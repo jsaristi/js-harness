@@ -463,6 +463,8 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed, log });
   }
   if (!local.ok) {
+    // One pull request (alone, or the last a bisection kept) is the one that turned it red (Codex, 2026-10-17).
+    log.leave(merged[0], 'red', local.said);
     stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
     return 4;
   }

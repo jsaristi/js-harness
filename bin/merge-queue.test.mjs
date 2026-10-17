@@ -1209,3 +1209,11 @@ test('--dry-run writes no land record, and a land whose record cannot be written
   assert.equal(code, 0, out.join('\n'));
   assert.match(out.at(-1), /^Could not write the land record to .*lands\.jsonl \(.+\): the land's exit stands\.$/);
 });
+
+test('a land of one pull request red on this machine records it as left out red, with what the suite said (Codex, 2026-10-17)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, said: 'npm run test exited 1' }) });
+  assert.equal(code, 4, out.join('\n'));
+  const [record] = landsOf(root).map(landSaid);
+  assert.deepEqual([record.exit, record.leftOut, record.landed], [4, [{ pr: 1, reason: 'red', said: 'npm run test exited 1' }], []]);
+});
