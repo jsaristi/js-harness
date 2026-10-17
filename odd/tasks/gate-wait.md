@@ -2885,9 +2885,50 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     `gate-on-github`, branches never merged. `gate-wait-t4` is this session's, removed at the close.
   - *Spent on Codex on 2026-10-16 by this session:* 156,948 input tokens (cut 3) and 49,467 (its
     merge of `main`).
+- 2026-10-17 · **T11 opened by JH 5 on the lead's note of 13:07Z** ("Next: triage item 11, gate-wait
+  T11 (design with two readers, docs/FAILURES.md review-tool-timeout): how a gentle-ai review waits
+  for the gate lock or uses the merge-base commit, and what a session does on operation_timeout;
+  then build what the design settles, in the manifest's review text. Ask him nothing."), branch
+  `feat/review-timeout-rule` from origin/main 13:15Z.
+  - *The probe.* gentle-ai takes `--base-ref` as a tree and diffs it against the head's: the target
+    evidence of `review-482ab063172d1bb1` reads `base-diff:workspace:7c00d719…:919d5889…`, and
+    `7c00d719` is the tree of `db31c96c`, the tip of origin/main then (`git rev-parse db31c96c^{tree}`).
+    So a branch behind the default branch, given `--base-ref origin/main`, is assessed with every
+    later change of the default branch in it, reversed. Measured at 13:20Z on a detached checkout of
+    `24139b7e` (PR 400's head, 19 commits behind origin/main, nothing of its own outside it):
+    `gentle-ai review assess --base-ref origin/main --committed-only` took 20 s and saw 20 paths and
+    470 changed lines, which is `git diff --shortstat origin/main HEAD` (51 + 419); with the
+    merge-base commit (`24139b7e` itself) it answered in 1 s that there is nothing pending. This is
+    also L10 of first-version: three timeouts with `--base-ref=origin/main`, 9 s with the merge-base
+    commit. The other sightings name no base or `origin/main`; none names a merge-base commit.
+  - *Design, version 1, for two readers.*
+    1. *The base is a commit the head contains.* A gentle-ai review is given the merge-base of the
+       head with the default branch (`git merge-base origin/main HEAD`) or the last reviewed
+       boundary, never the name of a branch that moves: a moving name puts the default branch's
+       newer work in the candidate, reversed, which reviews the wrong change and makes the
+       preflight slower the further the branch is behind. The base goes on the assess, so its
+       `next_transition` carries it to the preflight unchanged.
+    2. *It does not wait for the gate lock.* Its reviewer has no tools, and the gate of this repo
+       sends its tests to GitHub's machines; no sighting shows the gate as the cause (each is "an
+       observation beside the gate"), while the base is shown. Waiting would hold every review
+       behind every gate for a cause not shown.
+    3. *On `operation_timeout`, once more, then on.* The session runs the same command once again,
+       after no gate runs on the machine (`js-harness gate -- <the same command>` waits for that
+       turn). If it times out again, the candidate goes on without that review: the feature
+       document gets a gentle-ai line naming the range, both times and that it was not reviewed
+       (the line `notify --kind ready` reads); Codex reviews the range as for every code commit;
+       he is not asked, since the provider defect is tracked upstream (gentle-ai #5422). In this
+       repo the time is also a `Seen:` line of `review-tool-timeout`.
+    4. *Where it lives.* The work session's part of the orchestrator skill (`bin/lib/manifest.mjs`,
+       the line on what runs beside a gate), so an installed project gets it; its test in
+       `bin/lib/manifest.test.mjs` pins the text. The entry's Control becomes that test.
+    Left to the readers: whether 1 should also be a check (the guard's PreToolUse hook could refuse
+    a gentle-ai review command whose `--base-ref` the head does not contain, and print the
+    merge-base command), and whether 3's retry through `js-harness gate` is worth its wait.
 
 ## Next
 
-Nothing: the feature is closed (T10, 2026-10-16). What it left open is in the entry of T10 in
+T11 (JH 5, `feat/review-timeout-rule`): its design version 1 is in Progress, 2026-10-17, for two
+readers; then the manifest line and its test. Before T11, nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
 Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
 2026-10-16 by the session "JH 21".
