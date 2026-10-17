@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, stampedHour } from './guard.mjs';
-import { backtickRefusal, backticksInDoubleQuotes, modelRefusal, onFirstParentLine, reviewBaseRefusal } from './guard.mjs';
+import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal } from './guard.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -131,6 +131,37 @@ test('backticks inside double quotes are found, as bash would run them', () => {
   assert.deepEqual(backticksInDoubleQuotes('git commit -m "the `check` row and `rules` too"'), ['check', 'rules']);
   assert.deepEqual(backticksInDoubleQuotes('node -e "console.log(`${x}`)"'), ['${x}']);
   assert.match(backtickRefusal('git commit -m "fix the `check` row"'), /run as commands in bash \(`check`\)/);
+});
+
+test('a recursive rm or an rmdir of a folder at the top of a drive is refused with where to put it instead', () => {
+  for (const command of [
+    'rm -rf D:/practice-jh22',
+    'rm -rf "D:\\practice jh22" && node scripts/practice.mjs setup',
+    'cd D:/js-harness && rm -r -f /d/practice-jh22/',
+    'rm --recursive --force D:/scratch',
+    'rmdir D:/jh23-fp-scratch',
+    'rm -rf D:/',
+    'rm D:/scratch -rf',
+    '(rm -rf D:/scratch)',
+    '{ rm -rf D:/scratch; }',
+    'if true; then rm -rf D:/scratch; fi',
+  ]) assert.match(driveRootRemovalRefusal(command), /js-harness guard: .*top of a drive.*asks the user.*-worktrees/s, command);
+});
+
+test('an rm below a drive\'s top folders, a plain rm, and the text of quotes or heredocs pass', () => {
+  for (const command of [
+    'rm -rf D:/js-harness-worktrees/practice/jh22',
+    'rm -rf /tmp/x',
+    'rm D:/notes.txt',
+    'rm -rf ./build',
+    'git commit -m "remove it with rm -rf D:/practice-jh22"',
+    "cat > a.md <<'EOF'\nrm -rf D:/practice-jh22\nEOF",
+    'echo rm -rf D:/practice-jh22',
+    'echo "&&" rm -rf D:/scratch',
+    "echo ';' rm -rf D:/scratch",
+    'echo "(" rm -rf D:/scratch',
+    'echo "$(rm -rf ./build)" D:/scratch',
+  ]) assert.equal(driveRootRemovalRefusal(command), null, command);
 });
 
 test('single quotes, escaped backticks, $(...) and bare backticks pass', () => {

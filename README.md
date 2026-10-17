@@ -951,7 +951,9 @@ standard input and refuses seven things: a sub-agent launched on a model the pro
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a shell command with backticks
-inside double quotes, which bash runs as commands; a heavy `node --test` outside a gate turn while
+inside double quotes, which bash runs as commands; a recursive `rm` or an `rmdir` of a drive's root or a
+folder at its top, which the host holds for the user even in bypass mode, with where to put such a folder
+instead (below the project's worktrees folder, or the session's scratchpad); a heavy `node --test` outside a gate turn while
 another gate holds the machine's lock or an eval batch runs, heavy being several files, or one file
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
 while its trials run, and `uninstall` removes that folder with the lock's); and a `Write` or `Edit` that puts a line

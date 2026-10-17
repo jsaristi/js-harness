@@ -8,7 +8,9 @@
 //     odd/tasks/session-channel.md, layer 3).
 //   - `SendMessage` and `mcp__ccd_session_mgmt__send_message`: the hour a message stamps as its time of sending
 //     against the clock (`hourRefusal`).
-//   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a gentle-ai review
+//   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a recursive `rm` or
+//     an `rmdir` of a drive's root or a folder at its top, which the host holds for the user even in bypass mode
+//     (`driveRootRemovalRefusal`; odd/tasks/held-sessions.md, T4); then a gentle-ai review
 //     given a `--base-ref` its head does not contain (`reviewBaseRefusal`; odd/tasks/gate-wait.md, T11); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8).
@@ -34,7 +36,7 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
-  + '  with backticks inside double quotes, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
+  + '  with backticks inside double quotes, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
   + '  file that stamps today with an hour ahead of the clock; lets a git commit or merge wrapped in js-harness gate --\n'
   + '  run with a hint beside its result, since a plain one waits for its turn by itself; always exits 0\n'
@@ -75,7 +77,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, allowedModels, backtickRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal } = await import('./lib/guard.mjs');
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
@@ -83,6 +85,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
+  const driveRoot = driveRootRemovalRefusal(input.command);
+  if (driveRoot !== null) return driveRoot;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
   const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
   if (base !== null) return base;
