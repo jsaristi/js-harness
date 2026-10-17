@@ -237,7 +237,7 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [x] T4b (kind: build) S4: the release source, built as designed; inline, test first (L7)
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
-- [ ] T6 (kind: verify) S6: the stability pass on `main`
+- [x] T6 (kind: verify) S6: the stability pass on `main`; every check of S6 green by `42e520d` (L18, L25, L26), T6f's bound still open
 - [x] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail); built inline (L23)
 - [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
 - [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
@@ -446,7 +446,17 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   Windows once T6g lands, and T6f, which waits on his answer. Seen on the way: the selection of (1) handed
   `bin/lib/test-run-warning.mjs`, not a test file, to `node --test`, which ran it as a file of no tests; not read
   further.
-- L26 (2026-10-17, commit-gates-first): "Overflow only" in T7's design above is superseded: every gate a
+- L26 (2026-10-17, JH 25): T6 closed. The Windows rerun L25 owed, on `main` `42e520d` (#342, T6g, landed),
+  under `js-harness gate --max 60` with `JS_HARNESS_GATE_WSL=0`, `JS_HARNESS_GATE_CI=0` and `TEMP`/`TMP` on the
+  `js-harness-tmp` folder of drive D: `node --test` whole, 5,932 tests, 5,913 pass, 0 fail, 19 skipped,
+  `duration_ms 1113607`, exit 0, with the machine 87% busy before it. With L25, each of S6's checks has passed on
+  `main`: the whole suite on Windows (here) and in WSL2, `check` in WSL2 and on CircleCI, every row of `check`
+  on Windows (its one red was the test T6g fixed), and no unsettled entry in `docs/FAILURES.md`. One check
+  that is not a pass: `check` was not run whole on Windows again after T6g, since its only red was that test.
+  The figure is close to the bound: 1,114 s against the `sensor-timeout` rule's 1,200, where L25's run took
+  862 s and L18's 1,398, so the whole suite on Windows sits on that bound by load; T6f, the bound L21 asks him
+  about, stays open apart from T6.
+- L27 (2026-10-17, commit-gates-first): "Overflow only" in T7's design above is superseded: every gate a
   commit's or a merge's hook runs now sends its tests to GitHub first, whether or not the lock is free, and a
   check by hand stays here (it tests the working tree). The bound from the push is the rule `ci-gate-bound`, 8
   minutes, and `gate.yml` stops its job two minutes later. Design, readers and figures:

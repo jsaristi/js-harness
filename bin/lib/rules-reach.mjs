@@ -11,11 +11,11 @@ import { HASH_KEYS } from './rules.mjs';
 import { parseProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
 
 /** Where the harness's own checkout keeps its list, from its git top. */
-const HARNESS_LIST = 'bin/lib/rules-data.mjs';
+export const HARNESS_LIST = 'bin/lib/rules-data.mjs';
 // What a list is reduced to before two are compared: the keys the hash reads, and a project rule's sensor.
 const COMPARED = [...HASH_KEYS, 'sensor'];
 // The default branch, in the order it is looked for: the remote's own head, then the usual names.
-const MAIN_REFS = [
+export const MAIN_REFS = [
   ['origin/HEAD', 'refs/remotes/origin/HEAD'],
   ['origin/main', 'refs/remotes/origin/main'],
   ['main', 'refs/heads/main'],
@@ -128,7 +128,7 @@ function gitTop(cwd) {
 }
 
 /** The list the project at `top` declares, `{ path, kind }`, or `null` for a project that declares none. */
-function listOf(top) {
+export function listOf(top) {
   if (fs.existsSync(path.join(top, HARNESS_LIST))) return { path: HARNESS_LIST, kind: 'harness' };
   if (fs.existsSync(path.join(top, PROJECT_RULES_PATH))) return { path: PROJECT_RULES_PATH, kind: 'project' };
   return null;
