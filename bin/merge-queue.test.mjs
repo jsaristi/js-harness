@@ -944,8 +944,9 @@ test('landingLines confirms the newest proposed line of each id on that branch a
 const RULES_DATA = (a) => `export const RULES = ${JSON.stringify([{ id: 'a', value: a }, { id: 'b', value: 2 }], null, 2)};\n`;
 
 /** makeQueueRepo with bin/lib/rules-data.mjs on main and a branch rule/a that changes rule a; the home a temporary
- * folder whose relief file holds `lines`. `{ root, origin, main, head, env, reliefFile }`. */
-function makeRuleRepo(lines) {
+ * folder whose relief file holds `lines`. `sources`, when given, is the branch's docs/rule-sources.json.
+ * `{ root, origin, main, head, env, reliefFile }`. */
+function makeRuleRepo(lines, { sources } = {}) {
   const made = makeQueueRepo();
   const { root } = made;
   fs.mkdirSync(path.join(root, 'bin', 'lib'), { recursive: true });
@@ -956,6 +957,11 @@ function makeRuleRepo(lines) {
   const main = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '-b', 'rule/a', main);
   fs.writeFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), RULES_DATA(5), 'utf8');
+  if (sources !== undefined) {
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'docs', 'rule-sources.json'), `${JSON.stringify(sources, null, 2)}\n`, 'utf8');
+    git(root, 'add', '.');
+  }
   git(root, 'commit', '--quiet', '-am', 'rule a changes');
   git(root, 'push', '--quiet', 'origin', 'rule/a');
   const head = git(root, 'rev-parse', 'HEAD');
@@ -1074,6 +1080,41 @@ test('landingLines given declarations confirms the newest proposal whose declara
 test('a land confirms the proposal whose declaration its head holds, not a newer one rules change wrote for another', async () => {
   const held = declarationOf(RULES_DATA(5), 'a');
   const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration ${held}`, `${proposed('a', 'rule/a', '05:00')}; declaration 000000000000`]);
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('landingLines given sourced confirms a proposal whose declaration and source the landed head both hold', () => {
+  const relief = ['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration and source aaaaaaaaaaaa`, `${proposed('a', 'rule/a', '01:00')}; declaration and source bbbbbbbbbbbb`].join('\n');
+  const until = new Date(2026, 9, 16, 11, 0, 0).getTime();
+  const given = { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'bbbbbbbbbbbb' } };
+  assert.deepEqual(landingLines(relief, { ...given, sourced: { a: 'aaaaaaaaaaaa' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+  // The declaration alone is not the declaration with its source: a line that names both is matched by both.
+  assert.deepEqual(landingLines(relief, given), { lines: [], none: ['a'] });
+});
+
+test('landingLines reads a proposal with no hash beside hashed ones by its stamp, and the hashed ones by their hash', () => {
+  const relief = ['# Relief', proposed('a', 'rule/a', '00:00'), `${proposed('a', 'rule/a', '01:00')}; declaration and source 000000000000`, proposed('a', 'rule/a', '30:00')].join('\n');
+  const until = new Date(2026, 9, 16, 10, 10, 0).getTime();
+  const given = { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'aaaaaaaaaaaa' }, sourced: { a: 'bbbbbbbbbbbb' } };
+  assert.deepEqual(landingLines(relief, given).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+  assert.deepEqual(landingLines(relief, { ...given, sourced: { a: '000000000000' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 3']);
+});
+
+test('landingLines reads a relief file with Windows line ends: a hashed line is matched and its place counted as with LF', () => {
+  const relief = ['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration and source aaaaaaaaaaaa`, `${proposed('a', 'rule/a', '01:00')}; declaration aaaaaaaaaaaa`, 'rule:a landed on main 0000000 from rule/b: confirms relief line 9', ''].join('\r\n');
+  const until = new Date(2026, 9, 16, 11, 0, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'aaaaaaaaaaaa' }, sourced: { a: 'cccccccccccc' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 3']);
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'dddddddddddd' }, sourced: { a: 'aaaaaaaaaaaa' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+});
+
+test('a land confirms the proposal whose source its head holds, not a newer one of the same declaration with another source (T16e-f)', async () => {
+  const sources = { a: { kind: 'design', path: 'docs/A.md' } };
+  const head = declarationOf(RULES_DATA(5), 'a', sources);
+  const other = declarationOf(RULES_DATA(5), 'a', { a: { kind: 'design', path: 'docs/B.md' } });
+  assert.notEqual(head, other);
+  const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration and source ${head}`, `${proposed('a', 'rule/a', '05:00')}; declaration and source ${other}`], { sources });
   const { code, out } = await landRule(made);
   assert.equal(code, 0, out.join('\n'));
   assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);

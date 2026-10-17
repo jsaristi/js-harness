@@ -392,17 +392,20 @@ function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
  * branch keeps `rule/a` from matching `rule/ab`, the space after "proposed" `rule:a` from matching `rule:ab`) that no
  * later "rule:<id> landed on main ... from <branch>: " line confirms gets one line naming its place, from 1, blank lines
  * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. Only a proposal
- * the landed head holds counts: a line that ends "; declaration <hash>" when `declarations[id]` is that hash (the head's
- * declaration of the rule, `declarationOf`), and an older line that names none when it is stamped before `until` (ms),
- * the start of the second of the head's commit, since `rules change` stamps its line before the commit that holds it. */
-export function landingLines(relief, { branch, ids, sha, declarations = {}, until = Infinity }) {
+ * the landed head holds counts: a line that ends "; declaration and source <hash>" when `sourced[id]` is that hash (the
+ * head's declaration of the rule with its entry of `docs/rule-sources.json`, `declarationOf`); an older line that ends
+ * "; declaration <hash>" when `declarations[id]` is that hash (the declaration alone); and an older line that names
+ * neither when it is stamped before `until` (ms), the start of the second of the head's commit, since `rules change`
+ * stamps its line before the commit that holds it. */
+export function landingLines(relief, { branch, ids, sha, declarations = {}, sourced = {}, until = Infinity }) {
   const lines = String(relief).split('\n');
   const found = { lines: [], none: [] };
   for (const id of ids) {
     const proposal = `rule:${id} proposed on ${branch}, not landed`;
     const held = (line) => {
-      const named = /; declaration ([0-9a-f]{12}|none)\s*$/.exec(line);
-      return named === null ? stampOf(line) < until : named[1] === declarations[id];
+      const named = /; declaration( and source)? ([0-9a-f]{12}|none)\s*$/.exec(line);
+      if (named === null) return stampOf(line) < until;
+      return named[2] === (named[1] === undefined ? declarations : sourced)[id];
     };
     const newest = lines.findLastIndex((line) => line.includes(proposal) && held(line));
     if (newest === -1) {
@@ -422,6 +425,7 @@ function stampOf(line) {
 }
 
 const RULES_DATA = 'bin/lib/rules-data.mjs';
+const RULE_SOURCES = 'docs/rule-sources.json';
 
 /** The ids of the rules the branch at `head` changed against `main`, read at `place`: those whose declaration in
  * `bin/lib/rules-data.mjs` differs between `head` and its merge base with `main`, added and removed ones among them, so
@@ -464,20 +468,27 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
     } catch {
       // No relief file is no proposed line.
     }
-    // What the landed head holds: each rule's declaration, and its commit time for a proposal line that names none.
+    // What the landed head holds: each rule's declaration, alone and with its source, and its commit time for a proposal
+    // line that names neither. A head with no sources file holds no source for any rule.
     const committed = Number(gitIn(place, 'show', '-s', '--format=%ct', pr.headRefOid).out.trim());
     const shown = gitIn(place, 'show', `${pr.headRefOid}:${RULES_DATA}`);
+    const sourcesShown = gitIn(place, 'show', `${pr.headRefOid}:${RULE_SOURCES}`);
     let declarations = null;
+    let sourced = null;
     try {
-      declarations = shown.ok ? Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)])) : null;
+      const sources = sourcesShown.ok ? JSON.parse(sourcesShown.out) : {};
+      if (shown.ok) {
+        declarations = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)]));
+        sourced = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id, sources)]));
+      }
     } catch {
-      // A declaration that does not parse is one the head cannot be matched by.
+      // A declaration or a sources file that does not parse is one the head cannot be matched by.
     }
-    if (!Number.isFinite(committed) || committed <= 0 || declarations === null) {
+    if (!Number.isFinite(committed) || committed <= 0 || declarations === null || sourced === null) {
       stdout(`${said}, and what its head holds could not be read: no landing line is written for it.`);
       continue;
     }
-    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), declarations, until: committed * 1000 });
+    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), declarations, sourced, until: committed * 1000 });
     for (const id of none) stdout(`${said} with no relief line "rule:${id} proposed on ${pr.headRefName}, not landed": no landing line is written for it.`);
     for (const line of lines) {
       try {

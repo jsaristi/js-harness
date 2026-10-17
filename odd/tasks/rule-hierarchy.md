@@ -2994,7 +2994,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     gentle-ai evidence of slice (c): high (item 5), approved, lineage review-2ccf3665c662d927 on 9ff94fe..e6c9c44; medium, not due (under_budget) on e6c9c44..1f31afd, 12773f4..ac6cf2c and ac6cf2c..9c3f41a.
     Next: push, pull request against main, notify; then T2 of `odd/tasks/land-unattended.md` (exit 5 and the gate-first ticket, the lead's yes). Then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
-  - [ ] T16e-f (kind: build) The landing's match covers the source too: hash the rule with its
+  - [x] T16e-f (kind: build) The landing's match covers the source too: hash the rule with its
     entry of `docs/rule-sources.json` at the head, since a second `rules change` of the same
     declaration with another source would be confirmed though the head holds the first source
     (verifier A1 on `9c3f41a`, 2026-10-16); tests of a CRLF relief file and of lines without a hash
@@ -4533,6 +4533,17 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     lineage review-6fd0cbffb794ab8d; its WARNING that the unknown answer ran before the offline guard is fixed in
     `d9f52c4` (medium, not due, under_budget); its WARNING that the `maintenance.auto` line was needed does not
     hold (above). Codex on `1630123..d9f52c4`: correct (0.95), recorded.
+
+- 2026-10-17, T16e-f, by `JH 21 · reserva de la noche` on `feat/landing-rule-hash`, item 9 of the lead's triage of
+  open work, built test first. `rules change` ends its proposal line with `; declaration and source <hash>`, the
+  hash of the rule's declaration together with its entry of `docs/rule-sources.json` (`declarationOf` given the
+  sources, `bin/lib/rules-change-run.mjs`). `recordLandings` (`bin/merge-queue.mjs`) reads both files at the landed
+  head, and `landingLines` matches such a line only by that hash, so a second proposal of the same declaration with
+  another source is no longer confirmed (verifier A1 on `9c3f41a`). A line written before, ending `; declaration
+  <hash>`, keeps its match by the declaration alone; a line with neither keeps the time bound. RED: the sourced
+  match, a line with no hash beside hashed ones, and the land of two proposals that differ only in source (three of
+  `bin/merge-queue.test.mjs`), and the four relief-line tests of `bin/lib/rules-change-run.test.mjs`. The CRLF relief
+  file test passed at once and stays as a pin (A3): `\s*$` already took the `\r`.
 
 - 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
   `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage
