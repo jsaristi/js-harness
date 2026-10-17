@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from '../check.mjs';
+import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from '../check.mjs';
 import { REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS } from '../codex-review.mjs';
 import { DEFAULT_TIMEOUT_MINUTES } from '../contract.mjs';
 import { GATE_MAX_MINUTES } from '../gate.mjs';
@@ -25,6 +25,10 @@ test('the timeout of a Codex review is the declared review-timeout in millisecon
 
 test('the bound of a sensor of the gate is the declared sensor-timeout in milliseconds', () => {
   assert.equal(SENSOR_TIMEOUT_MS, ruleValue('sensor-timeout', 'minutes') * 60_000);
+});
+
+test('the silence a sensor of the gate may keep is the declared sensor-silence in milliseconds', () => {
+  assert.equal(SENSOR_SILENCE_MS, ruleValue('sensor-silence', 'minutes') * 60_000);
 });
 
 test('the budget AGENTS.md is held to is the declared agents-budget', () => {
