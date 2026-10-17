@@ -71,6 +71,17 @@ test('the bare template has every section empty, a filled one has no problem, an
   assert.deepEqual(summaryProblems(longer), []);
   const infoString = filled.replace('## Delivered\n', '```\n```js\n## Goal\n```\n## Delivered\n');
   assert.deepEqual(summaryProblems(infoString), []);
+  // A longer bare run closes a fence too, of tildes as of backticks.
+  const longerClose = filled.replace('## Delivered\n', '```\n## Goal\n`````\n## Delivered\n');
+  assert.deepEqual(summaryProblems(longerClose), []);
+  const tildes = filled.replace('## Delivered\n', '~~~\n## Goal\n~~~~\n## Delivered\n');
+  assert.deepEqual(summaryProblems(tildes), []);
+  // A backtick line whose text holds a backtick is no fence, as Markdown reads it: the sections after it count.
+  const inlineCode = filled.replace('## Delivered\n', '```a`b\n## Delivered\n');
+  assert.deepEqual(summaryProblems(inlineCode), []);
+  // A tilde fence's info string may hold a backtick.
+  const tildeInfo = filled.replace('## Delivered\n', '~~~a`b\n## Goal\n~~~\n## Delivered\n');
+  assert.deepEqual(summaryProblems(tildeInfo), []);
   // A code line indented four spaces does not open a fence.
   const indented = filled.replace('## Cost\n', '    ```\n## Cost\n');
   assert.deepEqual(summaryProblems(indented), []);
