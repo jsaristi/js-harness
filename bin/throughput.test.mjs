@@ -189,3 +189,21 @@ test('with the git of the machine, not a fake, it reads a repository', async () 
   const code = await throughputMain(['status', '--home', home], {}, { cwd: repo, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
 });
+
+test('--against compares the window with an equal one before it, row by row, and judges nothing under 7 days', async () => {
+  const home = makeHome(GATES);
+  const { code, stdout } = await run(['--since', '2026-10-16', '--until', '2026-10-17', '--against', '2026-10-15..2026-10-16'], { home });
+  assert.equal(code, 0);
+  assert.match(stdout, /before 2026-10-15 to 2026-10-16, after 2026-10-16 to 2026-10-17/);
+  assert.match(stdout, /pull requests merged +before 0 +after 1 +not judged: 1 days a side, under 7/);
+  // 10-15 is covered by the gate log only from 23:00: a part of a day is no day's value.
+  assert.match(stdout, /gate waits, min +before none +after 2 +not judged: 0 days a side/);
+});
+
+test('--against a window of another length is a usage error', async () => {
+  const home = makeHome(GATES);
+  const { code, stderr } = await run(['--since', '2026-10-16', '--until', '2026-10-17', '--against', '2026-10-13..2026-10-16'], { home });
+  assert.equal(code, 2);
+  assert.match(stderr, /equal windows/);
+  assert.equal((await run(['--against', '2026-10-15'], { home })).code, 2);
+});

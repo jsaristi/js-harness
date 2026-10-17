@@ -319,3 +319,60 @@ export function throughputRows(days) {
     row('conflicts by file', 'conflicts', `${conflicts.length} of ${branchMerges} merges into branches conflicted${conflicts.length ? `: ${topNames(conflicts.map((merge) => merge.files), 5).map(([file, n]) => `${file} ×${n}`).join(', ')}` : ''}`),
   ];
 }
+
+/** Days a side a comparison needs before it judges, the threshold version 2 set (odd/tasks/throughput-review.md,
+ * L4 item 4): with fewer, a day-to-day swing like the gate-wait median's 216 s to 69 s reads as a change. */
+export const COMPARE_DAYS = 7;
+
+const round1 = (value) => (value === null ? null : Math.round(value * 10) / 10);
+
+/** The rows a comparison reads, each a day's value from its facts; the source each needs whole. */
+const DAILY = [
+  ['pull requests merged', 'git', (day) => new Set(day.prs.map((pr) => pr.number)).size],
+  ['last commit to merge commit, median min', 'git', (day) => median(day.prs.filter((pr) => pr.lastCommitAt).map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.lastCommitAt)) / 60000))],
+  ['lock busy, h', 'gates', (day) => busySeconds(ownEnded(day).map((gate) => [Date.parse(gate.startedAt), Date.parse(gate.endedAt)])) / 3600],
+  ['gate waits, min', 'gates', (day) => day.gates.reduce((sum, gate) => sum + gate.waitedSeconds, 0) / 60],
+  ['commit gates here, median s', 'gates', (day) => median(ownEnded(day).filter((gate) => gate.kind === 'check' || gate.kind === 'commit').map((gate) => gate.seconds))],
+  ['checks with the lock free, median s', 'gates', (day) => median(ownEnded(day).filter((gate) => gate.kind === 'check' && gate.waitedSeconds < 5).map((gate) => gate.seconds))],
+  ['lands, median s', 'gates', (day) => median(ownEnded(day).filter((gate) => gate.kind === 'land').map((gate) => gate.seconds))],
+  ['red lands', 'gates', (day) => ownEnded(day).filter((gate) => gate.kind === 'land' && gate.result !== 'pass' && gate.result !== 'exit 0').length],
+  ['Codex attempts', 'codex', (day) => day.codex.length],
+  ['Codex, median s', 'codex', (day) => median(day.codex.map((run) => run.seconds).filter(Number.isFinite))],
+  ['idle upper bound, median min', 'channel', (day) => median((day.idle ?? []).map((wait) => wait.minutes))],
+];
+
+const ownEnded = (day) => day.gates.filter((gate) => gate.lock === 'own' && gate.endedAt);
+
+/** A day's value of each compared row, `null` where its source was not read that day or, for a gate row, where the
+ * gate log covers the day only in part: a part of a day is not a day. */
+export function dailyValues(day) {
+  const values = {};
+  for (const [label, source, read] of DAILY) {
+    const missing = day.unavailable?.[UNAVAILABLE_KEY[source]] || (source === 'gates' && day.partialFrom);
+    values[label] = missing ? null : round1(read({ prs: [], gates: [], codex: [], ...day }));
+  }
+  return values;
+}
+
+/** Compares a window of days before a change with an equal window after it, row by row, daily value with daily
+ * value: `[{ label, before, after, verdict }]`. Under `COMPARE_DAYS` days a side it judges nothing and says how often
+ * a window that did not change falls outside the before range, 2/(n+1); from there a row moved only when the after
+ * window's median daily value lies outside the before range. */
+export function compareWindows(beforeDays, afterDays) {
+  if (beforeDays.length !== afterDays.length) throw new Error(`a comparison reads equal windows: ${beforeDays.length} days before, ${afterDays.length} after`);
+  const before = beforeDays.map(dailyValues);
+  const after = afterDays.map(dailyValues);
+  return DAILY.map(([label]) => {
+    const was = before.map((values) => values[label]).filter((value) => value !== null);
+    const is = after.map((values) => values[label]).filter((value) => value !== null);
+    const n = Math.min(was.length, is.length);
+    const chance = `${Math.round((200 / (was.length + 1)))}%`;
+    if (n < COMPARE_DAYS) return { label, before: was, after: is, verdict: `not judged: ${n} days a side, under ${COMPARE_DAYS}; a window that did not change falls outside a ${was.length}-day range ${chance} of the time` };
+    const low = Math.min(...was);
+    const high = Math.max(...was);
+    const mid = round1(median(is));
+    if (mid < low) return { label, before: was, after: is, verdict: `moved down: after median ${mid}, before ${low} to ${high}; chance ${chance} if nothing changed` };
+    if (mid > high) return { label, before: was, after: is, verdict: `moved up: after median ${mid}, before ${low} to ${high}; chance ${chance} if nothing changed` };
+    return { label, before: was, after: is, verdict: `within the before range ${low} to ${high}` };
+  });
+}

@@ -16,6 +16,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
   channelIdle,
   codexFacts,
+  compareWindows,
   conflictFiles,
   dayBounds,
   daysBetween,
@@ -32,7 +33,7 @@ import {
 export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 
 const USAGE = [
-  'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--json]',
+  'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
   '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]...',
   '       js-harness throughput status',
   '       (each also takes --cwd <path> and --home <path>)',
@@ -45,6 +46,9 @@ const USAGE = [
   '    once the day has settled, two gate-max after its midnight. A kept day is written again only by a fuller one,',
   '    the replacement recorded (exit 1 otherwise). --gate-log reads copies of the gate log instead of the live one,',
   '    at most two (the log and its rotated file), for a day the live log has rotated away.',
+  '  --against: the window compared with an equal window before it, a row each, daily value with daily value. Under 7',
+  '    days a side it prints both and how often a window that did not change falls outside the before range, 2/(n+1),',
+  '    and judges nothing; from 7, a row moved only when the after median lies outside the before range.',
   '  status: the days kept, each partial one with why, and each day since the first one kept that has none (exit 1).',
   '  Exit 2: a usage error, and nothing is done.',
 ].join('\n');
@@ -54,7 +58,7 @@ class ThroughputArgError extends Error {}
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const VERBS = new Set(['snapshot', 'status']);
 const FLAGS_OF = {
-  table: ['--since', '--until', '--json', '--cwd', '--home'],
+  table: ['--since', '--until', '--against', '--json', '--cwd', '--home'],
   snapshot: ['--day', '--gate-log', '--cwd', '--home'],
   status: ['--cwd', '--home'],
 };
@@ -74,7 +78,12 @@ function parseArgs(argv) {
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) throw new ThroughputArgError(`${arg} requires a value`);
     if (['--since', '--until', '--day'].includes(arg) && !(DAY.test(value) && utcDay(Date.parse(`${value}T00:00:00Z`)) === value)) throw new ThroughputArgError(`${arg} takes a day as YYYY-MM-DD: ${value}`);
-    if (arg === '--gate-log') {
+    if (arg === '--against') {
+      const [since, until] = value.split('..');
+      const isDay = (day) => DAY.test(day ?? '') && utcDay(Date.parse(`${day}T00:00:00Z`)) === day;
+      if (!isDay(since) || !isDay(until) || !(since < until)) throw new ThroughputArgError(`--against takes the window before as <since>..<until>, each YYYY-MM-DD: ${value}`);
+      flags.against = { since, until };
+    } else if (arg === '--gate-log') {
       flags['gate-log'] = [...(flags['gate-log'] ?? []), value];
       if (flags['gate-log'].length > 2) throw new ThroughputArgError('--gate-log takes two copies at most: the newer, then the older');
     } else flags[arg.slice(2)] = value;
@@ -242,6 +251,7 @@ function table(ctx, flags) {
   const since = flags.since ?? utcDay(Date.parse(`${until}T00:00:00Z`) - 24 * 3600 * 1000);
   if (!(since < until)) throw new ThroughputArgError(`--since ${since} is not before --until ${until}`);
   const days = daysBetween(since, until).map((day) => dayFacts(day, ctx));
+  if (flags.against) return compared(ctx, flags, { since, until }, days);
   const rows = throughputRows(days);
   if (flags.json) {
     ctx.out(JSON.stringify({ since, until, days: days.map(({ day, source, partialFrom, unavailable }) => ({ day, source, partialFrom, unavailable })), rows }, null, 2));
@@ -252,6 +262,25 @@ function table(ctx, flags) {
   for (const day of days) ctx.out(`  ${day.day}  ${day.source === 'snapshot' ? 'snapshot' : 'live records'}${day.partialFrom ? `, the gate log from ${day.partialFrom}` : ''}${day.snapshotUnreadable ? ` (its snapshot is unreadable: ${day.snapshotUnreadable})` : ''}`);
   const width = Math.max(...rows.map((row) => row.label.length));
   for (const row of rows) ctx.out(`${row.label.padEnd(width)}  ${row.value}  [${row.source}]`);
+  return 0;
+}
+
+/** The window against an equal one before it (`--against`), each compared row's daily values side by side. */
+function compared(ctx, flags, after, afterDays) {
+  const before = flags.against;
+  const beforeDays = daysBetween(before.since, before.until);
+  if (beforeDays.length !== afterDays.length) throw new ThroughputArgError(`--against reads equal windows: ${beforeDays.length} days before, ${afterDays.length} after`);
+  const rows = compareWindows(beforeDays.map((day) => dayFacts(day, ctx)), afterDays);
+  if (flags.json) {
+    ctx.out(JSON.stringify({ before, after, rows }, null, 2));
+    return 0;
+  }
+  const list = (values) => (values.length ? values.join(', ') : 'none');
+  ctx.out(`Throughput compared  before ${before.since} to ${before.until}, after ${after.since} to ${after.until} (UTC days, until excluded)  ${ctx.root}`);
+  const width = Math.max(...rows.map((row) => row.label.length));
+  const beforeWidth = Math.max(...rows.map((row) => list(row.before).length));
+  const afterWidth = Math.max(...rows.map((row) => list(row.after).length));
+  for (const row of rows) ctx.out(`${row.label.padEnd(width)}  before ${list(row.before).padEnd(beforeWidth)}  after ${list(row.after).padEnd(afterWidth)}  ${row.verdict}`);
   return 0;
 }
 

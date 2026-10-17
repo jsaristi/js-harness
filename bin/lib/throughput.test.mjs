@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskCounts, throughputRows } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskCounts, throughputRows } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -215,4 +215,37 @@ test('a pull request merged twice into main is one pull request, and the table n
   // The time of a merge commit is when its land built it, before the land's tests: the row says so.
   assert.match(rowOf(rows, 'last commit to merge commit').source, /before the land's tests/);
   assert.equal(rowOf(rows, 'last commit to merge commit').value, 'median 30 min, p75 60 min, worst 60 min (3); docs-only none; code none');
+});
+
+test('a day reads as one value a row, null where its source was not read or the gate log covers it in part', () => {
+  const day = dayOf({
+    prs: [{ number: 1, mergedAt: '2026-10-16T10:30:00.000Z', lastCommitAt: '2026-10-16T10:00:00.000Z' }],
+    gates: [gate({ waitedSeconds: 120 })],
+    codex: [{ startedAt: '2026-10-16T08:00:00Z', seconds: 49 }],
+  });
+  const values = dailyValues(day);
+  assert.equal(values['pull requests merged'], 1);
+  assert.equal(values['last commit to merge commit, median min'], 30);
+  assert.equal(values['gate waits, min'], 2);
+  assert.equal(values['Codex attempts'], 1);
+  assert.equal(dailyValues({ ...day, partialFrom: '2026-10-16T10:00:00Z' })['gate waits, min'], null);
+  assert.equal(dailyValues({ ...day, unavailable: { git: 'no main' } })['pull requests merged'], null);
+});
+
+test('under 7 days a side, the comparison prints the ranges and the false-alarm chance and judges nothing', () => {
+  const day = (waits) => dayOf({ gates: [gate({ waitedSeconds: waits * 60 })] });
+  const [row] = compareWindows([day(216), day(69)], [day(30), day(40)]).filter((r) => r.label === 'gate waits, min');
+  assert.deepEqual(row.before, [216, 69]);
+  assert.deepEqual(row.after, [30, 40]);
+  assert.equal(row.verdict, 'not judged: 2 days a side, under 7; a window that did not change falls outside a 2-day range 67% of the time');
+});
+
+test('with 7 days a side, a row moved only when the after median lies outside the before range', () => {
+  const day = (waits) => dayOf({ gates: [gate({ waitedSeconds: waits * 60 })] });
+  const before = [100, 120, 90, 110, 130, 95, 105].map(day);
+  const label = 'gate waits, min';
+  const verdict = (after) => compareWindows(before, after.map(day)).find((r) => r.label === label).verdict;
+  assert.equal(verdict([40, 50, 60, 45, 55, 70, 300]), 'moved down: after median 55, before 90 to 130; chance 25% if nothing changed');
+  assert.equal(verdict([100, 95, 92, 140, 150, 160, 99]), 'within the before range 90 to 130');
+  assert.throws(() => compareWindows(before, [day(1)]), /equal windows/);
 });

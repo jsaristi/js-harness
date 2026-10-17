@@ -369,6 +369,20 @@ $ js-harness throughput status
 2026-10-16  kept
 ```
 
+`--against <since>..<until>` compares the window with an equal window before a change, row by
+row, daily value with daily value. The gate-wait median moved from 216 s to 69 s from one day to
+the next with nothing shipped, so under 7 days a side it prints both and how often a window that
+did not change falls outside the before range, 2/(n+1), and judges nothing; from 7 days a row
+moved only when the after window's median lies outside the before range.
+
+```console
+$ js-harness throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
+Throughput compared  before 2026-10-15 to 2026-10-16, after 2026-10-16 to 2026-10-17 (UTC days, until excluded)  D:\js-harness
+pull requests merged                     before 80      after 94      not judged: 1 days a side, under 7; a window that did not change falls outside a 1-day range 100% of the time
+lock busy, h                             before 14.3    after 16.8    not judged: 1 days a side, under 7; a window that did not change falls outside a 1-day range 100% of the time
+…
+```
+
 ### js-harness contract
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
