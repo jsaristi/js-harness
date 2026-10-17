@@ -112,3 +112,34 @@ The state comes from `gh pr view <n>` at about 13:25Z.
 - Codex: five runs, 370,018 input tokens in all, as their outputs say. A sixth, on the skipped range, was refused before it started.
 - gentle-ai: two reviews (two and three lenses). The other commits were assessed only.
 - Context: 52% at the last notice (13:24Z).
+
+## Third stretch
+After the second stretch, from 2026-10-17 ~13:25Z to 15:05Z. The work came from the lead's note of 14:37Z: "triage item 14, the T6f verifier advisories", to be built "test first on their own branch and PR", and then this third stretch. That note is the lead's claim, not his words. The host compacted this session once in this stretch, at about 14:53Z, after `9a62f82` was committed and before Codex ran.
+
+### Delivered
+The state comes from `gh pr view <n>` at about 15:01Z.
+- 404 `feat/citations-reachable`, 405 `feat/rules-reach-rest` and 406 `docs/jh21-second-stretch` were merged, as the lead's note said and `gh` confirms.
+- 409 `fix/sensor-silence-advisories`, open. This is first-version T6h and T6i, item 14:
+  - T6h: `runSensor` (`bin/check.mjs`) decides that a time ran out one turn of the loop later (`setImmediate`). A command that exited as its bound ran out is therefore reported by its exit, not as a timeout. RED came first.
+  - T6i: a gate-level test where the silence bound stops a real hang. The row names the silence, and the child the sensor started is gone. It passed at once and stays as a pin. Its bound is 4 s, not the rule's 20 minutes; an existing test already covers the rule's value reaching `checkSensor`.
+
+### Findings
+- The verifier's text was not in JH 25's summary in full. It was recovered from JH 25's transcript (`2fd3f776`, line 10072) by a script, because a grep with large quantifiers over the transcript was too slow.
+- Two `setTimeout` calls of one duration do not fire in one turn of the loop for certain. Each takes its start time from a fresh read of the clock, so two set apart can land a clock tick apart. The T6h test therefore emits the fake exit inside the sensor's own timer instead of from a second timer.
+
+### Reviews
+- gentle-ai rated `3586f40..22455a7` high by escalation (item 4: the order of a timer and an exit), with lenses resilience and reliability, and approved it (`review-cdd7f329fb92c696`). It gave three advisories:
+  - one was fixed in `9a62f82`: the T6i test now waits up to 5 s for a killed child to be reaped;
+  - one, the order of two timers, became Codex's finding below;
+  - one stays open: no test breaks a silence with a chunk inside the deferred turn.
+- gentle-ai rated `9a62f82` and `2531fa8` medium (`under_budget`).
+- Codex found a P2 in `3586f40..9a62f82` (137,518 input tokens): the T6h test leaned on two timers firing in one turn. It was fixed in `2531fa8`, and the recheck was correct (0.98; 52,279 input tokens).
+
+### Failures and lessons
+- None new in this stretch. The second stretch's lesson held: each fix commit got its gentle-ai line in the feature document before the push, and `notify --kind ready` recorded 409 on its first run.
+
+### Cost
+- Gates: 4 commits through the gate on GitHub's machines (`22455a7`, `9a62f82`, `2531fa8`, `f6aa3c6`), about 140-155 s each, plus this summary's commit.
+- Codex: two runs, 189,797 input tokens in all, as their outputs say.
+- gentle-ai: one review (two lenses). The other commits were assessed only.
+- Context: 27% at the last notice (15:01Z), after the compaction.
