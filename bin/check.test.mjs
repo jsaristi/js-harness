@@ -386,7 +386,9 @@ after(() => {
 function gitEnv() {
   if (!gitConfigDir) {
     gitConfigDir = makeTmpDir();
-    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '');
+    // Automatic maintenance off: a commit would start a detached `git maintenance run` that outlives it, and a
+    // repository copied then can find its lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+    fs.writeFileSync(path.join(gitConfigDir, 'empty.gitconfig'), '[maintenance]\n\tauto = false\n');
   }
   const inherited = Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key));
   return { ...Object.fromEntries(inherited), GIT_CONFIG_GLOBAL: path.join(gitConfigDir, 'empty.gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
@@ -4233,6 +4235,23 @@ const commitAs = ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit
 let documentsBase;
 after(() => {
   if (documentsBase) fs.rmSync(documentsBase, { recursive: true, force: true });
+});
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which outlives it holding a lock in
+// `.git/objects`; a copy made then can find the lock gone (rules-row-template-copy-enoent in docs/FAILURES.md).
+test('a commit in a copy of the documents repository starts no detached git maintenance', () => {
+  const repo = documentsRepo();
+  try {
+    const run = spawnSync('git', [...commitAs, '--allow-empty', '-m', 'traced'], {
+      cwd: repo,
+      encoding: 'utf8',
+      env: { ...gitEnv(), GIT_TRACE: '1' },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.doesNotMatch(run.stderr, /maintenance run/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
 });
 
 /** A repository of one commit whose `docs/` and `notes.md` are declared documents and whose one sensor
