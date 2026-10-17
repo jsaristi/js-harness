@@ -248,6 +248,8 @@ among them), and the marks at M of its written files.
   - Verifier, the worktree was made before Codex was found missing: the same check as the first item.
   The run-line test needs mode bits that stop a write, so it is skipped on Windows; in WSL2 it failed on the
   code before and passes after.
+  gentle-ai on 3586f406..ae6ee823: medium, not due (under_budget). Codex 5ea341a..ae6ee82: correct (0.9), no
+  findings. Risk: none named (the turn tooling; the push guard reads no line it changed).
 
 ## Next step
 
