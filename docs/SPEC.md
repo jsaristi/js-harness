@@ -366,6 +366,15 @@ proofs and by those tasks.
 **Discarded:** The repository's git folder as the record's home: there is none outside a repository. Messages as the channel.
 **Today:** `bin/lib/channel.mjs`, `bin/notify.mjs`, `js-harness notify`
 
+### A finished session leaves a summary
+
+**Problem:** On 2026-10-17 the owner asked that every session hand the lead a summary when it finishes, so the work can be reverse-engineered later, and that the lead always archive finished sessions (lead transcript e152c9d8, line 21112); the archiving had lived only in a memory note, and was not kept.
+**Requirement:** A command prints the template of a session's summary, headed by its title and naming its file, `docs/sessions/<date>-<title-slug>.md`, where the slug is the one an opening's file name takes from the title. Its sections are one list that every check of a summary reads: the goal, the user's words that started the work, what was delivered, the decisions and whose, the failures and lessons, what is left and who holds it, and the cost.
+**Reason:** A session's record is otherwise spread over its transcript, feature documents and notices, and a transcript is lost on a new session or a compaction; one committed file per session is what survives for the lead and for later study.
+**Proof:** `node --test bin/summary.test.mjs`
+**Discarded:** A summary in the closed notice's text: a notice is one line, outside any repository.
+**Today:** `bin/summary.mjs`, `bin/lib/summary.mjs`, `js-harness summary`
+
 ### A role is the address, and there is one orchestrator
 
 **Problem:** A notice reached an orchestrator that had been relieved: it was sent to the reply address of an earlier message, which belongs to a session and not to the role (relief file, line 78).

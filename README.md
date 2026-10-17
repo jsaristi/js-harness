@@ -450,6 +450,24 @@ PASS  odd/tasks/codex-review-cost.md
 …
 ```
 
+### js-harness summary
+
+Prints the summary a work session leaves when it finishes, the file the lead reads before it archives
+the session. It is kept to reverse-engineer how the work went later, so each section holds facts with
+their evidence (a pull request, a commit, a `path:line`, a command and its output), not prose: the goal
+and the opening, the user's words that started it, what was delivered, the decisions and whose they
+were, what failed and what was learned, what is left and who holds it, and the cost.
+
+```console
+$ js-harness summary path --title "JH 24 · gate más rápido"
+docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md
+$ js-harness summary template --title "JH 24 · gate más rápido" > docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md
+```
+
+The file is named by the day and by the title's letters and digits, without accents, as the
+session's opening is. The session fills every section, commits and pushes the file, and closes with
+it (`notify --kind closed --summary`, below).
+
 ### js-harness failures
 
 Reads the register of what went wrong, `docs/FAILURES.md`: the totals, the count by class and

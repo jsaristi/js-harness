@@ -428,6 +428,19 @@ export function reliefLineOf(line) {
  * title typed on two devices is one. */
 const titleOf = (text) => text.trim().normalize('NFC');
 
+/** What the title `title` has of letters and digits, in lower case and without accents, joined by dashes and
+ * cut at 60 characters: the readable part of an opening's file name and of a session's summary file, so one
+ * title gives one name in both. Empty for a title with no letter or digit. */
+export function titleSlug(title) {
+  return titleOf(title)
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, '');
+}
+
 /** The name of the file that holds the opening of the session titled `title`: what the title has of
  * letters and digits, in lower case and without accents, so a person who lists the folder can tell the
  * files apart, then the start of the title's hash, which is what makes the name the title's own. Nothing
@@ -436,13 +449,7 @@ const titleOf = (text) => text.trim().normalize('NFC');
  * differ by case or by an accent get two names on a disk that ignores case. */
 export function openingFileName(title) {
   const wanted = titleOf(title);
-  const readable = wanted
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .slice(0, 60)
-    .replace(/^-+|-+$/g, '');
+  const readable = titleSlug(title);
   const hash = crypto.createHash('sha256').update(wanted, 'utf8').digest('hex').slice(0, 12);
   return `${readable === '' ? '' : `${readable}-`}${hash}.json`;
 }
