@@ -565,11 +565,18 @@ Each is run once by the build, with its result recorded in Progress.
    (Progress, 02:39).
 4. Do the `Stop` and `SessionStart` hooks fire in a session started through `claude
    remote-control`?
+   Read 2026-10-17, not run: yes, `Stop` and `SessionStart` on `startup`, `resume` and
+   `compact`; no js-harness hook is seen there, since no such session is newer than
+   2026-10-10 (Progress, "T2 test 4").
 5. After a rename, does the old title stop resolving as an address?
    Run 2026-10-16 at 18:43 local: it does, at once, and the restored title resolves again
    (Progress, "T2 test 5").
 6. The clean start against the compaction: may a session clear itself while he has it open, and
    does it lose less than a summary?
+   Run 2026-10-17 at 17:36 local on JH 26: the clear happened and started a new transcript
+   with the source `startup`, so no hook of this project ran; all seven written facts came
+   back from this document by the lead's opening. It loses less than a summary only when the
+   state is written first and the opening is sent (Progress, "T2 test 6").
 
 ### 14. A compaction that loses nothing (T6b; design, version 2, after its two readers)
 
@@ -1655,10 +1662,12 @@ and 3.
   `--opening` with a lone `--` after it is refused instead of taken (`bin/notify.mjs:89-92`);
   one test pipes an opening through the dispatcher's real standard input; the concurrent
   append test proves its writers overlapped, or starts them on a barrier
-- [ ] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
+- [x] T2 The six tests owed, run and recorded, before anything is built on their answers. Test
   2 is retired by his answer of 2026-10-15 (section 13); test 1 is run (2026-10-16, typed
   text); test 3 is run (2026-10-16, not in his sidebar); test 5 is run (2026-10-16, the old
-  title stops resolving at once); tests 4 and 6 remain
+  title stops resolving at once); test 4 is read (2026-10-17, both events fire, `compact`
+  included); test 6 is run (2026-10-17, the clear starts as `startup`, no hook runs, the
+  written state came back whole by the opening)
 - [x] T3 The reader takes `origin`, the peer fields, `SendMessage`'s `to`, `permissionMode`; a
   peer message is neither a prompt nor a title
 - [x] T4 The board: the roster; the channel section (the record's last notices, and the last
@@ -3108,6 +3117,102 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   Commit `175e15f`. gentle-ai on `67e04cb..175e15f`: high (item 2 escalated), lenses risk and reliability, approved
   and acknowledged, lineage review-afeb3126c951c989; its SUGGESTION, a negative case, left. Codex on
   `67e04cb..175e15f`: correct (0.97), recorded.
+- 2026-10-17, JH 26, T2 test 6, run on itself, by the lead's assignment of 08:15Z. The assignment is a claim of the
+  lead's. His answer is typed and read with `sessions --quote` (`e152c9d8`:20292, 08:10Z): "Sí, que la corra
+  (Recomendada)". The question he answered named JH 5. The lead moved the run to JH 26 because JH 26 held no work,
+  so its conversation was the cheap one to lose.
+  - The method: write the state, store the resume prompt with `notify --opening`, and commit (`feat/t2-test6`,
+    worktree `D:\js-harness-worktrees\jh26-test6`). Then `clear_session` on "self", which clears once the turn ends
+    and the session is idle. Then go on from files only and compare. Nothing wakes a cleared session by itself, so
+    before the clear the lead was asked to send it its opening.
+  - Before, written at 08:17Z (03:17 local), the facts the cleared session should get back; each is checked after:
+    - B1. JH 26's feature document `odd/tasks/wake-and-flag.md`, T1 to T4, landed: PR 349 (B1, `--kind ready
+      --pr`), PR 351 (A(a), the Stop hook's wake warning, `bin/lib/stop-wake.mjs`), PR 352 (T4, notify holds a
+      stamped hour to the clock, `stampOff` in `bin/lib/guard.mjs`).
+    - B2. The lead's next two units landed at 07:27Z: PR 371 (`notify --kind ready` runs the land's
+      `pullRequestProblems` and `reviewEvidence`, `readyProblems` in `bin/notify.mjs`, `odd/tasks/ready-checks.md`)
+      and PR 370 (protocols skill section 3: run the installed `js-harness`, `odd/tasks/installed-harness.md`).
+    - B3. JH 26 sent `--kind closed` to the lead at 07:59Z. Its worktrees `jh26-ready` and `jh26-installed` were
+      removed. `jh26-failures-owed` (`docs/failures-owed-t6`) was left untouched and not checked.
+    - B4. Its own mistake this stretch: it edited a worktree while Codex reviewed it, so no record was written, and
+      it cost two more runs. The rule it broke: commit the evidence first, then review.
+    - B5. Channel facts it holds: notices are lines of `~/.js-harness/channel/<slug>.jsonl` (schema
+      `js-harness.channel-notice/v1`); a ready notice carries `pr`; openings are under `openingsDir`; the Stop hook
+      (`js-harness reply --hook`) blocks a session that holds work with nothing in its background.
+    - B6. Its state before this: one host compaction this session (about 07:02Z), with the resume hook's text read
+      and acted on. The opening stored then was stale (it still named 349-352 as open).
+    - B7. The conversation-only facts, which no file held before this line: the lead's two units came from the
+      double-reviewed notes `improvements-2026-10-17-reader1.md` and `-reader2.md` in the lead's notes folder.
+      PR 371's Risk line was edited from "item 3" to "none", since a requested change is not high risk by itself.
+      The `js-harness gate --` guard now says to commit with a plain `git commit`, whose hook waits its turn.
+  - What happened next, read from JH 26's transcript (`74d9b5ac`) and git, not from memory:
+    - The Bash call that committed and pushed the Before started at 08:18:18Z and returned at 22:21:09Z. Its
+      timeout was 400 s, and it never fired. The commit `7d0db2f7` is dated 22:19:48Z, so the pre-commit hook ran
+      for about 14 hours.
+    - The machine did not sleep. The System log since 03:00 local holds no sleep or wake event, only three clock
+      corrections under 2 s at 09:31Z.
+    - The gate log has no event from `jh26-test6`, so the wait is not a gate's. Its cause is not known.
+    - The lead's board saw this hang as "quiet 10h 44m". It was not a clear.
+    - At 22:2xZ the first `clear_session` on "self" was refused: "a message the user sent is waiting in the queue,
+      and a clear would erase it". The queued message was the throughput session's B4b question, sent while the call
+      hung. The answer to it was not delivered, because that session is archived.
+    - At 19:37Z by its stamp, the lead wrote that JH 26 "was cleared". That was the lead's reading of the board.
+      JH 26's conversation was whole when the lead's message reached it.
+  - So by 22:25Z test 6 had not run: the clear never happened. It is asked again now that the queue is empty, from
+    this same Before. B7 gains: the hook's 14-hour hang, and the refusal on a queued message.
+  - After, written by the cleared session at 22:41Z from files only; the old transcript `74d9b5ac` was not read
+    (only its file time, 22:29:55Z, the last write before the clear).
+    - The clear happened. The old conversation is gone from this session's context, and the session came back
+      under a new transcript, `a6db53fe`, with the same title: the channel records its reading of the opening as
+      `a6db53fe`, title `JH 26 · canal y compactación`, at 22:37:20Z.
+    - The start: `SessionStart` ran at 22:36:46Z with the source `startup`, not `clear` (this transcript's first
+      hook records). The first prompt after the clear, the lead's message naming the opening, was queued at
+      22:36:57.659Z and read at 22:36:57.993Z: 7 min 2 s after the old transcript's last write. The lead had read
+      the opening at 22:36:29Z (the channel's reading record, reader `e152c9d8`).
+    - Because the source was `startup`: the resume hook (`js-harness resume --hook`, matcher `compact`) and the
+      rules hook (matcher `compact|clear|resume`) did not run. `js-harness doctor --hook` ran and was cancelled at
+      its 10 s timeout (11,180 ms). The session's folder was `D:\js-harness`, on `main`, not the worktree; the
+      opening named the worktree. So no hook carried anything back: what came back came from the lead's message,
+      the opening it pointed to, and this document the opening pointed to.
+    - The opening itself holds no Bn: it names the worktree, the branch, this entry and the steps after it.
+    - B1. Came back, from this document. Checked against git: `origin/main` holds the merges of PR 349
+      (`8fd28014`), 351 (`43f2ad99`) and 352 (`52c5e7ae`).
+    - B2. Came back, from this document. Checked against git: PR 371 (`4fb0bc90`) and PR 370 (`45c4ba3f`) merged.
+    - B3. Came back, from this document. Checked: `git worktree list` holds `jh26-failures-owed` on
+      `docs/failures-owed-t6` and `jh26-test6`, and no `jh26-ready` or `jh26-installed`. The `--kind closed`
+      notice of 07:59Z was not checked in the channel.
+    - B4. Came back, from this document only; no other file holds it to check it by.
+    - B5. Came back, from this document. Checked: the channel's notices in `~/.js-harness/channel/D--js-harness.jsonl`
+      carry `js-harness.channel-notice/v1`, and `openings` is a folder beside it. The Stop hook's rule was not
+      checked.
+    - B6. Came back, from this document only.
+    - B7. Came back, from this document only, with the two facts it gained (the 14-hour hang, the refused clear).
+    - The board was not read for any Bn: none needed it.
+    - Does it lose less than a summary? For what was written, yes: all seven came back whole, four of them checked
+      against git or files, and none is a paraphrase. For what was not written, it loses everything, where a
+      summary keeps some of it; and the clear brings nothing back by itself. With the start's source `startup`, no
+      hook of this project runs after a clear, so a cleared session that no message reaches starts with nothing
+      but its folder, and that folder was `main`, not its worktree. So a clear loses less than a summary only when
+      the state was written first and the lead sends the opening; this run had both.
+    - Whether he had the session open at the clear is not known from files.
+- 2026-10-17, 17:41 local, JH 26, T2 test 4, by the opening's order ("run test 4 ... as the doc allows"). Read, not
+  run: section 13 and the Progress of 2026-10-15 23:32 say test 4 does not need him at the app, and since T16 no
+  session is opened where he does not see it, so no `claude remote-control` session was started for it. It
+  extends the reading of 2026-10-11 ("Not shown by this: that the matcher `compact` fires there ... nor which hook
+  ran").
+  - The method: a scratchpad script read every transcript of this project and kept those whose entries carry the
+    entry point `sdk-cli` (the remote server's sessions): four, `213bd4ec`, `4454b298`, `8c91f279`, `dec4f35e`.
+    For each it counted the hook records by event, matcher source and command, and the compaction boundaries.
+  - The matcher `compact` fires there: `213bd4ec` (from 2026-10-10) and `4454b298` (from 2026-10-04) each hold one
+    compaction and, after it, one `SessionStart:compact` record of the Orca hook and one of engram's ("Recovering
+    engram context after compaction..."). `SessionStart:resume` fired in `4454b298` (4) and `dec4f35e` (1);
+    `SessionStart:startup` in all four; `Stop` in all four (35, 53 and 6 blocking errors, 3, 1).
+  - Which hook ran: only the Orca hook and engram's are recorded. No js-harness hook appears, and that does not show
+    it would not run: the newest of the four starts 2026-10-10, and a hook that prints nothing leaves no record.
+    This session's own start shows that: gentle-ai's `review stop-hook` and herdr's state hook, both matched on
+    `startup`, left no record, while Orca's (stdout `{}`) and engram's (a warning on stderr) did.
+  - So test 4 is answered: yes, both events fire, `compact` included. Whether a js-harness hook runs there is not
+    shown; a remote session opened by him after a compaction would show it.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
