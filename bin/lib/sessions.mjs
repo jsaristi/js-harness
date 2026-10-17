@@ -2324,6 +2324,16 @@ function pendingAge(session, now, ended) {
   return now - (Number.isNaN(written) ? launched : Math.max(launched, written));
 }
 
+/** Whether `session` (its facts, as `sessionFacts` gives them) ends on a call that has had no result for the held-call
+ * limit at `now`, as the board's held line counts it. A session the host holds on a card writes nothing, so this is what
+ * keeps it on the board past its window (odd/tasks/held-sessions.md, S4). Facts read from a transcript's tail lack the
+ * subagent files `readSession` adds, so a subagent at work counts as held there: the board reads such a session whole
+ * and asks again. */
+export function heldPastLimit(session, now) {
+  const age = pendingAge(session, now, false);
+  return age !== null && age >= PENDING_CALL_LIMIT_MS;
+}
+
 /** How many times the limit fits in an age of `pendingAge`, as a power of two: -1 below the limit or when no call
  * counts, 0 from the limit to twice it, 1 from twice to four times it, and so on. A watch says a call each time it grows. */
 const crossingOf = (age) => (age === null || age < PENDING_CALL_LIMIT_MS ? -1 : Math.floor(Math.log2(age / PENDING_CALL_LIMIT_MS)));

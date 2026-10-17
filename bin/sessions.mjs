@@ -63,7 +63,7 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -446,6 +446,37 @@ function readRelief(file, readFile) {
  * so the two never parse a transcript in two ways. `io` is `{ readFile, readdir, stat, readFacts }`. `measureReaders`
  * (`{ told(sessionId, after, at), kept(query) }`, optional) judges each session's last automatic compaction (`missOf`);
  * without it no session has a miss. */
+// A session the host holds on a card writes nothing, so it would leave the window just when it needs him
+// (odd/tasks/held-sessions.md, S4). A transcript last written within HELD_HORIZON_MS is read from its last
+// HELD_TAIL_BYTES, and kept when it ends on a call that has had no result for the held-call limit.
+const HELD_HORIZON_MS = 7 * 24 * 3600 * 1000;
+const HELD_TAIL_BYTES = 256 * 1024;
+
+/** Whether the transcript at `file`, last written at `changedAt`, outside the window, is held at `now`: `false`
+ * past the horizon, without `io.readTail`, or when its tail cannot be read, since such a session cannot be told. */
+function heldOutsideWindow(file, changedAt, now, io) {
+  if (changedAt < now - HELD_HORIZON_MS || typeof io.readTail !== 'function') return false;
+  try {
+    return heldPastLimit(io.readFacts(io.readTail(file, HELD_TAIL_BYTES)), now);
+  } catch {
+    return false;
+  }
+}
+
+/** The last `bytes` of `file` as text; its first line may be cut, and the transcript parser skips it. */
+function tailOfFile(file, bytes) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const start = Math.max(0, size - bytes);
+    const buffer = Buffer.alloc(size - start);
+    fs.readSync(fd, buffer, 0, buffer.length, start);
+    return buffer.toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders }) {
   let names;
   try {
@@ -470,6 +501,11 @@ export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, 
       continue;
     }
     if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
+    else if (heldOutsideWindow(path.join(projectDir, name), changedAt, generatedAt, io)) {
+      // The tail is the cheap look; the whole read, with its subagents' files, says whether it is held.
+      const session = readSession(id, new Date(changedAt).toISOString(), where, io);
+      if (!session.unavailable && heldPastLimit(session, generatedAt)) read.push(session);
+    }
   }
   const sessions = titledByReadings(read, record.readings);
   // Most recent first, by the last entry when the transcript has one and by its last write otherwise.
@@ -501,6 +537,8 @@ export async function sessionsMain(
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     readdir = (absolute) => fs.readdirSync(absolute),
     stat = (absolute) => fs.statSync(absolute),
+    // The last `bytes` of a file, so a transcript outside the window is judged held without reading all of it.
+    readTail = (absolute, bytes) => tailOfFile(absolute, bytes),
     // The transcript reader, replaceable so a test can make it fail on one transcript.
     readFacts = sessionFacts,
     // The desktop app's records of the sessions (`appSessions`), replaceable so a test gives its own; a failure
@@ -522,7 +560,7 @@ export async function sessionsMain(
   const slug = projectSlug(root);
   const claudeHome = parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude');
   const projectDir = path.join(claudeHome, 'projects', slug);
-  const io = { readFile, readdir, stat, readFacts };
+  const io = { readFile, readdir, stat, readFacts, readTail };
   const pauseTmp = parsed.tmp ?? tmpdir();
   const stateFiles = { readFileSync: readFile, statSync: stat };
   // Where the session that orchestrates this project keeps its notes: one file per project under the

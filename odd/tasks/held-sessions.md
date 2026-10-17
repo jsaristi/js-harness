@@ -1,0 +1,42 @@
+A session the host holds on a card for him stays on the board, and the lead brings the card to him in the lead's session.
+Branch: feat/held-sessions-relayed. Delivery: ask-on-risk. Tests: `node --test` through `js-harness gate`; the commit's tests run on CI.
+
+## Goal
+No session waits on a card in its own window without him being told in the lead's session, with what the card asks.
+
+## Why
+On 2026-10-17 JH 22 and JH 23 sat 20 and 31 hours on a permission card for a Bash command, and JH 26 on a held message, while he was away for ten hours and the lead reported "nothing unblocked". The board drops a transcript not written in the last 12 hours (`bin/sessions.mjs:147`, `readSessionsWindow` at `:472`), and a held session writes nothing, so its 15-minute "held for approval" line (`bin/lib/sessions.mjs:2885-2889`) left the board with it: JH 23 at about 00:14Z, JH 22 at about 10:57Z. The app's note listed all three as "needs the user" the whole time; the lead read that as his to handle in their windows instead of bringing it to him here, though his standing word is that only the lead asks him.
+
+## Done when
+- `node --test bin/lib/sessions.test.mjs bin/sessions.test.mjs` exits 0
+- `node --test bin/lib/manifest.test.mjs` exits 0
+- `npm run check` exits 0
+- A session whose last call has had no result for 15 minutes is on the board however old its transcript, and its line says the host may be holding it for approval.
+
+## In scope / Out of scope
+- In: the board's window (`bin/sessions.mjs`, `bin/lib/sessions.mjs`), the orchestrator skill text (`bin/lib/manifest.mjs`), their tests, README.
+- Out: his permission settings and the host's own approval cards: they are his security settings, and a command cannot answer a card in another window.
+
+## Constraints
+- The 12-hour window stays for every other session — because the board is read on a phone and old finished sessions are noise.
+- The lead never answers a card for him and never stops a session to get around one — because the card is the host asking him.
+
+## Ask me before
+Nothing beyond the usual: the cards themselves are his to answer.
+
+## Specs
+- S1 (his words, typed, 2026-10-17 ~19:45Z, lead transcript): "haz un protocolo para que esto no pase, yo ya te habia dicho que me pasaras las decisiones a esta sesion"
+- S2 (his words, typed, same minute): "como puedo darle permitir todo para que tengas mas independencia?"
+- S3 (his answer by the question tool to "Pregunta 3", what JH 22's card says): "Permiso para un comando"
+- S4 (the lead's scope, from S1): a session whose last call has had no result for the held-call limit stays on the board whatever its transcript's age.
+- S5 (the lead's scope, from S1): the orchestrator skill says that a session the host holds (the board's held-call line, or the app's "needs the user") is brought to him in the lead's session that turn, with the question tool: which session, what the card asks, and what the lead recommends; he answers it in that window.
+
+## Tasks
+- [x] T1 (kind: build) (S4) The board keeps a held session past its window: `readSessionsWindow` reads the last 256 KiB of a transcript last written within seven days, and keeps it when its facts end on a call with no result for the held-call limit, confirmed by the whole read with its subagents' files (`heldPastLimit`, `heldOutsideWindow`). Tests first. Route: inline. RED: `bin/sessions.test.mjs` "stays on the board past the window" got `[]`; a first GREEN broke "--hours widens the window" (a foreground subagent that wrote 45 s ago counted as held from the tail alone), fixed by the whole read; GREEN: `bin/sessions.test.mjs` and `bin/lib/sessions.test.mjs` 540 pass, 0 fail. On the real board it brings back JH 22 (20h 47m), JH 23 (31h 35m), JH 19 (35h 44m) and JH 20 (36h 14m); the look took 32 s, as before (31.8 s).
+- [x] T2 (kind: docs) (S5) The orchestrator skill (section "Questions to the user") and README. Tests first. Route: inline. RED: `bin/lib/manifest.test.mjs` "how a question reaches the user" failed at the new assertion; GREEN: 174 of 174.
+
+## Log
+- L1 (2026-10-17, his words) S1 and S2, quoted above.
+- L2 (2026-10-17, the lead) Evidence. JH 22's last entry is a Bash tool_use at 2026-10-16T22:57:47Z with no result (`rm -rf D:/practice-jh22` then `node scripts/practice.mjs setup/run --no-host`, run in the background); JH 23's is a Bash tool_use at 2026-10-16T12:10:03Z with no result (`sed -i` on a scratchpad script, `mkdir -p D:/jh23-fp-scratch`, `node fp-build.mjs`). `stop_session` on both said "it is waiting for the user to answer a request". All three run in `bypassPermissions`; `~/.claude/settings.json` has no `ask` rule, only `deny` rules for secrets, and `js-harness guard` only denies (`bin/guard.mjs:50`). So the card is the host's own; both commands write to a new folder at the root of `D:`, outside the session's folders: the likely cause, not proven.
+- L3 (2026-10-17, the lead) Answer to S2: his settings already allow everything they can (bypass mode, deny rules only for secrets); the card is the host's own check and not a setting to open. What keeps sessions from tripping it is scratch inside their scratchpad or a `mktemp -d` folder, as the test discipline already says; the lead does not change his security settings.
+- L4 (2026-10-17, the lead) The fixed board found two more held sessions nobody knew of: JH 19 and JH 20, the "dormant reserves" whose queued messages never ran, each on a Bash call with no result for about 36 hours. The lead's mistake, for the record: the app's note marked JH 22, JH 23 and JH 26 "needs the user" for the whole stretch he was away, and the lead treated that as his to find in their windows, against his standing word that every question reaches him in the lead's chat. T2 writes the opposite into the skill.

@@ -2535,6 +2535,8 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('in the reply to their next message'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // odd/tasks/held-sessions.md, S5: a card the host holds in a session's window reaches him here, not there.
+  assert.ok(text.includes("- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find."));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
   assert.ok(text.includes('- A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (`rule:double-review`, `js-harness-protocols` section 1), and says what its readers changed, or names by path the reviewed text it rests on.'));
   // A timer outlived what it waited for (his correction, 2026-10-14): a background task declares its purpose and its end.
