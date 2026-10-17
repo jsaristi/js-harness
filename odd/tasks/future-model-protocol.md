@@ -531,3 +531,7 @@ now only the style `settings.json` selects does. Found in passing, the same clas
 of a removed folder (a README in `hooks`) gave lines no request carries; now only `CLAUDE.md` and
 `AGENTS.md` do. `HOME_TOKEN` moved to `evals/without.mjs`, which reads it back, and `home.mjs`
 imports it. 205 tests of the probe, `without`, `home` and `arms` pass.
+
+L28 (2026-10-17, 23:39 UTC by `date`) Codex rechecked `cb9f1f3..3f3d59a` (48,783 input tokens, recorded): all three fixed, no new finding.
+gentle-ai assessed C6a `cb9f1f3` from `3badd8b`: medium, not due (`under_budget`, 338 changed lines).
+gentle-ai assessed the slice `cb9f1f3..3f3d59a` (C6a and its fixes) from `3badd8b`: medium, not due (`under_budget`, 498 changed lines).
