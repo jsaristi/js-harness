@@ -238,7 +238,7 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [x] T5 (kind: verify) S5: the clean-home cycle, as a test or a gated script (PR 265, L5; the update step, L7)
 - [x] T5a (kind: build) S5: uninstall removes the empty folders install made, never one that was there (PR 265, L5)
 - [ ] T6 (kind: verify) S6: the stability pass on `main`
-- [ ] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail)
+- [x] T6a (kind: build) S6: a heavy run beside a gate is refused whatever its size: one test file the gate log times over a minute counts as several, and an eval batch shows itself to the guard as a gate holder does; one file stays free by the skill's rule (`odd/tasks/test-run-warning.md`, "One file stays free, as the skill says") and the refusal is his decision, so narrowing it goes to him through the lead first (`docs/FAILURES.md`, heavy-run-beside-gate: two single files of 65 to 200 s beside gates since the protocol line, one of which made a gate fail); built inline (L23)
 - [x] T6b (kind: build) S6: `scripts/package-contents.test.mjs` reads both shapes of `npm pack --json`, the array of npm 11 and the object keyed by name of npm 12 (L18, finding 2)
 - [x] T6c (kind: build) S6: the launcher test whose shell's parent has ended holds under a whole run's load, or is quarantined in docs/FLAKY.md (L18, finding 3)
 - [x] T6d (kind: design) S6: `merge-review-covers-main`, open for a merge below HEAD; narrowing what a review covers is his (L18, finding 4); overtaken by `723af7c`, no design left (L22)
@@ -407,3 +407,17 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   failures` lists `merge-review-covers-main` as `controlled`. Reading a merge by what was written in it is
   already how `mergeStart` reviews a merge at HEAD, so no new narrowing of what a review covers is left to
   ask him.
+- L23 (2026-10-16, JH 25): T6a, inline, test first. The guard's refusal (`testRunWarning`,
+  `bin/lib/test-run-warning.mjs`) now counts one test file as heavy when the gate log timed a gate that ran it
+  alone (`gate ... -- node --test <file>`) over `HEAVY_FILE_SECONDS`, 60 (`timedSeconds`, the longest such
+  run; the file named from the folder the command runs in, which the guard takes from the payload's `cwd`).
+  A file no gate ran alone stays free, as before: nothing times a file inside `check`'s tests sensor, so the
+  set grows only as heavy files are run under `js-harness gate`, which the refusal asks for. An eval batch
+  (`evals/suite.mjs`) writes a mark under `~/.js-harness/gate/batches` and beats it as a gate's holder beats
+  its file (`bin/lib/batch-mark.mjs`); the guard reads it as a holder, and the refusal says to wait for the
+  batch. Gates do not wait for a batch: the task asked the guard to see it, and making gates wait would change
+  their line. Nothing narrowed what is refused, so no question went to him. RED: `batch-mark.mjs` missing,
+  the new guard test refused nothing, the suite left no mark. GREEN, one file at a time:
+  `bin/lib/test-run-warning.test.mjs` 10 of 10, `bin/lib/batch-mark.test.mjs` 6 of 6, `bin/guard.test.mjs` 23
+  of 23, `evals/suite.test.mjs` 104 of 104; `js-harness failures` lists `heavy-run-beside-gate` as
+  `controlled`. An independent verifier (risk item 2: the guard answers every Bash call of every session) found no blocker: the three parts met, and a differential of 17 commands against the baseline gave no difference; of its advisories, a sweep that cannot remove a dead mark no longer fails the batch, and a gate command the log cut at its length times no file. Not built: a gate that waits for a batch, a per-file time from `check`'s own runs, forgetting one slow run before the log rotates, and keeping a live batch's mark through `uninstall`.

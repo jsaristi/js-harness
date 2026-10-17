@@ -16,7 +16,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, index = null, configDir } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -30,7 +30,8 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
-    testRun: (command) => testRunWarning(command, { env: {}, holder: () => held }),
+    // `timed` stands in for the gate log: the seconds a gate ran each file alone, by its name.
+    testRun: (command, options) => testRunWarning(command, { env: {}, holder: () => held, fileSeconds: (file) => timed[file], ...options }),
     claudeConfigDir: configDir,
     readIndex: () => {
       if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
@@ -179,6 +180,16 @@ test('a node --test of several files outside a turn is denied while another gate
   assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), quiet, 'the lock is free');
   assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: 'node --test bin/a.test.mjs' } }, { held }), quiet, 'one file');
   assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: `js-harness gate -- ${command}` } }, { held }), quiet, 'in a turn');
+});
+
+test('one file the gate log timed over a minute is denied beside a gate, named from the folder of the payload (first-version T6a)', async () => {
+  const held = { pid: 4242, cwd: 'D:/js-harness-worktrees/other' };
+  const timed = { 'bin/slow.test.mjs': 95 };
+  const refused = await hook({ tool_name: 'Bash', cwd: 'D:/w', tool_input: { command: 'node --test D:/w/bin/slow.test.mjs' } }, { held, timed });
+  assert.equal(denied(refused).permissionDecisionReason, "node --test of bin/slow.test.mjs, which the gate log timed at 95 s, starts outside a turn while the gate of D:/js-harness-worktrees/other holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, which waits its turn");
+  const quiet = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w', tool_input: { command: 'node --test bin/quick.test.mjs' } }, { held, timed }), quiet, 'a file never timed');
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w', tool_input: { command: 'node --test bin/slow.test.mjs' } }, { timed }), quiet, 'the lock is free');
 });
 
 test('any other tool, an unreadable payload, or a failure inside passes silently with exit 0', async () => {

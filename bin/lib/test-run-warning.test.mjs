@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { testRunFiles, testRunWarning } from './test-run-warning.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { GATE_COMMAND_MAX, gateRecord } from './gate-log.mjs';
+import { markBatch } from './batch-mark.mjs';
+import { HEAVY_FILE_SECONDS, testRunFiles, testRunWarning, timedSeconds } from './test-run-warning.mjs';
 
 // The warning `js-harness guard --hook` gives for a whole test run started beside a gate
 // (odd/tasks/test-run-warning.md). The look at the lock is a stand-in here: no test reads this machine's.
@@ -8,6 +13,8 @@ import { testRunFiles, testRunWarning } from './test-run-warning.mjs';
 const HOLDER = { token: '1-a', pid: 1, cwd: 'D:\\js-harness-worktrees\\other' };
 const held = () => HOLDER;
 const free = () => null;
+// No test reads this machine's gate log either: a file the log never timed is one no gate ran alone.
+const untimed = () => undefined;
 const warned = (what) => `node --test of ${what} starts outside a turn while the gate of D:\\js-harness-worktrees\\other holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, or one file at a time`;
 
 test('testRunFiles counts the files of a node --test run as a command of its own, and is null for any other command', () => {
@@ -22,8 +29,8 @@ test('testRunFiles counts the files of a node --test run as a command of its own
 });
 
 test('testRunWarning warns for node --test of several files or of all while the lock is held outside a turn', () => {
-  assert.equal(testRunWarning('node --test bin/a.test.mjs bin/b.test.mjs', { env: {}, holder: held }), warned('2 test files'));
-  assert.equal(testRunWarning('node --test', { env: {}, holder: held }), warned('every test file'));
+  assert.equal(testRunWarning('node --test bin/a.test.mjs bin/b.test.mjs', { env: {}, holder: held, fileSeconds: untimed }), warned('2 test files'));
+  assert.equal(testRunWarning('node --test', { env: {}, holder: held, fileSeconds: untimed }), warned('every test file'));
   assert.match(testRunWarning('node --test a b', { env: {}, holder: () => ({ token: null, pid: null }) }), /while another gate holds/);
 });
 
@@ -37,7 +44,7 @@ test('testRunWarning says nothing for one file, a free lock, a run under js-harn
     ['node --test a b', { JS_HARNESS_CHECK_INNER: '1' }, held],
     ['git status', {}, held],
   ]) {
-    assert.equal(testRunWarning(command, { env, holder }), null, command);
+    assert.equal(testRunWarning(command, { env, holder, fileSeconds: untimed }), null, command);
   }
   // The lock is not looked at for a command that needs no look.
   assert.equal(testRunWarning('git status', { env: {}, holder: () => assert.fail('the lock was looked at') }), null);
@@ -49,7 +56,7 @@ test('testRunWarning sees a run inside wsl.exe and sh -c, and a file named by a 
   // The command of the slip, as the Bash tool was given it: the variable was empty, and the whole suite ran.
   const slip = 'wsl.exe -d Ubuntu -- sh -c "cd /mnt/d/js-harness-worktrees/exact-tests && for f in bin/lib/a.test.mjs bin/lib/b.test.mjs; do /home/o/.local/node/bin/node --test --test-reporter=tap \\$f 2>&1 | grep -E pass | head -5; done"';
   assert.equal(testRunFiles(slip), Infinity);
-  assert.equal(testRunWarning(slip, { env: {}, holder: held }), warned('several test files'));
+  assert.equal(testRunWarning(slip, { env: {}, holder: held, fileSeconds: untimed }), warned('several test files'));
   assert.equal(testRunFiles('wsl.exe -d Ubuntu -- /home/o/node --test a.mjs b.mjs'), 2);
   assert.equal(testRunFiles('wsl -- node --test'), 0);
   assert.equal(testRunFiles("bash -c 'node --test a.mjs b.mjs'"), 2);
@@ -72,11 +79,105 @@ test('testRunWarning sees a run inside wsl.exe and sh -c, and a file named by a 
 });
 
 test('testRunWarning counts a glob as several files, reads quotes whole, and exempts only the run under js-harness gate', () => {
-  assert.equal(testRunWarning('node --test bin/lib/*.test.mjs', { env: {}, holder: held }), warned('several test files'));
-  assert.equal(testRunWarning('node --test --test-name-pattern="foo|bar" a.mjs', { env: {}, holder: held }), null);
-  assert.equal(testRunWarning("node --test --test-name-pattern 'a; b' a.mjs", { env: {}, holder: held }), null);
-  assert.equal(testRunWarning('js-harness gate -- echo done; node --test a.mjs b.mjs', { env: {}, holder: held }), warned('2 test files'));
-  assert.equal(testRunWarning('node --test --test-name-pattern="js-harness gate" a.mjs b.mjs', { env: {}, holder: held }), warned('2 test files'));
-  assert.equal(testRunWarning('js-harness gate -- "node --test a.mjs b.mjs"', { env: {}, holder: held }), null);
-  assert.equal(testRunWarning('js-harness gate --wait 240 -- node --test a.mjs b.mjs && echo ok', { env: {}, holder: held }), null);
+  assert.equal(testRunWarning('node --test bin/lib/*.test.mjs', { env: {}, holder: held, fileSeconds: untimed }), warned('several test files'));
+  assert.equal(testRunWarning('node --test --test-name-pattern="foo|bar" a.mjs', { env: {}, holder: held, fileSeconds: untimed }), null);
+  assert.equal(testRunWarning("node --test --test-name-pattern 'a; b' a.mjs", { env: {}, holder: held, fileSeconds: untimed }), null);
+  assert.equal(testRunWarning('js-harness gate -- echo done; node --test a.mjs b.mjs', { env: {}, holder: held, fileSeconds: untimed }), warned('2 test files'));
+  assert.equal(testRunWarning('node --test --test-name-pattern="js-harness gate" a.mjs b.mjs', { env: {}, holder: held, fileSeconds: untimed }), warned('2 test files'));
+  assert.equal(testRunWarning('js-harness gate -- "node --test a.mjs b.mjs"', { env: {}, holder: held, fileSeconds: untimed }), null);
+  assert.equal(testRunWarning('js-harness gate --wait 240 -- node --test a.mjs b.mjs && echo ok', { env: {}, holder: held, fileSeconds: untimed }), null);
+});
+
+
+// first-version T6a: a heavy run beside a gate is refused whatever its size. Two single files of 65 to 200 s ran
+// beside gates past the protocol line, and one made a gate fail (docs/FAILURES.md, heavy-run-beside-gate).
+
+const at = (seconds) => `node --test of bin/slow.test.mjs, which the gate log timed at ${seconds} s, starts outside a turn while the gate of D:\\js-harness-worktrees\\other holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, which waits its turn`;
+
+test('one test file the gate log times over a minute counts as several: refused while the lock is held', () => {
+  const asked = [];
+  const timed = (file) => {
+    asked.push(file);
+    return file === 'bin/slow.test.mjs' ? HEAVY_FILE_SECONDS + 30 : undefined;
+  };
+  assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, holder: held, fileSeconds: timed }), at(HEAVY_FILE_SECONDS + 30));
+  // Named as the gate log names it: from the folder the command runs in, with forward slashes.
+  assert.equal(testRunWarning('node --test .\\bin\\slow.test.mjs', { env: {}, holder: held, fileSeconds: timed }), at(HEAVY_FILE_SECONDS + 30));
+  assert.deepEqual(asked, ['bin/slow.test.mjs', 'bin/slow.test.mjs']);
+});
+
+test('one test file stays free when the gate log timed it at a minute or less, never timed it, or the lock is free', () => {
+  for (const seconds of [HEAVY_FILE_SECONDS, 12.5, undefined]) {
+    assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, holder: held, fileSeconds: () => seconds }), null, String(seconds));
+  }
+  // The gate log is read only once the lock is held, and not inside a turn.
+  assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, holder: free, fileSeconds: () => assert.fail('the gate log was read') }), null);
+  assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: { JS_HARNESS_GATE_HELD: '1' }, holder: held, fileSeconds: () => assert.fail('the gate log was read') }), null);
+});
+
+test('timedSeconds takes the longest run of a file that a gate ran alone, and nothing from a gate of several files', () => {
+  const gate = (id, command, seconds, cwd = 'D:\\js-harness-worktrees\\one') => [
+    { v: 1, event: 'start', id, at: '2026-10-16T10:00:00.000Z', cwd, command, pid: 1, lock: 'took', waitedSeconds: 0, waitedFor: [] },
+    { v: 1, event: 'end', id, at: '2026-10-16T10:05:00.000Z', seconds, result: 'exit 0' },
+  ];
+  const events = [
+    ...gate('a', 'gate -- node --test bin/slow.test.mjs', 70),
+    ...gate('b', 'gate --wait 240 -- node --test bin/slow.test.mjs', 95.5, 'D:\\js-harness-worktrees\\two'),
+    ...gate('c', 'gate -- node --test bin/slow.test.mjs bin/other.test.mjs', 400),
+    ...gate('d', 'check', 900),
+    ...gate('e', 'gate -- "node --test bin/quick.test.mjs"', 8),
+    { v: 1, event: 'start', id: 'f', at: '2026-10-16T11:00:00.000Z', cwd: 'D:\\w', command: 'gate -- node --test bin/slow.test.mjs', pid: 1, lock: 'took', waitedSeconds: 0, waitedFor: [] },
+  ];
+  assert.equal(timedSeconds(events, 'bin/slow.test.mjs'), 95.5);
+  assert.equal(timedSeconds(events, 'bin/quick.test.mjs'), 8);
+  assert.equal(timedSeconds(events, 'bin/other.test.mjs'), undefined);
+  assert.equal(timedSeconds([], 'bin/slow.test.mjs'), undefined);
+  // A command the log cut at its length may have lost every file after the first: it times none.
+  const prefix = 'gate -- node --test ';
+  const file = `${'d/'.repeat(GATE_COMMAND_MAX)}`.slice(0, GATE_COMMAND_MAX - prefix.length - 'a.mjs'.length) + 'a.mjs';
+  assert.equal(`${prefix}${file}`.length, GATE_COMMAND_MAX);
+  assert.equal(timedSeconds(gate('g', `${prefix}${file}`, 500), file), undefined);
+  assert.equal(timedSeconds(gate('h', `${prefix}${file.slice(2)}`, 500), file.slice(2)), 500);
+});
+
+test('testRunWarning reads the gate log of its home by default: a file a gate ran alone for over a minute is refused', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-heavy-file-'));
+  try {
+    // Two checkouts of one repository (a worktree's .git is a file naming the common folder), and another project.
+    const main = path.join(home, 'repo');
+    const tree = path.join(home, 'tree');
+    const other = path.join(home, 'other');
+    fs.mkdirSync(path.join(main, '.git', 'worktrees', 'tree'), { recursive: true });
+    fs.mkdirSync(tree);
+    fs.writeFileSync(path.join(tree, '.git'), `gitdir: ${path.join(main, '.git', 'worktrees', 'tree')}\n`);
+    fs.mkdirSync(path.join(other, '.git'), { recursive: true });
+    let clock = Date.parse('2026-10-16T10:00:00.000Z');
+    const record = gateRecord({ home, cwd: main, command: 'gate -- node --test bin/slow.test.mjs', now: () => clock });
+    record.start({ lock: 'took', waitedMs: 0, waitedFor: [] });
+    clock += (HEAVY_FILE_SECONDS + 30) * 1000;
+    record.end({ result: 'exit 0' });
+    assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, home, cwd: tree, holder: held }), at(HEAVY_FILE_SECONDS + 30));
+    assert.equal(testRunWarning('node --test bin/quick.test.mjs', { env: {}, home, cwd: tree, holder: held }), null);
+    // Codex, 2026-10-16: the gate log is the machine's, so a file of the same name in another project is not timed.
+    assert.equal(testRunWarning('node --test bin/slow.test.mjs', { env: {}, home, cwd: other, holder: held }), null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an eval batch shows itself to the guard as a gate holder does: several files, or a heavy one, are refused beside it', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-batch-guard-'));
+  try {
+    assert.equal(testRunWarning('node --test a.mjs b.mjs', { env: {}, home }), null);
+    const release = markBatch(home, { cwd: 'D:\\js-harness-worktrees\\evals', command: 'node evals/suite.mjs --name screen' });
+    try {
+      assert.equal(testRunWarning('node --test a.mjs b.mjs', { env: {}, home }), "node --test of 2 test files starts outside a turn while the eval batch of D:\\js-harness-worktrees\\evals runs: both share the cores and miss their bounds; wait for the batch to end, or run one file at a time");
+      assert.equal(testRunWarning('node --test a.mjs', { env: {}, home }), null);
+    } finally {
+      release();
+    }
+    assert.equal(testRunWarning('node --test a.mjs b.mjs', { env: {}, home }), null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
