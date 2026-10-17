@@ -1533,3 +1533,13 @@ test('--prune is a mode of its own: with --land or --dry-run it is a usage error
     assert.equal(code, 2, argv.join(' '));
   }
 });
+
+// The Orca app's worktrees are its own, as `.claude/worktrees` are the Claude app's (odd/tasks/land-unattended.md, T11).
+test('a land keeps a landed worktree of the Orca app, under orca/workspaces', async () => {
+  const { root, heads } = makeQueueRepo();
+  const orcas = idle(worktree(root, path.join(path.dirname(root), 'orca', 'workspaces', 'js-harness', 'copepod'), 'feat/a'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(orcas), true, out.join('\n'));
+  assert.deepEqual(removedOf(root), []);
+});
