@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { removableWorktrees } from './lib/worktrees.mjs';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
@@ -68,7 +69,7 @@ const TIMEOUT_MS = 60_000;
  * dry run and found its git directory; `said` keeps the last line the land printed. */
 function landLog({ now, session }) {
   const iso = (ms) => new Date(ms).toISOString();
-  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], exit: null, said: null };
+  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], removed: [], exit: null, said: null };
   return {
     record,
     file: null,
@@ -607,6 +608,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       }
     }
     log.record.landed = merged.map((pr) => pr.number);
+    log.landedBranches = new Map(merged.map((pr) => [pr.headRefName, pr.number]));
     stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
     // Main has moved: the relief's lines never turn a land into a failure.
     try {
@@ -632,6 +634,28 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   }
 }
 
+/** After a land, removes the worktree of each landed pull request that can go with nothing lost (`removableWorktrees`:
+ * on its branch, clean, idle, its head in the main the land pushed) with `git worktree remove`, never `--force`; the
+ * branch stays. Each one removed is named in the land's record (odd/tasks/land-unattended.md, T9). */
+function removeLandedWorktrees({ cwd, run, now, log, stdout }) {
+  const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
+  const found = removableWorktrees({ cwd, base: log.record.candidate, branches: new Set(log.landedBranches.keys()), gitIn, now });
+  if (found === null) {
+    stdout('Could not list the worktrees: no worktree of a landed pull request was removed.');
+    return;
+  }
+  for (const tree of found) {
+    const pr = log.landedBranches.get(tree.branch);
+    const removed = gitIn(cwd, 'worktree', 'remove', tree.path);
+    if (!removed.ok) {
+      stdout(`Could not remove the worktree of PR ${pr} at ${tree.path} (${removed.err.split('\n')[0] || 'git gave no reason'}): it stays.`);
+      continue;
+    }
+    log.record.removed.push({ pr, path: tree.path });
+    stdout(`Removed the worktree of PR ${pr} at ${tree.path}: its branch ${tree.branch} is in main, and the worktree was clean and idle. The branch stays.`);
+  }
+}
+
 export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   const { env = process.env, now = Date.now, stdout: printOut = console.log, stderr: printErr = console.error } = deps;
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -654,6 +678,15 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     printErr(line);
   };
   const code = await queueRun(args, { ...deps, stdout, stderr, log });
+  if (code === 0 && log.landedBranches?.size > 0) {
+    // Outside the record's `said`, as telling is: what the land did ended with main moved. A removal that fails
+    // changes no exit.
+    try {
+      removeLandedWorktrees({ cwd: args.cwd, run: deps.run ?? spawnSync, now, log, stdout: printOut });
+    } catch (err) {
+      printOut(`Could not remove the worktrees of the landed pull requests (${err.message}): the land's exit stands.`);
+    }
+  }
   if (log.file && log.record.leftOut.length > 0) {
     // After the land's own last line, and not as its `said`: telling is no part of what the land did. A notice
     // that cannot be written changes no exit either.
