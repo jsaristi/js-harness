@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
-import { circleciState, failedRows, landingLines, localSuite, mergeQueueMain } from './merge-queue.mjs';
+import { circleciState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, tellLeftOut } from './merge-queue.mjs';
+import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
+import { appendGateEvent } from './lib/gate-log.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
@@ -200,10 +202,10 @@ function landRunner(prs, checks, onChecks = () => {}) {
 
 const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks);
   const out = [];
-  const code = await mergeQueueMain(['--land', '--cwd', root], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
   return { code, out, calls };
 }
 
@@ -1176,8 +1178,8 @@ test('--land writes one land record: the pull requests it looked at, each left o
     main,
     considered: [1, 2, 3, 4],
     leftOut: [
-      { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.' },
-      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'] },
+      { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.', told: null },
+      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'], told: null },
     ],
     phases: [{ phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }],
     circleci: { state: 'green', name: 'check', conclusion: 'success', url: 'https://app.circleci.com/x' },
@@ -1194,7 +1196,7 @@ test('a bisected land records each suite run and the pull request that turned th
   const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite });
   assert.equal(code, 0, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
-  assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests  1 failed' }]);
+  assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests  1 failed', told: null }]);
   assert.deepEqual(record.phases, [{ phase: 'suite', ok: false }, { phase: 'circleci', ok: null }, { phase: 'suite', ok: true }, { phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }]);
   assert.deepEqual(record.landed, [1]);
 });
@@ -1222,7 +1224,7 @@ test('a land of one pull request red on this machine records it as left out red,
   const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, said: 'npm run test exited 1' }) });
   assert.equal(code, 4, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
-  assert.deepEqual([record.exit, record.leftOut, record.landed], [4, [{ pr: 1, reason: 'red', said: 'npm run test exited 1' }], []]);
+  assert.deepEqual([record.exit, record.leftOut, record.landed], [4, [{ pr: 1, reason: 'red', said: 'npm run test exited 1', told: null }], []]);
 });
 
 test('--land starts CircleCI with the local suite: the queue branch of the candidate is on origin while the suite runs (odd/tasks/land-unattended.md, D)', async () => {
@@ -1266,4 +1268,83 @@ test('a land whose suite did not run and whose queue branch origin keeps names t
   assert.equal(out.at(-1), 'The suite did not run on this machine (gate: nothing ran): main was not pushed, and nothing was bisected.');
   const [record] = landsOf(root);
   assert.equal(record.said, out.at(-1), 'the record keeps the exit line, not the cleanup');
+});
+
+// A(b) (odd/tasks/land-unattended.md, Design 6): the session of a pull request a land leaves out is told why.
+const harnessHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-home-'));
+const slugOf = (root) => projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root));
+const readyFrom = (title, pr, at = '2026-10-17T01:00:00.000Z') =>
+  newNotice({ at, from: { host: 'pc', id: 'abc', source: 'transcript', title }, to: 'orchestrator', kind: 'ready', text: `PR ${pr} ready to land`, pr });
+const toldNotes = (home, slug) => readNotices(home, slug).notices.filter((notice) => notice.from?.source === 'merge-queue');
+
+test('failingTests names the failing tests of the last gate that ended at a folder, from the gate log, and none for another folder', () => {
+  const home = harnessHome();
+  const place = path.join(os.tmpdir(), 'merge-queue-1-2');
+  const gate = (id, cwd, failing, at) => {
+    appendGateEvent(home, { v: 1, event: 'start', id, at, cwd, command: 'check', pid: 1, lock: 'parent', waitedSeconds: 0, waitedFor: [] });
+    appendGateEvent(home, { v: 1, event: 'end', id, at, seconds: 1, result: failing.length ? 'fail' : 'pass', sensors: [{ name: 'tests', seconds: 1, pass: !failing.length, timedOut: false, ...(failing.length && { failing }) }] });
+  };
+  gate('a', place, ['an old red'], '2026-10-17T01:00:00.000Z');
+  gate('b', place, ['the land turns red', 'and so does this'], '2026-10-17T01:05:00.000Z');
+  gate('c', path.join(os.tmpdir(), 'another'), ['not this land'], '2026-10-17T01:06:00.000Z');
+  assert.deepEqual(failingTests(home, place), ['the land turns red', 'and so does this']);
+  assert.deepEqual(failingTests(home, path.join(os.tmpdir(), 'none')), []);
+  assert.deepEqual(failingTests(harnessHome(), place), [], 'no gate log: no names');
+});
+
+test('tellLeftOut tells the session whose ready notice names a left-out pull request why, once a ready notice, and nobody for a pull request no work session named', () => {
+  const home = harnessHome();
+  const slug = 'project';
+  appendNotice(home, slug, readyFrom('JH 7 · the feature', 2));
+  appendNotice(home, slug, readyFrom('JH ORQ · js-harness', 3));
+  const record = {
+    leftOut: [
+      { pr: 2, reason: 'red', said: 'FAIL  tests', failing: ['the one test'] },
+      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'] },
+      { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.' },
+    ],
+  };
+  const lines = [];
+  const now = () => Date.parse('2026-10-17T02:00:00.000Z');
+  tellLeftOut({ record, home, slug, now, stdout: (line) => lines.push(line) });
+  const notes = toldNotes(home, slug);
+  assert.equal(notes.length, 1, 'only PR 2 has a work session that said it was ready');
+  assert.deepEqual([notes[0].kind, notes[0].to], ['note', { role: 'work', number: 7 }]);
+  assert.equal(notes[0].text, 'PR 2 was left out of a land (red): FAIL  tests. Failing tests: the one test.');
+  assert.deepEqual(record.leftOut.map((out) => out.told), [7, null, null]);
+  assert.deepEqual(lines, ['Told JH 7 · the feature why PR 2 was left out.']);
+  tellLeftOut({ record, home, slug, now, stdout: () => {} });
+  assert.equal(toldNotes(home, slug).length, 1, 'the same reason is not told twice for one ready notice');
+  appendNotice(home, slug, readyFrom('JH 7 · the feature', 2, '2026-10-17T03:00:00.000Z'));
+  tellLeftOut({ record, home, slug, now: () => Date.parse('2026-10-17T04:00:00.000Z'), stdout: () => {} });
+  assert.equal(toldNotes(home, slug).length, 2, 'a newer ready notice is told again');
+});
+
+test('a told reason that does not fit a notice is cut to its length, and a record that cannot be read tells nobody and says so', () => {
+  const home = harnessHome();
+  const slug = 'project';
+  appendNotice(home, slug, readyFrom('JH 7 · the feature', 2));
+  const record = { leftOut: [{ pr: 2, reason: 'red', said: 'FAIL  tests', failing: Array.from({ length: 60 }, (_, index) => `test number ${index} of the suite`) }] };
+  tellLeftOut({ record, home, slug, now: Date.now, stdout: () => {} });
+  const [note] = toldNotes(home, slug);
+  assert.equal(note.text.length, NOTICE_TEXT_MAX);
+  assert.ok(note.text.endsWith('…'), note.text.slice(-20));
+  const lines = [];
+  const unreadable = { leftOut: [{ pr: 2, reason: 'merge', said: 'it does not merge.' }] };
+  tellLeftOut({ record: unreadable, home, slug, now: Date.now, stdout: (line) => lines.push(line), readFile: () => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); } });
+  assert.match(lines.join('\n'), /^Could not read the channel's record .+ \(EBUSY\): no session was told why its pull request was left out\.$/);
+  assert.deepEqual(unreadable.leftOut.map((out) => out.told), [null]);
+});
+
+test('a land tells the session of the pull request it finds red the failing tests, and records them and who was told (odd/tasks/land-unattended.md, A(b))', async () => {
+  const { root, heads } = makeQueueRepo();
+  const home = harnessHome();
+  appendNotice(home, slugOf(root), readyFrom('JH 9 · feature b', 2));
+  const suite = (dir) => (fs.readFileSync(path.join(dir, 'b.txt'), 'utf8').includes('B from b') ? { ok: false, said: 'FAIL  tests', failing: ['b breaks it'] } : { ok: true });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite, env: { JS_HARNESS_HOME: home } });
+  assert.equal(code, 0, out.join('\n'));
+  const [record] = landsOf(root);
+  assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests', failing: ['b breaks it'], told: 9 }]);
+  assert.deepEqual(toldNotes(home, slugOf(root)).map((note) => [note.to.number, note.text]), [[9, 'PR 2 was left out of a land (red): FAIL  tests. Failing tests: b breaks it.']]);
+  assert.equal(record.said, `Landed: main ${record.main.slice(0, 7)} is now ${record.candidate.slice(0, 7)}, with PR 1.`, 'the record keeps the land\'s own last line');
 });
