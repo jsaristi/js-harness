@@ -37,12 +37,13 @@ const GH_LOG_PREFIX = /^[^\t\r\n]*\t[^\t\r\n]*\t\S+ ?/;
 
 /** The `LOG_LINES` of a red run's log the gate prints, each without gh's prefix: from the test runner's list of
  * the failing tests when it has one, which the gate log reads their names from and the end alone can cut, and
- * otherwise the end. */
-function failedLog(stdout) {
+ * otherwise the end. Lines a window from the list leaves out at the end are said, with where to read them. */
+function failedLog(stdout, id) {
   const lines = String(stdout ?? '').trimEnd().split(/\r?\n/).map((line) => line.replace(GH_LOG_PREFIX, ''));
   const list = lines.findIndex((line) => line.trim() === '✖ failing tests:');
   const from = list === -1 ? Math.max(0, lines.length - LOG_LINES) : Math.min(list, Math.max(0, lines.length - LOG_LINES));
-  return lines.slice(from, from + LOG_LINES).join('\n');
+  const left = lines.length - (from + LOG_LINES);
+  return [...lines.slice(from, from + LOG_LINES), ...(left > 0 ? [`… ${left} more lines: gh run view ${id} --log-failed`] : [])].join('\n');
 }
 
 /** Why this gate's tests go to CI, or null when they run here: it is the gate of a commit (or a merge) being made,
@@ -158,7 +159,7 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
     // gate's bound is.
     if (run.conclusion === 'failure') {
       const log = gh(['run', 'view', id, '--log-failed']);
-      return { ran: true, pass: false, url: run.url, seconds, output: failedLog(log.stdout) };
+      return { ran: true, pass: false, url: run.url, seconds, output: failedLog(log.stdout, id) };
     }
     return { ran: false, why: `its run (${run.url}) ended ${run.conclusion || 'with no conclusion'}` };
   } catch (err) {

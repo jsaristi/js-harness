@@ -13,6 +13,7 @@ import { paceLogArgs, parsePaceLog } from './lib/progress-pace.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { recordPath } from './lib/channel.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { jsonLinesPath } from './lib/codex-reviews.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
   channelIdle,
@@ -22,12 +23,14 @@ import {
   dayBounds,
   daysBetween,
   gateFacts,
+  landFacts,
   parseCommitTimes,
   parseMergeFiles,
   parseMerges,
   prFacts,
   taskChanges,
   taskCounts,
+  withReadyAt,
   throughputRows,
   utcDay,
 } from './lib/throughput.mjs';
@@ -189,7 +192,7 @@ function branchConflicts(run, root, { from, to, until }) {
 /** The facts of `day` that a rotating record holds, the only ones a snapshot keeps: the gates. `gateLogs`, when
  * given, are archived copies of the gate log read in its place, the newer first. */
 function rotatingFacts(day, ctx, gateLogs = null, copiedAt = null) {
-  const facts = { partialFrom: null, partialUntil: null, gates: [], unavailable: {} };
+  const facts = { partialFrom: null, partialUntil: null, gates: [], fallbacks: [], unavailable: {} };
   const files = gateLogs ? { 'log.jsonl': gateLogs[0], 'log.1.jsonl': gateLogs[1] } : null;
   const fileSystem = files
     ? { readFileSync: (file, encoding) => { const copy = files[path.basename(file)]; if (!copy) throw Object.assign(new Error('none'), { code: 'ENOENT' }); return ctx.fileSystem.readFileSync(copy, encoding); } }
@@ -201,7 +204,12 @@ function rotatingFacts(day, ctx, gateLogs = null, copiedAt = null) {
   // event nor than its modification time. Made before the day settled, it may lack the day's last gates.
   if (gateLogs && log.events?.length) {
     // A copy that kept its source's time says only its last write: `--copied-at` says when it was made.
-    const madeAt = Math.max(...log.events.map((event) => Date.parse(event.at)).filter(Number.isFinite), copiedAt ?? ctx.fileSystem.statSync(gateLogs[0]).mtimeMs);
+    // A loop, not a spread: the copies a snapshot names can hold more events than a call takes arguments.
+    let madeAt = copiedAt ?? ctx.fileSystem.statSync(gateLogs[0]).mtimeMs;
+    for (const event of log.events) {
+      const at = Date.parse(event.at);
+      if (at > madeAt) madeAt = at;
+    }
     if (madeAt < settlesAt(day)) facts.partialUntil = new Date(madeAt).toISOString();
   }
   return facts;
@@ -211,7 +219,7 @@ function rotatingFacts(day, ctx, gateLogs = null, copiedAt = null) {
  * snapshot of them would freeze what a stale fetch had not seen yet. */
 function appendOnlyFacts(day, ctx) {
   const bounds = dayBounds(day);
-  const facts = { prs: [], codex: [], tasks: null, conflicts: [], branchMerges: 0, idle: [], unavailable: {} };
+  const facts = { prs: [], codex: [], tasks: null, conflicts: [], branchMerges: 0, idle: [], lands: [], unavailable: {} };
   const fromGit = gitFacts(ctx, bounds);
   if (fromGit.unavailable) facts.unavailable.git = fromGit.unavailable;
   else {
@@ -226,8 +234,39 @@ function appendOnlyFacts(day, ctx) {
   }
   const notices = channelNotices(ctx);
   if (notices.unavailable) facts.unavailable.channel = notices.unavailable;
-  else facts.idle = channelIdle(notices, bounds);
+  else {
+    facts.idle = channelIdle(notices, bounds);
+    facts.prs = withReadyAt(facts.prs, notices);
+  }
+  try {
+    facts.lands = landFacts(ctx.readLands(ctx.root), bounds);
+  } catch (err) {
+    facts.unavailable.lands = err.message;
+  }
   return facts;
+}
+
+/** The merge queue's land records (`<git common dir>/js-harness/lands.jsonl`): none where the file is not there, a
+ * machine where no land ran, and a throw where it is there and cannot be read, so its row says so instead of none. A
+ * line that does not parse is left out. */
+function readLandRecord(root, run, fileSystem) {
+  const file = jsonLinesPath(root, 'lands.jsonl', { spawn: run });
+  if (!file) return [];
+  let text;
+  try {
+    text = fileSystem.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw new Error(err.code ?? err.message);
+  }
+  return text.split(/\r?\n/).flatMap((line) => {
+    try {
+      const parsed = JSON.parse(line);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? [parsed] : [];
+    } catch {
+      return [];
+    }
+  });
 }
 
 /** The notices of the project's channel record, read once a run; `{ unavailable }` with why. A line that does not
@@ -359,6 +398,11 @@ function snapshot(ctx, flags) {
     ctx.err(`js-harness throughput: ${day} settles at ${new Date(settles).toISOString()}: only a day whose gates have ended is kept`);
     return 2;
   }
+  // A copy made after now would vouch for gates no copy can hold yet, and settle a day it has only in part.
+  if (flags['copied-at'] !== undefined && flags['copied-at'] > ctx.now()) {
+    ctx.err(`js-harness throughput: --copied-at ${new Date(flags['copied-at']).toISOString()} is after now (${new Date(ctx.now()).toISOString()}): a copy is made by then`);
+    return 2;
+  }
   // A copy named that is not there would read as a log with no gate, which a kept day must never be written from.
   for (const copy of flags['gate-log'] ?? []) {
     try {
@@ -431,6 +475,7 @@ export async function throughputMain(
     homedir = os.homedir,
     fileSystem = fs,
     readCodexRuns = (root) => readCodexReviewRuns(root, { spawn: run }),
+    readLands = (root) => readLandRecord(root, run, fileSystem),
     timezoneOffset = () => new Date().getTimezoneOffset(),
   } = {},
 ) {
@@ -446,7 +491,7 @@ export async function throughputMain(
   const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, out: stdout, err: stderr };
+  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, readLands, out: stdout, err: stderr };
   try {
     if (parsed.verb === 'snapshot') return snapshot(ctx, parsed.flags);
     if (parsed.verb === 'status') return status(ctx);

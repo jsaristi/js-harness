@@ -146,6 +146,8 @@ test('a red run\'s log loses gh\'s job, step and time before each line, and keep
     const result = await runCiGate(options(p, gh, clock()));
     assert.match(result.output, /^✖ failing tests:\n\n✖ the table reads a day \(12\.5ms\)\ndetail 0\n/);
     assert.doesNotMatch(result.output, /Run the gate/);
+    // The lines the window leaves out at the end are said, with where to read them.
+    assert.match(result.output, /\ndetail 76\n… 43 more lines: gh run view \d+ --log-failed$/);
   } finally {
     p.done();
   }

@@ -40,8 +40,8 @@ const secondsBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(fro
 /** The tests sensor of an end line, or the first sensor that says where it ran. */
 const testsOf = (end) => (Array.isArray(end?.sensors) ? end.sensors.find((sensor) => sensor?.name === 'tests') : undefined);
 
-/** The gates of a day among the gate log's events (`readGateLog`): `{ gates, partialFrom }`. A gate is the day's when
- * its start is in `[from, to)`. `partialFrom` is the time of the oldest event when the log holds none before `from`:
+/** The gates of a day among the gate log's events (`readGateLog`): `{ gates, fallbacks, partialFrom }`. A gate is the
+ * day's when its start is in `[from, to)`, a fallback (a gate CI gave no answer) when its line is. `partialFrom` is the time of the oldest event when the log holds none before `from`:
  * the rotation took the start of the day, and every figure of its gates is partial from then. */
 export function gateFacts(events, { from, to }) {
   const ends = new Map();
@@ -51,10 +51,13 @@ export function gateFacts(events, { from, to }) {
     if (event.event === 'end') ends.set(event.id, event);
   }
   const gates = [];
+  const fallbacks = [];
   for (const start of events) {
-    if (start.event !== 'start') continue;
     const at = Date.parse(start.at);
     if (!(at >= from && at < to)) continue;
+    // A gate CI gave no answer, written before the gate it fell back to runs here.
+    if (start.event === 'ci-fallback') fallbacks.push({ id: start.id, at: start.at, seconds: Number.isFinite(start.seconds) ? start.seconds : null, reason: start.reason ?? null });
+    if (start.event !== 'start') continue;
     const end = ends.get(start.id) ?? null;
     const tests = testsOf(end);
     gates.push({
@@ -75,8 +78,8 @@ export function gateFacts(events, { from, to }) {
     });
   }
   // A log with no event at all covers nothing of the day: partial from its end, so any copy that holds it is fuller.
-  if (oldest === null) return { gates, partialFrom: new Date(to).toISOString() };
-  return { gates, partialFrom: Date.parse(oldest.at) > from ? oldest.at : null };
+  if (oldest === null) return { gates, fallbacks, partialFrom: new Date(to).toISOString() };
+  return { gates, fallbacks, partialFrom: Date.parse(oldest.at) > from ? oldest.at : null };
 }
 
 /** The seconds the union of `[from, to]` intervals (ms) covers: two gates at once count once. */
@@ -183,6 +186,33 @@ export function channelIdle(notices, { from, to }) {
   return idle;
 }
 
+/** `prs` (`prFacts`'s), each with `readyAt`: the newest `ready` notice that names it (`notify --kind ready --pr`, B1)
+ * at or before its merge, as the merge queue reads the newest one; `null` where none does. */
+export function withReadyAt(prs, notices) {
+  const ready = notices.filter((notice) => notice?.kind === 'ready' && Number.isInteger(notice.pr) && Number.isFinite(Date.parse(notice.at)));
+  return prs.map((pr) => {
+    const merged = Date.parse(pr.mergedAt);
+    const newest = ready.filter((notice) => notice.pr === pr.number && Date.parse(notice.at) <= merged).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+    return { ...pr, readyAt: newest?.at ?? null };
+  });
+}
+
+/** The lands started in `[from, to)` among the merge queue's records (`<git common dir>/js-harness/lands.jsonl`, B2):
+ * `{ startedAt, seconds, exit, landed, considered, phases: [{ phase, seconds, ok }] }`. */
+export function landFacts(records, { from, to }) {
+  return records
+    .filter((record) => Date.parse(record?.startedAt) >= from && Date.parse(record.startedAt) < to)
+    .map((record) => ({
+      startedAt: record.startedAt,
+      seconds: Number.isFinite(Date.parse(record.endedAt)) ? secondsBetween(record.startedAt, record.endedAt) : null,
+      exit: Number.isInteger(record.exit) ? record.exit : null,
+      landed: Array.isArray(record.landed) ? record.landed.length : 0,
+      considered: Array.isArray(record.considered) ? record.considered.length : 0,
+      phases: (Array.isArray(record.phases) ? record.phases : []).filter((phase) => typeof phase?.phase === 'string' && Number.isFinite(phase.seconds)).map(({ phase, seconds, ok }) => ({ phase, seconds, ok: ok ?? null })),
+    }))
+    .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+}
+
 const isObjectLike = (value) => typeof value === 'object' && value !== null;
 
 /** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome, findings,
@@ -241,13 +271,22 @@ const SOURCES = {
   tasks: 'each commit of origin/main compared with the one before, as progress compares them; open: git grep of the checkboxes of odd/tasks/*.md and docs/ROADMAP.md',
   conflicts: 'git merge-tree of each merge into a branch on origin/main',
   channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
+  ready: 'the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main',
+  lands: '<git common dir>/js-harness/lands.jsonl, one line per merge-queue --land',
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'] };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'] };
 
 /** Why `day` could not read `source`, or `undefined`. */
 const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
+
+/** The first day each recorder's lines can be in the records, the day it reached main: a day before it has no line
+ * because nothing wrote one, and its row says so instead of a zero. */
+const RECORDED_FROM = { B1: '2026-10-17', B2: '2026-10-17', B3: '2026-10-17' };
+
+/** When B1 reached main (the merge of pull request 349): one merged before it could not be named by a ready notice. */
+const B1_AT = '2026-10-17T03:24:51Z';
 
 const minutes = (seconds) => `${Math.round(seconds / 60)} min`;
 const counted = (values) => `(${values.length})`;
@@ -270,16 +309,21 @@ export function throughputRows(days) {
   const all = (key) => days.flatMap((day) => day[key] ?? []);
   const hours = days.length * 24;
   const gates = all('gates');
-  const unread = (source) => days.filter((day) => unreadOf(day, source)).map((day) => `${day.day} ${unreadOf(day, source)}`);
+  const fallbacks = all('fallbacks');
+  const unread = (source, among = days) => among.filter((day) => unreadOf(day, source)).map((day) => `${day.day} ${unreadOf(day, source)}`);
   const partial = days.flatMap((day) => [
     day.partialFrom && (Date.parse(day.partialFrom) >= dayBounds(day.day).to ? `partial: ${day.day} not in the gate log` : `partial: ${day.day} from ${day.partialFrom.slice(11, 16)}Z`),
     // A day kept from a copy of the log made before the day settled: its last gates may be missing.
     day.partialUntil && `partial: ${day.day} until ${day.partialUntil.slice(0, 16)}Z`,
   ]).filter(Boolean);
-  const row = (label, source, value) => {
-    const missing = unread(source);
+  const row = (label, source, value, recorder = null) => {
+    // A day before its recorder holds nothing to read, whether or not its source could be read.
+    const early = recorder ? days.filter((day) => day.day < RECORDED_FROM[recorder]).map((day) => day.day) : [];
+    const notRecordedOn = early.length > 0 ? `not recorded: ${early.join(', ')} (before ${recorder}, ${RECORDED_FROM[recorder]})` : null;
+    if (early.length === days.length && notRecordedOn) return { label, value: notRecordedOn, source: SOURCES[source] };
+    const missing = unread(source, days.filter((day) => !early.includes(day.day)));
     if (missing.length > 0) return { label, value: `not read: ${missing.join('; ')}`, source: SOURCES[source] };
-    const notes = source === 'gates' ? partial : [];
+    const notes = [...(source === 'gates' ? partial : []), notRecordedOn].filter(Boolean);
     return { label, value: [value, ...notes].join('; '), source: SOURCES[source] };
   };
 
@@ -328,19 +372,39 @@ export function throughputRows(days) {
   const conflicts = all('conflicts');
   const branchMerges = days.reduce((sum, day) => sum + (day.branchMerges ?? 0), 0);
 
+  // A pull request merged before B1 could not have a ready notice naming it: only the days after count.
+  const afterB1 = days.filter((day) => day.day >= RECORDED_FROM.B1).flatMap((day) => day.prs ?? []).filter((pr) => pr.readyAt !== undefined);
+  const readyPrs = afterB1.filter((pr) => Date.parse(pr.mergedAt) >= Date.parse(B1_AT));
+  const beforeB1 = new Set(afterB1.filter((pr) => Date.parse(pr.mergedAt) < Date.parse(B1_AT)).map((pr) => pr.number)).size;
+  const readyTimes = readyPrs.filter((pr) => pr.readyAt).map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.readyAt)) / 60000);
+  const noReady = [...new Set(readyPrs.filter((pr) => !pr.readyAt).map((pr) => `#${pr.number}`))];
+  const landRecords = all('lands');
+  const byPhase = new Map();
+  for (const { phase, seconds, ok } of landRecords.flatMap((land) => land.phases)) byPhase.set(phase, [...(byPhase.get(phase) ?? []), { seconds, ok }]);
+  const phaseNotes = [...byPhase].map(([phase, runs]) => {
+    const red = runs.filter((one) => one.ok === false).length;
+    return `${phase} ${runs.length}, median ${Math.round(median(runs.map((one) => one.seconds)))} s${red ? `, red ${red}` : ''}`;
+  });
+
   const medianOf = (values, unit) => (values.length ? `median ${Math.round(median(values))} ${unit} ${counted(values)}` : 'none');
   return [
     row('pull requests merged', 'git', `${numbers.size} (${(numbers.size / hours).toFixed(2)} an hour)${twice.length ? `; merged twice: ${twice.join(', ')}` : ''}`),
     row('last commit to merge commit', 'merge', leadTimes.length
       ? `median ${Math.round(median(leadTimes))} min, p75 ${Math.round(percentile(leadTimes, 75))} min, worst ${Math.round(Math.max(...leadTimes))} min ${counted(leadTimes)}; docs-only ${medianOf(leadOf(prs.filter((pr) => pr.docsOnly === true)), 'min')}; code ${medianOf(leadOf(prs.filter((pr) => pr.docsOnly === false)), 'min')}`
       : 'none'),
-    notRecorded('ready to merged', 'B1, JH 26', 'a ready notice that names its pull request'),
+    row('ready to merged', 'ready', readyTimes.length || noReady.length || beforeB1
+      ? `${readyTimes.length ? `median ${Math.round(median(readyTimes))} min, p75 ${Math.round(percentile(readyTimes, 75))} min, worst ${Math.round(Math.max(...readyTimes))} min ${counted(readyTimes)}` : 'none'}${noReady.length ? `; no ready notice: ${noReady.join(', ')}` : ''}${beforeB1 ? `; merged before B1 reached main at ${B1_AT.slice(11, 16)}Z: ${beforeB1}` : ''}`
+      : 'none', 'B1'),
     row('lock busy', 'gates', `${(busy / 3600).toFixed(1)} h of ${hours} h${kinds.length ? `; by kind: ${kinds.join(', ')}` : ''}`),
     row('gate waits', 'gates', `${minutes(waited)} in all${mostWaited.length ? `; most: ${mostWaited.map(([session, seconds]) => `${short(session)} ${minutes(seconds)}`).join(', ')}` : ''}`),
     row('commit gates', 'gates', `here: ${medianOf(commits.map((gate) => gate.seconds), 's')}, lock free ${medianOf(free, 's')}; GitHub: ${medianOf(github, 's')}`),
     row('lands', 'gates', `${lands.length}, median ${lands.length ? Math.round(median(lands.map((gate) => gate.seconds))) : '-'} s, red ${red.length}; ${lands.length} gates for ${landFolders.size} lands`),
-    notRecorded('land phases', 'B2, JH 24', 'one land record per land'),
-    row('failing tests', 'gates', topNames(ended.map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none'),
+    row('land phases', 'lands', landRecords.length ? `${landRecords.length} lands, median ${Math.round(median(landRecords.map((land) => land.seconds).filter(Number.isFinite)) ?? 0)} s, landed ${landRecords.reduce((sum, land) => sum + land.landed, 0)} of ${landRecords.reduce((sum, land) => sum + land.considered, 0)} looked at; exit ${topNames(landRecords.map((land) => [String(land.exit ?? 'none')]), 9).sort((a, b) => a[0].localeCompare(b[0])).map(([exit, n]) => `${exit} ×${n}`).join(', ')}${phaseNotes.length ? `; ${phaseNotes.join('; ')}` : ''}` : 'none', 'B2'),
+    row('failing tests', 'gates', topNames(ended.filter((gate) => gate.lock !== 'ci').map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none'),
+    row('red tests on CI', 'gates', topNames(ended.filter((gate) => gate.lock === 'ci').map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none', 'B3'),
+    row('CI fallbacks', 'gates', fallbacks.length
+      ? `${fallbacks.length}, ${minutes(fallbacks.reduce((sum, fallback) => sum + (fallback.seconds ?? 0), 0))} waited before them; why: ${topNames(fallbacks.map((fallback) => [fallback.reason ?? 'not said']), 3).map(([why, n]) => `${why} ×${n}`).join(', ')}`
+      : 'none', 'B3'),
     row('load at gate starts', 'gates', loads.length ? `median share ${median(loads).toFixed(2)} (${loads.length}); full at ${loads.filter((share) => share >= 1).length} of ${loads.length}` : 'none'),
     row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings}`),
     row('idle upper bound', 'channel', idle.length
@@ -392,7 +456,8 @@ export function dailyValues(day) {
  * n + m, and below it likewise, so 2 * prod (m - i) / (n + m - i) over those ranks. An even `m`'s median is the mean
  * of two, which may lie outside with only m/2 past the range: that product is then a bound. A percentage, as said. */
 export function outsideChance(n, m) {
-  if (n === 0 || m === 0) return '0%';
+  // An empty side has no range or no median: there is no chance to state.
+  if (n === 0 || m === 0) return null;
   const far = Math.ceil(m / 2);
   let chance = 2;
   for (let i = 0; i < far; i += 1) chance *= (m - i) / (n + m - i);
@@ -412,7 +477,7 @@ export function compareWindows(beforeDays, afterDays) {
     const is = after.map((values) => values[label]).filter((value) => value !== null);
     const n = Math.min(was.length, is.length);
     const chance = outsideChance(was.length, is.length);
-    if (n < COMPARE_DAYS) return { label, before: was, after: is, verdict: `not judged: ${n} days a side, under ${COMPARE_DAYS}; with nothing changed, the after median falls outside the before range ${chance} of the time` };
+    if (n < COMPARE_DAYS) return { label, before: was, after: is, verdict: `not judged: ${n} days a side, under ${COMPARE_DAYS}; ${chance === null ? 'one side has no value' : `with nothing changed, the after median falls outside the before range ${chance} of the time`}` };
     const low = Math.min(...was);
     const high = Math.max(...was);
     const mid = round1(median(is));
