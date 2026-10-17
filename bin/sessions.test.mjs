@@ -407,16 +407,19 @@ test('a session whose last call has had no result stays on the board past the wi
 }));
 
 // Codex P2 on f9195084: a held call whose entry is longer than the tail left the tail with no whole entry.
-test('a held session whose last call is longer than the tail read stays on the board', withMachine(async (machine) => {
-  const held = 'aaaaaaaa-0000-4000-8000-00000000000b';
-  writeAt(path.join(machine.projectDir, `${held}.jsonl`), jsonl(
-    { type: 'custom-title', customTitle: 'Held on a long call', sessionId: held },
-    prompt('write the file', 21 * 3600),
-    call('toolu_b1', 'Bash', { command: `cat > big.txt <<'EOF'\n${'x'.repeat(300 * 1024)}\nEOF`, description: 'Write a big file' }, 20 * 3600),
-  ), 20 * 3600);
-  const { stdout } = await runSessions(machine, ['--json']);
-  assert.deepEqual(JSON.parse(stdout).sessions.map((session) => session.id), [held]);
-}));
+// The tail is read in bytes; a body of two-byte characters is longer in bytes than in characters.
+for (const [kind, body] of [['ASCII', 'x'.repeat(300 * 1024)], ['multibyte', 'é'.repeat(200 * 1024)]]) {
+  test(`a held session whose last call (${kind}) is longer than the tail read stays on the board`, withMachine(async (machine) => {
+    const held = 'aaaaaaaa-0000-4000-8000-00000000000b';
+    writeAt(path.join(machine.projectDir, `${held}.jsonl`), jsonl(
+      { type: 'custom-title', customTitle: 'Held on a long call', sessionId: held },
+      prompt('write the file', 21 * 3600),
+      call('toolu_b1', 'Bash', { command: `cat > big.txt <<'EOF'\n${body}\nEOF`, description: 'Write a big file' }, 20 * 3600),
+    ), 20 * 3600);
+    const { stdout } = await runSessions(machine, ['--json']);
+    assert.deepEqual(JSON.parse(stdout).sessions.map((session) => session.id), [held]);
+  }));
+}
 
 test('work with no recorded end carries the last write of its file: a shell\'s output, a subagent\'s transcript', withMachine(async (machine) => {
   writeSessions(machine);

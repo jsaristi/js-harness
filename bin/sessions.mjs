@@ -459,9 +459,10 @@ function heldOutsideWindow(file, changedAt, now, io) {
   try {
     let text = io.readTail(file, HELD_TAIL_BYTES);
     // The first line of a tail may be cut; an entry longer than the tail leaves no whole line after it, so the
-    // whole transcript is read then (Codex P2 on f9195084).
+    // whole transcript is read then (Codex P2 on f9195084). The count of lines decides, not the text's length:
+    // the tail is cut in bytes, and a multibyte text is shorter in characters than in bytes.
     const lines = text.split('\n').filter((line) => line.trim() !== '');
-    if (text.length >= HELD_TAIL_BYTES && lines.length < 2) text = io.readFile(file);
+    if (lines.length < 2) text = io.readFile(file);
     return heldPastLimit(io.readFacts(text), now);
   } catch {
     return false;
