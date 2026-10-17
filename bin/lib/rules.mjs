@@ -476,6 +476,18 @@ export function rulesHash(list) {
   return createHash('sha256').update(JSON.stringify(reduced)).digest('hex').slice(0, 12);
 }
 
+/** The rules of `list` that hold everywhere: those with no `scope`. */
+export function unscoped(list) {
+  return list.filter((rule) => rule.scope === undefined);
+}
+
+/** The hash a copy of the harness ships, over its unscoped rules only, so that a change of a rule scoped to this
+ * repository (his Codex rate) does not call every installed copy behind (odd/tasks/rule-hierarchy.md, "Reach: the
+ * hash of the installed command"). The copy's own list is the stamp: computed, never written apart from it. */
+export function shippedRulesHash(list) {
+  return rulesHash(unscoped(list));
+}
+
 /** `text` with its first character in upper case, for a sentence that opens with a subject. */
 const upper = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
