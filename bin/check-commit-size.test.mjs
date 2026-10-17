@@ -7,12 +7,13 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkCommitSize } from './check.mjs';
 import { ruleHere } from './lib/rules.mjs';
 
 // The harness's own rules file, which a repository holds for the rule, of this repository only, to be in force.
-const RULES_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'rules-data.mjs');
+const BIN = path.dirname(fileURLToPath(import.meta.url));
+const RULES_FILE = path.join(BIN, 'lib', 'rules-data.mjs');
 const REVIEWED_COMMIT_LINES = ruleHere('reviewed-commit-lines', 'changed lines', fs.readFileSync(RULES_FILE, 'utf8')).value;
 
 let configDir;
@@ -125,6 +126,43 @@ test('no row with nothing staged, with only documents staged, or while a merge i
     git(root, 'checkout', '-q', 'main');
     git(root, 'merge', '-q', '--no-ff', '--no-commit', 'side');
     assert.deepEqual(checkCommitSize(root), []);
+  });
+});
+
+// Git runs `pre-merge-commit` for the commit a merge makes by itself before it writes MERGE_HEAD, so a merge
+// that needs no hand was sized as a commit of this branch and refused (odd/tasks/land-unattended.md, T8): the
+// merge hook says which hook it is, and the row reads that.
+test('no row in the hook of a merge git commits by itself, where MERGE_HEAD is not written yet', () => {
+  inRepo((root) => {
+    git(root, 'checkout', '-q', '-b', 'side');
+    fs.writeFileSync(path.join(root, 'bin', 'big.mjs'), linesOf(REVIEWED_COMMIT_LINES + 1));
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'big');
+    git(root, 'checkout', '-q', 'main');
+    fs.writeFileSync(path.join(root, 'trunk.md'), 'the trunk moves on\n');
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'trunk');
+    // The merge hook of this repository, with its gate replaced by a script that writes what the row says.
+    const said = path.join(root, '..', `${path.basename(root)}-said.json`);
+    const probe = path.join(root, '..', `${path.basename(root)}-probe.mjs`);
+    fs.writeFileSync(probe, [
+      `import fs from 'node:fs';`,
+      `import { checkCommitSize } from ${JSON.stringify(pathToFileURL(path.join(BIN, 'check.mjs')).href)};`,
+      `fs.writeFileSync(${JSON.stringify(said)}, JSON.stringify({ rows: checkCommitSize(process.cwd()), mergeHead: fs.existsSync('.git/MERGE_HEAD') }));`,
+    ].join('\n'));
+    const hook = fs.readFileSync(path.join(BIN, '..', '.githooks', 'pre-merge-commit'), 'utf8').replace(/\r\n/g, '\n')
+      .replace(/^exec .*$/m, `exec node ${JSON.stringify(probe.replace(/\\/g, '/'))}`);
+    fs.writeFileSync(path.join(root, '.git', 'hooks', 'pre-merge-commit'), hook);
+    fs.chmodSync(path.join(root, '.git', 'hooks', 'pre-merge-commit'), 0o755);
+    try {
+      git(root, 'merge', '-q', '--no-ff', '--no-edit', 'side');
+      const { rows, mergeHead } = JSON.parse(fs.readFileSync(said, 'utf8'));
+      assert.equal(mergeHead, false, 'git wrote MERGE_HEAD before the hook: the case this test is for did not arise');
+      assert.deepEqual(rows, []);
+    } finally {
+      fs.rmSync(said, { force: true });
+      fs.rmSync(probe, { force: true });
+    }
   });
 });
 
