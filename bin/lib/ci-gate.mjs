@@ -33,7 +33,7 @@ const CI_POLL_MS = 10_000;
 const LOG_LINES = 80;
 
 // The job, the step and the time gh's `--log-failed` puts before each line of a run's log.
-const GH_LOG_PREFIX = /^[^\t\r\n]*\t[^\t\r\n]*\t\S+ ?/;
+export const GH_LOG_PREFIX = /^[^\t\r\n]*\t[^\t\r\n]*\t\S+ ?/;
 
 /** The `LOG_LINES` of a red run's log the gate prints, each without gh's prefix: from the test runner's list of
  * the failing tests when it has one, which the gate log reads their names from and the end alone can cut, and
@@ -64,7 +64,9 @@ export function onCiMachine(env) {
   return Boolean(value) && value !== 'false' && value !== '0';
 }
 
-const spawner = (command, env) => (args, { cwd } = {}) => {
+/** A runner of `command` as the gate runs git and gh: 60 s at most and a 64 MB buffer, so a run's whole failed log
+ * is read. The daily Windows reader (./windows-daily.mjs) runs its gh with it too. */
+export const spawner = (command, env) => (args, { cwd } = {}) => {
   const run = spawnSync(command, args, { cwd, encoding: 'utf8', env, windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
   return { status: run.error ? null : run.status, stdout: String(run.stdout ?? ''), stderr: String(run.stderr ?? run.error?.message ?? '').trim() };
 };

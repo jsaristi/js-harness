@@ -32,6 +32,8 @@ function world({ files = {}, channel = '', onSleep = () => {} } = {}) {
     stderr: (line) => state.err.push(line),
     homedir: () => HOME,
     run: noGit,
+    // The daily Windows run is read only where a test asks for it: no other body here reaches GitHub.
+    windowsDaily: async () => null,
     readdir: (dir) => Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
     mtime: (file) => {
       if (state.files[file] === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
@@ -180,4 +182,51 @@ test('heartbeat says once what it could not read for stall detection, so a missi
   assert.equal(said.filter((line) => line.includes("the channel's record")).length, 1);
   assert.equal(said.filter((line) => line.includes('the gate log')).length, 1);
   assert.equal(said.length, 2);
+});
+
+// odd/tasks/commit-gates-first.md, S5: the heartbeat reads the daily Windows run, and a red one told now ends it.
+test('heartbeat ends with the WINDOWS line when the daily Windows run is told red, after what the reader found', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  const asked = [];
+  deps.windowsDaily = async (options) => {
+    asked.push(options);
+    return asked.length < 3 ? { lines: ['windows-daily: the newest run, u, passed (ended 2 h ago)'], told: null, failed: null } : { lines: ['windows-daily: the newest run, v, failed'], told: 'WINDOWS: v failure, 2 failing: a; b', failed: null };
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120', '--windows', '30'], {}, deps), 0);
+  assert.equal(state.out.at(-1), 'WINDOWS: v failure, 2 failing: a; b');
+  assert.equal(state.out.at(-2), 'windows-daily: the newest run, v, failed');
+  assert.equal(state.out.filter((line) => line.includes(', u, passed')).length, 1, 'a line already said is not said again');
+  assert.equal(asked[0].home, HOME);
+  assert.equal(asked[0].cwd, CWD);
+  assert.equal(asked[0].slug, projectSlug(CWD));
+  assert.equal(asked[0].everyMs, 30 * 60000);
+  assert.equal(state.clock, T0 + 2 * 120000, 'it asks at the first tick and at each one after');
+  assert.match(state.out[0], /every 30 minutes, the daily Windows run/);
+});
+
+test('heartbeat: --windows 0 never reads the daily Windows run, and a value that is no whole number is a usage error', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  let asked = 0;
+  deps.windowsDaily = async () => {
+    asked += 1;
+    return null;
+  };
+  assert.equal(await loopMain(['heartbeat', '--windows', '0'], {}, deps), 0);
+  assert.equal(asked, 0);
+  assert.match(state.out.at(-1), /^STALL: /);
+  assert.doesNotMatch(state.out[0], /Windows/);
+  for (const bad of ['soon', '-1', '1.5']) {
+    const { state: other, deps: otherDeps } = world();
+    assert.equal(await loopMain(['heartbeat', '--windows', bad], {}, otherDeps), 2, bad);
+    assert.match(other.err.join('\n'), /--windows/);
+  }
+});
+
+test('heartbeat: a reader that throws is said once and ends nothing', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  deps.windowsDaily = async () => {
+    throw new Error('gh vanished');
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], {}, deps), 1);
+  assert.equal(state.out.filter((line) => line.includes('gh vanished')).length, 1);
 });

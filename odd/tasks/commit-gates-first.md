@@ -24,7 +24,9 @@ runs, although the README says one does (R1).
 ## In scope / Out of scope
 - In: `bin/lib/ci-gate.mjs`, `bin/check.mjs` (its CI path), `.github/workflows/gate.yml`, a new rule
   `ci-gate-bound`, `bin/guard.mjs`, `bin/lib/test-run-warning.mjs`, README, this document, and for R1 a new
-  workflow and its reader.
+  workflow and its reader, the heartbeat (`bin/loop.mjs`), the dispatcher (`bin/js-harness.mjs`), the
+  orchestrator skill's line (`bin/lib/manifest.mjs`), docs/SPEC and docs/ROADMAP. `bin/lib/channel.mjs` is not
+  edited: the reader calls `notifyMain`.
 - Out: `bin/merge-queue.mjs` (JH 24, the land) and the channel code (JH 26): other sessions own them.
 
 ## Constraints
@@ -165,6 +167,75 @@ The change:
 Why a hint and not a refusal: the plan names a hint, and a refusal would stop a commit that runs correctly, only
 slower. If wrapped commits keep coming after it ships, a refusal is his question, not this change's.
 
+### R1, version 3: as it is built (2026-10-17, after T6f landed)
+
+Versions 1 (below) and 2 (above) stand where this does not change them. What the code's map added
+(`bin/loop.mjs:351-415`, `bin/check.mjs:1038`, `bin/lib/flaky.mjs`, `bin/lib/channel.mjs`,
+`bin/lib/manifest.mjs:1292-1530`, `scripts/github-workflows.test.mjs:45-83`):
+- The workflow, `.github/workflows/windows-daily.yml`: `schedule` (07:23 UTC) and `workflow_dispatch` only;
+  `permissions: contents: read`; no secret; checkout and setup-node pinned by the commits gate.yml pins; `runs-on:
+  windows-2025`; `timeout-minutes: 60`; node 24.21.0; the whole history; `node --test`. The workflow test, which
+  today holds that `gate.yml` is the only workflow, holds instead that these two are, and the daily one's shape.
+- The first run. `workflow_dispatch` runs only a workflow the default branch holds, so before the PR the same
+  file, plus a `push` trigger for `windows-try/**`, ran from a throwaway branch `windows-try/r1` (run
+  39007607383). Its commit (53d600ee) was made outside this checkout's gate, since the extra trigger fails the
+  workflow test by design, and pushed with `--no-verify`; it is no commit of this branch, and the branch is deleted
+  after its run. Once the PR lands, one `gh workflow run windows-daily.yml` on main is the run the plan asks for.
+- The reader, `js-harness windows-daily` (`bin/windows-daily.mjs`, its logic in `bin/lib/windows-daily.mjs`):
+  - The repository is the one `origin` names (`githubRepository` of `bin/lib/ci-gate.mjs`), its default branch is
+    asked of GitHub (`gh repo view`), and the newest completed run of `windows-daily.yml` on that branch is read
+    with `gh run list`. Every `gh` call runs as the gate's do: 60 s at most, a 64 MB buffer (the spawner of
+    `ci-gate.mjs`, exported), so a long failed log is not cut before the names at its end and a slow download is
+    not the heartbeat's 10 s bound.
+  - It says, in one line each: no workflow there, no run yet, a `gh` that cannot answer (why, first line), or the
+    newest run's state and age.
+  - A green run: nothing to tell. A red one is `failure`, `timed_out` or `cancelled` (a run past its 60 minutes can
+    end as either of the last two). For a red one it reads `gh run view <id> --log-failed`, takes gh's prefix off
+    each line with `GH_LOG_PREFIX` (from main's PR 362, exported), and reads the names with `failingTests` and the
+    total count of `✖` lines under the summary, and the files with `failedTestFiles` against `testFilesOf`.
+  - It stays silent on a red run only when that list of files is not empty and every file has a current entry in
+    the working tree's `docs/FLAKY.md`. The gate counts a quarantine only after a rerun that passed; the daily run
+    has no rerun, so a quarantined file failing is passed over, and the output says so. A red run with no file
+    found (a failed setup step, a timeout, a log it cannot read) is told, as "names not readable".
+  - Stale: when the newest completed run ended more than 26 hours ago (GitHub drops scheduled runs under load and
+    switches the schedule off after 60 days of no activity), it is told once for that run.
+  - Told once: a run is told by creating `<home>/.js-harness/channel/windows-daily/<project>/told-<id>-<attempt>`
+    with the `wx` flag (`stale-<id>` for staleness), and the notice is written only when that create succeeds, so a
+    hand run and the heartbeat never both tell it. `uninstall` removes the channel folder whole.
+  - The notice: `notifyMain` called in the same process (`--to orchestrator --kind note`), so the sender, project
+    and record are the command's own and `bin/lib/channel.mjs` is not edited. Its text, at most 500 characters:
+    the run's URL, the total failing and up to the 20 names that fit.
+  - By hand it prints what it found and exits 0; 1 only when the notice could not be written.
+- Who runs it: the lead's `js-harness loop heartbeat`, every `--windows <minutes>` (default 60, `0` switches it
+  off; not a rule: no skill text cites the number). The time of the last ask is kept in
+  `<home>/.js-harness/channel/windows-daily/<project>/asked`, and a tick asks when that time is older than the
+  interval, the first tick included: a heartbeat that ends every 30 minutes and is started again would otherwise
+  never reach 60. A run told now ends the heartbeat with `WINDOWS: <url> red, <n> failing: <names>` (or the stale
+  line), exit 0, as `STALLED:` does. The notice alone would not wake the lead: `channel-watch` passes over its own
+  session's notices (`bin/loop.mjs:434`), and the heartbeat runs in the lead's session. The other answers (green,
+  no workflow, `gh` cannot answer) are said once per heartbeat, as `unread` says what stall detection could not
+  read. The existing heartbeat tests pass `--windows 0`; new ones hold the end line, `--windows 0`, a bad value as a
+  usage error, and the asked time.
+- The per-batch Windows run by hand (README `:563-574`) becomes the way to reproduce a red daily run here. The
+  plan put his question as "a Windows run off the lock on a cadence he chooses (e.g. once a day or every N
+  batches)" (throughput-v3-plan.md:9-12), since per batch it would hold the lock 15-19 hours a day, and he chose
+  once a day (`docs/ROADMAP.md:69`). The per-batch step was a promise no land kept (0 of 84 land suites ran on
+  Windows), so an automated daily run replaces it; `docs/ROADMAP.md:986`'s limit "no dropping the Windows run from
+  a land" gets a note saying so (L8). The daily run cannot see this machine's antivirus, temporary folders or
+  paths; the README says so.
+- The texts: README `:75-82` (the Windows-only tests are run daily on GitHub's Windows too), `:563-574` (one
+  sentence on the daily run), a `### js-harness windows-daily` section in the dispatcher's order, the heartbeat
+  section `:165-183`; `bin/js-harness.mjs` (`COMMANDS`, its usage line, and the loop line `:14`); the loop usage and
+  `FLAGS_OF` (`bin/loop.mjs:35,49,79`); the orchestrator skill's heartbeat line (`manifest.mjs:104`); `docs/SPEC.md`
+  a requirement for the daily run (its proof the workflow test and the reader's tests) and `:141`, `:231` (Windows
+  runners are no longer only discarded); `docs/ROADMAP.md:69` (a Windows run now exists) and the R1 row.
+- In scope grows by `bin/loop.mjs`, `bin/js-harness.mjs`, `bin/lib/manifest.mjs`, `bin/lib/ci-gate.mjs` (two
+  exports), docs/SPEC and ROADMAP; `bin/lib/channel.mjs` stays untouched.
+- What a red first run means: with TEMP on `runner.temp`, the second trial failed only the test that main's
+  workflow test makes of a tree holding a second workflow without its updated test (L8), so the first run on main
+  is expected green; a red one is told like any other.
+- Risk: item 5 (a CI workflow). It is not on any gate's or land's path, and a red run stops nothing.
+
 ### R1: a daily Windows suite (S5), after T6f
 
 Recorded now so that its readers read it with C and E; built only once T6f is resolved.
@@ -189,7 +260,8 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   Route: inline. Commit d81b45b5; PR 353 (ready, waiting to land).
 - [x] T3 (kind: build) S4: E, test first, on `feat/wrapped-commit-hint` (stacked on C: its words name C's
   GitHub-first gate); gate, gentle-ai, Codex, PR. Route: inline. Commits 8ba73c22, 4665c503; PR 354.
-- [ ] T4 (kind: build) S5: R1, once T6f is resolved; test first; gate, gentle-ai (item 5), Codex, PR.
+- [ ] T4 (kind: build) S5: R1, once T6f is resolved; test first; gate, gentle-ai (item 5), Codex, PR. Route: inline
+  (one unit, under the writer trigger). Branch `feat/windows-daily`.
 
 ## Log
 - L1 (2026-10-17, the brief from the session that started this one, verbatim): "Build items C and E and the daily
@@ -239,3 +311,32 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   C was merged into E (48adfe64), and PR 354 opened, based on `rule/ci-gate-bound`. The Stop hook then offered
   C's whole branch (base main); only its read-only status ran, and it timed out the same way. Next: retarget
   354 to main once 353 lands; R1 once first-version T6f lands, which waits on 353.
+- L7 (2026-10-17, state): C (PR 353) and E (PR 354) landed; first-version T6f landed (PR 360). T4 (R1) started on
+  `feat/windows-daily` in this session's app worktree, from main f88b5a3. Written, not committed: the workflow
+  `.github/workflows/windows-daily.yml`, its shape tests in `scripts/github-workflows.test.mjs` (to run), and the
+  design "R1, version 3" above. Running: a Windows trial run 39007607383 from the throwaway branch `windows-try/r1`
+  (pushed --no-verify, as the gate pushes gate/ branches; delete it after the run), and two readers of version 3.
+  Next: fold the readers' findings into version 3, then build the reader (`bin/lib/windows-daily.mjs`,
+  `bin/windows-daily.mjs`) and the heartbeat's hourly check test first, the texts, gate, gentle-ai (item 5),
+  Codex, PR, notify the lead --kind ready.
+- L8 (2026-10-17, state): both readers of version 3 returned (reader 1: 4 blockers, 7 advisories; reader 2: 5
+  blockers, 10 advisories), and version 3 above now holds them: gh with the gate's 60 s and 64 MB (the failed log
+  of the first run is 1,420,583 bytes, over spawnSync's 1 MB default), silence only when files are found and all
+  quarantined, `GH_LOG_PREFIX` from main (PR 362, fast-forwarded to fe98af86), the ask time kept in a file, a run
+  told by the creator of its `wx` marker, keyed by id and attempt, `cancelled` as red, staleness, the command wired
+  into the dispatcher, README, SPEC and ROADMAP. One correction to my own first answer to reader 2's item 5: the
+  per-batch run is replaced, not kept, by his cadence answer (the bullet above says why), and ROADMAP:986 says so.
+  The first trial run, 39007607383 (from 53d600ee on `windows-try/r1`), ended red in 14.5 min: 6,067 tests, 168
+  failed in 9 files. Most compare a path under the runner's TEMP, an 8.3 short path (`C:\Users\RUNNER~1\...`),
+  with git's or realpath's long form (`runneradmin`); one is the trial file's own `push` trigger, which the
+  workflow test refuses by design. The workflow now points TEMP and TMP at `runner.temp` for the suite step, and a
+  second trial, 39008562752 (from e3a24d9f, made with commit-tree outside this branch and pushed `--no-verify`),
+  runs it. The reader read the first run end to end with the real gh: 168 failing named, a 444-character notice,
+  and a second reading "told before". `gh repo view` takes its repository as an argument, not `--repo`: the smoke
+  run found it, a test now pins it. Built test first and green one file at a time: windows-daily lib 10, command
+  4, loop-bodies 13, loop 20, js-harness 44, readme 5, manifest 167, ci-gate 11, workflows 9.
+- L9 (2026-10-17, state): the second trial, 39008562752, ran 6,072 tests in 12.6 min with 1 failure: "the
+  repository holds one GitHub workflow, the gate", main's own workflow test on a tree of main plus the new workflow,
+  which this branch's test replaces. The TEMP change cleared the other 167. `windows-try/r1` is deleted
+  (`git ls-remote origin 'refs/heads/windows-try/*'` lists nothing). Next: commit through the gate, gentle-ai (item
+  5), Codex, push, PR, notify the lead --kind ready; after it lands, one `gh workflow run windows-daily.yml` on main.
