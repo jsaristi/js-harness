@@ -59,6 +59,8 @@ const CURRENT = 'log.jsonl';
 const OLDER = 'log.1.jsonl';
 const BUSIEST_CURRENT = 'busiest.jsonl';
 const BUSIEST_OLDER = 'busiest.1.jsonl';
+const TIMES_CURRENT = 'test-times.jsonl';
+const TIMES_OLDER = 'test-times.1.jsonl';
 
 /** Whether `file` is there, is not empty and does not end with a line break: what a write that was cut
  * short leaves. `false` for a file that cannot be looked at, since the line is appended all the same.
@@ -131,6 +133,14 @@ function appendLine(home, [current, older], value, { maxBytes, io }) {
  * cpuSeconds }]`, the heaviest first. `gateRecord` writes it (`busiest`), with what its reader takes. */
 export function appendGateBusiest(home, line, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
   return appendLine(home, [BUSIEST_CURRENT, BUSIEST_OLDER], line, { maxBytes, io });
+}
+
+/** Appends the test times of one gate to `test-times.jsonl`, beside the log, as `appendGateBusiest` appends its
+ * line: rotated past `maxBytes` into `test-times.1.jsonl`, `{ ok: true }` or `{ error }`, never a throw. The line is
+ * `{ v, id, at, files: [{ test, seconds }] }`, the id the gate's lines in the log have: a list of every test file
+ * on each end line would rotate the log far sooner (odd/tasks/throughput-review.md, B5). */
+export function appendGateTestTimes(home, line, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
+  return appendLine(home, [TIMES_CURRENT, TIMES_OLDER], line, { maxBytes, io });
 }
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -315,6 +325,36 @@ export function readGateBusiest(home, { fileSystem: io = fs } = {}) {
   return byId;
 }
 
+/** One test file's time as a line of `test-times.jsonl` holds it. */
+const isTestTime = (value) => isObject(value) && isText(value.test) && Number.isFinite(value.seconds);
+
+/** The lines of `test-times.jsonl` and `test-times.1.jsonl` (`appendGateTestTimes`), as a Map from the gate's id to
+ * its line, read as `readGateBusiest` reads its own: none for a file that is not there or cannot be read, a line
+ * that is torn or of another shape left out, a gate's line in the newer file the one kept. */
+export function readGateTestTimes(home, { fileSystem: io = fs } = {}) {
+  const dir = gateLogDir(home);
+  const byId = new Map();
+  for (const name of [TIMES_CURRENT, TIMES_OLDER]) {
+    let text;
+    try {
+      text = io.readFileSync(path.join(dir, name), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const line of text.split('\n')) {
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const whole = hasHead({ ...parsed, event: 'times' }) && Array.isArray(parsed.files) && parsed.files.every(isTestTime);
+      if (whole && !byId.has(parsed.id)) byId.set(parsed.id, parsed);
+    }
+  }
+  return byId;
+}
+
 /** The gates of `events`, in the order they began: `{ start, end }` for a gate that ran, with no `end` for
  * one that was killed or still runs, `{ refused }` for one that was refused its turn, and `{ stopped }` for
  * one that stopped before its sensors, which is the end of no start whatever id it has. An end whose start
@@ -470,6 +510,8 @@ function loadWritten(load) {
  *   (`appendGateBusiest`). Each process is written as its reader takes it (`isSpent`) and the rest is left
  *   out; nothing is written for a gate whose start is not in the log, which nothing could key it by, nor
  *   where nobody was found.
+ * - `testTimes(files)`, after the end of a gate that started and traced its tests: each test file's seconds,
+ *   `[{ test, seconds }]`, written in `test-times.jsonl` under the gate's `id` (`appendGateTestTimes`).
  * - `id`, the id of the gate's lines, and `started()`, whether its start is in the log: a gate takes the
  *   readings `busiest` writes only where it can be written.
  * - `failure()`: `undefined`, or why the log could not be written and what is missing from it, to be said
@@ -477,7 +519,7 @@ function loadWritten(load) {
  *
  * None of them throws. `append`, `appendBusiest`, `now` and `id` stand in for the writer of the log, the
  * writer of `busiest.jsonl`, the clock and the random id. */
-export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, now = Date.now, id = randomUUID, onFailure }) {
+export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, appendTestTimes = appendGateTestTimes, now = Date.now, id = randomUUID, onFailure }) {
   const gate = id();
   // The session that ran it, where the host gives one: what lets `sessions` tell whose gate it was (./stall.mjs).
   const said = { cwd, command: String(command).slice(0, GATE_COMMAND_MAX), pid, ...(isText(session) && session !== '' && { session }) };
@@ -518,6 +560,13 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
       const spent = busiest.filter(isSpent).map(({ pid: spentPid, name, script, cpuSeconds }) => ({ ...(Number.isFinite(spentPid) && { pid: spentPid }), name, ...(isText(script) && { script }), cpuSeconds }));
       if (spent.length === 0) return;
       handed('who spent the processor over this gate', appendBusiest, { v: GATE_LOG_VERSION, id: gate, at: new Date(now()).toISOString(), seconds: Number.isFinite(runSeconds) ? runSeconds : 0, busiest: spent });
+    },
+    testTimes(files) {
+      if (startedAt === undefined || !Array.isArray(files)) return;
+      // Written as the reader takes them (`isTestTime`): a file it would refuse would cost the line.
+      const kept = files.filter(isTestTime).map(({ test, seconds: fileSeconds }) => ({ test, seconds: fileSeconds }));
+      if (kept.length === 0) return;
+      handed('the test times of this gate', appendTestTimes, { v: GATE_LOG_VERSION, id: gate, at: new Date(now()).toISOString(), files: kept });
     },
     start({ lock, waitedMs, waitedFor, load }) {
       const at = now();

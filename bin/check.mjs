@@ -1160,6 +1160,9 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // Keep the runner's own report, even what it printed before a spawn error such as ENOBUFS, so a
   // red row says which test failed, not just that one did.
   const left = ranIn ? leftPaths(`${result.stdout ?? ''}${result.stderr ?? ''}`) : [];
+  // Each test file's seconds, for the throughput review (odd/tasks/throughput-review.md, B5), read before the
+  // results go, in shadow and in skip mode alike. A suite of the mirror that fell back ran untraced: it has none.
+  const times = started && !(started.mounted && !ranIn) ? testTimesOf(started.results) : [];
   // A suite of the mirror that fell back to Windows ran untraced: it says nothing of what was skipped.
   const shadowed = shadow && !(shadow.mounted && !ranIn) ? endShadow(shadow) : null;
   if (started && !shadowed) fs.rmSync(started.results, { recursive: true, force: true });
@@ -1176,7 +1179,26 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (plan) detail += `; exact tests: skipped ${skip.skipped} of ${skip.files} test files`;
   // A run of none in WSL2 is proven by the traces of the mirror, the place its tree key names (`checkSensors`).
   const provenIn = ranIn || (plan?.none && inWsl);
-  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }) };
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }) };
+}
+
+/** The seconds of each test file a traced suite ran, from the tracer's results (`trace-reads.cjs`): `[{ test,
+ * seconds }]`, none where the folder cannot be read, a result cut short or with no time left out. */
+function testTimesOf(results) {
+  const times = [];
+  try {
+    for (const name of fs.readdirSync(results)) {
+      try {
+        const { test, seconds } = JSON.parse(fs.readFileSync(path.join(results, name), 'utf8'));
+        if (typeof test === 'string' && Number.isFinite(seconds)) times.push({ test, seconds });
+      } catch {
+        // a result cut short
+      }
+    }
+  } catch {
+    // no file ended, or the folder cannot be read
+  }
+  return times.sort((a, b) => a.test.localeCompare(b.test));
 }
 
 /** Characters a test file's path may hold to be named on the command line of a skip gate: node takes each
@@ -1846,6 +1868,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
       record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
+      // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
+      record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
     // Not asked again where git did not answer before the sensors: there is nothing to compare with.
     const after = before && untrackedPaths(cwd, deps.git);

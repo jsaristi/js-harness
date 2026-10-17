@@ -365,10 +365,11 @@ function install() {
       }
       // How this test file ended, for a gate in shadow (S6): which of the files selection would have skipped failed.
       // A file of its own, written whole: one shared file lost the end of a test file that passed, likely to
-      // appends of processes at once through WSL's /mnt (inferred, 2026-10-14).
+      // appends of processes at once through WSL's /mnt (inferred, 2026-10-14). `seconds` is how long the file's
+      // process ran, for the throughput review's per-file times (B5).
       if (results) {
         real.mkdirSync(results, { recursive: true });
-        real.writeFileSync(path.join(results, `${process.pid}-${crypto.randomBytes(4).toString('hex')}.json`), JSON.stringify({ test, code }));
+        real.writeFileSync(path.join(results, `${process.pid}-${crypto.randomBytes(4).toString('hex')}.json`), JSON.stringify({ test, code, seconds: Math.round(process.uptime() * 1000) / 1000 }));
       }
       let partNames = [];
       try {

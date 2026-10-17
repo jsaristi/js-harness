@@ -9,6 +9,7 @@ import {
   GATE_LOG_ENV,
   appendGateBusiest,
   appendGateEvent,
+  appendGateTestTimes,
   formatGates,
   gateLogDir,
   gateLogSwitchedOff,
@@ -18,6 +19,7 @@ import {
   provenBy,
   readGateBusiest,
   readGateLog,
+  readGateTestTimes,
 } from './gate-log.mjs';
 
 // The gate log: JSON lines, two per gate, in a folder of its own under the home. Every test here has a
@@ -891,3 +893,36 @@ test('a ci-fallback line under a gate\'s id is read, and pairs, prints and prove
   // Alone, with its gate rotated away, it is no gate at all.
   assert.deepEqual(gatesOf([fallback]), []);
 }));
+
+const timesLine = (id, more = {}) => ({ v: 1, id, at: AT, files: [{ test: 'bin/a.test.mjs', seconds: 2.5 }, { test: 'bin/b.test.mjs', seconds: 0.4 }], ...more });
+
+test('appendGateTestTimes writes one line per gate in test-times.jsonl beside the log, rotated as busiest.jsonl is, and readGateTestTimes reads them by id', withHome(async (home) => {
+  for (const id of ['a', 'b', 'c']) assert.deepEqual(appendGateTestTimes(home, timesLine(id), { maxBytes: 100 }), { ok: true });
+  assert.deepEqual(files(home), ['test-times.1.jsonl', 'test-times.jsonl']);
+  const read = readGateTestTimes(home);
+  assert.deepEqual([...read.keys()].sort(), ['b', 'c']);
+  assert.deepEqual(read.get('c'), timesLine('c'));
+  // Torn, foreign and misshapen lines are left out; a home with no file has none.
+  fs.appendFileSync(path.join(gateLogDir(home), 'test-times.jsonl'), `${['{"v":1,"id":"torn', 'not json', JSON.stringify(timesLine('d', { v: 2 })), JSON.stringify(timesLine('e', { files: [{ test: 'x', seconds: 'slow' }] })), JSON.stringify(timesLine('f', { files: 'x' }))].join('\n')}\n`);
+  assert.deepEqual([...readGateTestTimes(home).keys()].sort(), ['b', 'c']);
+  assert.equal(readGateTestTimes(path.join(home, 'none')).size, 0);
+  assert.deepEqual(readGateLog(home).events, []);
+}));
+
+test('gateRecord keeps the test times of a gate that started, under its id, and only the files it can read back', () => {
+  const { deps } = captured();
+  const kept = [];
+  const appendTestTimes = (home, line) => {
+    kept.push(line);
+    return { ok: true };
+  };
+  const record = gateRecord({ home: 'C:\\home', cwd: 'C:\\work\\one', command: 'check', pid: 100, ...deps, appendTestTimes });
+  record.testTimes([{ test: 'bin/a.test.mjs', seconds: 1 }]);
+  assert.deepEqual(kept, [], 'before its start a gate has no id in the log to key them by');
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+  record.testTimes([{ test: 'bin/a.test.mjs', seconds: 1.25 }, { test: 7, seconds: 1 }, { test: 'bin/b.test.mjs', seconds: null }]);
+  record.testTimes([]);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].id, record.id);
+  assert.deepEqual(kept[0].files, [{ test: 'bin/a.test.mjs', seconds: 1.25 }]);
+});
