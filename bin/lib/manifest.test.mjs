@@ -2613,7 +2613,7 @@ test('the orchestrator skill says what every recap carries and how a block waits
 test('the orchestrator skill closes a work session with the notify command and keeps notices out of the relief file', () => {
   const text = components[2].content('0.1.0');
   // Sweep A1 16 and A1 17.
-  assert.ok(text.includes('- When you have finished, say so in your first line, and close with `js-harness notify --to orchestrator --kind closed "<what you delivered>"`'));
+  assert.ok(text.includes('- When you have finished, say so in your first line. Write your summary from `js-harness summary template --title "<your title>"` into the file it names, commit and push it, and close with `js-harness notify --to orchestrator --kind closed --summary <that file> "<what you delivered>"`: nothing more goes to you, and the lead reads your summary and archives you.'));
   assert.doesNotMatch(text, /Your last prompt is the closing notice/);
   assert.doesNotMatch(text, /a notice not yet delivered/);
 });
@@ -3630,6 +3630,9 @@ test('the skills say who archives and opens sessions, and to check that TaskStop
   const orchestrator = components[2].content('0.1.0');
   assert.ok(orchestrator.includes('archives the old orchestrator itself when the host gives it a tool to archive sessions'));
   assert.ok(orchestrator.includes('a work session whose work is fully finished'));
+  // odd/tasks/session-close.md, S4: a session closed with its summary is read and archived, no question.
+  assert.ok(orchestrator.includes("when it closed with its summary, the board lists it under `to archive`: read the summary, then archive the session with the host's tool to archive sessions, without asking, and name it in the recap"));
+  assert.ok(orchestrator.includes('A finished session that closed without a summary is asked for one first'));
   assert.ok(orchestrator.includes('When the host gives you a tool to start sessions, open the new session yourself'));
   assert.ok(!orchestrator.includes('The user archives the old orchestrator only after that'));
   assert.ok(components[0].content('0.1.0').includes('TaskStop has been seen to end the shell of a background command and leave its node process running'));

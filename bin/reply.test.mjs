@@ -154,7 +154,8 @@ test('a work session that ends its turn holding handed work with nothing in the 
   assert.equal(result.answer.decision, 'block');
   assert.match(result.answer.reason, WARNING);
   assert.match(result.answer.reason, /js-harness wait --notice-to 26/);
-  assert.match(result.answer.reason, /--kind closed/);
+  assert.match(result.answer.reason, /--kind closed --summary <file>/);
+  assert.match(result.answer.reason, /js-harness summary template/);
   assert.doesNotMatch(result.answer.reason, /--kind waiting/, 'a waiting notice still needs a wait: it is never offered as the way out');
   assert.equal(result.err, '');
 });

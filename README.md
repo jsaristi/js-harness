@@ -450,6 +450,24 @@ PASS  odd/tasks/codex-review-cost.md
 …
 ```
 
+### js-harness summary
+
+Prints the summary a work session leaves when it finishes, the file the lead reads before it archives
+the session. It is kept to reverse-engineer how the work went later, so each section holds facts with
+their evidence (a pull request, a commit, a `path:line`, a command and its output), not prose: the goal
+and the opening, the user's words that started it, what was delivered, the decisions and whose they
+were, what failed and what was learned, what is left and who holds it, and the cost.
+
+```console
+$ js-harness summary path --title "JH 24 · gate más rápido"
+docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md
+$ js-harness summary template --title "JH 24 · gate más rápido" > docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md
+```
+
+The file is named by the day and by the title's letters and digits, without accents, as the
+session's opening is. The session fills every section, commits and pushes the file, and closes with
+it (`notify --kind closed --summary`, below).
+
 ### js-harness failures
 
 Reads the register of what went wrong, `docs/FAILURES.md`: the totals, the count by class and
@@ -687,6 +705,8 @@ orchestrator may write a line in its relief file instead), and how many compacti
 those facts (nobody announces a compaction: he does not compact by hand); then the reliefs of the record (each `relieved` notice, judged by the context its relieved session was at: filled at the pause or another reason) and the Log lines that name a reopening, as candidates for the lead. Under each roster row's
 mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
 and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
+A session that closed with its summary (`notify --kind closed --summary`) and is not archived yet
+gets a `to archive:` line naming the file: the lead reads it, then archives the session.
 
 ```console
 $ js-harness sessions --address orchestrator
@@ -795,6 +815,12 @@ address of the orchestrator: no single one now (sessions --address exit 1): …
 A pull request ready to land is announced with `--kind ready --pr <number>`: the record keeps
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which
 session a pull request belongs to from the record, even when the notice was sent from `main`.
+
+A session gives its work back with `--kind closed --summary <file>`, the summary it leaves
+(`js-harness summary`, above): the record keeps the file, and the lead reads it before it archives
+the session. The notice is refused, with exit 1 and nothing written, while a section of the file is
+missing or empty, or while neither origin/main nor the session's branch on origin holds it as it is
+in the worktree: commit it and push it first. A closed notice without `--summary` is a usage error.
 
 The record stamps every notice with the clock, so the text needs no hour. A text that opens with
 one as its sending (`19:48 JH ORQ: …`, or after the label, `JH 5, 19:48: …`) more than a minute
