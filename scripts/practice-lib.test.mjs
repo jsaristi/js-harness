@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, TEMPLATE_SECTIONS, templateLinesProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
   channelEnv, channelStepProblem, channelRecord,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
@@ -490,7 +490,7 @@ test('realHomeFiles names nothing of the gate log, which the gates of the user\'
 
 // ---- the journey -----------------------------------------------------------------------------------------------------
 
-test('the journey is the eleven steps of the feature document, the pause hook, the channel, the project rules, the reply hook and the host session, under ids that stay', () => {
+test("the journey is the eleven steps of the feature document, the template's lines, the pause hook, the channel, the project rules, the reply hook and the host session, under ids that stay", () => {
   // The ids go into record.jsonl, so a renamed one breaks every line already written: they are pinned here.
   assert.deepEqual(JOURNEY.map((step) => step.id), [
     'real-home-before',
@@ -501,6 +501,7 @@ test('the journey is the eleven steps of the feature document, the pause hook, t
     'commit-refused',
     'project-rules',
     'project-uninstall',
+    'template-lines',
     'global-uninstall',
     'pause-hook',
     'channel',
@@ -1262,6 +1263,46 @@ test('after a second init, only an AGENTS.md that is the candidate template may 
   assert.equal(secondInitProblem(' M AGENTS.md', template, template), null);
   assert.equal(secondInitProblem(' M AGENTS.md', '# edited\n', template), 'tracked files differ after the second js-harness init:\n M AGENTS.md');
   assert.equal(secondInitProblem(' M AGENTS.md\n M add.mjs', template, template), 'tracked files differ after the second js-harness init:\n M AGENTS.md\n M add.mjs');
+});
+
+// The step `template-lines` (odd/tasks/rule-hierarchy.md, T12): the AGENTS.md the installed `init` wrote is the
+// candidate's template, with the sections T9 gave it and the four states, in at most half of the budget.
+const TEMPLATE = [
+  '# p',
+  '',
+  '## What good looks like',
+  'Every claim is checked.',
+  '',
+  '## Working with the owner',
+  'A reply ends with one of four states: working,',
+  'decision, cut, or finished.',
+  '',
+].join('\n');
+const TEMPLATE_RIGHT = { agentsText: TEMPLATE, template: TEMPLATE, tokens: 600, budget: 1500 };
+
+test("the template's sections are the two T9 gave it", () => {
+  assert.deepEqual(TEMPLATE_SECTIONS, ['What good looks like', 'Working with the owner']);
+});
+
+test('templateLinesProblem finds nothing wrong with the template, as init wrote it, inside half the budget', () => {
+  assert.equal(templateLinesProblem(TEMPLATE_RIGHT), null);
+  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, tokens: 750 }), null);
+});
+
+test('templateLinesProblem names a project with no AGENTS.md, and one whose AGENTS.md is not the template', () => {
+  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: undefined }), 'the project has no AGENTS.md after js-harness init');
+  assert.match(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: `${TEMPLATE}more\n` }), /^the AGENTS\.md js-harness init wrote is not this candidate's template/);
+});
+
+test('templateLinesProblem names a missing section, the missing four states, and a template over half the budget', () => {
+  const without = TEMPLATE.replace('## Working with the owner\n', '');
+  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: without, template: without }), 'the template js-harness init wrote has no section "Working with the owner"');
+  const stateless = TEMPLATE.replace('one of four states', 'a state');
+  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: stateless, template: stateless }), 'the template js-harness init wrote does not say that a reply ends with one of four states');
+  assert.equal(
+    templateLinesProblem({ ...TEMPLATE_RIGHT, tokens: 751 }),
+    'the template js-harness init wrote is 751 estimated tokens, over 750, half of agents-budget: a project keeps less than half for its own lines',
+  );
 });
 
 test('a text is redacted of the token wherever it appears, and left as it is with no token', () => {

@@ -2652,7 +2652,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   honesty audit, C9). No checkbox here, so that `js-harness progress` counts them once
 - [ ] T11 Every rule moved: the memory notes placed and, on his word, deleted; the remaining
   contradictions of the roadmap corrected
-- [ ] T12 Practice journey: a step for the template's lines and one for the reply hook
+- [x] T12 Practice journey: a step for the template's lines and one for the reply hook (the
+  reply step by JH 25 in pull request 282; the template step `template-lines` on
+  `feat/practice-journey-t12`, Progress, 2026-10-16)
 - Moved on 2026-10-14 to "JH 14 · protocolo para modelos futuros", by the lead's message to
   this session; its state is kept in `odd/tasks/future-model-protocol.md`, and only there: T15
   (the seven signals read and recorded; the roadmap's section replaced by a pointer only after
@@ -4288,6 +4290,29 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     only by the verifiers' probes.
   The second pass comes before any rule gets a `row` that refuses (step 4), because a refusing
   row turns a false positive into a failed gate.
+- 2026-10-16, T12, by `JH 26 · canal y compactación` on `feat/practice-journey-t12`, from `main` 64933f6, on the
+  lead's notice ("rule-hierarchy T12 ..., the practice journey steps for the template's lines and for the reply hook,
+  test first"; a claim of the lead's). Inline, test first.
+  - The reply step was already built (`reply-hook`, JH 25, pull request 282), so the template step is what T12 owed.
+  - The step `template-lines` follows `project-uninstall`, whose second `init` has just written `AGENTS.md` into a
+    project that `uninstall` emptied, so the file is the installed copy's.
+  - It holds that file to three things, through `templateLinesProblem` of `scripts/practice-lib.mjs`:
+    - it is `agentsTemplate` of the candidate's source, so the copy installed is the candidate;
+    - it has the two sections T9 gave it (`TEMPLATE_SECTIONS`) and the line of the four states;
+    - its estimated tokens are at most half of `agents-budget`.
+  - RED: the test file failed to load on the missing export `TEMPLATE_SECTIONS`. GREEN:
+    `node --test scripts/practice-lib.test.mjs` passes 120 of 120.
+  - The journey, with uncommitted changes and no host step, ran
+    `node scripts/practice.mjs run --root D:\js-harness-practice --no-host`: exit 0, every step that ran PASS.
+    `template-lines` printed "in 639 estimated tokens of the 750 it may take". Its record line is
+    `{"date":"2026-10-17T00:20:03.772Z","ok":false,"candidate":{"branch":"feat/practice-journey-t12","commit":"43358a48","dirty":true}, …}`.
+    It is not ok because it left out `host-loads` and its tree was dirty.
+  - The same run shows the case `secondInitProblem` was written for. The project had committed an earlier
+    candidate's template (`budget 144 estimated tokens` at `commit-passes`). The second `init` rewrote it to this one's,
+    which the run committed as 7f79279.
+  - Not run: `host-loads`, which spends a model. The "Done when" line on the practice journey stays open for a run
+    with the host.
+  - Not touched: the step `project-uninstall`, where JH 22 holds a pending fix.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai

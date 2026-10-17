@@ -491,6 +491,7 @@ export const JOURNEY = Object.freeze([
   { id: 'commit-refused', title: 'a commit that breaks the test of the project is refused, and the file is restored' },
   { id: 'project-rules', title: "the project's own rules are listed and checked, and a commit that drops one is refused" },
   { id: 'project-uninstall', title: 'uninstall removes what init wrote and nothing the project owns; init again' },
+  { id: 'template-lines', title: "the AGENTS.md init wrote is the candidate's template, with the lines that hold in any project, in at most half the budget" },
   { id: 'global-uninstall', title: 'uninstall --global leaves the practice home as it was; install again' },
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
   { id: 'channel', title: 'a notice recorded in the installed project is read back on its board, and nothing reaches the real home' },
@@ -509,6 +510,28 @@ export function secondInitProblem(porcelainText, agentsText, template) {
   const lines = porcelainText.split('\n').filter(Boolean);
   const onlyTemplate = lines.length === 1 && lines[0] === ' M AGENTS.md' && agentsText === template;
   return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
+}
+
+/** The sections `agentsTemplate` gained with the lines that hold in any project (odd/tasks/rule-hierarchy.md, T9), whose
+ * wording is the owner's yes: the step `template-lines` looks for each in the AGENTS.md the installed `init` wrote. */
+export const TEMPLATE_SECTIONS = Object.freeze(['What good looks like', 'Working with the owner']);
+
+/** What is wrong with the AGENTS.md the installed `init` wrote, or `null` (odd/tasks/rule-hierarchy.md, T12).
+ * `agentsText` is the file, or nothing; `template` is `agentsTemplate` of the candidate's source, so the two match only
+ * when the copy installed is the candidate. The file must hold each of `TEMPLATE_SECTIONS` as a `## ` heading and the
+ * line of the four states (read with the wrapping undone), and `tokens`, its estimated size, must be at most half of
+ * `budget` (agents-budget), so that a project keeps the other half for its own lines. */
+export function templateLinesProblem({ agentsText, template, tokens, budget }) {
+  if (agentsText === undefined) return 'the project has no AGENTS.md after js-harness init';
+  if (agentsText !== template) return "the AGENTS.md js-harness init wrote is not this candidate's template (agentsTemplate of bin/lib/project.mjs), so the copy installed is not the candidate";
+  const headings = agentsText.split(/\r?\n/);
+  for (const section of TEMPLATE_SECTIONS) {
+    if (!headings.includes(`## ${section}`)) return `the template js-harness init wrote has no section "${section}"`;
+  }
+  if (!agentsText.replace(/\s+/g, ' ').includes('A reply ends with one of four states')) return 'the template js-harness init wrote does not say that a reply ends with one of four states';
+  const half = budget / 2;
+  if (tokens > half) return `the template js-harness init wrote is ${tokens} estimated tokens, over ${half}, half of agents-budget: a project keeps less than half for its own lines`;
+  return null;
 }
 
 /** The one step that starts a host session, and so spends a model: `run --no-host` leaves it out. */
