@@ -502,6 +502,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
 - [x] T10 (kind: build) The full uninstall, D7: `uninstall --global --full` removes the snapshots, the normal one
   offers it, neither removes a project under a pass; from closed PR 263's pieces, on T9's code, tests first
   (L7; route: inline; risk items 1 and 4, so an independent verifier and the slice's review)
+- [ ] T11 (kind: verify) Follow-up of the Codex recheck of 7fe1b24..5018d1b, which left findings 1 ("Point
+  recovery commands at the project checkout") and 4 ("Validate the after-index against its recorded hash") fixed
+  only in part: both are fixed in `b761aef` with their tests (gentle-ai approved, `review-66e30d0a70858dbd`), and a
+  second recheck is refused by design, so `5018d1b..b761aef` is recorded as a skip. A Codex review of the next
+  slice that touches `bin/lib/memory-pass.mjs` or `memoryKeptLine` in `bin/install.mjs` reads them. Open with it,
+  from gentle-ai's advisories: a snapshot verified before `b761aef` whose index is not UTF-8 is now refused as
+  damaged (nothing is written); a home holding `"` or `$` prints a command that does not run as copied.
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -569,7 +576,9 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   it, each seen RED first: the locked line gives both commands in full, with the stamp and `--home "<home>"`, from
   that project's checkout (no file records the checkout's path, and the slug cannot be turned back into it); verify
   keeps the index after the pass byte for byte, and undo refuses an `after-index.txt` whose hash is not the one
-  `after.json` records, before it merges anything. Per file: memory-pass 32, install 77 pass. Then PR.
+  `after.json` records, before it merges anything. Per file: memory-pass 32, install 77 pass. Commit `b761aef`;
+  gentle-ai approved it (`review-66e30d0a70858dbd`); Codex refused a second recheck, so that range is a recorded
+  skip and T11 carries it to the next slice. Then the PR.
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
   to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on
