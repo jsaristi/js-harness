@@ -799,6 +799,21 @@ function writeTranscript(machine, id, entries) {
 const replied = (seconds) => ({ type: 'assistant', timestamp: later(seconds), isSidechain: false, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }] } });
 /** A line he typed in the chat, `seconds` after NOW. */
 const typed = (content, seconds) => ({ type: 'user', timestamp: later(seconds), isSidechain: false, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content } });
+/** A line he sent while the session worked, `seconds` after NOW, as host 2.1.299 queues it: a list of text blocks, the
+ * first of them the host's own reminders and the last his words (the shape of e152c9d8, line 20374). */
+const queuedTyped = (words, seconds) => ({
+  type: 'attachment',
+  timestamp: later(seconds),
+  isSidechain: false,
+  attachment: {
+    type: 'queued_command',
+    prompt: [{ type: 'text', text: '<system-reminder>\nThe session "made up" finished a turn.\n</system-reminder>\n\n' }, { type: 'text', text: words }],
+    commandMode: 'prompt',
+    origin: { kind: 'human' },
+    timestamp: later(seconds),
+    humanTurn: true,
+  },
+});
 /** The session asks him `question` with the question tool, `seconds` after NOW. */
 const asks = (question, seconds) => ({ type: 'assistant', timestamp: later(seconds), isSidechain: false, message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'toolu_question', name: 'AskUserQuestion', input: { questions: [{ question, header: 'Rama', multiSelect: false, options: [{ label: 'main', description: 'made up' }, { label: 'feat', description: 'made up' }] }] } }] } });
 /** His answer `answer` to that question with the question tool, `seconds` after NOW. */
@@ -1078,6 +1093,16 @@ test('an answer typed in the chat after its question is verified, and its words 
   const answer = recorded(machine).notices.at(-1);
   assert.deepEqual([answer.kind, answer.question, answer.verified, answer.transcript, answer.line], ['answer', 1, true, TRANSCRIPT_ID, 2]);
   assert.deepEqual(answer.copy, { tool: null, answers: [{ question: QUESTION, options: [], answer: 'Entonces la A', how: 'typed in the chat' }] });
+}));
+
+test('an answer he sent while the session worked is verified from his words alone, without the reminders the host queued with them', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  assert.equal((await askQuestion(machine)).code, 0);
+  writeTranscript(machine, TRANSCRIPT, [replied(30), queuedTyped('Entonces la A', 60)]);
+  const { code, out, err } = await answerTo(machine);
+  assert.deepEqual([code, err, out[1]], [0, [], 'the user\'s answer, typed in the chat: Entonces la A']);
+  const answer = recorded(machine).notices.at(-1);
+  assert.deepEqual([answer.verified, answer.copy.answers[0].answer], [true, 'Entonces la A']);
 }));
 
 test('an answer typed in the chat is refused when it was sent before its question, when it holds only pasted text, or when it is not his words', withMachine(async (machine) => {

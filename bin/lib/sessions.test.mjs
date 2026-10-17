@@ -4265,6 +4265,24 @@ test('quoteOf takes a message the person sent while the session worked: a queued
   assert.equal(lib.quoteOf(transcript({ ...queued(5, { timestamp: undefined }), timestamp: undefined }), 1).at, null);
 });
 
+// Host 2.1.299 (2026-10-17) queues his message as a list of text blocks: the first holds the host's own
+// reminders, each a `<system-reminder>` block, and the last his words (e152c9d8, line 20374, keys and lengths read).
+test('quoteOf takes his words from a queued list of text blocks, and leaves out the reminders the host queued with them', () => {
+  const reminders = '<system-reminder>\nThe session "made up" finished a turn.\n</system-reminder>\n<system-reminder>\nLinked sessions now: made up.\n</system-reminder>\n\n';
+  const text = transcript(
+    queued(1, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: 'made up while it worked, from a phone' }] }),
+    queued(2, { prompt: [{ type: 'text', text: `${reminders}Dale` }, { type: 'image', source: {} }, { type: 'text', text: 'la A' }] }),
+    queued(3, { prompt: [{ type: 'text', text: pasted('Sos JH 5.') }] }),
+  );
+  assert.deepEqual(lib.quoteOf(text, 1), { person: true, at: at(1), text: 'made up while it worked, from a phone', images: 0, pastedOnly: false, queued: true });
+  assert.deepEqual([lib.quoteOf(text, 2).text, lib.quoteOf(text, 2).images], ['Dale\nla A', 1]);
+  assert.equal(lib.quoteOf(text, 3).pastedOnly, true);
+  // Only the reminders that open the first block are the host's: a tag he typed in his own words stays his, even at
+  // the start of his block.
+  const his = '<system-reminder>esto</system-reminder> lo escribí yo';
+  assert.equal(lib.quoteOf(transcript(queued(4, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: his }] })), 1).text, his);
+});
+
 test('quoteOf refuses every other attachment and says what it is: another origin, no turn of his, no text, another type', () => {
   const lines = [
     queued(1, { origin: { kind: 'peer', name: 'JH 1 · made up', from: 'local_1', body: 'made up' }, isMeta: true, humanTurn: undefined }),
@@ -4276,7 +4294,7 @@ test('quoteOf refuses every other attachment and says what it is: another origin
     queued(7, { humanTurn: 'true' }),
     queued(8, { origin: 'human' }),
     queued(9, { origin: { kind: 'something-new' } }),
-    queued(10, { prompt: [{ type: 'text', text: 'made up' }] }),
+    queued(10, { prompt: [{ type: 'text', text: '<system-reminder>\nmade up\n</system-reminder>\n\n' }, { type: 'image', source: {} }] }),
     queued(11, { prompt: undefined }),
     { type: 'attachment', ...base(12), attachment: { type: 'hook_success', stdout: 'made up', origin: { kind: 'human' }, humanTurn: true, prompt: 'made up' } },
     { type: 'attachment', ...base(13), attachment: null },
