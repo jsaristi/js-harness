@@ -382,7 +382,7 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
 - [x] T3 The seven signals read and recorded, and the carry list for the roadmap's section (S2;
   route: inline)
 - [x] T4 The roadmap's F7 row and checkbox point to `docs/future-model.md`, through the lead (S1; the lead cleared this session to make the one-hunk edit itself, JH 7 being paused)
-- [ ] T5 G5 and G6, the eval model per run and the setup recorded with it: without G5 no step
+- [x] T5 G5 and G6, the eval model per run and the setup recorded with it: without G5 no step
   that spends can run on a new model (S3; route: inline). G5 `a23f834` and G6a `f6e09fc`, each
   assessed medium and under budget by gentle-ai; G6b, the record and the refusal, next; left of
   G6: codegraph's version and the js-harness commit
@@ -545,3 +545,5 @@ chained to push `feat/eval-arms` and open its pull request (based on #130) only 
 record and no P0 to P2 finding. Resume when origin/main's `docs/todo.md` holds "JH 14 resume"
 (the wait armed at the pause); then read this Log to its end, check the review's outcome and the
 pull request, and go on with C3a.
+
+L15 (2026-10-17, JH 21, on the lead's triage of open work) T5 checked off: G5 `a23f834`, G6a `f6e09fc` and G6b `148d5dd` are on origin/main through pull request 130 (merged as 2f45666e; `git merge-base --is-ancestor 148d5dd origin/main` exits 0). G6's last part, codegraph's version and the js-harness commit, is T10's and stays open there.
