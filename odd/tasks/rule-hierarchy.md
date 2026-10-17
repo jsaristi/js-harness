@@ -4518,6 +4518,21 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - T16e, the merge command: its three slices are pull requests 314 (225da7d3), 328 (d0b25553) and 339
     (685a4518).
   - T17, the sweep of 2026-10-11: T17a to T17e are all checked.
+- 2026-10-17, by `JH 21 · reserva de la noche` on `fix/doctor-rules-row`, item 2 of the lead's triage of open work:
+  the two follow-ups of gentle-ai's review of `53f79c4..34931d8` on the harness's rules row, built test first.
+  - R4-serial-uncached-latency: `buildReport` (bin/doctor.mjs) now asks for main's list beside the lookups of
+    the latest versions (`Promise.all`), so a slow network is waited on once. RED: "an online doctor asks for
+    main's list while the latest versions are still being looked up, not after them" saw every lookup give up
+    first.
+  - R3-pin-null-version: a pinned project and a copy whose own version cannot be read is `unknown`, not `n/a`;
+    offline it stays `n/a`, since nothing is compared (RED both, `bin/lib/rules-installed.test.mjs`).
+  - The `maintenance.auto` line of `bin/check-rules-row.test.mjs` is dropped: `repoTemplate` turns automatic
+    maintenance off in every repository it builds (`bin/lib/git-fixture.testkit.mjs:43-50,72-73`).
+  - Commits `7bdaa2e` and `d9f52c4`, the gate passed on both. gentle-ai: `1630123..7bdaa2e` high (item 4
+    escalated: two requests now run together), lenses resilience and reliability, approved and acknowledged,
+    lineage review-6fd0cbffb794ab8d; its WARNING that the unknown answer ran before the offline guard is fixed in
+    `d9f52c4` (medium, not due, under_budget); its WARNING that the `maintenance.auto` line was needed does not
+    hold (above). Codex on `1630123..d9f52c4`: correct (0.95), recorded.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
