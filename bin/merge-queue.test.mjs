@@ -1378,3 +1378,40 @@ test('a bisected red keeps what the shortest red candidate said and failed, not 
   assert.deepEqual(record.leftOut, [{ pr: 1, reason: 'red', said: 'FAIL  tests  1 failed', failing: ['a breaks it'], told: null }]);
   assert.ok(out.includes('PR 1 is left out: the candidate turns red on this machine when it is merged (FAIL  tests  1 failed).'), out.join('\n'));
 });
+
+// T7 (odd/tasks/land-unattended.md, L17): a land run from a merge-queue that is not origin/main's would run code
+// main no longer has, as the lead's lands did from a stale checkout.
+function guardedRepo(mainText) {
+  const made = makeQueueRepo();
+  const { root } = made;
+  git(root, 'checkout', '--quiet', '--detach', 'origin/main');
+  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'bin', 'merge-queue.mjs'), mainText, 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', 'the queue on main');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const self = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-self-')), 'merge-queue.mjs');
+  return { ...made, self };
+}
+
+test('--land stops before it builds anything when the merge-queue it runs from is not origin/main\'s (odd/tasks/land-unattended.md, T7)', async () => {
+  const { root, origin, self } = guardedRepo('export const queue = 2;\n');
+  fs.writeFileSync(self, 'export const queue = 1;\n', 'utf8');
+  const main = git(origin, 'rev-parse', 'main');
+  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(out.at(-1), `merge-queue: ${self} is not origin/main's bin/merge-queue.mjs: a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!calls.some((line) => line.startsWith('git push')), calls.join('\n'));
+});
+
+test('the land guard reads a merge-queue with Windows line ends as origin/main\'s, and lands', async () => {
+  const { root, origin, self } = guardedRepo('export const queue = 2;\n');
+  fs.writeFileSync(self, 'export const queue = 2;\r\n', 'utf8');
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+});

@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
@@ -675,7 +676,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   return code;
 }
 
-async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), stdout, stderr, log }) {
+async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
   const cwd = args.cwd;
   const fail = (line) => {
     stderr(`merge-queue: ${line}`);
@@ -690,6 +691,22 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
   const main = gitIn(cwd, 'rev-parse', 'origin/main').out.trim();
   if (!main) return fail('could not read origin/main.');
   log.record.main = main;
+  // A land run from a merge-queue that is not main's runs code main no longer has: the lead's lands ran a stale
+  // checkout's, so D and B2 never ran (odd/tasks/land-unattended.md, L17). Only where main holds the queue: a
+  // project that runs the installed harness has none of its own. Line ends do not count.
+  if (args.land) {
+    const own = (text) => text.replace(/\r\n/g, '\n');
+    const onMain = gitIn(cwd, 'show', `${main}:bin/merge-queue.mjs`);
+    let mine = null;
+    try {
+      mine = fs.readFileSync(self, 'utf8');
+    } catch {
+      // Unreadable is not proven different: the land goes on, as it did before the guard.
+    }
+    if (onMain.ok && mine !== null && own(mine) !== own(onMain.out)) {
+      return fail(`${self} is not origin/main's bin/merge-queue.mjs: a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
+    }
+  }
   const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
   let listed;
   try {
