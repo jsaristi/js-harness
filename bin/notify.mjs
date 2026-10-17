@@ -18,6 +18,7 @@ import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
 import { stampOff } from './lib/guard.mjs';
+import { pullRequestProblems } from './lib/pull-request.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
@@ -35,7 +36,8 @@ const USAGE = [
   '    are read, with --transcript and --line; no other kind takes them. The text is one line of',
   `    ${NOTICE_TEXT_MAX} characters at most.`,
   '  A ready notice says a pull request is ready to land, and names it with --pr <n>, so the land knows whose it',
-  '    is from the record and not from a branch; no other kind takes --pr.',
+  '    is from the record and not from a branch; no other kind takes --pr. It is refused, with the land\'s reasons,',
+  '    while the land would leave that pull request out: its state, its body\'s gentle-ai line, its reviews.',
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
@@ -185,6 +187,34 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 // How much of a relief line the command prints back: the stamp and the start of it. The file has it whole.
 const SHOWN = 300;
 
+/** What would leave pull request `pr` out of a land before it builds, by the land's own functions and words: its
+ * `pullRequestProblems` (UNKNOWN mergeable read as the land reads it, GitHub not having computed it yet), then its
+ * `reviewEvidence` of the head against origin/main, fetched first. `[]` when the land would build it. */
+export async function readyProblems(pr, cwd, { run, evidence = null }) {
+  const answered = (command, args) => {
+    const done = run(command, args, { cwd });
+    return done.status === 0 ? { ok: true, out: done.stdout } : { ok: false, why: String(done.stderr || done.error?.message || `exit ${done.status}`).trim() };
+  };
+  const view = answered('gh', ['pr', 'view', String(pr), '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid']);
+  let found = null;
+  try {
+    found = view.ok ? JSON.parse(view.out) : null;
+  } catch {
+    found = null;
+  }
+  if (found === null) return [`could not read pull request ${pr} with gh (${view.ok ? 'its answer is no JSON' : view.why}).`];
+  const problems = pullRequestProblems(found.mergeable === 'UNKNOWN' ? { ...found, mergeable: 'MERGEABLE' } : found);
+  if (problems.length) return problems;
+  const fetched = answered('git', ['fetch', '-q', 'origin']);
+  if (!fetched.ok) return [`could not fetch origin (${fetched.why}).`];
+  const main = answered('git', ['rev-parse', 'origin/main']);
+  if (!main.ok) return [`could not read origin/main (${main.why}).`];
+  // The land's module is loaded only for a ready notice: every other notice stays as light as it was.
+  const covers = evidence ?? (await import('./merge-queue.mjs')).reviewEvidence;
+  const coverage = covers(cwd, main.out.trim(), found.headRefOid);
+  return coverage?.pass ? [] : [`PR ${pr}: ${String(coverage?.detail ?? 'its review records could not be read').replace(/\.$/, '')}.`];
+}
+
 export async function notifyMain(
   argv,
   {
@@ -206,6 +236,8 @@ export async function notifyMain(
     // The id of a question: the record is searched for it after the append, which has no lock to say where
     // the line went. A random one, unless a test fixes it.
     newId = () => crypto.randomUUID(),
+    // What would leave the pull request of a ready notice out of a land, `[]` when nothing would.
+    landChecks = readyProblems,
   } = {},
 ) {
   let parsed;
@@ -271,6 +303,16 @@ export async function notifyMain(
     const off = stampOff(draft.text, new Date(at));
     if (off !== null) {
       stderr(`js-harness notify: the text stamps ${off.stamped}, and the clock says ${off.right}. Stamp ${off.right}, or no hour: the record already stamps every notice with its time. Not recorded.`);
+      return 1;
+    }
+  }
+
+  // A ready notice is held to the checks the land runs before it builds: 360, 365 and 367 were announced ready and
+  // left out of a land for want of gentle-ai evidence, a relay and some 13 minutes each (odd/tasks/ready-checks.md, S1).
+  if (draft.kind === 'ready') {
+    const problems = await landChecks(draft.pr, cwd, { run });
+    if (problems.length) {
+      stderr(`js-harness notify: pull request ${draft.pr} is not ready to land: ${problems.join(' ')} Not recorded.`);
       return 1;
     }
   }
