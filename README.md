@@ -467,6 +467,11 @@ and says so. A gate that ran nothing (no turn in time, or a waiting push took it
 before it ended is no red: the land exits 5, with nothing pushed and nothing bisected
 (`odd/tasks/land-unattended.md`). The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
+Each `--land` appends one JSON line to `lands.jsonl` under the git directory's `js-harness` folder:
+the pull requests it looked at, each one left out with its reason (`not-ready`, `review`, `door`,
+`conflict`, `merge` or `red`, with what the suite said), the start and seconds of each suite run,
+of CircleCI and of the push, the CircleCI build, what landed and the exit. A `--dry-run` writes none,
+and a record that cannot be written is said and changes no exit.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
