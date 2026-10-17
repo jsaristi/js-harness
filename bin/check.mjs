@@ -1851,15 +1851,16 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return (await testsOnCi(cwd, lock, deps)) ?? underGateLock(cwd, lock, deps, run, record);
+  return (await testsOnCi(cwd, lock, deps, record)) ?? underGateLock(cwd, lock, deps, run, record);
 }
 
 /** The rows of a gate whose tests ran on GitHub's machines, where every commit's gate goes first
  * (./lib/ci-gate.mjs), or null for a gate that runs here: the project has no gate workflow, the switch keeps it
  * here, or CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its
- * tests marked as run on CI, so the measures of the lines count both. `deps.ciGateWanted` and `deps.runCiGate`
- * stand in for the two halves. */
-async function testsOnCi(cwd, lock, deps) {
+ * tests marked as run on CI and the names of those that failed there, so the measures of the lines count both. A
+ * gate CI gave no answer leaves a `ci-fallback` line under `local`'s id, the record of the gate that then runs
+ * here, with what the wait cost. `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. */
+async function testsOnCi(cwd, lock, deps, local = null) {
   const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
   console.error(`check: ${why}; the push of the tree being committed starts their run`);
@@ -1867,6 +1868,7 @@ async function testsOnCi(cwd, lock, deps) {
   const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
   if (!ci.ran) {
     console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
     return null;
   }
   const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
@@ -1876,7 +1878,8 @@ async function testsOnCi(cwd, lock, deps) {
     : null;
   record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
   at = Date.now();
-  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci' }] });
+  const failing = ci.pass ? [] : failingTests(ci.output);
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci', ...(failing.length > 0 && { failing }) }] });
   return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
 }
 

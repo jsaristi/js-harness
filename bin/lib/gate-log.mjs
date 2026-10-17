@@ -202,8 +202,9 @@ export function isTreeKey(value) {
 /** The kinds of event this version writes and reads. `stopped` came after the other three: a version that
  * does not know it leaves its line out in silence (`readGateLog`), which is why a gate that stopped writes
  * no start for that version to show alone. The four `first-` kinds are a ticket's (./gate-first.mjs):
- * issued, claimed, expired, cancelled, each under the ticket's id; they are no gate (`gatesOf`). */
-const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled'];
+ * issued, claimed, expired, cancelled, each under the ticket's id; they are no gate (`gatesOf`). `ci-fallback` is a
+ * gate's that asked GitHub's machines first and got no answer, under the id of the gate it then runs here. */
+const KINDS = ['start', 'end', 'refused', 'stopped', 'same', 'first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'ci-fallback'];
 
 /** Whether `value` has the head of a line of this log, enough to be paired: the version, an event that is
  * a text, the id and when. The kind of the event is not asked here (`readGateLog`). */
@@ -459,6 +460,8 @@ function loadWritten(load) {
  *   to take: `reason` is the word the lock refused it with, such as `held` (told not to wait) or `timeout`
  *   (its wait ran out). It is written as the lock says it and read as any text, so a reason the lock
  *   comes to give later needs no change here.
+ * - `ciFallback({ seconds, reason })`, for a gate whose tests went to GitHub's machines first and got no answer, so
+ *   they run here: `seconds` is what the wait cost, `reason` why there was no answer. It comes before the start.
  * - `stopped({ rows })`, for a gate that ran nothing because a row it knew before its sensors had already
  *   failed: `rows` are the names of the rows that stopped it. It is the one line of that gate, which wrote
  *   no start and writes no end.
@@ -533,6 +536,10 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
     },
     refused({ reason, waitedMs, waitedFor }) {
       write('this refusal', now(), { event: 'refused', ...said, reason, ...waited({ waitedMs, waitedFor }) });
+    },
+    ciFallback({ seconds: waited, reason } = {}) {
+      // Before the start of the gate it falls back to, whose id it shares: what the throughput review joins it by.
+      write('this fallback from CI', now(), { event: 'ci-fallback', ...said, seconds: Number.isFinite(waited) ? waited : 0, ...(isText(reason) && { reason }) });
     },
     stopped({ rows } = {}) {
       // A name that is no text is left out, as a gate that is none is among the gates waited for: the

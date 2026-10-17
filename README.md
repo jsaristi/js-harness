@@ -78,7 +78,7 @@ given), reads that workflow's run in the GitHub repository the remote names with
 branch, and lets the commit through only on green. The `tests` row then names the run. A gate that
 gets no answer from GitHub (a remote not on GitHub, no push, `gh` not signed in, no run within 3
 minutes, a run cancelled or timed out, or one not done within `rule:ci-gate-bound` of the push,
-which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
+which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. The gate log keeps both: a run's red tests by name, read from its log with gh's prefix taken off, and a `ci-fallback` line with why and what the wait cost, under the id of the gate that then runs here. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
 on Windows is left to the merge queue's run on this machine.
 
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
