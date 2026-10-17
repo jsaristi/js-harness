@@ -4275,8 +4275,11 @@ test('quoteOf takes his words from a queued list of text blocks, and leaves out 
     queued(3, { prompt: [{ type: 'text', text: pasted('Sos JH 5.') }] }),
   );
   assert.deepEqual(lib.quoteOf(text, 1), { person: true, at: at(1), text: 'made up while it worked, from a phone', images: 0, pastedOnly: false, queued: true });
-  assert.equal(lib.quoteOf(text, 2).text, 'Dale\nla A');
+  assert.deepEqual([lib.quoteOf(text, 2).text, lib.quoteOf(text, 2).images], ['Dale\nla A', 1]);
   assert.equal(lib.quoteOf(text, 3).pastedOnly, true);
+  // Only the reminders that open a block are the host's: a tag he typed inside his words stays his.
+  const his = 'mirá <system-reminder>esto</system-reminder> que escribí';
+  assert.equal(lib.quoteOf(transcript(queued(4, { prompt: [{ type: 'text', text: reminders }, { type: 'text', text: his }] })), 1).text, his);
 });
 
 test('quoteOf refuses every other attachment and says what it is: another origin, no turn of his, no text, another type', () => {
