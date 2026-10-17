@@ -39,11 +39,11 @@ function fakeGit({ origin = true } = {}) {
   };
 }
 
-async function run(argv, { home, git = fakeGit(), codex = [] } = {}) {
+async function run(argv, { home, git = fakeGit(), codex = [], now = NOW } = {}) {
   const out = [];
   const err = [];
   const code = await throughputMain(argv, {}, {
-    cwd: ROOT, stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => NOW, run: git,
+    cwd: ROOT, stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => now, run: git,
     homedir: () => home, readCodexRuns: () => codex,
   });
   return { code, stdout: out.join('\n'), stderr: err.join('\n') };
@@ -89,7 +89,8 @@ test('snapshot keeps a closed day once, and the table then reads the day from it
   const kept = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(kept.schema, SNAPSHOT_SCHEMA);
   assert.deepEqual(kept.gates.map((gate) => gate.id), ['g1']);
-  assert.equal(kept.prs[0].number, 7);
+  // main's history is append-only and is read live, never kept: a stale fetch freezes nothing.
+  assert.equal(kept.prs, undefined);
 
   const again = await run(['snapshot', '--day', '2026-10-16'], { home });
   assert.equal(again.code, 1);
@@ -120,4 +121,39 @@ test('status names each day since the first one kept that has none, and exits 1'
   assert.match(stdout, /2026-10-14 {2}kept/);
   assert.match(stdout, /2026-10-15 {2}MISSING/);
   assert.match(stdout, /2026-10-16 {2}kept/);
+});
+
+test('a day is kept only once its last gates can have ended: two gate-max after its midnight', async () => {
+  const home = makeHome(GATES);
+  const early = await run(['snapshot', '--day', '2026-10-16'], { home, now: Date.parse('2026-10-17T00:30:00Z') });
+  assert.equal(early.code, 2);
+  assert.match(early.stderr, /settles at 2026-10-17T01:00:00.000Z/);
+});
+
+test('snapshot --gate-log keeps a day from archived copies of the log and says where it came from', async () => {
+  const home = makeHome();
+  const copy = path.join(home, 'gate-log.jsonl');
+  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join('
+') + '
+');
+  const { code, stderr } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
+  assert.equal(code, 0, stderr);
+  const kept = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'throughput', ROOT.replace(/[^A-Za-z0-9]/g, '-'), '2026-10-16.json'), 'utf8'));
+  assert.deepEqual(kept.from, [copy]);
+  assert.deepEqual(kept.gates.map((gate) => gate.id), ['g1']);
+});
+
+test('a partial day is replaced by a fuller one, and the replacement is recorded', async () => {
+  const home = makeHome(GATES.slice(1));
+  assert.equal((await run(['snapshot', '--day', '2026-10-16'], { home })).code, 0);
+  const copy = path.join(home, 'gate-log.jsonl');
+  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join('
+') + '
+');
+  const { code, stdout } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
+  assert.equal(code, 0);
+  assert.match(stdout, /replaced a partial snapshot/);
+  const kept = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'throughput', ROOT.replace(/[^A-Za-z0-9]/g, '-'), '2026-10-16.json'), 'utf8'));
+  assert.equal(kept.partialFrom, null);
+  assert.equal(kept.replaced.partialFrom, '2026-10-16T09:00:00Z');
 });

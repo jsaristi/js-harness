@@ -118,13 +118,25 @@ function gitFacts(run, root, { from, to }) {
   return { prs, tasks: start && end ? { start, end } : null, conflicts };
 }
 
-/** The facts of `day` read from the live records. */
-function liveFacts(day, ctx) {
-  const bounds = dayBounds(day);
-  const facts = { day, source: 'live', partialFrom: null, gates: [], prs: [], codex: [], tasks: null, conflicts: [], unavailable: {} };
-  const log = readGateLog(ctx.home, { fileSystem: ctx.fileSystem });
+/** The facts of `day` that a rotating record holds, the only ones a snapshot keeps: the gates. `gateLogs`, when
+ * given, are archived copies of the gate log read in its place, the newer first. */
+function rotatingFacts(day, ctx, gateLogs = null) {
+  const facts = { partialFrom: null, gates: [], unavailable: {} };
+  const files = gateLogs ? { 'log.jsonl': gateLogs[0], 'log.1.jsonl': gateLogs[1] } : null;
+  const fileSystem = files
+    ? { readFileSync: (file, encoding) => { const copy = files[path.basename(file)]; if (!copy) throw Object.assign(new Error('none'), { code: 'ENOENT' }); return ctx.fileSystem.readFileSync(copy, encoding); } }
+    : ctx.fileSystem;
+  const log = readGateLog(ctx.home, { fileSystem });
   if (log.unavailable) facts.unavailable['gate log'] = log.unavailable.join(', ');
-  else Object.assign(facts, gateFacts(log.events, bounds));
+  else Object.assign(facts, gateFacts(log.events, dayBounds(day)));
+  return facts;
+}
+
+/** The facts of `day` that append-only records hold (main's history, the Codex runs), read live every time: a
+ * snapshot of them would freeze what a stale fetch had not seen yet. */
+function appendOnlyFacts(day, ctx) {
+  const bounds = dayBounds(day);
+  const facts = { prs: [], codex: [], tasks: null, conflicts: [], unavailable: {} };
   const fromGit = gitFacts(ctx.run, ctx.root, bounds);
   if (fromGit.unavailable) facts.unavailable.git = fromGit.unavailable;
   else Object.assign(facts, fromGit);
@@ -134,6 +146,13 @@ function liveFacts(day, ctx) {
     facts.unavailable.codex = err.message;
   }
   return facts;
+}
+
+/** The live facts of `day`, both halves. */
+function liveFacts(day, ctx) {
+  const rotating = rotatingFacts(day, ctx);
+  const appended = appendOnlyFacts(day, ctx);
+  return { day, source: 'live', ...rotating, ...appended, unavailable: { ...rotating.unavailable, ...appended.unavailable } };
 }
 
 const snapshotFolder = (home, slug) => path.join(home, '.js-harness', 'throughput', slug);
@@ -157,7 +176,10 @@ function readSnapshot(file, fileSystem) {
 
 function dayFacts(day, ctx) {
   const kept = readSnapshot(path.join(ctx.folder, `${day}.json`), ctx.fileSystem);
-  if (kept && !kept.unreadable) return kept;
+  if (kept && !kept.unreadable) {
+    const appended = appendOnlyFacts(day, ctx);
+    return { ...kept, ...appended, unavailable: { ...kept.unavailable, ...appended.unavailable } };
+  }
   const live = liveFacts(day, ctx);
   if (kept?.unreadable) live.snapshotUnreadable = kept.unreadable;
   return live;
