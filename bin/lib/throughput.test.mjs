@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -239,7 +239,22 @@ test('under 7 days a side, the comparison prints the ranges and the false-alarm 
   const [row] = compareWindows([day(216), day(69)], [day(30), day(40)]).filter((r) => r.label === 'gate waits, min');
   assert.deepEqual(row.before, [216, 69]);
   assert.deepEqual(row.after, [30, 40]);
-  assert.equal(row.verdict, 'not judged: 2 days a side, under 7; a window that did not change falls outside a 2-day range 67% of the time');
+  assert.equal(row.verdict, 'not judged: 2 days a side, under 7; with nothing changed, the after median falls outside the before range at most 100% of the time');
+});
+
+test('the chance that an unchanged window\'s median falls outside the before range is the after values taking the far ranks', () => {
+  // Seven a side: the median is outside when the 4 highest (or lowest) of 14 are all after, 2 * (7/14 * 6/13 * 5/12 * 4/11).
+  assert.equal(outsideChance(7, 7), '7%');
+  assert.equal(outsideChance(1, 1), '100%');
+  assert.equal(outsideChance(3, 3), '40%');
+  // An even after window's median is a mean of two: at least half of them past the range is a bound, not the chance.
+  assert.equal(outsideChance(8, 8), 'at most 8%');
+});
+
+test('a gate row of a day whose gate log ends before the day settled is partial, said with when it ends', () => {
+  const day = dayOf({ gates: [gate({})], partialUntil: '2026-10-16T18:30:00.000Z' });
+  assert.equal(rowOf(throughputRows([day]), 'gate waits').value, `0 min in all; partial: ${DAY} until 2026-10-16T18:30Z`);
+  assert.equal(dailyValues(day)['gate waits, min'], null);
 });
 
 test('with 7 days a side, a row moved only when the after median lies outside the before range', () => {
@@ -247,7 +262,7 @@ test('with 7 days a side, a row moved only when the after median lies outside th
   const before = [100, 120, 90, 110, 130, 95, 105].map(day);
   const label = 'gate waits, min';
   const verdict = (after) => compareWindows(before, after.map(day)).find((r) => r.label === label).verdict;
-  assert.equal(verdict([40, 50, 60, 45, 55, 70, 300]), 'moved down: after median 55, before 90 to 130; chance 25% if nothing changed');
+  assert.equal(verdict([40, 50, 60, 45, 55, 70, 300]), 'moved down: after median 55, before 90 to 130; chance 7% if nothing changed');
   assert.equal(verdict([100, 95, 92, 140, 150, 160, 99]), 'within the before range 90 to 130');
   assert.throws(() => compareWindows(before, [day(1)]), /equal windows/);
 });

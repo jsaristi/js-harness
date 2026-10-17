@@ -361,7 +361,8 @@ gates under the home (`.js-harness/throughput/<project>/<day>.json`) once the da
 two `gate-max` after its midnight, and the table reads a kept day from there. Main's history,
 the Codex runs and the channel are append-only and always read live. A kept day is written
 again only by a fuller one, the replacement recorded; `--gate-log <file>` (twice at most) reads
-archived copies of the log instead, for a day the live log has lost. `throughput status` lists
+archived copies of the log instead, for a day the live log has lost; a copy made before the day
+settled may lack its last gates, so the day is kept as partial until then. `throughput status` lists
 the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
 leaves the snapshots in place.
 
@@ -373,15 +374,16 @@ $ js-harness throughput status
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by
 row, daily value with daily value. The gate-wait median moved from 216 s to 69 s from one day to
-the next with nothing shipped, so under 7 days a side it prints both and how often a window that
-did not change falls outside the before range, 2/(n+1), and judges nothing; from 7 days a row
-moved only when the after window's median lies outside the before range.
+the next with nothing shipped, so under 7 days a side it prints both and how often the median of
+a window that did not change falls outside the before range, and judges nothing; from 7 days a
+row moved only when the after window's median lies outside the before range, which an unchanged
+week does 7% of the time. The window before must end by the one compared.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
 Throughput compared  before 2026-10-15 to 2026-10-16, after 2026-10-16 to 2026-10-17 (UTC days, until excluded)  D:\js-harness
-pull requests merged                     before 80      after 94      not judged: 1 days a side, under 7; a window that did not change falls outside a 1-day range 100% of the time
-lock busy, h                             before 14.3    after 16.8    not judged: 1 days a side, under 7; a window that did not change falls outside a 1-day range 100% of the time
+pull requests merged                     before 80      after 94      not judged: 1 days a side, under 7; with nothing changed, the after median falls outside the before range 100% of the time
+lock busy, h                             before 14.3    after 16.8    not judged: 1 days a side, under 7; with nothing changed, the after median falls outside the before range 100% of the time
 …
 ```
 

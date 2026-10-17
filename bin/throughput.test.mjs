@@ -23,6 +23,13 @@ function makeHome(gateLines = []) {
   return home;
 }
 
+/** An archived copy of the gate log holding `lines`, made at `madeAt`: its modification time, which says up to when
+ * it can hold the log. */
+function writeCopy(file, lines, madeAt = NOW) {
+  fs.writeFileSync(file, lines.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
+  fs.utimesSync(file, madeAt / 1000, madeAt / 1000);
+}
+
 /** A git that answers as a repository whose main merged pull request 7 at 10:30Z on the 16th. */
 function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = null } = {}) {
   return (command, args) => {
@@ -162,7 +169,7 @@ test('a day is kept only once its last gates can have ended: two gate-max after 
 test('snapshot --gate-log keeps a day from archived copies of the log and says where it came from', async () => {
   const home = makeHome();
   const copy = path.join(home, 'gate-log.jsonl');
-  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
+  writeCopy(copy, GATES);
   const { code, stderr } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
   assert.equal(code, 0, stderr);
   const kept = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'throughput', ROOT.replace(/[^A-Za-z0-9]/g, '-'), '2026-10-16.json'), 'utf8'));
@@ -174,7 +181,7 @@ test('a partial day is replaced by a fuller one, and the replacement is recorded
   const home = makeHome(GATES.slice(1));
   assert.equal((await run(['snapshot', '--day', '2026-10-16'], { home })).code, 0);
   const copy = path.join(home, 'gate-log.jsonl');
-  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
+  writeCopy(copy, GATES);
   const { code, stdout } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
   assert.equal(code, 0);
   assert.match(stdout, /replaced a partial snapshot/);
@@ -234,7 +241,7 @@ test('a day kept from a log that holds no gate of it is partial, so a fuller cop
   fs.writeFileSync(empty, '');
   assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', empty], { home })).code, 0);
   const copy = path.join(home, 'gate-log.jsonl');
-  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
+  writeCopy(copy, GATES);
   const { code, stdout } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
   assert.equal(code, 0);
   assert.match(stdout, /replaced a partial snapshot/);
@@ -271,4 +278,36 @@ test('a history read that fails leaves the task row unread', async () => {
   const home = makeHome(GATES);
   const { stdout } = await run([], { home, git: fakeGit({ pace: { status: 128, stdout: '', stderr: 'fatal: bad object\n' } }) });
   assert.match(stdout, /tasks closed and added +not read: 2026-10-16 git log: fatal: bad object/);
+});
+
+test('a copy of the gate log made before its day settled keeps the day as partial until then, and a later copy replaces it', async () => {
+  const home = makeHome();
+  const early = path.join(home, 'early.jsonl');
+  writeCopy(early, GATES, Date.parse('2026-10-16T18:30:00Z'));
+  const first = await run(['snapshot', '--day', '2026-10-16', '--gate-log', early], { home });
+  assert.equal(first.code, 0, first.stderr);
+  assert.match(first.stdout, /partial: the copies end at 2026-10-16T18:30:00.000Z, before the day settles/);
+  assert.match((await run([], { home })).stdout, /gate waits +.*partial: 2026-10-16 until 2026-10-16T18:30Z/);
+  const late = path.join(home, 'late.jsonl');
+  writeCopy(late, GATES);
+  const second = await run(['snapshot', '--day', '2026-10-16', '--gate-log', late], { home });
+  assert.equal(second.code, 0, second.stderr);
+  assert.match(second.stdout, /replaced a partial snapshot/);
+  // The early copy covers less at its end, so it writes nothing over the later one.
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', early], { home })).code, 1);
+});
+
+test('--against takes a window before the one it compares', async () => {
+  const home = makeHome(GATES);
+  const { code, stderr } = await run(['--since', '2026-10-15', '--until', '2026-10-16', '--against', '2026-10-16..2026-10-17'], { home });
+  assert.equal(code, 2);
+  assert.match(stderr, /--against takes the window before: 2026-10-16\.\.2026-10-17 does not end by 2026-10-15/);
+});
+
+test('status does not name as missing a day that has not settled yet', async () => {
+  const home = makeHome(GATES);
+  await run(['snapshot', '--day', '2026-10-15'], { home });
+  const { code, stdout } = await run(['status'], { home, now: Date.parse('2026-10-17T00:30:00Z') });
+  assert.equal(code, 0, stdout);
+  assert.doesNotMatch(stdout, /2026-10-16 {2}MISSING/);
 });
