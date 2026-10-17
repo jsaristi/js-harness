@@ -207,11 +207,11 @@ proofs and by those tasks.
 ### The Codex review
 
 **Problem:** The Codex review of each approved slice depended on the agent remembering, and nothing noticed a skip (`odd/tasks/project-init.md`). On 2026-09-29 every shell command of a review failed after a Codex update, and in 6 of 41 reviews the model never read the diff yet answered (`odd/tasks/codex-exec-review.md`).
-**Requirement:** A command runs Codex's review of a range and records it only on evidence that the reviewer read the diff (a completed turn, and every changed line of the patch in the output of its successful commands), never on its wording; an explicit skip is recorded with its reason; the pre-push hook refuses a push whose code commits no record covers.
+**Requirement:** A command runs Codex's review of a range and records it only on evidence that the reviewer read the diff (a completed turn, and every changed line of the patch in the output of its successful commands), never on its wording; an explicit skip is recorded with its reason; the pre-push hook refuses a push whose code commits no record covers. A merge of the default branch is reviewed by what was written in it: at HEAD as the range, and below HEAD, after code commits that each have a record, in a turn of its own before the commits after it, where two turns cost less than one review (`odd/tasks/merge-below-head.md`).
 **Reason:** A second reviewer after gentle-ai, and a skip must be explicit, never silent.
 **Proof:** `node --test bin/codex-review.test.mjs`, `node --test bin/check-codex-reviews.test.mjs`, `node --test bin/pre-push-hook.test.mjs`, `node --test bin/lib/codex-reviews.test.mjs`
 **Discarded:** The Codex plugin's review: it passes no per-thread setting and returns only text. Reading gentle-ai's or the plugin's own state as the record: pruned, opaque and free to change.
-**Today:** `bin/codex-review.mjs`, `bin/lib/codex-reviews.mjs`, `bin/lib/codex-review-coverage.mjs`, `.githooks/pre-push`, `js-harness codex-review`
+**Today:** `bin/codex-review.mjs`, `bin/lib/codex-reviews.mjs`, `bin/lib/codex-review-coverage.mjs`, `bin/lib/codex-review-turns.mjs`, `.githooks/pre-push`, `js-harness codex-review`
 
 ### The merge queue
 
@@ -269,8 +269,8 @@ proofs and by those tasks.
 
 ### Waiting and waking
 
-**Problem:** On 2026-10-14 nothing ran for seven hours while sessions waited; twice a session near compaction ended its turn waiting with nothing to wake it, because the host compacts only inside a turn (`odd/tasks/pause-no-idle.md`); after a restart the lead woke seven sessions by hand and each re-armed its waits from memory (`odd/tasks/boot-wake.md`).
-**Requirement:** A wait ends with one line when its one condition holds (a pull request merged, the default branch holding a commit or a text, a notice for a role), says what it waits for and when it ends, and gives up with exit 1 after a bound. After a boot, a command lists the sessions open in the hours before it with the command for each stored opening and the waits the boot killed, leaves each a note and the orchestrator the list to wake, once per boot; an opt-in runs it at each login through a recorded startup file that uninstall removes.
+**Problem:** On 2026-10-14 nothing ran for seven hours while sessions waited; twice a session near compaction ended its turn waiting with nothing to wake it, because the host compacts only inside a turn (`odd/tasks/pause-no-idle.md`); after a restart the lead woke seven sessions by hand and each re-armed its waits from memory (`odd/tasks/boot-wake.md`); on 2026-10-16 a session waiting on a pull request read five of the lead's notices hours late (`wait-blind-to-notices`, `docs/FAILURES.md`).
+**Requirement:** A wait ends with one line when its one condition holds (a pull request merged, the default branch holding a commit or a text, a notice for a role), says what it waits for and when it ends, and gives up with exit 1 after a bound. A work session's wait also ends, with exit 3, on a notice to that session's own number, and names the same wait to run again. After a boot, a command lists the sessions open in the hours before it with the command for each stored opening and the waits the boot killed, leaves each a note and the orchestrator the list to wake, once per boot; an opt-in runs it at each login through a recorded startup file that uninstall removes.
 **Reason:** A background task that ends is the only thing that wakes an idle session, and nothing can push a prompt into one; so the harness leaves notes and the orchestrator wakes sessions.
 **Proof:** `node --test bin/wait.test.mjs`, `node --test bin/wake.test.mjs`, `node --test bin/lib/wake.test.mjs`, `node --test bin/lib/startup-file.test.mjs`
 **Discarded:** Ending a turn idle while waiting for a message, an event or the compaction. Pushing a prompt into an idle session from a command: no path exists. Recording each wait as it is armed: waits are read from the transcripts.

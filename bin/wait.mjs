@@ -3,13 +3,14 @@
 // origin/main holding a commit or a file's text (git, after a fetch), or a notice addressed to a role in the
 // channel record (bin/lib/channel.mjs). It says what it waits for and when it ends, checks at once and then every
 // `--every` seconds, and ends: exit 0 when the condition holds; exit 1 when the time runs out, or when the pull
-// request is closed without merging; exit 2 for a usage error, with nothing checked. Zero dependencies.
+// request is closed without merging; exit 2 for a usage error, with nothing checked; exit 3 when a notice to the
+// waiting work session's own number comes first. Zero dependencies.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { readNotices } from './lib/channel.mjs';
-import { mainCheckout, projectSlug, roleNamed } from './lib/sessions.mjs';
+import { readNotices, senderOf } from './lib/channel.mjs';
+import { mainCheckout, projectSlug, roleNamed, roleOfTitle } from './lib/sessions.mjs';
 import { ruleValue } from './lib/rules.mjs';
 
 /** How often a wait checks, and how long it waits, when --every and --for do not say: the declared rules
@@ -29,6 +30,9 @@ const USAGE = [
   '  --main-file <path> --contains <text>: the file of origin/main holds the text, after git fetch origin.',
   "  --notice-to <role>: a notice addressed to orchestrator (or ORQ), or to a work session's number, is in the channel",
   '    record and was written after the wait started; its kind, sender and text are printed.',
+  "  Every wait run by a work session (its title's number, read from the transcript CLAUDE_CODE_SESSION_ID names) also",
+  '    ends on a notice to that number written after it started (exit 3): it prints the notice and the same wait to',
+  '    run again. A session with no number keeps its one condition.',
   '  Exit 2: a usage error, and nothing is checked.',
 ].join('\n');
 
@@ -180,22 +184,54 @@ function conditionOf(condition, { cwd, home, run, readFile, now, started }) {
     };
   }
 
-  const label = condition.role.role === 'orchestrator' ? 'orchestrator' : String(condition.role.number);
-  const phrase = `a notice to ${label}`;
+  const phrase = `a notice to ${roleLabel(condition.role)}`;
   return {
     phrase,
     check: () => {
-      // The record of the project the folder is in, as `notify` names it: the same slug and home.
-      const record = readNotices(home, projectSlug(mainCheckout(run, cwd)), { readFile });
-      if (record.unavailable !== undefined) return failed(`the channel's record ${record.path} could not be read (${record.unavailable})`);
-      const found = record.notices.find(
-        (notice) => notice.to.role === condition.role.role && (notice.to.number ?? null) === condition.role.number && Date.parse(notice.at) >= started,
-      );
-      if (found === undefined) return WAITING;
-      const sender = found.from?.title || 'a session with no title';
-      return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`, `${found.kind} from ${sender}: ${found.text}`] };
+      const looked = noticeTo(condition.role, { cwd, home, run, readFile, started });
+      if (looked.reason !== undefined) return failed(looked.reason);
+      if (looked.line === undefined) return WAITING;
+      return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`, looked.line] };
     },
   };
+}
+
+/** A role as the wait names it: `orchestrator`, or a work session's number. */
+const roleLabel = (role) => (role.role === 'orchestrator' ? 'orchestrator' : String(role.number));
+
+/** One look in the channel record for a notice to `role` written since `started`: `{ line }`, its kind, sender and
+ * text as the wait prints them; `{}` when there is none; `{ reason }` when the record exists and cannot be read. */
+function noticeTo(role, { cwd, home, run, readFile, started }) {
+  // The record of the project the folder is in, as `notify` names it: the same slug and home.
+  const record = readNotices(home, projectSlug(mainCheckout(run, cwd)), { readFile });
+  if (record.unavailable !== undefined) return { reason: `the channel's record ${record.path} could not be read (${record.unavailable})` };
+  const found = record.notices.find(
+    (notice) => notice.to.role === role.role && (notice.to.number ?? null) === role.number && Date.parse(notice.at) >= started,
+  );
+  if (found === undefined) return {};
+  return { line: `${found.kind} from ${found.from?.title || 'a session with no title'}: ${found.text}` };
+}
+
+/** The number of the work session that waits, or `null` (odd/tasks/session-channel.md, T20b): read as `notify`
+ * reads its sender (`senderOf`), from the title of the transcript CLAUDE_CODE_SESSION_ID names. A session with no
+ * id, a transcript with no title (a phone session's), the orchestrator and a title of no agreed shape have none. */
+function ownNumber({ env, cwd, run, readdir, readFile, homedir, defaultCwd }) {
+  if (!env.CLAUDE_CODE_SESSION_ID) return null;
+  try {
+    const claudeHome = path.resolve(defaultCwd, env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
+    const projectDir = path.join(claudeHome, 'projects', projectSlug(mainCheckout(run, cwd)));
+    const role = roleOfTitle(senderOf({ env, projectDir, readdir, readFile }).title);
+    return role?.role === 'work' ? role.number : null;
+  } catch {
+    // A session whose number cannot be read keeps the wait it had, as one with none does.
+    return null;
+  }
+}
+
+/** `argv` as one line a POSIX shell reads back into the same words: a word with anything but letters, digits and
+ * `_ . / : @ % + = , -` is put in single quotes. */
+function shellLine(argv) {
+  return argv.map((word) => (/^[\w./:@%+=,-]+$/.test(word) ? word : `'${word.replace(/'/g, "'\\''")}'`)).join(' ');
 }
 
 /** The wait itself. `env` gives the harness home when `--home` is not given, as `notify` reads it. The seams are
@@ -212,6 +248,7 @@ export async function waitMain(
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, timeout: CHECK_MS, maxBuffer: 64 * 1024 * 1024, ...options }),
     readFile = (file) => fs.readFileSync(file, 'utf8'),
+    readdir = (dir) => fs.readdirSync(dir),
     homedir = os.homedir,
   } = {},
 ) {
@@ -234,10 +271,34 @@ export async function waitMain(
   const bounded = (command, args, options = {}) =>
     run(command, args, { ...options, timeout: Math.max(1000, Math.min(CHECK_MS, deadline - now())) });
   const { phrase, check } = conditionOf(parsed.condition, { cwd, home, run: bounded, readFile, now, started });
-  stdout(`js-harness wait: waits for ${phrase}; ends when it holds, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`);
+  // The notices to the session's own number end every wait, but one that already waits for them.
+  const number = ownNumber({ env, cwd, run: bounded, readdir, readFile, homedir, defaultCwd });
+  const own = number === null ? null : { role: 'work', number };
+  const watched = own !== null && !(parsed.condition.kind === 'notice' && parsed.condition.role.role === 'work' && parsed.condition.role.number === number);
+  const ends = watched ? `ends when it holds, on a notice to ${number}, or after ${minutes} minutes` : `ends when it holds, or after ${minutes} minutes`;
+  stdout(`js-harness wait: waits for ${phrase}; ${ends}; stop it with TaskStop when it is no longer needed`);
 
   let lastReason = null;
+  let lastWatchReason = null;
   for (;;) {
+    if (watched) {
+      let looked;
+      try {
+        looked = noticeTo(own, { cwd, home, run: bounded, readFile, started });
+      } catch (err) {
+        looked = { reason: err.message };
+      }
+      if (looked.line !== undefined) {
+        stdout(`js-harness wait: a notice to ${number} came before ${phrase} held (${hourOf(now())}); the wait ends`);
+        stdout(looked.line);
+        stdout(`js-harness wait: to wait again, run: js-harness wait ${shellLine(argv)}`);
+        return 3;
+      }
+      if (looked.reason !== undefined && looked.reason !== lastWatchReason) {
+        stderr(`js-harness wait: the notices to ${number} are not watched now: ${looked.reason}; it is read again at the next tick`);
+      }
+      lastWatchReason = looked.reason ?? null;
+    }
     let outcome;
     try {
       outcome = check();

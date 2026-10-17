@@ -696,8 +696,8 @@ review covers everything the merge brought, code that already had its review.
   parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
   in its first part. A merge is read by what was written in it only at HEAD, so a detached
   worktree at c4b7a37 reviewed it in 1 part of 18 lines
-- Control: check — bin/codex-review.test.mjs — "a run from a merge of the default branch below HEAD
-  names the worktree at the merge" — since 2026-10-16
+- Control: check — bin/codex-review.test.mjs — "is planned in two turns: the merge by what was
+  written in it" — since 2026-10-16
 
 ### message-cap-ran-out
 The lead's messages to sessions are limited to ten for each message he types; they ran out while he
@@ -1158,6 +1158,16 @@ disk.
 - Seen: 2026-10-10 — relief file, line 101 — 2,357 `js-harness-*` folders dated 10-01 to 10-10,
   counted by the orchestrator; 2,358 at line 105; also odd/tasks/gate-lock.md:316-317
 
+### test-matches-temp-path
+A test read a run's output for words with a pattern that matched inside them, and the output names
+the test's temporary folders, whose random letters can spell one: `/part/i` matched `rkpArT` in
+`/tmp/js-harness-codex-review-rkpArT/`, and the test failed by the folder's name alone.
+- Class: tool
+- Seen: 2026-10-16 — CircleCI job 83 (claimed; the lead's notice to JH 27) — the land of PRs 338 and
+  339 failed at `bin/codex-review.test.mjs:1593`, a test already on `main`
+- Control: check — bin/codex-review.test.mjs — "what a run says of a launch is not read inside the
+  random letters of a temporary folder its output names" — since 2026-10-16
+
 ### test-skipped-here-never-run
 A test that this machine skips is run by no gate, so its expectation went stale and stood red with
 nothing to say so.
@@ -1271,8 +1281,8 @@ wait, so it read them hours later.
   JH 7 waited on pull request 284 with `js-harness wait --pr` and ended its turn; no wait watched its
   number, so none of the lead's notices woke it, and it saw them at 17:04 local (claimed; JH 7's own
   notice of 22:06Z)
-- Control: owed — odd/tasks/session-channel.md — "every `js-harness wait` also ends on a notice to
-  the waiting session's own number"
+- Control: check — bin/wait.test.mjs — "every wait also ends on a notice to the waiting session's own
+  number, with exit 3, its notice and the wait to arm again" — since 2026-10-16
 
 ### wait-not-attributable
 A process that waits for a free machine cannot be attributed to its session from the board, and one

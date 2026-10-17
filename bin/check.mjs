@@ -19,6 +19,7 @@ import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
 import { numstatFiles, reviewParts } from './lib/codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './lib/codex-review-plan.mjs';
 import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { mergeTurn, turnsCheaper } from './lib/codex-review-turns.mjs';
 import { codexReviewsPath } from './lib/codex-reviews.mjs';
 import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
@@ -287,6 +288,27 @@ const doorSide = (base) => ({
   text: (git, file) => git(['show', `HEAD:${file}`]),
   mergeFilter: false,
 });
+
+/** The two sides of a push's row: the lines `head` brings past `base`, the remote's default branch, and a file's text
+ * as `head` holds it. */
+const pushSide = (base, head) => ({
+  strict: false,
+  revs: () => [`${base}...${head}`],
+  text: (git, file) => git(['show', `${head}:${file}`]),
+  mergeFilter: false,
+});
+
+/** The row `rules` of `check --push` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the lines `head`
+ * brings past the default branch of `remote`, read as the door reads them, said as INFO whatever a rule's row says:
+ * the commit refuses, the push reports, the merge refuses. No row when the remote has no default branch to read. */
+function checkPushRules(cwd, { rules = RULES, spawn = spawnSync, head = 'HEAD', remote = 'origin' } = {}) {
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (branch === null) return [];
+  // The harness's own list judges the harness's own repository alone, as `checkOwnRules` has it at a commit.
+  if (!gitOut(spawn, cwd, ['ls-tree', head, '--', RULES_DATA_FILE])?.trim()) return [];
+  return checkListRow(cwd, rules, spawn, pushSide(branch.ref, head))
+    .map((row) => (row.pass ? row : { ...row, pass: true, info: true, detail: `${row.detail}; a push reports it, the merge door refuses it` }));
+}
 
 /** The list `bin/lib/rules-data.mjs` holds at HEAD, read as text and checked as the list the rules accept: `{ list }`,
  * `list` being `null` when the file is absent, or `{ row }` with the failure of the row `rules` that says why it is
@@ -2302,14 +2324,24 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   const atMerge = merge === null ? null : uncovered.find((commit) => commit.id === tip);
   const { start, before } = atMerge ? { start: merge.from, before: atMerge } : range.unknown ? { start: null, before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
   const baseArg = before === null ? base : `${before.shortId}^`;
-  const size = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
+  const one = reviewSize(spawn, cwd, start, tip, atMerge ? merge : null);
+  // A merge of main below HEAD, after code commits that each have a record, is reviewed in two turns where they
+  // cost less than the one review (`mergeTurn`, `turnsCheaper`): the command decides it so, and so does this.
+  const turn = atMerge || one === null || range.unknown || range.from === null ? null : mergeTurn(cwd, { given: range.from, tip, uncovered, spawn, remote });
+  // A merge that has the review off cannot be a turn of its own, as the command says of it (`cutInTurns`).
+  const turnable = turn !== null && codexSwitchAt(gitIn(cwd, spawn), turn.merge).value !== 'off';
+  const turnSizes = turnable ? [reviewSize(spawn, cwd, turn.from, turn.merge, turn), reviewSize(spawn, cwd, turn.merge, tip)] : null;
+  const inTurns = turnSizes !== null && turnSizes.every((each) => each !== null) && turnsCheaper(one, turnSizes);
+  const both = (key) => turnSizes[0][key] + turnSizes[1][key];
+  const size = inTurns ? { parts: both('parts'), changedLines: both('changedLines'), files: both('files'), leftOut: both('leftOut') } : one;
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.
   const over = size !== null && size.parts > MAX_PARTS_WITHOUT_FLAG;
   let sized = `how large the review of ${baseArg}..HEAD is today could not be told`;
   if (size?.parts === 0) sized = `the review of ${baseArg}..HEAD has no part today, since the range changes no file ${size.leftOut > 0 ? 'a review reads ' : ''}as a whole`;
   else if (size) {
+    const what = inTurns ? `2 turns today, the merge ${turn.merge.slice(0, 7)} by what was written in it and then the commits after it: ${counted(size.parts, 'part')}` : `${counted(size.parts, 'part')} today`;
     sized =
-      `the review of ${baseArg}..HEAD is ${counted(size.parts, 'part')} today, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
+      `the review of ${baseArg}..HEAD is ${what}, ${counted(size.changedLines, 'changed line')} in ${counted(size.files, 'file')}` +
       (over ? `, already more parts than ${partsBound({ maxParts: MAX_PARTS_WITHOUT_FLAG, maxPartsGiven: false })}` : '');
   }
   return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [
@@ -2493,7 +2525,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     for (const row of rows) console.log(formatRow(row));
     return rows.every((row) => row.pass) ? 0 : 1;
   }
-  // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
+  // A push runs the Codex review row and the row `rules` of the lines it brings, as INFO. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   //
   // The other list is the static rows: all a gate knows of the working tree before its sensors, each in a
@@ -2503,7 +2535,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
-    ? [checkCodexReviews(cwd, head, { ...deps, remote })]
+    ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote })]
     : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.

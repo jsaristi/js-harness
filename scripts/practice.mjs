@@ -18,9 +18,11 @@ import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
   uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, channelEnv, channelStepProblem, channelRecord, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
-  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
+  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem, TEMPLATE_SECTIONS, templateLinesProblem,
 } from './practice-lib.mjs';
 import { agentsTemplate } from '../bin/lib/project.mjs';
+import { estimateTokens } from '../bin/lib/payload.mjs';
+import { TOKEN_BUDGET } from '../bin/check.mjs';
 import { classifyAgentFailure } from '../evals/agent-output.mjs';
 import { killByPath } from '../evals/runner.mjs';
 
@@ -587,6 +589,18 @@ const STEPS = {
       templated = `; AGENTS.md took this candidate's template and was committed as ${short(head(ctx))}`;
     }
     return `uninstall removed the hook, the project manifest, harness.json, AGENTS.md and .codegraph, and git status showed:\n${after.join('\n')}\ninit again: the hook is back and no tracked file differs${templated}`;
+  },
+
+  'template-lines': (ctx) => {
+    const { project } = ctx.layout;
+    // The step before ran `init` again on a project `uninstall` had emptied, so AGENTS.md is the one the installed copy
+    // wrote, not one committed by an earlier candidate.
+    const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
+    const template = agentsTemplate(project);
+    const tokens = estimateTokens(template);
+    const problem = templateLinesProblem({ agentsText, template, tokens, budget: TOKEN_BUDGET });
+    assertThat(problem === null, problem);
+    return `the AGENTS.md js-harness init wrote in ${project} is this candidate's template: it holds the sections ${TEMPLATE_SECTIONS.map((section) => `"${section}"`).join(' and ')} and the four states, in ${tokens} estimated tokens of the ${TOKEN_BUDGET / 2} it may take`;
   },
 
   'global-uninstall': (ctx) => {

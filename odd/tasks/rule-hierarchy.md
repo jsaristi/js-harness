@@ -1605,7 +1605,9 @@ until the last check passes.
      changes only by the approved draft of letter G, which is not built.
 5. **The relief line.** It is built before any write and checked with `reliefLineOf`.
    - The line reads: `` rule:<id> proposed on rule/<name>, not landed: <what>; source <kind>;
-     supersedes relief line <n> ``.
+     supersedes relief line <n>; declaration <hash> ``, the hash the twelve hex characters of
+     `declarationOf` (the rule's declaration as written), which the merge queue matches against
+     the landed head's (T16e, item 7, amended 2026-10-16).
    - `<what>` is `<old> to <new>` for a value, `text of <path>` for a text, `retired,
      successors <ids or none>` for a retirement, `new` for a new rule, `form` for a
      form-only change, and `source checked` for `--check-source`.
@@ -1785,8 +1787,9 @@ nothing.
   - **`{ reports: <reason>, since: <day> }`:** a finding is INFO and the line names the reason.
 - A FAIL line names the rule, the file, the line and the text, and gives the cure: the mark
   instead of the value, or `rules change`.
-- It does not run on `check --push`, nor when nothing is staged. `--no-verify` passes it; the
-  merge door (letter E, T16e) is what closes that.
+- It does not run when nothing is staged. On `check --push` it reports, as INFO whatever the
+  rule's row says (T16e, item 8, amended 2026-10-16). `--no-verify` passes it; the merge door
+  (letter E, T16e) is what closes that.
 - It scans only the added lines, so it costs little at every commit. A probe found the whole
   scan takes about 8 seconds with 90 subject-anchored patterns, so the whole-text count is kept
   out of the gate.
@@ -2649,7 +2652,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   honesty audit, C9). No checkbox here, so that `js-harness progress` counts them once
 - [ ] T11 Every rule moved: the memory notes placed and, on his word, deleted; the remaining
   contradictions of the roadmap corrected
-- [ ] T12 Practice journey: a step for the template's lines and one for the reply hook
+- [x] T12 Practice journey: a step for the template's lines and one for the reply hook (the
+  reply step by JH 25 in pull request 282; the template step `template-lines` on
+  `feat/practice-journey-t12`, Progress, 2026-10-16)
 - Moved on 2026-10-14 to "JH 14 · protocolo para modelos futuros", by the lead's message to
   this session; its state is kept in `odd/tasks/future-model-protocol.md`, and only there: T15
   (the seven signals read and recorded; the roadmap's section replaced by a pointer only after
@@ -2797,8 +2802,41 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     another branch with an edit in it pass, now merges are read by `--diff-merges=combined` and
     `gentleAiEvidence` exempts only a merge of main (`c35e195`, gate passed, gentle-ai medium, under
     budget); Codex recheck `647389f..c35e195` correct (0.97), both fixed. Pull request 328 on
-    `main`, the orchestrator told. Next: slice (c). Then slice (c), then the throughput plan's item 2
+    `main`, the orchestrator told; then `main` `a0bc8a0` merged in (`78a5853`), Codex's review of
+    the branch after it found two P2s in the Codex-off reader, fixed in `9ff94fe` (recheck correct).
+    Slice (c), items 7 and 8, on `feat/merge-door-landing` (worktree
+    `D:/js-harness-worktrees/merge-landing`), stacked on slice (b) at `9ff94fe`: `landingLines`,
+    `changedRuleIds` and `recordLandings` in `bin/merge-queue.mjs` (the ids a `rule/` branch changed
+    are those whose declaration differs from the merge base; the relief file is found as `notify`
+    finds it, `env` and `now` injectable), 6 tests seen red then green (the newest proposal on that
+    branch alone, once; a land appends, `--dry-run`, red and exit 3 append none, no proposal says so,
+    a push that reported a failure appends); `checkPushRules` in `bin/check.mjs` (the row over
+    `<remote>/<default>...<head>`, INFO whatever the row), 2 tests, the first seen red; help, USAGE,
+    README, and T16d's "does not run on `check --push`" amended. Committed as `e6c9c44` (gate passed,
+    tests on CI). State at the context pause (2026-10-16): verifier (opus, high) running on
+    `9ff94fe..e6c9c44`; gentle-ai high (item 5 escalated), lineage `review-2ccf3665c662d927`, lenses
+    risk and reliability, granted, approved and acknowledged. Its findings, informational, for the
+    correction batch: the `landed` callback runs after main moved with the slug's `mainCheckout` and
+    `projectSlug` outside any try (`bin/merge-queue.mjs` the `landed` lambda): guard it so a land
+    that moved main still exits 0 and prints the moved-heads notice; no test of `checkPushRules` with
+    no default branch (it must leave `check --push` at the Codex row alone); `base...head` in
+    `pushSide` is a `git diff`, so a merge-base range, but no test puts the remote ahead of the
+    head. The verifier: item 7 met; one blocker, B1: in a project that installs the harness,
+    `checkPushRules` scans with the harness's own list (the commit gate's `checkOwnRules` uses it
+    only where `bin/lib/rules-data.mjs` exists): return no row when `head` has no
+    `bin/lib/rules-data.mjs`, with a test (a project with no rules-data, README lines restating a
+    value: no row). Advisories kept: A2 a `--check-source` proposal is never confirmed (said);
+    A3 the row costs 20-30 s more on a 37k-line push; A6 a relative `JS_HARNESS_HOME` is not
+    resolved as `notify` does. Correction batch: B1 fixed (`checkPushRules` returns no row when `head` has no `bin/lib/rules-data.mjs`, test seen red), the `landed` call guarded (test seen red: a lost checkout after main moved), and a no-default-branch push test (a pin, green at once). Pull request 328 landed on main meanwhile, so this slice goes to main directly: committed as `1f31afd`, main merged as `12773f4`. Codex on `9ff94fe..12773f4`, 4 parts: one P2, a proposal `rules change` writes on the same branch while a land runs would be confirmed though the landed head does not hold it; fixed by counting only proposal lines stamped no later than the landed head's commit (`rules change` stamps its line before that commit), two tests seen red, committed as `ac6cf2c`. Codex on `12773f4..ac6cf2c`: the same P2 not fixed, since a time bound leaves the same second and an amend open. Fixed by content instead: `rules change` ends its proposal line with `; declaration <hash>`, a hash of the declaration it wrote (`declarationOf` in `bin/lib/rules-change-run.mjs`), and the queue confirms only a proposal whose hash is the landed head's; a line with no hash, written before this change, keeps the time bound, now strict. Two tests seen red against `ac6cf2c`. Codex refused a second recheck (one recheck a finding); a verifier (Opus 5.5, high) read `9c3f41a`: resolved, no blocker; advisories A1 (the source is outside the hash) and A3 (no CRLF test) are task T16e-f, A2 (the line's spec) is fixed here.
+    gentle-ai evidence of slice (c): high (item 5), approved, lineage review-2ccf3665c662d927 on 9ff94fe..e6c9c44; medium, not due (under_budget) on e6c9c44..1f31afd, 12773f4..ac6cf2c and ac6cf2c..9c3f41a.
+    Next: push, pull request against main, notify; then T2 of `odd/tasks/land-unattended.md` (exit 5 and the gate-first ticket, the lead's yes). Then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
+  - [ ] T16e-f (kind: build) The landing's match covers the source too: hash the rule with its
+    entry of `docs/rule-sources.json` at the head, since a second `rules change` of the same
+    declaration with another source would be confirmed though the head holds the first source
+    (verifier A1 on `9c3f41a`, 2026-10-16); tests of a CRLF relief file and of lines without a hash
+    beside hashed ones (A3). Codex's second recheck of the P2 was refused by the one-recheck cap, and
+    the range `ac6cf2c..9c3f41a` is recorded as a skip naming this task. Route: inline.
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
@@ -4252,6 +4290,29 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     only by the verifiers' probes.
   The second pass comes before any rule gets a `row` that refuses (step 4), because a refusing
   row turns a false positive into a failed gate.
+- 2026-10-16, T12, by `JH 26 · canal y compactación` on `feat/practice-journey-t12`, from `main` 64933f6, on the
+  lead's notice ("rule-hierarchy T12 ..., the practice journey steps for the template's lines and for the reply hook,
+  test first"; a claim of the lead's). Inline, test first.
+  - The reply step was already built (`reply-hook`, JH 25, pull request 282), so the template step is what T12 owed.
+  - The step `template-lines` follows `project-uninstall`, whose second `init` has just written `AGENTS.md` into a
+    project that `uninstall` emptied, so the file is the installed copy's.
+  - It holds that file to three things, through `templateLinesProblem` of `scripts/practice-lib.mjs`:
+    - it is `agentsTemplate` of the candidate's source, so the copy installed is the candidate;
+    - it has the two sections T9 gave it (`TEMPLATE_SECTIONS`) and the line of the four states;
+    - its estimated tokens are at most half of `agents-budget`.
+  - RED: the test file failed to load on the missing export `TEMPLATE_SECTIONS`. GREEN:
+    `node --test scripts/practice-lib.test.mjs` passes 120 of 120.
+  - The journey, with uncommitted changes and no host step, ran
+    `node scripts/practice.mjs run --root D:\js-harness-practice --no-host`: exit 0, every step that ran PASS.
+    `template-lines` printed "in 639 estimated tokens of the 750 it may take". Its record line is
+    `{"date":"2026-10-17T00:20:03.772Z","ok":false,"candidate":{"branch":"feat/practice-journey-t12","commit":"43358a48","dirty":true}, …}`.
+    It is not ok because it left out `host-loads` and its tree was dirty.
+  - The same run shows the case `secondInitProblem` was written for. The project had committed an earlier
+    candidate's template (`budget 144 estimated tokens` at `commit-passes`). The second `init` rewrote it to this one's,
+    which the run committed as 7f79279.
+  - Not run: `host-loads`, which spends a model. The "Done when" line on the practice journey stays open for a run
+    with the host.
+  - Not touched: the step `project-uninstall`, where JH 22 holds a pending fix.
 
 ## Next step
 **State for a resume, 2026-10-16, his batch B reviewed on `rule/his-last-patterns`.** gentle-ai

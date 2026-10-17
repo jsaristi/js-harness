@@ -5439,3 +5439,68 @@ test('check --subagents says what it cannot tell when reading the records throws
   }
 });
 
+
+// The push reports (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the row `rules` over
+// `<remote>/<default>...<head>`, said as INFO whatever the rule's row: the commit refuses, the push reports, the merge
+// refuses.
+
+/** doorRepo with a bare remote `remote` whose main is the base commit. */
+function pushRepo(remote, options) {
+  const made = doorRepo(options);
+  const bare = path.join(made.dir, '.git', `${remote}.git`);
+  git(made.dir, 'init', '-q', '--bare', '-b', 'main', bare);
+  git(made.dir, 'remote', 'add', remote, bare);
+  git(made.dir, 'push', '-q', remote, `${made.base}:refs/heads/main`);
+  git(made.dir, 'fetch', '-q', remote);
+  return made;
+}
+
+test('check --push prints the row rules as INFO and exits 0 with a refusing finding, over --remote and --head', async () => {
+  const { dir } = pushRepo('up', { change: restateRoadmap });
+  try {
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const { code, output } = await runCheck(['--push', '--remote', 'up', '--head', head, '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.match(output, /^INFO {2}rules {2}1 restated value in the lines this change adds, 1 of a rule that refuses it; a push reports it, the merge door refuses it$/m);
+    assert.match(output, /^ {6}docs\/ROADMAP\.md:2 restates rule "gate-wait", which refuses it since 2026-10-16: The gate may wait 60 minutes\./m);
+    assert.doesNotMatch(output, DOOR_ROW_FAILS);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push gives no row rules in a project whose head has no bin/lib/rules-data.mjs, as the commit gate', async () => {
+  const { dir } = pushRepo('origin', { base: null, change: restateRoadmap });
+  try {
+    const { code, output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /^(INFO|PASS|FAIL) {2}rules /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push reads only the lines the head brings past the remote\'s default branch', async () => {
+  const { dir } = pushRepo('origin', { change: restateRoadmap });
+  try {
+    // The remote's main already holds the restated line, so the push brings none.
+    git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+    git(dir, 'fetch', '-q', 'origin');
+    const { code, output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /restates rule/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push gives no row rules where the remote has no default branch to read the push against', async () => {
+  const { dir } = doorRepo({ change: restateRoadmap });
+  try {
+    const { output } = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
+    assert.doesNotMatch(output, /^(INFO|PASS|FAIL) {2}rules /m);
+    assert.doesNotMatch(output, /restates rule/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

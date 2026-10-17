@@ -1490,7 +1490,7 @@ test('gate first takes its flags as gate log takes its own: what is no ticket is
  * read in a home of their own.
  *
  * The host's session is dropped too: a gate records it in its log, so a run of this file inside a Claude
- * Code session would see a field that CI never sets (first-version T6, L24). */
+ * Code session would see a field that CI never sets (first-version T6, L25). */
 function outsideAGate(more = []) {
   const dropped = ['claude_code_session_id', 'js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_load', 'js_harness_gate_log', ...more];
   return { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_GATE_LOAD: 'off' };

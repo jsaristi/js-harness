@@ -422,6 +422,12 @@ read and cost, with how close that estimate came on the last reviews this machin
 starts nothing; a run records in each part's run line the figures it was planned at, which that
 line reads; `--unavailable <reason>` records a skip.
 
+A merge of the default branch is reviewed by what was written in it, not by what it brought in. At
+HEAD that is one review. Below HEAD, after code commits that each have a record, the range is cut
+in two turns where two cost less than one review (a part counted as 100 changed lines): the merge,
+in a worktree at it that the run removes, then the commits after it. Each turn writes its record;
+a merge whose review owes a correction stops the run before the commits after it.
+
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again
 Plan of the Codex review of b42a30b..c670cff: gpt-6.1-sol at medium effort, 2 parts, 727 changed lines in 7 files.
@@ -456,6 +462,15 @@ what `git rev-list a..b` lists), on a line the pull request adds to a feature do
 The queue resolves each range itself; a merge of main needs no line, and a pull request of documents
 asks for none. A rebase changes the hashes, and the refusal says so. For each ready pull request
 the queue prints, commit by commit, the Codex record that covers it and the line that names it.
+
+A landed pull request from a `rule/` branch closes what `js-harness rules change` opened: for each
+rule it changed in `bin/lib/rules-data.mjs`, the newest relief line "rule:<id> proposed on
+<branch>, not landed" that the landed head holds (the line ends with a hash of the declaration it
+wrote, which must be the head's) and that no later landing confirms gets one line of the queue's, "rule:<id>
+landed on main <sha> from <branch>: confirms relief line <n>". A branch with no such line is named;
+`--dry-run` and a land that does not move main write none. A rule's row is read three times: the
+commit refuses a restated value, `js-harness check --push` reports it as INFO for the lines the push
+brings past the remote's default branch, and the merge door refuses it.
 
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
@@ -666,6 +681,21 @@ Waits in the background for one condition and ends when it holds: a pull request
 commit or a file content on `origin/main`, or a notice addressed to a session in the channel
 record. It says at start what it waits for and what ends it, so a session keeps working instead
 of ending its turn to wait.
+
+A work session's wait, whatever its condition, also ends on a notice to that session's own
+number, so a session that waits on a pull request still wakes for the lead. The number is read
+from the title of the transcript the host's `CLAUDE_CODE_SESSION_ID` names, as `notify` reads a
+sender. A session with no number keeps its one condition: the orchestrator, a phone session
+whose transcript has no title. Such a wait exits 3, prints the notice and the same wait to run
+again:
+
+```console
+$ js-harness wait --pr 340 --for 2 --every 5
+js-harness wait: waits for the merge of pull request 340; ends when it holds, on a notice to 26, or after 2 minutes; stop it with TaskStop when it is no longer needed
+js-harness wait: a notice to 26 came before the merge of pull request 340 held (20:14); the wait ends
+note from JH 26 · canal y compactación: smoke test of T20b
+js-harness wait: to wait again, run: js-harness wait --pr 340 --for 2 --every 5
+```
 
 ```console
 $ js-harness wait --pr 133 --for 1 --every 5
