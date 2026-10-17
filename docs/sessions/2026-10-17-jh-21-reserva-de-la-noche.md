@@ -143,3 +143,38 @@ The state comes from `gh pr view <n>` at about 15:01Z.
 - Codex: two runs, 189,797 input tokens in all, as their outputs say.
 - gentle-ai: one review (two lenses). The other commits were assessed only.
 - Context: 27% at the last notice (15:01Z), after the compaction.
+
+## Fourth stretch
+After the third stretch, from 2026-10-17 ~15:35Z to 16:05Z. The work came from the lead's note of 15:34Z: "the advisories recorded as later work, outside gate-first" (gate-first's own were left to JH 5, who holds that document). Those were the two items of gate-wait T11 and the two of memory-hygiene T11 from `docs/sessions/2026-10-17-jh-5-canal-entre-sesiones.md`, plus this session's own R3 advisory. Each went "one branch and PR per feature document". The note is the lead's claim, not his words. PRs 409 and 410 had landed (main `5ea341af`).
+
+### Delivered
+The state comes from `gh pr create` and the `ready` notices, at about 16:02Z. All three PRs are open.
+- 411 `test/sensor-silence-chunk`: first-version T6j, a pin. A chunk written between the silence running out and its deferred decision breaks the silence: nothing is killed, and the exit is reported. The test fails against a copy without the `chunks !== seen` check.
+- 412 `fix/review-base-walk`: gate-wait T12 and T13.
+  - The guard's first-parent lookup is now bounded by the base: `rev-list --first-parent --parents HEAD ^<base>`. A bound by count was rejected, because it cannot tell a base off the line from one deeper than the bound.
+  - The real-repo test's temp dir has a space in its name and is quoted.
+- 414 `fix/memory-pass-advisories`: memory-hygiene T12 and T13.
+  - On Windows, a home with a curly double quote gets single quotes, and cmd.exe gets its own form.
+  - While the index is as the pass left it, an after-index that is not that index's text is damaged, not older. Once the index has changed, the refusal names both readings.
+
+No advisory was dropped: each one cost a few lines and a test.
+
+### Findings
+- The first version of T12 decided by the last commit the walk printed. gentle-ai's reliability lens warned that a walk git cuts late (committer dates out of order) prints more than that. The fix checks the first parent of every commit printed, which needs one git run fewer.
+- A differential check of the old lookup against the new one, on this repository's history (32 bases, including second parents, a tree and the root), found 0 differences, before and after that fix.
+
+### Reviews
+- gate-wait: gentle-ai rated `5ea341af..a9109b1` high by escalation (item 2), with lenses risk and reliability, and approved it (`review-9cb629c08f739b2c`). Both of its advisories (the warning above, and tests for a root, a tree and a second parent) were fixed in `3d4194c`. Codex rated `5ea341a..3d4194c` correct (0.94; 65,042 input tokens).
+- memory-hygiene: gentle-ai rated `5ea341af..76b06df` high by escalation (item 1), with lenses risk and reliability, and approved it (`review-e255530cff15e77c`). Its suggestion, to run the whole install file, was done in a gate turn: 82 pass. Codex rated `5ea341a..76b06df` correct (0.96; 75,545 input tokens).
+- T6j: gentle-ai rated it medium (`under_budget`), a test only. Codex rated `5ea341a..8da9efa` correct (0.94; 58,767 input tokens).
+
+### Failures and lessons
+- To read origin/main, this session ran `git checkout --detach origin/main` in the shared checkout `D:\js-harness`. It noticed this within minutes and put the checkout back on `main` (clean, behind origin as before). Reads of another ref go through `git show <ref>:<path>` or a worktree, never a checkout of the shared folder.
+- A `sed -i` on `odd/tasks/gate-wait.md` turned it from CRLF to LF and left a lone CR in the middle of a line. It was caught by `file` and `cat -A` before the commit. A script restored CRLF and split the line. This is the same trap JH 5 recorded: such edits go through the Edit tool.
+- Another session's gate held the machine's lock, so the guard refused a `node --test` of two files. The files ran one at a time, and the long one ran in a `js-harness gate --` turn.
+
+### Cost
+- Gates: 7 commits through the gate (3 on gate-wait, 2 on memory-hygiene, 2 on first-version), plus one gate turn for the install file and this summary's commit.
+- Codex: three runs, 199,354 input tokens in all, as their outputs say.
+- gentle-ai: two reviews (two lenses each). The other commits were assessed only.
+- Context: 50% at the last notice (16:02Z).
