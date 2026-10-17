@@ -141,7 +141,8 @@ export async function windowsDaily({ home, slug, cwd, notify = (argv, out) => no
       lines.push(`windows-daily: told before (${marker})`);
       continue;
     }
-    const code = await notify(['--to', 'orchestrator', '--kind', 'note', telling.text], (line) => lines.push(line));
+    // The notice goes to the home of its marker, or a notice in one home would be marked told in another.
+    const code = await notify(['--to', 'orchestrator', '--kind', 'note', '--home', home, telling.text], (line) => lines.push(line));
     if (code === 0) return { lines, told: telling.line, failed: null };
     // A notice not written is not told: the marker goes, so the next reading tries again.
     fs.rmSync(marker, { force: true });

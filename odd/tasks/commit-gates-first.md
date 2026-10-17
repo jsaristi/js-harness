@@ -351,3 +351,9 @@ Recorded now so that its readers read it with C and E; built only once T6f is re
   now goes). Left as said: a slow GitHub can hold one heartbeat tick up to about 4 minutes (four gh calls of at
   most 60 s), once an hour. The Stop hook then offered the whole branch: only its read-only status ran, nothing
   started.
+- L11 (2026-10-17, state): 1c7d985d was assessed alone: medium, under_budget, no review due. Codex reviewed
+  65a1ba4..1c7d985 in 3 parts (374,871 input tokens, 90 s, recorded): parts 2 and 3 correct; part 1 found a P2,
+  confidence 0.98: `windows-daily --home <path>` wrote its marker under that home but the notice under the real
+  one, so the run read as told while no one was told. Pinned by a RED test (the notice's arguments name the
+  marker's home) and fixed by passing `--home` to notify; a real `notifyMain` with `--home` wrote the record under
+  the given home. Next: Codex's recheck of that commit, push, PR, notify the lead --kind ready.

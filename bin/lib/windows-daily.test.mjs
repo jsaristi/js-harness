@@ -133,7 +133,8 @@ test('a red run is told once, by the one that creates its marker', async (t) => 
   const options = { ...base, home, slug: 'D--repo', notify, gh: fakeGh({ run: runOf('failure'), log: RED_LOG }) };
   const first = await windowsDaily(options);
   assert.match(first.told, /^WINDOWS: \S+ failure, 2 failing: the loop stops; a notice is written$/);
-  assert.deepEqual(sent[0].slice(0, 4), ['--to', 'orchestrator', '--kind', 'note']);
+  // The notice goes to the same home as its marker: a marker in one home and a notice in another is told to no one.
+  assert.deepEqual(sent[0].slice(0, 6), ['--to', 'orchestrator', '--kind', 'note', '--home', home]);
   assert.ok(fs.existsSync(path.join(home, '.js-harness', 'channel', 'windows-daily', 'D--repo', 'told-77-1')));
   const second = await windowsDaily(options);
   assert.equal(second.told, null);
