@@ -39,6 +39,7 @@ js-harness commands:
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; a work session's wait also ends on a notice to its own number (exit 3), printing it and the same wait to run again; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
 - \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, a recursive \`rm\` or an \`rmdir\` of a folder at the top of a drive (the host holds that one for the user even in bypass mode, so put practice and scratch folders below the project's worktrees folder or in your scratchpad), and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
+- \`js-harness permit\` — the PermissionRequest hook install registers (\`--hook\`): while the orchestrator holds the relay (\`lease\`), a permission card of another session reaches it first and waits up to 9.5 minutes for \`allow <id>\` or \`deny <id> --reason <text>\`; with no verdict the card reaches the user. \`list\` shows the waiting cards.
 - \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words. On Claude Code a work session that ends its turn holding work the orchestrator handed it, with nothing in its background to wake it, is turned back once, with the wait to arm.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
@@ -98,6 +99,7 @@ Every question of the project reaches the user in one place: the orchestrator's 
 - The question tool holds the session that calls it until the user answers. So it is called at once only when the user wrote in that session a short while ago; otherwise in the reply to their next message, and until then a reply says in one line how many questions wait. \`notify\`, the board (\`to ask:\`) and the resume after a compaction print this rule for the moment.
 - The answer is recorded once given: \`--kind answer --question <n>\`, with \`--transcript\` and \`--line\` naming where the user's words are, and the session that asked is rung. \`--kind withdrawn --question <n> "<why>"\` closes one that no longer needs an answer.
 - A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find.
+- The permit relay (\`js-harness permit\`): while you lead, hold it with \`js-harness permit lease\` at your start and at each re-arm of your channel watch (it lasts 40 minutes; when it says another session holds it, you are the new lead, add \`--take-over\`). A card of another session then reaches you first, as a \`permit <id>\` note, and waits for you up to 9.5 minutes: read what it asks (\`js-harness permit list\`, and that session's transcript when the command alone does not say why) and answer in time. \`js-harness permit allow <id>\` when it stays inside that session's own work (its worktree and scratch, its own branch and pull request, a test or a build); \`js-harness permit deny <id> --reason "<why>"\` when it is obsolete, unsafe, or touches what is the user's (spend, publishing, anything irreversible outside the project, credentials, their security settings). A card you leave unanswered reaches the user after its wait: bring it to them as above. Before you are relieved, \`js-harness permit lease --off\`.
 - A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (\`rule:double-review\`, \`js-harness-protocols\` section 1), and says what its readers changed, or names by path the reviewed text it rests on.
 - The board lists every question still open, and whether it is recorded and not shown yet, on the user's screen, closed without an answer, or answered and not carried yet.
 
@@ -267,6 +269,12 @@ export const entryComponents = [
     entry: () => guardHookEntry(),
   },
   {
+    id: 'claude-permit-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'PermissionRequest'],
+    entry: () => permitHookEntry(),
+  },
+  {
     id: 'claude-share-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
     pointer: ['hooks', 'Stop'],
@@ -378,6 +386,19 @@ function guardHookEntry() {
   return {
     matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the permit relay, guarded to exit 0: an older js-harness has no `permit` and answers 2. */
+export const PERMIT_HOOK_COMMAND = 'js-harness permit --hook || exit 0';
+
+/** `permit --hook` (bin/permit.mjs) registered as a `PermissionRequest` hook on every tool: while a lead holds the
+ * relay, a card of another session is told to the orchestrator and waits for its verdict; with none, or none in time,
+ * the card reaches the user as before (odd/tasks/held-sessions.md, S8 and T6). Claude Code only: the event is Claude
+ * Code's. 600 s, the host's own default for a command hook: the relay answers within 570 s of its own. */
+function permitHookEntry() {
+  return {
+    hooks: [{ type: 'command', command: PERMIT_HOOK_COMMAND, timeout: 600 }],
   };
 }
 

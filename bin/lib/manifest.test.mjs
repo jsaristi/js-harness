@@ -1227,6 +1227,17 @@ test('install writes the web failure hook under hooks.PostToolUseFailure of the 
   }
 });
 
+// --- The permit relay: a `PermissionRequest` entry in Claude Code's settings and nowhere else (held-sessions T6) ---
+
+test('entryComponents declare the permit relay for Claude Code only: a PermissionRequest entry on every tool, with the host\'s 600 s timeout', () => {
+  const permitHook = hookById('claude-permit-hook');
+  assert.ok(permitHook, 'the claude-permit-hook component is declared');
+  assert.deepEqual(permitHook.pointer, ['hooks', 'PermissionRequest']);
+  assert.deepEqual(permitHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  assert.deepEqual(permitHook.entry(), { hooks: [{ type: 'command', command: 'js-harness permit --hook || exit 0', timeout: 600 }] });
+  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PermissionRequest'), false, 'no Codex entry: the event is Claude Code\'s');
+});
+
 // --- The guard: a `PreToolUse` entry on the three tools it checks, in Claude Code's settings and nowhere else ---
 
 const guardHook = hookById('claude-guard-hook');
@@ -2537,6 +2548,10 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
   // odd/tasks/held-sessions.md, S5: a card the host holds in a session's window reaches him here, not there.
   assert.ok(text.includes("- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find."));
+  // odd/tasks/held-sessions.md, S8 and T7: the lead holds the permit relay and judges each card it brings.
+  assert.ok(text.includes('- The permit relay (`js-harness permit`): while you lead, hold it with `js-harness permit lease`'));
+  assert.ok(text.includes('`js-harness permit deny <id> --reason "<why>"` when it is obsolete, unsafe, or touches what is the user\'s'));
+  assert.ok(text.includes('`js-harness permit lease --off`'));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
   assert.ok(text.includes('- A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (`rule:double-review`, `js-harness-protocols` section 1), and says what its readers changed, or names by path the reviewed text it rests on.'));
   // A timer outlived what it waited for (his correction, 2026-10-14): a background task declares its purpose and its end.

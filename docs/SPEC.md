@@ -330,6 +330,15 @@ proofs and by those tasks.
 **Discarded:** Reading effort: a hook before a tool call cannot. Taking back a reply with a wrong share: impossible; turning the stop back is the nearest. A warning instead of a refusal for test runs. The first backtick detector: 20 hits for 1 real.
 **Today:** `bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/test-run-warning.mjs`, `bin/lib/memory-index-guard.mjs`, `bin/lib/document-hour-guard.mjs`, `js-harness guard`, `claude-guard-hook`, `claude-share-hook`
 
+### The permit relay
+
+**Problem:** The host asks the user before some tool calls even in bypass mode, and the session waits in its own window: on 2026-10-17 five sessions waited 12 to 38 hours on such cards while the owner was away.
+**Requirement:** While the orchestrator holds the relay, a permission card of another session reaches it first and waits up to 570 seconds for its explicit allow or deny; with no verdict, no orchestrator, the orchestrator's own card or any failure, the card reaches the user as before. Nothing is allowed by a rule.
+**Reason:** The owner's order of 2026-10-18 (odd/tasks/held-sessions.md, S8): the orchestrator judges what each card asks and lets the safe ones proceed. The host's `PermissionRequest` hook is the one documented way to answer a card for the user.
+**Proof:** `node --test bin/permit.test.mjs`, `node --test bin/lib/manifest.test.mjs`
+**Discarded:** A hook that allows by a fixed list of safe paths (S7: the owner chose the orchestrator's judgment). Answering a card already on screen: the host gives a session no tool for it.
+**Today:** `bin/permit.mjs`, `js-harness permit`, `claude-permit-hook`
+
 ### The context pause and the inbox
 
 **Problem:** Of 13 automatic compactions in 57 transcripts, three had no turn end between the pause and the compaction, and none wrote state to a feature document after the pause (`odd/tasks/session-channel.md`). Sessions at the pause ended turns idle and were never woken (`odd/tasks/pause-no-idle.md`). On 2026-10-14 the lead hit the host's cap of ten messages to other sessions, and its note waited until the session looked.
