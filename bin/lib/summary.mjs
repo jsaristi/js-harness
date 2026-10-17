@@ -53,11 +53,14 @@ export function summaryTemplate(title, at) {
 export function summaryProblems(text) {
   const bodies = new Map();
   let current = null;
-  let fenced = false;
+  let fence = null;
   for (const line of lf(text).split('\n')) {
-    // A heading inside a fenced block is the block's text, not a section.
-    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-    const heading = fenced ? null : /^## (.+?)\s*$/.exec(line);
+    // A heading inside a fenced block is the block's text, not a section. A fence opens on ``` or ~~~ indented
+    // three spaces at most, as Markdown reads it, and closes only on the marker that opened it.
+    const marker = /^ {0,3}(```|~~~)/.exec(line)?.[1];
+    const inside = fence !== null;
+    if (marker !== undefined && (fence === null || marker === fence)) fence = fence === null ? marker : null;
+    const heading = inside || fence !== null ? null : /^## (.+?)\s*$/.exec(line);
     if (heading) {
       current = heading[1];
       if (!bodies.has(current)) bodies.set(current, []);
@@ -92,9 +95,10 @@ export function closeProblems(file, cwd, { run = (command, args, options) => spa
   const sections = summaryProblems(text);
   if (sections.length > 0) return [`${file}: ${sections.join(', ')}.`];
   const branch = git('branch', '--show-current').out.trim();
-  // The default branch as origin names it, origin/main where this clone does not know it (gentle-ai, R3).
-  const main = git('symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD').out.trim() || 'origin/main';
-  const refs = [main, ...(branch !== '' && `origin/${branch}` !== main ? [`origin/${branch}`] : [])];
+  // The default branch as origin names it, then origin/main, which the brief names even where origin's default
+  // is another branch, then the session's own branch on origin: the first that holds the file as it is wins.
+  const main = git('symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD').out.trim();
+  const refs = [...new Set([main, 'origin/main', branch === '' ? '' : `origin/${branch}`].filter((ref) => ref !== ''))];
   let differs = null;
   for (const ref of refs) {
     const shown = git('show', `${ref}:${file}`);

@@ -1263,7 +1263,7 @@ test('an answer quotes his words, so an hour that opens them is not held to the 
   assert.equal(recorded(machine).notices[0].text, words);
 }));
 
-// The close check as notify runs it, with its own git, on a real clone (gentle-ai, 2026-10-17, R3).
+// The close check as notify runs it, with its own git, on a real clone: every other test here stubs it (odd/tasks/session-close.md, L4).
 test('a closed notice runs the real summary check with notify\'s own git: refused unpushed, recorded once pushed', withMachine(async (machine) => {
   const git = (cwd, ...args) => {
     const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
@@ -1286,4 +1286,6 @@ test('a closed notice runs the real summary check with notify\'s own git: refuse
   assert.match(errors.join('\n'), /is not pushed: neither origin\/main nor origin\/feat\/x holds it/);
   git(work, 'push', '-q', 'origin', 'feat/x');
   assert.equal(await close(), 0, errors.join('\n'));
+  // The refused close wrote nothing; the one that passed carries the file the board's `to archive:` line names.
+  assert.deepEqual(readNotices(machine.home, projectSlug(work)).notices.filter((one) => one.kind === 'closed').map((one) => one.summary), [file]);
 }));

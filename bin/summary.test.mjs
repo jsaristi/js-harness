@@ -57,12 +57,18 @@ test('the bare template has every section empty, a filled one has no problem, an
   assert.deepEqual(summaryProblems(filled), []);
   const missing = filled.replace('## Cost\n', '');
   assert.deepEqual(summaryProblems(missing), ['"Cost" is missing']);
-  // Only the template's own placeholder is no content: an autolink is a fact (gentle-ai, R2 and R3).
+  // Only the template's own placeholder is no content: an autolink is a fact (odd/tasks/session-close.md, L4).
   const linked = bare.replace(/^<.*>$/gm, '<https://github.com/jsaristi/js-harness/pull/379>');
   assert.deepEqual(summaryProblems(linked), []);
   // A heading inside a fenced block is the block's text, not a section of the summary.
   const fenced = filled.replace('## Cost\n', '## Cost\n```\n## Goal\n```\n');
   assert.deepEqual(summaryProblems(fenced), []);
+  // A fence closes only on its own marker: a ~~~ line inside a ``` block is the block's text.
+  const mixedOpen = filled.replace('## Failures and lessons\n', '```\n~~~\n```\n## Failures and lessons\n');
+  assert.deepEqual(summaryProblems(mixedOpen), []);
+  // A code line indented four spaces does not open a fence.
+  const indented = filled.replace('## Cost\n', '    ```\n## Cost\n');
+  assert.deepEqual(summaryProblems(indented), []);
 });
 
 test('the opening of a title keeps the name it had before the slug was taken out of it', () => {
@@ -125,6 +131,21 @@ test('closeProblems takes a summary main already holds, from a session on main o
   git('push', '-q', 'origin', 'main');
   assert.deepEqual(closeProblems(FILE, work), []);
   git('checkout', '-q', '-b', 'feat/y');
+  assert.deepEqual(closeProblems(FILE, work), []);
+}));
+
+test('closeProblems still takes origin/main where origin names another default branch', withClone(({ work, git }) => {
+  git('checkout', '-q', 'main');
+  fs.mkdirSync(path.join(work, 'docs', 'sessions'), { recursive: true });
+  fs.writeFileSync(path.join(work, FILE), filledSummary());
+  git('add', FILE);
+  git('commit', '-q', '-m', 'summary');
+  git('push', '-q', 'origin', 'main');
+  git('checkout', '-q', '-b', 'develop', 'main~1');
+  git('push', '-q', 'origin', 'develop');
+  git('remote', 'set-head', 'origin', 'develop');
+  // On develop, which lacks the summary, with the file main holds back in the worktree.
+  git('checkout', '-q', 'main', '--', FILE);
   assert.deepEqual(closeProblems(FILE, work), []);
 }));
 
