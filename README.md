@@ -682,6 +682,21 @@ commit or a file content on `origin/main`, or a notice addressed to a session in
 record. It says at start what it waits for and what ends it, so a session keeps working instead
 of ending its turn to wait.
 
+A work session's wait, whatever its condition, also ends on a notice to that session's own
+number, so a session that waits on a pull request still wakes for the lead. The number is read
+from the title of the transcript the host's `CLAUDE_CODE_SESSION_ID` names, as `notify` reads a
+sender. A session with no number keeps its one condition: the orchestrator, a phone session
+whose transcript has no title. Such a wait exits 3, prints the notice and the same wait to run
+again:
+
+```console
+$ js-harness wait --pr 340 --for 2 --every 5
+js-harness wait: waits for the merge of pull request 340; ends when it holds, on a notice to 26, or after 2 minutes; stop it with TaskStop when it is no longer needed
+js-harness wait: a notice to 26 came before the merge of pull request 340 held (20:14); the wait ends
+note from JH 26 · canal y compactación: smoke test of T20b
+js-harness wait: to wait again, run: js-harness wait --pr 340 --for 2 --every 5
+```
+
 ```console
 $ js-harness wait --pr 133 --for 1 --every 5
 js-harness wait: waits for the merge of pull request 133; ends when it holds, or after 1 minutes; stop it with TaskStop when it is no longer needed

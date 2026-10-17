@@ -1271,8 +1271,8 @@ wait, so it read them hours later.
   JH 7 waited on pull request 284 with `js-harness wait --pr` and ended its turn; no wait watched its
   number, so none of the lead's notices woke it, and it saw them at 17:04 local (claimed; JH 7's own
   notice of 22:06Z)
-- Control: owed — odd/tasks/session-channel.md — "every `js-harness wait` also ends on a notice to
-  the waiting session's own number"
+- Control: check — bin/wait.test.mjs — "every wait also ends on a notice to the waiting session's own
+  number, with exit 3, its notice and the wait to arm again" — since 2026-10-16
 
 ### wait-not-attributable
 A process that waits for a free machine cannot be attributed to its session from the board, and one
