@@ -3094,6 +3094,34 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
     after `notify --to 26` there, printing the notice and the wait to run again.
   - Help, the README's section, the skill's line in `bin/lib/manifest.mjs` and SPEC's "Waiting and waking" say the new
     exit. `wait-blind-to-notices`'s Control is now that test; `failures` reads it as controlled.
+- 2026-10-17, JH 26, T2 test 6, run on itself, by the lead's assignment of 08:15Z. The assignment is a claim of the
+  lead's. His answer is typed and read with `sessions --quote` (`e152c9d8`:20292, 08:10Z): "Sí, que la corra
+  (Recomendada)". The question he answered named JH 5. The lead moved the run to JH 26 because JH 26 held no work,
+  so its conversation was the cheap one to lose.
+  - The method: write the state, store the resume prompt with `notify --opening`, and commit (`feat/t2-test6`,
+    worktree `D:\js-harness-worktrees\jh26-test6`). Then `clear_session` on "self", which clears once the turn ends
+    and the session is idle. Then go on from files only and compare. Nothing wakes a cleared session by itself, so
+    before the clear the lead was asked to send it its opening.
+  - Before, written at 08:17Z (03:17 local), the facts the cleared session should get back; each is checked after:
+    - B1. JH 26's feature document `odd/tasks/wake-and-flag.md`, T1 to T4, landed: PR 349 (B1, `--kind ready
+      --pr`), PR 351 (A(a), the Stop hook's wake warning, `bin/lib/stop-wake.mjs`), PR 352 (T4, notify holds a
+      stamped hour to the clock, `stampOff` in `bin/lib/guard.mjs`).
+    - B2. The lead's next two units landed at 07:27Z: PR 371 (`notify --kind ready` runs the land's
+      `pullRequestProblems` and `reviewEvidence`, `readyProblems` in `bin/notify.mjs`, `odd/tasks/ready-checks.md`)
+      and PR 370 (protocols skill section 3: run the installed `js-harness`, `odd/tasks/installed-harness.md`).
+    - B3. JH 26 sent `--kind closed` to the lead at 07:59Z. Its worktrees `jh26-ready` and `jh26-installed` were
+      removed. `jh26-failures-owed` (`docs/failures-owed-t6`) was left untouched and not checked.
+    - B4. Its own mistake this stretch: it edited a worktree while Codex reviewed it, so no record was written, and
+      it cost two more runs. The rule it broke: commit the evidence first, then review.
+    - B5. Channel facts it holds: notices are lines of `~/.js-harness/channel/<slug>.jsonl` (schema
+      `js-harness.channel-notice/v1`); a ready notice carries `pr`; openings are under `openingsDir`; the Stop hook
+      (`js-harness reply --hook`) blocks a session that holds work with nothing in its background.
+    - B6. Its state before this: one host compaction this session (about 07:02Z), with the resume hook's text read
+      and acted on. The opening stored then was stale (it still named 349-352 as open).
+    - B7. The conversation-only facts, which no file held before this line: the lead's two units came from the
+      double-reviewed notes `improvements-2026-10-17-reader1.md` and `-reader2.md` in the lead's notes folder.
+      PR 371's Risk line was edited from "item 3" to "none", since a requested change is not high risk by itself.
+      The `js-harness gate --` guard now says to commit with a plain `git commit`, whose hook waits its turn.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
