@@ -15,6 +15,12 @@ test('a git commit or merge wrapped in js-harness gate -- is found, in any wrapp
     ['js-harness gate -- git -C D:/w -c core.pager=cat --no-pager commit -m x', { verb: 'commit', dir: 'D:/w' }],
     ['js-harness gate --no-wait -- git merge --no-ff feat/x', { verb: 'merge', dir: null }],
     ['cd D:/w && js-harness gate -- git.exe commit -m x', { verb: 'commit', dir: null }],
+    // Through a shell's -c (Codex, 2026-10-17), as the test-run warning reads one.
+    ['js-harness gate -- sh -c "git commit -m x"', { verb: 'commit', dir: null }],
+    ['js-harness gate -- bash -lc "npm test && git -C D:/w commit -m x"', { verb: 'commit', dir: 'D:/w' }],
+    // The gate's own --cwd is where the commit runs (Codex, 2026-10-17); git's -C is read from there.
+    ['js-harness gate --cwd D:/other -- git commit -m x', { verb: 'commit', dir: 'D:/other' }],
+    ['js-harness gate --cwd D:/other -- git -C sub commit -m x', { verb: 'commit', dir: path.join('D:/other', 'sub') }],
   ];
   for (const [command, found] of cases) assert.deepEqual(wrappedCommit(command), found, command);
 });
@@ -36,6 +42,8 @@ test('a test run, a commit outside the wrapper, a commit that runs no gate and a
     'js-harness gate -- git merge --abort',
     'js-harness gate -- git log --grep commit',
     'js-harness gate -- echo git commit',
+    'js-harness gate -- sh -c "git commit --no-verify -m x"',
+    'js-harness gate -- sh script.sh git commit',
     'js-harness gate',
   ]) {
     assert.equal(wrappedCommit(command), null, command);
@@ -81,6 +89,9 @@ test('without the workflow, with the switch off or on a CI machine, the hint say
 test('the project is the one git -C names, read from the folder the command runs in', () => {
   assert.equal(hint('js-harness gate -- git -C elsewhere commit -m x', { cwd: OTHER }), hint('js-harness gate -- git commit -m x', { workflow: false }));
   assert.equal(hint('js-harness gate -- git -C ../project commit -m x', { cwd: OTHER }), hint('js-harness gate -- git commit -m x'));
+  // The gate's --cwd moves the commit: to the project from elsewhere, and away from it.
+  assert.equal(hint('js-harness gate --cwd ../project -- git commit -m x', { cwd: OTHER }), hint('js-harness gate -- git commit -m x'));
+  assert.equal(hint('js-harness gate --cwd ../other -- git commit -m x'), hint('js-harness gate -- git commit -m x', { workflow: false }));
 });
 
 test('a command that wraps no commit gets no hint', () => {

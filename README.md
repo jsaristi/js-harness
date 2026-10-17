@@ -750,7 +750,8 @@ refusal is printed as the hook's deny, with the reason and the right value; any 
 as it was. One more Bash call runs with a hint the agent reads beside its result (the hook's
 `additionalContext`): a `git commit` or `git merge` wrapped in `js-harness gate --`, which holds
 the machine's lock for the commit's whole gate, so the gate runs here and never goes to GitHub,
-while a plain commit waits for its turn by itself. A commit with `--no-verify` or `-n`, a merge
+while a plain commit waits for its turn by itself. It reads every command the wrapper runs, a
+shell's `-c` included, from the folder the gate's `--cwd` names. A commit with `--no-verify` or `-n`, a merge
 that makes no commit, a commit after the wrapper (`js-harness gate -- npm test && git commit`)
 and a wrapped test run get none: a test run of your own stays wrapped. A denial on the same call
 wins over the hint. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a

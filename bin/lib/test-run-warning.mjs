@@ -161,6 +161,18 @@ const WSL = /(^|[\\/])wsl(\.exe)?$/i;
 const SHELL = /(^|[\\/])(sh|bash|dash|zsh)(\.exe)?$/i;
 const KEYWORDS = new Set(['do', 'then', 'else', 'elif', '!', 'time', '{']);
 
+/** The command line a shell's `-c` runs, for words that start with a shell (`sh`, `bash`, `dash`, `zsh`), or `null`
+ * for any other words or a shell with no `-c`. `-c` counts among the shell's options only, before a script or a
+ * `--`, and within a cluster such as `-cl` (Codex, 2026-10-14). */
+export function shellScript(words) {
+  if (!SHELL.test(words[0]?.text ?? '')) return null;
+  let flag = -1;
+  for (let index = 1; index < words.length && /^-[a-zA-Z]+$/.test(words[index].text); index += 1) {
+    if (words[index].text.includes('c')) flag = index;
+  }
+  return flag === -1 || words[flag + 1] === undefined ? null : words[flag + 1].text;
+}
+
 /** The files the first `node --test` that `words` runs names (see `filesOf`), looking through `wsl.exe` and
  * `sh -c`, or `null` where there is none. A script a shell runs is not read. */
 function scan(words, depth = 0) {
@@ -173,14 +185,9 @@ function scan(words, depth = 0) {
     return split === -1 ? null : scan(rest.slice(split + 1), depth + 1);
   }
   if (SHELL.test(rest[0].text)) {
-    // `-c` counts among the shell's options only, before a script or a `--`, and within a cluster such as
-    // `-cl` (Codex, 2026-10-14).
-    let flag = -1;
-    for (let index = 1; index < rest.length && /^-[a-zA-Z]+$/.test(rest[index].text); index += 1) {
-      if (rest[index].text.includes('c')) flag = index;
-    }
-    if (flag === -1 || rest[flag + 1] === undefined) return null;
-    for (const inner of commandsOf(rest[flag + 1].text)) {
+    const script = shellScript(rest);
+    if (script === null) return null;
+    for (const inner of commandsOf(script)) {
       const found = scan(inner, depth + 1);
       if (found !== null) return found;
     }

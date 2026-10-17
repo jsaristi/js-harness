@@ -4,7 +4,7 @@
 // guard adds a hint beside its result instead of refusing it. A whole test run stays wrapped: the skill requires it.
 import path from 'node:path';
 import { CI_GATE_ENV, CI_WORKFLOW, onCiMachine } from './ci-gate.mjs';
-import { commandsOf, gateCommands } from './test-run-warning.mjs';
+import { commandsOf, gateCommands, shellScript } from './test-run-warning.mjs';
 
 const GIT = /(^|[\\/])git(\.exe)?$/i;
 // git's own options that take the next word as their value (`git -C <dir> commit`).
@@ -28,7 +28,7 @@ function commitOf(words) {
   while (at < words.length && words[at].text.startsWith('-')) {
     const option = words[at].text;
     if (GIT_VALUED.has(option)) {
-      if (option === '-C' && words[at + 1] !== undefined) dir = dir === null ? words[at + 1].text : path.join(dir, words[at + 1].text);
+      if (option === '-C' && words[at + 1] !== undefined) dir = under(dir, words[at + 1].text);
       at += 2;
     } else {
       at += 1;
@@ -68,12 +68,32 @@ function commitOf(words) {
  * wrapper (`js-harness gate -- npm test && git commit`) is outside it. */
 export function wrappedCommit(command) {
   for (const words of commandsOf(command)) {
-    const wrapped = gateCommands(withoutAssignments(words));
+    const gate = withoutAssignments(words);
+    const wrapped = gateCommands(gate);
     if (wrapped === null) continue;
+    // The gate's own `--cwd` is where its command runs (bin/gate.mjs); git's `-C` is read from there.
+    const split = gate.findIndex((word) => word.text === '--');
+    const at = gate.findIndex((word, index) => word.text === '--cwd' && index < split);
+    const gateDir = at === -1 ? null : gate[at + 1]?.text ?? null;
     for (const inner of wrapped) {
-      const found = commitOf(withoutAssignments(inner));
-      if (found !== null) return found;
+      const found = commitIn(withoutAssignments(inner));
+      if (found !== null) return { verb: found.verb, dir: under(gateDir, found.dir) };
     }
+  }
+  return null;
+}
+
+/** `next` read from the folder `base` (either may be `null`, for the folder the command runs in). */
+const under = (base, next) => (base === null || next === null ? next ?? base : path.isAbsolute(next) ? next : path.join(base, next));
+
+/** `commitOf` of `words`, or of the first command a shell's `-c` in them runs (Codex, 2026-10-17). */
+function commitIn(words, depth = 0) {
+  const script = shellScript(words);
+  if (script === null) return commitOf(words);
+  if (depth > 4) return null;
+  for (const inner of commandsOf(script)) {
+    const found = commitIn(withoutAssignments(inner), depth + 1);
+    if (found !== null) return found;
   }
   return null;
 }
