@@ -145,6 +145,8 @@ among them), and the marks at M of its written files.
   merged line, the cost rule; route: inline. The T3 commit (Log).
 - [x] T4 (kind: verify) The "Done when" scratch repository; an independent verifier (risk item 2, the
   push guard's coverage), gentle-ai escalated, Codex.
+- [x] T5 (kind: build) PR 338's follow-up advisories, on the lead's order of 2026-10-17 14:37Z (triage item
+  12); route: inline, JH 5, `fix/merge-turn-advisories` (Log, 2026-10-17).
 
 ## Log
 
@@ -230,6 +232,22 @@ among them), and the marks at M of its written files.
   HEAD, after commits that each have a record, is planned in two turns…" and "a merge of main below HEAD is
   reviewed in two turns…: a record each, and no worktree is left". `failures check --settled` names no
   `merge-review-covers-main` (0 lines, 2026-10-17).
+
+- 2026-10-17, JH 5, T5 on the lead's order of 14:37Z ("triage item 12, gate-first T7 ... with PR #338's five
+  advisories"). Each advisory of PR 338's body, test first:
+  - gentle-ai R3, turn 1 ran before turn 2's refusals were checked: the one refusal that does not wait on
+    turn 1, no Codex, is now checked before anything is made; the others (the recheck, the split, the parts)
+    read the record turn 1 writes, so they stay after it.
+  - gentle-ai R3, the run log read without `where`: `mergeTurn` passes it (`bin/lib/codex-review-turns.mjs`).
+  - gentle-ai R3, turn failure paths untested: tests for no Codex, a worktree git will not add, the tracked
+    files changed during the turn, and a run line that never reached the log.
+  - gentle-ai R4, a reused pid kept a stale turn worktree: a worktree older than `TURN_WORKTREE_MAX_AGE_MS`
+    (a day, by the time in its name) is swept though a process of its pid runs.
+  - Verifier, a turn whose run line never reached the log read as owing nothing: `runsLogged`
+    (`bin/lib/codex-review-recheck.mjs`) and the run stops, saying to run the review again.
+  - Verifier, the worktree was made before Codex was found missing: the same check as the first item.
+  The run-line test needs mode bits that stop a write, so it is skipped on Windows; in WSL2 it failed on the
+  code before and passes after.
 
 ## Next step
 

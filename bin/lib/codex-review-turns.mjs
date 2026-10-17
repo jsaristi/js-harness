@@ -49,7 +49,7 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
   try {
     const records = readCodexReviews(cwd, { spawn, where });
     const from = recheckAnchor({ from: atMerge.from, records, back: back.split('\n').filter(Boolean), changedBetween });
-    state = recheckState({ from, records, runs: readCodexReviewRuns(cwd, { spawn }) });
+    state = recheckState({ from, records, runs: readCodexReviewRuns(cwd, { spawn, where }) });
   } catch {
     return null;
   }
@@ -101,7 +101,11 @@ function addCounts(all, one) {
 }
 
 // The worktree a turn below HEAD is reviewed in: `<common git dir>/js-harness/review-turn-<pid>-<time>` (S7).
-const TURN_WORKTREE = /^review-turn-(\d+)-\d+$/;
+const TURN_WORKTREE = /^review-turn-(\d+)-(\d+)$/;
+
+// How long a turn worktree may stand: a turn is one review, which no run keeps going for a day. One older is
+// removed though a process of its pid runs, since that pid was reused by another (gentle-ai R4, PR 338).
+export const TURN_WORKTREE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Whether the process `pid` is running here: a signal 0 tests it and sends nothing. */
 export function processRunning(pid) {
@@ -134,9 +138,10 @@ export function removeTurnWorktree(cwd, place, { spawn = spawnSync, rm = fs.rmSy
   }
 }
 
-/** Removes every turn worktree under `commonGitDir` whose run is gone, killed before it removed its own, and
+/** Removes every turn worktree under `commonGitDir` whose run is gone, killed before it removed its own, or
+ * that is older than a turn can last (`TURN_WORKTREE_MAX_AGE_MS`, by the time in its name against `now`), and
  * then has git forget the worktrees whose folder is gone. One of a run still going is left to it. */
-export function sweepTurnWorktrees(cwd, { commonGitDir, spawn = spawnSync, running = processRunning }) {
+export function sweepTurnWorktrees(cwd, { commonGitDir, spawn = spawnSync, running = processRunning, now = Date.now }) {
   const dir = path.join(commonGitDir, 'js-harness');
   let names;
   try {
@@ -146,7 +151,9 @@ export function sweepTurnWorktrees(cwd, { commonGitDir, spawn = spawnSync, runni
   }
   for (const name of names) {
     const match = TURN_WORKTREE.exec(name);
-    if (match !== null && !running(Number(match[1]))) removeTurnWorktree(cwd, path.join(dir, name), { spawn });
+    if (match === null) continue;
+    const old = now() - Number(match[2]) > TURN_WORKTREE_MAX_AGE_MS;
+    if (old || !running(Number(match[1]))) removeTurnWorktree(cwd, path.join(dir, name), { spawn });
   }
   gitIn(cwd, spawn, ['worktree', 'prune']);
 }

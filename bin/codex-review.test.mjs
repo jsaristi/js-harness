@@ -5637,8 +5637,75 @@ test('a merge of main below HEAD on a branch whose covered work is small is not 
   assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, after, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
+// The ways the turn at a merge below HEAD can fail, each with what it leaves (gentle-ai R3 and the verifier of
+// pull request 338): a run that cannot go on says why, launches no session it would not finish and leaves no
+// worktree.
+test('a run of two turns with no Codex refuses before it makes the worktree of the merge, and launches nothing (verifier, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const records = contentOf(codexReviewsPath(repo.root));
+  const fake = fakeCodexInParts();
+  const gitAsked = [];
+  const notFound = Object.assign(new Error('spawnSync codex ENOENT'), { code: 'ENOENT' });
+  const spawn = (command, args, opts) => {
+    if (command !== 'git') return { status: null, error: notFound };
+    gitAsked.push(args.join(' '));
+    return spawnSync(command, args, opts);
+  };
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, spawn, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /Could not run `codex`/);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(gitAsked.some((args) => args.startsWith('worktree add')), false, 'no worktree was made');
+  assert.equal(contentOf(codexReviewsPath(repo.root)), records, 'no record');
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('a run whose worktree at the merge cannot be made says so and launches nothing (gentle-ai R3, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  // git refuses to add the worktree.
+  const fake = fakeCodexInParts();
+  const spawn = (command, args, opts) => (command === 'git' && args[0] === 'worktree' && args[1] === 'add' ? { status: 128, stdout: '', stderr: 'fatal: no' } : fake.spawn(command, args, opts));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, spawn, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /Could not make a worktree at the merge [0-9a-f]{7}, so nothing was started or recorded/);
+  assert.equal(fake.calls.length, 0);
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('a run whose tracked files change during the turn at the merge reviews nothing after it, and says to run it again (gentle-ai R3, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const during = () => fs.writeFileSync(path.join(repo.root, 'a.txt'), 'changed during the turn\n', 'utf8');
+  // A second session would fail the run: only one is listed.
+  const fake = fakeCodexInParts({ ...mergeTurnSession(repo), during });
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed/);
+  assert.equal(fake.calls.length, 1);
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
 // Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
 const readOnlyHolds = process.platform !== 'win32' && process.getuid?.() !== 0;
+
+test('a turn at the merge whose run line never reached the run log stops the run: whether it owes a correction cannot be said (verifier, PR 338)', { skip: !readOnlyHolds && 'mode bits stop no write here' }, async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const runLog = path.join(repo.root, '.git', 'js-harness', 'codex-review-runs.jsonl');
+  // The run log takes no line from the turn: the record is written, its run line is not.
+  const during = () => {
+    fs.mkdirSync(path.dirname(runLog), { recursive: true });
+    if (!fs.existsSync(runLog)) fs.writeFileSync(runLog, '', 'utf8');
+    fs.chmodSync(runLog, 0o444);
+  };
+  const fake = fakeCodexInParts({ ...mergeTurnSession(repo), during });
+  try {
+    const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.err, /The run line of the turn at the merge [0-9a-f]{7} is not in the run log/);
+    assert.equal(fake.calls.length, 1);
+  } finally {
+    fs.chmodSync(runLog, 0o644);
+  }
+});
 
 test('the diff a merge review reads shows every line of it where the object store is read-only, as in Codex\'s sandbox', { skip: !readOnlyHolds && 'mode bits stop no write here' }, () => {
   const { root, mine, main, head } = makeResolvedMergeRepo();
