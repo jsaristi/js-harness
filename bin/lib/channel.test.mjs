@@ -58,11 +58,35 @@ test('a notice is a schema, the time, the sender, the role it is for, the kind, 
   assert.deepEqual([note().cwd, note().worktree, note().branch], [null, null, null]);
 });
 
-test('the kinds are eight, question and withdrawn last and in that order, and no other is one', () => {
-  assert.deepEqual(channel.NOTICE_KINDS, ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn']);
-  for (const kind of channel.NOTICE_KINDS.filter((one) => !['answer', 'question', 'withdrawn'].includes(one))) assert.equal(note({ kind }).kind, kind);
-  for (const kind of ['done', 'Note', '', undefined, 'constructor']) refused({ kind }, /--kind takes one of opened, waiting, closed, note, answer, relieved, question, withdrawn/);
+test('the kinds are nine, question, withdrawn and ready last and in that order, and no other is one', () => {
+  assert.deepEqual(channel.NOTICE_KINDS, ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn', 'ready']);
+  for (const kind of channel.NOTICE_KINDS.filter((one) => !['answer', 'question', 'withdrawn', 'ready'].includes(one))) assert.equal(note({ kind }).kind, kind);
+  for (const kind of ['done', 'Note', '', undefined, 'constructor']) refused({ kind }, /--kind takes one of opened, waiting, closed, note, answer, relieved, question, withdrawn, ready/);
 });
+
+// odd/tasks/wake-and-flag.md, T1 (B1 of the throughput plan): a pull request is announced ready with its number, so
+// the land can tell which session it belongs to without reading a branch (most ready notices are sent from main).
+test('a ready notice carries the number of its pull request, and only a ready notice takes one', () => {
+  const ready = note({ kind: 'ready', pr: 344, text: 'T20b: every wait ends on a notice to its own number' });
+  assert.deepEqual(ready, { schema: 'js-harness.channel-notice/v1', at: AT, from: FROM, to: { role: 'orchestrator', number: null }, kind: 'ready', text: 'T20b: every wait ends on a notice to its own number', cwd: null, worktree: null, branch: null, pr: 344 });
+  refused({ kind: 'ready', text: 'ready' }, /a ready notice names its pull request: --pr <n>/);
+  for (const pr of [0, -1, 1.5, '344', Number.MAX_SAFE_INTEGER + 1]) refused({ kind: 'ready', pr, text: 'ready' }, /--pr takes the number of a pull request, from 1/);
+  for (const kind of ['opened', 'waiting', 'closed', 'note', 'relieved', 'withdrawn']) refused({ kind, pr: 344, question: kind === 'withdrawn' ? 1 : undefined, text: 'x' }, /only a ready notice takes --pr/);
+  refused({ kind: 'answer', pr: 344, text: 'A', transcript: '1d16beeb', line: 4 }, /only a ready notice takes --pr/);
+  refused({ kind: 'ready', pr: 344, text: 'ready', question: 1 }, /only an answer or a withdrawal takes --question/);
+});
+
+test('readNotices keeps a ready notice with its pull request, and skips one without a number', withHome((home) => {
+  const file = channel.recordPath(home, SLUG);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const ready = note({ kind: 'ready', pr: 344, text: 'ready to land' });
+  const { pr, ...unnumbered } = ready;
+  const lines = [ready, unnumbered, { ...ready, pr: '344' }, { ...ready, pr: 0 }].map((one) => JSON.stringify(one));
+  fs.writeFileSync(file, lines.join('\n'), 'utf8');
+  const read = channel.readNotices(home, SLUG);
+  assert.deepEqual(read.notices, [ready]);
+  assert.equal(read.skipped, 3);
+}));
 
 test('a notice is for a role: the orchestrator or the number of a work session', () => {
   for (const to of ['boss', 'JH 5', '', '5.5', undefined]) refused({ to }, /--to takes a role/);

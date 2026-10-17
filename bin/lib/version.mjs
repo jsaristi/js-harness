@@ -27,8 +27,8 @@ export function isNewer(candidate, current) {
  * not the one npm would replace. */
 export const INSTALL_NEWEST = 'npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it';
 
-/** The repository whose tags are the releases (docs/ROADMAP.md, "Release source"): private, read with the git
- * credentials already on the machine. */
+/** The repository whose tags are the releases (docs/ROADMAP.md, "Release source"): public since 2026-10-16, read
+ * with the machine's git. */
 export const DEFAULT_REPO = 'https://github.com/jsaristi/js-harness.git';
 
 /** A release tag: `v` and three numbers, nothing else, so a tag that reaches an install's argv carries no flag. */

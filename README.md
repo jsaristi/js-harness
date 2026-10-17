@@ -286,6 +286,15 @@ Claude CLI's native updater) stays `stale`, named by the session-start hook, unt
 `js-harness doctor --stack-reviewed` records its review. A tool installed since joins the record as
 it is; one removed is no update.
 
+Its `js-harness` row is the harness's own rules: the version column holds the first 8 characters
+of the hash of the installed copy's rules with no scope, and `up to date` compares it with the same
+hash of the default branch's list. A rule scoped to the harness's own repository never calls a copy
+behind. In the harness's own checkout that list is read from the main ref with git; anywhere else
+an interactive `doctor` reads it from GitHub on every run, never from the cache, and `--offline`,
+the session-start hook and the TUI's stack block read nothing there (`n/a`), as does a project that
+pins another version than the copy's. A copy behind is `outdated`, and its fix names the newest copy and the ids of the
+rules that differ; a list that cannot be read is `unknown`. `--json` adds both hashes and the ids.
+
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
@@ -644,6 +653,10 @@ $ js-harness notify --to orchestrator --kind note "JH 1: the README's example of
 js-harness notify: recorded note for the orchestrator at 2026-10-14T09:24:29.740Z from session 9265156a in ~\.js-harness\channel\…
 address of the orchestrator: no single one now (sessions --address exit 1): …
 ```
+
+A pull request ready to land is announced with `--kind ready --pr <number>`: the record keeps
+the number, and the board shows it ("ready for pull request 344"), so the land can tell which
+session a pull request belongs to from the record, even when the notice was sent from `main`.
 
 ### js-harness wake
 
