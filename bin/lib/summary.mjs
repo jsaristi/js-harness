@@ -56,11 +56,11 @@ export function summaryProblems(text) {
   let fence = null;
   for (const line of lf(text).split('\n')) {
     // A heading inside a fenced block is the block's text, not a section. As Markdown reads it, a fence opens on
-    // three or more backticks or tildes indented three spaces at most, and closes only on a bare run of the same
-    // character at least as long as the one that opened it.
+    // three or more backticks or tildes indented three spaces at most, whose text after a run of backticks holds no
+    // backtick, and closes only on a bare run of the same character at least as long as the one that opened it.
     const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     const wasFenced = fence !== null;
-    if (!wasFenced && marker !== null) fence = marker[1];
+    if (!wasFenced && marker !== null && !(marker[1][0] === '`' && marker[2].includes('`'))) fence = marker[1];
     else if (wasFenced && marker !== null && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim() === '') fence = null;
     const heading = wasFenced || fence !== null ? null : /^## (.+?)\s*$/.exec(line);
     if (heading) {
