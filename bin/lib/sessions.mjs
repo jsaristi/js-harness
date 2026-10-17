@@ -1870,8 +1870,22 @@ function queuedMessageOf(entry) {
   if (kind === 'peer') return { what: peerInWords(peerMessageOf(entry), { queued: true }) };
   if (kind !== 'human') return { what: `a queued message of origin ${JSON.stringify(kind)}` };
   if (attachment.humanTurn !== true) return { what: 'a queued message of origin "human" that the host does not mark as a turn of the person' };
-  if (typeof attachment.prompt !== 'string') return { what: 'a queued message of the person that holds no text to quote' };
-  return { what: null, prompt: attachment.prompt, at: attachment.timestamp };
+  const prompt = queuedWords(attachment.prompt);
+  if (prompt === null) return { what: 'a queued message of the person that holds no text to quote' };
+  return { what: null, prompt, at: attachment.timestamp };
+}
+
+// A reminder the host puts in a queued message beside his words, with the blank lines after it: the host's text, never his.
+const HOST_REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>\s*/g;
+
+/** His words in a queued message's `prompt`, or `null` when it holds none. A string is his text as it is. Host
+ * 2.1.299 (2026-10-17) writes a list of blocks instead, the first holding its own reminders of what happened while
+ * the session worked: each text block without those reminders, one a line, a block left blank dropped. */
+function queuedWords(prompt) {
+  if (typeof prompt === 'string') return prompt;
+  if (!Array.isArray(prompt)) return null;
+  const words = prompt.filter(isText).map((block) => block.text.replace(HOST_REMINDER, '')).filter((text) => text.trim() !== '');
+  return words.length === 0 ? null : words.join('\n');
 }
 
 /** The entry at line `line` (from 1) of a transcript's `text`, when it is what the person sent: `{
