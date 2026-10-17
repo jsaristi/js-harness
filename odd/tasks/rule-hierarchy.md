@@ -4579,7 +4579,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     and written through, so a shared target outside the project was overwritten where git, holding only the link,
     could not give it back. Fixed in the next commit: sync reads `AGENTS.md` with `lstat` and keeps a link with a
     `kept` line; RED seen with an injected `lstat`, and a test with a real link that runs where links can be made
-    (the gate's Ubuntu; skipped on this Windows machine).
+    (the gate's Ubuntu; skipped on this Windows machine). That fix is `37037bb`; gentle-ai on `37037bb`, assessed
+    by its gate: medium, 64 lines, review not due (`under_budget`). Codex's recheck on `1bf827e..37037bb` (32,356
+    input tokens): correct (0.98), the finding fixed.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
