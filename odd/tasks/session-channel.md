@@ -3122,9 +3122,21 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
       double-reviewed notes `improvements-2026-10-17-reader1.md` and `-reader2.md` in the lead's notes folder.
       PR 371's Risk line was edited from "item 3" to "none", since a requested change is not high risk by itself.
       The `js-harness gate --` guard now says to commit with a plain `git commit`, whose hook waits its turn.
-  - The first clear_session on "self" (08:19Z) was refused: "a message the user sent is waiting in the queue, and a
-    clear would erase it". The message was the throughput session's B4b question. After it was answered (yes, the
-    throughput session writes it and sends the branch again, since this conversation is lost), the clear was asked again.
+  - What happened next, read from JH 26's transcript (`74d9b5ac`) and git, not from memory:
+    - The Bash call that committed and pushed the Before started at 08:18:18Z and returned at 22:21:09Z. Its
+      timeout was 400 s, and it never fired. The commit `7d0db2f7` is dated 22:19:48Z, so the pre-commit hook ran
+      for about 14 hours.
+    - The machine did not sleep. The System log since 03:00 local holds no sleep or wake event, only three clock
+      corrections under 2 s at 09:31Z.
+    - The gate log has no event from `jh26-test6`, so the wait is not a gate's. Its cause is not known.
+    - The lead's board saw this hang as "quiet 10h 44m". It was not a clear.
+    - At 22:2xZ the first `clear_session` on "self" was refused: "a message the user sent is waiting in the queue,
+      and a clear would erase it". The queued message was the throughput session's B4b question, sent while the call
+      hung. The answer to it was not delivered, because that session is archived.
+    - At 19:37Z by its stamp, the lead wrote that JH 26 "was cleared". That was the lead's reading of the board.
+      JH 26's conversation was whole when the lead's message reached it.
+  - So by 22:25Z test 6 had not run: the clear never happened. It is asked again now that the queue is empty, from
+    this same Before. B7 gains: the hook's 14-hour hang, and the refusal on a queued message.
 
 ## State for a resume
 Read "Next step" first: it says what is owed and in which order. This section is only what a
