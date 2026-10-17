@@ -409,6 +409,14 @@ export const RULES = [
     "unit": "days"
   },
   {
+    "id": "throughput-quiet-runs",
+    "subject": "how many recorded throughput reviews in a row that found nothing make the review weekly instead of daily",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 2,
+    "unit": "reviews"
+  },
+  {
     "id": "wait-every",
     "subject": "how often js-harness wait checks its condition, unless --every says otherwise",
     "owner": "project",
