@@ -36,3 +36,13 @@ after its kills, a run waits, bounded, until the killed process group is gone.
 
 The test "a missing login stops the trial before the agent starts" finds the trial's directory still in
 the work root under load: its removal had not ended when the test read the folder.
+
+### evals/isolation-probe.test.mjs
+- Owner: JH 28
+- Expires: 2026-10-23
+- Failure: engram-listener-unseen-at-kill
+
+The test "the probe stops what the trial left listening on its engram port, by number, and leaves nothing
+behind" (line 1734) failed once in WSL2 under load, in a land that touched nothing of the evals; alone it
+passes. It asserts that one listener was found on the trial's port at the kill: its timing against the
+stand-in server is the suspect, not yet read.
