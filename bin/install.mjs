@@ -79,7 +79,11 @@ function reportSessionMessages(home) {
  * PowerShell expands `$` or ends at `"`, as they do in double quotes. A single quote is written as each reads it:
  * `'\''` for sh, `''` for PowerShell (`platform` win32). */
 export function shellWord(value, platform = process.platform) {
-  return `'${value.replace(/'/g, platform === 'win32' ? "''" : "'\\''")}'`;
+  if (platform !== 'win32') return `'${value.replace(/'/g, "'\\''")}'`;
+  // cmd.exe reads no single quotes, and a Windows path holds no `"`: double quotes serve all three shells there
+  // unless PowerShell would expand something in them. PowerShell takes ‘ ’ ‚ ‛ for a single quote too.
+  if (!/[$`]/.test(value)) return `"${value}"`;
+  return `'${value.replace(/['‘’‚‛]/g, (quote) => quote + quote)}'`;
 }
 
 function memoryKeptLine(folder, home) {

@@ -749,15 +749,21 @@ test('a home holding a dollar sign is printed in single quotes, so the kept line
 
 test('shellWord puts a home in single quotes, which keep a double quote and a dollar sign, and writes a single quote as each shell reads it', () => {
   assert.equal(shellWord('/home/a "b" $USER', 'linux'), `'/home/a "b" $USER'`);
-  assert.equal(shellWord('C:\\Users\\First Last', 'win32'), `'C:\\Users\\First Last'`);
   // sh ends the quotes, writes an escaped quote and opens them again; PowerShell doubles it inside them.
   assert.equal(shellWord("/home/o'neil", 'linux'), `'/home/o'\\''neil'`);
-  assert.equal(shellWord("C:\\Users\\o'neil", 'win32'), `'C:\\Users\\o''neil'`);
+  assert.equal(shellWord("C:\\Users\\o'neil $x", 'win32'), `'C:\\Users\\o''neil $x'`);
+  // cmd.exe reads no single quotes, so a Windows home with nothing to expand keeps double quotes: one argument there.
+  assert.equal(shellWord("C:\\Users\\First Last", 'win32'), `"C:\\Users\\First Last"`);
+  assert.equal(shellWord("C:\\Users\\o'neil", 'win32'), `"C:\\Users\\o'neil"`);
+  // PowerShell takes the curly quotes for a single quote too: doubled inside single quotes.
+  assert.equal(shellWord('C:\\Users\\x\u2019y $z', 'win32'), `'C:\\Users\\x\u2019\u2019y $z'`);
 });
 
 test('uninstallMain keeps a project under a memory pass with the line that can release its lock, exit 1, in either mode', async () => {
   // A space in the home, as in C:\Users\First Last: the line's commands still run as they are copied.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness cli home '));
+  // Double quotes on Windows, which cmd.exe reads too; single quotes elsewhere.
+  const quotedHome = process.platform === 'win32' ? `"${home}"` : `'${home}'`;
   try {
     const planned = snapshotOf(home, 'C--planned', '20261015T120606108Z');
     fs.writeFileSync(path.join(planned, 'lock'), JSON.stringify({ stamp: '20261015T120606108Z', pid: 4242 }));
@@ -766,7 +772,7 @@ test('uninstallMain keeps a project under a memory pass with the line that can r
     fs.writeFileSync(path.join(killed, 'lock'), JSON.stringify({ stamp: '20261016T090000000Z', pid: 4343 }));
     const lines = [
       `kept ${killed}: ${path.join(killed, 'lock')} holds no finished plan (pid 4343); if that process is not running, remove the file and uninstall again`,
-      `kept ${planned}: a memory pass is planned (20261015T120606108Z) for the memory folder C:/memory; from that project's checkout run js-harness memory verify 20261015T120606108Z --home '${home}' or js-harness memory undo 20261015T120606108Z --home '${home}', then uninstall again`,
+      `kept ${planned}: a memory pass is planned (20261015T120606108Z) for the memory folder C:/memory; from that project's checkout run js-harness memory verify 20261015T120606108Z --home ${quotedHome} or js-harness memory undo 20261015T120606108Z --home ${quotedHome}, then uninstall again`,
     ];
     const normal = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.deepEqual([normal.code, normal.outLines, normal.errLines], [1, [], lines]);
