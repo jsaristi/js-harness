@@ -196,6 +196,7 @@ const BODY = {
   load: shaped(LOAD),
   rows: listOf(isText),
   code: isTreeKey,
+  error: isText,
   by: isText,
 };
 
