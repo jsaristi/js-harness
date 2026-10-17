@@ -480,7 +480,7 @@ test('reviewed and shipped record the outcomes, and status prints the reviews th
   await run(['snapshot', '--day', '2026-10-16'], { home });
   let status = await run(['status'], { home });
   assert.equal(status.code, 0, status.stdout);
-  assert.match(status.stdout, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/m);
+  assert.match(status.stdout, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/m);
 
   const reviewed = await run(['reviewed', '--day', '2026-10-16', '--found', 'nothing'], { home });
   assert.equal(reviewed.code, 0, reviewed.stderr);

@@ -510,7 +510,7 @@ test('the reviews due: the last settled day unless reviewed, weekly once the las
   const reviewed = (day, found) => ({ v: 1, kind: 'reviewed', day, found, at: `${day}T12:00:00.000Z` });
   // Nothing recorded: the review of the last settled day.
   assert.deepEqual(throughputDues([], { now, settlesAt }).map((due) => [due.id, due.at]), [['review 2026-10-16', '2026-10-17T01:00:00.000Z']]);
-  assert.match(throughputDues([], { now, settlesAt })[0].line, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/);
+  assert.match(throughputDues([], { now, settlesAt })[0].line, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/);
   // Reviewed: nothing due.
   assert.deepEqual(throughputDues([reviewed('2026-10-16', 'candidates')], { now, settlesAt }), []);
   // Two quiet reviews in a row: weekly, due seven days after the last one.
@@ -518,8 +518,12 @@ test('the reviews due: the last settled day unless reviewed, weekly once the las
   assert.deepEqual(throughputDues(quiet, { now, settlesAt }), []);
   const week = Date.parse('2026-10-23T02:00:00Z');
   assert.deepEqual(throughputDues(quiet, { now: week, settlesAt }).map((due) => [due.id, due.at]), [['review 2026-10-22', '2026-10-23T01:00:00.000Z']]);
-  // One that found candidates makes it daily again.
+  // One that found candidates makes it daily again, a re-measure as well as a daily review.
   assert.equal(throughputDues([...quiet.slice(0, 1), reviewed('2026-10-15', 'candidates')], { now, settlesAt }).length, 1);
+  const remeasure = (shipped, found, at) => ({ v: 1, kind: 'reviewed', shipped, found, at });
+  assert.equal(throughputDues([...quiet, remeasure('2026-10-01', 'candidates', '2026-10-16T09:00:00.000Z')], { now, settlesAt }).length, 1);
+  assert.equal(throughputDues([...quiet, remeasure('2026-10-01', 'nothing', '2026-10-16T09:00:00.000Z')], { now, settlesAt }).length, 0);
+  assert.equal(throughputDues([remeasure('2026-10-01', 'candidates', '2026-10-13T09:00:00.000Z'), ...quiet], { now, settlesAt }).length, 0, 'one before the quiet runs does not count');
   // Two items shipped on the 5th are re-measured together once 6..12 settled, until the re-measure is recorded.
   const shipped = (item, day) => ({ v: 1, kind: 'shipped', item, day, at: `${day}T15:00:00.000Z` });
   const ships = [reviewed('2026-10-16', 'nothing'), shipped('a', '2026-10-05'), shipped('b', '2026-10-05'), shipped('c', '2026-10-14')];

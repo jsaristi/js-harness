@@ -425,7 +425,7 @@ reviewed --shipped <day>` records it. The outcomes go to `outcomes.jsonl` beside
 $ js-harness throughput status
 2026-10-15  kept
 2026-10-16  kept
-DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing|candidates
+DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing|candidates
 ```
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by

@@ -628,14 +628,18 @@ export function throughputDues(outcomes, { now, settlesAt }) {
   const reviews = outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.day)).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
   const dues = [];
   const last = reviews.at(-1)?.day ?? null;
-  const quiet = reviews.length >= QUIET_RUNS && reviews.slice(-QUIET_RUNS).every((one) => one.found === 'nothing');
+  const streak = reviews.slice(-QUIET_RUNS);
+  // A re-measure that found candidates since the quiet runs began makes the review daily again, as a review does.
+  const streakFrom = Math.min(...streak.map((one) => Date.parse(one.at)));
+  const remeasureFound = outcomes.some((one) => one?.kind === 'reviewed' && isDayText(one.shipped) && one.found === 'candidates' && Date.parse(one.at) >= streakFrom);
+  const quiet = streak.length === QUIET_RUNS && streak.every((one) => one.found === 'nothing') && !remeasureFound;
   const dueDay = last === null ? settled : addDays(last, quiet ? QUIET_DAYS : 1);
   if (dueDay <= settled) {
     const since = last === null ? settled : addDays(last, 1);
     dues.push({
       id: `review ${settled}`,
       at: new Date(settlesAt(dueDay)).toISOString(),
-      line: `DUE: throughput review of ${since === settled ? settled : `${since}..${settled}`}: js-harness throughput --since ${since}; js-harness-protocols section 7; then js-harness throughput reviewed --day ${settled} --found nothing|candidates`,
+      line: `DUE: throughput review of ${since === settled ? settled : `${since}..${settled}`}: js-harness throughput --since ${since} --until ${addDays(settled, 1)}; js-harness-protocols section 7; then js-harness throughput reviewed --day ${settled} --found nothing|candidates`,
     });
   }
   const remeasured = new Set(outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.shipped)).map((one) => one.shipped));
