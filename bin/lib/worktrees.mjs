@@ -79,7 +79,10 @@ export const GIT_TIMEOUT_MS = 20_000;
  * bounded by `GIT_TIMEOUT_MS`, as the heartbeat bounds its commands: one that hangs counts as a no (T11). */
 export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
   const gitIn = (dir, ...args) => {
-    const result = run('git', args, { cwd: dir, encoding: 'utf8', windowsHide: true, timeout: GIT_TIMEOUT_MS });
+    // No optional locks: a `git status` killed at its limit would otherwise leave an index.lock that breaks a worktree
+    // that was only slow (gentle-ai, 2026-10-17, R4).
+    const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+    const result = run('git', args, { cwd: dir, encoding: 'utf8', windowsHide: true, timeout: GIT_TIMEOUT_MS, env });
     return { ok: !result?.error && result?.status === 0, out: String(result?.stdout ?? ''), err: String(result?.stderr || result?.error?.message || '').trim() };
   };
   const base = gitIn(cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
