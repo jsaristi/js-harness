@@ -1112,3 +1112,41 @@ test('the usage says what a question takes, what --question names, and that a ve
   assert.match(usage, /--question <n>/);
   assert.match(usage, /verified answer\s+is one read at its line of the transcript/);
 });
+
+// T4 of odd/tasks/wake-and-flag.md (S4): the hour a notice's text stamps as its sending is held to the clock the notice
+// is stamped with, as the guard holds a message's. 73 of the 74 lead notices that opened "HH:MM JH ORQ: ..." were more
+// than a minute off the local clock (2026-10-15 to 10-17).
+const hhmm = (ms) => `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}`;
+
+test('a notice whose text stamps an hour more than a minute off the clock is refused, with the right hour, and not recorded', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const wrong = hhmm(NOW + 13 * 60 * 1000);
+  const { code, out, err } = await runNotify(machine, ['--to', '5', '--kind', 'note', `${wrong} JH ORQ: PR 300 landed.`]);
+  assert.equal(code, 1);
+  assert.deepEqual(out, []);
+  assert.match(err.join('\n'), new RegExp(`the text stamps ${wrong}, and the clock says ${hhmm(NOW)}`));
+  assert.match(err.join('\n'), /or no hour/);
+  assert.deepEqual(recorded(machine).notices, [], 'nothing is written');
+}));
+
+test('a stamp within a minute, an hour that is an event and a text with no hour are recorded as before', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  for (const text of [
+    `${hhmm(NOW)} JH ORQ: PR 300 landed.`,
+    `${hhmm(NOW - 60 * 1000)} HIS ORDER: go on.`,
+    `JH 5 · canal entre sesiones: compacted at ${hhmm(NOW - 5 * 60 * 1000)}, resumes T2`,
+    'Lead: PR 300 landed at 03:10.',
+    'No hour here.',
+  ]) {
+    const { code } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', text]);
+    assert.equal(code, 0, text);
+  }
+  assert.equal(recorded(machine).notices.length, 5);
+}));
+
+test('an answer quotes his words, so an hour that opens them is not held to the clock', withMachine(async (machine) => {
+  const words = `${hhmm(NOW + 13 * 60 * 1000)} JH 5 arranca`;
+  const { code } = await runNotify(machine, ['--to', '5', '--kind', 'answer', '--transcript', '1d16beeb', '--line', '406', words]);
+  assert.equal(code, 0);
+  assert.equal(recorded(machine).notices[0].text, words);
+}));
