@@ -1306,16 +1306,20 @@ export function uninstall(home, deps = {}) {
 }
 
 /** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
- * the gates of days the gate log has rotated away. Named, with how many days they hold (`null` where the folder
- * could not be listed), so the person knows what stays; `{}` when there is no folder. */
+ * the gates of days the gate log has rotated away. The gentle-ai review starts the pause hook keeps beside them
+ * (`review-starts.jsonl`, B6) are the only copy of those starts, and stay too. Named, with how many days and how many
+ * projects' starts they hold (`null` where the folder could not be listed), so the person knows what stays; `{}`
+ * when there is no folder. */
 function throughputResult(home, statFile, listDir) {
   const dir = path.join(home, '.js-harness', 'throughput');
   try {
     if (!isThere(dir, statFile)) return {};
-    const days = listDir(dir).flatMap((project) => listDir(path.join(dir, project)).filter((name) => name.endsWith('.json'))).length;
-    return { throughputKept: { path: dir, days } };
+    const files = listDir(dir).map((project) => listDir(path.join(dir, project)));
+    const days = files.flatMap((names) => names.filter((name) => name.endsWith('.json'))).length;
+    const reviewStarts = files.filter((names) => names.includes('review-starts.jsonl')).length;
+    return { throughputKept: { path: dir, days, reviewStarts } };
   } catch {
-    return { throughputKept: { path: dir, days: null } };
+    return { throughputKept: { path: dir, days: null, reviewStarts: null } };
   }
 }
 

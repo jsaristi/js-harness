@@ -835,7 +835,7 @@ test('uninstall removes the folder of memory hygiene when no project holds a sna
   }
 });
 
-test('uninstall keeps the snapshots of the throughput review and names their folder, with a manifest and without', () => {
+test('uninstall keeps the snapshots and the review starts of the throughput review and names their folder, with a manifest and without', () => {
   const home = makeTmpHome();
   try {
     const folder = path.join(home, '.js-harness', 'throughput');
@@ -844,8 +844,11 @@ test('uninstall keeps the snapshots of the throughput review and names their fol
       fs.mkdirSync(path.join(folder, 'C--proj'), { recursive: true });
       fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-15.json'), '{}');
       fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-16.json'), '{}');
+      // The gentle-ai review starts the pause hook keeps there are no day snapshot, and are counted apart (B6).
+      fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
       const result = uninstall(home);
-      assert.deepEqual(result.throughputKept, { path: folder, days: 2 }, String(withManifest));
+      assert.deepEqual(result.throughputKept, { path: folder, days: 2, reviewStarts: 1 }, String(withManifest));
+      assert.equal(fs.existsSync(path.join(folder, 'C--proj', 'review-starts.jsonl')), true, 'the review starts are kept too');
       assert.equal(fs.existsSync(path.join(folder, 'C--proj', '2026-10-16.json')), true, 'a snapshot is never removed');
     }
     fs.rmSync(folder, { recursive: true });

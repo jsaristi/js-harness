@@ -412,3 +412,35 @@ test('the test files row reads the live folder\'s test times of the day\'s trace
   assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home: fromCopies })).code, 0);
   assert.match((await run([], { home: fromCopies })).stdout, /test files +not recorded: 2026-10-16 \(no test times kept\)/);
 });
+
+test('the gentle-ai reviews row reads the store and the starts once a run, and a store that cannot be read says so', async () => {
+  const home = makeHome(GATES);
+  const out = [];
+  let reads = 0;
+  const reviews = {
+    starts: [{ v: 1, lineage: 'review-a', at: '2026-10-17T09:00:00.000Z', from: 'birthtime', seenAt: '2026-10-17T08:00:00.000Z' }],
+    ends: [{ lineage: 'review-a', at: '2026-10-17T09:30:00.000Z' }],
+    live: [],
+  };
+  const main = (deps) => throughputMain(['--since', '2026-10-16', '--until', '2026-10-18'], {}, {
+    cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], readLands: () => [], ...deps,
+  });
+  await main({ readReviews: () => { reads += 1; return reviews; } });
+  assert.equal(reads, 1);
+  assert.match(out.join(String.fromCharCode(10)), /gentle-ai reviews +1 acknowledged, median 30 min \(1 timed, one lineage each\); 1 started, 0 open, 0 gone without acknowledgement; started not recorded: 2026-10-16 \(this machine records starts from 2026-10-17 08:00Z\) +\[gentle-ai's store/);
+  out.length = 0;
+  const denied = { ...fs, readdirSync: (dir, ...rest) => (String(dir).includes('review-transactions') ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readdirSync(dir, ...rest)) };
+  await main({ fileSystem: denied });
+  assert.match(out.join(String.fromCharCode(10)), /gentle-ai reviews +not read: 2026-10-16 EACCES; 2026-10-17 EACCES/);
+});
+
+test('a starts file that cannot be read leaves the acknowledgements from gentle-ai\'s store on the row', async () => {
+  const home = makeHome(GATES);
+  const out = [];
+  const starts = (file) => String(file).replace(/[\\/]+/g, '/').endsWith('/review-starts.jsonl');
+  const fileSystem = { ...fs, readFileSync: (file, ...rest) => (starts(file) ? (() => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); })() : fs.readFileSync(file, ...rest)) };
+  await throughputMain(['--since', '2026-10-17', '--until', '2026-10-18'], {}, {
+    cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], readLands: () => [], fileSystem,
+  });
+  assert.match(out.join(String.fromCharCode(10)), /gentle-ai reviews +0 acknowledged; started not read: 2026-10-17 EBUSY/);
+});
