@@ -22,6 +22,10 @@ const SECTIONS = [
 ];
 
 export const SUMMARY_HEADINGS = SECTIONS.map(([heading]) => heading);
+const PLACEHOLDERS = new Set(SECTIONS.map(([, holds]) => `<${holds}>`));
+
+/** `text` with the line ends git keeps, so a working copy with CRLF reads as the blob it was committed as. */
+const lf = (text) => String(text).replace(/\r\n/g, '\n');
 
 /** The UTC day of `at` (milliseconds), as `YYYY-MM-DD`. */
 const dayOf = (at) => new Date(at).toISOString().slice(0, 10);
@@ -49,8 +53,11 @@ export function summaryTemplate(title, at) {
 export function summaryProblems(text) {
   const bodies = new Map();
   let current = null;
-  for (const line of String(text).replace(/\r\n/g, '\n').split('\n')) {
-    const heading = /^## (.+?)\s*$/.exec(line);
+  let fenced = false;
+  for (const line of lf(text).split('\n')) {
+    // A heading inside a fenced block is the block's text, not a section.
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    const heading = fenced ? null : /^## (.+?)\s*$/.exec(line);
     if (heading) {
       current = heading[1];
       if (!bodies.has(current)) bodies.set(current, []);
@@ -59,13 +66,11 @@ export function summaryProblems(text) {
   const problems = [];
   for (const heading of SUMMARY_HEADINGS) {
     if (!bodies.has(heading)) problems.push(`"${heading}" is missing`);
-    else if (!bodies.get(heading).some((line) => line !== '' && !/^<.*>$/.test(line))) problems.push(`"${heading}" is empty`);
+    // Only the template's own placeholder is no content: a line in angle brackets may be an autolink, a fact.
+    else if (!bodies.get(heading).some((line) => line !== '' && !PLACEHOLDERS.has(line))) problems.push(`"${heading}" is empty`);
   }
   return problems;
 }
-
-/** `text` with the line ends git keeps, so a working copy with CRLF reads as the blob it was committed as. */
-const lf = (text) => String(text).replace(/\r\n/g, '\n');
 
 /** What keeps the summary `file` (relative to the repository's root) from closing a session, `[]` when nothing
  * does: it is not in the worktree at `cwd`, a section of it is missing or empty, or neither origin/main nor the
@@ -87,15 +92,17 @@ export function closeProblems(file, cwd, { run = (command, args, options) => spa
   const sections = summaryProblems(text);
   if (sections.length > 0) return [`${file}: ${sections.join(', ')}.`];
   const branch = git('branch', '--show-current').out.trim();
-  const refs = ['origin/main', ...(branch !== '' && branch !== 'main' ? [`origin/${branch}`] : [])];
-  let older = null;
+  // The default branch as origin names it, origin/main where this clone does not know it (gentle-ai, R3).
+  const main = git('symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD').out.trim() || 'origin/main';
+  const refs = [main, ...(branch !== '' && `origin/${branch}` !== main ? [`origin/${branch}`] : [])];
+  let differs = null;
   for (const ref of refs) {
     const shown = git('show', `${ref}:${file}`);
     if (!shown.ok) continue;
     if (lf(shown.out) === lf(text)) return [];
-    older ??= ref;
+    differs ??= ref;
   }
-  if (older !== null) return [`${older} holds an older copy of ${file}: commit and push it as it is now.`];
+  if (differs !== null) return [`${differs} holds a different copy of ${file}: commit and push it as it is now.`];
   const where = refs.length === 1 ? `${refs[0]} does not hold it` : `neither ${refs.join(' nor ')} holds it`;
   return [`${file} is not pushed: ${where}; commit it and push.`];
 }

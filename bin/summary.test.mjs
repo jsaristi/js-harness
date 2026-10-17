@@ -57,6 +57,17 @@ test('the bare template has every section empty, a filled one has no problem, an
   assert.deepEqual(summaryProblems(filled), []);
   const missing = filled.replace('## Cost\n', '');
   assert.deepEqual(summaryProblems(missing), ['"Cost" is missing']);
+  // Only the template's own placeholder is no content: an autolink is a fact (gentle-ai, R2 and R3).
+  const linked = bare.replace(/^<.*>$/gm, '<https://github.com/jsaristi/js-harness/pull/379>');
+  assert.deepEqual(summaryProblems(linked), []);
+  // A heading inside a fenced block is the block's text, not a section of the summary.
+  const fenced = filled.replace('## Cost\n', '## Cost\n```\n## Goal\n```\n');
+  assert.deepEqual(summaryProblems(fenced), []);
+});
+
+test('the opening of a title keeps the name it had before the slug was taken out of it', () => {
+  // The file of this session's own opening on this machine, written before titleSlug existed.
+  assert.equal(openingFileName('JH 24 · gate más rápido'), 'jh-24-gate-mas-rapido-2e7abe831746.json');
 });
 
 /** A clone `work` of a bare `origin.git` whose main holds one commit, on a branch `feat/x`, in a temp folder. */
@@ -101,7 +112,7 @@ test('closeProblems refuses a summary not in the worktree, one with empty sectio
   git('push', '-q', 'origin', 'feat/x');
   assert.deepEqual(closeProblems(FILE, work), []);
   fs.appendFileSync(path.join(work, FILE), '- one more fact (#380).\n');
-  assert.deepEqual(closeProblems(FILE, work), [`origin/feat/x holds an older copy of ${FILE}: commit and push it as it is now.`]);
+  assert.deepEqual(closeProblems(FILE, work), [`origin/feat/x holds a different copy of ${FILE}: commit and push it as it is now.`]);
 }));
 
 test('closeProblems takes a summary main already holds, from a session on main or on any branch', withClone(({ work, git }) => {
