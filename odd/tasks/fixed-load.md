@@ -121,23 +121,31 @@ is made" is replaced, for this feature, by the measured saving.
 | Change | Where | Saving (headless `/context`) | Undo | Backup |
 |---|---|---|---|---|
 | context7 off for this project (D5) | `~/.claude.json`, `projects["D:/js-harness"].disabledMcpServers` gets `"context7"` | 1.8k deferred (1.9k with its server instructions) | `/mcp enable context7` in a session of `D:\js-harness`, or remove the entry | `~/.js-harness/backups/claude.json.before-fixed-load-20261015T063515` |
-| Claude Docs connector off for this project (D4) | the same list gets `"claude.ai Claude Docs"` (its own name; `claude_ai_Claude_Docs` is the tool prefix and does not match) | 0.6k loaded, 1.6k deferred | `/mcp enable claude.ai Claude Docs`, or remove the entry | the same file |
-| Ten skills hidden from the model, still callable by him as `/name` (D6) | `D:\js-harness\.claude\settings.local.json`, `skillOverrides`: go-testing, gentle-ai-bench, docx, pptx, xlsx, pdf, google-workspace, morning, import-memory, keybindings-help, each `"user-invocable-only"` | 1.9k (Skills 7.0k to 5.1k) | remove the `skillOverrides` key, or set one skill to `"on"` | `~/.js-harness/backups/js-harness.settings.local.json.before-fixed-load-20261015T063830` |
+| Claude Docs connector off for this project (D4; the CLI only, not the desktop app: L12) | the same list gets `"claude.ai Claude Docs"` (its own name; `claude_ai_Claude_Docs` is the tool prefix and does not match) | 0.6k loaded, 1.6k deferred | `/mcp enable claude.ai Claude Docs`, or remove the entry | the same file |
+| Ten skills hidden from the model, still callable by him as `/name` (D6; in the desktop app the seven of the `anthropic-skills` plugin stay: L12) | `D:\js-harness\.claude\settings.local.json`, `skillOverrides`: go-testing, gentle-ai-bench, docx, pptx, xlsx, pdf, google-workspace, morning, import-memory, keybindings-help, each `"user-invocable-only"` | 1.9k (Skills 7.0k to 5.1k) | remove the `skillOverrides` key, or set one skill to `"on"` | `~/.js-harness/backups/js-harness.settings.local.json.before-fixed-load-20261015T063830` |
 
 `/mcp disable` is refused in a headless session ("Reconnect, enable, and disable aren't available in this
 session"), so the list was written as the toggle writes it (Claude Code's own help text: "persists to
 `disabledMcpServers` in the project entry of `~/.claude.json` — reversible with `/mcp enable`"). Both
 switches are per project: worktrees under `D:\js-harness-worktrees` are other projects, but every work
-session starts in `D:\js-harness`. The desktop app adds its own Docs connector under another name; whether
-this switch reaches it shows in the `fixed load` row of the next desktop session.
+session starts in `D:\js-harness`.
+
+In the desktop app two of the three do not take effect (L12). D5 does: context7 is `disabled` in a
+session opened after the app restarted. D4 does not: the app's Claude Docs connector stays `connected`,
+and Claude Code has no project switch for one claude.ai connector, only `disableClaudeAiConnectors`, which
+turns all of them off. D6 does only for the skills that are not a plugin's: `skillOverrides` returns `on`
+for every plugin skill, and docx, pptx, xlsx, pdf, google-workspace, morning and import-memory come from
+the `anthropic-skills` plugin there; the only project switch for them, `enabledPlugins`, turns the whole
+plugin off. Both are his questions 6 and 7 (T7).
 
 ## Tasks
 - [x] T1 (kind: design) Measure the fixed load per category and owner; one recommendation per category (this document)
 - [x] T2 (kind: build) The `fixed load` row of `check`, test-first (S5, S6): RED (no module), GREEN 9 of 9
 - [x] T3 (kind: docs) README's check rows and ROADMAP F2
 - [x] T4 (kind: build) His decisions applied: D4, D5, D6 made and measured, each with its undo and backup; D1 is the code's budget; D2 waits on #4036; D3 is nothing
-- [ ] T5 (kind: verify) Gate, gentle-ai review, Codex review, PR ready, the lead told
+- [x] T5 (kind: verify) Gate, gentle-ai review, Codex review, PR ready, the lead told: PR 203, landed 2026-10-16
 - [ ] T6 (kind: build) When gentle-ai #4036 ships (D2): back up `~/.claude/CLAUDE.md`, exclude the orchestrator and agent-routing blocks through gentle-ai, measure before and after
+- [ ] T7 (kind: build) D4 and D6 in the desktop app, as he answers questions 6 (the `anthropic-skills` plugin) and 7 (`disableClaudeAiConnectors`): each change backed up, recorded in the table above with its undo, and measured in the next desktop session
 
 ## Log
 - L1 (2026-10-15 05:52, the lead's notice to session 20): "Lead: GO. Your feature: the fixed context load of a session (~119k before any message; his concern 05:50). Full brief: C:/Users/Oficina/AppData/Roaming/Claude/side-session-notes/local_a8ef1e36-0003-4a3d-b6b5-9d18df61ab3e/jh20-brief-fixed-load.md"
@@ -151,3 +159,4 @@ this switch reaches it shows in the `fixed load` row of the next desktop session
 - L9 (2026-10-15) The row measured session d3ecd893 as 0: the host writes the turn it resumes after a compaction with zero usage at the top and the real usage in `iterations`. Fixed test first (RED: actual 0; GREEN 13 of 13): a record whose input, cache creation and cache read are all zero is not a first turn. The row on this machine now reads 109596, median of 5 sessions, none at 0.
 - L10 (2026-10-15) PR 203 conflicted again with main (87914bf): main added `checkExactCount` to the same rows line of `bin/check.mjs`. Merged main; the fixed load row stays last, after the exact count rows.
 - L11 (2026-10-16) gentle-ai 4.2.0 assessed the work-unit commits no review covered, each slice from a detached worktree at its last commit (`review assess --base-ref <boundary> --committed-only`): 29b37ee..107754e (cf4280d, 107754e) medium, not due (under_budget); 387ef65..d1f0dd9 medium, not due (under_budget). No review started; the two merges of main are not candidates. Codex covers every code commit.
+- L12 (2026-10-16 02:2x) After the app restarted, this session read its own state: `session_connectors_status` lists context7 `disabled` but Claude Docs (connector 1a59c906) `connected` with 8 tools, and `get_usage` puts Skills at 7,031 tokens, the figure before D6. Read in Claude Code 2.1.29x (`claude.exe`): the skill filter is `if(e.type!=="prompt"||e.source==="plugin")return"on"`, so `skillOverrides` never hides a plugin's skill; `disableClaudeAiConnectors` is described as "When true in any settings source, claude.ai MCP cloud connectors are not auto-fetched or connected"; `enabledPlugins` takes `plugin@marketplace: false` in `.claude/settings.local.json`. The headless saving of D6 (L5) came from the non-plugin skills. gentle-ai #4036 still open (checked 2026-10-16), so T6 waits. Asked him through the lead: questions 6 (D6) and 7 (D4).
