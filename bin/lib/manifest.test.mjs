@@ -3642,6 +3642,8 @@ test('the skills say who archives and opens sessions, and to check that TaskStop
   assert.ok(orchestrator.includes('a work session whose work is fully finished'));
   // odd/tasks/session-close.md, S4: a session closed with its summary is read and archived, no question.
   assert.ok(orchestrator.includes("when it closed with its summary, the board lists it under `to archive`: read the summary, then archive the session with the host's tool to archive sessions, without asking, and name it in the recap"));
+  // odd/tasks/session-close.md, S7: Remote Control keeps a finished session live, so the host refuses to archive it.
+  assert.ok(orchestrator.includes("When the host refuses because the session still has live work, turn its Remote Control off with the host's tool, then archive it again, without asking"));
   assert.ok(orchestrator.includes('A finished session that closed without a summary is asked for one first'));
   assert.ok(orchestrator.includes('When the host gives you a tool to start sessions, open the new session yourself'));
   assert.ok(!orchestrator.includes('The user archives the old orchestrator only after that'));
