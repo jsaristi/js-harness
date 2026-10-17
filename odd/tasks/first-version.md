@@ -247,6 +247,7 @@ cuts) shortens the run but does not make any fixed figure true for a growing sui
 - [x] T6g (kind: build) S6: `bin/gate.test.mjs`, "a real gate leaves its two lines in the log of its home", passes inside a Claude Code session as on CI: its helper drops the host's session and the test sets one itself (L25, the one red of T6's second pass); built inline
 - [x] T6h (kind: build) S6: the T6f verifier's advisory "A pre-existing microsecond race in `runSensor`": "If a timer fires after the process has ended but before Node delivers `exit`, the result is still reported as a timeout" (JH 25's summary and transcript); test first (L32)
 - [x] T6i (kind: build) S6: the T6f verifier's advisory "No gate-level run in which the silence bound stops a real 20-minute hang": its probes covered it "at the runSensor level (Windows tree and WSL2) with bounds of seconds, not with the 20-minute rule"; test first (L32)
+- [x] T6j (kind: build) S6: gentle-ai's R3 advisory on T6h, "no test breaks a silence with a chunk inside the deferred turn"; a pin of the behavior T6h built (L33)
 - [x] T7 (kind: design) S7: gates on CI machines, designed with their cost; asked to him before the build (above, L8; the question goes to him through the lead)
 - [x] T7b (kind: build) S7: the design built, after his yes to its spend (L9; inline, test first)
 
@@ -521,3 +522,9 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   That test is `2531fa8`; gentle-ai on `9a62f82..2531fa8`: medium, not due (`under_budget`). Codex recheck of
   `9a62f82..2531fa8`: correct (0.98), its one finding fixed. Left: no test breaks a silence with a chunk inside the
   deferred turn (R3's advisory).
+- L33 (2026-10-17, JH 21, on `test/sensor-silence-chunk`, from origin/main `5ea341af`, after PR 409 landed): T6j, on
+  the lead's note of 15:34Z ("Plus your own R3 advisory: no test breaks a silence with a chunk inside the deferred
+  turn"; the lead's claim, not his words). The new test of `bin/check.test.mjs` writes a chunk inside the silence's
+  own timer, right after it runs, so the chunk lands before the deferred decision, then ends the command 10 ms
+  later: the run is reported by its exit 0, with the chunk in its output, and nothing is killed. It passed at once
+  (T6h built the behavior) and stays as a pin; against a copy of `bin/check.mjs` without `chunks !== seen` it fails.

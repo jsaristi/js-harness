@@ -665,6 +665,32 @@ test('runSensor reports the exit of a command that ended as its bound ran out, n
   }
 });
 
+test('a chunk written in the turn after the silence ran out breaks the silence: nothing is killed (first-version T6j)', async () => {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  const kills = [];
+  // The chunk is written inside the silence's own timer, right after it runs, so it lands before the deferred
+  // decision; the command then ends while its silence, armed again by that chunk, still has time left.
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...args) => realSetTimeout(ms === 50 ? () => {
+    fn();
+    child.stdout.write('still here\n');
+    realSetTimeout(() => {
+      child.emit('exit', 0, null);
+      child.emit('close');
+    }, 10);
+  } : fn, ms, ...args);
+  let running;
+  try {
+    running = runSensor('fake', { timeout: 0, silence: 50, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  const result = await running;
+  assert.deepEqual([result.status, result.error, kills, result.stdout], [0, undefined, [], 'still here\n']);
+});
+
 test('a gate stops a real silent hang at its silence bound: the row says so and the tree it started is gone (first-version T6i)', async () => {
   const dir = makeTmpDir();
   try {
