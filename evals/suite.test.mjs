@@ -1736,17 +1736,100 @@ test('--configs takes arms of one component beside their base, and refuses an ar
   assert.throws(() => parse({ '--configs': 'current,current-without-skills,current-without-skills' }), usageError(/listed twice/));
 });
 
-test('a run that names an arm is refused until arms are built, and nothing runs; --plan still states it', async () => {
+/** A `runTrial` stand-in that prepares each trial's home for real, in the scratch directory, and keeps whether the
+ * file `rel` of the home is there, by config. `js-harness init` is a stand-in that answers success. */
+function seedingRun(m, rel) {
+  const held = {};
+  const run = fakeRun(async (trial) => {
+    const home = path.join(m.base, 'seeded', `${trial.config.name}-${trial.task.id}-${trial.effort}`);
+    const workspace = path.join(home, 'workspace');
+    write(path.join(workspace, 'README.md'), 'a workspace\n');
+    await trial.config.prepare({ home, workspace });
+    held[trial.config.name] = fs.existsSync(path.join(home, ...rel.split('/')));
+  });
+  return { run, held };
+}
+const initStandIn = () => ({ status: 0, stdout: '', stderr: '' });
+
+test('an arm of current runs in a home seeded from the same template without its component, and its cut is pinned', async () => {
+  const m = machine();
+  const { run, held } = seedingRun(m, '.claude/CLAUDE.md');
+  const { io, deps } = depsFor(m, { runTrial: run, runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-claude-md', '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.deepEqual(held, { current: true, 'current-without-claude-md': false });
+  const configs = new Map(run.trials.map((trial) => [trial.config.name, trial.config]));
+  assert.deepEqual(configs.get('current-without-claude-md').args({ effort: 'medium' }), configs.get('current').args({ effort: 'medium' }), 'the arm runs as current does');
+  const doc = readDoc(m);
+  assert.deepEqual(keysOf(doc.trials).sort(), ['alpha|current-without-claude-md|medium|1', 'alpha|current|medium|1', 'beta|current-without-claude-md|medium|1', 'beta|current|medium|1']);
+  const pin = doc.arms?.['current-without-claude-md'];
+  assert.deepEqual({ ...pin, sha256: '' }, { base: 'current', components: ['claude-md'], sha256: '' });
+  assert.match(pin.sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(Object.keys(doc.arms), ['current-without-claude-md']);
+});
+
+test('a run without arms records no arms, as before', async () => {
   const m = machine();
   const { io, deps } = depsFor(m);
-  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-skills' }), ENV, deps), 2);
-  assert.match(io.err, /current-without-skills/);
+  assert.equal(await suiteMain(runArgv(m, { '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.equal('arms' in readDoc(m), false);
+});
+
+test('an arm whose component the home does not hold stops the run before any trial, with no results file and no template left', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m, { runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'current,current-without-agents', '--efforts': 'medium' }), ENV, deps), 1);
+  assert.match(io.err, /agents is not in the current arm's home/);
+  assert.deepEqual(deps.runTrial.asked, []);
+  assert.equal(fs.existsSync(resultsFile(m)), false);
+  assert.deepEqual(templatesIn(m.workRoot), []);
+});
+
+test('an arm is continued on the same cut, and refused on another or on none, before any trial and with the file untouched', async () => {
+  const m = machine();
+  const configs = 'current,current-without-claude-md';
+  const first = depsFor(m, { runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': configs, '--efforts': 'medium' }), ENV, first.deps), 0, first.io.err);
+  const same = depsFor(m, { runInit: initStandIn });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': configs, '--efforts': 'medium', '--repeats': '2' }), ENV, same.deps), 0, same.io.err);
+  assert.equal(same.deps.runTrial.asked.length, 4, 'the same cut continues');
+
+  const doc = readDoc(m);
+  const pinned = doc.arms['current-without-claude-md'].sha256;
+  for (const [label, arms] of [['another cut', { 'current-without-claude-md': { base: 'current', components: ['claude-md'], sha256: '0'.repeat(64) } }], ['no pin', undefined]]) {
+    write(resultsFile(m), JSON.stringify({ ...doc, arms }));
+    const before = fs.readFileSync(resultsFile(m));
+    const again = depsFor(m, { runInit: initStandIn });
+    assert.equal(await suiteMain(runArgv(m, { '--configs': configs, '--efforts': 'medium', '--repeats': '3' }), ENV, again.deps), 1, label);
+    assert.match(again.io.err, /another cut of an arm/, label);
+    assert.match(again.io.err, new RegExp(`cut of current-without-claude-md: ${arms ? 'sha256 000000000000' : 'unknown'} -> sha256 ${pinned.slice(0, 12)}`), label);
+    assert.deepEqual(again.deps.runTrial.asked, [], label);
+    assert.deepEqual(fs.readFileSync(resultsFile(m)), before, label);
+  }
+});
+
+test('a run that names a minimal-with arm is refused until that arm is built, and nothing runs; --plan still states it', async () => {
+  const m = machine();
+  const { io, deps } = depsFor(m);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal,minimal-with-mcp-engram' }), ENV, deps), 2);
+  assert.match(io.err, /minimal-with-mcp-engram/);
   assert.match(io.err, /not built yet/);
   assert.deepEqual(deps.runTrial.asked, []);
   nothingCreated(m);
   const plan = depsFor(m);
   assert.equal(await suiteMain([...runArgv(m, { '--configs': 'current,current-without-skills', '--efforts': 'medium' }), '--plan'], {}, plan.deps), 0, plan.io.err);
   assert.match(plan.io.out, /unknown for 4 trials, .*alpha current-without-skills medium \(1\)/);
+});
+
+test('a Codex arm runs in a home seeded from the Codex template without its component, and its cut is pinned', async () => {
+  const m = codexMachine();
+  const { run, held } = seedingRun(m, '.codex/AGENTS.md');
+  const { io, deps } = codexDeps(m, { runTrial: run, runInit: initStandIn });
+  assert.equal(await suiteMain(codexRunArgv(m, { '--configs': 'current,current-without-agents-md', '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.deepEqual(held, { current: true, 'current-without-agents-md': false });
+  const configs = new Map(run.trials.map((trial) => [trial.config.name, trial.config]));
+  assert.deepEqual(configs.get('current-without-agents-md').args({ effort: 'medium', workspace: m.base }), configs.get('current').args({ effort: 'medium', workspace: m.base }));
+  const pin = readCodexDoc(m).arms?.['current-without-agents-md'];
+  assert.deepEqual({ ...pin, sha256: '' }, { base: 'current', components: ['agents-md'], sha256: '' });
 });
 
 // ---- the honesty runs -------------------------------------------------------------------------------------------------

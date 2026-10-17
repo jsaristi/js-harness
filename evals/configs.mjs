@@ -272,9 +272,10 @@ export function minimalConfig(options) {
  * setup itself lives in the trial's home and workspace, which `seed({ home, workspace })`, an optional
  * (async) function, fills after the shared preparation (`prepareSandbox`); without one the home is as bare
  * as the minimal arm's. The seam is separate because building the home from the real configuration is its
- * own piece of work (`home.mjs`). */
-export function currentConfig({ seed, ...options } = {}) {
-  return buildConfig('current', options, [], seed);
+ * own piece of work (`home.mjs`). An arm of one component (`evals/arms.mjs`) is this config under its own
+ * `name`, with a seed that takes its component out. */
+export function currentConfig({ seed, name = 'current', ...options } = {}) {
+  return buildConfig(name, options, [], seed);
 }
 
 // ---- the subagent configs --------------------------------------------------------------------------

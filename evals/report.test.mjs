@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, compareCells, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
+  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, checkRuns, compareCells, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
 } from './report.mjs';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-report-test-'));
@@ -903,6 +903,15 @@ test('runs that both hold current trials and differ in setup are refused; a run 
   assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', [trial({ task: 'gamma' })]) })), 'b has no current trial');
   assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs()), b: docOf('b', currentOf('gamma')) })), 'two runs recorded before setups');
   assert.doesNotThrow(() => buildReport(load({ a: docOf('a', bothConfigs(), { setup: setupA }), b: docOf('b', currentOf('gamma'), { setup: setupA }) })), 'the same setup');
+});
+
+test('an arm taken out of current runs on its template, so a run of its trials alone shares the setup of the current runs', () => {
+  // Read as runs directly: loading a file of arm trials waits for the report's arms section (C5).
+  const runs = [
+    { name: 'a', doc: docOf('a', [trial({ task: 'alpha', config: 'current' })], { setup: { sha256: 'a'.repeat(64), items: {} } }) },
+    { name: 'b', doc: docOf('b', [trial({ task: 'beta', config: 'current-without-skills' })], { setup: { sha256: 'b'.repeat(64), items: {} } }) },
+  ];
+  assert.throws(() => checkRuns(runs), /runs a and b differ in setup/);
 });
 
 test('the setups are compared against the first run that holds current trials, whatever the order of the runs', () => {

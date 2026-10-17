@@ -9,6 +9,7 @@
 //
 // Built here: what a path or a JSON key holds, the blocks of the global instruction file, cut by their marker
 // lines, and Codex's plugins, MCP servers and hook trust, which are tables of its `config.toml`.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { components as fileComponents } from '../bin/lib/manifest.mjs';
@@ -287,6 +288,28 @@ export function checkWithout(root, components, agent) {
       throw new ArmError(`${id} is not in the current arm's home, so an arm without it would be the current arm under another name`);
     }
   }
+}
+
+/** The SHA-256 of what taking `components` out of the template payload in `root` does: each path removed, and each
+ * file rewritten with the digest of its new bytes as `settle(rel, bytes)` reads them (the fingerprint's own reading,
+ * so a counter Claude Code keeps beside the MCP servers does not move it). A run pins it per arm, so a resume whose
+ * cut changed, by a template edit or by this module's code, is another measurement. Each component is read against
+ * the template as it is, not after the one before it: the digest moves whenever either input does, which is what a
+ * pin needs. Reads only. */
+export function withoutDigest(root, components, agent, settle = (rel, bytes) => bytes) {
+  const hash = crypto.createHash('sha256');
+  for (const id of components) {
+    hash.update(`component\0${id}\n`);
+    for (const piece of piecesOf(root, id, agent)) {
+      if (piece.remove) hash.update(`remove\0${piece.remove}\n`);
+      else {
+        const rel = piece.text ?? piece.write;
+        const bytes = piece.text ? piece.content : `${JSON.stringify(piece.json, null, 2)}\n`;
+        hash.update(`write\0${rel}\0${crypto.createHash('sha256').update(settle(rel, bytes)).digest('hex')}\n`);
+      }
+    }
+  }
+  return hash.digest('hex');
 }
 
 /** Takes `components` out of the home in `root`, one after the other, once `checkWithout` has passed for all of

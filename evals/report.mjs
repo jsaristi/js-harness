@@ -303,7 +303,9 @@ function stackDifferences(a, b) {
     .map((key) => ({ field: `stack.${key}`, a: left[key], b: right[key] }));
 }
 
-const holdsCurrent = (doc) => (doc.trials ?? []).some((entry) => entry.config === 'current');
+// The configs that run in a home seeded from the current arm's template: current, and every arm of one component taken
+// out of it (`evals/arms.mjs`), so their setup is the same thing.
+const holdsCurrent = (doc) => (doc.trials ?? []).some((entry) => entry.config === 'current' || String(entry.config).startsWith('current-without-'));
 /** A setup as the first 12 characters of its sha256, enough to tell two apart in a refusal. */
 const setupOf = (doc) => (typeof doc.setup?.sha256 === 'string' ? `sha256 ${doc.setup.sha256.slice(0, 12)}` : null);
 

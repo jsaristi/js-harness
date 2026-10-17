@@ -279,6 +279,10 @@ const SETTLED = {
 
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
+/** The bytes of the payload file `rel` as the fingerprint reads them: `raw` itself, or the part of it that is setup
+ * when a day of sessions changes the rest (`SETTLED`). */
+export const settledBytes = (rel, raw) => (Object.hasOwn(SETTLED, rel) ? SETTLED[rel](Buffer.from(raw).toString('utf8')) : raw);
+
 /** The fingerprint of the payload in `root`, whose `files` are its inventory: one sha256 per item (the first two
  * segments of a path, such as `.claude/skills`) over its files' paths and settled contents, and one over the items.
  * Two templates of the same setup have the same fingerprint; the items say which part of a setup moved. */
@@ -287,8 +291,7 @@ export function fingerprintOf(root, files = inventory(root)) {
   for (const { path: rel } of files) {
     const item = rel.split('/').slice(0, 2).join('/');
     const raw = fs.readFileSync(path.join(root, ...rel.split('/')));
-    const settled = Object.hasOwn(SETTLED, rel) ? SETTLED[rel](raw.toString('utf8')) : raw;
-    lines.set(item, [...(lines.get(item) ?? []), `${rel}\0${sha256(settled)}\n`]);
+    lines.set(item, [...(lines.get(item) ?? []), `${rel}\0${sha256(settledBytes(rel, raw))}\n`]);
   }
   const items = Object.fromEntries([...lines].sort(([a], [b]) => (a < b ? -1 : 1)).map(([item, entries]) => [item, sha256(entries.join(''))]));
   return { sha256: sha256(Object.entries(items).map(([item, hash]) => `${item}\0${hash}\n`).join('')), items };

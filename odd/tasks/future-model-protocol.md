@@ -440,3 +440,19 @@ snake-case events, literal strings), leaving a plugin's own hooks.json and stale
 spelling a cut could miss (dotted keys, inline tables, arrays of tables) and every line the scan
 cannot read is an `ArmError` before anything is touched. `withoutDesktopApp` now calls the shared
 `withoutTables`, its 40 tests unchanged and green. RED observed (6 failing), then 22 GREEN.
+
+L20 (2026-10-17, 22:21 by `date`; the clock jumped ten hours during a template build, likely a sleep)
+C3c committed `dde2216d` (gate green; the first try failed on a flaky `bin/check.test.mjs` test,
+"checkSensor stops a command that never exits", passed alone, not mine). STATE for a resume: C4 and
+C5 are written and GREEN in the session scratchpad, not yet in this worktree: `scratchpad/c4/evals/`
+holds C4 alone (home.mjs `settledBytes`; without.mjs `withoutDigest`; configs.mjs and
+codex-configs.mjs `name` on the current config; suite.mjs arms seeded from the template with a
+filter, pinned as `doc.arms[name] = { base, components, sha256 }`, a cut that moved refused as kind
+`arm`, minimal-with still exit 2; report.mjs `holdsCurrent` widened; tests in suite.test.mjs and
+report.test.mjs, RED then 7 GREEN); `scratchpad/tree/evals/` holds C4 plus C5 (report.mjs arms
+section: `armSection`, `costTotal`, `armLines`, `checkTrial` takes arms; 4 tests RED then GREEN).
+Next: copy C4 in, run the whole evals tests once, commit; then C5 the same way, plus a differential
+check that `node evals/report.mjs` over the committed F5 and F6 files prints the same bytes before and
+after; then gentle-ai assess over the slice from `924d29e`, Codex review, push, PR. T11: first
+fingerprints at 22:20 in `scratchpad/fp-1.json` (claude `a021507a2128`, codex `8fbed9dbd3b9`),
+built by `scratchpad/fp-build.mjs <worktree> <out> D:/jh23-fp-scratch`; rebuild hours later.
