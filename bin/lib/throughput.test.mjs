@@ -60,6 +60,8 @@ test('a day the log no longer covers from its start says from when it is covered
   const facts = gateFacts([start('b', '2026-10-16T10:00:00Z'), end('b', '2026-10-16T10:04:00Z')], { from, to });
   assert.equal(facts.partialFrom, '2026-10-16T10:00:00Z');
   assert.equal(gateFacts([start('a', '2026-10-15T20:00:00Z')], { from, to }).partialFrom, null);
+  // A log with no event covers nothing of the day, never all of it.
+  assert.equal(gateFacts([], { from, to }).partialFrom, '2026-10-17T00:00:00.000Z');
 });
 
 test('busy time is the union of the runs, so two gates at once count once', () => {

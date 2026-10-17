@@ -207,3 +207,41 @@ test('--against a window of another length is a usage error', async () => {
   assert.match(stderr, /equal windows/);
   assert.equal((await run(['--against', '2026-10-15'], { home })).code, 2);
 });
+
+test('a gate log that is missing, empty or unreadable never writes over a kept day, and a mistyped copy is a usage error', async () => {
+  const home = makeHome(GATES.slice(1));
+  const file = path.join(home, '.js-harness', 'throughput', ROOT.replace(/[^A-Za-z0-9]/g, '-'), '2026-10-16.json');
+  assert.equal((await run(['snapshot', '--day', '2026-10-16'], { home })).code, 0);
+  const partial = fs.readFileSync(file, 'utf8');
+
+  const missing = await run(['snapshot', '--day', '2026-10-16', '--gate-log', path.join(home, 'no-such-copy.jsonl')], { home });
+  assert.equal(missing.code, 2);
+  assert.match(missing.stderr, /no-such-copy\.jsonl: no such file/);
+
+  const empty = path.join(home, 'empty.jsonl');
+  fs.writeFileSync(empty, '');
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', empty], { home })).code, 1);
+  assert.equal(fs.readFileSync(file, 'utf8'), partial);
+});
+
+test('a day kept from a log that holds no gate of it is partial, so a fuller copy replaces it', async () => {
+  const home = makeHome();
+  const empty = path.join(home, 'empty.jsonl');
+  fs.writeFileSync(empty, '');
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', empty], { home })).code, 0);
+  const copy = path.join(home, 'gate-log.jsonl');
+  fs.writeFileSync(copy, GATES.map((line) => JSON.stringify(line)).join(String.fromCharCode(10)) + String.fromCharCode(10));
+  const { code, stdout } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home });
+  assert.equal(code, 0);
+  assert.match(stdout, /replaced a partial snapshot/);
+});
+
+test('an unreadable gate log keeps nothing', async () => {
+  const home = makeHome(GATES);
+  const denied = { ...fs, readFileSync: (file, ...rest) => (String(file).includes('gate-log') ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest)) };
+  const out = [];
+  const code = await throughputMain(['snapshot', '--day', '2026-10-16'], {}, { cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => NOW, run: fakeGit(), homedir: () => home, readCodexRuns: () => [], fileSystem: denied });
+  assert.equal(code, 1, out.join('\n'));
+  assert.match(out.join('\n'), /gate log could not be read/);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness', 'throughput')), false);
+});

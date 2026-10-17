@@ -296,9 +296,21 @@ function snapshot(ctx, flags) {
     ctx.err(`js-harness throughput: ${day} settles at ${new Date(settles).toISOString()}: only a day whose gates have ended is kept`);
     return 2;
   }
+  // A copy named that is not there would read as a log with no gate, which a kept day must never be written from.
+  for (const copy of flags['gate-log'] ?? []) {
+    try {
+      ctx.fileSystem.statSync(copy);
+    } catch {
+      throw new ThroughputArgError(`--gate-log ${copy}: no such file`);
+    }
+  }
   const file = path.join(ctx.folder, `${day}.json`);
   const kept = readSnapshot(file, ctx.fileSystem);
   const facts = rotatingFacts(day, ctx, flags['gate-log'] ?? null);
+  if (facts.unavailable['gate log']) {
+    ctx.err(`js-harness throughput: the gate log could not be read (${facts.unavailable['gate log']}): nothing is kept of ${day}`);
+    return 1;
+  }
   if (kept && !(kept.unreadable === undefined && fuller(facts, kept))) {
     ctx.err(`js-harness throughput: ${day} is already kept (${file}); a kept day is written again only by one that covers more of it`);
     return 1;

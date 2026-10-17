@@ -72,7 +72,9 @@ export function gateFacts(events, { from, to }) {
       load: Number.isFinite(start.load?.share) ? start.load.share : null,
     });
   }
-  return { gates, partialFrom: oldest !== null && Date.parse(oldest.at) > from ? oldest.at : null };
+  // A log with no event at all covers nothing of the day: partial from its end, so any copy that holds it is fuller.
+  if (oldest === null) return { gates, partialFrom: new Date(to).toISOString() };
+  return { gates, partialFrom: Date.parse(oldest.at) > from ? oldest.at : null };
 }
 
 /** The seconds the union of `[from, to]` intervals (ms) covers: two gates at once count once. */
@@ -248,7 +250,7 @@ export function throughputRows(days) {
   const hours = days.length * 24;
   const gates = all('gates');
   const unread = (source) => days.filter((day) => day.unavailable?.[UNAVAILABLE_KEY[source]]).map((day) => `${day.day} ${day.unavailable[UNAVAILABLE_KEY[source]]}`);
-  const partial = days.filter((day) => day.partialFrom).map((day) => `partial: ${day.day} from ${day.partialFrom.slice(11, 16)}Z`);
+  const partial = days.filter((day) => day.partialFrom).map((day) => (Date.parse(day.partialFrom) >= dayBounds(day.day).to ? `partial: ${day.day} not in the gate log` : `partial: ${day.day} from ${day.partialFrom.slice(11, 16)}Z`));
   const row = (label, source, value) => {
     const missing = unread(source);
     if (missing.length > 0) return { label, value: `not read: ${missing.join('; ')}`, source: SOURCES[source] };
