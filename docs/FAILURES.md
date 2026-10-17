@@ -52,8 +52,12 @@ A session stopped and asked him for a yes on a step that was not one of the thin
 - Seen: 2026-10-10 — relief file, line 119 — the orchestrator called the deferral of a test "his to
   accept" and JH 3 asked him; his words and the withdrawal at line 124; also
   odd/tasks/session-board.md:1598-1608
-- Control: owed — odd/tasks/rule-hierarchy.md — "The reply check: `bin/lib/reply.mjs`,
-  `bin/reply.mjs`"
+- Control: protocol — bin/lib/protocols-skill.mjs — "Ask only what is the user's; the project's" — since
+  2026-10-17
+- Was: owed — odd/tasks/rule-hierarchy.md — "The reply check: `bin/lib/reply.mjs`,
+  `bin/reply.mjs`"; that task landed as pull request 282, and the reply check turns back a reply with no
+  state or a decision while work runs, not a yes asked on a step that is not his, so the control is the
+  protocol written from this incident (section 1, its incident of 2026-10-09)
 - Proof: count of bare yes per session is 0 (owed: nothing prints it yet)
 
 ### assessment-counts-main
@@ -733,6 +737,11 @@ review covers everything the merge brought, code that already had its review.
   parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
   in its first part. A merge is read by what was written in it only at HEAD, so a detached
   worktree at c4b7a37 reviewed it in 1 part of 18 lines
+- Seen: 2026-10-14 — JH 8's `odd/tasks/gate-first.md`, T7 (observed) — the merge `cd2b689` of a
+  stacked base, `feat/gate-first` after it took `origin/main`, was read as the whole range from
+  `origin/main`: 4 parts, about 1.2M input tokens, for commits that each had a record, so
+  `5cccfc4..cd2b689` was recorded as a skip. Since T7 a stacked base whose own code commits each
+  have a record is read as the default branch is
 - Control: check — bin/codex-review.test.mjs — "is planned in two turns: the merge by what was
   written in it" — since 2026-10-16
 
@@ -942,8 +951,11 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
-- Control: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
-  document names a commit, and that commit is reachable from HEAD"
+- Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
+  reachable from HEAD, unless it rides with staged work" — since 2026-10-17
+- Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
+  document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
+  the check in the row citations (odd/tasks/commands-and-doctor.md, L10)
 
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
@@ -1004,8 +1016,10 @@ without that review, and the choice went to him.
   preflight status with `--base-ref origin/main --committed-only` ended `operation_timeout` (pre_native,
   retry_safe false) after about 25 s, on at least 5 runs between 03:22Z and 04:09Z (8 by the lead's count
   of 2026-10-17); reported as gentle-ai issue 5422, and the candidate's review was declined after it
-- Control: owed — odd/tasks/gate-wait.md — "three of its four sightings ran beside
-  a gate or a full machine"
+- Control: check — bin/lib/guard.test.mjs — "a gentle-ai review whose --base-ref is off the first-parent line of
+  its head is refused, naming the bases to give" — since 2026-10-17
+- Proof: `js-harness guard --hook` denies a gentle-ai review whose `--base-ref` is off its head's first-parent line; the
+  timeout itself is `js-harness-protocols` section 3 (one more run, then on, unreviewed, with Codex)
 
 ### rule-only-in-memory
 A rule lived only in an agent's memory note, so he repeated it and sessions already open did not get
@@ -1060,7 +1074,10 @@ this entry, so the lands it turned red have no cause.
   failed in 4 gates: the land candidate merge-queue-108380 at 01:36Z and 01:39Z, rules-row at 02:10Z, and
   rule-first-patterns at 03:49Z or jh26-commit-size at 18:20Z; the first three also failed four more tests of
   the same file
-- Control: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"
+- Control: check — bin/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
+  Codex runs of every day of the window together" — since 2026-10-17
+- Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
+  and the daily throughput table now names the failing tests of each day's gates
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken

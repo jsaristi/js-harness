@@ -32,7 +32,7 @@ import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-
 import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
 import { treeKey } from './lib/gate-tree.mjs';
-import { addedLines, resolveCitations } from './lib/citations.mjs';
+import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
@@ -531,19 +531,50 @@ function stagedDocuments(cwd, documents, spawn = spawnSync) {
  * documents (`odd/tasks/`), each code span that cites a `path:line` or a commit resolved against the folder and the
  * repository (`bin/lib/citations.mjs`), with one line for each that does not. It is INFO and stops nothing: documents
  * cite other branches and removed files on purpose, so it becomes a failure only once its false alarms have been
- * none over twenty commits. No row when no feature document is staged, or git does not answer. */
+ * none over twenty commits. It also reads each task the change checks off (T6, docs/FAILURES.md,
+ * record-states-wrong-fact: tasks were checked off while their files were in no commit), which names a commit HEAD
+ * reaches or rides with the work it checks off (`resolveTicks`). No row when no feature document is staged, or git
+ * does not answer. */
 export function checkCitations(cwd, spawn = spawnSync) {
   const git = hookGit(cwd, spawn);
   const diff = git?.(['diff', '--cached', '-U0', '--no-renames', '--no-relative', '--no-color', '--', 'odd/tasks/']);
   if (!diff) return [];
   // The cited file as this commit will hold it, from the index: the working tree may differ from it.
   // A file that ends in a newline has no line after it.
-  const lineCount = (file) => git(['show', `:${file}`])?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
+  const staged = (file) => git(['show', `:${file}`]);
+  const lineCount = (file) => staged(file)?.replace(/\r?\n$/, '').split(/\r?\n/).length ?? null;
   const commitExists = (id) => git(['cat-file', '-e', `${id}^{commit}`]) !== null;
-  const { checked, unresolved } = resolveCitations(addedLines(diff), { lineCount, commitExists });
+  const added = addedLines(diff);
+  const { checked, unresolved } = resolveCitations(added, { lineCount, commitExists });
   const counted = `${checked} citation${checked === 1 ? '' : 's'} in the lines this change adds to feature documents`;
-  const row = { name: 'citations', pass: true, info: true, detail: `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}` };
-  return [unresolved.length === 0 ? row : { ...row, lines: unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`) }];
+  let detail = `${counted}, ${unresolved.length === 0 ? 'all resolved' : `${unresolved.length} of them not resolved`}`;
+  const lines = unresolved.map((u) => `${u.file}:${u.line} \`${u.citation}\`: ${u.why}`);
+  // A file HEAD does not hold had no task checked off before.
+  const ticks = checkedOff(added, (file) => checkedTasks(git(['show', `HEAD:${file}`]) ?? ''));
+  if (ticks.length > 0) {
+    const head = git(['rev-parse', '-q', '--verify', 'HEAD^{commit}'])?.trim();
+    // `merge-base --is-ancestor` answers no with exit 1, an unrelated history included (Codex, 2026-10-17); any
+    // other exit, or no git, is no claim. `git` has already answered here, so the repository is the one guarded.
+    const reaches = (id) => {
+      const full = git(['rev-parse', '-q', '--verify', `${id}^{commit}`])?.trim();
+      if (!full || !head) return null;
+      try {
+        const asked = spawn('git', ['merge-base', '--is-ancestor', full, head], { cwd, encoding: 'utf8' });
+        if (!asked || asked.error) return null;
+        return asked.status === 0 ? true : asked.status === 1 ? false : null;
+      } catch {
+        return null;
+      }
+    };
+    const names = git(['diff', '--cached', '--name-only', '-z', '--no-relative']) ?? '';
+    const rides = names.split('\0').some((name) => name !== '' && !name.startsWith('odd/tasks/'));
+    const text = (file, line) => taskText(staged(file) ?? '', line);
+    const off = resolveTicks(ticks, { text, commitExists, reaches, rides });
+    detail += `; ${ticks.length} task${ticks.length === 1 ? '' : 's'} checked off, ${off.length === 0 ? 'each in a commit HEAD reaches or in this one' : `${off.length} of them in no commit HEAD reaches`}`;
+    lines.push(...off.map((u) => `${u.file}:${u.line} ${u.id}${u.citation === null ? '' : ` \`${u.citation}\``}: ${u.why}`));
+  }
+  const row = { name: 'citations', pass: true, info: true, detail };
+  return [lines.length === 0 ? row : { ...row, lines }];
 }
 
 /** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
@@ -901,13 +932,13 @@ const SENSOR_OUTPUT_LIMIT = 64 * 1024 * 1024;
  * `silence` (ms) bounds the stretch with no output instead: each chunk the command writes restarts it, and
  * past it the tree is killed as at `timeout`, the error then saying `silent: true`. It needs the pipes, so
  * with `inherit` it does nothing; 0 or none is no such bound. */
-export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors }) {
+export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = false, killTree: tree = killTree, killSurvivors: survivors = killSurvivors, spawn: start = spawnChild }) {
   return new Promise((resolve) => {
     const out = { stdout: '', stderr: '' };
     let child;
     const startedAt = Date.now(); // before the spawn: the shell cannot have been created earlier
     try {
-      child = spawnChild(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+      child = start(command, { cwd, env, shell: true, windowsHide: true, detached: process.platform !== 'win32', stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       resolve({ status: null, signal: null, ...out, error });
       return;
@@ -952,9 +983,19 @@ export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = f
       const error = extra ?? (timedOut ? timedOutError() : undefined);
       resolve({ ...exit, ...out, ...(error && { error }), ...(sweepError && { sweepError: sweepError.message }) });
     };
-    // Kills the tree for a time that ran out, the silence's or the whole run's, whichever came first.
+    // Kills the tree for a time that ran out, the silence's or the whole run's, whichever came first. The decision
+    // waits one turn of the loop: an exit the system already holds is delivered after the timers, so a command that
+    // ended as its time ran out is reported by its exit, not as a timeout (first-version T6h, JH 25's verifier).
+    let chunks = 0;
     const outOfTime = (bySilence) => {
       if (timedOut || exitedAt !== undefined) return;
+      const seen = chunks;
+      setImmediate(() => {
+        if (done || timedOut || exitedAt !== undefined || (bySilence && chunks !== seen)) return;
+        kill(bySilence);
+      });
+    };
+    const kill = (bySilence) => {
       timedOut = true;
       silent = bySilence;
       clearTimeout(timer);
@@ -972,6 +1013,7 @@ export function runSensor(command, { cwd, env, timeout, silence = 0, inherit = f
     for (const stream of inherit ? [] : ['stdout', 'stderr']) {
       child[stream].setEncoding('utf8');
       child[stream].on('data', (chunk) => {
+        chunks += 1;
         if (out[stream].length < SENSOR_OUTPUT_LIMIT) out[stream] += chunk;
         if (!timedOut && exitedAt === undefined) listen();
       });
@@ -1563,14 +1605,18 @@ function ownTicketRows(reason, cwd, lock, env, deps) {
 }
 
 /** Claims the ticket of the session of `lock` for the gate that checks `cwd` (`claimTicket`), and writes in
- * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
+ * the gate log what the claim did: the tickets its sweep found expired, those it left because their file was
+ * held, and the claim, with the gates that
  * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
- * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines. */
+ * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines, and
+ * `deps.claimTicket` for the claim. The code of a hold goes in `error`: the log's `code` is the key of a tree. */
 export function claimOf(lock, cwd, deps, { named = false } = {}) {
-  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd), named });
+  const claim = deps.claimTicket ?? claimTicket;
+  const { ticket, expired, unclaimed = [] } = claim({ home: lock.home, session: lock.session, cwd: path.resolve(cwd), named });
   if (lock.log === false) return ticket;
   const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
   for (const gone of expired) logTicket(lock.home, 'first-expired', gone, {}, written);
+  for (const { ticket: held, code } of unclaimed) logTicket(lock.home, 'first-unclaimed', held, { error: code, cwd: path.resolve(cwd), pid: process.pid }, written);
   if (ticket) {
     let waiting = [];
     try {

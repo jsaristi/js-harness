@@ -53,7 +53,11 @@ const USAGE = [
   '    session-stall, 60), and again each time that quiet doubles; one already stalled at the start is named on an',
   '    "already stalled:" line and waits for its doubling; with a WINDOWS line (exit 0) when the daily Windows run,',
   '    read every --windows minutes (60; 0 for never; js-harness windows-daily reads it by hand), is red and was not',
-  '    told before; or after --max hours (10, exit 1);',
+  '    told before; with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
+  '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
+  '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
+  '    js-harness throughput snapshot does, the settled days of the last throughput-backfill-days (14) that the gate',
+  '    log holds and that have no snapshot, never while a gate holds the lock;',
   '    channel-watch ends with the first notice in the channel record written by a session other than its owner',
   '    (exit 0), or after --for minutes (30, exit 1).',
   '  Exit 2: a usage error, and nothing is done.',
@@ -396,6 +400,32 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return result.told;
   };
+  // The throughput review (odd/tasks/throughput-review.md, S4): each tick keeps the settled days that have no
+  // snapshot and reads the reviews due; a due one ends the loop when it falls due and again each time its wait,
+  // plus an hour, doubles (due, +1, +3, +7 h). What the tick said is said once each, as `unread` is.
+  const skipDays = new Set();
+  const throughputSaid = new Set();
+  const duesAt = async (now) => {
+    let result;
+    try {
+      result = await ctx.throughputTick({ home, cwd: ctx.cwd, slug, now, run: boundedRun, skip: skipDays });
+    } catch (err) {
+      result = { lines: [`throughput: the tick failed (${err.message})`], dues: [] };
+    }
+    if (result === null) return [];
+    for (const line of result.lines) {
+      if (!throughputSaid.has(line)) ctx.out(line);
+      throughputSaid.add(line);
+    }
+    return result.dues;
+  };
+  const dueCrossing = (due, now) => Math.floor(Math.log2(Math.max(0, now - Date.parse(due.at)) / 3600000 + 1));
+  const dueTold = new Map();
+  // Every line that ends the loop is followed by the reviews still due, so whatever wakes the lead names them.
+  const ending = (lines, dues, code) => {
+    for (const line of [...lines, ...dues.map((due) => due.line)]) ctx.out(line);
+    return code;
+  };
   const started = ctx.now();
   const end = started + max * 3600000;
   const gateDir = gateLogDir(home);
@@ -417,32 +447,26 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it`);
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
     ctx.out(`already stalled: ${item.title ?? `work session ${item.number}`}, quiet ${spanOf(item.quietMs)}`);
   }
+  for (const due of await duesAt(started)) {
+    dueTold.set(due.id, dueCrossing(due, started));
+    ctx.out(`already due: ${due.line.replace(/^DUE: /, '').split(':')[0]}, since ${hourOf(Date.parse(due.at))}`);
+  }
   for (;;) {
     const last = lastWrite();
     const now = ctx.now();
-    if (now - last >= quiet * 60000) {
-      ctx.out(`STALL: no gate-log or channel write since ${hourOf(last)}`);
-      return 0;
-    }
+    const dues = await duesAt(now);
+    if (now - last >= quiet * 60000) return ending([`STALL: no gate-log or channel write since ${hourOf(last)}`], dues, 0);
     const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
-    if (fresh.length > 0) {
-      for (const item of fresh) ctx.out(stalledLine(item));
-      return 0;
-    }
+    if (fresh.length > 0) return ending(fresh.map(stalledLine), dues, 0);
     const windowsLine = await windowsTold();
-    if (windowsLine !== null) {
-      ctx.out(windowsLine);
-      return 0;
-    }
-    if (now >= end) {
-      ctx.out(`js-harness loop heartbeat: ${plural(max, 'hour')} cap reached (${hourOf(now)})`);
-      return 1;
-    }
+    if (windowsLine !== null) return ending([windowsLine], dues, 0);
+    if (dues.some((due) => dueCrossing(due, now) > (dueTold.get(due.id) ?? -1))) return ending([], dues, 0);
+    if (now >= end) return ending([`js-harness loop heartbeat: ${plural(max, 'hour')} cap reached (${hourOf(now)})`], dues, 1);
     await ctx.sleep(Math.min(every, end - now, last + quiet * 60000 - now));
   }
 }
@@ -535,6 +559,8 @@ export async function loopMain(
     readFile = (file) => fs.readFileSync(file, 'utf8'),
     // The heartbeat's reading of the daily Windows run: null when it is not due, else what it found.
     windowsDaily = async (options) => (await import('./lib/windows-daily.mjs')).windowsDailyTick(options),
+    // The heartbeat's throughput tick: keeps the settled days with no snapshot, and says which review is due.
+    throughputTick = async (options) => (await import('./throughput.mjs')).throughputTick(options),
   } = {},
 ) {
   let parsed;
@@ -548,7 +574,7 @@ export async function loopMain(
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
   const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
   const slug = projectSlug(mainCheckout(run, cwd));
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run, windowsDaily };
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run, windowsDaily, throughputTick };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {

@@ -141,7 +141,7 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
 - [x] T5 (S4; from session-channel T7) The row `session-classes` of `doctor`; and the explicit
   `install` flag that writes `crossSessionInbound: "accept"`, recorded and undone by `uninstall`
   (his answer, L3). Route: inline.
-- [ ] T6 (`record-states-wrong-fact` of docs/FAILURES.md) The row `citations` also checks that a task
+- [x] T6 (`record-states-wrong-fact` of docs/FAILURES.md) The row `citations` also checks that a task
   the change checks off in a feature document names a commit, and that commit is reachable from HEAD
   (not `main`: a feature branch checks its tasks off before it merges), building on
   `bin/lib/citations.mjs`. It answers the entry's sixth sighting, `odd/tasks/gate-log.md` T3 to T8
@@ -151,7 +151,7 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   carries its evidence. The row stays INFO by its own rule. Test first; when done, the entry's
   Control becomes that test. The lead's order of 2026-10-16 22:10Z: "fix the cause test first if it
   breaks shipped behavior, else open its task in the owning feature doc and settle the entry";
-  nothing shipped is broken, so it is a task.
+  nothing shipped is broken, so it is a task. Done by JH 21 on `feat/citations-reachable` (L10).
 
 ## Log
 - L1 — The opening of this session, by the orchestrator "JH ORQ · js-harness", 2026-10-14 (a claim,
@@ -264,6 +264,27 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   citations counted the lines of a cited file in the working tree, not in the index the commit holds,
   so an unstaged deletion read as no such file and unstaged lines hid a bad citation. Fixed with its
   test: the line count reads the staged blob (git show :path).
+- L10 — 2026-10-17, T6, by `JH 21 · reserva de la noche` on `feat/citations-reachable`, from the
+  lead's order of 11:59Z (a claim, not his words): "the citations row checks that a checked-off task
+  names a commit reachable from HEAD (INFO only); FAILURES record-states-wrong-fact gets its
+  control". A task is checked off when an added `- [x] T…` line names an id HEAD's file did not
+  hold checked off, so a reworded checked line checks nothing off. Its text is that line and the
+  indented lines that continue it, read from the index, since a `-U0` diff holds only the changed
+  line. One reading made here: a task checked off beside staged work outside `odd/tasks/` passes
+  with no commit named, because it is checked off in the commit being made and a tick cannot name
+  its own commit; checked off alone, it must name one. "Reachable" is `git merge-base --is-ancestor`
+  answering yes; its no, exit 1, is not reachable, and any other answer is no claim. RED: the new test
+  of `bin/check-citations.test.mjs` failed (no task part in the detail); GREEN: 4/4 there and 4/4 in
+  `bin/lib/citations.test.mjs`. The entry's Control is now that test. Committed as `0308678`; its own
+  gate's row said "1 task checked off, each in a commit HEAD reaches or in this one".
+  gentle-ai on `0308678`: medium, 180 lines, review not due (`under_budget`). Codex on
+  `db31c96..0308678` (87,653 input tokens): incorrect (0.98), two P2s, both fixed in the next commit
+  with one test seen red: a commit of an unrelated history read as no claim, since `merge-base` has
+  no base to print (now `--is-ancestor`, whose exit 1 is a no); a nested task's text ran on into its
+  siblings and could borrow their commit (now it stops at the next task line or a line no deeper).
+  That fix is `96cd531`; gentle-ai on `96cd531`, assessed by its gate: medium, 57 lines, review not
+  due (`under_budget`). Codex's recheck on `0308678..96cd531` (39,295 input tokens): correct (0.98),
+  both findings fixed.
 
 ## Next step
 Codex review of the index fix (`--base fbad613`), push to update PR 144, tell the lead, then pause

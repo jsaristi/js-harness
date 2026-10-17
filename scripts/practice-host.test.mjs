@@ -13,10 +13,25 @@ const [load, skill, compact] = [1, 2, 3].map((n) => readHostStream(fixture(n)));
 // The first call answered with the first heading of the practice AGENTS.md: the word it was asked for.
 const WORD = '# PROJECT';
 
-test('the three recorded calls pass, each as what it proves', () => {
-  assert.deepEqual(hostCallProblems('load', load, { word: WORD }), []);
-  assert.deepEqual(hostCallProblems('skill', skill), []);
-  assert.deepEqual(hostCallProblems('compact', compact), []);
+// The rules' turn-start hook (odd/tasks/rule-hierarchy.md, T16f) was installed after these calls were recorded: what it
+// adds to a stream, one succeeded response, is added here, named as its event is, with no output.
+const ruleHook = (name) => ({ name, exitCode: 0, outcome: 'success', stdout: '' });
+const withRules = (stream, name) => ({ ...stream, hooks: [...stream.hooks, ruleHook(name)] });
+
+test('the three recorded calls pass, each as what it proves, with the rules hook its event adds', () => {
+  assert.deepEqual(hostCallProblems('load', withRules(load, 'UserPromptSubmit'), { word: WORD }), []);
+  assert.deepEqual(hostCallProblems('skill', withRules(skill, 'UserPromptSubmit')), []);
+  assert.deepEqual(hostCallProblems('compact', withRules(compact, 'SessionStart:compact')), []);
+});
+
+test('each of the three events of the rules hook is checked: a turn, a compaction and a sub-agent (T16f)', () => {
+  assert.deepEqual(hostCallProblems('load', load, { word: WORD }), ['no UserPromptSubmit hook ran']);
+  assert.deepEqual(hostCallProblems('compact', compact), ['no SessionStart:compact hook ran beside the one of js-harness resume, so the rules hook did not']);
+  const failed = { ...ruleHook('UserPromptSubmit'), exitCode: 2, outcome: 'error' };
+  assert.deepEqual(hostCallProblems('load', { ...load, hooks: [...load.hooks, failed] }, { word: WORD }), ['a UserPromptSubmit hook did not succeed (exit 2, error)']);
+  const subagent = { init: skill.init, hooks: [ruleHook('UserPromptSubmit'), ruleHook('SubagentStart:general-purpose')], result: { ...skill.result, result: 'done' } };
+  assert.deepEqual(hostCallProblems('subagent', subagent), []);
+  assert.deepEqual(hostCallProblems('subagent', { ...subagent, hooks: [ruleHook('UserPromptSubmit')] }), ['no SubagentStart hook ran']);
 });
 
 test('the stream is read into its init, its hook responses and its last result, whatever else it holds', () => {
@@ -29,7 +44,7 @@ test('the stream is read into its init, its hook responses and its last result, 
 test('a load with a skill missing, a file tool, a failed start hook, two turns or no word is refused, each by name', () => {
   const broken = {
     init: { ...load.init, skills: ['js-harness'], tools: ['Read'] },
-    hooks: load.hooks.map((hook, i) => (i === 1 ? { ...hook, exitCode: 1, outcome: 'error' } : hook)),
+    hooks: [...load.hooks.map((hook, i) => (i === 1 ? { ...hook, exitCode: 1, outcome: 'error' } : hook)), ruleHook('UserPromptSubmit')],
     result: { ...load.result, num_turns: 2, result: 'no idea' },
   };
   assert.deepEqual(hostCallProblems('load', broken, { word: WORD }), [
@@ -45,11 +60,13 @@ test('a stream with no init, no hook or no result says so', () => {
   assert.deepEqual(hostCallProblems('load', { init: null, hooks: [], result: null }, { word: WORD }), [
     'the stream has no init event',
     'no SessionStart:startup hook ran',
+    'no UserPromptSubmit hook ran',
     'the stream has no result',
   ]);
   assert.deepEqual(hostCallProblems('skill', { init: skill.init, hooks: [], result: skill.result }), ['no PostToolUse:Skill hook ran']);
   assert.deepEqual(hostCallProblems('compact', { init: compact.init, hooks: compact.hooks.filter((hook) => hook.name !== 'SessionStart:compact'), result: compact.result }), [
     'no SessionStart:compact hook printed the words of js-harness resume',
+    'no SessionStart:compact hook ran beside the one of js-harness resume, so the rules hook did not',
   ]);
 });
 
@@ -60,7 +77,7 @@ test('a skill call that did not quote the skill is refused', () => {
 });
 
 test('an error result is refused with its subtype', () => {
-  assert.deepEqual(hostCallProblems('compact', { ...compact, result: { ...compact.result, subtype: 'error_during_execution', is_error: true } }), [
+  assert.deepEqual(hostCallProblems('compact', { ...withRules(compact, 'SessionStart:compact'), result: { ...compact.result, subtype: 'error_during_execution', is_error: true } }), [
     'the result is not a success (error_during_execution)',
   ]);
 });

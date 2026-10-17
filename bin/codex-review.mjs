@@ -18,6 +18,8 @@
 // reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):
 // its diff with the tree that merging its two parents again gives, conflict markers included, which is the
 // resolution of its conflicts and any edit made in it, not what the merge brought in (odd/tasks/merge-review.md).
+// So is a merge of a stacked base, a branch off the default branch each of whose own code commits has a record
+// (odd/tasks/gate-first.md, T7).
 //
 // A review runs on one model at one effort, `REVIEW_MODEL` at `REVIEW_EFFORT`, which the command names to
 // Codex itself and no flag changes (Sebastián, 2026-10-08; odd/tasks/codex-review-cost.md). The session's
@@ -176,7 +178,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, re
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, secondRecheckRefused,
+  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -219,7 +221,7 @@ const USAGE =
   `--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
-  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -942,8 +944,9 @@ const SUBMODULE_AS_A_FILE = '--submodule=short';
 const MERGE_OWN_PROMPT = 'The review of a merge is asked with this command\'s own prompt: the sentence Codex writes for `--base` names a diff of two commits, not what was written in a merge.';
 
 /** The line that says a review reads a merge by what was written in it (`mergeStart`). */
-export function mergeReviewSaid({ head, side, branch }) {
-  return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, a commit of ${branch}: its review reads what was written in the merge (its diff with the automatic merge of its parents), not what the merge brought in.`;
+export function mergeReviewSaid({ head, side, branch, stacked = false }) {
+  const of = stacked ? `a stacked base off ${branch}, each of whose own code commits has a record` : `a commit of ${branch}`;
+  return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, ${of}: its review reads what was written in the merge (its diff with the automatic merge of its parents), not what the merge brought in.`;
 }
 
 /** The line a run says before turn `index` of a range cut at the merge `merge` below `head` (odd/tasks/merge-below-head.md). */
@@ -968,7 +971,7 @@ function turnsLines(turns) {
   const sends = one.inputTokens === null ? '' : `, about ${thousands(one.inputTokens)} input tokens`;
   return [
     turnSaid(1, turns),
-    mergeReviewSaid({ head: turns.merge, side: turns.side, branch: turns.branch }),
+    mergeReviewSaid({ head: turns.merge, side: turns.side, branch: turns.branch, stacked: turns.stacked === true }),
     ...planLines(first),
     turnSaid(2, turns),
     ...planLines(second),
@@ -1387,7 +1390,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const atMerge = mergeStart(root, { given, tip: head, spawn, where });
     if (atMerge !== null) {
       merge = { side: atMerge.side, branch: atMerge.branch, auto: atMerge.auto };
-      log(mergeReviewSaid({ head, ...merge }));
+      log(mergeReviewSaid({ head, ...merge, stacked: atMerge.stacked === true }));
       base = atMerge.from;
       return atMerge.from;
     }
@@ -1490,13 +1493,19 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       );
       return 1;
     }
+    // Codex is looked for before anything is made: the turn would find it missing only after its worktree was
+    // added (the verifier of pull request 338).
+    if (!codexVersion(spawn, platform, childEnv(env, platform))) {
+      error(NO_CODEX);
+      return 1;
+    }
     log(turnSaid(1, turns));
     const { commonGitDir: common } = where;
     if (!common) {
       error('Could not find the git directory, where the worktree of the merge is made, so nothing was started or recorded.');
       return 1;
     }
-    sweepTurnWorktrees(root, { commonGitDir: common, spawn });
+    sweepTurnWorktrees(root, { commonGitDir: common, spawn, now: () => now().getTime() });
     const place = addTurnWorktree(root, turns.merge, { commonGitDir: common, spawn, now: () => now().getTime() });
     if (place === null) {
       error(`Could not make a worktree at the merge ${turns.merge.slice(0, 7)}, so nothing was started or recorded.`);
@@ -1526,8 +1535,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.`);
       return 1;
     }
-    if (!records.some((record) => record.base === turns.from && record.head === turns.merge)) {
+    const written = records.findLast((record) => record.base === turns.from && record.head === turns.merge);
+    if (written === undefined) {
       error(`The turn at the merge ${turns.merge.slice(0, 7)} wrote no record, so the commits after it were not reviewed.`);
+      return 1;
+    }
+    // A record whose run line never reached the log reads as owing nothing, which says nothing here.
+    if (!runsLogged(written, runs)) {
+      error(`The run line of the turn at the merge ${turns.merge.slice(0, 7)} is not in the run log, so whether it owes a correction cannot be said and the commits after it were not reviewed: run the review again.`);
       return 1;
     }
     if (recheckState({ from: turns.merge, records, runs }).kind !== 'review') {

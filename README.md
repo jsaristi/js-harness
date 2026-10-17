@@ -10,7 +10,7 @@ It is plain Node with no dependencies. It needs Node 22 or newer and git.
 
 ## Install
 
-The repository is private: the install needs a GitHub account with access to it.
+The repository is public on GitHub; the install reads it from there.
 
 ```sh
 npm i -g github:jsaristi/js-harness
@@ -22,8 +22,9 @@ js-harness init
 1. `npm i -g` puts the `js-harness` command on the path.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json`, `AGENTS.md`, an empty failures
-   register (`docs/FAILURES.md`) and the pre-commit gate of that project.
+3. `js-harness init`, in a git repository, writes `harness.json` (the pin, and `"reply": true`,
+   which turns the reply check on), `AGENTS.md`, an empty failures register (`docs/FAILURES.md`)
+   and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -35,6 +36,10 @@ js-harness uninstall
 js-harness uninstall --global
 npm rm -g js-harness
 ```
+
+`uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
+and names them; `uninstall --global --full` removes them too. Files you modified and the memory
+notes themselves are kept either way.
 
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
@@ -177,9 +182,16 @@ Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windo
 told before. The time of the last reading is kept in a file, so a heartbeat started again after a
 `STALL` still reads it once an hour.
 
+Each tick also keeps the throughput snapshot of every settled day of the last
+`throughput-backfill-days` that the gate log holds and that has none, never while a gate holds
+the lock, and reads the throughput reviews due (`js-harness throughput status`). One that falls
+due ends the heartbeat with its `DUE:` line, again an hour, three and seven after; and every line
+that ends it is followed by the `DUE:` lines still open, so the daily review never waits on the
+lead remembering it.
+
 ```console
 $ js-harness loop heartbeat
-js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it
 STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
 ```
 
@@ -198,6 +210,10 @@ js-harness loop: stopped heartbeat: 2 processes, none left (looked at 05:18)
 Inside a project, moves it to the version its `harness.json` pins. With `--global`, or outside a
 git repository, writes the machine install again.
 
+The lines of `AGENTS.md` that `init` wrote for any project sit between two `js-harness block`
+marks. While the project has not edited them, `sync` writes them as the running version has them,
+for the project to commit; an edited block is kept and said.
+
 ```console
 $ js-harness sync
 up to date at 0.1.0
@@ -206,6 +222,9 @@ up to date at 0.1.0
 ### js-harness uninstall
 
 Inside a project, removes what `init` wrote; with `--global`, removes what `install` wrote.
+`--global --full` also removes the memory snapshots, the only copy of what a pass changed; files
+you modified and the memory notes themselves are kept either way. Neither removes a project's
+memory folder while a pass holds its lock: the line says what releases it.
 
 ```console
 $ js-harness uninstall
@@ -239,7 +258,7 @@ pin and running version: match
 
 ### js-harness update
 
-Says whether a newer release exists: the newest `vX.Y.Z` tag of the private repository, read with
+Says whether a newer release exists: the newest `vX.Y.Z` tag of the repository, read with
 `git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
 another repository). No release is tagged before 1.0.0, so for now it says that and how to get
 the newest copy. When the tags cannot be listed it says why and exits 1.
@@ -364,7 +383,13 @@ and `CI fallbacks` read the gate log's lines of gates sent to GitHub's machines;
 the recorder of a row reached main says `not recorded` on that row, since nothing wrote a line.
 `test files` reads the time of each test file from the local gates that traced their tests
 (exact tests on), kept beside the gate log in `test-times.jsonl`; a day kept from copies of the
-gate log has no times and says so.
+gate log has no times and says so. `gentle-ai reviews` counts the reviews gentle-ai acknowledged from the
+records it keeps in the git common folder, so it reaches back before the row existed; when each started is
+kept by the pause hook while the review runs, from the first tool call that sees it, so a day before this
+machine began recording them says `started not recorded`. `uninstall` keeps those starts with the snapshots.
+`questions` reads the channel's question notices to the answer or withdrawal that closed each, numbered as the
+board numbers them: how long an answer took to be relayed, and, from answer notices that keep them, when the
+question was shown and answered.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17
@@ -388,13 +413,24 @@ archived copies of the log instead, for a day the live log has lost; a copy made
 settled may lack its last gates, so the day is kept as partial until then. A copy is made no
 earlier than its modification time; one that kept its source's time (`cp -p`) says when it was
 made with `--copied-at <YYYY-MM-DDTHH:MMZ>`, never a time after now. `throughput status` lists
-the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
+the kept days and exits 1 naming each day since the first one kept that has none, or that none
+is kept at all, since a project whose snapshots never ran must not read as fine. Uninstall
 leaves the snapshots in place.
+
+`status` then prints a `DUE:` line for each review owed, which changes no exit code. The review
+of the last settled day is due a day after the last one recorded; once the last
+`throughput-quiet-runs` reviews found nothing it is due `throughput-quiet-days` after it, and one
+that finds candidates makes it daily again. `throughput reviewed --day <day> --found
+nothing|candidates` records a review, `throughput shipped <item> [--day <day>]` records a change
+that shipped, and each ship day owes a re-measure of the `throughput-compare-days` after it
+against as many before, everything shipped that day compared together, until `throughput
+reviewed --shipped <day>` records it. The outcomes go to `outcomes.jsonl` beside the snapshots.
 
 ```console
 $ js-harness throughput status
 2026-10-15  kept
 2026-10-16  kept
+DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing|candidates
 ```
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by
@@ -436,6 +472,24 @@ PASS  odd/tasks/codex-parity.md
 PASS  odd/tasks/codex-review-cost.md
 …
 ```
+
+### js-harness summary
+
+Prints the summary a work session leaves when it finishes, the file the lead reads before it archives
+the session. It is kept to reverse-engineer how the work went later, so each section holds facts with
+their evidence (a pull request, a commit, a `path:line`, a command and its output), not prose: the goal
+and the opening, the user's words that started it, what was delivered, the decisions and whose they
+were, what failed and what was learned, what is left and who holds it, and the cost.
+
+```console
+$ js-harness summary path --title "JH 24 · gate más rápido"
+docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md
+$ js-harness summary template --title "JH 24 · gate más rápido" > docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md
+```
+
+The file is named by the day and by the title's letters and digits, without accents, as the
+session's opening is. The session fills every section, commits and pushes the file, and closes with
+it (`notify --kind closed --summary`, below).
 
 ### js-harness failures
 
@@ -501,8 +555,9 @@ read and cost, with how close that estimate came on the last reviews this machin
 starts nothing; a run records in each part's run line the figures it was planned at, which that
 line reads; `--unavailable <reason>` records a skip.
 
-A merge of the default branch is reviewed by what was written in it, not by what it brought in. At
-HEAD that is one review. Below HEAD, after code commits that each have a record, the range is cut
+A merge of the default branch is reviewed by what was written in it, not by what it brought in, and
+so is a merge of a stacked base: a branch off the default branch each of whose own code commits has
+a record. At HEAD that is one review. Below HEAD, after code commits that each have a record, the range is cut
 in two turns where two cost less than one review (a part counted as 100 changed lines): the merge,
 in a worktree at it that the run removes, then the commits after it. Each turn writes its record;
 a merge whose review owes a correction stops the run before the commits after it.
@@ -577,6 +632,19 @@ as the gate log names them, by a note to that session's number in the channel, w
 (`js-harness notify --kind ready --pr <n>`); one that sent none is not told, and the lead relays it. The
 same reason is told once for one ready notice. Each left-out entry of the record keeps the failing
 tests of a red (`failing`) and the number of the session told (`told`, or `null`).
+After it lands, a land removes the worktree of each pull request it landed, with `git worktree remove` and
+never `--force`, when nothing in it can be lost: its head is in the main it pushed, `git status` shows
+nothing, ignored files included (the removal takes them, and no branch brings them back), its index has
+not changed for 10 minutes, and it is neither another app's (the Claude app's under `.claude/worktrees`,
+the Orca app's under `orca/workspaces`, which those apps manage), the main one, a locked one nor the
+one the land runs from. The branch stays, so `git worktree add` brings it back; the record names each one removed (`removed`, each `{ pr, path }`). A session still open in such a
+worktree that staged nothing for 10 minutes is not seen: on Windows the removal of a folder in use fails
+and is said; elsewhere the session loses its folder.
+`--prune` removes by the same rule every worktree on a branch origin/main holds, whatever landed it, after
+a fetch; it asks about no pull request, moves nothing and writes no record. `js-harness doctor` counts
+those worktrees in its `worktrees` row, a gap that names `--prune` and each one; its hook, run at every
+session start, does not count them, since that asks a `git status` of each. Each git call of that count
+stops after 20 seconds, as the heartbeat bounds its commands: a worktree whose git hangs is not counted.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
@@ -653,7 +721,10 @@ watchdog task: off
 
 The board of the project's recent Claude Code sessions: each one's state, context size and
 last reply, the worktrees and their feature plans, the running gates, the open pull
-requests and whether a memory hygiene pass is due. It only reads. `--watch` waits until the board changes in a way that needs a
+requests and whether a memory hygiene pass is due. It only reads. A session is listed when its
+transcript changed in the last `--hours` (12 by default), and also, up to seven days back, when its
+last call has had no result for 15 minutes: a session the host holds on a card writes nothing, and
+the board keeps it with the line that the host may be holding it for approval. `--watch` waits until the board changes in a way that needs a
 decision; `--address <role>` prints the title of the session that holds a role; `--quote
 <transcript> <line>` prints one message the user sent; `--measures` prints, for each compaction
 the host made, whether the session was told the pause and committed its feature document (the
@@ -661,6 +732,9 @@ orchestrator may write a line in its relief file instead), and how many compacti
 those facts (nobody announces a compaction: he does not compact by hand); then the reliefs of the record (each `relieved` notice, judged by the context its relieved session was at: filled at the pause or another reason) and the Log lines that name a reopening, as candidates for the lead. Under each roster row's
 mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
 and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
+A session that closed with its summary (`notify --kind closed --summary`) and is not archived yet
+gets a `to archive:` line naming the file: the lead reads it, then archives the session, first
+turning its Remote Control off when the host refuses it as live work.
 
 ```console
 $ js-harness sessions --address orchestrator
@@ -688,15 +762,17 @@ unseen: 1 to clear
 Keeps the project's Claude Code memory small and true. The index of that memory is read on every
 turn of every session, and in this repository it grew from 233 to 10,917 characters in 18 days with
 nothing watching it. `memory status` says whether a hygiene pass is due and why: no verified pass
-yet, the index over 4,000 bytes, a line over the host's 150 characters, a link to no file or a note
-with no line, a rule note written since the last pass, or 7 days since it with notes written since.
+yet, the index over its budget (rule `memory-index-bytes`), a line over the host's 150 characters, a
+link to no file or a note with no line, a rule note written since the last pass, or the cadence (rule
+`memory-pass-days`) passed since it with notes written since. `js-harness rules <id>` prints each value.
 It reads the main checkout's memory folder, so a worktree sees the same notes, and exits 1 when a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the
 user is lost and no file another session wrote is overwritten, and an undo that puts back only what
 nobody wrote since and refuses while another pass holds the lock. `uninstall --global` removes that
 folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
-so it is kept, with its journal, and its stamps are named. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+so it is kept, with its journal, and its stamps are named; `uninstall --global --full` removes them
+too. Neither removes a project under a pass. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
 
 ```console
 $ js-harness memory status
@@ -767,6 +843,12 @@ address of the orchestrator: no single one now (sessions --address exit 1): …
 A pull request ready to land is announced with `--kind ready --pr <number>`: the record keeps
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which
 session a pull request belongs to from the record, even when the notice was sent from `main`.
+
+A session gives its work back with `--kind closed --summary <file>`, the summary it leaves
+(`js-harness summary`, above): the record keeps the file, and the lead reads it before it archives
+the session. The notice is refused, with exit 1 and nothing written, while a section of the file is
+missing or empty, or while neither origin/main nor the session's branch on origin holds it as it is
+in the worktree: commit it and push it first. A closed notice without `--summary` is a usage error.
 
 The record stamps every notice with the clock, so the text needs no hour. A text that opens with
 one as its sending (`19:48 JH ORQ: …`, or after the label, `JH 5, 19:48: …`) more than a minute
@@ -869,7 +951,9 @@ standard input and refuses seven things: a sub-agent launched on a model the pro
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a shell command with backticks
-inside double quotes, which bash runs as commands; a heavy `node --test` outside a gate turn while
+inside double quotes, which bash runs as commands; a recursive `rm` or an `rmdir` of a drive's root or a
+folder at its top, which the host holds for the user even in bypass mode, with where to put such a folder
+instead (below the project's worktrees folder, or the session's scratchpad); a heavy `node --test` outside a gate turn while
 another gate holds the machine's lock or an eval batch runs, heavy being several files, or one file
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
 while its trials run, and `uninstall` removes that folder with the lock's); and a `Write` or `Edit` that puts a line
@@ -934,6 +1018,7 @@ markdown is taken off, followed by the end of the line or a mark such as a dash 
 (`**Working** — the gate wakes me`); a label inside a sentence, or a sentence that only begins
 with its word (`Working on the docs`), is none.
 
+`init` writes `"reply": true` in a new project's `harness.json`; `false` turns the check off.
 `"reply": true` takes the English labels (`Working`, `Decision`, `Cut`, `Finished`; `What it is`,
 `Where it goes`, `What sending it does`). An object names the project's own, each over the
 English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión", "cut":

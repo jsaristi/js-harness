@@ -7,6 +7,8 @@ import { notifyMain, readyProblems } from './notify.mjs';
 import { sessionsMain } from './sessions.mjs';
 import { channelDir, findOpenings, openingFileName, openingsDir, readNotices, recordPath, reliefPath, reliefStamp } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { summaryTemplate } from './lib/summary.mjs';
+import { spawnSync } from 'node:child_process';
 
 // Every test has a machine of its own in the temp folder: a harness home, a Claude home with synthetic
 // transcripts and the names of a checkout and a worktree (`git` is a fake). Nothing reads or writes the
@@ -89,6 +91,8 @@ async function runNotify(machine, argv, deps = {}) {
     run: fakeGit(machine).run,
     // The land's checks of a ready notice ask gh and git of a real pull request: a test that holds them gives its own.
     landChecks: async () => [],
+    // The check of a closed notice's summary reads git: a test that holds it gives its own.
+    closeChecks: async () => [],
     ...deps,
   });
   return { code, out, err };
@@ -153,6 +157,10 @@ const USAGE_ERRORS = [
   ['--to', 'orchestrator', '--kind', 'ready', 'T3 is ready'], ['--to', 'orchestrator', '--kind', 'ready', '--pr', '0', 'T3 is ready'],
   ['--to', 'orchestrator', '--kind', 'ready', '--pr', '#344', 'T3 is ready'], ['--to', 'orchestrator', '--kind', 'ready', '--pr', '34.4', 'T3 is ready'],
   ['--to', 'orchestrator', '--kind', 'ready', '--pr'], ['--to', 'orchestrator', '--kind', 'note', '--pr', '344', 'probe'], ['--relief', 'a line', '--pr', '344'],
+  // A closed notice names its summary with --summary, a file of docs/sessions/, and no other kind takes one.
+  ['--to', 'orchestrator', '--kind', 'closed', 'delivered'], ['--to', 'orchestrator', '--kind', 'closed', '--summary'],
+  ['--to', 'orchestrator', '--kind', 'closed', '--summary', 'README.md', 'delivered'], ['--to', 'orchestrator', '--kind', 'note', '--summary', 'docs/sessions/a.md', 'probe'],
+  ['--relief', 'a line', '--summary', 'docs/sessions/a.md'],
 ];
 
 const usageName = (argv) => JSON.stringify(argv).replace(/x{20,}/g, (run) => `<${run.length} x>`);
@@ -324,6 +332,39 @@ test('a ready notice the land would leave out is refused with the land\'s reason
   assert.deepEqual(recorded(machine).notices, []);
 }));
 
+// A session that finishes hands the lead its summary (odd/tasks/session-close.md, T2).
+test('a closed notice is recorded with its summary once the summary is checked, from the worktree it is sent from', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const asked = [];
+  const closeChecks = async (file, cwd) => {
+    asked.push([file, cwd]);
+    return [];
+  };
+  const { code, out } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'closed', '--summary', 'docs/sessions/2026-01-01-jh-5.md', 'T1-T3 delivered'], { closeChecks });
+  assert.equal(code, 0);
+  assert.deepEqual(asked, [['docs/sessions/2026-01-01-jh-5.md', machine.worktree]]);
+  const [notice] = recorded(machine).notices;
+  assert.deepEqual([notice.kind, notice.summary, notice.text], ['closed', 'docs/sessions/2026-01-01-jh-5.md', 'T1-T3 delivered']);
+  assert.match(out[0], /^js-harness notify: recorded closed for the orchestrator at /);
+}));
+
+test('a closed notice whose summary is not ready is refused with the reasons, and nothing is recorded', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const closeChecks = async () => ['docs/sessions/2026-01-01-jh-5.md is not pushed: neither origin/main nor origin/feat/x holds it; commit it and push.'];
+  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'closed', '--summary', 'docs/sessions/2026-01-01-jh-5.md', 'T1-T3 delivered'], { closeChecks });
+  assert.equal(code, 1);
+  assert.deepEqual(out, []);
+  assert.match(err.join('\n'), /the summary is not ready: docs\/sessions\/2026-01-01-jh-5\.md is not pushed: neither origin\/main nor origin\/feat\/x holds it; commit it and push\. Not recorded\./);
+  assert.deepEqual(recorded(machine).notices, []);
+}));
+
+test('a notice of another kind runs no summary checks', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const closeChecks = async () => assert.fail('a note is no closed notice');
+  const { code } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'probe'], { closeChecks });
+  assert.equal(code, 0);
+}));
+
 test('a notice of another kind runs no land checks', withMachine(async (machine) => {
   writeSession(machine, SENDER, SENDER_TITLE);
   const landChecks = async () => assert.fail('a note is no ready notice');
@@ -400,7 +441,7 @@ test('--self names the sender in place of the host\'s id, and is the one the add
 
 test('a session the host does not name still records its notice, as a sender that is not known, and is told so', withMachine(async (machine) => {
   writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
-  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'closed', 'delivered; nothing more goes to this session'], { env: { CODEX_HOME: 'C:\\codex' } });
+  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'closed', '--summary', 'docs/sessions/2026-01-01-jh-5.md', 'delivered; nothing more goes to this session'], { env: { CODEX_HOME: 'C:\\codex' } });
   assert.equal(code, 0);
   assert.deepEqual(recorded(machine).notices[0].from, { host: 'unknown', id: null, source: null, title: null, permissionMode: null, context: null });
   assert.match(out[0], /recorded closed for the orchestrator at \d\d:\d\d local \(\S+\) from a sender the host does not name in /);
@@ -799,6 +840,21 @@ function writeTranscript(machine, id, entries) {
 const replied = (seconds) => ({ type: 'assistant', timestamp: later(seconds), isSidechain: false, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }] } });
 /** A line he typed in the chat, `seconds` after NOW. */
 const typed = (content, seconds) => ({ type: 'user', timestamp: later(seconds), isSidechain: false, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content } });
+/** A line he sent while the session worked, `seconds` after NOW, as host 2.1.299 queues it: a list of text blocks, the
+ * first of them the host's own reminders and the last his words (the shape of e152c9d8, line 20374). */
+const queuedTyped = (words, seconds) => ({
+  type: 'attachment',
+  timestamp: later(seconds),
+  isSidechain: false,
+  attachment: {
+    type: 'queued_command',
+    prompt: [{ type: 'text', text: '<system-reminder>\nThe session "made up" finished a turn.\n</system-reminder>\n\n' }, { type: 'text', text: words }],
+    commandMode: 'prompt',
+    origin: { kind: 'human' },
+    timestamp: later(seconds),
+    humanTurn: true,
+  },
+});
 /** The session asks him `question` with the question tool, `seconds` after NOW. */
 const asks = (question, seconds) => ({ type: 'assistant', timestamp: later(seconds), isSidechain: false, message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'toolu_question', name: 'AskUserQuestion', input: { questions: [{ question, header: 'Rama', multiSelect: false, options: [{ label: 'main', description: 'made up' }, { label: 'feat', description: 'made up' }] }] } }] } });
 /** His answer `answer` to that question with the question tool, `seconds` after NOW. */
@@ -1080,6 +1136,16 @@ test('an answer typed in the chat after its question is verified, and its words 
   assert.deepEqual(answer.copy, { tool: null, answers: [{ question: QUESTION, options: [], answer: 'Entonces la A', how: 'typed in the chat' }] });
 }));
 
+test('an answer he sent while the session worked is verified from his words alone, without the reminders the host queued with them', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  assert.equal((await askQuestion(machine)).code, 0);
+  writeTranscript(machine, TRANSCRIPT, [replied(30), queuedTyped('Entonces la A', 60)]);
+  const { code, out, err } = await answerTo(machine);
+  assert.deepEqual([code, err, out[1]], [0, [], 'the user\'s answer, typed in the chat: Entonces la A']);
+  const answer = recorded(machine).notices.at(-1);
+  assert.deepEqual([answer.verified, answer.copy.answers[0].answer], [true, 'Entonces la A']);
+}));
+
 test('an answer typed in the chat is refused when it was sent before its question, when it holds only pasted text, or when it is not his words', withMachine(async (machine) => {
   writeSession(machine, SENDER, SENDER_TITLE);
   assert.equal((await askQuestion(machine)).code, 0);
@@ -1124,6 +1190,34 @@ test('an answer to a question-tool call is verified when the call was asked afte
   assert.deepEqual([otherQuestion.code, otherQuestion.out], [1, []]);
   assert.deepEqual(otherQuestion.err, ['js-harness notify: not recorded: no question of that call starts with "Pregunta 2: ": it answers another question']);
   assert.equal(recordText(machine), unchanged);
+}));
+
+test('a verified answer keeps when its question was shown and when he answered it, as the transcript times them', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  // Tapped: the question tool's call is when it was shown, its result when he answered.
+  assert.equal((await askQuestion(machine)).code, 0);
+  const prefixed = 'Pregunta 1: Which branch do we merge first?';
+  writeTranscript(machine, TRANSCRIPT, [asks(prefixed, 30), answering(prefixed, 'main', 90)]);
+  assert.equal((await answerTo(machine)).code, 0);
+  const tapped = recorded(machine).notices.at(-1);
+  assert.deepEqual([tapped.shownAt, tapped.answeredAt], [later(30), later(90)]);
+
+  // Typed: no tool showed it, so only the time of his line.
+  assert.equal((await askQuestion(machine, { newId: () => SECOND_ID })).code, 0);
+  writeTranscript(machine, TRANSCRIPT, [replied(30), typed('Entonces la A', 120)]);
+  assert.equal((await answerTo(machine, { number: 2 })).code, 0);
+  const typedAnswer = recorded(machine).notices.at(-1);
+  assert.equal(typedAnswer.answeredAt, later(120));
+  assert.equal('shownAt' in typedAnswer, false);
+}));
+
+test('an answer no transcript confirmed keeps no shown or answered time', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  assert.equal((await askQuestion(machine)).code, 0);
+  const { code } = await answerTo(machine, { transcript: 'ffffffff' });
+  assert.equal(code, 0);
+  const answer = recorded(machine).notices.at(-1);
+  assert.deepEqual([answer.verified, 'shownAt' in answer, 'answeredAt' in answer], [false, false, false]);
 }));
 
 test('a withdrawal names its question and closes it, and an answer to a withdrawn question is refused with the reason', withMachine(async (machine) => {
@@ -1220,4 +1314,31 @@ test('an answer quotes his words, so an hour that opens them is not held to the 
   const { code } = await runNotify(machine, ['--to', '5', '--kind', 'answer', '--transcript', '1d16beeb', '--line', '406', words]);
   assert.equal(code, 0);
   assert.equal(recorded(machine).notices[0].text, words);
+}));
+
+// The close check as notify runs it, with its own git, on a real clone: every other test here stubs it (odd/tasks/session-close.md, L4).
+test('a closed notice runs the real summary check with notify\'s own git: refused unpushed, recorded once pushed', withMachine(async (machine) => {
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+  };
+  git(machine.dir, 'init', '-q', '--bare', 'origin.git');
+  git(machine.dir, 'clone', '-q', 'origin.git', 'work');
+  const work = path.join(machine.dir, 'work');
+  git(work, 'checkout', '-q', '-b', 'feat/x');
+  const file = 'docs/sessions/2026-01-01-jh-5.md';
+  fs.mkdirSync(path.join(work, 'docs', 'sessions'), { recursive: true });
+  fs.writeFileSync(path.join(work, file), summaryTemplate('JH 5', NOW).replace(/^<.*>$/gm, '- a fact (#379).'));
+  git(work, 'add', file);
+  git(work, 'commit', '-q', '-m', 'summary');
+  const close = () => notifyMain(['--home', machine.home, '--claude-home', machine.claudeHome, '--to', 'orchestrator', '--kind', 'closed', '--summary', file, 'delivered'], {
+    cwd: work, stdout: () => {}, stderr: (line) => errors.push(line), env: { CLAUDE_CODE_SESSION_ID: SENDER }, now: () => NOW, homedir: () => path.join(machine.dir, 'os-home'),
+  });
+  const errors = [];
+  assert.equal(await close(), 1);
+  assert.match(errors.join('\n'), /is not pushed: neither origin\/main nor origin\/feat\/x holds it/);
+  git(work, 'push', '-q', 'origin', 'feat/x');
+  assert.equal(await close(), 0, errors.join('\n'));
+  // The refused close wrote nothing; the one that passed carries the file the board's `to archive:` line names.
+  assert.deepEqual(readNotices(machine.home, projectSlug(work)).notices.filter((one) => one.kind === 'closed').map((one) => one.summary), [file]);
 }));

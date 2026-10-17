@@ -1050,7 +1050,7 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       fails; that `git status` takes git's optional index lock beside other commands.
 - [x] T10 · Close: `docs/ROADMAP.md`, both reviews of each slice with code, pull requests,
       the closing notice. Evidence: the entry of T10 in Progress.
-- [ ] T11 · `review-tool-timeout` (docs/FAILURES.md): three of its four sightings ran beside
+- [x] T11 · `review-tool-timeout` (docs/FAILURES.md): three of its four sightings ran beside
       a gate or a full machine (2026-10-11 beside a gate; 2026-10-15, host-update-check L4,
       while a retry on a quiet machine answered in 23 s, L6; 2026-10-16, first-version L10, at
       100% CPU with `--base-ref=origin/main`, then 9 s with the merge-base commit). M2 read "no
@@ -1066,6 +1066,12 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       test first if it breaks shipped behavior, else open its task in the owning feature doc
       and settle the entry"; the cause is not shown (the timeouts are an observation beside
       the gate), so it is a task.
+- [x] T12 · T11's later work, gentle-ai's warning: "the first-parent listing has no depth bound"
+      (`onFirstParentLine`, `bin/lib/guard.mjs`, read `git rev-list --first-parent HEAD` whole).
+      Test first. Evidence: the entry of T12 and T13 in Progress.
+- [x] T13 · T11's later work, gentle-ai's warning: "a test's unquoted temp dir" (the real-repo
+      test of `reviewBaseRefusal` in `bin/lib/guard.test.mjs`). Test first. Evidence: the entry of
+      T12 and T13 in Progress.
 
 ## Progress
 - 2026-10-12 · Opened (`335ce6f`). The map of the code is a read-only sub-agent's (72 test
@@ -2885,9 +2891,121 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     `gate-on-github`, branches never merged. `gate-wait-t4` is this session's, removed at the close.
   - *Spent on Codex on 2026-10-16 by this session:* 156,948 input tokens (cut 3) and 49,467 (its
     merge of `main`).
+- 2026-10-17 · **T11 opened by JH 5 on the lead's note of 13:07Z** ("Next: triage item 11, gate-wait
+  T11 (design with two readers, docs/FAILURES.md review-tool-timeout): how a gentle-ai review waits
+  for the gate lock or uses the merge-base commit, and what a session does on operation_timeout;
+  then build what the design settles, in the manifest's review text. Ask him nothing."), branch
+  `feat/review-timeout-rule` from origin/main 13:15Z.
+  - *The probe.* gentle-ai takes `--base-ref` as a tree and diffs it against the head's: the target
+    evidence of `review-482ab063172d1bb1` reads `base-diff:workspace:7c00d719…:919d5889…`, and
+    `7c00d719` is the tree of `db31c96c`, the tip of origin/main then (`git rev-parse db31c96c^{tree}`).
+    So a branch behind the default branch, given `--base-ref origin/main`, is assessed with every
+    later change of the default branch in it, reversed. Measured at 13:20Z on a detached checkout of
+    `24139b7e` (PR 400's head, 19 commits behind origin/main, nothing of its own outside it):
+    `gentle-ai review assess --base-ref origin/main --committed-only` took 20 s and saw 20 paths and
+    470 changed lines, which is `git diff --shortstat origin/main HEAD` (51 + 419); with the
+    merge-base commit (`24139b7e` itself) it answered in 1 s that there is nothing pending. This is
+    also L10 of first-version: three timeouts with `--base-ref=origin/main`, 9 s with the merge-base
+    commit. The other sightings name no base or `origin/main`; none names a merge-base commit.
+  - *Design, version 1, for two readers.*
+    1. *The base is a commit the head contains.* A gentle-ai review is given the merge-base of the
+       head with the default branch (`git merge-base origin/main HEAD`) or the last reviewed
+       boundary, never the name of a branch that moves: a moving name puts the default branch's
+       newer work in the candidate, reversed, which reviews the wrong change and makes the
+       preflight slower the further the branch is behind. The base goes on the assess, so its
+       `next_transition` carries it to the preflight unchanged.
+    2. *It does not wait for the gate lock.* Its reviewer has no tools, and the gate of this repo
+       sends its tests to GitHub's machines; no sighting shows the gate as the cause (each is "an
+       observation beside the gate"), while the base is shown. Waiting would hold every review
+       behind every gate for a cause not shown.
+    3. *On `operation_timeout`, once more, then on.* The session runs the same command once again,
+       after no gate runs on the machine (`js-harness gate -- <the same command>` waits for that
+       turn). If it times out again, the candidate goes on without that review: the feature
+       document gets a gentle-ai line naming the range, both times and that it was not reviewed
+       (the line `notify --kind ready` reads); Codex reviews the range as for every code commit;
+       he is not asked, since the provider defect is tracked upstream (gentle-ai #5422). In this
+       repo the time is also a `Seen:` line of `review-tool-timeout`.
+    4. *Where it lives.* The work session's part of the orchestrator skill (`bin/lib/manifest.mjs`,
+       the line on what runs beside a gate), so an installed project gets it; its test in
+       `bin/lib/manifest.test.mjs` pins the text. The entry's Control becomes that test.
+    Left to the readers: whether 1 should also be a check (the guard's PreToolUse hook could refuse
+    a gentle-ai review command whose `--base-ref` the head does not contain, and print the
+    merge-base command), and whether 3's retry through `js-harness gate` is worth its wait.
+  - *What the two readers changed (version 2, settled).* Reader A (mechanism, probes with a logging
+    `git` shim in a scratch clone) found the cost is not the diff's size: after the diff gentle-ai
+    4.2.0 walks `git log --first-parent -n 64 HEAD~1` with a `git diff-tree` per ancestor, so a base
+    off the head's first-parent line costs about 216 git runs against 31 (17 to 45 s against 2.6 to
+    7 s on a loaded machine, the slowest with a 2-line diff), and load multiplies each run. So the
+    condition is a base on the head's first-parent line, given by its hash (assess copies the string
+    into its `next_transition`, names too): after a merge of the default branch, its merge-base is
+    the default branch's tip on the second parent, slow and holding reviewed slices, and the merge
+    commit is the base, as section 3 of the protocols already said. Reader A also corrected the
+    probe: the assess from `24139b7e` itself answered `unassessable`, high and due, exit 1 ("no
+    pending changes"), which is no candidate. The sighting of 2026-10-07 timed out with a base on
+    the line, so the fallback stays. Reader B (operability) moved the rule to its home, the
+    protocols skill, section 3 (`bin/lib/protocols-skill.mjs`), leaving the orchestrator skill's line
+    a pointer; dropped the retry through `js-harness gate --`, which would hold the machine's lock for
+    the whole review, and with it the wait (a commit's tests run on GitHub, so the lock does not even
+    mean a quiet machine); recommended the guard, which makes the Control a check; and made the
+    record line say "not reviewed", since the merge queue counts any gentle-ai line that names the
+    range. Left out of the shipped text, as reader B advised: "he is not asked" (the defect handoff
+    of the global instructions asks the user before reporting; here the lead's order and the open
+    upstream issue #5422 settle it).
+  - *Built (7c44b96e, then the first-parent correction).* `reviewBaseRefusal` in `bin/lib/guard.mjs`,
+    wired into the guard's Bash check: an assess, status or start whose `--base-ref` resolves to a
+    commit off the head's first-parent line is denied, naming the bases to give; a base git cannot
+    resolve as a commit (a tree, an unknown name) runs. Protocols section 3 gives the base and the
+    timeout procedure (one more run of the same status, never a new start; then on, a gentle-ai line
+    with both times and "not reviewed", Codex on the range) and says an assess with nothing pending is
+    no candidate; the orchestrator skill's line points there. The entry's Control is the guard's test.
+    Tests first: the lib tests failed before (no export, then the merge case let through); after,
+    guard 25, lib guard 23, manifest 173, protocols-skill 11 pass.
+  - *Reviews.* Codex e20291a..5533618 incorrect (0.99), two P2 (a newline did not end a command; a
+    `cd` before it was not followed); the independent verifier (risk item 2) found the same `cd` case
+    and heredoc bodies read as commands, both false refusals at 55336181. All fixed test first in
+    1cebd69a with its advisories (a 5 s git timeout, the protocols wording, a protocols test, the
+    help lines): lib guard 24, guard 25, protocols-skill 12, manifest 173, js-harness 44 pass.
+    Codex recheck e20291a..1cebd69 found three new P2 (a `\` line continuation, a relative `--cwd`
+    after a `cd`, a `#` comment). gentle-ai e20291ab..1cebd69a high (item 2), lenses risk and
+    reliability: approved and acknowledged (`review-ea14564f6a7371ed`), three warnings left as later
+    work (the first-parent listing has no depth bound; a relative `--cwd`; a test's unquoted temp
+    dir). The pre-push hook refused the branch while the recheck's findings stood, so the three P2
+    were fixed test first (lib guard 24, guard 25 pass; it also settles the relative `--cwd` warning);
+    gentle-ai on 93f8a8d: medium, 15 lines, not due (under_budget). Codex recheck
+    946df82..93f8a8d correct (0.98), 3 of 3 fixed. Left as later work: the listing's depth bound and
+    the test's unquoted temp dir.
+- 2026-10-17 · **T12 and T13 by JH 21 on the lead's note of 15:34Z** ("the advisories recorded as
+  later work, outside gate-first […] (1) gate-wait T11: the first-parent listing has no depth bound;
+  one test's temp dir is unquoted"; the lead's claim, not his words), branch `fix/review-base-walk`
+  from origin/main `5ea341af`.
+  - *T12.* A bound by count cannot tell a base off the line from one deeper than the bound, so the
+    walk is bounded by the base instead: `git rev-list --first-parent HEAD ^<base>` stops at the
+    first commit the base holds, right above it when the base is on the line, at the fork point
+    when it is off. The base is on the line when the first parent of the last commit listed is the
+    base, or, when nothing is listed, when it is the head. `onFirstParentLine` is exported and
+    takes `run` for the test. RED: on a branch of two commits over 41, the lookup read 42 lines of
+    history. Differential check against the old lookup on this repository's history (32 bases: on
+    the line, on second parents, `HEAD^2`, a tree, the root, an unknown name): 0 differ.
+  - *T13.* The real-repo test's folder now holds a space, as a home like `C:\Users\Ana María`
+    puts one in every temp dir, and its command quotes `--cwd`. RED: without the quotes, the test
+    fails. GREEN: `bin/lib/guard.test.mjs` and `bin/guard.test.mjs`, 50 pass.
+  - *Reviews.* Committed as `a9109b1` (gate: medium, 90 lines). gentle-ai on `5ea341af..a9109b1`: high by
+    escalation (item 2, the guard decides which review commands are refused), lenses risk and reliability,
+    approved and acknowledged (lineage `review-9cb629c08f739b2c`), two advisories from R3. The warning: the
+    verdict read only the last commit printed, so a walk git cuts late (committer dates out of order) and that
+    prints commits below the base would call a base on the line off it. Each commit now comes with its parents
+    (`--parents`, one git run fewer), and the base is on the line when it is the first parent of any commit
+    printed, since every one is on the head's line. The suggestion: tests for a root, a tree, and a base merged
+    in by a second parent. Both done test first in the next commit (RED: a run that prints a commit below the
+    base was called off the line); lib guard 26, guard 25 pass; the differential check, 32 bases, 0 differ.
+    That commit is `3d4194c`; gentle-ai on `a9109b1..3d4194c`: medium, not due (`under_budget`). Codex on
+    `5ea341a..3d4194c`: correct (0.94), no finding.
 
 ## Next
 
-Nothing: the feature is closed (T10, 2026-10-16). What it left open is in the entry of T10 in
+T11 landed (PR 407). T12 and T13, its later work (JH 21, `fix/review-base-walk`): built test first;
+reviewed (gentle-ai approved, Codex correct); next, the PR and `notify --kind ready`. After them, nothing
+open from T11. Before T11,
+nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
 Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
 2026-10-16 by the session "JH 21".

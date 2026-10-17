@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, main } from './check.mjs';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
 import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -632,6 +634,76 @@ test('runSensor still stops at its ceiling a command that keeps writing', async 
     // The silence bound is the 4 s that node's start fits in above, and the ceiling comes after it.
     const result = await runSensor('node loop.js', { cwd: dir, timeout: 6000, silence: 4000 });
     assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', undefined, 'timed out after 6000 ms']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor reports the exit of a command that ended as its bound ran out, not a timeout (first-version T6h)', async () => {
+  for (const bound of [{ timeout: 50 }, { timeout: 0, silence: 50 }]) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    const kills = [];
+    // The exit is emitted inside the sensor's own timer, right after it runs: the way an exit the system already
+    // holds is delivered after a timer that ran out at that moment. Two timers set apart can land a clock tick
+    // apart and let the deferred decision run first (Codex on 3586f40..9a62f82), so the order is not left to them.
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = (fn, ms, ...args) => realSetTimeout(ms === 50 ? () => {
+      fn();
+      child.emit('exit', 0, null);
+      child.emit('close');
+    } : fn, ms, ...args);
+    let running;
+    try {
+      running = runSensor('fake', { ...bound, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    const result = await running;
+    assert.deepEqual([result.status, result.error, kills], [0, undefined, []], JSON.stringify(bound));
+  }
+});
+
+test('a chunk written in the turn after the silence ran out breaks the silence: nothing is killed (first-version T6j)', async () => {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  const kills = [];
+  // The chunk is written inside the silence's own timer, right after it runs, so it lands before the deferred
+  // decision; the command then ends while its silence, armed again by that chunk, still has time left.
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...args) => realSetTimeout(ms === 50 ? () => {
+    fn();
+    child.stdout.write('still here\n');
+    realSetTimeout(() => {
+      child.emit('exit', 0, null);
+      child.emit('close');
+    }, 10);
+  } : fn, ms, ...args);
+  let running;
+  try {
+    running = runSensor('fake', { timeout: 0, silence: 50, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  const result = await running;
+  assert.deepEqual([result.status, result.error, kills, result.stdout], [0, undefined, [], 'still here\n']);
+});
+
+test('a gate stops a real silent hang at its silence bound: the row says so and the tree it started is gone (first-version T6i)', async () => {
+  const dir = makeTmpDir();
+  try {
+    // The sensor writes once, starts a child that holds on, writes its pid, then says nothing more.
+    fs.writeFileSync(path.join(dir, 'hang.js'), "const { spawn } = require('node:child_process'); const held = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); require('node:fs').writeFileSync('held.pid', String(held.pid)); console.log('started'); setInterval(() => {}, 1000);");
+    const row = await checkSensor(dir, { name: 'tests', command: 'node hang.js' }, { sensorTimeout: 120000, sensorSilence: 4000 });
+    assert.deepEqual([row.pass, row.timedOut, row.detail], [false, true, 'node hang.js wrote nothing for 4 s and was stopped']);
+    assert.match(row.output, /started/);
+    const held = Number(fs.readFileSync(path.join(dir, 'held.pid'), 'utf8'));
+    // A killed process can answer a moment longer while it is reaped (gentle-ai R3 on 22455a7): wait up to 5 s.
+    const gone = () => { try { process.kill(held, 0); return false; } catch (err) { return err.code === 'ESRCH'; } };
+    for (const until = Date.now() + 5000; !gone() && Date.now() < until;) await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.ok(gone(), `pid ${held} still runs`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -3342,6 +3414,26 @@ test('main --no-wait is refused for a gate that waits ahead of it when the lock 
 // stand-in for the writer of the log. Nothing showed that the line the real writer makes of it is one the
 // real reader takes: a reader that knew only `held` and `timeout` would count every such refusal among the
 // lines it could not read.
+// Found in review, 2026-10-17 (Codex and the verifier of gate-first T6): the line of a ticket left unclaimed
+// carried the code of the hold in `code`, which the reader takes only as the key of a tree, so it dropped
+// every such line and counted it unreadable.
+test('a ticket left unclaimed because its file was held is in the real gate log as one first-unclaimed line with the code of the hold, which its reader takes', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-unclaimed-'));
+  try {
+    const held = { id: '0a0a0a0a', session: 'sess-a', reason: 'first', until: new Date(Date.now() + 60_000).toISOString() };
+    const deps = { claimTicket: () => ({ ticket: null, expired: [], unclaimed: [{ ticket: held, code: 'EBUSY' }] }) };
+    assert.equal(claimOf({ home, session: 'sess-a' }, home, deps), null);
+    const { events, skipped } = readGateLog(home);
+    assert.deepEqual([events.length, skipped], [1, 0]);
+    assert.deepEqual(
+      events.map(({ event, id, error, cwd, pid }) => ({ event, id, error, cwd, pid })),
+      [{ event: 'first-unclaimed', id: '0a0a0a0a', error: 'EBUSY', cwd: path.resolve(home), pid: process.pid }],
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a gate refused with --no-wait behind a gate that waits ahead is in the real gate log of its home as one refusal whose reason is ahead: its reader takes the line and counts none unreadable', () => withGate({ tests: 'run-tests' }, async (dir, home) => {
   const since = new Date(Date.now() - 5000).toISOString();
   const folder = path.join(gateDir(home), 'wait-22-aaaaaaaaaaaa');

@@ -3,7 +3,7 @@
 // resolved against the tree and the repository.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addedLines, citationsIn, resolveCitations } from './citations.mjs';
+import { addedLines, checkedOff, checkedTasks, citationsIn, resolveCitations, resolveTicks, taskText } from './citations.mjs';
 
 test('a citation is a code span: a repository path with a line or a range, or a commit id', () => {
   assert.deepEqual(citationsIn('see `bin/check.mjs:1176-1202` and `bin/lib/stack.mjs:653`, on `d3f6ac1`'), [
@@ -59,5 +59,31 @@ test('each citation resolves, or says why not: no such file, past its end, no su
     { file: 'odd/tasks/a.md', line: 5, citation: 'abc1234', why: 'no such commit' },
     { file: 'odd/tasks/a.md', line: 6, citation: 'bin/check.mjs:0', why: 'no such line or range' },
     { file: 'odd/tasks/a.md', line: 6, citation: 'bin/check.mjs:10-2', why: 'no such line or range' },
+  ]);
+});
+
+test('a task is checked off by a change only when it was not before, and a commit git cannot place is no claim (T6)', () => {
+  const before = checkedTasks('- [x] T1 done\n- [ ] T2 open\n  - [x] T3a nested\n');
+  assert.deepEqual([...before], ['T1', 'T3a']);
+  const added = [
+    { file: 'f.md', line: 1, text: '- [x] T1 done, reworded' },
+    { file: 'f.md', line: 2, text: '- [x] T2 open' },
+    { file: 'f.md', line: 5, text: '- [x] T9 at `abc1234`' },
+    { file: 'f.md', line: 6, text: '- [x] T10 at `def5678`' },
+  ];
+  const ticks = checkedOff(added, () => before);
+  assert.deepEqual(ticks.map((tick) => tick.id), ['T2', 'T9', 'T10']);
+  assert.equal(taskText('- [x] T2 open\n  in `fed9876`.\n- [ ] T3\n', 1), '- [x] T2 open\n  in `fed9876`.');
+  const texts = { 2: '- [x] T2 open\n  in `fed9876`.', 5: added[2].text, 6: added[3].text };
+  const unresolved = resolveTicks(ticks, {
+    text: (file, line) => texts[line],
+    commitExists: (id) => id !== 'def5678',
+    // HEAD does not reach fed9876, and git cannot say for abc1234.
+    reaches: (id) => (id === 'fed9876' ? false : null),
+    rides: true,
+  });
+  assert.deepEqual(unresolved, [
+    { file: 'f.md', line: 2, id: 'T2', citation: 'fed9876', why: 'not reachable from HEAD' },
+    { file: 'f.md', line: 6, id: 'T10', citation: 'def5678', why: 'no such commit' },
   ]);
 });

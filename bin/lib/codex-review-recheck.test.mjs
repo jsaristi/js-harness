@@ -9,6 +9,7 @@ import {
   recheckPrompt,
   recheckState,
   runAnswerFindings,
+  runsLogged,
   secondRecheckRefused,
 } from './codex-review-recheck.mjs';
 
@@ -19,6 +20,16 @@ const C = 'c'.repeat(40);
 const finding = (title, extra = {}) => ({ file: 'bin/x.mjs', start: 3, end: 4, severity: 'P2', title, body: 'The last line is lost.', confidence: 0.9, ...extra });
 const record = (base, head, extra = {}) => ({ schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-10-14T00:00:00.000Z', outcome: 'reviewed', ...extra });
 const runLine = (id, extra = {}) => ({ id, outcome: 'reviewed', ...extra });
+
+test('a record whose run lines are all in the run log is logged; one that names none, or a run line the log lacks, is not (verifier, PR 338)', () => {
+  const runs = [runLine('r1'), runLine('r2')];
+  assert.equal(runsLogged(record(A, B, { run: 'r1' }), runs), true);
+  assert.equal(runsLogged(record(A, B, { runs: ['r1', 'r2'] }), runs), true);
+  assert.equal(runsLogged(record(A, B), runs), false);
+  assert.equal(runsLogged(record(A, B, { run: 'r3' }), runs), false);
+  assert.equal(runsLogged(record(A, B, { runs: ['r1', null] }), runs), false);
+  assert.equal(runsLogged(record(A, B, { runs: [] }), runs), false);
+});
 
 test('a range that starts at the head of a review that found something is a recheck of those findings', () => {
   const found = [finding('[P2] Drops a record')];

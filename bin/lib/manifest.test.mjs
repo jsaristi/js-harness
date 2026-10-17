@@ -31,7 +31,7 @@ import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log
 import { gateFirstDir, issueTicket } from './gate-first.mjs';
 import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpening } from './channel.mjs';
 import { remoteDir, remoteFiles } from './remote.mjs';
-import { hygieneDir, journalPath } from './memory-hygiene.mjs';
+import { hygieneDir, journalPath, purgeMarker } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
 
 function makeTmpHome() {
@@ -835,7 +835,7 @@ test('uninstall removes the folder of memory hygiene when no project holds a sna
   }
 });
 
-test('uninstall keeps the snapshots of the throughput review and names their folder, with a manifest and without', () => {
+test('uninstall keeps the snapshots and the review starts of the throughput review and names their folder, with a manifest and without', () => {
   const home = makeTmpHome();
   try {
     const folder = path.join(home, '.js-harness', 'throughput');
@@ -844,8 +844,11 @@ test('uninstall keeps the snapshots of the throughput review and names their fol
       fs.mkdirSync(path.join(folder, 'C--proj'), { recursive: true });
       fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-15.json'), '{}');
       fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-16.json'), '{}');
+      // The gentle-ai review starts the pause hook keeps there are no day snapshot, and are counted apart (B6).
+      fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
       const result = uninstall(home);
-      assert.deepEqual(result.throughputKept, { path: folder, days: 2 }, String(withManifest));
+      assert.deepEqual(result.throughputKept, { path: folder, days: 2, reviewStarts: 1 }, String(withManifest));
+      assert.equal(fs.existsSync(path.join(folder, 'C--proj', 'review-starts.jsonl')), true, 'the review starts are kept too');
       assert.equal(fs.existsSync(path.join(folder, 'C--proj', '2026-10-16.json')), true, 'a snapshot is never removed');
     }
     fs.rmSync(folder, { recursive: true });
@@ -906,6 +909,149 @@ test('uninstall goes on past a project folder of memory hygiene it cannot remove
     fs.rmSync(kept, { recursive: true });
     const whole = uninstall(home, { removeFile: (target) => { throw Object.assign(new Error('EPERM'), { code: 'EPERM', target }); } });
     assert.deepEqual(whole.memoryKept, [{ path: hygieneDir(home), reason: 'unremovable', code: 'EPERM' }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// T10, the full uninstall (odd/tasks/memory-hygiene.md, D7): `--full` removes the snapshots too, neither mode
+// removes a project under a pass, and a marker beside the folder tells every writer of a pass that an uninstall runs.
+
+/** Puts the lock of a pass in the project folder `project`, as `planPass` writes it. */
+function lockPass(project, stamp, pid = process.pid) {
+  fs.writeFileSync(path.join(project, 'lock'), JSON.stringify({ stamp, pid }));
+}
+
+test('the full uninstall removes the snapshots and the whole folder of memory hygiene, and names each project with its stamps', () => {
+  const home = makeTmpHome();
+  try {
+    const project = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+    fs.mkdirSync(path.join(project, 'snapshots', '20261016T090000000Z'), { recursive: true });
+    leftByMemory(home, 'C--other');
+    const result = uninstall(home, { full: true });
+    assert.deepEqual(result, { ...NOTHING_ELSE, removed: [hygieneDir(home)], memorySnapshotsRemoved: [{ path: project, stamps: ['20261015T120606108Z', '20261016T090000000Z'] }] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the marker is gone, and the now-empty .js-harness with it');
+
+    leftByMemory(home, 'C--other');
+    assert.deepEqual(uninstall(home, { full: true }), { ...NOTHING_ELSE, removed: [hygieneDir(home)] }, 'no snapshot, nothing to name');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the normal uninstall keeps a project under a pass, with what can release its lock, and removes the others', () => {
+  const home = makeTmpHome();
+  try {
+    const planned = leftByMemory(home, 'C--planned', '20261015T120606108Z');
+    fs.writeFileSync(path.join(planned, 'snapshots', '20261015T120606108Z', 'manifest.json'), JSON.stringify({ folder: 'C:/memory', writeSet: [], before: {} }));
+    lockPass(planned, '20261015T120606108Z');
+    const killed = leftByMemory(home, 'C--killed');
+    lockPass(killed, '20261016T090000000Z', 4242);
+    const empty = leftByMemory(home, 'C--empty');
+    fs.writeFileSync(path.join(empty, 'lock'), '');
+    const gone = leftByMemory(home, 'C--gone');
+    const result = uninstall(home);
+    assert.deepEqual(result.memoryKept, [
+      { path: empty, reason: 'locked', lock: path.join(empty, 'lock'), stamp: null, pid: null, manifest: false, folder: null },
+      { path: killed, reason: 'locked', lock: path.join(killed, 'lock'), stamp: '20261016T090000000Z', pid: 4242, manifest: false, folder: null },
+      { path: planned, reason: 'locked', lock: path.join(planned, 'lock'), stamp: '20261015T120606108Z', pid: process.pid, manifest: true, folder: 'C:/memory' },
+    ]);
+    assert.deepEqual(result.removed, [gone]);
+    assert.equal(fs.existsSync(path.join(planned, 'lock')), true);
+    assert.equal(fs.existsSync(purgeMarker(hygieneDir(home))), false, 'the marker is gone after the run');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a project under a pass whose snapshots cannot be looked at is kept as locked by either mode, and the full one removes nothing', () => {
+  const home = makeTmpHome();
+  try {
+    const locked = leftByMemory(home, 'C--locked', '20261015T120606108Z');
+    lockPass(locked, '20261015T120606108Z');
+    leftByMemory(home, 'C--other');
+    const statFile = (target, ...rest) => {
+      if (target === path.join(locked, 'snapshots')) throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      return fs.statSync(target, ...rest);
+    };
+    const before = everythingUnder(home);
+    const entry = { path: locked, reason: 'locked', lock: path.join(locked, 'lock'), stamp: '20261015T120606108Z', pid: process.pid, manifest: true, folder: null };
+    const full = uninstall(home, { full: true, statFile });
+    assert.deepEqual(full.memoryKept, [{ path: hygieneDir(home), reason: 'locked-whole' }, entry]);
+    assert.deepEqual(everythingUnder(home), before);
+    assert.deepEqual(uninstall(home, { statFile }).memoryKept, [entry]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the full uninstall removes nothing of the folder while any project is under a pass, and names the lock', () => {
+  const home = makeTmpHome();
+  try {
+    const locked = leftByMemory(home, 'C--locked', '20261015T120606108Z');
+    lockPass(locked, '20261015T120606108Z');
+    const other = leftByMemory(home, 'C--other', '20261016T090000000Z');
+    const before = everythingUnder(home);
+    const result = uninstall(home, { full: true });
+    assert.deepEqual(result.memoryKept, [
+      { path: hygieneDir(home), reason: 'locked-whole' },
+      { path: locked, reason: 'locked', lock: path.join(locked, 'lock'), stamp: '20261015T120606108Z', pid: process.pid, manifest: true, folder: null },
+    ]);
+    assert.equal(Object.hasOwn(result, 'memorySnapshotsRemoved'), false);
+    assert.deepEqual(everythingUnder(home), before, 'not one file of it is gone');
+    assert.equal(fs.existsSync(other), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an uninstall refuses while another holds the marker, and names one left by a run that ended; with no folder it makes no marker', () => {
+  const home = makeTmpHome();
+  try {
+    assert.deepEqual(uninstall(home, { full: true }), { ...NOTHING_ELSE, removed: [] });
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'no folder, no marker, no .js-harness');
+
+    const project = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+    const marker = purgeMarker(hygieneDir(home));
+    fs.writeFileSync(marker, JSON.stringify({ pid: 4242, startedAt: '2026-10-16T08:00:00.000Z' }));
+    for (const [alive, full] of [[true, false], [false, true]]) {
+      const result = uninstall(home, { full, alive: (pid) => pid === 4242 && alive });
+      assert.deepEqual(result.memoryKept, [{ path: hygieneDir(home), reason: 'purging', marker, pid: 4242, alive }], String(alive));
+      assert.equal(fs.existsSync(path.join(project, 'snapshots', '20261015T120606108Z')), true);
+      assert.equal(fs.existsSync(marker), true, 'the marker of another run is not removed');
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a full removal that fails puts the folder back and says it may be partly removed; a folder left aside is named', () => {
+  const home = makeTmpHome();
+  try {
+    const project = leftByMemory(home, 'C--proj', '20261015T120606108Z');
+    const failing = (target, options) => {
+      if (path.basename(target).startsWith('memory-hygiene.purging-')) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    };
+    const back = uninstall(home, { full: true, removeFile: failing });
+    assert.deepEqual(back.memoryKept, [{ path: hygieneDir(home), reason: 'partial', code: 'EBUSY' }]);
+    assert.equal(fs.existsSync(path.join(project, 'journal.jsonl')), true, 'the folder is back under its name');
+
+    let aside;
+    const renameFile = (from, to) => {
+      if (from === hygieneDir(home)) {
+        aside = to;
+        return fs.renameSync(from, to);
+      }
+      throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    };
+    const left = uninstall(home, { full: true, removeFile: failing, renameFile });
+    assert.deepEqual(left.memoryKept, [{ path: aside, reason: 'aside', code: 'EBUSY', dir: hygieneDir(home) }]);
+    assert.equal(fs.existsSync(aside), true);
+
+    const found = uninstall(home);
+    assert.deepEqual(found.memoryKept, [{ path: aside, reason: 'aside-found', dir: hygieneDir(home) }]);
+    assert.equal(fs.existsSync(aside), true, 'a folder left aside is named, never removed');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -2316,6 +2462,16 @@ test('the orchestrator skill has a one-line description a host can read, and nam
   }
 });
 
+// T16f of odd/tasks/rule-hierarchy.md: the rules in force are read in the list, not in the relief file.
+test('the orchestrator skill reads the rules in force in the list, at its start from the handover prompt too', () => {
+  const lines = components[2].content('0.1.0').split('\n');
+  const home = lines.find((line) => line.startsWith('- the rules in force'));
+  assert.ok(home !== undefined, 'the list of where each thing lives names the rules in force');
+  assert.ok(home.includes('`js-harness rules`') && home.includes('read the list, not the relief file'), home);
+  const handover = lines.find((line) => line.startsWith('- When you start from that prompt, '));
+  assert.ok(handover.startsWith('- When you start from that prompt, read the list (`js-harness rules`), the relief file, the board '), handover);
+});
+
 // T9 of odd/tasks/session-channel.md: the handover ends with a `relieved` notice, which `sessions --measures` counts as a relief.
 test('the orchestrator skill has the one before append a relieved notice as the step after its handover', () => {
   const lines = components[2].content('0.1.0').split('\n');
@@ -2346,7 +2502,7 @@ test('the orchestrator skill lets both reviews run beside a gate, and keeps a su
   const text = components[2].content('0.1.0');
   assert.doesNotMatch(text, /a reviewer wait for the gate to end/);
   assert.ok(text.includes(
-    '\n- While a gate runs on the machine, run nothing heavy beside it: a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: `js-harness codex-review` runs beside a gate, since out of a turn Codex\'s `node --test` is refused, and so does a gentle-ai review, whose reviewer has no tools.\n',
+    '\n- While a gate runs on the machine, run nothing heavy beside it: a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: `js-harness codex-review` runs beside a gate, since out of a turn Codex\'s `node --test` is refused, and so does a gentle-ai review, whose reviewer has no tools. Give that review a base on the head\'s first-parent line, and on `operation_timeout` run it once more, then go on as `js-harness-protocols` section 3 says.\n',
   ));
 });
 
@@ -2379,6 +2535,8 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('in the reply to their next message'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // odd/tasks/held-sessions.md, S5: a card the host holds in a session's window reaches him here, not there.
+  assert.ok(text.includes("- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find."));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
   assert.ok(text.includes('- A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (`rule:double-review`, `js-harness-protocols` section 1), and says what its readers changed, or names by path the reviewed text it rests on.'));
   // A timer outlived what it waited for (his correction, 2026-10-14): a background task declares its purpose and its end.
@@ -2467,7 +2625,7 @@ test('the orchestrator skill says what every recap carries and how a block waits
 test('the orchestrator skill closes a work session with the notify command and keeps notices out of the relief file', () => {
   const text = components[2].content('0.1.0');
   // Sweep A1 16 and A1 17.
-  assert.ok(text.includes('- When you have finished, say so in your first line, and close with `js-harness notify --to orchestrator --kind closed "<what you delivered>"`'));
+  assert.ok(text.includes('- When you have finished, say so in your first line. Write your summary from `js-harness summary template --title "<your title>"` into the file it names, commit and push it, and close with `js-harness notify --to orchestrator --kind closed --summary <that file> "<what you delivered>"`: nothing more goes to you, and the lead reads your summary and archives you.'));
   assert.doesNotMatch(text, /Your last prompt is the closing notice/);
   assert.doesNotMatch(text, /a notice not yet delivered/);
 });
@@ -3484,6 +3642,11 @@ test('the skills say who archives and opens sessions, and to check that TaskStop
   const orchestrator = components[2].content('0.1.0');
   assert.ok(orchestrator.includes('archives the old orchestrator itself when the host gives it a tool to archive sessions'));
   assert.ok(orchestrator.includes('a work session whose work is fully finished'));
+  // odd/tasks/session-close.md, S4: a session closed with its summary is read and archived, no question.
+  assert.ok(orchestrator.includes("when it closed with its summary, the board lists it under `to archive`: read the summary, then archive the session with the host's tool to archive sessions, without asking, and name it in the recap"));
+  // odd/tasks/session-close.md, S7: Remote Control keeps a finished session live, so the host refuses to archive it.
+  assert.ok(orchestrator.includes("When the host refuses because the session still has live work, turn its Remote Control off with the host's tool, then archive it again, without asking"));
+  assert.ok(orchestrator.includes('A finished session that closed without a summary is asked for one first'));
   assert.ok(orchestrator.includes('When the host gives you a tool to start sessions, open the new session yourself'));
   assert.ok(!orchestrator.includes('The user archives the old orchestrator only after that'));
   assert.ok(components[0].content('0.1.0').includes('TaskStop has been seen to end the shell of a background command and leave its node process running'));

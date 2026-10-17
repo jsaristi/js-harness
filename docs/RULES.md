@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `d0ed9be06be6`. In force: 34 (16 of Sebastián, 18 of the project). Retired: 0.
+Hash `4a95a3907229`. In force: 40 (16 of Sebastián, 24 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -143,6 +143,16 @@ How long a gate waits for its turn of the lock before it gives up, by default: 6
 - Read by: `bin/js-harness.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
 
+### memory-index-bytes
+The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.
+- Read by: `bin/lib/memory-hygiene.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
+
+### memory-pass-days
+The days after a verified memory hygiene pass when the next is due, if a note was written since: 7 days.
+- Read by: `bin/lib/memory-hygiene.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
+
 ### person-present
 How long after the user last wrote in a session a question is put to them at once with the question tool: 15 minutes.
 - Read by: none.
@@ -183,6 +193,26 @@ How long one sensor of the gate may run before it is stopped and the commit refu
 How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
 - Read by: `bin/lib/manifest.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
+
+### throughput-backfill-days
+How many closed days back the heartbeat writes a missing throughput snapshot for: 14 days.
+- Read by: `bin/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-compare-days
+How many days a side a throughput comparison needs before it judges a change: 7 days.
+- Read by: `bin/lib/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-quiet-days
+How many days after the last recorded throughput review the next is due once the review has gone quiet: 7 days.
+- Read by: `bin/lib/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-quiet-runs
+How many recorded throughput reviews in a row that found nothing make the review weekly instead of daily: 2 reviews.
+- Read by: `bin/lib/throughput.mjs`.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### wait-every
 How often js-harness wait checks its condition, unless --every says otherwise: 120 seconds. The flag `--every` overrides it for one run.

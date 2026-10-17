@@ -76,6 +76,19 @@ test('a ready notice carries the number of its pull request, and only a ready no
   refused({ kind: 'ready', pr: 344, text: 'ready', question: 1 }, /only an answer or a withdrawal takes --question/);
 });
 
+// The summary a finished session leaves (odd/tasks/session-close.md, T2): the record keeps its file.
+test('a closed notice keeps the file of its summary, under docs/sessions, and no other kind takes one', () => {
+  assert.equal(note({ kind: 'closed', text: 'delivered', summary: 'docs/sessions/2026-10-17-jh-24.md' }).summary, 'docs/sessions/2026-10-17-jh-24.md');
+  assert.equal(note({ kind: 'closed', text: 'delivered', summary: 'docs\\sessions\\2026-10-17-jh-24.md' }).summary, 'docs/sessions/2026-10-17-jh-24.md');
+  // A closed notice built by a library caller, or read from the record, may have none: the command requires it.
+  assert.equal('summary' in note({ kind: 'closed', text: 'delivered' }), false);
+  for (const summary of ['README.md', 'docs/sessions/a.txt', '../docs/sessions/a.md', 'docs/sessions/sub/a.md', '/docs/sessions/a.md', 'C:/r/docs/sessions/a.md', 'docs/sessions/.md', '']) {
+    refused({ kind: 'closed', text: 'delivered', summary }, /--summary takes a file of docs\/sessions\/, as js-harness summary path names it/);
+  }
+  for (const kind of ['opened', 'waiting', 'note', 'relieved']) refused({ kind, summary: 'docs/sessions/a.md' }, /only a closed notice takes --summary/);
+  refused({ kind: 'ready', pr: 344, summary: 'docs/sessions/a.md' }, /only a closed notice takes --summary/);
+});
+
 test('readNotices keeps a ready notice with its pull request, and skips one without a number', withHome((home) => {
   const file = channel.recordPath(home, SLUG);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -280,6 +293,30 @@ test('an answer names its question, and is verified only where its line was read
     [{ question: 3, verified: false, copy: copyOfAnswered }, /an answer that was not verified takes copy null/],
   ];
   for (const [fields, pattern] of cases) refused({ kind: 'answer', transcript: '1d16beeb', line: 406, ...fields }, pattern);
+});
+
+test('a verified answer keeps when its question was shown and when he answered it, and a typed one only when he answered', () => {
+  const SHOWN = '2026-10-17T09:05:00.000Z';
+  const ANSWERED = '2026-10-17T09:20:00.000Z';
+  const base = { kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, question: 3, verified: true };
+  const tapped = note({ ...base, copy: copyOfAnswered, shownAt: SHOWN, answeredAt: ANSWERED });
+  assert.deepEqual(Object.keys(tapped).slice(-4), ['verified', 'copy', 'shownAt', 'answeredAt']);
+  assert.deepEqual([tapped.shownAt, tapped.answeredAt], [SHOWN, ANSWERED]);
+  const typedCopy = { tool: null, answers: [{ question: 'Pregunta 3: ¿cuál?', options: [], answer: 'Low', how: 'typed in the chat' }] };
+  const typed = note({ ...base, copy: typedCopy, answeredAt: ANSWERED });
+  assert.equal(typed.answeredAt, ANSWERED);
+  assert.equal('shownAt' in typed, false);
+  // Written without them, as every answer before B4b was: the same keys as before.
+  assert.deepEqual(Object.keys(note({ ...base, copy: copyOfAnswered })).slice(-2), ['verified', 'copy']);
+  const cases = [
+    [{ ...base, copy: copyOfAnswered, answeredAt: 'yesterday' }, /answeredAt takes a time/],
+    [{ ...base, copy: copyOfAnswered, shownAt: 42, answeredAt: ANSWERED }, /shownAt takes a time/],
+    [{ ...base, copy: typedCopy, shownAt: SHOWN, answeredAt: ANSWERED }, /no tool showed an answer typed in the chat/],
+    [{ ...base, verified: false, copy: null, answeredAt: ANSWERED }, /only a verified answer takes shownAt and answeredAt/],
+    [{ kind: 'answer', text: 'Low', transcript: '1d16beeb', line: 406, answeredAt: ANSWERED }, /only a verified answer takes shownAt and answeredAt/],
+    [{ kind: 'note', text: 'hi', answeredAt: ANSWERED }, /only a verified answer takes shownAt and answeredAt/],
+  ];
+  for (const [fields, pattern] of cases) refused(fields, pattern);
 });
 
 test('the copy of an answer keeps the question, the options and the answer, cut to its limits, and drops the keys it does not know', () => {

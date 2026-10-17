@@ -205,10 +205,11 @@ function deliveredBy(text) {
   return { name: attributeOf(opening[1], 'name') || null };
 }
 
-/** The text of the entry that holds a peer message: a queued command's `prompt`, or a `user` entry's content as
- * `quoteEntry` reads it (the string, or its text blocks joined), `''` when it has none. */
+/** The text of the entry that holds a peer message: a queued command's `prompt` as `queuedWords` reads it (a list of
+ * blocks without the host's leading reminders), or a `user` entry's content as `quoteEntry` reads it (the string, or
+ * its text blocks joined), `''` when it has none. */
 function peerTextOf(entry) {
-  if (entry.type === 'attachment') return typeof entry.attachment.prompt === 'string' ? entry.attachment.prompt : '';
+  if (entry.type === 'attachment') return queuedWords(entry.attachment.prompt)?.text ?? '';
   const content = entry.message?.content;
   return typeof content === 'string' ? content : blocksOf(entry).filter(isText).map((block) => block.text).join('\n');
 }
@@ -1271,7 +1272,9 @@ function recordOfRows(rows, notices) {
     if (!row) continue;
     const kept = said.get(row) ?? { status: null, worktree: null, branch: null, notices: 0 };
     kept.notices += 1;
-    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text };
+    // A closed notice keeps the summary its session left, which the lead reads before it archives it (session-close, T3).
+    const summary = notice.kind === 'closed' && typeof notice.summary === 'string' ? { summary: notice.summary } : {};
+    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text, ...summary };
     if (typeof notice.worktree === 'string') {
       kept.worktree = notice.worktree;
       kept.branch = typeof notice.branch === 'string' ? notice.branch : null;
@@ -1870,8 +1873,24 @@ function queuedMessageOf(entry) {
   if (kind === 'peer') return { what: peerInWords(peerMessageOf(entry), { queued: true }) };
   if (kind !== 'human') return { what: `a queued message of origin ${JSON.stringify(kind)}` };
   if (attachment.humanTurn !== true) return { what: 'a queued message of origin "human" that the host does not mark as a turn of the person' };
-  if (typeof attachment.prompt !== 'string') return { what: 'a queued message of the person that holds no text to quote' };
-  return { what: null, prompt: attachment.prompt, at: attachment.timestamp };
+  const words = queuedWords(attachment.prompt);
+  if (words === null) return { what: 'a queued message of the person that holds no text to quote' };
+  return { what: null, prompt: words.text, images: words.images, at: attachment.timestamp };
+}
+
+// The reminders the host puts at the start of a queued message's first block, before his words, with the blank lines
+// after them: the host's text, never his. Only that leading run: a tag he typed in his own words stays his.
+const HOST_REMINDERS = /^(?:\s*<system-reminder>[\s\S]*?<\/system-reminder>)+\s*/;
+
+/** His words in a queued message's `prompt` as `{ text, images }`, or `null` when it holds none. A string is his
+ * text as it is. Host 2.1.299 (2026-10-17) writes a list of blocks instead, the first opening with its own reminders
+ * of what happened while the session worked: the text blocks, the first without that leading run, one a line, a
+ * block left blank dropped, and how many image blocks came with them. */
+function queuedWords(prompt) {
+  if (typeof prompt === 'string') return { text: prompt, images: 0 };
+  if (!Array.isArray(prompt)) return null;
+  const words = prompt.filter(isText).map((block, i) => (i === 0 ? block.text.replace(HOST_REMINDERS, '') : block.text)).filter((text) => text.trim() !== '');
+  return words.length === 0 ? null : { text: words.join('\n'), images: prompt.filter((block) => block?.type === 'image').length };
 }
 
 /** The entry at line `line` (from 1) of a transcript's `text`, when it is what the person sent: `{
@@ -1935,7 +1954,7 @@ function quoteEntry(entry, calls = NO_CALLS) {
   const blocks = queued ? [] : blocksOf(entry);
   const said = typeof content === 'string' ? content : blocks.filter(isText).map((block) => block.text).join('\n');
   const typed = said.replace(PASTED_CONTENT, '');
-  return { person: true, at: entry.timestamp ?? queued?.at ?? null, text: said, images: blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '', queued: queued !== null };
+  return { person: true, at: entry.timestamp ?? queued?.at ?? null, text: said, images: queued ? queued.images : blocks.filter((block) => block.type === 'image').length, pastedOnly: typed !== said && typed.trim() === '', queued: queued !== null };
 }
 
 /** What an entry is when it is not a reply of the session, in words, or `null` for the session's own reply. The
@@ -2303,6 +2322,16 @@ function pendingAge(session, now, ended) {
   const work = isAgent(pending.tool) ? session.work.find((item) => item.tool === 'Agent' && !item.ended && item.toolUseId === pending.id) : undefined;
   const written = Date.parse(work?.file?.modifiedAt ?? '');
   return now - (Number.isNaN(written) ? launched : Math.max(launched, written));
+}
+
+/** Whether `session` (its facts, as `sessionFacts` gives them) ends on a call that has had no result for the held-call
+ * limit at `now`, as the board's held line counts it. A session the host holds on a card writes nothing, so this is what
+ * keeps it on the board past its window (odd/tasks/held-sessions.md, S4). Facts read from a transcript's tail lack the
+ * subagent files `readSession` adds, so a subagent at work counts as held there: the board reads such a session whole
+ * and asks again. */
+export function heldPastLimit(session, now) {
+  const age = pendingAge(session, now, false);
+  return age !== null && age >= PENDING_CALL_LIMIT_MS;
 }
 
 /** How many times the limit fits in an age of `pendingAge`, as a power of two: -1 below the limit or when no call
@@ -3025,6 +3054,13 @@ function rosterLines(roster, now) {
   const orchestrators = roster.rows.filter((row) => row.role === 'orchestrator');
   if (orchestrators.length > 1) {
     lines.push(`  ${orchestrators.length} sessions carry the orchestrator's title: ${orchestrators.map((row) => JSON.stringify(row.title)).join(', ')}. A message to the orchestrator has no single address.`);
+  }
+  // A session whose last word is a close with its summary waits for the lead to read the summary and archive it,
+  // until the app says it is archived (odd/tasks/session-close.md, T3).
+  for (const row of roster.rows) {
+    const status = row.record?.status;
+    if (status?.kind !== 'closed' || typeof status.summary !== 'string' || row.where === 'archived') continue;
+    lines.push(`  to archive: ${row.title ?? '(no title)'}, closed ${ago(status.at, now)}: read ${status.summary}, then archive it`);
   }
   if (roster.unread > 0) lines.push(inNoRow(roster.unread, 'that could not be read'));
   if (roster.outside > 0) lines.push(inNoRow(roster.outside, 'with no entry inside the window'));

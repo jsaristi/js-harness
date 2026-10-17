@@ -122,6 +122,14 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "memory-index-bytes": {
+    "kind": "design",
+    "path": "odd/tasks/memory-hygiene.md"
+  },
+  "memory-pass-days": {
+    "kind": "design",
+    "path": "odd/tasks/memory-hygiene.md"
+  },
   "person-present": {
     "kind": "design",
     "path": "odd/tasks/session-channel.md"
@@ -353,6 +361,22 @@
       "date": "2026-10-11",
       "by": "session"
     }
+  },
+  "throughput-backfill-days": {
+    "kind": "design",
+    "path": "odd/tasks/throughput-review.md"
+  },
+  "throughput-compare-days": {
+    "kind": "design",
+    "path": "odd/tasks/throughput-review.md"
+  },
+  "throughput-quiet-days": {
+    "kind": "design",
+    "path": "odd/tasks/throughput-review.md"
+  },
+  "throughput-quiet-runs": {
+    "kind": "design",
+    "path": "odd/tasks/throughput-review.md"
   },
   "wait-every": {
     "kind": "design",

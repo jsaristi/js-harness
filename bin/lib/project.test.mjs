@@ -14,6 +14,7 @@ import {
   gitDirs,
   gitDirsAndCommits,
   agentsTemplate,
+  templateBlock,
   runCodegraphInit,
   InitWriteError,
 } from './project.mjs';
@@ -141,8 +142,9 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     const harnessJsonPath = path.join(root, 'harness.json');
     assert.ok(fs.existsSync(harnessJsonPath));
     const harnessJsonContent = fs.readFileSync(harnessJsonPath, 'utf8');
-    assert.deepEqual(JSON.parse(harnessJsonContent), { version: '0.1.0' });
-    assert.equal(harnessJsonContent, JSON.stringify({ version: '0.1.0' }, null, 2) + '\n');
+    // The reply check is on in a new project: his answer 11, "Prendido por defecto" (odd/tasks/rule-hierarchy.md, T9).
+    assert.deepEqual(JSON.parse(harnessJsonContent), { version: '0.1.0', reply: true });
+    assert.equal(harnessJsonContent, JSON.stringify({ version: '0.1.0', reply: true }, null, 2) + '\n');
 
     const agentsPath = path.join(root, 'AGENTS.md');
     assert.ok(fs.existsSync(agentsPath));
@@ -3602,6 +3604,97 @@ test('an invalid harness.json never echoes its own bytes: a fixed reason for JSO
     assert.equal(unreadable.kind, 'invalidHarnessJson');
     assert.match(unreadable.reason, /^it cannot be read \(([A-Z0-9_]+|unknown error)\)$/);
     assert.equal(syncProject(root, '0.1.0', syncDeps()).reason, unreadable.reason);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// T16f of odd/tasks/rule-hierarchy.md: the harness's lines of AGENTS.md, in their marked block, are rendered again by sync
+// while the project has not edited them (bin/lib/template-block.test.mjs holds the block itself).
+test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md again and says so; an edited one is kept', () => {
+  const root = makeTmpRepo('js-harness-project-template-block-');
+  const mark = (body) => `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->`;
+  const block = (body) => `# project\n\nOur own line.\n\n${mark(body)}\n${body}<!-- js-harness block end -->\n\n## Constraints\n- ours\n`;
+  const old = '## What good looks like\nAn older line of the harness.\n';
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, block(old), 'utf8');
+
+    const first = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(first.code, 0);
+    assert.equal(first.upToDate, false);
+    assert.deepEqual(first.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+
+    const second = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(second.upToDate, true);
+    assert.deepEqual(second.actions, []);
+
+    const edited = block(old).replace('An older line', 'Our edited line');
+    fs.writeFileSync(agents, edited, 'utf8');
+    const third = syncProject(root, '0.1.0', syncDeps());
+    assert.deepEqual(third.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: "its block of the harness's lines was edited, so sync does not render it again" }]);
+    assert.equal(third.upToDate, true);
+    assert.equal(fs.readFileSync(agents, 'utf8'), edited);
+
+    // A block sync cannot write again is a failed sync, not an up-to-date one (gentle-ai R3 and R4 on cf820d2).
+    fs.writeFileSync(agents, block(old), 'utf8');
+    const refused = (file, ...rest) => {
+      if (file === agents) throw new Error('EACCES');
+      return fs.writeFileSync(file, ...rest);
+    };
+    const fourth = syncProject(root, '0.1.0', syncDeps({ writeFile: refused }));
+    assert.equal(fourth.code, 1);
+    assert.equal(fourth.upToDate, false);
+    assert.deepEqual(fourth.actions, [{ kind: 'problem', path: 'AGENTS.md', reason: "its block of the harness's lines could not be rendered again (EACCES)" }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(old));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject does not render the block through an AGENTS.md that is a link: git could not give its target back', (t) => {
+  const root = makeTmpRepo('js-harness-project-template-link-');
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-template-link-target-'));
+  const body = '## What good looks like\nAn older line of the harness.\n';
+  const shared = `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${body}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    const target = path.join(outside, 'AGENTS.md');
+    fs.writeFileSync(target, shared, 'utf8');
+    fs.rmSync(agents);
+    try {
+      fs.symlinkSync(target, agents, 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') {
+        t.skip('symlinks need privileges on this machine');
+        return;
+      }
+      throw err;
+    }
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.deepEqual(result.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: 'it is a link, so sync does not write through it' }]);
+    assert.equal(fs.readFileSync(target, 'utf8'), shared);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('syncProject reads AGENTS.md with lstat, so a link is kept on a machine that cannot make one', () => {
+  const root = makeTmpRepo('js-harness-project-template-lstat-');
+  const body = '## What good looks like\nAn older line of the harness.\n';
+  const text = `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${body}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, text, 'utf8');
+    const lstat = (file, ...rest) => (file === agents ? { isSymbolicLink: () => true, isFile: () => false } : fs.lstatSync(file, ...rest));
+    const result = syncProject(root, '0.1.0', syncDeps({ lstat }));
+    assert.deepEqual(result.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: 'it is a link, so sync does not write through it' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), text);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

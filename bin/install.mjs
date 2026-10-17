@@ -6,7 +6,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
+import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -20,7 +22,7 @@ import {
 import { INSTALL_NEWEST } from './lib/version.mjs';
 
 const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
-const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global]';
+const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full]]';
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
 class ScopeArgError extends Error {}
@@ -69,6 +71,71 @@ function reportSessionMessages(home) {
   const back = record?.had ? `uninstall puts back ${JSON.stringify(record.previous)}` : 'uninstall removes it';
   console.log(`set ${key} to "${value}" in ${result.path} (${was}; ${back})`);
   return 0;
+}
+
+/** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7).
+ * A planned pass is released from its project's checkout, which no file records, against the uninstall's home. */
+/** `value` as one word the user's shell reads back as it is: in single quotes, inside which neither sh nor
+ * PowerShell expands `$` or ends at `"`, as they do in double quotes. A single quote is written as each reads it:
+ * `'\''` for sh, `''` for PowerShell (`platform` win32). */
+export function shellWord(value, platform = process.platform) {
+  if (platform !== 'win32') return `'${value.replace(/'/g, "'\\''")}'`;
+  // cmd.exe reads no single quotes, and a Windows path holds no `"`: double quotes serve all three shells there
+  // unless PowerShell would expand something in them or end them at “ ” „, which it takes for `"`. PowerShell
+  // takes ‘ ’ ‚ ‛ for a single quote too.
+  if (!PWSH_DOUBLE_QUOTED_UNSAFE.test(value)) return `"${value}"`;
+  return `'${value.replace(/['‘’‚‛]/g, (quote) => quote + quote)}'`;
+}
+
+/** `value` in double quotes for cmd.exe where `shellWord` gave it single quotes on Windows, which cmd.exe splits
+ * at a space: no one form serves cmd.exe and PowerShell there. `null` where `shellWord` serves every shell. */
+export function cmdExeWord(value, platform = process.platform) {
+  return platform === 'win32' && PWSH_DOUBLE_QUOTED_UNSAFE.test(value) ? `"${value}"` : null;
+}
+
+/** What PowerShell does not read as it is inside double quotes: what it expands, and the curly double quotes. */
+const PWSH_DOUBLE_QUOTED_UNSAFE = /[$`“”„]/;
+
+function memoryKeptLine(folder, home) {
+  switch (folder.reason) {
+    case 'locked':
+      return folder.stamp !== null && folder.manifest
+        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run${cmdExeWord(home) === null ? '' : ', in PowerShell,'} js-harness memory verify ${folder.stamp} --home ${shellWord(home)} or js-harness memory undo ${folder.stamp} --home ${shellWord(home)}${cmdExeWord(home) === null ? '' : ` (in cmd.exe, --home ${cmdExeWord(home)})`}, then uninstall again`
+        : `kept ${folder.path}: ${folder.lock} holds no finished plan (pid ${folder.pid ?? 'unknown'}); if that process is not running, remove the file and uninstall again`;
+    case 'locked-whole':
+      return `kept ${folder.path}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`;
+    case 'purging':
+      return folder.alive
+        ? `kept ${folder.path}: another uninstall is removing it (pid ${folder.pid}, ${folder.marker}); run js-harness uninstall --global again once it ends`
+        : `kept ${folder.path}: ${folder.marker} was left by an uninstall that ended before removing it (pid ${folder.pid ?? 'unknown'}); remove that file and run js-harness uninstall --global again`;
+    case 'partial':
+      return `could not remove ${folder.path} (${folder.code}): it was put back under its name and may be partly removed; run js-harness uninstall --global --full again`;
+    case 'aside':
+      return `could not remove ${folder.path} (${folder.code}), nor put it back as ${folder.dir}: rename it back to ${folder.dir}, then run js-harness uninstall --global --full again`;
+    case 'aside-found':
+      return `found ${folder.path}, left by an uninstall that stopped: rename it back to ${folder.dir} when there is none, else remove it`;
+    default:
+      return `could not remove ${folder.path} (${folder.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`;
+  }
+}
+
+/** "N snapshot(s) of a memory pass (stamps)", `whose` added after "pass". */
+function snapshotWords(stamps, whose = '') {
+  return `${stamps.length} snapshot${stamps.length === 1 ? '' : 's'} of a memory pass${whose} (${stamps.join(', ')})`;
+}
+
+/** The project uninstall leaves the project's memory snapshots under the machine's home: one stdout line says where
+ * they are and what removes them, when there are any (D7.3). Nothing is said when they cannot be looked for. */
+function sayProjectSnapshots(parsed, deps) {
+  try {
+    const run = deps.run ?? ((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }));
+    const { slug } = memoryLocation({ home: parsed.home, project: parsed.cwd, run });
+    const project = path.join(hygieneDir(parsed.home), slug);
+    const stamps = fs.readdirSync(path.join(project, 'snapshots')).sort();
+    if (stamps.length > 0) console.log(`kept ${project}: ${snapshotWords(stamps, ' of this project')}, under the machine's home; js-harness uninstall --global --full removes them`);
+  } catch {
+    // no snapshots, or no way to find them: nothing to say
+  }
 }
 
 /** The flags `uninstall` and `sync` share. Strict like `init`'s parsing (an unknown flag or a missing
@@ -229,6 +296,9 @@ function logSyncProjectAction(action) {
     case 'ran':
       console.log(`ran ${action.path}`);
       break;
+    case 'rendered':
+      console.log(`rendered the harness's lines of ${action.path} again, unedited since they were written: commit it`);
+      break;
     case 'removed':
       console.log(`removed ${action.path}`);
       break;
@@ -359,18 +429,30 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * `uninstallProject`, `removeFile` and `schtasks` (or `spawnSync`, what the real `schtasks.exe` is run through)
  * for the machine one — each ignores what it does not use. */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
+  // `--full` is uninstall's alone (D7.3 of odd/tasks/memory-hygiene.md): taken out before the flags `sync` shares.
+  // One right after `--cwd` or `--home` stays, so that flag still refuses it as a value that starts with `--`.
+  const isFull = (token, i) => token === '--full' && argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
+  const full = argv.some(isFull);
   let parsed;
   try {
-    parsed = parseScopeArgs(argv, env);
+    parsed = parseScopeArgs(argv.filter((token, i) => !isFull(token, i)), env);
   } catch (err) {
     console.error(`${err.message}\n\n${UNINSTALL_USAGE}`);
+    return 2;
+  }
+  // It deletes the only copy of what a memory pass changed, so it is asked for in full words, even outside a
+  // repository where `uninstall` alone is the machine's.
+  if (full && !parsed.global) {
+    console.error(`--full removes the memory snapshots of the machine: it goes with --global\n\n${UNINSTALL_USAGE}`);
     return 2;
   }
 
   if (!parsed.global) {
     const projectResult = uninstallProject(parsed.cwd, deps);
     if (!projectResult.notGitRepo && !projectResult.notInitialized) {
-      return reportUninstallProject(projectResult);
+      const code = reportUninstallProject(projectResult);
+      if (projectResult.actions) sayProjectSnapshots(parsed, deps);
+      return code;
     }
     // An explicit --cwd names a project, and so does a git repository around the cwd: when it is not
     // an initialized one, say so rather than falling through, or a second `uninstall` in the same
@@ -387,8 +469,9 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   const home = parsed.home;
   // A recorded scheduled task is looked for and deleted through `schtasks.exe`, found from the environment this
   // command was given and nowhere else (`runSchtasks`); it is run only when the manifest records a task.
-  const result = uninstall(home, { ...deps, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  const result = uninstall(home, { ...deps, full, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
+  for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
   // named it is gone by now: it goes to stderr with the error code and what is left to do.
   const notUndone = new Map(result.keptOptional.filter((file) => file.reason !== 'edited').map((file) => [file.path, file]));
@@ -480,21 +563,22 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     }
   }
   // The folder of memory hygiene, which `memory` writes under the home. A project's folder that holds snapshots is
-  // kept on purpose and said on stdout, since they are the only copy of what a pass changed; one that could not be
-  // looked at or removed goes to stderr and fails the uninstall, like the channel's.
+  // kept on purpose by the normal uninstall and said on stdout, with what removes them, since they are the only copy
+  // of what a pass changed; everything else left of it goes to stderr and fails the uninstall (D7).
   const memoryKept = result.memoryKept ?? [];
   for (const folder of memoryKept) {
     if (folder.stamps) {
       const count = folder.stamps.length;
-      console.log(`kept ${folder.path}: ${count} snapshot${count === 1 ? '' : 's'} of a memory pass (${folder.stamps.join(', ')}), the only copy of what ${count === 1 ? 'that pass' : 'those passes'} changed${folder.journal ? ", with the project's journal" : ''}; remove the folder by hand to drop them`);
+      console.log(`kept ${folder.path}: ${count} snapshot${count === 1 ? '' : 's'} of a memory pass (${folder.stamps.join(', ')}), the only copy of what ${count === 1 ? 'that pass' : 'those passes'} changed${folder.journal ? ", with the project's journal" : ''}; js-harness uninstall --global --full removes them`);
     } else {
-      console.error(`could not remove ${folder.path} (${folder.code}): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`);
+      console.error(memoryKeptLine(folder, home));
     }
   }
   const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
   if (result.throughputKept) {
-    const { path: folder, days } = result.throughputKept;
-    console.log(`kept ${folder}: ${days === null ? 'the' : days} day snapshot${days === 1 ? '' : 's'} of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`);
+    const { path: folder, days, reviewStarts } = result.throughputKept;
+    const starts = reviewStarts === null ? ', and any gentle-ai review starts recorded there' : reviewStarts > 0 ? `, and the gentle-ai review starts of ${reviewStarts} project${reviewStarts === 1 ? '' : 's'}, the only record of when those reviews began` : '';
+    console.log(`kept ${folder}: ${days === null ? 'the' : days} day snapshot${days === 1 ? '' : 's'} of the throughput review, the only copy of the gates of days the gate log has rotated away${starts}; remove the folder by hand to drop them`);
   }
   if (
     result.removed.length === 0 &&

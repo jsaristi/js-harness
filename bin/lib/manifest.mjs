@@ -12,7 +12,8 @@ import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
-import { hygieneDir } from './memory-hygiene.mjs';
+import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
+import { readLock } from './memory-pass.mjs';
 
 function skillContent(version) {
   return `---
@@ -26,7 +27,7 @@ js-harness commands:
 - \`js-harness sync --global\` — re-write installed files for the running version.
 - \`js-harness update\` — say whether a newer release exists; none is tagged before 1.0.0, so it says how to get the newest copy.
 - \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
-- \`js-harness uninstall --global\` — remove exactly what install wrote.
+- \`js-harness uninstall --global\` — remove exactly what install wrote; it keeps the memory snapshots, the only copy of what a memory pass changed, and \`--full\` removes them too.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run. Where the project's \`codexReview\` switch is off at HEAD it starts nothing and records nothing.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone ${ruleValue('gate-wait', 'minutes')} minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).
 - \`js-harness gate -- <command>\` — a heavy run that is not a commit's gate (a whole test suite by hand, a batch of evals), under the same lock: it waits for its turn like a gate (\`--wait <minutes>\`, \`--no-wait\`), is stopped after ${ruleValue('gate-max', 'minutes')} minutes (\`--max <minutes>\`), and its exit code is the command's.
@@ -37,7 +38,7 @@ js-harness commands:
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; a work session's wait also ends on a notice to its own number (exit 3), printing it and the same wait to run again; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
-- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, a recursive \`rm\` or an \`rmdir\` of a folder at the top of a drive (the host holds that one for the user even in bypass mode, so put practice and scratch folders below the project's worktrees folder or in your scratchpad), and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
 - \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words. On Claude Code a work session that ends its turn holding work the orchestrator handed it, with nothing in its background to wake it, is turned back once, with the wait to arm.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
@@ -87,6 +88,7 @@ A change does not exist until it is in a file. Where each thing lives:
 - a feature's plan (tasks, progress, next step): its feature document on its branch, written only by the session that owns the feature;
 - the notices between sessions (a session opened, waits, closed; a question to the user and its answer): the project's record, appended with \`js-harness notify\` and read on the board;
 - what is in flight between sessions and in neither of those yet (the user's decisions, what each session is for) and, at its head, the charter of what the lead does alone: the orchestrator's relief file;
+- the rules in force, each a value or a sentence with its id: the list \`js-harness rules\` prints, where a rule is changed by its own command; read the list, not the relief file, for what a rule says;
 - the facts (who works, what runs, gates, branches, context sizes, the questions still open): stored nowhere, computed by \`js-harness sessions\`.
 
 ## Questions to the user
@@ -95,13 +97,14 @@ Every question of the project reaches the user in one place: the orchestrator's 
 - A question is recorded before it is asked: \`js-harness notify --to orchestrator --kind question\`, with its fields (\`text\`, \`options\`, \`waits\`) as JSON on standard input. It prints the question's number and the words its text is headed by in the tool: that heading is how the answer is joined to its question.
 - The question tool holds the session that calls it until the user answers. So it is called at once only when the user wrote in that session a short while ago; otherwise in the reply to their next message, and until then a reply says in one line how many questions wait. \`notify\`, the board (\`to ask:\`) and the resume after a compaction print this rule for the moment.
 - The answer is recorded once given: \`--kind answer --question <n>\`, with \`--transcript\` and \`--line\` naming where the user's words are, and the session that asked is rung. \`--kind withdrawn --question <n> "<why>"\` closes one that no longer needs an answer.
+- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find.
 - A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (\`rule:double-review\`, \`js-harness-protocols\` section 1), and says what its readers changed, or names by path the reviewed text it rests on.
 - The board lists every question still open, and whether it is recorded and not shown yet, on the user's screen, closed without an answer, or answered and not carried yet.
 
 ## The lead
 
 What you run:
-- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the work sessions that hold work you handed them and have made no commit, notice or gate for ${ruleValue('session-stall', 'minutes')} minutes (\`Stalled\`), the worktrees with their feature plans, the running gates, the open pull requests and your relief file. \`js-harness loop heartbeat\` ends on such a session too, with a \`STALLED:\` line, and on a red daily Windows run not told before, with a \`WINDOWS:\` line that names its failing tests.
+- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the work sessions that hold work you handed them and have made no commit, notice or gate for ${ruleValue('session-stall', 'minutes')} minutes (\`Stalled\`), the worktrees with their feature plans, the running gates, the open pull requests and your relief file. \`js-harness loop heartbeat\` ends on such a session too, with a \`STALLED:\` line, and on a red daily Windows run not told before, with a \`WINDOWS:\` line that names its failing tests. It also keeps each settled day's throughput snapshot and ends on a throughput review that falls due, with a \`DUE:\` line that names the commands to run; every line that ends it is followed by the \`DUE:\` lines still open.
 - \`js-harness sessions --watch\`, in the background — your way of waiting. It is silent until the board changes in a way that needs a decision, then prints the changes and the board. Launch it again each time it returns. A return with "nothing changed" is not news: relaunch it and say nothing.
 - \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes; \`--pace\` gives the tasks closed and added each day on the default branch.
 - \`js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>\`, in the background — each loop you keep (\`js-harness loop heartbeat\`, \`js-harness loop channel-watch\`, a merge keeper): it records you as its owner, runs the command, and its end wakes you. \`js-harness loop status\` lists the project's loops with their owners; \`js-harness loop stop <name>\` stops one of yours and says only when nothing of it is left.
@@ -154,7 +157,7 @@ Compaction, and a relief only on request. You hold nothing the files do not. A c
 You are the orchestrator of this project's sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.
 \`\`\`
 
-- When you start from that prompt, read the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you lead. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): archived without asking, and named in the recap.
+- When you start from that prompt, read the list (\`js-harness rules\`), the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you lead. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): when it closed with its summary, the board lists it under \`to archive\`: read the summary, then archive the session with the host's tool to archive sessions, without asking, and name it in the recap. When the host refuses because the session still has live work, turn its Remote Control off with the host's tool, then archive it again, without asking: a Remote Control link counts as live work and keeps a finished session from being archived. A finished session that closed without a summary is asked for one first, by \`SendMessage\` to its title, and archived once it closes with it.
 - The orchestrator before you, once it is renamed out of the role's title (\`<code> ORQ relevada\`), runs \`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"\`: \`js-harness sessions --measures\` counts the reliefs from those notices.
 - When you come back from a compaction, do what a new lead does: the files are the record, your summary is not.
 - Loops have owners. At your start and after a compaction, run \`js-harness loop status\`. A compaction or a restart marks your background tasks stopped while their processes live on: restart each loop you own with \`js-harness loop run <name> --restart ...\`, so a task of yours holds it again. Never stop or restart a loop another session owns: a second lead (a fork) that finds loops another owns leaves them alone and says so. At a handover, the new lead takes each loop over with \`--restart --take-over\`, after the relief line where the old lead gave them up; the old lead starts no loop again.
@@ -170,12 +173,12 @@ How a lead is rotated, where the host nests a session under the one that started
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
 - Commit with a plain \`git commit\`: in a project that holds \`.github/workflows/gate.yml\` its gate sends the tests to GitHub's machines first, and anywhere it waits by itself for its turn here while another runs (\`Gates\` in \`js-harness sessions\` says which runs and which wait). A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too; a commit wrapped in it holds the machine's lock and never goes to GitHub.
 - Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
-- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does a gentle-ai review, whose reviewer has no tools.
+- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does a gentle-ai review, whose reviewer has no tools. Give that review a base on the head's first-parent line, and on \`operation_timeout\` run it once more, then go on as \`js-harness-protocols\` section 3 says.
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When a pull request of yours is ready to land, say so with \`js-harness notify --to orchestrator --kind ready --pr <number> "<what it holds>"\`: the land finds whose pull request it is from that notice, not from the branch you sent it from.
-- When you have finished, say so in your first line, and close with \`js-harness notify --to orchestrator --kind closed "<what you delivered>"\`: nothing more goes to you.
+- When you have finished, say so in your first line. Write your summary from \`js-harness summary template --title "<your title>"\` into the file it names, commit and push it, and close with \`js-harness notify --to orchestrator --kind closed --summary <that file> "<what you delivered>"\`: nothing more goes to you, and the lead reads your summary and archives you.
 - When you are free and wait for the orchestrator with nothing handed to you, say so with \`js-harness notify --to orchestrator --kind waiting "<on what>"\`: until a \`waiting\` or a \`closed\`, the work last handed to you is yours, and ${ruleValue('session-stall', 'minutes')} minutes with no commit, notice or gate show you as stalled to the orchestrator.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
 - Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
@@ -1292,22 +1295,33 @@ export function sync(home, version, deps = {}) {
 export function uninstall(home, deps = {}) {
   // The folder of memory hygiene first, on its own: what is left of `.js-harness` once it is gone is then removed
   // by the steps below, with a manifest and without, as when `memory` never ran.
-  const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
+  const memory = removeMemoryHygieneFolder(home, {
+    removeFile: deps.removeFile ?? fs.rmSync,
+    statFile: deps.statFile ?? fs.statSync,
+    listDir: deps.listDir ?? fs.readdirSync,
+    renameFile: deps.renameFile ?? fs.renameSync,
+    alive: deps.alive ?? isAlive,
+    full: deps.full === true,
+  });
   const result = uninstallInstalled(home, deps);
   return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory), ...throughputResult(home, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync) };
 }
 
 /** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
- * the gates of days the gate log has rotated away. Named, with how many days they hold (`null` where the folder
- * could not be listed), so the person knows what stays; `{}` when there is no folder. */
+ * the gates of days the gate log has rotated away. The gentle-ai review starts the pause hook keeps beside them
+ * (`review-starts.jsonl`, B6) are the only copy of those starts, and stay too. Named, with how many days and how many
+ * projects' starts they hold (`null` where the folder could not be listed), so the person knows what stays; `{}`
+ * when there is no folder. */
 function throughputResult(home, statFile, listDir) {
   const dir = path.join(home, '.js-harness', 'throughput');
   try {
     if (!isThere(dir, statFile)) return {};
-    const days = listDir(dir).flatMap((project) => listDir(path.join(dir, project)).filter((name) => name.endsWith('.json'))).length;
-    return { throughputKept: { path: dir, days } };
+    const files = listDir(dir).map((project) => listDir(path.join(dir, project)));
+    const days = files.flatMap((names) => names.filter((name) => name.endsWith('.json'))).length;
+    const reviewStarts = files.filter((names) => names.includes('review-starts.jsonl')).length;
+    return { throughputKept: { path: dir, days, reviewStarts } };
   } catch {
-    return { throughputKept: { path: dir, days: null } };
+    return { throughputKept: { path: dir, days: null, reviewStarts: null } };
   }
 }
 
@@ -1531,40 +1545,106 @@ function removeChannelFolder(home, removeFile, statFile) {
   return { removed: [dir], kept: [] };
 }
 
-/** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as `{ removed, kept }`
- * (odd/tasks/memory-hygiene.md, D4 and T9). A project's folder that holds a snapshot is kept, with the stamps of its
- * snapshots and whether its journal is beside them: a snapshot is the only copy of what a memory pass changed, so it
- * is never removed on its way out. The other projects' folders go; with none kept, the whole folder goes. A folder
- * that cannot be looked at or removed is kept with the error code, like the channel's, one project at a time, so
- * one held open does not hide what was removed before it, the projects after it, or the stamps kept. */
-function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
+/** Removes the folder of memory hygiene under `home` (`hygieneDir` of `memory-hygiene.mjs`), as
+ * `{ removed, kept, snapshotsRemoved }` (odd/tasks/memory-hygiene.md, D4, T9 and D7).
+ *
+ * The normal uninstall keeps a project's folder that holds a snapshot, with the stamps of its snapshots and whether
+ * its journal is beside them: a snapshot is the only copy of what a memory pass changed. The other projects' folders
+ * go; with none kept, the whole folder goes. One that cannot be looked at or removed is kept with the error code,
+ * one project at a time, so one held open does not hide what was removed before it or the stamps kept.
+ *
+ * `full` (`uninstall --global --full`, D7.2) removes the snapshots too: the folder is moved aside in one rename and
+ * removed there, and `snapshotsRemoved` names each project that held snapshots, with their stamps. A removal that
+ * fails puts the folder back (`partial`: it may be partly removed), or names where it was left (`aside`).
+ *
+ * Neither mode removes a project under a pass, whose `lock` (`readLock` of `memory-pass.mjs`) is kept as
+ * `locked` with what the lock says (D7.4); the full one then removes nothing (`locked-whole`), since it takes the
+ * folder whole. While it works it holds a marker beside the folder (`purgeMarker`, D7.5), which every writer of a
+ * pass checks after taking its lock: a plan either holds its lock when the locks are read, or sees the marker and
+ * stops. A marker already there is another uninstall's, or one a killed run left: nothing is touched, and `purging`
+ * says whether its pid is `alive`. A folder a killed run left aside is named (`aside-found`), never removed. */
+function removeMemoryHygieneFolder(home, { removeFile, statFile, listDir, renameFile, alive, full }) {
   const dir = hygieneDir(home);
+  const marker = purgeMarker(dir);
   const unremovable = (folder, err) => ({ path: folder, reason: 'unremovable', code: err.code ?? 'unknown error' });
+  const asides = asideFolders(dir, listDir);
+  const purging = (held) => ({ removed: [], kept: [{ path: dir, reason: 'purging', marker, pid: held.pid, alive: held.pid !== null && alive(held.pid) }, ...asides], snapshotsRemoved: [] });
+  const held = readMarker(marker);
+  if (held !== null) return purging(held);
+  try {
+    if (!isThere(dir, statFile)) return { removed: [], kept: asides, snapshotsRemoved: [] };
+  } catch (err) {
+    return { removed: [], kept: [unremovable(dir, err), ...asides], snapshotsRemoved: [] };
+  }
+  try {
+    fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx' });
+  } catch (err) {
+    if (err.code === 'EEXIST') return purging(readMarker(marker) ?? { pid: null });
+    return { removed: [], kept: [unremovable(dir, err), ...asides], snapshotsRemoved: [] };
+  }
+  try {
+    const result = full ? removeHygieneWhole(dir, { removeFile, statFile, listDir, renameFile }) : removeHygieneProjects(dir, { removeFile, statFile, listDir });
+    const kept = [...result.kept, ...asides].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return { removed: result.removed, kept, snapshotsRemoved: result.snapshotsRemoved ?? [] };
+  } finally {
+    fs.rmSync(marker, { force: true });
+  }
+}
+
+/** The project folders of the hygiene folder `dir`, each as `{ path, stamps, journal, lock }` (`lock` from
+ * `readLock`, null when there is none), or `{ path, reason: 'unremovable', code }` for one that cannot be looked at. */
+function hygieneProjects(dir, statFile, listDir) {
+  return listDir(dir).sort().map((name) => {
+    const project = path.join(dir, name);
+    // The lock first, which never throws: a project whose snapshots cannot be looked at is still seen under a pass.
+    const lock = readLock(project);
+    try {
+      const snapshots = path.join(project, 'snapshots');
+      const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
+      return { path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile), lock };
+    } catch (err) {
+      return lock ? { path: project, lock } : { path: project, reason: 'unremovable', code: err.code ?? 'unknown error' };
+    }
+  });
+}
+
+/** What `uninstall` says of a project under a pass: the lock, and the memory folder its plan's manifest records. */
+function lockedProject(project) {
+  const { lock } = project;
+  let folder = null;
+  if (lock.manifest) {
+    try {
+      const recorded = JSON.parse(fs.readFileSync(path.join(project.path, 'snapshots', lock.stamp, 'manifest.json'), 'utf8')).folder;
+      if (typeof recorded === 'string') folder = recorded;
+    } catch {
+      // a manifest that cannot be read names no folder
+    }
+  }
+  return { path: project.path, reason: 'locked', lock: path.join(project.path, 'lock'), ...lock, folder };
+}
+
+/** The normal mode: each project's folder goes, unless it holds a snapshot or a lock. */
+function removeHygieneProjects(dir, { removeFile, statFile, listDir }) {
   let projects;
   try {
-    if (!isThere(dir, statFile)) return { removed: [], kept: [] };
-    projects = listDir(dir).sort().map((name) => path.join(dir, name));
+    projects = hygieneProjects(dir, statFile, listDir);
   } catch (err) {
-    return { removed: [], kept: [unremovable(dir, err)] };
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
   }
   const kept = [];
   const goes = [];
   for (const project of projects) {
-    try {
-      const snapshots = path.join(project, 'snapshots');
-      const stamps = isThere(snapshots, statFile) && statFile(snapshots).isDirectory() ? listDir(snapshots).sort() : [];
-      if (stamps.length > 0) kept.push({ path: project, stamps, journal: isThere(path.join(project, 'journal.jsonl'), statFile) });
-      else goes.push(project);
-    } catch (err) {
-      kept.push(unremovable(project, err));
-    }
+    if (project.reason) kept.push(project);
+    else if (project.lock) kept.push(lockedProject(project));
+    else if (project.stamps.length > 0) kept.push({ path: project.path, stamps: project.stamps, journal: project.journal });
+    else goes.push(project.path);
   }
   if (kept.length === 0) {
     try {
       removeFile(dir, { recursive: true, force: true });
       return { removed: [dir], kept: [] };
     } catch (err) {
-      return { removed: [], kept: [unremovable(dir, err)] };
+      return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
     }
   }
   const removed = [];
@@ -1573,15 +1653,89 @@ function removeMemoryHygieneFolder(home, removeFile, statFile, listDir) {
       removeFile(project, { recursive: true, force: true });
       removed.push(project);
     } catch (err) {
-      kept.push(unremovable(project, err));
+      kept.push({ path: project, reason: 'unremovable', code: err.code ?? 'unknown error' });
     }
   }
-  kept.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { removed, kept };
 }
 
-/** `memoryKept` of `uninstall`'s result, there only when a folder of memory hygiene is kept, the one case it speaks of. */
-const memoryResult = (memory) => (memory.kept.length > 0 ? { memoryKept: memory.kept } : {});
+/** The full mode: nothing while a project is under a pass; else the folder moved aside in one rename and removed
+ * there, put back when that fails. A project that cannot be looked at is removed with the rest, unnamed. */
+function removeHygieneWhole(dir, { removeFile, statFile, listDir, renameFile }) {
+  let projects;
+  try {
+    projects = hygieneProjects(dir, statFile, listDir);
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  const locked = projects.filter((project) => project.lock).map(lockedProject);
+  if (locked.length > 0) return { removed: [], kept: [{ path: dir, reason: 'locked-whole' }, ...locked] };
+  const snapshotsRemoved = projects.filter((project) => project.stamps?.length > 0).map((project) => ({ path: project.path, stamps: project.stamps }));
+  const aside = `${dir}.purging-${process.pid}-${Date.now()}`;
+  try {
+    renameFile(dir, aside);
+  } catch (err) {
+    return { removed: [], kept: [{ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' }] };
+  }
+  try {
+    removeFile(aside, { recursive: true, force: true, maxRetries: 3 });
+  } catch (err) {
+    const code = err.code ?? 'unknown error';
+    try {
+      renameFile(aside, dir);
+      return { removed: [], kept: [{ path: dir, reason: 'partial', code }] };
+    } catch {
+      return { removed: [], kept: [{ path: aside, reason: 'aside', code, dir }] };
+    }
+  }
+  return { removed: [dir], kept: [], snapshotsRemoved };
+}
+
+/** The marker `marker` as `{ pid }`, `pid` null for one that does not parse; null when there is none. */
+function readMarker(marker) {
+  let text;
+  try {
+    text = fs.readFileSync(marker, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    return { pid: null };
+  }
+  try {
+    const pid = JSON.parse(text).pid;
+    return { pid: Number.isInteger(pid) ? pid : null };
+  } catch {
+    return { pid: null };
+  }
+}
+
+/** The folders a full removal killed between its rename and its end left beside `dir`, as `aside-found`. */
+function asideFolders(dir, listDir) {
+  const prefix = `${path.basename(dir)}.purging-`;
+  try {
+    return listDir(path.dirname(dir))
+      .filter((name) => name.startsWith(prefix))
+      .sort()
+      .map((name) => ({ path: path.join(path.dirname(dir), name), reason: 'aside-found', dir }));
+  } catch {
+    return [];
+  }
+}
+
+/** Whether the process `pid` runs: `EPERM` is one that runs as someone else. */
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM';
+  }
+}
+
+/** `memoryKept` and `memorySnapshotsRemoved` of `uninstall`'s result, each there only when it holds something. */
+const memoryResult = (memory) => ({
+  ...(memory.kept.length > 0 ? { memoryKept: memory.kept } : {}),
+  ...(memory.snapshotsRemoved.length > 0 ? { memorySnapshotsRemoved: memory.snapshotsRemoved } : {}),
+});
 
 /** Removes the folder `js-harness remote` writes under `home` (`remoteDir` of `remote.mjs`) with what is left in
  * it, the logs of the servers and the markers of their stops, as `{ removed, kept }`, like `removeChannelFolder`:

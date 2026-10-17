@@ -126,8 +126,9 @@ function sweepExpired(home, { now, io }) {
 }
 
 /** The kinds of line a ticket leaves in the machine's gate log (./gate-log.mjs), one for each thing that
- * happens to it: issued, claimed by a gate, gone by its expiry, cancelled. */
-export const TICKET_EVENTS = ['first-issued', 'first-claimed', 'first-expired', 'first-cancelled'];
+ * happens to it: issued, claimed by a gate, gone by its expiry, cancelled, or left unclaimed by a gate because
+ * its file was held. */
+export const TICKET_EVENTS = ['first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'first-unclaimed'];
 
 /** Writes the line of `kind` for `ticket` in the gate log of `home`, with `extra` (the gate that claimed it,
  * and the gates it passed). Its id is the ticket's. A tree or an issuer the ticket does not name is left
@@ -277,13 +278,17 @@ export function ofTree(tree, cwd, platform) {
  * `ticket` being the one claimed or `null`, and `expired` the tickets of any session this claim removed
  * because their expiry had passed. The oldest ticket of the session whose tree is `cwd`, or that names
  * none, is renamed, read and removed: spent here, whatever the gate comes to. A rename that fails (another
- * gate of the session claimed it first, or it was cancelled) is no claim, and the next ticket is tried. A
+ * gate of the session claimed it first, or it was cancelled) is no claim, and the next ticket is tried. One
+ * Windows refuses while another process holds the file is tried again; one still held is no claim either, and
+ * comes back in `unclaimed` (`{ ticket, code }`, the key there only when one was), so the gate says it. A
  * session that is not known (`null`) claims nothing. Never throws: a ticket that cannot be claimed is no
  * ticket, and the gate waits as any other. With `named`, only a ticket that names the tree `cwd` is claimed:
  * a `js-harness gate` claims its own folder's ticket (the merge queue's land, odd/tasks/land-unattended.md)
  * and leaves one that names no tree to the session's next whole check. */
-export function claimTicket({ home, session, cwd, named = false, now = Date.now, platform = process.platform, fileSystem: io = fs }) {
+export function claimTicket({ home, session, cwd, named = false, now = Date.now, platform = process.platform, fileSystem: io = fs, pause = sleepSync }) {
   let expired = [];
+  const unclaimed = [];
+  const said = () => (unclaimed.length > 0 ? { unclaimed } : {});
   try {
     expired = sweepExpired(home, { now, io });
     if (!isText(session)) return { ticket: null, expired };
@@ -292,9 +297,10 @@ export function claimTicket({ home, session, cwd, named = false, now = Date.now,
       .filter((ticket) => ticket.session === session && (ticket.tree === null ? !named : ofTree(ticket.tree, cwd, platform)));
     for (const candidate of mine) {
       const claimed = path.join(dir, `${candidate.id}.claimed-${process.pid}-${randomBytes(3).toString('hex')}`);
-      try {
-        io.renameSync(path.join(dir, `${candidate.id}.json`), claimed);
-      } catch {
+      const held = renameHeld(io, path.join(dir, `${candidate.id}.json`), claimed, pause, platform);
+      if (held === 'gone') continue;
+      if (held !== null) {
+        unclaimed.push({ ticket: candidate, code: held });
         continue;
       }
       const ticket = ticketIn(io, claimed, candidate.id);
@@ -309,10 +315,38 @@ export function claimTicket({ home, session, cwd, named = false, now = Date.now,
         expired = [...expired, ticket];
         continue;
       }
-      return { ticket, expired };
+      return { ticket, expired, ...said() };
     }
-    return { ticket: null, expired };
+    return { ticket: null, expired, ...said() };
   } catch {
-    return { ticket: null, expired };
+    return { ticket: null, expired, ...said() };
   }
 }
+
+/** The codes of a rename Windows refuses for a moment, while another process holds the file open: the
+ * ticket is still there, unlike one another gate claimed or a cancel removed (ENOENT). Elsewhere the same
+ * codes are no hold but a refusal that stays (a folder that cannot be written), so they are tried once and
+ * said (gate-first T8). */
+const HELD = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const HELD_TRIES = 3;
+const HELD_PAUSE_MS = 25;
+
+/** Renames `from` to `to`, trying again after `pause` while the file is held on Windows (`platform`): `null`
+ * once it is renamed, `'gone'` when it is no longer there (or any code that is not a hold), else the code of
+ * the last hold. */
+function renameHeld(io, from, to, pause, platform) {
+  const tries = platform === 'win32' ? HELD_TRIES : 1;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      io.renameSync(from, to);
+      return null;
+    } catch (err) {
+      if (!HELD.has(err?.code)) return 'gone';
+      if (attempt === tries) return err.code;
+      pause(HELD_PAUSE_MS);
+    }
+  }
+}
+
+/** Blocks for `ms`: a claim is synchronous, and a hold lasts milliseconds. */
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

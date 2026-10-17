@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { removableWorktrees } from './lib/worktrees.mjs';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
@@ -20,7 +21,7 @@ import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--cwd <path>]
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land | --prune [--cwd <path>]
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
@@ -59,7 +60,15 @@ suite, to its answer or the branch's removal) and of the push, what landed, and 
 A land tells the work session of each pull request it left out why, the failing tests of a red included, by a
 note to that session's number in the channel; the session is the one whose newest ready notice names the pull
 request (js-harness notify --kind ready --pr <n>), and none is told twice the same reason for one ready notice.
-The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.`;
+The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.
+After it lands, a land removes the worktree of each pull request it landed (git worktree remove, never --force)
+when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
+changed for 10 minutes, and it is not under .claude/worktrees or orca/workspaces (other apps' own), the main
+one, locked, or the one the land runs from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
+no exit.
+--prune fetches origin and removes, by the same rule, every worktree on a branch origin/main holds, whatever
+landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or
+list the worktrees.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -68,7 +77,7 @@ const TIMEOUT_MS = 60_000;
  * dry run and found its git directory; `said` keeps the last line the land printed. */
 function landLog({ now, session }) {
   const iso = (ms) => new Date(ms).toISOString();
-  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], exit: null, said: null };
+  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], removed: [], exit: null, said: null };
   return {
     record,
     file: null,
@@ -111,15 +120,16 @@ function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
 }
 
 function parseArgs(argv) {
-  const args = { dryRun: false, land: false, cwd: process.cwd() };
+  const args = { dryRun: false, land: false, prune: false, cwd: process.cwd() };
   for (let at = 0; at < argv.length; at += 1) {
     if (argv[at] === '--dry-run') args.dryRun = true;
     else if (argv[at] === '--land') args.land = true;
+    else if (argv[at] === '--prune') args.prune = true;
     else if (argv[at] === '--cwd' && at + 1 < argv.length) args.cwd = argv[(at += 1)];
     else return null;
   }
   // One mode, named: a run that pushes main is never what a bare command does.
-  return args.dryRun === args.land ? null : args;
+  return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
 
 /** How long the queue waits for CircleCI's result on a candidate, and how often it asks. */
@@ -382,17 +392,20 @@ function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
  * branch keeps `rule/a` from matching `rule/ab`, the space after "proposed" `rule:a` from matching `rule:ab`) that no
  * later "rule:<id> landed on main ... from <branch>: " line confirms gets one line naming its place, from 1, blank lines
  * counted, as `rules change` names the line it supersedes; `none` are the ids no proposed line names. Only a proposal
- * the landed head holds counts: a line that ends "; declaration <hash>" when `declarations[id]` is that hash (the head's
- * declaration of the rule, `declarationOf`), and an older line that names none when it is stamped before `until` (ms),
- * the start of the second of the head's commit, since `rules change` stamps its line before the commit that holds it. */
-export function landingLines(relief, { branch, ids, sha, declarations = {}, until = Infinity }) {
+ * the landed head holds counts: a line that ends "; declaration and source <hash>" when `sourced[id]` is that hash (the
+ * head's declaration of the rule with its entry of `docs/rule-sources.json`, `declarationOf`); an older line that ends
+ * "; declaration <hash>" when `declarations[id]` is that hash (the declaration alone); and an older line that names
+ * neither when it is stamped before `until` (ms), the start of the second of the head's commit, since `rules change`
+ * stamps its line before the commit that holds it. */
+export function landingLines(relief, { branch, ids, sha, declarations = {}, sourced = {}, until = Infinity }) {
   const lines = String(relief).split('\n');
   const found = { lines: [], none: [] };
   for (const id of ids) {
     const proposal = `rule:${id} proposed on ${branch}, not landed`;
     const held = (line) => {
-      const named = /; declaration ([0-9a-f]{12}|none)\s*$/.exec(line);
-      return named === null ? stampOf(line) < until : named[1] === declarations[id];
+      const named = /; declaration( and source)? ([0-9a-f]{12}|none)\s*$/.exec(line);
+      if (named === null) return stampOf(line) < until;
+      return named[2] === (named[1] === undefined ? declarations : sourced)[id];
     };
     const newest = lines.findLastIndex((line) => line.includes(proposal) && held(line));
     if (newest === -1) {
@@ -412,6 +425,7 @@ function stampOf(line) {
 }
 
 const RULES_DATA = 'bin/lib/rules-data.mjs';
+const RULE_SOURCES = 'docs/rule-sources.json';
 
 /** The ids of the rules the branch at `head` changed against `main`, read at `place`: those whose declaration in
  * `bin/lib/rules-data.mjs` differs between `head` and its merge base with `main`, added and removed ones among them, so
@@ -454,20 +468,31 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
     } catch {
       // No relief file is no proposed line.
     }
-    // What the landed head holds: each rule's declaration, and its commit time for a proposal line that names none.
+    // What the landed head holds: each rule's declaration, alone and with its source, and its commit time for a proposal
+    // line that names neither. A head with no sources file holds no source for any rule.
     const committed = Number(gitIn(place, 'show', '-s', '--format=%ct', pr.headRefOid).out.trim());
     const shown = gitIn(place, 'show', `${pr.headRefOid}:${RULES_DATA}`);
+    const sourcesShown = gitIn(place, 'show', `${pr.headRefOid}:${RULE_SOURCES}`);
     let declarations = null;
+    let sourced = {};
     try {
-      declarations = shown.ok ? Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)])) : null;
+      if (shown.ok) declarations = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id)]));
     } catch {
-      // A declaration that does not parse is one the head cannot be matched by.
+      // A declaration file that does not parse is one the head cannot be matched by.
+    }
+    // A sources file that does not parse matches no line that names the source; a line that names the declaration
+    // alone, or neither, is still matched.
+    try {
+      const sources = sourcesShown.ok ? JSON.parse(sourcesShown.out) : {};
+      if (shown.ok) sourced = Object.fromEntries(ids.map((id) => [id, declarationOf(shown.out, id, sources)]));
+    } catch {
+      stdout(`${said}, and its ${RULE_SOURCES} does not parse: a relief line that names a rule with its source is not matched.`);
     }
     if (!Number.isFinite(committed) || committed <= 0 || declarations === null) {
       stdout(`${said}, and what its head holds could not be read: no landing line is written for it.`);
       continue;
     }
-    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), declarations, until: committed * 1000 });
+    const { lines, none } = landingLines(relief, { branch: pr.headRefName, ids, sha: candidate.slice(0, 7), declarations, sourced, until: committed * 1000 });
     for (const id of none) stdout(`${said} with no relief line "rule:${id} proposed on ${pr.headRefName}, not landed": no landing line is written for it.`);
     for (const line of lines) {
       try {
@@ -607,6 +632,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       }
     }
     log.record.landed = merged.map((pr) => pr.number);
+    log.landedBranches = new Map(merged.map((pr) => [pr.headRefName, pr.number]));
     stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
     // Main has moved: the relief's lines never turn a land into a failure.
     try {
@@ -632,6 +658,56 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   }
 }
 
+/** After a land, removes the worktree of each landed pull request that can go with nothing lost (`removableWorktrees`:
+ * on its branch, clean, idle, its head in the main the land pushed) with `git worktree remove`, never `--force`; the
+ * branch stays. Each one removed is named in the land's record (odd/tasks/land-unattended.md, T9). */
+function removeLandedWorktrees({ cwd, run, now, log, stdout }) {
+  const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
+  const found = removableWorktrees({ cwd, base: log.record.candidate, branches: new Set(log.landedBranches.keys()), gitIn, now });
+  if (found === null) {
+    stdout('Could not list the worktrees: no worktree of a landed pull request was removed.');
+    return;
+  }
+  for (const tree of found) {
+    const pr = log.landedBranches.get(tree.branch);
+    const removed = gitIn(cwd, 'worktree', 'remove', tree.path);
+    if (!removed.ok) {
+      stdout(`Could not remove the worktree of PR ${pr} at ${tree.path} (${removed.err.split('\n')[0] || 'git gave no reason'}): it stays.`);
+      continue;
+    }
+    log.record.removed.push({ pr, path: tree.path });
+    stdout(`Removed the worktree of PR ${pr} at ${tree.path}: its branch ${tree.branch} is in main, and the worktree was clean and idle. The branch stays.`);
+  }
+}
+
+/** `--prune`: removes every worktree `removableWorktrees` gives against origin/main once fetched, whatever landed its
+ * branch (odd/tasks/land-unattended.md, T10), as a land removes those of its own pull requests. No land record. */
+function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
+  const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
+  if (!gitIn(args.cwd, 'fetch', '-q', 'origin').ok) {
+    stderr('merge-queue: could not fetch origin.');
+    return 1;
+  }
+  const base = gitIn(args.cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
+  const found = base ? removableWorktrees({ cwd: args.cwd, base, gitIn, now }) : null;
+  if (found === null) {
+    stderr(`merge-queue: could not ${base ? 'list the worktrees' : 'read origin/main'}: none was removed.`);
+    return 1;
+  }
+  let removed = 0;
+  for (const tree of found) {
+    const done = gitIn(args.cwd, 'worktree', 'remove', tree.path);
+    if (!done.ok) {
+      stdout(`Could not remove the worktree at ${tree.path} (${done.err.split('\n')[0] || 'git gave no reason'}): it stays.`);
+      continue;
+    }
+    removed += 1;
+    stdout(`Removed the worktree at ${tree.path}: its branch ${tree.branch} is in origin/main, and the worktree was clean and idle. The branch stays.`);
+  }
+  stdout(`${removed} worktree${removed === 1 ? '' : 's'} removed.`);
+  return 0;
+}
+
 export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   const { env = process.env, now = Date.now, stdout: printOut = console.log, stderr: printErr = console.error } = deps;
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -643,6 +719,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     printErr(USAGE);
     return 2;
   }
+  if (args.prune) return pruneRun(args, { ...deps, stdout: printOut, stderr: printErr });
   // Every line the run prints passes through the land's record, which keeps the last as its `said`.
   const log = landLog({ now, session: env.CLAUDE_CODE_SESSION_ID || null });
   const stdout = (line) => {
@@ -654,6 +731,15 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     printErr(line);
   };
   const code = await queueRun(args, { ...deps, stdout, stderr, log });
+  if (code === 0 && log.landedBranches?.size > 0) {
+    // Outside the record's `said`, as telling is: what the land did ended with main moved. A removal that fails
+    // changes no exit.
+    try {
+      removeLandedWorktrees({ cwd: args.cwd, run: deps.run ?? spawnSync, now, log, stdout: printOut });
+    } catch (err) {
+      printOut(`Could not remove the worktrees of the landed pull requests (${err.message}): the land's exit stands.`);
+    }
+  }
   if (log.file && log.record.leftOut.length > 0) {
     // After the land's own last line, and not as its `said`: telling is no part of what the land did. A notice
     // that cannot be written changes no exit either.

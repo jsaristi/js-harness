@@ -202,10 +202,10 @@ function landRunner(prs, checks, onChecks = () => {}) {
 
 const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks);
   const out = [];
-  const code = await mergeQueueMain(['--land', '--cwd', root], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
+  const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
   return { code, out, calls };
 }
 
@@ -944,8 +944,9 @@ test('landingLines confirms the newest proposed line of each id on that branch a
 const RULES_DATA = (a) => `export const RULES = ${JSON.stringify([{ id: 'a', value: a }, { id: 'b', value: 2 }], null, 2)};\n`;
 
 /** makeQueueRepo with bin/lib/rules-data.mjs on main and a branch rule/a that changes rule a; the home a temporary
- * folder whose relief file holds `lines`. `{ root, origin, main, head, env, reliefFile }`. */
-function makeRuleRepo(lines) {
+ * folder whose relief file holds `lines`. `sources`, when given, is the branch's docs/rule-sources.json.
+ * `{ root, origin, main, head, env, reliefFile }`. */
+function makeRuleRepo(lines, { sources } = {}) {
   const made = makeQueueRepo();
   const { root } = made;
   fs.mkdirSync(path.join(root, 'bin', 'lib'), { recursive: true });
@@ -956,6 +957,12 @@ function makeRuleRepo(lines) {
   const main = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '-b', 'rule/a', main);
   fs.writeFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), RULES_DATA(5), 'utf8');
+  if (sources !== undefined) {
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const text = typeof sources === 'string' ? sources : `${JSON.stringify(sources, null, 2)}\n`;
+    fs.writeFileSync(path.join(root, 'docs', 'rule-sources.json'), text, 'utf8');
+    git(root, 'add', '.');
+  }
   git(root, 'commit', '--quiet', '-am', 'rule a changes');
   git(root, 'push', '--quiet', 'origin', 'rule/a');
   const head = git(root, 'rev-parse', 'HEAD');
@@ -1079,6 +1086,49 @@ test('a land confirms the proposal whose declaration its head holds, not a newer
   assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
 });
 
+test('landingLines given sourced confirms a proposal whose declaration and source the landed head both hold', () => {
+  const relief = ['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration and source aaaaaaaaaaaa`, `${proposed('a', 'rule/a', '01:00')}; declaration and source bbbbbbbbbbbb`].join('\n');
+  const until = new Date(2026, 9, 16, 11, 0, 0).getTime();
+  const given = { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'bbbbbbbbbbbb' } };
+  assert.deepEqual(landingLines(relief, { ...given, sourced: { a: 'aaaaaaaaaaaa' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+  // The declaration alone is not the declaration with its source: a line that names both is matched by both.
+  assert.deepEqual(landingLines(relief, given), { lines: [], none: ['a'] });
+});
+
+test('landingLines reads a proposal with no hash beside hashed ones by its stamp, and the hashed ones by their hash', () => {
+  const relief = ['# Relief', proposed('a', 'rule/a', '00:00'), `${proposed('a', 'rule/a', '01:00')}; declaration and source 000000000000`, proposed('a', 'rule/a', '30:00')].join('\n');
+  const until = new Date(2026, 9, 16, 10, 10, 0).getTime();
+  const given = { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'aaaaaaaaaaaa' }, sourced: { a: 'bbbbbbbbbbbb' } };
+  assert.deepEqual(landingLines(relief, given).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+  assert.deepEqual(landingLines(relief, { ...given, sourced: { a: '000000000000' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 3']);
+});
+
+test('landingLines reads a relief file with Windows line ends: a hashed line is matched and its place counted as with LF', () => {
+  const relief = ['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration and source aaaaaaaaaaaa`, `${proposed('a', 'rule/a', '01:00')}; declaration aaaaaaaaaaaa`, 'rule:a landed on main 0000000 from rule/b: confirms relief line 9', ''].join('\r\n');
+  const until = new Date(2026, 9, 16, 11, 0, 0).getTime();
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'aaaaaaaaaaaa' }, sourced: { a: 'cccccccccccc' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 3']);
+  assert.deepEqual(landingLines(relief, { branch: 'rule/a', ids: ['a'], sha: 'abc1234', until, declarations: { a: 'dddddddddddd' }, sourced: { a: 'aaaaaaaaaaaa' } }).lines, ['rule:a landed on main abc1234 from rule/a: confirms relief line 2']);
+});
+
+test('a land confirms the proposal whose source its head holds, not a newer one of the same declaration with another source (T16e-f)', async () => {
+  const sources = { a: { kind: 'design', path: 'docs/A.md' } };
+  const head = declarationOf(RULES_DATA(5), 'a', sources);
+  const other = declarationOf(RULES_DATA(5), 'a', { a: { kind: 'design', path: 'docs/B.md' } });
+  assert.notEqual(head, other);
+  const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration and source ${head}`, `${proposed('a', 'rule/a', '05:00')}; declaration and source ${other}`], { sources });
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('a head whose sources file does not parse still confirms a proposal that names the declaration alone', async () => {
+  const made = makeRuleRepo(['# Relief', `${proposed('a', 'rule/a', '00:00')}; declaration ${declarationOf(RULES_DATA(5), 'a')}`], { sources: '{ not json' });
+  const { code, out } = await landRule(made);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+  assert.ok(out.some((line) => line.includes('docs/rule-sources.json does not parse')), out.join('\n'));
+});
+
 test('--land whose suite did not run exits 5, bisects nothing and pushes nothing, with two pull requests', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   let runs = 0;
@@ -1185,6 +1235,7 @@ test('--land writes one land record: the pull requests it looked at, each left o
     circleci: { state: 'green', name: 'check', conclusion: 'success', url: 'https://app.circleci.com/x' },
     candidate: landed,
     landed: [1, 2],
+    removed: [],
     exit: 0,
     said: out.at(-1),
   });
@@ -1414,4 +1465,131 @@ test('the land guard reads a merge-queue with Windows line ends as origin/main\'
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
+});
+
+// After a land, the worktree of each landed pull request goes when nothing in it can be lost (odd/tasks/land-unattended.md,
+// T9): 151 of 184 worktrees were on branches already in main, and the board took 126 s over them (L22).
+const worktree = (root, dir, branch) => {
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  git(root, 'worktree', 'add', '--quiet', dir, branch);
+  return dir;
+};
+/** Puts the index of the worktree `dir` 20 minutes back, past the minutes a removal waits for. */
+const idle = (dir) => {
+  const back = (Date.now() - 20 * 60_000) / 1000;
+  fs.utimesSync(path.resolve(dir, git(dir, 'rev-parse', '--git-path', 'index')), back, back);
+  return dir;
+};
+const removedOf = (root) => landsOf(root).at(-1).removed.map((entry) => [entry.pr, path.basename(entry.path)]);
+
+test('a land removes the worktree of a landed pull request that is clean and idle, keeps its branch and names it in its record; a dirty one stays', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const clean = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  const dirty = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  fs.writeFileSync(path.join(dirty, 'notes.txt'), 'not committed\n');
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(clean), false, out.join('\n'));
+  assert.equal(fs.existsSync(path.join(dirty, 'notes.txt')), true);
+  assert.equal(git(root, 'rev-parse', 'feat/a'), heads['feat/a'], 'the branch of a removed worktree stays');
+  assert.deepEqual(removedOf(root), [[1, 'wt-a']]);
+  assert.ok(out.some((line) => line.startsWith('Removed the worktree of PR 1 at ')), out.join('\n'));
+  assert.match(landsOf(root).at(-1).said, /^Landed: /);
+});
+
+test('a land keeps a landed worktree under .claude/worktrees, the app\'s, and the worktree it runs from', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const apps = idle(worktree(root, path.join(top, '.claude', 'worktrees', 'a'), 'feat/a'));
+  const from = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { cwd: from });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(apps), true);
+  assert.equal(fs.existsSync(from), true);
+  assert.deepEqual(removedOf(root), []);
+});
+
+test('a land keeps a landed worktree with a commit beyond main, and one whose index changed in the last minutes', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const beyond = worktree(root, path.join(top, 'wt-a'), 'feat/a');
+  fs.writeFileSync(path.join(beyond, 'later.txt'), 'later\n');
+  git(beyond, 'add', 'later.txt');
+  git(beyond, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '--quiet', '-m', 'later');
+  idle(beyond);
+  const fresh = worktree(root, path.join(top, 'wt-b'), 'feat/b');
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(beyond), true);
+  assert.equal(fs.existsSync(fresh), true);
+  assert.deepEqual(removedOf(root), []);
+});
+
+test('a removal git refuses is said, and the land still exits 0', async () => {
+  const { root, heads } = makeQueueRepo();
+  const kept = idle(worktree(root, path.join(path.dirname(root), 'wt-a'), 'feat/a'));
+  // Only its removal: the land's own worktrees are removed by the same verb.
+  const wrap = failingGit((args) => args[0] === 'worktree' && args[1] === 'remove' && path.basename(args.at(-1)) === 'wt-a', refused);
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(kept), true);
+  assert.ok(out.some((line) => line.startsWith('Could not remove the worktree of PR 1 at ') && line.includes('refused by the test')), out.join('\n'));
+  assert.deepEqual(removedOf(root), []);
+});
+
+// `git worktree remove` takes a worktree's ignored files with it, and `git status` does not show them: an eval run kept
+// under `evals/runs/` would be lost with no branch to bring it back (Codex, 2026-10-17, P1).
+test('a land keeps a landed worktree that holds an ignored file', async () => {
+  const { root, heads } = makeQueueRepo();
+  fs.appendFileSync(path.join(root, '.git', 'info', 'exclude'), '*.log\n');
+  const top = path.dirname(root);
+  const holds = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  fs.writeFileSync(path.join(holds, 'run.log'), 'a result no commit holds\n');
+  const clean = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.readFileSync(path.join(holds, 'run.log'), 'utf8'), 'a result no commit holds\n');
+  assert.equal(fs.existsSync(clean), false, out.join('\n'));
+  assert.deepEqual(removedOf(root), [[2, 'wt-b']]);
+});
+
+// The worktrees landed by other means than a land (odd/tasks/land-unattended.md, T10): `--prune` removes, by the rule
+// a land uses, every one whose branch origin/main already holds.
+test('--prune removes every clean, idle worktree on a branch origin/main holds, keeps the others and writes no land record', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  git(root, 'push', '--quiet', 'origin', 'feat/a:main');
+  const top = path.dirname(root);
+  const inMain = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  const notInMain = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { run, calls } = runner([]);
+  const out = [];
+  const code = await mergeQueueMain(['--prune', '--cwd', root], { run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(inMain), false, out.join('\n'));
+  assert.equal(fs.existsSync(notInMain), true);
+  assert.equal(git(root, 'rev-parse', 'feat/a'), heads['feat/a'], 'the branch stays');
+  assert.equal(git(origin, 'rev-parse', 'main'), heads['feat/a'], 'main is not moved');
+  assert.ok(out.some((line) => line.startsWith('Removed the worktree at ') && line.includes('feat/a')), out.join('\n'));
+  assert.equal(out.at(-1), '1 worktree removed.');
+  assert.deepEqual(landsOf(root), []);
+  assert.equal(calls.some((call) => call.startsWith('gh ')), false, 'no pull request is asked about');
+});
+
+test('--prune is a mode of its own: with --land or --dry-run it is a usage error', async () => {
+  for (const argv of [['--prune', '--land'], ['--prune', '--dry-run']]) {
+    const out = [];
+    const code = await mergeQueueMain(argv, { stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+    assert.equal(code, 2, argv.join(' '));
+  }
+});
+
+// The Orca app's worktrees are its own, as `.claude/worktrees` are the Claude app's (odd/tasks/land-unattended.md, T11).
+test('a land keeps a landed worktree of the Orca app, under orca/workspaces', async () => {
+  const { root, heads } = makeQueueRepo();
+  const orcas = idle(worktree(root, path.join(path.dirname(root), 'orca', 'workspaces', 'js-harness', 'copepod'), 'feat/a'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(orcas), true, out.join('\n'));
+  assert.deepEqual(removedOf(root), []);
 });

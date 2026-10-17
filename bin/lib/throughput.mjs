@@ -3,7 +3,9 @@
 // hands it records and the command (bin/throughput.mjs) hands it what it read. The facts and not the figures are
 // what a day keeps, so a median over several days is the median of their facts, never of their daily medians.
 
+import { recordedQuestions } from './channel.mjs';
 import { compareSteps, stepsOf } from './progress-pace.mjs';
+import { ruleValue } from './rules.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -233,6 +235,81 @@ export function landFacts(records, { from, to }) {
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
 
+/** The questions of `[from, to)` (B4), from the channel's `record` (`readNotices`): `recorded`, the question notices
+ * written in it, `{ number, at }`; `closed`, those whose closing notice was written in it, as the board settles one
+ * (`recordedQuestions`): `{ number, by, via, recordedAt, at, shownAt, answeredAt }`, `by` an answer or a withdrawal, and
+ * `via` how an answer came: by the question tool, typed in the chat, or not verified (no transcript could be read).
+ * `shownAt` and `answeredAt` are the answer notice's own times, which B4 adds: `null` on a notice written without them;
+ * `shownAt` is kept only for an answer by the question tool, since no tool showed a typed one. */
+export function questionFacts(record, { from, to }) {
+  const inDay = (at) => {
+    const ms = Date.parse(at);
+    return ms >= from && ms < to;
+  };
+  const time = (value) => (typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null);
+  const recorded = record.questions.filter(({ notice }) => inDay(notice.at)).map(({ number, notice }) => ({ number, at: notice.at }));
+  const closed = recordedQuestions(record)
+    .filter((one) => one.closed !== null && inDay(one.closed.notice.at))
+    .map(({ number, notice, closed: { by, notice: closing } }) => {
+      const via = by !== 'answer' ? null : closing.verified === false ? 'not verified' : closing.copy?.tool == null ? 'typed in the chat' : 'question tool';
+      return { number, by, via, recordedAt: notice.at, at: closing.at, shownAt: via === 'question tool' ? time(closing.shownAt) : null, answeredAt: by === 'answer' ? time(closing.answeredAt) : null };
+    })
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return { recorded, closed };
+}
+
+/** The gentle-ai reviews of `[from, to)` (B6), from `record`: `starts`, the lines the pause hook recorded
+ * (`readReviewStarts`); `ends`, gentle-ai's terminal records (`readReviewEnds`); `live`, the lineages whose folder is in
+ * its store now. Returns `{ since, started, ended, open, gone }`. `since` is when this machine began recording starts
+ * (the first line's `seenAt`), and a start born before it is not counted, since the ones that burned before were never
+ * seen. Each distinct start of a lineage is one review, so an id used again after a burn counts twice, and lines of one
+ * start written by two sessions count once. An end goes to the last start of its lineage at or before it, with the
+ * minutes from that start, `null` with none; the last start of a lineage still live has no end yet (gentle-ai writes
+ * the record before it deletes the folder) and is open, and a start with no end went without acknowledgement
+ * (abandoned, reclaimed or reset). */
+export function reviewFacts({ starts, ends, live }, { from, to }) {
+  const seen = starts.map((one) => Date.parse(one.seenAt)).filter(Number.isFinite);
+  const since = seen.length > 0 ? seen.reduce((a, b) => Math.min(a, b)) : null;
+  // Each lineage's lives: an id used again after a burn starts a new one. Two sessions' lines of one start are one.
+  const lives = new Map();
+  for (const one of starts) {
+    const at = Date.parse(one.at);
+    if (!Number.isFinite(at)) continue;
+    const list = lives.get(one.lineage) ?? [];
+    if (!list.includes(at)) list.push(at);
+    lives.set(one.lineage, list);
+  }
+  for (const list of lives.values()) list.sort((a, b) => a - b);
+  const alive = new Set(live);
+  const iso = (ms) => new Date(ms).toISOString();
+  const inDay = (at) => at >= from && at < to;
+  // Each end goes to the last life started at or before it; a live folder is the last life, so its own end is not
+  // in yet (gentle-ai writes the record before it deletes the folder).
+  const endOf = new Map();
+  const unpaired = [];
+  for (const [lineage, at] of ends.map((one) => [one.lineage, Date.parse(one.at)]).filter(([, at]) => Number.isFinite(at)).sort((a, b) => a[1] - b[1])) {
+    const list = lives.get(lineage) ?? [];
+    const life = list.filter((began) => began <= at).at(-1);
+    const last = list.at(-1);
+    if (alive.has(lineage) && (life === undefined || life === last)) continue;
+    if (life === undefined) unpaired.push({ lineage, at });
+    else if (!endOf.has(`${lineage}@${life}`)) endOf.set(`${lineage}@${life}`, at);
+  }
+  const counted = [...lives].flatMap(([lineage, list]) => list.map((at) => ({ lineage, at }))).filter((one) => since !== null && one.at >= since && inDay(one.at)).sort((a, b) => a.at - b.at);
+  const ended = [
+    ...[...endOf].map(([key, at]) => ({ lineage: key.slice(0, key.lastIndexOf('@')), at, minutes: Math.round((at - Number(key.slice(key.lastIndexOf('@') + 1))) / 60000) })),
+    ...unpaired.map((one) => ({ ...one, minutes: null })),
+  ].filter((one) => inDay(one.at)).sort((a, b) => a.at - b.at).map((one) => ({ lineage: one.lineage, at: iso(one.at), minutes: one.minutes }));
+  const isLast = (one) => lives.get(one.lineage).at(-1) === one.at;
+  return {
+    since: since === null ? null : iso(since),
+    started: counted.map((one) => ({ lineage: one.lineage, at: iso(one.at) })),
+    ended,
+    open: counted.filter((one) => alive.has(one.lineage) && isLast(one)).map((one) => one.lineage),
+    gone: counted.filter((one) => !endOf.has(`${one.lineage}@${one.at}`) && !(alive.has(one.lineage) && isLast(one))).map((one) => one.lineage),
+  };
+}
+
 const isObjectLike = (value) => typeof value === 'object' && value !== null;
 
 /** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome, findings,
@@ -293,11 +370,13 @@ const SOURCES = {
   channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
   ready: 'the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main',
   lands: '<git common dir>/js-harness/lands.jsonl, one line per merge-queue --land',
+  reviews: 'gentle-ai\'s store (<git common dir>/gentle-ai/review-transactions: a terminal record per acknowledgement) and the starts the pause hook keeps (<home>/.js-harness/throughput/<slug>/review-starts.jsonl)',
+  questions: 'the channel (~/.js-harness/channel): each question notice to the answer or withdrawal that closes it, as the board settles it (recordedQuestions); shown and answered are the answer notice\'s own times (B4)',
   times: 'test-times.jsonl beside the gate log, one line per gate that traced its tests (exact tests on)',
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'] };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'], reviews: ['reviews'], questions: ['channel'] };
 
 /** Why `day` could not read `source`, or `undefined`. */
 const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
@@ -431,6 +510,57 @@ export function throughputRows(days) {
     return { label, value: [said, notKept].filter(Boolean).join('; '), source };
   };
 
+  // B6's row: the acknowledgements come from gentle-ai's own records, so every day has them; the starts only from
+  // when this machine began recording them, so a day before says so rather than a zero.
+  const reviewsRow = () => {
+    const label = 'gentle-ai reviews';
+    const read = days.filter((day) => day.reviews !== undefined);
+    const ended = read.flatMap((day) => day.reviews.ended);
+    const timed = ended.map((one) => one.minutes).filter(Number.isFinite);
+    const since = read.map((day) => day.reviews.since).find(Boolean) ?? null;
+    const sinceDay = since === null ? null : since.slice(0, 10);
+    // A day whose starts file could not be read keeps its acknowledgements, which come from gentle-ai's records.
+    const startsUnread = read.filter((day) => day.unavailable?.['review starts']);
+    const early = read.filter((day) => !startsUnread.includes(day) && (sinceDay === null || day.day < sinceDay)).map((day) => day.day);
+    const counted = read.filter((day) => !startsUnread.includes(day) && sinceDay !== null && day.day >= sinceDay);
+    const count = (key) => counted.reduce((sum, day) => sum + day.reviews[key].length, 0);
+    const parts = [`${ended.length} acknowledged${timed.length ? `, median ${Math.round(median(timed))} min (${timed.length} timed, one lineage each)` : ''}`];
+    if (counted.length > 0) parts.push(`${count('started')} started, ${count('open')} open, ${count('gone')} gone without acknowledgement`);
+    if (startsUnread.length > 0) parts.push(`started not read: ${startsUnread.map((day) => `${day.day} ${day.unavailable['review starts']}`).join('; ')}`);
+    if (early.length > 0) parts.push(`started not recorded: ${early.join(', ')} (${since === null ? 'no review start recorded on this machine' : `this machine records starts from ${sinceDay} ${since.slice(11, 16)}Z`})`);
+    return row(label, 'reviews', parts.join('; '));
+  };
+
+  // B4's row: what was asked and how long its answer took, from the channel's own notices. The relayed time holds today;
+  // the shown and answered times are the answer notice's own, which only notices written since B4 keep.
+  const questionsRow = () => {
+    const label = 'questions';
+    const unkept = days.filter((day) => day.questions === undefined && !unreadOf(day, 'questions')).map((day) => day.day);
+    const notKept = unkept.length > 0 ? `not recorded: ${unkept.join(', ')} (no questions kept)` : null;
+    if (unkept.length === days.length) return { label, value: notKept, source: SOURCES.questions };
+    const kept = days.filter((day) => day.questions !== undefined);
+    const closed = kept.flatMap((day) => day.questions.closed);
+    const answers = closed.filter((one) => one.by === 'answer');
+    const by = (via) => answers.filter((one) => one.via === via).length;
+    const ways = [['question tool', 'by the question tool'], ['typed in the chat', 'typed in the chat'], ['not verified', 'not verified']].filter(([via]) => by(via) > 0).map(([via, words]) => `${by(via)} ${words}`);
+    const span = (list, first, last) => list.map((one) => (Date.parse(one[last]) - Date.parse(one[first])) / 60000).filter(Number.isFinite);
+    const said = (words, values) => `${words}: median ${Math.round(median(values))} min ${counted(values)}`;
+    const parts = [`${kept.reduce((sum, day) => sum + day.questions.recorded.length, 0)} recorded`, `${answers.length} answered${ways.length ? ` (${ways.join(', ')})` : ''}, ${closed.length - answers.length} withdrawn`];
+    const relayed = span(answers, 'recordedAt', 'at');
+    if (relayed.length > 0) parts.push(said('recorded to answer relayed', relayed));
+    const timed = answers.filter((one) => one.answeredAt !== null);
+    if (answers.length > 0 && timed.length === 0) parts.push('shown and answered times: not recorded (B4)');
+    else if (timed.length > 0) {
+      const tapped = timed.filter((one) => one.shownAt !== null);
+      const typed = timed.filter((one) => one.via === 'typed in the chat');
+      if (tapped.length > 0) parts.push(said('recorded to shown', span(tapped, 'recordedAt', 'shownAt')), said('shown to answered', span(tapped, 'shownAt', 'answeredAt')));
+      if (typed.length > 0) parts.push(said('typed, recorded to answered', span(typed, 'recordedAt', 'answeredAt')));
+      if (timed.length < answers.length) parts.push(`no shown or answered time: ${answers.length - timed.length} of ${answers.length} answers`);
+    }
+    const { value, source } = row(label, 'questions', parts.join('; '));
+    return { label, value: [value, notKept].filter(Boolean).join('; '), source };
+  };
+
   const medianOf = (values, unit) => (values.length ? `median ${Math.round(median(values))} ${unit} ${counted(values)}` : 'none');
   return [
     row('pull requests merged', 'git', `${numbers.size} (${(numbers.size / hours).toFixed(2)} an hour)${twice.length ? `; merged twice: ${twice.join(', ')}` : ''}`),
@@ -453,6 +583,8 @@ export function throughputRows(days) {
       : 'none', 'B3'),
     row('load at gate starts', 'gates', loads.length ? `median share ${median(loads).toFixed(2)} (${loads.length}); full at ${loads.filter((share) => share >= 1).length} of ${loads.length}` : 'none'),
     row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings}`),
+    reviewsRow(),
+    questionsRow(),
     row('idle upper bound', 'channel', idle.length
       ? `${idle.length} waits, median ${Math.round(median(idleMinutes))} min, ${(idleMinutes.reduce((sum, m) => sum + m, 0) / 60).toFixed(1)} session-h in all; longest: ${longest.title ?? short(longest.session)} ${Math.round(longest.minutes)} min`
       : 'none'),
@@ -463,9 +595,73 @@ export function throughputRows(days) {
   ];
 }
 
-/** Days a side a comparison needs before it judges, the threshold version 2 set (odd/tasks/throughput-review.md,
- * L4 item 4): with fewer, a day-to-day swing like the gate-wait median's 216 s to 69 s reads as a change. */
-export const COMPARE_DAYS = 7;
+/** Days a side a comparison needs before it judges (the rule throughput-compare-days), the threshold version 2 set
+ * (odd/tasks/throughput-review.md, L4 item 4): with fewer, a day-to-day swing like the gate-wait median's 216 s to
+ * 69 s reads as a change. */
+export const COMPARE_DAYS = ruleValue('throughput-compare-days', 'days');
+
+/** Days after the last review the next is due once the review has gone quiet (the rule throughput-quiet-days). */
+export const QUIET_DAYS = ruleValue('throughput-quiet-days', 'days');
+
+/** Reviews in a row that found nothing to make the review weekly (the rule throughput-quiet-runs). */
+export const QUIET_RUNS = ruleValue('throughput-quiet-runs', 'reviews');
+
+/** The day `n` days after `day` (before it when `n` is negative). */
+export const addDays = (day, n) => utcDay(dayBounds(day).from + n * DAY_MS);
+const isDayText = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(dayBounds(value).from);
+
+/** The last day whose records are whole at `now`, `settlesAt(day)` being the ms they are. */
+export function lastSettledDay(now, settlesAt) {
+  let day = utcDay(now);
+  while (settlesAt(day) > now) day = addDays(day, -1);
+  return day;
+}
+
+/** What the throughput review owes at `now`, read from the outcomes `throughput reviewed` and `throughput shipped`
+ * recorded, `settlesAt(day)` being the ms a day's records are whole. The review of the last settled day is due a
+ * day after the last one recorded, or `QUIET_DAYS` after it once the last `QUIET_RUNS` found nothing (S4's stop
+ * rule); one that finds candidates makes it daily again. Each day something shipped owes a re-measure once its
+ * after window of `COMPARE_DAYS` has settled, everything shipped that day compared together, until a review of that
+ * ship day is recorded. Each due is `{ id, at, line }`, `at` the ISO time it became due. */
+export function throughputDues(outcomes, { now, settlesAt }) {
+  const settled = lastSettledDay(now, settlesAt);
+  const reviews = outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.day)).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+  const dues = [];
+  const last = reviews.at(-1)?.day ?? null;
+  const streak = reviews.slice(-QUIET_RUNS);
+  // A re-measure that found candidates since the quiet runs began makes the review daily again, as a review does.
+  const streakFrom = Math.min(...streak.map((one) => Date.parse(one.at)));
+  const remeasureFound = outcomes.some((one) => one?.kind === 'reviewed' && isDayText(one.shipped) && one.found === 'candidates' && Date.parse(one.at) >= streakFrom);
+  const quiet = streak.length === QUIET_RUNS && streak.every((one) => one.found === 'nothing') && !remeasureFound;
+  const dueDay = last === null ? settled : addDays(last, quiet ? QUIET_DAYS : 1);
+  if (dueDay <= settled) {
+    const since = last === null ? settled : addDays(last, 1);
+    dues.push({
+      id: `review ${settled}`,
+      at: new Date(settlesAt(dueDay)).toISOString(),
+      line: `DUE: throughput review of ${since === settled ? settled : `${since}..${settled}`}: js-harness throughput --since ${since} --until ${addDays(settled, 1)}; js-harness-protocols section 7; then js-harness throughput reviewed --day ${settled} --found nothing|candidates`,
+    });
+  }
+  const remeasured = new Set(outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.shipped)).map((one) => one.shipped));
+  const shipDays = new Map();
+  for (const one of outcomes) {
+    if (one?.kind !== 'shipped' || !isDayText(one.day) || typeof one.item !== 'string' || remeasured.has(one.day)) continue;
+    if (!shipDays.has(one.day)) shipDays.set(one.day, []);
+    if (!shipDays.get(one.day).includes(one.item)) shipDays.get(one.day).push(one.item);
+  }
+  for (const [day, items] of [...shipDays].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const since = addDays(day, 1);
+    const until = addDays(since, COMPARE_DAYS);
+    const at = settlesAt(addDays(until, -1));
+    if (at > now) continue;
+    dues.push({
+      id: `re-measure ${day}`,
+      at: new Date(at).toISOString(),
+      line: `DUE: throughput re-measure of ${items.join(', ')}, shipped ${day}: js-harness throughput --since ${since} --until ${until} --against ${addDays(since, -COMPARE_DAYS)}..${since}; then js-harness throughput reviewed --shipped ${day} --found nothing|candidates`,
+    });
+  }
+  return dues;
+}
 
 const round1 = (value) => (value === null ? null : Math.round(value * 10) / 10);
 

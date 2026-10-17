@@ -1470,7 +1470,7 @@ test('--session current is a usage error since the session was removed: exit 2 w
 // merge of the default branch read by what was written in it.
 const STARTS_WHERE_RECORDS_END =
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
-  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in.';
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.';
 
 test(`the usage names no session: its flags are those of a review, and its second line says what a review loads and that it runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`, async () => {
   const result = await run(['--cwd', '.']);
@@ -5470,6 +5470,57 @@ test('a merge of a branch the default branch does not hold is reviewed as before
   assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
+/** A branch that merged a stacked base, another branch that holds the remote's default branch, and resolved a
+ * conflict in `m.txt` (odd/tasks/gate-first.md, T7): `{ root, base, mine, main, side, head }`. The default branch
+ * moved on from `base` (`main`); the stacked base starts at it and has a commit of its own (`side`), with a
+ * record over `main..side` unless `sideRecorded` is false; the branch has a record over `base..mine`. */
+function makeStackedMergeRepo({ sideRecorded = true } = {}) {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-qam', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'stacked', base);
+  fs.writeFileSync(path.join(root, 's.txt'), 'S1 changed on main\n', 'utf8');
+  git(root, 'commit', '-qam', 'main moves');
+  const main = git(root, 'rev-parse', 'HEAD');
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 theirs\n', 'utf8');
+  git(root, 'commit', '-qam', 'the stacked base');
+  const side = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', trunk);
+  spawnSync('git', ['merge', '--no-ff', '--quiet', 'stacked'], { cwd: root });
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 both\n', 'utf8');
+  git(root, 'commit', '-am', 'merge the stacked base, resolving m.txt');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  if (sideRecorded) appendCodexReview(root, reviewedRecord(main, side));
+  return { root, base, mine, main, side, head };
+}
+
+test('a merge of a stacked base whose own commits all have records is reviewed by what was written in it (gate-first T7)', async () => {
+  const { root, mine, main, side, head } = makeStackedMergeRepo();
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  nothing.untouched('the plan of a stacked merge');
+  const lines = result.out.split('\n');
+  assert.equal(lines[0], mergeReviewSaid({ head, side, branch: 'origin/main', stacked: true }));
+  assert.match(lines[0], /a stacked base off origin\/main/);
+  const changedLines = numstatFiles(git(root, 'show', '-z', '--remerge-diff', '--format=', '--no-renames', '--numstat', head)).reduce((sum, file) => sum + file.changedLines, 0);
+  assert.deepEqual(lines.slice(1), plannedPlan(root, mine, head, [{ files: ['m.txt'], changedLines }]));
+});
+
+test('a merge of a stacked base with a commit of its own no record covers is reviewed as before, the whole range (gate-first T7)', async () => {
+  const { root, main, head } = makeStackedMergeRepo({ sideRecorded: false });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.ok(!result.out.includes('stacked'), result.out);
+  assert.ok(!result.out.includes('what was written in the merge'), result.out);
+});
+
 test('the review of a resolved merge asks Codex for a diff of two objects that exist, the automatic merge and the merge, and its record says so', async () => {
   const { root, mine, main, head } = makeResolvedMergeRepo();
   // Codex's sandbox is read-only, and `git show --remerge-diff` prints nothing there (it writes a temporary
@@ -5637,8 +5688,75 @@ test('a merge of main below HEAD on a branch whose covered work is small is not 
   assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, after, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
+// The ways the turn at a merge below HEAD can fail, each with what it leaves (gentle-ai R3 and the verifier of
+// pull request 338): a run that cannot go on says why, launches no session it would not finish and leaves no
+// worktree.
+test('a run of two turns with no Codex refuses before it makes the worktree of the merge, and launches nothing (verifier, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const records = contentOf(codexReviewsPath(repo.root));
+  const fake = fakeCodexInParts();
+  const gitAsked = [];
+  const notFound = Object.assign(new Error('spawnSync codex ENOENT'), { code: 'ENOENT' });
+  const spawn = (command, args, opts) => {
+    if (command !== 'git') return { status: null, error: notFound };
+    gitAsked.push(args.join(' '));
+    return spawnSync(command, args, opts);
+  };
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, spawn, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /Could not run `codex`/);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(gitAsked.some((args) => args.startsWith('worktree add')), false, 'no worktree was made');
+  assert.equal(contentOf(codexReviewsPath(repo.root)), records, 'no record');
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('a run whose worktree at the merge cannot be made says so and launches nothing (gentle-ai R3, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  // git refuses to add the worktree.
+  const fake = fakeCodexInParts();
+  const spawn = (command, args, opts) => (command === 'git' && args[0] === 'worktree' && args[1] === 'add' ? { status: 128, stdout: '', stderr: 'fatal: no' } : fake.spawn(command, args, opts));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, spawn, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /Could not make a worktree at the merge [0-9a-f]{7}, so nothing was started or recorded/);
+  assert.equal(fake.calls.length, 0);
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('a run whose tracked files change during the turn at the merge reviews nothing after it, and says to run it again (gentle-ai R3, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const during = () => fs.writeFileSync(path.join(repo.root, 'a.txt'), 'changed during the turn\n', 'utf8');
+  // A second session would fail the run: only one is listed.
+  const fake = fakeCodexInParts({ ...mergeTurnSession(repo), during });
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.err, /HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed/);
+  assert.equal(fake.calls.length, 1);
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
 // Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
 const readOnlyHolds = process.platform !== 'win32' && process.getuid?.() !== 0;
+
+test('a turn at the merge whose run line never reached the run log stops the run: whether it owes a correction cannot be said (verifier, PR 338)', { skip: !readOnlyHolds && 'mode bits stop no write here' }, async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  const runLog = path.join(repo.root, '.git', 'js-harness', 'codex-review-runs.jsonl');
+  // The run log takes no line from the turn: the record is written, its run line is not.
+  const during = () => {
+    fs.mkdirSync(path.dirname(runLog), { recursive: true });
+    if (!fs.existsSync(runLog)) fs.writeFileSync(runLog, '', 'utf8');
+    fs.chmodSync(runLog, 0o444);
+  };
+  const fake = fakeCodexInParts({ ...mergeTurnSession(repo), during });
+  try {
+    const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.err, /The run line of the turn at the merge [0-9a-f]{7} is not in the run log/);
+    assert.equal(fake.calls.length, 1);
+  } finally {
+    fs.chmodSync(runLog, 0o644);
+  }
+});
 
 test('the diff a merge review reads shows every line of it where the object store is read-only, as in Codex\'s sandbox', { skip: !readOnlyHolds && 'mode bits stop no write here' }, () => {
   const { root, mine, main, head } = makeResolvedMergeRepo();

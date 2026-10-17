@@ -254,7 +254,7 @@ const hasRow = (output, status, name) => checkRows(output).some((line) => line.s
 const snapshot = (files) => Object.fromEntries(files.map((file) => [file, contentHash(readIfThere(file))]));
 
 // ---- the host session ------------------------------------------------------------------------------------------------
-// The step `host-loads` (odd/tasks/practice-project.md, "T5: the step host-loads"): three calls of a real Claude Code in
+// The step `host-loads` (odd/tasks/practice-project.md, "T5: the step host-loads"): four calls of a real Claude Code in
 // the practice project, with the practice home as its config and a scratch home for everything else.
 
 const HOST_TIMEOUT_MS = 2 * 60 * 1000;
@@ -290,7 +290,7 @@ function realHostTraces(realHome) {
   return [...folders, ...keys].sort();
 }
 
-/** The three calls and what they prove; returns the evidence, or throws with every problem found. A host that could
+/** The four calls and what they prove; returns the evidence, or throws with every problem found. A host that could
  * not answer (its plan's cap, its login, a timeout) is said to be unavailable, never taken for a fault of the harness. */
 function hostLoads(ctx, token) {
   const { project, home, hostHome, root, prefix } = ctx.layout;
@@ -350,10 +350,12 @@ function hostLoads(ctx, token) {
     session = load.init.session_id;
     fs.writeFileSync(agents, original);
     call('skill', ['-p', 'Invoke the js-harness skill, then quote its line that starts with `js-harness check --push`, and nothing else.', '--resume', session, '--tools', 'Skill', '--allowedTools', 'Skill']);
+    // A sub-agent's start, the rules hook's third event (odd/tasks/rule-hierarchy.md, T16f).
+    call('subagent', ['-p', 'Use the Agent tool once, with a sub-agent whose whole task is to reply ok; then reply done, and nothing else.', '--resume', session, '--tools', 'Agent', '--allowedTools', 'Agent']);
     call('compact', ['-p', '/compact', '--resume', session]);
     ctx.host = { ...hostCost(streams), binary: claude, version };
     const cost = ctx.host;
-    detail = `${version} (${claude}), ${cost.model}: three calls, ${cost.inputTokens} input, ${cost.cacheTokens} cache and ${cost.outputTokens} output tokens, ${cost.costUsd.toFixed(4)} dollars, ${cost.durationMs} ms`;
+    detail = `${version} (${claude}), ${cost.model}: four calls, ${cost.inputTokens} input, ${cost.cacheTokens} cache and ${cost.outputTokens} output tokens, ${cost.costUsd.toFixed(4)} dollars, ${cost.durationMs} ms`;
   } finally {
     fs.writeFileSync(agents, original);
   }

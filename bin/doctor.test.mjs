@@ -2171,6 +2171,37 @@ test("doctorMain names an installed copy whose unscoped rules differ from main's
   }
 });
 
+test("an online doctor asks for main's list while the latest versions are still being looked up, not after them", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    // Each lookup of a latest version waits for main's list to be asked, or gives up after a second: run one after
+    // the other, every lookup gives up before main's list is asked.
+    let mainAsked;
+    const asked = new Promise((resolve) => { mainAsked = resolve; });
+    const lookups = [];
+    const fetchImpl = async (url) => {
+      if (url === MAIN_LIST_URL) {
+        mainAsked();
+        return { ok: true, status: 200, text: async () => writeRules(RULES) };
+      }
+      let timer;
+      const gaveUp = new Promise((resolve) => { timer = setTimeout(resolve, 1000, 'gave up'); });
+      lookups.push(await Promise.race([asked.then(() => 'asked'), gaveUp]));
+      clearTimeout(timer);
+      throw new Error('network disabled in tests');
+    };
+    await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
+    assert.ok(lookups.length > 0, 'the run looked up no latest version, so it proves nothing');
+    assert.deepEqual([...new Set(lookups)], ['asked']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test("doctor --offline and the hook read no main list outside the harness's checkout: the row is n/a and no request is made", async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
@@ -2219,6 +2250,54 @@ test("in the harness's checkout the hook tells a copy behind main once, and agai
     assert.equal((await hook()).output, '', 'the same main is told once');
     onMain = mainAhead(2).list;
     assert.match((await hook()).output, /1 stack gap/, 'a main that moved again is told again');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
+// and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
+// so the hook, run at every session start, does not ask.
+test('doctorMain shows the worktrees row stale, naming the command that removes them, when some are in main', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const worktrees = () => [{ path: 'D:/w/one', branch: 'feat/one' }, { path: 'D:/w/two', branch: 'feat/two' }];
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees });
+
+    assert.equal(code, 0);
+    assert.match(output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(output.includes('  worktrees (project):\n    2 worktrees on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them\n    D:/w/one (feat/one)\n    D:/w/two (feat/two)\n'), output);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain shows the worktrees row ok with none, unknown when it cannot tell, and its hook never counts them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+
+    const none = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => [] });
+    assert.match(none.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.doesNotMatch(none.output, /^ {2}worktrees \(/m, 'no fix line for the worktrees row');
+
+    const unread = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => null });
+    assert.match(unread.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => { asked = true; return [{ path: 'D:/w/one', branch: 'feat/one' }]; } });
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook counted the worktrees');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

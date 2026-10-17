@@ -19,11 +19,12 @@ import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
 import { stampOff } from './lib/guard.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
+import { closeProblems } from './lib/summary.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
-  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] "<one line>"',
+  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
   '       js-harness notify --to orchestrator --kind question   (the fields of the question as JSON on standard input)',
   '       js-harness notify --relief "<one line>"',
   '       js-harness notify --opening "<title>"   (the opening\'s text on standard input)',
@@ -38,12 +39,17 @@ const USAGE = [
   '  A ready notice says a pull request is ready to land, and names it with --pr <n>, so the land knows whose it',
   '    is from the record and not from a branch; no other kind takes --pr. It is refused, with the land\'s reasons,',
   '    while the land would leave that pull request out: its state, its body\'s gentle-ai line, its reviews.',
+  '  A closed notice gives the work back and names the summary the session leaves with --summary <file>, a file of',
+  '    docs/sessions/ (js-harness summary template prints it); no other kind takes --summary. It is refused while a',
+  '    section of that file is empty or missing, or while neither origin/main nor the session\'s branch on origin',
+  '    holds it as it is: commit it and push it first.',
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
   '    The record numbers it, and the number is printed: the user is asked with its text headed by',
   '    "Pregunta <n>: ". An answer or a withdrawal names its question with --question <n>. A verified answer',
-  '    is one read at its line of the transcript, and its copy is kept with it; with no transcript to read,',
+  '    is one read at its line of the transcript, and its copy is kept with it, with the time of his line and,',
+  '    for a question-tool answer, the time the question was shown; with no transcript to read,',
   '    the answer is recorded unverified, and that is said.',
   `  --relief appends one line, of ${RELIEF_LINE_MAX} characters at most, to the orchestrator's relief file, with the`,
   '    local date and time of the clock.',
@@ -77,7 +83,7 @@ function requireValue(argv, i, flag) {
 function parseArgs(argv) {
   const parsed = {};
   // A Map, not an object: `constructor` and `__proto__` are keys of every object literal.
-  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--pr', 'pr'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
+  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--pr', 'pr'], ['--summary', 'summary'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
   const texts = [];
   // `--relief` or `--opening` when a lone `--` follows it: its value is the text after that `--`.
   let fromText;
@@ -116,7 +122,7 @@ function parseArgs(argv) {
   if (texts.length > 1) throw new NotifyArgError('the text is one argument: put it between quotes');
 
   const places = { self: parsed.self, cwd: parsed.cwd, home: parsed.home, claudeHome: parsed.claudeHome };
-  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question', 'pr'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
+  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question', 'pr', 'summary'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
   for (const [flag, other] of [['relief', 'opening'], ['opening', 'relief']]) {
     if (parsed[flag] === undefined) continue;
     const extra = [...ofANotice, ...(parsed[other] !== undefined ? [`--${other}`] : []), ...(texts.length > 0 ? ['a text'] : [])];
@@ -142,13 +148,17 @@ function parseArgs(argv) {
     if (!/^\d+$/.test(parsed.pr) || Number(parsed.pr) < 1) throw new NotifyArgError('--pr takes the number of a pull request, from 1');
     pr = Number(parsed.pr);
   }
-  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question, pr } };
+  // A session that finishes hands the lead its summary (odd/tasks/session-close.md, S2): the command asks for it,
+  // while the record, and a notice another command builds, may hold a closed notice without one.
+  if (parsed.kind === 'closed' && parsed.summary === undefined) throw new NotifyArgError('a closed notice names the summary the session leaves: --summary <file> (js-harness summary template prints it)');
+  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question, pr, summary: parsed.summary } };
 }
 
 /** The copy an answer to question `number` keeps, read from the transcript's `text` at `line`: `{ copy }`, or
  * `{ refused }` in words when that line is not his answer to it. A typed answer counts when it was sent after the
  * question was recorded (`asked`, its notice). A question-tool answer counts when its call was asked after that
- * and holds a question that starts with the question's prefix: one call may ask several questions. */
+ * and holds a question that starts with the question's prefix: one call may ask several questions. With the copy come
+ * its `times` (throughput B4): `answeredAt`, the time of his line, and for a question-tool answer `shownAt`, its call's. */
 function copyOfAnswer(text, { line, file, number, asked }) {
   const quote = quoteOf(text, line);
   if (!quote.person) return { refused: `line ${line} of ${file} is ${quote.what}: not the user's answer` };
@@ -157,7 +167,7 @@ function copyOfAnswer(text, { line, file, number, asked }) {
     if (quote.pastedOnly) return { refused: `line ${line} of ${file} holds only pasted text: not the user's words typed in the chat` };
     if (quote.at === null) return { refused: `line ${line} of ${file} has no time, so it cannot be told to come after question ${number}` };
     if (!(Date.parse(quote.at) > recordedAt)) return { refused: `line ${line} of ${file} was sent before question ${number} was recorded` };
-    return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] } };
+    return { copy: { tool: null, answers: [{ question: asked.text, options: [], answer: quote.text, how: 'typed in the chat' }] }, times: { answeredAt: quote.at } };
   }
   const { answered } = quote;
   if (answered.askedAt === null) return { refused: `the call that line ${line} answers has no time, so it cannot be told to answer question ${number}` };
@@ -165,7 +175,7 @@ function copyOfAnswer(text, { line, file, number, asked }) {
   const prefix = questionPrefix(number);
   const answers = answered.answers.filter((one) => typeof one.question === 'string' && one.question.startsWith(prefix));
   if (answers.length === 0) return { refused: `no question of that call starts with ${JSON.stringify(prefix)}: it answers another question` };
-  return { copy: { tool: answered.tool, answers } };
+  return { copy: { tool: answered.tool, answers }, times: { shownAt: answered.askedAt, ...(quote.at === null ? {} : { answeredAt: quote.at }) } };
 }
 
 /** The text of an opening, from what standard input gave: bytes read as UTF-8, or a string as it is. Bytes
@@ -238,6 +248,8 @@ export async function notifyMain(
     newId = () => crypto.randomUUID(),
     // What would leave the pull request of a ready notice out of a land, `[]` when nothing would.
     landChecks = readyProblems,
+    // What keeps the summary of a closed notice from closing the session, `[]` when nothing does.
+    closeChecks = closeProblems,
   } = {},
 ) {
   let parsed;
@@ -313,6 +325,16 @@ export async function notifyMain(
     const problems = await landChecks(draft.pr, cwd, { run });
     if (problems.length) {
       stderr(`js-harness notify: pull request ${draft.pr} is not ready to land: ${problems.join(' ')} Not recorded.`);
+      return 1;
+    }
+  }
+
+  // A closed notice is held to its summary: written, filled and pushed, so the lead can read it from git before it
+  // archives the session (odd/tasks/session-close.md, S2).
+  if (draft.kind === 'closed') {
+    const problems = await closeChecks(draft.summary, cwd, { run });
+    if (problems.length) {
+      stderr(`js-harness notify: the summary is not ready: ${problems.join(' ')} Not recorded.`);
       return 1;
     }
   }
@@ -401,6 +423,7 @@ export async function notifyMain(
     if (parsed.notice.kind === 'answer') {
       const found = transcriptNamed(projectDir, parsed.notice.transcript, { cwd, readdir });
       let copy = null;
+      let times = {};
       if (found.not === 'outside') return notRecorded(`${parsed.notice.transcript} is not a transcript of this project: a file outside its sessions folder is none`);
       if (found.not === 'several') return notRecorded(`${plural(found.count, 'transcript')} start with ${parsed.notice.transcript}: give more of the session id`);
       if (found.not === 'short') return notRecorded(`${parsed.notice.transcript} is too short to name a session: a session id takes its first eight characters or more`);
@@ -417,11 +440,12 @@ export async function notifyMain(
           const read = copyOfAnswer(text, { line: parsed.notice.line, file: found.file, number, asked: theQuestion.notice });
           if (read.refused !== undefined) return notRecorded(read.refused);
           copy = read.copy;
+          times = read.times;
         }
       }
       if (claimed && copy === null) return notRecorded(closedSaid());
       try {
-        draft = newNotice({ at: null, from: null, ...parsed.notice, verified: copy !== null, copy });
+        draft = newNotice({ at: null, from: null, ...parsed.notice, verified: copy !== null, copy, ...times });
       } catch (failed) {
         if (!(failed instanceof ChannelInputError)) throw failed;
         return notRecorded(failed.message);
