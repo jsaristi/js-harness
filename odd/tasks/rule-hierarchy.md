@@ -2755,10 +2755,10 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `docs/model-effort.md` (documentation by model, graded by a test that rebuilds a capability
   from the documents alone, not built): one of the two measurements that spend, his to allow before it
   runs, asked once when he is back
-- [ ] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
+- [x] T2 The reply check: `bin/lib/reply.mjs`, `bin/reply.mjs`, the `Stop` entries in the
   manifest for both hosts, the `reply` key of `harness.json` (route: inline, JH 25; built on
   `feat/jh25-spec-reply`, the key waits for his answer to question 9; Progress, 2026-10-16)
-- [ ] T3 The failures register, as "The failures register" designs it (route: delegated, one
+- [x] T3 The failures register, as "The failures register" designs it (route: delegated, one
   writer; the trigger is three files that are not mechanical)
   - [x] T3a The design read by a reader that did not write it, and what it found taken or
     answered
@@ -2918,7 +2918,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     its sensors; designed on 2026-10-15, "The row `rules` (T16d)"; route inline; built
     b0093b8..5a57a17, pull request 247, landed on 2026-10-15 (`main` a1e8fb3), its design as
     pull request 241 (d4ec52d). Its step 2, the first patterns, is in progress in `rule/` batches
-  - [ ] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
+  - [x] T16e The merge command, the rule rows first. Two needs it takes, from the lead's
     inventory of 2026-10-12 (relief file, lines 325 and 337, not read by this session): the
     loop over what the reviews cover looks at each record itself, and the evidence of a
     review is written in a document on the pull request's own branch. Designed on 2026-10-16
@@ -3009,7 +3009,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     of the relief file's line 245, carries its cost and a review date, and its done is one
     command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it.
     Built by JH 27 on 2026-10-16, see "Progress"
-- [ ] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
+- [x] T17 The sweep of 2026-10-11 (his order of that day; route: delegated, read-only readers,
   then one writer for documents)
   - [x] T17a The list: `docs/sweep-2026-10-11.md`, pull request 61
   - [x] T17b This session's places corrected in documents: the roadmap and eleven closed
@@ -4509,6 +4509,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     the repository is public, named in "What else changes".
   - Codex reviewed `53f79c4..34931d8` in 2 parts: correct (0.88 and 0.96), recorded.
 
+- 2026-10-17, by `JH 21 · reserva de la noche` on `docs/open-work-text`, on the lead's triage of open work: four
+  task lines checked off whose work was done, each with its evidence (`gh pr view <n>` reads MERGED).
+  - T2, the reply check: pull request 282, merged as 23a3f25e. The `reply` key's default in `init` is T9, still
+    open. `asked-yes-not-his` in `docs/FAILURES.md` named T2 as its owed control; the reply check does not turn
+    back a yes asked on a step that is not his, so its control is now section 1 of the protocols skill.
+  - T3, the failures register: T3a to T3f are all checked.
+  - T16e, the merge command: its three slices are pull requests 314 (225da7d3), 328 (d0b25553) and 339
+    (685a4518).
+  - T17, the sweep of 2026-10-11: T17a to T17e are all checked.
+
 - 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
   `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage
   note). His answer 11, "Prendido por defecto (Recomendada)", read above (the lead's transcript
@@ -4520,6 +4530,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   doctor and journey tests: 612 tests, 607 pass, 0 fail. README says it at `init` and under
   `js-harness reply`. Committed as 0d3535aa (gate passed); gentle-ai 16301239..0d3535aa medium, not
   due (under_budget), not escalated; Codex 1630123..0d3535a correct (0.98), no findings.
+
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
 (worktree `D:/js-harness-worktrees/rules-installed-hash`): designed with two readers and a second round,

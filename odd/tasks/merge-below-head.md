@@ -143,7 +143,7 @@ among them), and the marks at M of its written files.
   of the turns for `--plan` and the debt row; route: inline. 19935ab.
 - [x] T3 (kind: build) S3-S9: the run in turns, the worktree helper, the stop on a correction, the
   merged line, the cost rule; route: inline. The T3 commit (Log).
-- [ ] T4 (kind: verify) The "Done when" scratch repository; an independent verifier (risk item 2, the
+- [x] T4 (kind: verify) The "Done when" scratch repository; an independent verifier (risk item 2, the
   push guard's coverage), gentle-ai escalated, Codex.
 
 ## Log
@@ -223,6 +223,13 @@ among them), and the marks at M of its written files.
   "wrote no record" where one review would have run: `cutInTurns` and the debt row now read the switch at
   the merge and keep one review (this also settles the verifier's last advisory). (2) `plansAsOne` added
   the kinds of `leftOut`, which are counts of their own, as numbers: it now adds them by field.
+
+- 2026-10-17, JH 21, on the lead's triage of open work: T4 checked off. Pull request 338 merged as 45fcad2b,
+  with the verifier above, gentle-ai review-4f9d361eb6afc479 (high, item 2) and Codex's recheck in its body.
+  The scratch repository of "Done when" is the fixture of `bin/codex-review.test.mjs`, "a merge of main below
+  HEAD, after commits that each have a record, is planned in two turns…" and "a merge of main below HEAD is
+  reviewed in two turns…: a record each, and no worktree is left". `failures check --settled` names no
+  `merge-review-covers-main` (0 lines, 2026-10-17).
 
 ## Next step
 

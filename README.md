@@ -10,7 +10,7 @@ It is plain Node with no dependencies. It needs Node 22 or newer and git.
 
 ## Install
 
-The repository is private: the install needs a GitHub account with access to it.
+The repository is public on GitHub; the install reads it from there.
 
 ```sh
 npm i -g github:jsaristi/js-harness
@@ -254,7 +254,7 @@ pin and running version: match
 
 ### js-harness update
 
-Says whether a newer release exists: the newest `vX.Y.Z` tag of the private repository, read with
+Says whether a newer release exists: the newest `vX.Y.Z` tag of the repository, read with
 `git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
 another repository). No release is tagged before 1.0.0, so for now it says that and how to get
 the newest copy. When the tags cannot be listed it says why and exits 1.

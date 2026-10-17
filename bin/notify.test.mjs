@@ -1192,6 +1192,34 @@ test('an answer to a question-tool call is verified when the call was asked afte
   assert.equal(recordText(machine), unchanged);
 }));
 
+test('a verified answer keeps when its question was shown and when he answered it, as the transcript times them', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  // Tapped: the question tool's call is when it was shown, its result when he answered.
+  assert.equal((await askQuestion(machine)).code, 0);
+  const prefixed = 'Pregunta 1: Which branch do we merge first?';
+  writeTranscript(machine, TRANSCRIPT, [asks(prefixed, 30), answering(prefixed, 'main', 90)]);
+  assert.equal((await answerTo(machine)).code, 0);
+  const tapped = recorded(machine).notices.at(-1);
+  assert.deepEqual([tapped.shownAt, tapped.answeredAt], [later(30), later(90)]);
+
+  // Typed: no tool showed it, so only the time of his line.
+  assert.equal((await askQuestion(machine, { newId: () => SECOND_ID })).code, 0);
+  writeTranscript(machine, TRANSCRIPT, [replied(30), typed('Entonces la A', 120)]);
+  assert.equal((await answerTo(machine, { number: 2 })).code, 0);
+  const typedAnswer = recorded(machine).notices.at(-1);
+  assert.equal(typedAnswer.answeredAt, later(120));
+  assert.equal('shownAt' in typedAnswer, false);
+}));
+
+test('an answer no transcript confirmed keeps no shown or answered time', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  assert.equal((await askQuestion(machine)).code, 0);
+  const { code } = await answerTo(machine, { transcript: 'ffffffff' });
+  assert.equal(code, 0);
+  const answer = recorded(machine).notices.at(-1);
+  assert.deepEqual([answer.verified, 'shownAt' in answer, 'answeredAt' in answer], [false, false, false]);
+}));
+
 test('a withdrawal names its question and closes it, and an answer to a withdrawn question is refused with the reason', withMachine(async (machine) => {
   writeSession(machine, SENDER, SENDER_TITLE);
   assert.equal((await askQuestion(machine)).code, 0);
