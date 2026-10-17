@@ -243,33 +243,43 @@ export function landFacts(records, { from, to }) {
 export function reviewFacts({ starts, ends, live }, { from, to }) {
   const seen = starts.map((one) => Date.parse(one.seenAt)).filter(Number.isFinite);
   const since = seen.length > 0 ? seen.reduce((a, b) => Math.min(a, b)) : null;
-  const first = new Map();
+  // Each lineage's lives: an id used again after a burn starts a new one. Two sessions' lines of one start are one.
+  const lives = new Map();
   for (const one of starts) {
     const at = Date.parse(one.at);
-    if (Number.isFinite(at) && !(at >= (first.get(one.lineage) ?? Infinity))) first.set(one.lineage, at);
+    if (!Number.isFinite(at)) continue;
+    const list = lives.get(one.lineage) ?? [];
+    if (!list.includes(at)) list.push(at);
+    lives.set(one.lineage, list);
   }
+  for (const list of lives.values()) list.sort((a, b) => a - b);
   const alive = new Set(live);
-  // An id used again after a burn can have two records: the end kept is the first at or after its start, else the
-  // earliest, so the row does not hang on the order the records were listed in.
-  const endOf = new Map();
-  for (const at of ends.filter((one) => !alive.has(one.lineage)).map((one) => [one.lineage, Date.parse(one.at)]).filter(([, at]) => Number.isFinite(at)).sort((a, b) => a[1] - b[1])) {
-    const [lineage, when] = at;
-    const kept = endOf.get(lineage);
-    const began = first.get(lineage);
-    if (kept === undefined || (began !== undefined && kept < began && when >= began)) endOf.set(lineage, when);
-  }
+  const iso = (ms) => new Date(ms).toISOString();
   const inDay = (at) => at >= from && at < to;
-  const started = [...first].filter(([, at]) => since !== null && at >= since && inDay(at)).sort((a, b) => a[1] - b[1]).map(([lineage, at]) => ({ lineage, at: new Date(at).toISOString() }));
-  const ended = [...endOf].filter(([, at]) => inDay(at)).sort((a, b) => a[1] - b[1]).map(([lineage, at]) => {
-    const began = first.get(lineage);
-    return { lineage, at: new Date(at).toISOString(), minutes: began !== undefined && began <= at ? Math.round((at - began) / 60000) : null };
-  });
+  // Each end goes to the last life started at or before it; a live folder is the last life, so its own end is not
+  // in yet (gentle-ai writes the record before it deletes the folder).
+  const endOf = new Map();
+  const unpaired = [];
+  for (const [lineage, at] of ends.map((one) => [one.lineage, Date.parse(one.at)]).filter(([, at]) => Number.isFinite(at)).sort((a, b) => a[1] - b[1])) {
+    const list = lives.get(lineage) ?? [];
+    const life = list.filter((began) => began <= at).at(-1);
+    const last = list.at(-1);
+    if (alive.has(lineage) && (life === undefined || life === last)) continue;
+    if (life === undefined) unpaired.push({ lineage, at });
+    else if (!endOf.has(`${lineage}@${life}`)) endOf.set(`${lineage}@${life}`, at);
+  }
+  const counted = [...lives].flatMap(([lineage, list]) => list.map((at) => ({ lineage, at }))).filter((one) => since !== null && one.at >= since && inDay(one.at)).sort((a, b) => a.at - b.at);
+  const ended = [
+    ...[...endOf].map(([key, at]) => ({ lineage: key.slice(0, key.lastIndexOf('@')), at, minutes: Math.round((at - Number(key.slice(key.lastIndexOf('@') + 1))) / 60000) })),
+    ...unpaired.map((one) => ({ ...one, minutes: null })),
+  ].filter((one) => inDay(one.at)).sort((a, b) => a.at - b.at).map((one) => ({ lineage: one.lineage, at: iso(one.at), minutes: one.minutes }));
+  const isLast = (one) => lives.get(one.lineage).at(-1) === one.at;
   return {
-    since: since === null ? null : new Date(since).toISOString(),
-    started,
+    since: since === null ? null : iso(since),
+    started: counted.map((one) => ({ lineage: one.lineage, at: iso(one.at) })),
     ended,
-    open: started.filter((one) => alive.has(one.lineage)).map((one) => one.lineage),
-    gone: started.filter((one) => !alive.has(one.lineage) && !endOf.has(one.lineage)).map((one) => one.lineage),
+    open: counted.filter((one) => alive.has(one.lineage) && isLast(one)).map((one) => one.lineage),
+    gone: counted.filter((one) => !endOf.has(`${one.lineage}@${one.at}`) && !(alive.has(one.lineage) && isLast(one))).map((one) => one.lineage),
   };
 }
 

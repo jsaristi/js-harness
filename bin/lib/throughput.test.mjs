@@ -406,7 +406,7 @@ test('a day\'s gentle-ai reviews: acknowledged once the record is there and the 
     starts: [
       start('old', '2026-10-15T09:00:00.000Z'), // live when recording began, born before it: not counted as started
       start('acked', '2026-10-17T09:00:00.000Z'),
-      start('acked', '2026-10-17T09:30:00.000Z', '2026-10-17T09:40:00.000Z'), // a second session's line: the earliest kept
+      start('acked', '2026-10-17T09:00:00.000Z', '2026-10-17T09:40:00.000Z'), // a second session's line of the same folder: one start
       start('open', '2026-10-17T10:00:00.000Z'),
       start('gone', '2026-10-17T11:00:00.000Z'),
       start('burning', '2026-10-17T12:00:00.000Z'),
@@ -442,7 +442,7 @@ test('the reviews row keeps the acknowledgements when only the starts could not 
   const starts = [start('again', '2026-10-17T10:00:00.000Z')];
   // The end kept is the first at or after the lineage's start, whatever order the records were listed in.
   for (const order of [ends, [...ends].reverse()]) {
-    assert.deepEqual(reviewFacts({ starts, ends: order, live: [] }, dayBounds('2026-10-17')).ended, [{ lineage: 'again', at: '2026-10-17T11:00:00.000Z', minutes: 60 }]);
+    assert.deepEqual(reviewFacts({ starts, ends: order, live: [] }, dayBounds('2026-10-17')).ended, [{ lineage: 'again', at: '2026-10-17T09:10:00.000Z', minutes: null }, { lineage: 'again', at: '2026-10-17T11:00:00.000Z', minutes: 60 }]);
   }
   const acked = reviewFacts({ starts: [], ends: [{ lineage: 'x', at: '2026-10-17T09:00:00.000Z' }], live: [] }, dayBounds('2026-10-17'));
   const row = rowOf(throughputRows([dayOf({ day: '2026-10-17', reviews: acked, unavailable: { 'review starts': 'EBUSY' } })]), 'gentle-ai reviews');
@@ -450,4 +450,19 @@ test('the reviews row keeps the acknowledgements when only the starts could not 
   // A day whose store could not be read beside one that was: the row says what was not read.
   const mixed = rowOf(throughputRows([dayOf({ day: '2026-10-16', unavailable: { reviews: 'EACCES' } }), dayOf({ day: '2026-10-17', reviews: acked })]), 'gentle-ai reviews');
   assert.equal(mixed.value, 'not read: 2026-10-16 EACCES');
+});
+
+test('an id used again after a burn is two reviews, each its start with the first end after it', () => {
+  const start = (at) => ({ v: 1, lineage: 'again', at, from: 'birthtime', seenAt: '2026-10-17T08:00:00.000Z' });
+  const record = {
+    starts: [start('2026-10-17T09:00:00.000Z'), start('2026-10-17T12:00:00.000Z')],
+    ends: [{ lineage: 'again', at: '2026-10-17T09:20:00.000Z' }, { lineage: 'again', at: '2026-10-17T12:40:00.000Z' }],
+    live: [],
+  };
+  const facts = reviewFacts(record, dayBounds('2026-10-17'));
+  assert.deepEqual(facts.started.map((one) => one.at), ['2026-10-17T09:00:00.000Z', '2026-10-17T12:00:00.000Z']);
+  assert.deepEqual(facts.ended.map((one) => one.minutes), [20, 40]);
+  // The second life still running: its first life ended, it is open.
+  const running = reviewFacts({ ...record, ends: [record.ends[0]], live: ['again'] }, dayBounds('2026-10-17'));
+  assert.deepEqual([running.ended.map((one) => one.minutes), running.open, running.gone], [[20], ['again'], []]);
 });

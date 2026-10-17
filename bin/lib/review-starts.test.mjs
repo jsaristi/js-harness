@@ -117,3 +117,9 @@ test('an id used again after a burn is a new start, even when its first start wa
   fs.writeFileSync(file, `${JSON.stringify({ v: 1, lineage: 'review-ddd', at: new Date().toISOString(), from: 'seen', seenAt: new Date().toISOString() })}\n`);
   assert.equal(recordReviewStarts({ commonDir, home, slug: 'D--repo', now: Date.now(), platform: 'win32' }), 0);
 }));
+
+test('a terminal record that is there and cannot be read says why, never read as no end', withStore(({ commonDir, v1 }) => {
+  fs.writeFileSync(path.join(v1, 'aa.json'), '{}');
+  const denied = { ...fs, readFileSync: () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); } };
+  assert.throws(() => readReviewEnds(commonDir, { fileSystem: denied }), /EACCES/);
+}));

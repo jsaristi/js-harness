@@ -130,9 +130,17 @@ export function readReviewEnds(commonDir, { fileSystem: io = fs } = {}) {
   return entriesOf(v1, io).flatMap((entry) => {
     if (!entry.isFile() || !entry.name.endsWith('.json')) return [];
     const file = path.join(v1, entry.name);
+    let text;
+    try {
+      text = io.readFileSync(file, 'utf8');
+    } catch (err) {
+      // Gone between the listing and the read is no record; another failure is said, so the row says not read.
+      if (err?.code === 'ENOENT') return [];
+      throw new Error(err?.code ?? err?.message ?? String(err));
+    }
     let parsed;
     try {
-      parsed = JSON.parse(io.readFileSync(file, 'utf8'));
+      parsed = JSON.parse(text);
     } catch {
       return [];
     }
