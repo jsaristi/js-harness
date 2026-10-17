@@ -194,9 +194,10 @@ test('a stamp that opens the text before the label is read, and a label never cr
   assert.match(hourRefusal('19:48 JH ORQ: PR 300 landed.', AT_1444), /stamps 19:48, and the clock says 14:44/);
 });
 
-// gate-wait T11: gentle-ai diffs the tree of `--base-ref` against the head's, so a branch name the head is behind puts
-// the default branch's newer work in the candidate, reversed (20 s and 470 lines against 1 s and nothing, 2026-10-17).
-test('a gentle-ai review whose --base-ref is a commit the head does not contain is refused, naming the merge-base command', () => {
+// gate-wait T11: gentle-ai diffs the tree of `--base-ref` against the head's, and walks up to 64 first-parent ancestors
+// of the head for it; a base off that line costs about 216 git runs against 31 (reader A, 2026-10-17), and one the
+// head is behind also puts the default branch's newer work in the candidate, reversed (20 s and 470 lines).
+test('a gentle-ai review whose --base-ref is off the first-parent line of its head is refused, naming the bases to give', () => {
   const asked = [];
   const contains = (base, cwd) => { asked.push([base, cwd]); return false; };
   for (const command of [
@@ -205,13 +206,13 @@ test('a gentle-ai review whose --base-ref is a commit the head does not contain 
     'gentle-ai review start --cwd "D:\\w\\one" --base-ref "origin/main" --committed-only',
   ]) {
     const reason = reviewBaseRefusal(command, { cwd: 'D:/payload', contains });
-    assert.match(reason, /^js-harness guard: --base-ref origin\/main is not a commit this head contains/, command);
-    assert.match(reason, /git merge-base origin\/main HEAD/, command);
+    assert.match(reason, /^js-harness guard: --base-ref origin\/main is not on this head's first-parent line/, command);
+    assert.match(reason, /the last reviewed boundary, the commit that merged the default branch in, or the hash of git merge-base origin\/main HEAD/, command);
   }
   assert.deepEqual(asked, [['origin/main', 'D:\\w\\one'], ['origin/main', 'D:\\w\\one'], ['origin/main', 'D:\\w\\one']]);
 });
 
-test('a base the head contains, one that is no commit, a review command without a base and any other command pass', () => {
+test('a base on that line, one that is no commit, a review command without a base and any other command pass', () => {
   assert.equal(reviewBaseRefusal('gentle-ai review assess --base-ref origin/main --json', { cwd: 'D:/p', contains: () => true }), null);
   // A tree (the base_tree a STATUS names) or a name git cannot read: the check cannot tell, so the call runs.
   assert.equal(reviewBaseRefusal('gentle-ai review start --base-ref 7c00d719 --committed-only', { cwd: 'D:/p', contains: () => null }), null);
@@ -230,7 +231,7 @@ test('with no --cwd the folder of the call is the repository the base is looked 
   assert.deepEqual(asked, [['abc123', 'D:/payload']]);
 });
 
-test('the base is looked up in git: a branch the head is behind is refused, its merge-base and the head itself pass', () => {
+test('the base is looked up in git: a branch the head is behind is refused, and so is one merged in by its second parent; the fork point, the merge commit and the head pass', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-base-'));
   const git = (...args) => spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
   try {
@@ -248,12 +249,21 @@ test('the base is looked up in git: a branch the head is behind is refused, its 
     git('commit', '-q', '-am', 'main moves');
     git('checkout', '-q', 'side');
     const command = (base) => `gentle-ai review assess --cwd ${dir} --base-ref ${base} --committed-only --json`;
-    assert.match(reviewBaseRefusal(command('main'), { cwd: dir }), /--base-ref main is not a commit this head contains/);
+    assert.match(reviewBaseRefusal(command('main'), { cwd: dir }), /--base-ref main is not on this head's first-parent line/);
     assert.equal(reviewBaseRefusal(command(fork), { cwd: dir }), null);
     assert.equal(reviewBaseRefusal(command('HEAD'), { cwd: dir }), null);
     const tree = git('rev-parse', 'main^{tree}').stdout.trim();
     assert.equal(reviewBaseRefusal(command(tree), { cwd: dir }), null);
     assert.equal(reviewBaseRefusal(command('no-such-ref'), { cwd: dir }), null);
+    // Main merged in: its tip is now an ancestor, but by the merge's second parent, so it is still refused.
+    git('merge', '-q', '--no-edit', 'main');
+    const merge = git('rev-parse', 'HEAD').stdout.trim();
+    fs.writeFileSync(path.join(dir, 'c'), '1');
+    git('add', 'c');
+    git('commit', '-q', '-m', 'after the merge');
+    assert.match(reviewBaseRefusal(command('main'), { cwd: dir }), /--base-ref main is not on this head's first-parent line/);
+    assert.equal(reviewBaseRefusal(command(merge), { cwd: dir }), null);
+    assert.equal(reviewBaseRefusal(command(fork), { cwd: dir }), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

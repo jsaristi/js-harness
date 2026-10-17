@@ -252,22 +252,25 @@ function optionOf(words, name) {
   return null;
 }
 
-/** Whether `base` is a commit the head of the repository at `cwd` contains: true, false, or null when git cannot
- * tell (a tree, a name it does not know, no repository). */
-function headContains(base, cwd) {
-  const result = spawnSync('git', ['-C', cwd, 'merge-base', '--is-ancestor', `${base}^{commit}`, 'HEAD'], { encoding: 'utf8', windowsHide: true });
-  if (result.status === 0) return true;
-  if (result.status === 1) return false;
-  return null;
+/** Whether `base` is a commit on the first-parent line of the head of the repository at `cwd`: true, false, or null
+ * when git cannot tell (a tree, a name it does not know, no repository). */
+function onFirstParentLine(base, cwd) {
+  const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+  const resolved = git('rev-parse', '--verify', '--quiet', `${base}^{commit}`);
+  if (resolved.status !== 0) return null;
+  const line = git('rev-list', '--first-parent', 'HEAD');
+  if (line.status !== 0) return null;
+  return line.stdout.split(/\r?\n/).includes(resolved.stdout.trim());
 }
 
 /** Why the Bash command `command` is refused for the base it gives a gentle-ai review, or null (odd/tasks/gate-wait.md,
- * T11). gentle-ai diffs the tree of `--base-ref` against the head's, so a base the head does not contain, such as a
- * default branch that moved on, puts that branch's newer work in the candidate, reversed: on 2026-10-17 a head 19
- * commits behind origin/main was assessed as 470 changed lines in 20 s, and as nothing in 1 s from its merge-base.
+ * T11). gentle-ai diffs the tree of `--base-ref` against the head's, then walks up to 64 first-parent ancestors of the
+ * head: a base off that line costs it about 216 git runs against 31, which a loaded machine stretches past its timeout,
+ * and a base the head is behind also puts that branch's newer work in the candidate, reversed (on 2026-10-17 a head 19
+ * commits behind origin/main was assessed as 470 changed lines in 20 s, and as nothing in 1 s from its merge-base).
  * Only `assess`, `status` and `start` take a base. The repository is the command's `--cwd`, else `cwd`; `contains`
  * stands in for git. A base git cannot read (a tree, an unknown name) is let run: the check says nothing it cannot tell. */
-export function reviewBaseRefusal(command, { cwd, contains = headContains } = {}) {
+export function reviewBaseRefusal(command, { cwd, contains = onFirstParentLine } = {}) {
   const words = shellWords(command);
   for (let i = 0; i < words.length; i += 1) {
     const atStart = i === 0 || SEPARATORS.has(words[i - 1]);
@@ -278,9 +281,11 @@ export function reviewBaseRefusal(command, { cwd, contains = headContains } = {}
     const base = optionOf(own, 'base-ref');
     if (base === null || base === '') continue;
     if (contains(base, optionOf(own, 'cwd') ?? cwd) !== false) continue;
-    return `js-harness guard: --base-ref ${base} is not a commit this head contains, so gentle-ai would review the newer `
-      + `work of ${base} in it, reversed, as this change. Give it a base the head contains: the last reviewed boundary, `
-      + `or --base-ref $(git merge-base ${base} HEAD) (odd/tasks/gate-wait.md, T11).`;
+    return `js-harness guard: --base-ref ${base} is not on this head's first-parent line, where gentle-ai walks for the `
+      + 'base: off it the preflight runs about 216 git commands instead of 31 and can time out, and a base the head is '
+      + 'behind puts its newer work in the candidate, reversed. Give it, by its hash, a commit on that line: the last '
+      + `reviewed boundary, the commit that merged the default branch in, or the hash of git merge-base ${base} HEAD `
+      + 'when it never was (odd/tasks/gate-wait.md, T11).';
   }
   return null;
 }

@@ -1008,9 +1008,9 @@ without that review, and the choice went to him.
   preflight status with `--base-ref origin/main --committed-only` ended `operation_timeout` (pre_native,
   retry_safe false) after about 25 s, on at least 5 runs between 03:22Z and 04:09Z (8 by the lead's count
   of 2026-10-17); reported as gentle-ai issue 5422, and the candidate's review was declined after it
-- Control: check — bin/lib/guard.test.mjs — "a gentle-ai review whose --base-ref is a commit the head does not
-  contain is refused, naming the merge-base command" — since 2026-10-17
-- Proof: `js-harness guard --hook` denies a gentle-ai review whose `--base-ref` its head does not contain; the
+- Control: check — bin/lib/guard.test.mjs — "a gentle-ai review whose --base-ref is off the first-parent line of
+  its head is refused, naming the bases to give" — since 2026-10-17
+- Proof: `js-harness guard --hook` denies a gentle-ai review whose `--base-ref` is off its head's first-parent line; the
   timeout itself is `js-harness-protocols` section 3 (one more run, then on, unreviewed, with Codex)
 
 ### rule-only-in-memory

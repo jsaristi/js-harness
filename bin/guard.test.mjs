@@ -179,7 +179,7 @@ test('a gentle-ai review given a base its head does not contain is denied, looke
   const refused = await hook({ tool_name: 'Bash', cwd: 'D:/w/behind', tool_input: { command } }, { baseContains: (base, cwd) => { asked.push([base, cwd]); return false; } });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecision, 'deny');
-  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: --base-ref origin\/main is not a commit this head contains/);
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: --base-ref origin\/main is not on this head's first-parent line/);
   assert.deepEqual(asked, [['origin/main', 'D:/w/behind']]);
   assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w/fresh', tool_input: { command } }, { baseContains: () => true }), { code: 0, out: '', err: '' });
 });

@@ -2925,6 +2925,35 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     Left to the readers: whether 1 should also be a check (the guard's PreToolUse hook could refuse
     a gentle-ai review command whose `--base-ref` the head does not contain, and print the
     merge-base command), and whether 3's retry through `js-harness gate` is worth its wait.
+  - *What the two readers changed (version 2, settled).* Reader A (mechanism, probes with a logging
+    `git` shim in a scratch clone) found the cost is not the diff's size: after the diff gentle-ai
+    4.2.0 walks `git log --first-parent -n 64 HEAD~1` with a `git diff-tree` per ancestor, so a base
+    off the head's first-parent line costs about 216 git runs against 31 (17 to 45 s against 2.6 to
+    7 s on a loaded machine, the slowest with a 2-line diff), and load multiplies each run. So the
+    condition is a base on the head's first-parent line, given by its hash (assess copies the string
+    into its `next_transition`, names too): after a merge of the default branch, its merge-base is
+    the default branch's tip on the second parent, slow and holding reviewed slices, and the merge
+    commit is the base, as section 3 of the protocols already said. Reader A also corrected the
+    probe: the assess from `24139b7e` itself answered `unassessable`, high and due, exit 1 ("no
+    pending changes"), which is no candidate. The sighting of 2026-10-07 timed out with a base on
+    the line, so the fallback stays. Reader B (operability) moved the rule to its home, the
+    protocols skill, section 3 (`bin/lib/protocols-skill.mjs`), leaving the orchestrator skill's line
+    a pointer; dropped the retry through `js-harness gate --`, which would hold the machine's lock for
+    the whole review, and with it the wait (a commit's tests run on GitHub, so the lock does not even
+    mean a quiet machine); recommended the guard, which makes the Control a check; and made the
+    record line say "not reviewed", since the merge queue counts any gentle-ai line that names the
+    range. Left out of the shipped text, as reader B advised: "he is not asked" (the defect handoff
+    of the global instructions asks the user before reporting; here the lead's order and the open
+    upstream issue #5422 settle it).
+  - *Built (7c44b96e, then the first-parent correction).* `reviewBaseRefusal` in `bin/lib/guard.mjs`,
+    wired into the guard's Bash check: an assess, status or start whose `--base-ref` resolves to a
+    commit off the head's first-parent line is denied, naming the bases to give; a base git cannot
+    resolve as a commit (a tree, an unknown name) runs. Protocols section 3 gives the base and the
+    timeout procedure (one more run of the same status, never a new start; then on, a gentle-ai line
+    with both times and "not reviewed", Codex on the range) and says an assess with nothing pending is
+    no candidate; the orchestrator skill's line points there. The entry's Control is the guard's test.
+    Tests first: the lib tests failed before (no export, then the merge case let through); after,
+    guard 25, lib guard 23, manifest 173, protocols-skill 11 pass.
 
 ## Next
 
