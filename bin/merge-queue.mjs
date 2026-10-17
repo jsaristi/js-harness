@@ -63,8 +63,8 @@ request (js-harness notify --kind ready --pr <n>), and none is told twice the sa
 The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.
 After it lands, a land removes the worktree of each pull request it landed (git worktree remove, never --force)
 when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
-changed for 10 minutes, and it is not under .claude/worktrees, the main one, locked, or the one the land runs
-from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
+changed for 10 minutes, and it is not under .claude/worktrees or orca/workspaces (other apps' own), the main
+one, locked, or the one the land runs from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
 no exit.
 --prune fetches origin and removes, by the same rule, every worktree on a branch origin/main holds, whatever
 landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or

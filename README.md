@@ -580,15 +580,16 @@ tests of a red (`failing`) and the number of the session told (`told`, or `null`
 After it lands, a land removes the worktree of each pull request it landed, with `git worktree remove` and
 never `--force`, when nothing in it can be lost: its head is in the main it pushed, `git status` shows
 nothing, ignored files included (the removal takes them, and no branch brings them back), its index has
-not changed for 10 minutes, and it is neither the Claude app's (under `.claude/worktrees`),
-the main one, a locked one nor the one the land runs from. The branch stays, so `git worktree add` brings
-it back; the record names each one removed (`removed`, each `{ pr, path }`). A session still open in such a
+not changed for 10 minutes, and it is neither another app's (the Claude app's under `.claude/worktrees`,
+the Orca app's under `orca/workspaces`, which those apps manage), the main one, a locked one nor the
+one the land runs from. The branch stays, so `git worktree add` brings it back; the record names each one removed (`removed`, each `{ pr, path }`). A session still open in such a
 worktree that staged nothing for 10 minutes is not seen: on Windows the removal of a folder in use fails
 and is said; elsewhere the session loses its folder.
 `--prune` removes by the same rule every worktree on a branch origin/main holds, whatever landed it, after
 a fetch; it asks about no pull request, moves nothing and writes no record. `js-harness doctor` counts
 those worktrees in its `worktrees` row, a gap that names `--prune` and each one; its hook, run at every
-session start, does not count them, since that asks a `git status` of each.
+session start, does not count them, since that asks a `git status` of each. Each git call of that count
+stops after 20 seconds, as the heartbeat bounds its commands: a worktree whose git hangs is not counted.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
