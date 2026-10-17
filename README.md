@@ -467,6 +467,11 @@ and says so. A gate that ran nothing (no turn in time, or a waiting push took it
 before it ended is no red: the land exits 5, with nothing pushed and nothing bisected
 (`odd/tasks/land-unattended.md`). The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
+Each `--land` appends one JSON line to `lands.jsonl` under the git directory's `js-harness` folder:
+the pull requests it looked at, each one left out with its reason (`not-ready`, `review`, `door`,
+`conflict`, `merge` or `red`, with what the suite said), the start and seconds of each suite run,
+of CircleCI and of the push, the CircleCI build, what landed and the exit. A `--dry-run` writes none,
+and a record that cannot be written is said and changes no exit.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
@@ -822,6 +827,18 @@ English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decis
 already shown when a `Stop` hook runs, so the session writes its close again in its next words.
 It never turns back a stop the hooks already turned back (`stop_hook_active`), does not run for
 sub-agents, writes nothing and always exits 0.
+
+In the same projects, on Claude Code, it also turns back a work session (a title such as `JH 7 · …`)
+that ends its turn holding work the orchestrator handed it, by a notice to its number or by its
+opening, with nothing running in its background and no cron of its own: nothing would wake it when
+a notice or a land comes, so it is told to arm `js-harness wait --notice-to <number>` in the
+background, or to give the work back with `--kind closed`. A `waiting` notice does not give it
+back: a session that waits still arms a wait. It says so once a handing, as the transcript records
+its earlier block, and again after a background task launched since has ended. A close with the
+decision state is not told, a handing older than the session's transcript belongs to another
+session of that number (except the opening the session read, always stored before it began), a
+call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
+is refused too, both reasons go in one block.
 
 ```console
 $ js-harness reply --hook < stop.json

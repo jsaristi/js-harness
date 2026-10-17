@@ -28,10 +28,18 @@ const timeOf = (iso) => {
 };
 
 /** The number of the work session a title names, or `null` for any other title. */
-const workNumber = (title) => {
+export const workNumber = (title) => {
   const role = roleOfTitle(title);
   return role?.role === 'work' ? role.number : null;
 };
+
+/** The number of the work session `notice` hands work to, or `null`: only the orchestrator hands work, by a notice
+ * addressed to the session's number. */
+export const handedNumber = (notice) => (
+  notice?.to?.role === 'work' && Number.isSafeInteger(notice.to.number) && roleOfTitle(notice.from?.title)?.role === 'orchestrator'
+    ? notice.to.number
+    : null
+);
 
 /** Who ran each gate event and when: `{ at, session }`, an end taking the session of its start, since only a start
  * (and a refusal, a stop, a same) writes it. A gate that recorded no session is left out. */
@@ -87,7 +95,7 @@ export function stalledSessions({ notices = [], openings = [], readings = [], ga
       if (typeof notice.from.id === 'string' && notice.from.id !== '') session.ids.add(notice.from.id);
       session.own.push({ at, notice });
     }
-    if (notice.to?.role === 'work' && Number.isSafeInteger(notice.to.number) && roleOfTitle(notice.from?.title)?.role === 'orchestrator') {
+    if (handedNumber(notice) !== null) {
       of(notice.to.number).handed.push({ at, holding: { what: 'notice', at: notice.at, from: notice.from?.title ?? null, kind: notice.kind ?? null, text: notice.text ?? '' } });
     }
   }
@@ -157,7 +165,7 @@ export function branchCommitAt(worktree, { run = runGit } = {}) {
 
 /** Every opening of the project `slug` under `home`: `{ openings: [{ title, at, from, text }], unavailable? }`. A file
  * that is not an opening (torn, or another schema) is left out; a folder that cannot be listed says why. */
-function readOpenings(home, slug, io) {
+export function readOpenings(home, slug, io) {
   const dir = openingsDir(home, slug);
   let names;
   try {

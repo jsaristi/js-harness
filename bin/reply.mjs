@@ -10,14 +10,21 @@
 // does not run for sub-agents: their end is the host's `SubagentStop`, not `Stop`. Its answer is always JSON and it
 // always exits 0: Codex reads a `Stop` hook's exit 0 only with JSON on standard output (its hooks documentation, read
 // on 2026-10-16), Claude Code reads `{}` as nothing to say, and whatever the hook cannot read lets the session stop.
+//
+// In the same projects it also turns back, once, a work session that ends its turn holding work the orchestrator
+// handed it with nothing in its background to wake it (bin/lib/stop-wake.mjs, A(a) of odd/tasks/wake-and-flag.md);
+// both reasons go in one block when both apply. Codex sends no background tasks, so there that check does not run.
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { replyConfig, replyRefusal } from './lib/reply.mjs';
+import { closingState, replyConfig, replyRefusal } from './lib/reply.mjs';
 
 const USAGE = 'Usage: js-harness reply --hook\n'
   + '  reads a Stop payload on standard input; where the nearest harness.json holds a "reply" key, turns the stop back\n'
   + '  when the reply does not close with exactly one state (working, decision, cut, finished, in the labels the key\n'
-  + '  names) and what that state needs; writes nothing and always exits 0\n';
+  + '  names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
+  + '  nothing in its background to wake it; writes nothing and always exits 0\n';
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that
  * is there and cannot be read or parsed throws. */
@@ -46,9 +53,26 @@ function nearestHarness(start, readFile) {
 /** How many of the payload's background tasks still run (Claude Code's `background_tasks`; Codex sends none). */
 const runningOf = (tasks) => (Array.isArray(tasks) ? tasks.filter((task) => task?.status === 'running').length : 0);
 
+/** The wake check's warning (bin/lib/stop-wake.mjs), or `null`; a record it cannot read is said on standard error
+ * and costs nothing else: the reply check above still answers. */
+async function wakeOf(payload, state, io, stderr) {
+  try {
+    // Loaded only where the reply check is on: the board's module is large, and every project pays the hook.
+    const { wakeWarning } = await import('./lib/stop-wake.mjs');
+    return wakeWarning(payload, state, io);
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the wake check did not run\n`);
+    return null;
+  }
+}
+
 export async function replyMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
   readFile = (file) => fs.readFileSync(file, 'utf8'),
+  readdir = (dir) => fs.readdirSync(dir),
+  run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 2000 }),
+  env = process.env,
+  homedir = os.homedir,
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
 } = {}) {
@@ -73,7 +97,11 @@ export async function replyMain(argv, {
       const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
       const config = replyConfig(nearestHarness(cwd, readFile));
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
-      else if (config !== null) reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+      else if (config !== null) {
+        reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+        const warning = await wakeOf(payload, closingState(message, config), { readFile, readdir, run, env, homedir }, stderr);
+        if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
+      }
     } catch (err) {
       // A harness.json that is there and cannot be read lets the session stop, and says why the check did not run.
       reason = null;
