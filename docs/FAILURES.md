@@ -737,6 +737,11 @@ review covers everything the merge brought, code that already had its review.
   parts, 1,974 lines, about 1,620,000 input tokens, everything `main` brought in, and was stopped
   in its first part. A merge is read by what was written in it only at HEAD, so a detached
   worktree at c4b7a37 reviewed it in 1 part of 18 lines
+- Seen: 2026-10-14 — JH 8's `odd/tasks/gate-first.md`, T7 (observed) — the merge `cd2b689` of a
+  stacked base, `feat/gate-first` after it took `origin/main`, was read as the whole range from
+  `origin/main`: 4 parts, about 1.2M input tokens, for commits that each had a record, so
+  `5cccfc4..cd2b689` was recorded as a skip. Since T7 a stacked base whose own code commits each
+  have a record is read as the default branch is
 - Control: check — bin/codex-review.test.mjs — "is planned in two turns: the merge by what was
   written in it" — since 2026-10-16
 

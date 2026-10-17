@@ -375,10 +375,10 @@ test('a merge commit somebody wrote code in needs a record, as the commit it is'
   // It has parents, so it is no root commit, and `<id>^` is the first of them: the range from there holds it.
   const from = `${short(root, merged)}^`;
   assert.deepEqual(row.lines, [`${short(root, merged)} merge side, with an edit of its own`, `make the record with: js-harness codex-review --base ${from}`]);
-  // The plain row counts it and names the same base: the review starts at that parent, and reads the edit
-  // with what the merge brought in beside it.
+  // The plain row counts it and names the same base: the review starts at that parent and reads the edit
+  // alone, since `side` is a stacked base whose own commits have their record (odd/tasks/gate-first.md, T7).
   const debt = checkCodexReviewDebt(root);
-  assert.equal(debt.detail, `no Codex review record for 1 of 3 code commits since origin/main: the review of ${from}..HEAD is 1 part today, 3 changed lines in 2 files`);
+  assert.equal(debt.detail, `no Codex review record for 1 of 3 code commits since origin/main: the review of ${from}..HEAD is 1 part today, 2 changed lines in 1 file`);
   assert.deepEqual(debt.lines, [
     `${short(root, merged)} merge side, with an edit of its own`,
     `make the record with: js-harness codex-review --base ${from}`,
