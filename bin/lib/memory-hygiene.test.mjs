@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dueNotice, hygieneDir, hygieneState, INDEX_BYTES, LINE_CHARS, purgeMarker, readJournal, readMemory } from './memory-hygiene.mjs';
+import { dueNotice, hygieneDir, hygieneState, INDEX_BYTES, LINE_CHARS, PASS_DAYS, purgeMarker, readJournal, readMemory } from './memory-hygiene.mjs';
+import { RULES } from './rules-data.mjs';
+import { ruleValue } from './rules.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-10-15T08:00:00Z');
@@ -164,4 +166,26 @@ test('an index link written as ./note.md matches the note', () => {
     const journal = [{ kind: 'verify', at: new Date(NOW - DAY).toISOString(), notes: ['a.md'] }];
     assert.deepEqual(hygieneState({ memory: readMemory(folder), journal, now: NOW }).reasons, []);
   });
+});
+
+test('the budgets are the rules memory-index-bytes and memory-pass-days, read from the list it is given', () => {
+  const tight = RULES.map((rule) => {
+    if (rule.id === 'memory-index-bytes') return { ...rule, value: 10 };
+    if (rule.id === 'memory-pass-days') return { ...rule, value: 2 };
+    return rule;
+  });
+  withFolder({ 'MEMORY.md': `${line('a')}\n`, 'a.md': note('user') }, (folder) => {
+    const at = NOW - 3 * DAY;
+    const journal = [{ kind: 'verify', at: new Date(at).toISOString(), notes: ['a.md'] }];
+    fs.utimesSync(path.join(folder, 'a.md'), new Date(at + DAY), new Date(at + DAY));
+    fs.utimesSync(path.join(folder, 'MEMORY.md'), new Date(at - DAY), new Date(at - DAY));
+    assert.deepEqual(ids(hygieneState({ memory: readMemory(folder), journal, now: NOW }).reasons), [], 'the declared rules: 4000 B, 7 days');
+    assert.deepEqual(ids(hygieneState({ memory: readMemory(folder), journal, now: NOW, rules: tight }).reasons), ['index-bytes', 'cadence']);
+    const without = RULES.filter((rule) => rule.id !== 'memory-pass-days');
+    assert.throws(() => hygieneState({ memory: readMemory(folder), journal, now: NOW, rules: without }), /memory-pass-days/);
+  });
+});
+
+test('the exported budgets are the declared rules', () => {
+  assert.deepEqual([INDEX_BYTES, PASS_DAYS], [ruleValue('memory-index-bytes', 'bytes'), ruleValue('memory-pass-days', 'days')]);
 });

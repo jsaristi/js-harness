@@ -707,8 +707,9 @@ unseen: 1 to clear
 Keeps the project's Claude Code memory small and true. The index of that memory is read on every
 turn of every session, and in this repository it grew from 233 to 10,917 characters in 18 days with
 nothing watching it. `memory status` says whether a hygiene pass is due and why: no verified pass
-yet, the index over 4,000 bytes, a line over the host's 150 characters, a link to no file or a note
-with no line, a rule note written since the last pass, or 7 days since it with notes written since.
+yet, the index over its budget (rule `memory-index-bytes`), a line over the host's 150 characters, a
+link to no file or a note with no line, a rule note written since the last pass, or the cadence (rule
+`memory-pass-days`) passed since it with notes written since. `js-harness rules <id>` prints each value.
 It reads the main checkout's memory folder, so a worktree sees the same notes, and exits 1 when a
 pass is due. `memory plan`, `memory verify` and `memory undo` make a pass safe: a lock, a snapshot
 of the folder and a journal under `~/.js-harness/memory-hygiene/`, a check that no quotation of the

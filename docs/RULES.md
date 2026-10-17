@@ -145,12 +145,12 @@ How long a gate waits for its turn of the lock before it gives up, by default: 6
 
 ### memory-index-bytes
 The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.
-- Read by: none.
+- Read by: `bin/lib/memory-hygiene.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
 
 ### memory-pass-days
 The days after a verified memory hygiene pass when the next is due, if a note was written since: 7 days.
-- Read by: none.
+- Read by: `bin/lib/memory-hygiene.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
 
 ### person-present
