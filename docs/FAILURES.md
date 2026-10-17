@@ -52,8 +52,12 @@ A session stopped and asked him for a yes on a step that was not one of the thin
 - Seen: 2026-10-10 — relief file, line 119 — the orchestrator called the deferral of a test "his to
   accept" and JH 3 asked him; his words and the withdrawal at line 124; also
   odd/tasks/session-board.md:1598-1608
-- Control: owed — odd/tasks/rule-hierarchy.md — "The reply check: `bin/lib/reply.mjs`,
-  `bin/reply.mjs`"
+- Control: protocol — bin/lib/protocols-skill.mjs — "Ask only what is the user's; the project's" — since
+  2026-10-17
+- Was: owed — odd/tasks/rule-hierarchy.md — "The reply check: `bin/lib/reply.mjs`,
+  `bin/reply.mjs`"; that task landed as pull request 282, and the reply check turns back a reply with no
+  state or a decision while work runs, not a yes asked on a step that is not his, so the control is the
+  protocol written from this incident (section 1, its incident of 2026-10-09)
 - Proof: count of bare yes per session is 0 (owed: nothing prints it yet)
 
 ### assessment-counts-main
@@ -1060,7 +1064,10 @@ this entry, so the lands it turned red have no cause.
   failed in 4 gates: the land candidate merge-queue-108380 at 01:36Z and 01:39Z, rules-row at 02:10Z, and
   rule-first-patterns at 03:49Z or jh26-commit-size at 18:20Z; the first three also failed four more tests of
   the same file
-- Control: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"
+- Control: check — bin/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
+  Codex runs of every day of the window together" — since 2026-10-17
+- Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
+  and the daily throughput table now names the failing tests of each day's gates
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
