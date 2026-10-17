@@ -282,6 +282,9 @@ the transcript readers use `projectSlug(mainCheckout)` (`bin/lib/sessions.mjs:72
   with one test seen red: a commit of an unrelated history read as no claim, since `merge-base` has
   no base to print (now `--is-ancestor`, whose exit 1 is a no); a nested task's text ran on into its
   siblings and could borrow their commit (now it stops at the next task line or a line no deeper).
+  That fix is `96cd531`; gentle-ai on `96cd531`, assessed by its gate: medium, 57 lines, review not
+  due (`under_budget`). Codex's recheck on `0308678..96cd531` (39,295 input tokens): correct (0.98),
+  both findings fixed.
 
 ## Next step
 Codex review of the index fix (`--base fbad613`), push to update PR 144, tell the lead, then pause
