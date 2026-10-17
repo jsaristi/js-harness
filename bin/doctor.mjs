@@ -179,23 +179,26 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const { resolved: functions } = functionsOf(harness, workingTree(gitIn(project, spawn)));
 
   const localRows = probeStack({ home, project, spawn, platform, interactive, functions, env });
-  const latestVersions = await resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now });
+  // The harness's own rules against main's, for every caller and never through `computeUpToDate`: its version is a
+  // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request, and
+  // that request runs beside the lookups of the latest versions, so a slow network is waited on once, not twice.
+  const [latestVersions, rules] = await Promise.all([
+    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now }),
+    harnessRulesRow({
+      project,
+      declared: harness.declared,
+      env: env ?? process.env,
+      online: Boolean(interactive) && !offline,
+      spawn,
+      fetch: fetchImpl,
+    }),
+  ]);
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
     const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
-  });
-  // The harness's own rules against main's, for every caller and never through `computeUpToDate`: its version is a
-  // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request.
-  const rules = await harnessRulesRow({
-    project,
-    declared: harness.declared,
-    env: env ?? process.env,
-    online: Boolean(interactive) && !offline,
-    spawn,
-    fetch: fetchImpl,
   });
   const withUnseenOnly = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.

@@ -46,7 +46,6 @@ const harnessRepo = repoTemplate((root) => {
   git(root, 'init', '-q', '-b', 'main');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
-  git(root, 'config', 'maintenance.auto', 'false');
   write(root, 'bin/lib/rules-data.mjs', 'export const RULES = [];\n');
   write(root, 'AGENTS.md', `${'a'.repeat(400)}\n`);
   write(root, 'docs/ROADMAP.md', '# Roadmap\n');
