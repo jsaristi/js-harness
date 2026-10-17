@@ -279,14 +279,25 @@ function optionOf(words, name) {
 
 /** Whether `base` is a commit on the first-parent line of the head of the repository at `cwd`: true, false, or null
  * when git cannot tell (a tree, a name it does not know, no repository). */
-function onFirstParentLine(base, cwd) {
+export function onFirstParentLine(base, cwd, { run = (args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 5000 }) } = {}) {
   // A git that hangs (a loaded machine, a scanner) times out, and a call it cannot judge runs.
-  const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 5000 });
+  const git = (...args) => run(args);
   const resolved = git('rev-parse', '--verify', '--quiet', `${base}^{commit}`);
   if (resolved.status !== 0) return null;
-  const line = git('rev-list', '--first-parent', 'HEAD');
-  if (line.status !== 0) return null;
-  return line.stdout.split(/\r?\n/).includes(resolved.stdout.trim());
+  const commit = resolved.stdout.trim();
+  // The head's line down to the first commit the base holds, never the whole history: on the line, that walk ends
+  // right above the base; off it, at the fork point. Either way it is as long as the branch.
+  const above = git('rev-list', '--first-parent', 'HEAD', `^${commit}`);
+  if (above.status !== 0) return null;
+  const line = above.stdout.split(/\r?\n/).filter(Boolean);
+  if (line.length === 0) {
+    // The base holds the head: on the line only when it is the head.
+    const head = git('rev-parse', 'HEAD');
+    return head.status !== 0 ? null : head.stdout.trim() === commit;
+  }
+  const parents = git('rev-list', '--parents', '-n', '1', line[line.length - 1]);
+  if (parents.status !== 0) return null;
+  return parents.stdout.trim().split(/\s+/)[1] === commit;
 }
 
 /** Why the Bash command `command` is refused for the base it gives a gentle-ai review, or null (odd/tasks/gate-wait.md,

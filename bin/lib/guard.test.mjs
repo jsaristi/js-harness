@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, stampedHour } from './guard.mjs';
-import { backtickRefusal, backticksInDoubleQuotes, modelRefusal, reviewBaseRefusal } from './guard.mjs';
+import { backtickRefusal, backticksInDoubleQuotes, modelRefusal, onFirstParentLine, reviewBaseRefusal } from './guard.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -262,7 +262,9 @@ test('a review on a later line of the command is checked, and a cd before it nam
 });
 
 test('the base is looked up in git: a branch the head is behind is refused, and so is one merged in by its second parent; the fork point, the merge commit and the head pass', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-base-'));
+  // A space in the folder, as a home like `C:\Users\Ana María` puts one in every temp dir: the command quotes it
+  // (gentle-ai's T11 warning, an unquoted temp dir).
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard base '));
   const git = (...args) => spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
   try {
     git('init', '-q', '-b', 'main');
@@ -278,7 +280,7 @@ test('the base is looked up in git: a branch the head is behind is refused, and 
     fs.writeFileSync(path.join(dir, 'a'), '2');
     git('commit', '-q', '-am', 'main moves');
     git('checkout', '-q', 'side');
-    const command = (base) => `gentle-ai review assess --cwd ${dir} --base-ref ${base} --committed-only --json`;
+    const command = (base) => `gentle-ai review assess --cwd "${dir}" --base-ref ${base} --committed-only --json`;
     assert.match(reviewBaseRefusal(command('main'), { cwd: dir }), /--base-ref main is not on this head's first-parent line/);
     assert.equal(reviewBaseRefusal(command(fork), { cwd: dir }), null);
     assert.equal(reviewBaseRefusal(command('HEAD'), { cwd: dir }), null);
@@ -294,6 +296,39 @@ test('the base is looked up in git: a branch the head is behind is refused, and 
     assert.match(reviewBaseRefusal(command('main'), { cwd: dir }), /--base-ref main is not on this head's first-parent line/);
     assert.equal(reviewBaseRefusal(command(merge), { cwd: dir }), null);
     assert.equal(reviewBaseRefusal(command(fork), { cwd: dir }), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the first-parent lookup reads the branch down to its base, not the whole history (the T11 warning of gentle-ai, no depth bound)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-walk-'));
+  const git = (...args) => spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
+  try {
+    git('init', '-q', '-b', 'main');
+    for (let i = 0; i < 40; i += 1) git('commit', '-q', '--allow-empty', '-m', `old ${i}`);
+    const fork = git('rev-parse', 'HEAD').stdout.trim();
+    git('checkout', '-q', '-b', 'side');
+    git('commit', '-q', '--allow-empty', '-m', 'side one');
+    const one = git('rev-parse', 'HEAD').stdout.trim();
+    git('commit', '-q', '--allow-empty', '-m', 'side two');
+    git('checkout', '-q', 'main');
+    git('commit', '-q', '--allow-empty', '-m', 'main moves');
+    git('checkout', '-q', 'side');
+    // Every git the lookup runs, through the real git, with the most lines any one of them printed.
+    let most = 0;
+    const run = (args) => {
+      const result = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+      most = Math.max(most, result.stdout.split('\n').filter(Boolean).length);
+      return result;
+    };
+    const lookup = (base) => onFirstParentLine(base, dir, { run });
+    assert.deepEqual([lookup(fork), lookup(one), lookup('HEAD'), lookup('main'), lookup('main~1')], [true, true, true, false, true]);
+    assert.ok(most <= 3, `the lookup read ${most} lines of history for a branch of two commits`);
+    // The head behind its base: the base is not on the head's line.
+    git('checkout', '-q', 'main');
+    assert.equal(lookup('side'), false);
+    assert.equal(lookup('no-such-ref'), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
