@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem,
+  pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem, uninstallExpected,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
@@ -1178,4 +1178,23 @@ test('a text is redacted of the token wherever it appears, and left as it is wit
   assert.equal(redacted('a tok b tok', 'tok'), 'a <token> b <token>');
   assert.equal(redacted('a b', undefined), 'a b');
   assert.equal(redacted(undefined, 'tok'), '');
+});
+
+// The step project-uninstall failed on main at a0bc8a0 because `init` began writing docs/FAILURES.md, untracked,
+// and the step's list of what uninstall changes still knew only `.codegraph/`.
+test('after uninstall, the status loses every untracked path the manifest of init records, and shows its two committed files deleted', () => {
+  const manifest = JSON.stringify({
+    files: [{ path: '.git/hooks/pre-commit', sha256: 'a' }, { path: 'docs/FAILURES.md', sha256: 'b' }],
+    kept: [{ path: 'harness.json', reason: 'exists' }],
+    dirs: [{ path: 'notes' }],
+  });
+  const before = ['?? .codegraph/', '?? docs/FAILURES.md', '?? notes/', '?? scratch.txt', ' M src/app.js'];
+  assert.deepEqual(uninstallExpected(before, manifest), [' D AGENTS.md', ' D harness.json', ' M src/app.js', '?? scratch.txt']);
+});
+
+test('a status line for a path init did not record stays expected, and a manifest that cannot be read keeps the old list', () => {
+  const before = ['?? .codegraph/', '?? docs/FAILURES.md'];
+  assert.deepEqual(uninstallExpected(before, JSON.stringify({ files: [] })), [' D AGENTS.md', ' D harness.json', '?? docs/FAILURES.md']);
+  assert.deepEqual(uninstallExpected(before, 'not json'), [' D AGENTS.md', ' D harness.json', '?? docs/FAILURES.md']);
+  assert.deepEqual(uninstallExpected(before, undefined), [' D AGENTS.md', ' D harness.json', '?? docs/FAILURES.md']);
 });

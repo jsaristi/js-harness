@@ -18,7 +18,7 @@ import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
   uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
-  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem,
+  HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem, uninstallExpected,
 } from './practice-lib.mjs';
 import { agentsTemplate } from '../bin/lib/project.mjs';
 import { classifyAgentFailure } from '../evals/agent-output.mjs';
@@ -550,12 +550,14 @@ const STEPS = {
     const written = [hook, gitPath(ctx, 'js-harness/manifest.json'), path.join(project, 'harness.json'), path.join(project, '.codegraph')];
     const statusLines = () => porcelain(ctx).split('\n').filter(Boolean).sort();
     const before = statusLines();
+    // Read before uninstall removes it: the untracked files `init` wrote, such as docs/FAILURES.md, are in it.
+    const manifestText = readIfThere(gitPath(ctx, 'js-harness/manifest.json'))?.toString('utf8');
     expectOk(harness(ctx, 'uninstall', '--cwd', project), 'js-harness uninstall');
     for (const file of written) assertThat(!fs.existsSync(file), `${file} is still there after js-harness uninstall`);
-    // What uninstall is expected to change in the status, and nothing else: `init` wrote `harness.json` and
-    // `AGENTS.md` and the step `commit-passes` committed them, so their removal shows as two deletions, and
-    // the untracked `.codegraph/` is gone. Any other difference is a change to what the project owns.
-    const expected = [...before.filter((line) => line !== '?? .codegraph/'), ' D AGENTS.md', ' D harness.json'].sort();
+    // What uninstall is expected to change in the status, and nothing else (`uninstallExpected`): the committed
+    // `harness.json` and `AGENTS.md` show as deleted, and every untracked path init recorded is gone. Any other
+    // difference is a change to what the project owns.
+    const expected = uninstallExpected(before, manifestText);
     const after = statusLines();
     assertThat(
       JSON.stringify(after) === JSON.stringify(expected),

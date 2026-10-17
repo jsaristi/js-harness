@@ -509,6 +509,27 @@ export function secondInitProblem(porcelainText, agentsText, template) {
   return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
 }
 
+/** The sorted `git status --porcelain` lines the practice project should show after `uninstall`, from the lines it
+ * showed before (`before`) and the text of the manifest `init` wrote (`manifestText`, read before uninstall removes
+ * it): every untracked path the manifest records as written (`files`, `dirs`) is gone, and so is `.codegraph/`;
+ * `harness.json` and `AGENTS.md`, which `init` wrote and the step `commit-passes` committed, show as deleted. The list
+ * is read from the manifest, so a file `init` begins to write is expected to go without this step being told. A
+ * manifest that cannot be read takes nothing away but `.codegraph/`, and the step then names what differs. */
+export function uninstallExpected(before, manifestText) {
+  let manifest = {};
+  try {
+    manifest = JSON.parse(manifestText ?? '') ?? {};
+  } catch {
+    manifest = {};
+  }
+  const recorded = new Set(['.codegraph']);
+  for (const entry of [...(Array.isArray(manifest.files) ? manifest.files : []), ...(Array.isArray(manifest.dirs) ? manifest.dirs : [])]) {
+    if (typeof entry?.path === 'string' && !entry.gitDir) recorded.add(entry.path.replace(/\/+$/, ''));
+  }
+  const gone = (line) => line.startsWith('?? ') && recorded.has(line.slice(3).replace(/\/+$/, ''));
+  return [...before.filter((line) => !gone(line)), ' D AGENTS.md', ' D harness.json'].sort();
+}
+
 /** The one step that starts a host session, and so spends a model: `run --no-host` leaves it out. */
 export const HOST_STEP = 'host-loads';
 
