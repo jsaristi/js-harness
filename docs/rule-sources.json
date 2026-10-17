@@ -228,9 +228,13 @@
       "by": "session"
     }
   },
+  "sensor-silence": {
+    "kind": "design",
+    "path": "odd/tasks/first-version.md"
+  },
   "sensor-timeout": {
     "kind": "design",
-    "path": "odd/tasks/remote-control.md"
+    "path": "odd/tasks/first-version.md"
   },
   "session-effort": {
     "kind": "words",
