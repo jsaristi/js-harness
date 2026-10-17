@@ -108,7 +108,7 @@ function oneLine(text, max, what) {
  * `answer` may name the question it answers with `question`, with `verified` (whether its line was read) and
  * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). Throws a
  * `ChannelInputError` for anything that is not a notice. */
-export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, pr }) {
+export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, pr, summary }) {
   const role = typeof to === 'string' ? roleNamed(to) : null;
   if (role === null) throw new ChannelInputError('--to takes a role: orchestrator (or ORQ), or the number of a work session');
   if (!NOTICE_KINDS.includes(kind)) throw new ChannelInputError(`--kind takes one of ${NOTICE_KINDS.join(', ')}`);
@@ -117,6 +117,7 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
   if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
   if (kind !== 'ready' && pr !== undefined) throw new ChannelInputError('only a ready notice takes --pr');
+  if (kind !== 'closed' && summary !== undefined) throw new ChannelInputError('only a closed notice takes --summary');
   if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks the user: --to orchestrator');
   const asked = kind === 'question' ? checkedQuestion({ text, options, waits }) : null;
   const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: asked === null ? oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice') : asked.text, cwd, worktree, branch };
@@ -130,6 +131,7 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
     if (question === undefined) throw new ChannelInputError('a withdrawal names its question: --question <n>');
     return { ...notice, question: questionNumberOf(question) };
   }
+  if (kind === 'closed' && summary !== undefined) return { ...notice, summary: summaryFileOf(summary) };
   if (kind !== 'answer') return notice;
   if (transcript === undefined || line === undefined) throw new ChannelInputError('an answer says where the user\'s words are read: --transcript <file or session id> and --line <n>');
   if (!Number.isSafeInteger(line) || line < 1) throw new ChannelInputError('--line takes the number of a line of the transcript, from 1');
@@ -146,6 +148,14 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   }
   if (copy !== null) throw new ChannelInputError('an answer that was not verified takes copy null: no transcript could be read');
   return { ...answer, question: number, verified, copy: null };
+}
+
+/** The file of the summary a closed notice names (odd/tasks/session-close.md, T2): a Markdown file directly under
+ * `docs/sessions/`, relative to the repository, with forward slashes. Throws a `ChannelInputError` for anything else. */
+function summaryFileOf(summary) {
+  const file = typeof summary === 'string' ? summary.replace(/\\/g, '/') : '';
+  if (!/^docs\/sessions\/[^/.][^/]*\.md$/.test(file)) throw new ChannelInputError('--summary takes a file of docs/sessions/, as js-harness summary path names it');
+  return file;
 }
 
 /** The number of a question, as the command and the record take it: a whole number from 1. Throws a

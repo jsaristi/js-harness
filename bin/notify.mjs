@@ -19,11 +19,12 @@ import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
 import { stampOff } from './lib/guard.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
+import { closeProblems } from './lib/summary.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
-  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] "<one line>"',
+  'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
   '       js-harness notify --to orchestrator --kind question   (the fields of the question as JSON on standard input)',
   '       js-harness notify --relief "<one line>"',
   '       js-harness notify --opening "<title>"   (the opening\'s text on standard input)',
@@ -38,6 +39,10 @@ const USAGE = [
   '  A ready notice says a pull request is ready to land, and names it with --pr <n>, so the land knows whose it',
   '    is from the record and not from a branch; no other kind takes --pr. It is refused, with the land\'s reasons,',
   '    while the land would leave that pull request out: its state, its body\'s gentle-ai line, its reviews.',
+  '  A closed notice gives the work back and names the summary the session leaves with --summary <file>, a file of',
+  '    docs/sessions/ (js-harness summary template prints it); no other kind takes --summary. It is refused while a',
+  '    section of that file is empty or missing, or while neither origin/main nor the session\'s branch on origin',
+  '    holds it as it is: commit it and push it first.',
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
@@ -77,7 +82,7 @@ function requireValue(argv, i, flag) {
 function parseArgs(argv) {
   const parsed = {};
   // A Map, not an object: `constructor` and `__proto__` are keys of every object literal.
-  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--pr', 'pr'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
+  const values = new Map([['--to', 'to'], ['--kind', 'kind'], ['--transcript', 'transcript'], ['--line', 'line'], ['--question', 'question'], ['--pr', 'pr'], ['--summary', 'summary'], ['--relief', 'relief'], ['--opening', 'opening'], ['--self', 'self'], ['--cwd', 'cwd'], ['--home', 'home'], ['--claude-home', 'claudeHome']]);
   const texts = [];
   // `--relief` or `--opening` when a lone `--` follows it: its value is the text after that `--`.
   let fromText;
@@ -116,7 +121,7 @@ function parseArgs(argv) {
   if (texts.length > 1) throw new NotifyArgError('the text is one argument: put it between quotes');
 
   const places = { self: parsed.self, cwd: parsed.cwd, home: parsed.home, claudeHome: parsed.claudeHome };
-  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question', 'pr'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
+  const ofANotice = ['to', 'kind', 'transcript', 'line', 'question', 'pr', 'summary'].filter((key) => parsed[key] !== undefined).map((key) => `--${key}`);
   for (const [flag, other] of [['relief', 'opening'], ['opening', 'relief']]) {
     if (parsed[flag] === undefined) continue;
     const extra = [...ofANotice, ...(parsed[other] !== undefined ? [`--${other}`] : []), ...(texts.length > 0 ? ['a text'] : [])];
@@ -142,7 +147,10 @@ function parseArgs(argv) {
     if (!/^\d+$/.test(parsed.pr) || Number(parsed.pr) < 1) throw new NotifyArgError('--pr takes the number of a pull request, from 1');
     pr = Number(parsed.pr);
   }
-  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question, pr } };
+  // A session that finishes hands the lead its summary (odd/tasks/session-close.md, S2): the command asks for it,
+  // while the record, and a notice another command builds, may hold a closed notice without one.
+  if (parsed.kind === 'closed' && parsed.summary === undefined) throw new NotifyArgError('a closed notice names the summary the session leaves: --summary <file> (js-harness summary template prints it)');
+  return { ...places, notice: { to: parsed.to, kind: parsed.kind, text: texts[0], transcript: parsed.transcript, line, question, pr, summary: parsed.summary } };
 }
 
 /** The copy an answer to question `number` keeps, read from the transcript's `text` at `line`: `{ copy }`, or
@@ -238,6 +246,8 @@ export async function notifyMain(
     newId = () => crypto.randomUUID(),
     // What would leave the pull request of a ready notice out of a land, `[]` when nothing would.
     landChecks = readyProblems,
+    // What keeps the summary of a closed notice from closing the session, `[]` when nothing does.
+    closeChecks = closeProblems,
   } = {},
 ) {
   let parsed;
@@ -313,6 +323,16 @@ export async function notifyMain(
     const problems = await landChecks(draft.pr, cwd, { run });
     if (problems.length) {
       stderr(`js-harness notify: pull request ${draft.pr} is not ready to land: ${problems.join(' ')} Not recorded.`);
+      return 1;
+    }
+  }
+
+  // A closed notice is held to its summary: written, filled and pushed, so the lead can read it from git before it
+  // archives the session (odd/tasks/session-close.md, S2).
+  if (draft.kind === 'closed') {
+    const problems = await closeChecks(draft.summary, cwd, { run });
+    if (problems.length) {
+      stderr(`js-harness notify: the summary is not ready: ${problems.join(' ')} Not recorded.`);
       return 1;
     }
   }

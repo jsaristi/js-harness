@@ -129,5 +129,6 @@ export function wakeWarning(payload, state, io) {
   return `js-harness reply: you hold work the orchestrator handed you (${what} at ${pad(when.getHours())}:${pad(when.getMinutes())} local) `
     + `and nothing runs in your background, so ${WAKE_MARKER} when a notice or a land comes. `
     + `Arm a wait in the background, \`js-harness wait --notice-to ${role.number}\` (it ends on any notice to ${role.number}), `
-    + 'or, when the work is done, give it back with `js-harness notify --to orchestrator --kind closed "<what was done>"`.';
+    + 'or, when the work is done, give it back with `js-harness notify --to orchestrator --kind closed --summary <file> "<what was done>"`, '
+    + 'the file your summary is in (`js-harness summary template`), committed and pushed.';
 }

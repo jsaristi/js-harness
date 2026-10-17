@@ -2,6 +2,9 @@
 // `docs/sessions/<date>-<title-slug>.md`, that the lead reads before it archives the session. It is kept for
 // reverse engineering how the work went, so it holds facts with their evidence, not prose. The template and
 // the check `notify --kind closed --summary` makes read the same headings, so they cannot drift (S5).
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { titleSlug } from './channel.mjs';
 
 /** The folder of the summaries, relative to the repository's root. */
@@ -59,4 +62,40 @@ export function summaryProblems(text) {
     else if (!bodies.get(heading).some((line) => line !== '' && !/^<.*>$/.test(line))) problems.push(`"${heading}" is empty`);
   }
   return problems;
+}
+
+/** `text` with the line ends git keeps, so a working copy with CRLF reads as the blob it was committed as. */
+const lf = (text) => String(text).replace(/\r\n/g, '\n');
+
+/** What keeps the summary `file` (relative to the repository's root) from closing a session, `[]` when nothing
+ * does: it is not in the worktree at `cwd`, a section of it is missing or empty, or neither origin/main nor the
+ * session's branch on origin holds it as it is now, as this clone last fetched origin. The lead reads it from git,
+ * and a file only on one worktree's disk dies with that worktree (S2). `run` is `spawnSync`'s shape. */
+export function closeProblems(file, cwd, { run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 30000 }), readFile = (absolute) => fs.readFileSync(absolute, 'utf8') } = {}) {
+  const git = (...args) => {
+    const result = run('git', args, { cwd });
+    return { ok: !result?.error && result?.status === 0, out: String(result?.stdout ?? '') };
+  };
+  const top = git('rev-parse', '--show-toplevel');
+  if (!top.ok) return [`${cwd} is not in a git repository, so ${file} cannot be read as committed.`];
+  let text;
+  try {
+    text = readFile(path.join(top.out.trim(), file));
+  } catch (err) {
+    return [`${file} is not in this worktree (${err.code ?? err.message}): write it from js-harness summary template.`];
+  }
+  const sections = summaryProblems(text);
+  if (sections.length > 0) return [`${file}: ${sections.join(', ')}.`];
+  const branch = git('branch', '--show-current').out.trim();
+  const refs = ['origin/main', ...(branch !== '' && branch !== 'main' ? [`origin/${branch}`] : [])];
+  let older = null;
+  for (const ref of refs) {
+    const shown = git('show', `${ref}:${file}`);
+    if (!shown.ok) continue;
+    if (lf(shown.out) === lf(text)) return [];
+    older ??= ref;
+  }
+  if (older !== null) return [`${older} holds an older copy of ${file}: commit and push it as it is now.`];
+  const where = refs.length === 1 ? `${refs[0]} does not hold it` : `neither ${refs.join(' nor ')} holds it`;
+  return [`${file} is not pushed: ${where}; commit it and push.`];
 }

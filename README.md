@@ -814,6 +814,12 @@ A pull request ready to land is announced with `--kind ready --pr <number>`: the
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which
 session a pull request belongs to from the record, even when the notice was sent from `main`.
 
+A session gives its work back with `--kind closed --summary <file>`, the summary it leaves
+(`js-harness summary`, above): the record keeps the file, and the lead reads it before it archives
+the session. The notice is refused, with exit 1 and nothing written, while a section of the file is
+missing or empty, or while neither origin/main nor the session's branch on origin holds it as it is
+in the worktree: commit it and push it first. A closed notice without `--summary` is a usage error.
+
 The record stamps every notice with the clock, so the text needs no hour. A text that opens with
 one as its sending (`19:48 JH ORQ: …`, or after the label, `JH 5, 19:48: …`) more than a minute
 off the clock is refused with exit 1, the right hour, and nothing written. An hour after a colon

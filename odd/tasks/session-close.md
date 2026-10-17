@@ -39,7 +39,7 @@ Nothing: he is at the PC but the lead said to take recommended answers; product 
 
 ## Tasks
 - [x] T1 (kind: build) (S1, S5) `bin/summary.mjs`: `template` and `path`, the headings in `bin/lib/summary.mjs`, `titleSlug` taken out of `openingFileName`; registered in `bin/js-harness.mjs`; README. Tests first. Route: inline. RED: `bin/summary.test.mjs` could not load its module (pass 0); GREEN: `bin/summary.test.mjs`, `bin/lib/channel.test.mjs` and `bin/js-harness.test.mjs` 102 of 102.
-- [ ] T2 (kind: build) (S2) `notify --kind closed --summary <path>`: stored on the notice; refused without it, outside `docs/sessions/`, with a heading missing or empty, or not pushed. Tests first. Route: inline.
+- [x] T2 (kind: build) (S2) `notify --kind closed --summary <path>`: stored on the notice; refused without it, outside `docs/sessions/`, with a heading missing or empty, or not pushed. Tests first. Route: inline. RED: `bin/summary.test.mjs` could not load `closeProblems`, and 6 tests of `bin/notify.test.mjs` and `bin/lib/channel.test.mjs` failed (pass 206, fail 6); GREEN: the three files 219 of 219. The command requires `--summary`; `newNotice` only checks its shape, since the record and other callers hold closed notices without one. The stop hook's advice (`bin/lib/stop-wake.mjs`) now names `--summary`.
 - [ ] T3 (kind: build) (S3) The board's `to archive:` line. Tests first. Route: inline.
 - [ ] T4 (kind: docs) (S4) The skill text, both halves, with its tests. Route: inline.
 - [ ] T5 (kind: verify) (S6) JH 24's own summary, the close with it. Route: inline.
