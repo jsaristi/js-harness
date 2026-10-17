@@ -546,8 +546,10 @@ export function checkCitations(cwd, spawn = spawnSync) {
  * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
  * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
  * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
- * own branch), or when git cannot say. */
-export function checkCommitSize(cwd, spawn = spawnSync) {
+ * own branch), or when git cannot say. A merge git commits by itself runs `pre-merge-commit` before MERGE_HEAD is
+ * written, so that hook says it in `JS_HARNESS_HOOK` (`.githooks/pre-merge-commit`). */
+export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
+  if (env.JS_HARNESS_HOOK === 'pre-merge-commit') return [];
   const git = hookGit(cwd, spawn);
   if (!git || git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) return [];
   const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
