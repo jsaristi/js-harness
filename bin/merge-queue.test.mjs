@@ -1292,6 +1292,20 @@ test('failingTests names the failing tests of the last gate that ended at a fold
   assert.deepEqual(failingTests(harnessHome(), place), [], 'no gate log: no names');
 });
 
+test('failingTests reads only the gates that began since the run it is asked about: an older red at the same folder is not this run\'s (Codex, 2026-10-17)', () => {
+  const home = harnessHome();
+  const place = path.join(os.tmpdir(), 'merge-queue-3-4');
+  const gate = (id, failing, at, sensors = [{ name: 'tests', seconds: 1, pass: !failing.length, timedOut: false, ...(failing.length && { failing }) }]) => {
+    appendGateEvent(home, { v: 1, event: 'start', id, at, cwd: place, command: 'check', pid: 1, lock: 'parent', waitedSeconds: 0, waitedFor: [] });
+    appendGateEvent(home, { v: 1, event: 'end', id, at, seconds: 1, result: 'fail', sensors });
+  };
+  gate('old', ['a red of an earlier run'], '2026-10-17T01:00:00.000Z');
+  gate('new', [], '2026-10-17T01:10:00.000Z', [{ name: 'rules', seconds: 1, pass: false, timedOut: false }]);
+  const since = Date.parse('2026-10-17T01:05:00.000Z');
+  assert.deepEqual(failingTests(home, place, since), [], 'this run failed on a sensor with no test names');
+  assert.deepEqual(failingTests(home, place), ['a red of an earlier run'], 'with no bound, the last gate that named any');
+});
+
 test('tellLeftOut tells the session whose ready notice names a left-out pull request why, once a ready notice, and nobody for a pull request no work session named', () => {
   const home = harnessHome();
   const slug = 'project';
@@ -1347,4 +1361,20 @@ test('a land tells the session of the pull request it finds red the failing test
   assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests', failing: ['b breaks it'], told: 9 }]);
   assert.deepEqual(toldNotes(home, slugOf(root)).map((note) => [note.to.number, note.text]), [[9, 'PR 2 was left out of a land (red): FAIL  tests. Failing tests: b breaks it.']]);
   assert.equal(record.said, `Landed: main ${record.main.slice(0, 7)} is now ${record.candidate.slice(0, 7)}, with PR 1.`, 'the record keeps the land\'s own last line');
+});
+
+test('a bisected red keeps what the shortest red candidate said and failed, not the whole candidate\'s (Codex, 2026-10-17)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const suite = (dir) => {
+    const a = fs.readFileSync(path.join(dir, 'a.txt'), 'utf8').includes('A from a');
+    const b = fs.readFileSync(path.join(dir, 'b.txt'), 'utf8').includes('B from b');
+    if (a && b) return { ok: false, said: 'FAIL  tests  2 failed', failing: ['a breaks it', 'b is only noise'] };
+    if (a) return { ok: false, said: 'FAIL  tests  1 failed', failing: ['a breaks it'] };
+    return { ok: true };
+  };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite });
+  assert.equal(code, 0, out.join('\n'));
+  const [record] = landsOf(root);
+  assert.deepEqual(record.leftOut, [{ pr: 1, reason: 'red', said: 'FAIL  tests  1 failed', failing: ['a breaks it'], told: null }]);
+  assert.ok(out.includes('PR 1 is left out: the candidate turns red on this machine when it is merged (FAIL  tests  1 failed).'), out.join('\n'));
 });

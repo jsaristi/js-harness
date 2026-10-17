@@ -185,11 +185,12 @@ export function failedRows(output) {
 const harnessHomeOf = (env) => env.JS_HARNESS_HOME || os.homedir();
 
 /** The names of the tests the last gate that ended at `place` found failing, from the gate log under `home`
- * (each sensor's `failing`); none where no gate there recorded any. A land's folder is its own, so the last
- * gate there is the run the land just made. */
-export function failingTests(home, place) {
+ * (each sensor's `failing`); none where no gate there recorded any. Only gates that began at `since` (ms) or
+ * later count: a bisection runs several suites in one folder, and an older red is not the run asked about
+ * (Codex, 2026-10-17). */
+export function failingTests(home, place, since = 0) {
   const at = (dir) => typeof dir === 'string' && path.resolve(dir).toLowerCase() === path.resolve(place).toLowerCase();
-  const ran = gatesOf(readGateLog(home).events).filter((gate) => gate.start && gate.end && at(gate.start.cwd));
+  const ran = gatesOf(readGateLog(home).events).filter((gate) => gate.start && gate.end && at(gate.start.cwd) && Date.parse(gate.start.at) >= since);
   for (const gate of ran.reverse()) {
     const names = (gate.end.sensors ?? []).flatMap((sensor) => (Array.isArray(sensor.failing) ? sensor.failing : []));
     if (names.length > 0) return names;
@@ -246,6 +247,7 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
       : `No gate-first ticket for the land (${ticket.err.split('\n')[0] || `gate first exited ${ticket.status}`}): it waits its turn in the gate line.`);
     if (ticket.ok) issued = /^ticket ([0-9a-f]{8}):/.exec(ticket.out.trim())?.[1] ?? null;
   }
+  const began = Date.now();
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
   // A ticket the gate did not claim (it ran nothing, or an older candidate's gate claims none) would hold one
   // of the two open slots for an hour: cancelled. One the gate claimed is gone, and its cancel exits 1 unsaid.
@@ -255,7 +257,7 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
   const last = failedRows(done.out);
   const said = last.length ? last.join('; ') : 'the gate exited non-zero';
   // A red names its failing tests, as the gate log has them, for the session that is told (A(b)).
-  const failing = done.ok ? [] : failingTests(harnessHomeOf(env), place);
+  const failing = done.ok ? [] : failingTests(harnessHomeOf(env), place, began);
   return { ok: done.ok, notRun: false, said, ...(failing.length > 0 && { failing }) };
 }
 
@@ -524,7 +526,8 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
         const reset = gitIn(place, 'reset', '--quiet', '--hard', commit);
         return reset.ok ? null : fail(`could not reset the candidate to ${what} (${reset.err.split('\n')[0] || 'git gave no reason'}): main was not pushed.`);
       };
-      let [low, high] = [1, merged.length];
+      // `red` is the run of the shortest red candidate found so far: its words and failing tests are the culprit's.
+      let [low, high, red] = [1, merged.length, local];
       while (low < high) {
         const mid = Math.floor((low + high) / 2);
         const failed = resetTo(merged[mid - 1].merge, `the merge of PR ${merged[mid - 1].number}`);
@@ -532,10 +535,10 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
         const half = suite(place);
         if (half.notRun) return notRun(half);
         if (half.ok) low = mid + 1;
-        else high = mid;
+        else [high, red] = [mid, half];
       }
       const culprit = merged[low - 1];
-      leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${local.said}).`, { said: local.said, ...redTests(local) });
+      leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${red.said}).`, { said: red.said, ...redTests(red) });
       const failed = low > 1 ? resetTo(merged[low - 2].merge, `the merge of PR ${merged[low - 2].number}`) : resetTo(main, 'main');
       if (failed !== null) return failed;
       const kept = merged.slice(0, low - 1);
