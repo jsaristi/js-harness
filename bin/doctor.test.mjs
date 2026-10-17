@@ -2171,6 +2171,35 @@ test("doctorMain names an installed copy whose unscoped rules differ from main's
   }
 });
 
+test("an online doctor asks for main's list while the latest versions are still being looked up, not after them", async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    // Each lookup of a latest version waits for main's list to be asked, or gives up after a second: run one after
+    // the other, every lookup gives up before main's list is asked.
+    let mainAsked;
+    const asked = new Promise((resolve) => { mainAsked = resolve; });
+    const lookups = [];
+    const fetchImpl = async (url) => {
+      if (url === MAIN_LIST_URL) {
+        mainAsked();
+        return { ok: true, status: 200, text: async () => writeRules(RULES) };
+      }
+      const waited = await Promise.race([asked.then(() => 'asked'), new Promise((resolve) => setTimeout(resolve, 1000, 'gave up'))]);
+      lookups.push(waited);
+      throw new Error('network disabled in tests');
+    };
+    await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
+    assert.ok(lookups.length > 0, 'the run looked up no latest version, so it proves nothing');
+    assert.deepEqual([...new Set(lookups)], ['asked']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test("doctor --offline and the hook read no main list outside the harness's checkout: the row is n/a and no request is made", async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

@@ -118,6 +118,17 @@ test("a pin of another version or another repository gives n/a and no request, a
   assert.deepEqual(urls, [MAIN_LIST_URL]);
 });
 
+test("a pinned project and a copy whose own version cannot be read give unknown, not n/a, and no request: the pin may be the copy's", async () => {
+  const urls = [];
+  const row = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '0.1.0' }, version: null, online: true, fetch: refusing(urls) });
+  assert.equal(row.upToDate, 'unknown');
+  assert.deepEqual(urls, []);
+  // With no pin there is nothing to compare the copy's version with, so the row still reads main's list.
+  const unpinned = await harnessRulesRow({ project: os.tmpdir(), version: null, online: true, fetch: answering(200, writeRules(RULES), urls) });
+  assert.equal(unpinned.upToDate, 'ok');
+  assert.deepEqual(urls, [MAIN_LIST_URL]);
+});
+
 test('in the harness\'s own checkout main\'s list is read from the main ref with git, offline too, and nothing is fetched', async () => {
   const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rules-installed-'));
   try {
