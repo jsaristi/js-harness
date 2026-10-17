@@ -338,6 +338,37 @@ export function reviewBaseRefusal(command, { cwd, contains = onFirstParentLine }
   return null;
 }
 
+// A drive's root, or a folder at its top, as Windows (`D:/x`, `D:\x`) or Git Bash (`/d/x`) writes it.
+const DRIVE_TOP = /^(?:[A-Za-z]:|\/[A-Za-z])(?:[\\/]+[^\\/]+)?[\\/]*$/;
+
+/** Why the Bash command `command` is refused for removing a drive's root or a folder at its top, or null: an `rm`
+ * with a recursive option, or an `rmdir`, that starts a command. The host asks the user before it even in bypass
+ * mode, as a removal of a critical path, and the session waits on that card until the user answers; on 2026-10-17
+ * JH 22 waited 20 hours on `rm -rf D:/practice-jh22` (odd/tasks/held-sessions.md, S7 and L9). A denial comes back at
+ * once. Text in quotes or in a heredoc's body is no command, and an `rm` that is no command's first word is not read. */
+export function driveRootRemovalRefusal(command) {
+  const words = shellWords(command);
+  for (let i = 0; i < words.length; i += 1) {
+    const atStart = i === 0 || SEPARATORS.has(words[i - 1]);
+    if (!atStart || (words[i] !== 'rm' && words[i] !== 'rmdir')) continue;
+    let recursive = words[i] === 'rmdir';
+    let options = true;
+    for (let at = i + 1; at < words.length && !SEPARATORS.has(words[at]); at += 1) {
+      const word = words[at];
+      if (options && word === '--') options = false;
+      else if (options && word === '--recursive') recursive = true;
+      else if (options && /^-[A-Za-z]+$/.test(word)) recursive ||= /[rR]/.test(word);
+      else if (recursive && DRIVE_TOP.test(word)) {
+        return `js-harness guard: ${word} is the top of a drive or a folder at it, and the host asks the user before `
+          + 'removing such a path even in bypass mode: the session would wait on that card until the user answers. '
+          + 'Put practice and scratch folders below the project\'s worktrees folder (for example '
+          + '<repo-parent>/<repo-name>-worktrees/practice/<name>) or in the session\'s scratchpad, and remove them there.';
+      }
+    }
+  }
+  return null;
+}
+
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
 export function denial(reason) {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } };

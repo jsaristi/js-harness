@@ -173,6 +173,15 @@ test('a Bash command with backticks inside double quotes is denied; in single qu
   }
 });
 
+test('a Bash rm -rf of a folder at the top of a drive is denied with where to put it; one below the worktrees folder passes', async () => {
+  const refused = await hook({ tool_name: 'Bash', tool_input: { command: 'rm -rf D:/practice-jh22 && node scripts/practice.mjs setup' } });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: D:\/practice-jh22 is the top of a drive/);
+  const command = 'rm -rf D:/js-harness-worktrees/practice/jh22';
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), { code: 0, out: '', err: '' });
+});
+
 test('a gentle-ai review given a base its head does not contain is denied, looked up in the folder of the call; one it contains passes', async () => {
   const asked = [];
   const command = 'gentle-ai review assess --agent claude-code --base-ref origin/main --committed-only --json';
