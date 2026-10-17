@@ -2307,7 +2307,9 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   // A merge of main below HEAD, after code commits that each have a record, is reviewed in two turns where they
   // cost less than the one review (`mergeTurn`, `turnsCheaper`): the command decides it so, and so does this.
   const turn = atMerge || one === null || range.unknown || range.from === null ? null : mergeTurn(cwd, { given: range.from, tip, uncovered, spawn, remote });
-  const turnSizes = turn === null ? null : [reviewSize(spawn, cwd, turn.from, turn.merge, turn), reviewSize(spawn, cwd, turn.merge, tip)];
+  // A merge that has the review off cannot be a turn of its own, as the command says of it (`cutInTurns`).
+  const turnable = turn !== null && codexSwitchAt(gitIn(cwd, spawn), turn.merge).value !== 'off';
+  const turnSizes = turnable ? [reviewSize(spawn, cwd, turn.from, turn.merge, turn), reviewSize(spawn, cwd, turn.merge, tip)] : null;
   const inTurns = turnSizes !== null && turnSizes.every((each) => each !== null) && turnsCheaper(one, turnSizes);
   const both = (key) => turnSizes[0][key] + turnSizes[1][key];
   const size = inTurns ? { parts: both('parts'), changedLines: both('changedLines'), files: both('files'), leftOut: both('leftOut') } : one;

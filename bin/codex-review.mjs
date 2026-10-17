@@ -1367,6 +1367,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (args.unavailable !== undefined || onResult !== null || left.coverage === undefined) return null;
     const at = mergeTurn(root, { given, tip: head, uncovered: left.coverage.uncovered, spawn, where });
     if (at === null) return null;
+    // The turn at the merge reads the switch there: off, it would record nothing, so the range stays one review.
+    const atGit = gitIn(root, spawn);
+    if (functionsOf(harnessOfCommit(atGit, at.merge), commitTree(atGit, at.merge)).resolved.codexReview.value === 'off') return null;
     const groups = (from, to, read) => rangeGroups(spawn, root, { from, head: to, maxChangedLines: args.partLines, everyFile, where, merge: read });
     const splits = [groups(at.from, at.merge, { side: at.side, branch: at.branch, auto: at.auto }), groups(at.merge, head, null), groups(left.start, head, null)];
     if (splits.some((split) => split.error)) return null;

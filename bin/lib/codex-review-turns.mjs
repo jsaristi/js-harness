@@ -91,8 +91,13 @@ export function plansAsOne(plans) {
     inputTokens: estimated ? sum('inputTokens') : null,
     inputTokensHigh: estimated ? sum('inputTokensHigh') : null,
     over: parts.length > last.maxParts,
-    leftOut: leftOut.length === 0 ? null : leftOut.reduce((all, one) => Object.fromEntries(Object.keys(one).map((key) => [key, all[key] + one[key]]))),
+    leftOut: leftOut.length === 0 ? null : leftOut.reduce(addCounts),
   };
+}
+
+// Two counts of what a review leaves out (`reviewScope`'s shape) as one: its kinds are counts of their own.
+function addCounts(all, one) {
+  return Object.fromEntries(Object.keys(one).map((key) => [key, typeof one[key] === 'object' ? addCounts(all[key], one[key]) : all[key] + one[key]]));
 }
 
 // The worktree a turn below HEAD is reviewed in: `<common git dir>/js-harness/review-turn-<pid>-<time>` (S7).

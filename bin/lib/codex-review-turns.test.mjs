@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { reviewCoverage } from './codex-review-coverage.mjs';
+import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
 import { addTurnWorktree, mergeTurn, PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './codex-review-turns.mjs';
@@ -144,6 +145,11 @@ test('the plans of two turns are held to the bound of parts and the allowance as
     { range: 'aaaaaaa..ccccccc', parts: ['1/4:4', '2/4:5', '3/4:2', '4/4:1'], files: 4, changedLines: 12, inputTokens: 150, high: 300, over: true },
   );
   assert.equal(plansAsOne([plan('a..b', [1], 100), plan('b..c', [1], null)]).inputTokens, null, 'no estimate when a turn has none');
+  // What both turns leave out adds up by kind, in the shape `leftOutSaid` reads (Codex, part 2).
+  const leaving = (documents, marked) => ({ ...plan('a..b', [1], 100), leftOut: { files: documents + marked, changedLines: 10 * (documents + marked), documents: { files: documents, changedLines: 10 * documents }, marked: { files: marked, changedLines: 10 * marked } } });
+  const both = plansAsOne([leaving(1, 0), leaving(2, 1)]);
+  assert.deepEqual(both.leftOut, { files: 4, changedLines: 40, documents: { files: 3, changedLines: 30 }, marked: { files: 1, changedLines: 10 } });
+  assert.notEqual(leftOutSaid(both.leftOut), 'nothing');
 });
 
 test('a turn worktree whose run is gone is removed by the next run, and one whose run is going is left to it (S7)', () => {

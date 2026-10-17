@@ -5355,7 +5355,7 @@ test('a merge somebody wrote in is a commit of the range: with a record for ever
 /** A branch that merged its remote's default branch and resolved a conflict in `m.txt`, while that branch also
  * changed `s.txt`: `{ root, base, mine, main, head }`, with a record over `base..mine`. With `inMain` false,
  * the merged side is a branch of its own, which the remote's default branch does not hold. */
-function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n', mineLines = 0, mainLines = 0 } = {}) {
+function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n', mineLines = 0, mainLines = 0, offAtMerge = false } = {}) {
   const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
   const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
   fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
@@ -5379,6 +5379,11 @@ function makeResolvedMergeRepo({ inMain = true, resolution = 'M1 both\n', mineLi
   git(root, 'checkout', '--quiet', trunk);
   spawnSync('git', ['merge', '--no-ff', '--quiet', 'side'], { cwd: root });
   fs.writeFileSync(path.join(root, 'm.txt'), resolution, 'utf8');
+  // `offAtMerge`: the merge turns the Codex review off, which a later commit may turn on again.
+  if (offAtMerge) {
+    fs.writeFileSync(path.join(root, 'harness.json'), '{ "functions": { "codexReview": "off" } }\n', 'utf8');
+    git(root, 'add', 'harness.json');
+  }
   git(root, 'commit', '-am', 'merge main, resolving m.txt');
   const head = git(root, 'rev-parse', 'HEAD');
   appendCodexReview(root, reviewedRecord(base, mine));
@@ -5479,9 +5484,11 @@ test('a commit after a merge of main that a record covers is reviewed alone, fro
 
 /** `makeResolvedMergeRepo` with `mineLines` of covered branch work and a commit to `a.txt` after the merge:
  * the merge is then below HEAD. */
-function mergeBelowHead({ mineLines = 0, mainLines = 0 } = {}) {
-  const repo = makeResolvedMergeRepo({ mineLines, mainLines });
+function mergeBelowHead({ mineLines = 0, mainLines = 0, offAtMerge = false } = {}) {
+  const repo = makeResolvedMergeRepo({ mineLines, mainLines, offAtMerge });
   fs.writeFileSync(path.join(repo.root, 'a.txt'), 'A1 after the merge\n', 'utf8');
+  // The commit after the merge turns the review on again.
+  if (offAtMerge) fs.writeFileSync(path.join(repo.root, 'harness.json'), '{ "functions": { "codexReview": "on" } }\n', 'utf8');
   git(repo.root, 'commit', '-qam', 'after the merge');
   return { ...repo, merge: repo.head, after: git(repo.root, 'rev-parse', 'HEAD') };
 }
@@ -5510,6 +5517,20 @@ test('a merge of main below HEAD, after commits that each have a record, is plan
   const again = await run(['--base', main, '--plan', '--again', ...nothing.home, '--cwd', root], nothing.deps);
   assert.equal(again.code, 0, again.err);
   assert.doesNotMatch(again.out, /^Turn /m);
+});
+
+test('a merge of main below HEAD that has the Codex review off is not a turn of its own: the range is one review, as its head has it on (Codex)', async () => {
+  // A turn at the merge would read the switch there and record nothing, so the run could never finish.
+  const { root, main, after } = mergeBelowHead({ mineLines: 300, offAtMerge: true });
+  const nothing = startsNothing(root);
+  const result = await run(['--base', main, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  nothing.untouched('the plan of a merge below HEAD with the review off');
+  assert.doesNotMatch(result.out, /^Turn |^In all, 2 turns/m);
+  assert.match(result.out, new RegExp(`^Plan of the Codex review of [0-9a-f]{7}\\.\\.${after.slice(0, 7)}:`, 'm'));
+  // The debt row says the same: one review, not two turns.
+  const row = checkCodexReviewDebt(root);
+  assert.doesNotMatch(row.detail, /2 turns/, row.detail);
 });
 
 /** The fake sessions of the turn at the merge of `mergeBelowHead`: Codex shows the diff of the automatic merge

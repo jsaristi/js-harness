@@ -214,6 +214,16 @@ among them), and the marks at M of its written files.
   failed to reach the log reads as owing nothing (as any review does today); the worktree is made before the
   turn finds Codex missing; a switch off at M says "wrote no record" without why.
 
+- 2026-10-16, the merge of `origin/main` (f0c235e). Main had closed T6d as "overtaken by `723af7c`, no design
+  left" (first-version L22); `723af7c` is in this branch's base and names the worktree to run by hand, and
+  this feature runs that turn itself, as his answer "Solo lo escrito" asks. The task line keeps both.
+
+- 2026-10-16, the Codex review of 9ecfc6e..f0c235e, two P2 findings, both fixed test first. (1) A merge that
+  has the review off was still cut into a turn of its own, which records nothing, so the run failed with
+  "wrote no record" where one review would have run: `cutInTurns` and the debt row now read the switch at
+  the merge and keep one review (this also settles the verifier's last advisory). (2) `plansAsOne` added
+  the kinds of `leftOut`, which are counts of their own, as numbers: it now adds them by field.
+
 ## Next step
 
 **State for a resume (2026-10-16, JH 27, near 88% of context):** B1 fixed in d81494c (gate green). The gentle-ai review of 64933f6..d81494c, lineage review-4f9d361eb6afc479, lenses risk/resilience/reliability, is APPROVED and acknowledged (authority burned). It left 6 informational advisories: R3-first-turn-before-second-turn-refusals, R3-rmsync-throws-in-finally, R3-run-log-read-without-where, R3-untested-turn-failure-paths, R4-pid-reuse-stale-worktree, R4-unguarded-worktree-rm. The rmSync guard (removeTurnWorktree never throws, with a test) is written and NOT committed yet; the other five go as follow-ups in the PR body. Next: commit the rm guard (gate), `git merge origin/main` (merge-tree says it is clean), `js-harness codex-review --base origin/main`, then push, open the PR with its gentle-ai line ("gentle-ai: approved, review-4f9d361eb6afc479, high via item 2"), notify the lead "JH 27: PR <n> ready to land (T6d merge-below-head)" with the S9 finding, and re-arm `js-harness wait --notice-to 27 --every 60`.
