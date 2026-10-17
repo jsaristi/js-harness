@@ -1066,6 +1066,12 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
       test first if it breaks shipped behavior, else open its task in the owning feature doc
       and settle the entry"; the cause is not shown (the timeouts are an observation beside
       the gate), so it is a task.
+- [x] T12 · T11's later work, gentle-ai's warning: "the first-parent listing has no depth bound"
+      (`onFirstParentLine`, `bin/lib/guard.mjs`, read `git rev-list --first-parent HEAD` whole).
+      Test first. Evidence: the entry of T12 and T13 in Progress.
+- [x] T13 · T11's later work, gentle-ai's warning: "a test's unquoted temp dir" (the real-repo
+      test of `reviewBaseRefusal` in `bin/lib/guard.test.mjs`). Test first. Evidence: the entry of
+      T12 and T13 in Progress.
 
 ## Progress
 - 2026-10-12 · Opened (`335ce6f`). The map of the code is a read-only sub-agent's (72 test
@@ -2968,12 +2974,38 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
     gentle-ai on 93f8a8d: medium, 15 lines, not due (under_budget). Codex recheck
     946df82..93f8a8d correct (0.98), 3 of 3 fixed. Left as later work: the listing's depth bound and
     the test's unquoted temp dir.
+- 2026-10-17 · **T12 and T13 by JH 21 on the lead's note of 15:34Z** ("the advisories recorded as
+  later work, outside gate-first […] (1) gate-wait T11: the first-parent listing has no depth bound;
+  one test's temp dir is unquoted"; the lead's claim, not his words), branch `fix/review-base-walk`
+  from origin/main `5ea341af`.
+  - *T12.* A bound by count cannot tell a base off the line from one deeper than the bound, so the
+    walk is bounded by the base instead: `git rev-list --first-parent HEAD ^<base>` stops at the
+    first commit the base holds, right above it when the base is on the line, at the fork point
+    when it is off. The base is on the line when the first parent of the last commit listed is the
+    base, or, when nothing is listed, when it is the head. `onFirstParentLine` is exported and
+    takes `run` for the test. RED: on a branch of two commits over 41, the lookup read 42 lines of
+    history. Differential check against the old lookup on this repository's history (32 bases: on
+    the line, on second parents, `HEAD^2`, a tree, the root, an unknown name): 0 differ.
+  - *T13.* The real-repo test's folder now holds a space, as a home like `C:\Users\Ana María`
+    puts one in every temp dir, and its command quotes `--cwd`. RED: without the quotes, the test
+    fails. GREEN: `bin/lib/guard.test.mjs` and `bin/guard.test.mjs`, 50 pass.
+  - *Reviews.* Committed as `a9109b1` (gate: medium, 90 lines). gentle-ai on `5ea341af..a9109b1`: high by
+    escalation (item 2, the guard decides which review commands are refused), lenses risk and reliability,
+    approved and acknowledged (lineage `review-9cb629c08f739b2c`), two advisories from R3. The warning: the
+    verdict read only the last commit printed, so a walk git cuts late (committer dates out of order) and that
+    prints commits below the base would call a base on the line off it. Each commit now comes with its parents
+    (`--parents`, one git run fewer), and the base is on the line when it is the first parent of any commit
+    printed, since every one is on the head's line. The suggestion: tests for a root, a tree, and a base merged
+    in by a second parent. Both done test first in the next commit (RED: a run that prints a commit below the
+    base was called off the line); lib guard 26, guard 25 pass; the differential check, 32 bases, 0 differ.
+    That commit is `3d4194c`; gentle-ai on `a9109b1..3d4194c`: medium, not due (`under_budget`). Codex on
+    `5ea341a..3d4194c`: correct (0.94), no finding.
 
 ## Next
 
-T11 (JH 5, `feat/review-timeout-rule`): built, reviewed and ticked (7c44b96e, 55336181, 1cebd69a,
-93f8a8d). Next: its PR and `notify --kind ready`; then JH 5's closing summary section and
-`notify --kind closed`. Later work from T11: a depth bound on the first-parent listing, and the
-quoted temp dir in its test. Before T11, nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
+T11 landed (PR 407). T12 and T13, its later work (JH 21, `fix/review-base-walk`): built test first;
+reviewed (gentle-ai approved, Codex correct); next, the PR and `notify --kind ready`. After them, nothing
+open from T11. Before T11,
+nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
 Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
 2026-10-16 by the session "JH 21".
