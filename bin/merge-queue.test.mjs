@@ -1254,3 +1254,16 @@ test('a land red on this machine removes its queue branch before it bisects, and
   assert.deepEqual(during, [1, 0, 1], 'the red candidate\'s branch goes as it turns red: none while its half is tested, one for the candidate without PR 2');
   assert.deepEqual(queueBranches(origin), []);
 });
+
+test('a land whose suite did not run and whose queue branch origin keeps names that branch before its exit line, which stays the last (odd/tasks/land-unattended.md, D)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], {
+    suite: () => ({ ok: false, notRun: true, said: 'gate: nothing ran' }),
+    wrap: failingGit((args) => args.includes('--delete'), refused),
+  });
+  assert.equal(code, 5, out.join('\n'));
+  assert.match(out.at(-2), /^Could not remove queue\/\S+ from origin \(fatal: refused by the test\): remove it by hand\.$/);
+  assert.equal(out.at(-1), 'The suite did not run on this machine (gate: nothing ran): main was not pushed, and nothing was bisected.');
+  const [record] = landsOf(root);
+  assert.equal(record.said, out.at(-1), 'the record keeps the exit line, not the cleanup');
+});

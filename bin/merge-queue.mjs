@@ -35,7 +35,8 @@ each ready pull request the queue prints, commit by commit, the Codex record tha
 line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
 refused ticket it waits its turn, and says which), and at the same time CircleCI's run of a queue/*
 branch pushed for it before the suite starts. The branch is removed once the candidate is red or
-untested on this machine, or once CircleCI answered; a red here still spends that CircleCI run. When
+untested on this machine, or once CircleCI answered. A candidate red or untested here still spends
+that CircleCI run, and a land killed before it ends leaves its branch on origin for a hand to remove. When
 both are green, main is pushed as the
 candidate, by fast-forward from the main it was built from. A candidate whose every changed path is a
 document main's harness.json declares runs no suite on this machine, as a commit of documents alone
@@ -51,7 +52,8 @@ ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or n
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
-one left out with its reason, the time of each suite run, of CircleCI and of the push, what landed, and its exit.`;
+one left out with its reason, the time of each suite run, of CircleCI (from the push of its queue branch, so it spans the local
+suite, to its answer or the branch's removal) and of the push, what landed, and its exit.`;
 
 const TIMEOUT_MS = 60_000;
 
@@ -422,7 +424,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   if (!candidate) return fail('could not read the candidate.');
   log.record.candidate = candidate;
   // CircleCI starts with the local suite, not after it: the two ran in series, about 2.8 minutes a land. The cost
-  // is one CircleCI run spent on a candidate this machine turns red. Main still waits for both greens.
+  // is one CircleCI run spent on each candidate this machine turns red or does not test. Main still waits for both greens.
   // `--no-verify`: the branch is the candidate's run on CircleCI, and no hook judges it; main's push is judged.
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
@@ -443,6 +445,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
   try {
     // A suite that did not run judged nothing: no red to bisect, and no main to push (odd/tasks/land-unattended.md).
     const notRun = (result) => {
+      drop(); // before the exit line, so a branch origin keeps is named above it and the record keeps the exit
       stdout(`The suite did not run on this machine (${result.said}): main was not pushed, and nothing was bisected.`);
       return 5;
     };
