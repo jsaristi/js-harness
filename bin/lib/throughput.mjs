@@ -237,9 +237,11 @@ export function landFacts(records, { from, to }) {
  * (`readReviewStarts`); `ends`, gentle-ai's terminal records (`readReviewEnds`); `live`, the lineages whose folder is in
  * its store now. Returns `{ since, started, ended, open, gone }`. `since` is when this machine began recording starts
  * (the first line's `seenAt`), and a start born before it is not counted, since the ones that burned before were never
- * seen. A lineage's start is its earliest line. An end counts once its folder is gone (gentle-ai writes the record
- * first), with the minutes from its start, `null` with none; a start of the day still live is open, and one gone
- * with no record went without acknowledgement (abandoned, reclaimed or reset). */
+ * seen. Each distinct start of a lineage is one review, so an id used again after a burn counts twice, and lines of one
+ * start written by two sessions count once. An end goes to the last start of its lineage at or before it, with the
+ * minutes from that start, `null` with none; the last start of a lineage still live has no end yet (gentle-ai writes
+ * the record before it deletes the folder) and is open, and a start with no end went without acknowledgement
+ * (abandoned, reclaimed or reset). */
 export function reviewFacts({ starts, ends, live }, { from, to }) {
   const seen = starts.map((one) => Date.parse(one.seenAt)).filter(Number.isFinite);
   const since = seen.length > 0 ? seen.reduce((a, b) => Math.min(a, b)) : null;
