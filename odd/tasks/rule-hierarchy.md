@@ -4550,7 +4550,11 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   `review-82c5317205449ba6`), two advisories. R3: a sources file that does not parse also blocked the match by the
   declaration alone; fixed in the next commit with its test seen red (the head's declarations are read apart from its
   sources, and a sources file that does not parse is said and matches no sourced line). R3: the hash's shape when no
-  sources are given; left, since it is the old line's hash on purpose.
+  sources are given; left, since it is the old line's hash on purpose. Codex on `db31c96..b9fd628` (1 part, 88,847
+  input tokens): the patch is correct (0.91), no finding. The lead asked that Codex also read `ac6cf2c..9c3f41a`;
+  `codex-review --base ac6cf2c --again` from a detached worktree at `9c3f41a` refused it as a second recheck of the
+  review that ended at `12773f4`, so that range keeps its skip record, and the matching code it held is the code the
+  review of `db31c96..b9fd628` read and found correct.
 
 - 2026-10-17, T9, the reply check on by default, built by `JH 5 · canal entre sesiones` on
   `feat/init-reply-on` from origin/main, on the lead's order of 11:22Z (item 5 of its triage
