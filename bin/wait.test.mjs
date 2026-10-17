@@ -20,6 +20,18 @@ const failedRun = (stderr) => ({ status: 1, stdout: '', stderr });
 const missing = () => ({ error: Object.assign(new Error('spawnSync gh ENOENT'), { code: 'ENOENT' }), status: null, stdout: '', stderr: '' });
 const args = (...extra) => ['--cwd', CWD, '--home', HOME, ...extra];
 
+// The waiting session, as the host names it to its commands: its id in CLAUDE_CODE_SESSION_ID, and its transcript in
+// the sessions folder of the project under CLAUDE_CONFIG_DIR, where `notify` reads a sender.
+const SELF_ID = 'bbbbbbbb-2222-4222-8222-222222222222';
+const CLAUDE_HOME = path.resolve('wait-test-claude');
+const PROJECT_DIR = path.join(CLAUDE_HOME, 'projects', projectSlug(CWD));
+const SELF_ENV = { CLAUDE_CODE_SESSION_ID: SELF_ID, CLAUDE_CONFIG_DIR: CLAUDE_HOME };
+const SESSION_26 = { title: 'JH 26 · canal y compactación' };
+// A path as the wait to arm again shows it: in single quotes when a shell would read it otherwise (a backslash, on
+// Windows), as it is elsewhere.
+const shown = (word) => (/^[\w./:@%+=,-]+$/.test(word) ? word : `'${word}'`);
+const watching = (phrase, number, minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for ${phrase}; ends when it holds, on a notice to ${number}, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`;
+
 /** Answers one after another, the last one again once they run out. */
 const inOrder = (...answers) => {
   let next = 0;
@@ -45,8 +57,13 @@ function noticeLine({ at, to, kind = 'note', text = 'a note', title = 'JH 5 · c
 /** The fake world of one run. `answer(command, args, state)` is what git and gh return. `onSleep(state)` runs after
  * each sleep, so that a test can write the record while the wait waits. `record` is the channel's text, or `null`
  * for no file; `readError` is what reading the record fails with, when given. */
-function world({ answer = () => ok(), onSleep = () => {}, record = null, readError = null } = {}) {
+function world({ answer = () => ok(), onSleep = () => {}, record = null, readError = null, transcript = null } = {}) {
   const state = { clock: T0, sleeps: [], calls: [], timeouts: [], outAtCall: [], out: [], err: [], record };
+  // The waiting session's own transcript, where `senderOf` reads its title: `{ title }`, a title it was given, or
+  // `{ title: null }`, a transcript with none (a phone session's).
+  const transcriptFile = path.join(PROJECT_DIR, `${SELF_ID}.jsonl`);
+  const transcriptText = transcript === null ? null
+    : `${JSON.stringify(transcript.title === null ? { type: 'user', message: { role: 'user', content: 'hola' }, sessionId: SELF_ID } : { type: 'custom-title', customTitle: transcript.title, sessionId: SELF_ID })}\n`;
   const deps = {
     cwd: CWD,
     now: () => state.clock,
@@ -68,7 +85,12 @@ function world({ answer = () => ok(), onSleep = () => {}, record = null, readErr
     readFile: (file) => {
       if (file === RECORD && readError !== null) throw readError;
       if (file === RECORD && state.record !== null) return state.record;
+      if (file === transcriptFile && transcriptText !== null) return transcriptText;
       throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    },
+    readdir: (dir) => {
+      if (dir === PROJECT_DIR && transcriptText !== null) return [`${SELF_ID}.jsonl`];
+      throw Object.assign(new Error(`ENOENT: ${dir}`), { code: 'ENOENT' });
     },
   };
   return { state, deps };
@@ -209,6 +231,93 @@ test('--notice-to: a record that cannot be read is said on stderr and retried, n
   assert.equal(state.err.length, 1);
   assert.match(state.err[0], /could not be read \(EACCES\)/);
   assert.match(state.out.at(-1), /did not hold after 1 minutes; the time ran out/);
+});
+
+// odd/tasks/session-channel.md, T20b (`wait-blind-to-notices`): every wait also ends on a notice to the waiting
+// session's own number, with an exit of its own, and says how to arm the same wait again.
+test("every wait also ends on a notice to the waiting session's own number, with exit 3, its notice and the wait to arm again", async () => {
+  const { state, deps } = world({
+    transcript: SESSION_26,
+    answer: () => ok('OPEN\n'),
+    record: noticeLine({ at: T0 - 60000, to: WORK(26), text: 'una vieja' }),
+    onSleep: (now) => {
+      if (now.sleeps.length === 1) now.record += noticeLine({ at: now.clock, to: WORK(4), text: 'para la cuatro' });
+      if (now.sleeps.length === 2) now.record += noticeLine({ at: now.clock, to: WORK(26), text: 'Lead: next for JH 26', title: 'JH ORQ · js-harness' });
+    },
+  });
+  assert.equal(await waitMain(args('--pr', '284', '--for', '60'), SELF_ENV, deps), 3);
+  assert.equal(state.out[0], watching('the merge of pull request 284', 26, 60));
+  assert.deepEqual(state.calls, ['gh pr view 284 --json state -q .state', 'gh pr view 284 --json state -q .state'], 'the notice is looked for before the pull request, which is not asked again');
+  assert.match(state.out[1], /^js-harness wait: a notice to 26 came before the merge of pull request 284 held \(\d\d:\d\d\); the wait ends$/);
+  assert.equal(state.out[2], 'note from JH ORQ · js-harness: Lead: next for JH 26');
+  assert.equal(state.out[3], `js-harness wait: to wait again, run: js-harness wait --cwd ${shown(CWD)} --home ${shown(HOME)} --pr 284 --for 60`);
+  assert.equal(state.out.length, 4);
+  assert.deepEqual(state.err, []);
+});
+
+test('the wait to arm again quotes an argument a shell would split', async () => {
+  const { state, deps } = world({
+    transcript: SESSION_26,
+    answer: (command, commandArgs) => (commandArgs[0] === 'fetch' ? ok() : ok('the old text\n')),
+    record: noticeLine({ at: T0 + 1000, to: WORK(26), text: 'hola' }),
+  });
+  assert.equal(await waitMain(['--main-file', 'docs/a.md', '--contains', "it's new", '--cwd', CWD, '--home', HOME], SELF_ENV, deps), 3);
+  assert.equal(state.out.at(-1), `js-harness wait: to wait again, run: js-harness wait --main-file docs/a.md --contains 'it'\\''s new' --cwd ${shown(CWD)} --home ${shown(HOME)}`);
+});
+
+test("the condition holds while no notice is addressed to the session's number, and the wait ends as before, exit 0", async () => {
+  const { state, deps } = world({
+    transcript: SESSION_26,
+    answer: inOrder(ok('OPEN\n'), ok('MERGED\n')),
+    record: noticeLine({ at: T0 + 1000, to: WORK(4), text: 'para la cuatro' }) + noticeLine({ at: T0 + 1000, to: ORQ, text: 'al lead' }),
+  });
+  assert.equal(await waitMain(args('--pr', '284'), SELF_ENV, deps), 0);
+  assert.equal(state.out[0], watching('the merge of pull request 284', 26));
+  assert.match(state.out[1], /^js-harness wait: the merge of pull request 284 holds \(\d\d:\d\d\)$/);
+  assert.equal(state.out.length, 2);
+});
+
+test('a session with no number keeps the wait it had: no id, a transcript with no title, or a title that names no work session', async () => {
+  const notice = noticeLine({ at: T0 + 1000, to: WORK(26), text: 'hola' });
+  for (const [label, env, transcript] of [
+    ['no session id', {}, SESSION_26],
+    ['no title in the transcript', SELF_ENV, { title: null }],
+    ['the orchestrator', SELF_ENV, { title: 'JH ORQ · js-harness (350k)' }],
+    ['a title of no agreed shape', SELF_ENV, { title: 'canal y compactación' }],
+  ]) {
+    const { state, deps } = world({ transcript, record: notice, answer: inOrder(ok('OPEN\n'), ok('MERGED\n')) });
+    assert.equal(await waitMain(args('--pr', '284'), env, deps), 0, label);
+    assert.equal(state.out[0], start('the merge of pull request 284'), label);
+    assert.deepEqual(state.err, [], label);
+  }
+});
+
+test('a wait for a notice to the session itself is not watched twice, and ends with exit 0', async () => {
+  const { state, deps } = world({ transcript: SESSION_26, record: noticeLine({ at: T0 + 1000, to: WORK(26), text: 'hola' }) });
+  assert.equal(await waitMain(args('--notice-to', '26'), SELF_ENV, deps), 0);
+  assert.equal(state.out[0], start('a notice to 26'));
+  assert.match(state.out[1], /^js-harness wait: a notice to 26 holds \(\d\d:\d\d\)$/);
+});
+
+test("a wait for the orchestrator's notices, run by a work session, also ends on a notice to its own number", async () => {
+  const { state, deps } = world({ transcript: SESSION_26, record: noticeLine({ at: T0 + 1000, to: WORK(26), text: 'hola' }) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), SELF_ENV, deps), 3);
+  assert.equal(state.out[0], watching('a notice to orchestrator', 26));
+});
+
+test('a project with no channel record sees no error from the notice watch', async () => {
+  const { state, deps } = world({ transcript: SESSION_26, answer: inOrder(ok('OPEN\n'), ok('MERGED\n')) });
+  assert.equal(await waitMain(args('--pr', '284'), SELF_ENV, deps), 0);
+  assert.deepEqual(state.err, []);
+});
+
+test('a record the notice watch cannot read is said once on stderr, and the condition is still checked', async () => {
+  const readError = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+  const { state, deps } = world({ transcript: SESSION_26, readError, answer: inOrder(ok('OPEN\n'), ok('OPEN\n'), ok('MERGED\n')) });
+  assert.equal(await waitMain(args('--pr', '284'), SELF_ENV, deps), 0);
+  assert.equal(state.calls.length, 3);
+  assert.equal(state.err.length, 1);
+  assert.match(state.err[0], /^js-harness wait: the notices to 26 are not watched now: the channel's record .+ could not be read \(EACCES\); it is read again at the next tick$/);
 });
 
 test('usage errors exit 2 with the usage, and nothing is checked', async () => {
