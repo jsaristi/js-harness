@@ -1,5 +1,5 @@
-// A gate whose turn at the machine's lock would wait runs its tests on GitHub's machines (./lib/ci-gate.mjs), and
-// one that gets no answer there runs them here as before. `checkSensors` is called with stand-ins for the lock,
+// Every commit's gate runs its tests on GitHub's machines first (./lib/ci-gate.mjs), and one that gets no answer
+// there runs them here as before. `checkSensors` is called with stand-ins for the lock,
 // the sensors, and the two halves of the CI gate, so nothing is pushed and no suite runs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -62,20 +62,22 @@ async function gate(over, { log = false, look = () => {} } = {}) {
 
 const URL = 'https://github.com/o/r/actions/runs/42';
 
-test('a gate whose turn would wait runs its tests on CI, takes no lock and runs no sensor here', async () => {
-  const { rows, seen, errors, dir, home } = await gate({ wanted: 'the machine\'s gate lock is held by another gate (pid 7)', ci: { ran: true, pass: true, url: URL, seconds: 190, output: '' } });
+const FIRST = 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first';
+
+test('a gate CI is wanted for runs its tests on CI, takes no lock and runs no sensor here', async () => {
+  const { rows, seen, errors, dir } = await gate({ wanted: FIRST, ci: { ran: true, pass: true, url: URL, seconds: 190, output: '' } });
   assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 0, takes: 0, ciRuns: 1 });
-  assert.deepEqual(seen.wantedWith, { cwd: dir, home, env: { SOME: 'env' } });
+  assert.deepEqual(seen.wantedWith, { cwd: dir, env: { SOME: 'env' } }, 'the lock is not asked');
   assert.deepEqual(seen.ranWith, { cwd: dir, remote: 'upstream', env: { SOME: 'env' } }, 'the remote check was given');
   const tests = rows.find((row) => row.name === 'tests');
   assert.equal(tests.pass, true);
   assert.equal(tests.detail, `ran on GitHub's machines in 190s (.github/workflows/gate.yml): ${URL}`);
-  assert.match(rows.find((row) => row.name === 'gate').detail, /^the machine's gate lock is held by another gate \(pid 7\), so the tests ran on CI$/);
-  assert.match(errors, /^check: the machine's gate lock is held by another gate \(pid 7\); the tests go to GitHub's machines/m);
+  assert.equal(rows.find((row) => row.name === 'gate').detail, `the tests ran on CI: ${FIRST}`);
+  assert.ok(errors.split('\n').includes(`check: ${FIRST}; the push of the tree being committed starts their run`), errors);
 });
 
 test('a red run on CI fails the gate with the end of its log', async () => {
-  const { rows, seen } = await gate({ wanted: '2 gates wait for the machine\'s gate lock', ci: { ran: true, pass: false, url: URL, seconds: 200, output: 'not ok 3 - a test' } });
+  const { rows, seen } = await gate({ wanted: FIRST, ci: { ran: true, pass: false, url: URL, seconds: 200, output: 'not ok 3 - a test' } });
   assert.equal(seen.sensors, 0);
   const tests = rows.find((row) => row.name === 'tests');
   assert.equal(tests.pass, false);
@@ -83,20 +85,20 @@ test('a red run on CI fails the gate with the end of its log', async () => {
 });
 
 test('a gate with no answer from CI runs here under the lock, and says why', async () => {
-  const { rows, seen, errors } = await gate({ wanted: 'the machine\'s gate lock is held by another gate (pid 7)', ci: { ran: false, why: 'gh run list failed: no auth' } });
+  const { rows, seen, errors } = await gate({ wanted: FIRST, ci: { ran: false, why: 'gh run list failed: no auth' } });
   assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 1, takes: 1, ciRuns: 1 });
   assert.equal(rows.find((row) => row.name === 'tests').pass, true);
   assert.match(errors, /^check: no answer from GitHub's machines \(gh run list failed: no auth\), so the tests run here$/m);
 });
 
-test('a gate whose turn is free runs here and never asks CI', async () => {
+test('a gate CI is not wanted for (no workflow, the switch, a CI machine) runs here and never asks CI', async () => {
   const { seen } = await gate({ wanted: null, ci: { ran: true, pass: true, url: URL, seconds: 1, output: '' } });
   assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 1, takes: 1, ciRuns: 0 });
 });
 
 test('a gate run on CI leaves its record in the gate log, its tests marked as run there', async () => {
   let events;
-  await gate({ wanted: 'held', ci: { ran: true, pass: false, url: URL, seconds: 230, output: 'x' } }, { log: true, look: (home) => { events = readGateLog(home).events; } });
+  await gate({ wanted: FIRST, ci: { ran: true, pass: false, url: URL, seconds: 230, output: 'x' } }, { log: true, look: (home) => { events = readGateLog(home).events; } });
   assert.deepEqual(events.map((event) => event.event), ['start', 'end']);
   assert.equal(events[0].lock, 'ci');
   assert.equal(events[1].result, 'fail');

@@ -1,5 +1,5 @@
-# The gate of one commit on GitHub's machines, for a commit whose tests would wait for this machine's line
-# (odd/tasks/first-version.md, "Gates on CI machines"). `check` pushes the tree it is about to commit to
+# The gate of one commit on GitHub's machines, where every commit's tests go first (odd/tasks/first-version.md,
+# "Gates on CI machines"; odd/tasks/commit-gates-first.md). `check` pushes the tree it is about to commit to
 # `gate/<sha>`, reads this run's conclusion, and deletes the branch; the commit is made only on green.
 #
 # It runs for nothing but a push to a `gate/` branch: no pull request starts a run, and a fork can push none
@@ -18,7 +18,10 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Two minutes past the rule ci-gate-bound, the longest a gate waits for this run from its push: the gate cancels
+    # first, and this ends a run whose gate died; equal, the two would race and a timed-out job could read as a red.
+    # scripts/github-workflows.test.mjs holds the relation.
+    timeout-minutes: 10
     steps:
       # v4.2.2. The whole history: `check` compares the head with origin/main.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
