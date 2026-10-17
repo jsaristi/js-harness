@@ -292,6 +292,9 @@ function logSyncProjectAction(action) {
     case 'ran':
       console.log(`ran ${action.path}`);
       break;
+    case 'rendered':
+      console.log(`rendered the harness's lines of ${action.path} again, unedited since they were written: commit it`);
+      break;
     case 'removed':
       console.log(`removed ${action.path}`);
       break;

@@ -2462,6 +2462,16 @@ test('the orchestrator skill has a one-line description a host can read, and nam
   }
 });
 
+// T16f of odd/tasks/rule-hierarchy.md: the rules in force are read in the list, not in the relief file.
+test('the orchestrator skill reads the rules in force in the list, at its start from the handover prompt too', () => {
+  const lines = components[2].content('0.1.0').split('\n');
+  const home = lines.find((line) => line.startsWith('- the rules in force'));
+  assert.ok(home !== undefined, 'the list of where each thing lives names the rules in force');
+  assert.ok(home.includes('`js-harness rules`') && home.includes('read the list, not the relief file'), home);
+  const handover = lines.find((line) => line.startsWith('- When you start from that prompt, '));
+  assert.ok(handover.startsWith('- When you start from that prompt, read the list (`js-harness rules`), the relief file, the board '), handover);
+});
+
 // T9 of odd/tasks/session-channel.md: the handover ends with a `relieved` notice, which `sessions --measures` counts as a relief.
 test('the orchestrator skill has the one before append a relieved notice as the step after its handover', () => {
   const lines = components[2].content('0.1.0').split('\n');

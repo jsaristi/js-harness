@@ -581,6 +581,8 @@ export function hostEnv(layout, baseEnv, token, platform = process.platform) {
 const FILE_TOOLS = ['Read', 'Grep', 'Glob', 'Bash', 'PowerShell', 'NotebookRead', 'Task', 'Agent'];
 // The first words `js-harness resume --hook` prints after a compaction (bin/resume.mjs).
 const RESUME_WORDS = 'js-harness resume:';
+// What the host entry setup seeds before the harness is installed prints (`echo unrelated-claude-hook`, scripts/e2e.mjs).
+const SEEDED_HOOK_OUTPUT = 'unrelated-claude-hook';
 
 /** The parts of a host's `--output-format stream-json --verbose --include-hook-events` output the step reads: the
  * `system/init` event, every `system/hook_response` as `{ name, exitCode, outcome, stdout }`, and the last result.
@@ -604,13 +606,21 @@ export function readHostStream(text) {
 }
 
 /** What is wrong with one call of the host session, one sentence each; none when it proves what it is for.
- * `load` (no tools, one turn): both skills listed, no file tool, every startup hook a success, and the answer holds
- * `word`, which only the practice's AGENTS.md holds. `skill`: the pause entry ran after the skill and succeeded, and
- * the answer quotes the skill. `compact`: the compact entry printed the words of `js-harness resume`. */
+ * `load` (no tools, one turn): both skills listed, no file tool, every startup hook a success, the turn's hook ran
+ * (the rules hook, `UserPromptSubmit`), and the answer holds `word`, which only the practice's AGENTS.md holds.
+ * `skill`: the pause entry ran after the skill and succeeded, and the answer quotes the skill. `compact`: the compact
+ * entry printed the words of `js-harness resume`, and a second compact entry, the rules hook, succeeded. `subagent`: a
+ * sub-agent's start hook ran and succeeded, the rules hook's third event (odd/tasks/rule-hierarchy.md, T16f). The host
+ * names a hook of an event with a matcher `<event>:<what matched>`, and one without a matcher by its event alone. */
 export function hostCallProblems(kind, { init, hooks, result }, { word } = {}) {
   const problems = [];
   const succeeded = (hook) => hook.exitCode === 0 && hook.outcome === 'success';
   const named = (name) => hooks.filter((hook) => hook.name === name);
+  const ofEvent = (event) => hooks.filter((hook) => hook.name === event || String(hook.name).startsWith(`${event}:`));
+  const ranAndSucceeded = (event, found) => {
+    if (found.length === 0) problems.push(`no ${event} hook ran`);
+    for (const hook of found.filter((item) => !succeeded(item))) problems.push(`a ${event} hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
+  };
   if (kind === 'load') {
     if (init === null) problems.push('the stream has no init event');
     else {
@@ -623,14 +633,21 @@ export function hostCallProblems(kind, { init, hooks, result }, { word } = {}) {
     const started = named('SessionStart:startup');
     if (started.length === 0) problems.push('no SessionStart:startup hook ran');
     for (const hook of started.filter((item) => !succeeded(item))) problems.push(`a SessionStart:startup hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
+    ranAndSucceeded('UserPromptSubmit', ofEvent('UserPromptSubmit'));
   }
+  if (kind === 'subagent') ranAndSucceeded('SubagentStart', ofEvent('SubagentStart'));
   if (kind === 'skill') {
     const after = named('PostToolUse:Skill');
     if (after.length === 0) problems.push('no PostToolUse:Skill hook ran');
     for (const hook of after.filter((item) => !succeeded(item))) problems.push(`a PostToolUse:Skill hook did not succeed (exit ${hook.exitCode}, ${hook.outcome})`);
   }
-  if (kind === 'compact' && !named('SessionStart:compact').some((hook) => succeeded(hook) && hook.stdout.startsWith(RESUME_WORDS))) {
-    problems.push('no SessionStart:compact hook printed the words of js-harness resume');
+  if (kind === 'compact') {
+    const compacted = named('SessionStart:compact').filter(succeeded);
+    if (!compacted.some((hook) => hook.stdout.startsWith(RESUME_WORDS))) problems.push('no SessionStart:compact hook printed the words of js-harness resume');
+    // The one left is the rules hook: the entry setup seeds (`SEEDED_HOOK_OUTPUT`) runs at a compaction too.
+    if (!compacted.some((hook) => !hook.stdout.startsWith(RESUME_WORDS) && hook.stdout.trim() !== SEEDED_HOOK_OUTPUT)) {
+      problems.push('no SessionStart:compact hook ran beside the one of js-harness resume, so the rules hook did not');
+    }
   }
   if (result === null) {
     problems.push('the stream has no result');

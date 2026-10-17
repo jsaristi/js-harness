@@ -2380,14 +2380,15 @@ the command; the dispatcher reaches the command, and so does a run on its own.
 
 **Left to the other parts of T16f**, not built here:
 - the hash in the installed command and `doctor` saying it is behind: built in the second part, below;
-- the template's marked block, rendered by `sync`;
+- the template's marked block, rendered by `sync`: built on 2026-10-17 by JH 21, see "Progress";
 - a memory note pointing to an id;
 - which of the shipped rules reach an installed project, a field T16b names, whose list is his ninth
   difference: until then the hook reads only a project's own `docs/rules.json` there;
-- the orchestrator skill's "read the relief file" becoming "read the list";
+- the orchestrator skill's "read the relief file" becoming "read the list": built on 2026-10-17 by JH 21;
 - keeping the installed copy current enough to read the list on `main`;
 - the practice journey's real-session check that each of the three events ran (the verifier of
-  2026-10-16 found it unbuilt: `practice-lib.mjs` still checks only `SessionStart:startup`).
+  2026-10-16 found it unbuilt: `practice-lib.mjs` still checks only `SessionStart:startup`): built on
+  2026-10-17 by JH 21, and passed by a real host run.
 
 **Where the readers' findings went.**
 - The attacker's blockers: B1 into "What it prints", B2 into "What is compared", B3 into "When it
@@ -3004,8 +3005,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block. Its second part, the hash in
     the installed command and `doctor`'s `js-harness` row, built by JH 28 on 2026-10-16 on
-    `feat/rules-installed-hash`, see "Progress"; the rest "Left to the other parts of T16f" stays
-    open. Route: inline.
+    `feat/rules-installed-hash`, see "Progress"; three more parts (the practice's check of the three
+    events, "read the list", the marked block) built by JH 21 on 2026-10-17 on `feat/rules-reach-rest`;
+    the rest "Left to the other parts of T16f" stays open. Route: inline.
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
     of the relief file's line 245, carries its cost and a review date, and its done is one
     command that exits 0. Added on 2026-10-15: the reader of T16c's design found no task for it.
@@ -4568,6 +4570,41 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   doctor and journey tests: 612 tests, 607 pass, 0 fail. README says it at `init` and under
   `js-harness reply`. Committed as 0d3535aa (gate passed); gentle-ai 16301239..0d3535aa medium, not
   due (under_budget), not escalated; Codex 1630123..0d3535a correct (0.98), no findings.
+
+- 2026-10-17, T16f, three of the parts left, by `JH 21 · reserva de la noche` on `feat/rules-reach-rest`, item 10 of
+  the lead's triage of open work, each built test first. The part "which shipped rules reach an installed project"
+  is his ninth difference and stays.
+  - The practice journey checks all three events of the rules hook (`hostCallProblems`, `scripts/practice-lib.mjs`):
+    a `UserPromptSubmit` hook at the first call, a `SessionStart:compact` hook beside resume's and the seeded entry's
+    at the compaction, and a `SubagentStart` hook at a new fourth call, `subagent`, which starts one sub-agent. RED:
+    the recorded 2.1.296 calls, made before the hook existed, now name each missing event. The real run
+    `node scripts/practice.mjs run --root D:\js-harness-practice --only host-loads`, on Claude Code 2.1.301, passed
+    the four calls: 0.0159 dollars, 35 s. `docs/SPEC.md` says four calls.
+  - The orchestrator skill names the rules in force among the places where each thing lives ("read the list, not
+    the relief file"), and its start from the handover prompt reads the list first (`bin/lib/manifest.test.mjs`,
+    RED then 174 of 174).
+  - The harness's lines of the `AGENTS.md` template (`templateBlock`, `bin/lib/project.mjs`) sit between two marks;
+    the first carries the hash of the lines. `sync` writes them as the running version has them while that hash
+    still matches, says `rendered`, and keeps an edited block with a `kept` line on every sync. The file is a
+    committed one, so git undoes the write. RED: `bin/lib/template-block.test.mjs` and the new
+    `bin/lib/project.test.mjs` test could not load the functions. A CRLF checkout keeps its line ends and reads as
+    unedited. README, under `js-harness sync`.
+  - The first two parts are commit `968f0fc`; gentle-ai on `968f0fc` (`--base-ref db31c96`, untracked excluded):
+    medium, 81 lines, review not due (`under_budget`). The third is the next commit, reviewed alone (item 3).
+  - gentle-ai on `968f0fc..cf820d2`, the third part: high by escalation (item 3, sync writes a project's committed
+    `AGENTS.md`), lenses risk, resilience and reliability, approved and acknowledged (lineage
+    `review-442164ed6054f39b`). Four advisories. R3 and R4: a block sync could not write again left the sync up to
+    date with exit 0; fixed in the next commit, test seen red (code 1, not up to date, the problem said). Left: a read
+    error of `AGENTS.md` is taken as no block (R3, the same as before this change for a missing file), and the
+    install log lines of `rendered` have no test of their own (R3, a suggestion).
+  - gentle-ai on `1bf827e`, that fix, assessed by its gate: medium, 21 lines, review not due (`under_budget`). Codex
+    on `db31c96..1bf827e` (121,867 input tokens): incorrect (0.94), one P2: an `AGENTS.md` that is a link was read
+    and written through, so a shared target outside the project was overwritten where git, holding only the link,
+    could not give it back. Fixed in the next commit: sync reads `AGENTS.md` with `lstat` and keeps a link with a
+    `kept` line; RED seen with an injected `lstat`, and a test with a real link that runs where links can be made
+    (the gate's Ubuntu; skipped on this Windows machine). That fix is `37037bb`; gentle-ai on `37037bb`, assessed
+    by its gate: medium, 64 lines, review not due (`under_budget`). Codex's recheck on `1bf827e..37037bb` (32,356
+    input tokens): correct (0.98), the finding fixed.
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
