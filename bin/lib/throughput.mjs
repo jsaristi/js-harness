@@ -600,6 +600,69 @@ export function throughputRows(days) {
  * 69 s reads as a change. */
 export const COMPARE_DAYS = ruleValue('throughput-compare-days', 'days');
 
+/** Days after the last review the next is due once the review has gone quiet (the rule throughput-quiet-days). */
+export const QUIET_DAYS = ruleValue('throughput-quiet-days', 'days');
+
+/** Reviews in a row that found nothing to make the review weekly (the rule throughput-quiet-runs). */
+export const QUIET_RUNS = ruleValue('throughput-quiet-runs', 'reviews');
+
+/** The day `n` days after `day` (before it when `n` is negative). */
+export const addDays = (day, n) => utcDay(dayBounds(day).from + n * DAY_MS);
+const isDayText = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(dayBounds(value).from);
+
+/** The last day whose records are whole at `now`, `settlesAt(day)` being the ms they are. */
+export function lastSettledDay(now, settlesAt) {
+  let day = utcDay(now);
+  while (settlesAt(day) > now) day = addDays(day, -1);
+  return day;
+}
+
+/** What the throughput review owes at `now`, read from the outcomes `throughput reviewed` and `throughput shipped`
+ * recorded, `settlesAt(day)` being the ms a day's records are whole. The review of the last settled day is due a
+ * day after the last one recorded, or `QUIET_DAYS` after it once the last `QUIET_RUNS` found nothing (S4's stop
+ * rule); one that finds candidates makes it daily again. Each day something shipped owes a re-measure once its
+ * after window of `COMPARE_DAYS` has settled, everything shipped that day compared together, until a review of that
+ * ship day is recorded. Each due is `{ id, at, line }`, `at` the ISO time it became due. */
+export function throughputDues(outcomes, { now, settlesAt }) {
+  const settled = lastSettledDay(now, settlesAt);
+  const reviews = outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.day)).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+  const dues = [];
+  const last = reviews.at(-1)?.day ?? null;
+  const streak = reviews.slice(-QUIET_RUNS);
+  // A re-measure that found candidates since the quiet runs began makes the review daily again, as a review does.
+  const streakFrom = Math.min(...streak.map((one) => Date.parse(one.at)));
+  const remeasureFound = outcomes.some((one) => one?.kind === 'reviewed' && isDayText(one.shipped) && one.found === 'candidates' && Date.parse(one.at) >= streakFrom);
+  const quiet = streak.length === QUIET_RUNS && streak.every((one) => one.found === 'nothing') && !remeasureFound;
+  const dueDay = last === null ? settled : addDays(last, quiet ? QUIET_DAYS : 1);
+  if (dueDay <= settled) {
+    const since = last === null ? settled : addDays(last, 1);
+    dues.push({
+      id: `review ${settled}`,
+      at: new Date(settlesAt(dueDay)).toISOString(),
+      line: `DUE: throughput review of ${since === settled ? settled : `${since}..${settled}`}: js-harness throughput --since ${since} --until ${addDays(settled, 1)}; js-harness-protocols section 7; then js-harness throughput reviewed --day ${settled} --found nothing|candidates`,
+    });
+  }
+  const remeasured = new Set(outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.shipped)).map((one) => one.shipped));
+  const shipDays = new Map();
+  for (const one of outcomes) {
+    if (one?.kind !== 'shipped' || !isDayText(one.day) || typeof one.item !== 'string' || remeasured.has(one.day)) continue;
+    if (!shipDays.has(one.day)) shipDays.set(one.day, []);
+    if (!shipDays.get(one.day).includes(one.item)) shipDays.get(one.day).push(one.item);
+  }
+  for (const [day, items] of [...shipDays].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const since = addDays(day, 1);
+    const until = addDays(since, COMPARE_DAYS);
+    const at = settlesAt(addDays(until, -1));
+    if (at > now) continue;
+    dues.push({
+      id: `re-measure ${day}`,
+      at: new Date(at).toISOString(),
+      line: `DUE: throughput re-measure of ${items.join(', ')}, shipped ${day}: js-harness throughput --since ${since} --until ${until} --against ${addDays(since, -COMPARE_DAYS)}..${since}; then js-harness throughput reviewed --shipped ${day} --found nothing|candidates`,
+    });
+  }
+  return dues;
+}
+
 const round1 = (value) => (value === null ? null : Math.round(value * 10) / 10);
 
 /** The rows a comparison reads, each a day's value from its facts; the source each needs whole. */
