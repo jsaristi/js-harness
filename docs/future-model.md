@@ -114,32 +114,49 @@ began with 0 of 32 that discriminated).
 ## Step 5. Change one component at a time (**spend**)
 
 An arm differs from its base by exactly one component; model, effort, tasks and repeats are the
-same, and the base and its arms run in one invocation of the suite, under the frozen setup. Two
-directions, chosen from Step 4:
+same, under the frozen setup. The arms continue Step 4's run: the same command with the arm added
+to `--configs` runs the arm's trials alone and compares them with the base trials already
+recorded, so an arm costs its own 15 trials, not 30. The arms are named in `evals/arms.mjs`:
 
-- When `minimal` ties `current` on score (F5), each arm is `minimal` plus one component. It asks
-  "does X earn its place" directly, and its trials cost about half.
-- Otherwise each arm is `current` minus one component, compared with `current`. It misses two
-  components that cover for each other (engram's plugin and the memory text of the global
-  `CLAUDE.md`, say): a pair suspected of that is also run removed together.
+- `current-without-<id>` is `current` with one component taken out, compared with `current`. It
+  misses two components that cover for each other (engram's plugin and the memory text of the
+  global `CLAUDE.md`, say): a pair suspected of that is also run removed together, as
+  `current-without-<id>_<id>`, its ids sorted.
+- `minimal-with-<id>` is `minimal` with one component put in. It asks "does X earn its place"
+  directly and its trials cost about half, but it holds only for some components: minimal's
+  flags switch off the user settings, every MCP server and every skill, so for Claude only an MCP
+  server (`minimal-with-mcp-<name>`, given by `--mcp-config`) goes in without changing a second
+  thing, and Codex takes none. Every other component is measured as `current-without`, whatever
+  Step 4 found.
 
 The components are what the arms seed, read from the code and not from memory: for Claude,
-`CLAUDE_ITEMS` and the plugin state of `evals/home.mjs` (settings with its hooks, the global
-`CLAUDE.md`, skills, agents, commands, output styles, hooks, every plugin in the cache, the MCP
-servers of `.claude.json`) and `js-harness init` in the workspace (the project's `AGENTS.md`,
-codegraph); for Codex, `CODEX_ITEMS` of `evals/codex-home.mjs`. The global `CLAUDE.md` is several
-components, not one: gentle-ai's managed block and his own sections. `current` is his machine, not
-what js-harness ships: an arm names which kind each component is.
+`CLAUDE_ITEMS` and the plugin state of `evals/home.mjs` (the global `CLAUDE.md`, skills, agents,
+commands, output styles, every plugin in the cache, the MCP servers of `.claude.json`) and
+`js-harness init` in the workspace (the project's `AGENTS.md`, codegraph); for Codex,
+`CODEX_ITEMS` of `evals/codex-home.mjs`. The global `CLAUDE.md` is several components, not one:
+five gentle-ai blocks (`gentle-ai-agent-routing`, `gentle-ai-codegraph-guidance`,
+`gentle-ai-engram-protocol`, `gentle-ai-orchestrator`, `gentle-ai-persona`) and a short section of
+his own (`claude-md-own`), each cut by its marker lines. `hooks` is not a folder either: it is the
+hook entries of the settings, whose owners are several (engram's and codegraph's among them), and
+js-harness's own entries and skills are the separate `js-harness` component. Whether Claude Code
+reads the project's `AGENTS.md` at all is unverified: `js-harness init` writes no `CLAUDE.md` that
+points to it, so `project` may measure only codegraph. `current` is his machine, not what
+js-harness ships: an arm names which kind each component is.
 
 | Kind | Examples | Whose to drop |
 |---|---|---|
-| js-harness's | its skills, its hooks, the project's `AGENTS.md` | js-harness, by a commit here |
-| The stack's | gentle-ai's block, engram's plugin, codegraph's hook and MCP server, context7 | that tool's (#4036 for gentle-ai's block) |
-| His machine's | his sections of `CLAUDE.md`, the output style, other plugins | his |
+| js-harness's | `js-harness` (its skills and hook entries), `project` (the project's `AGENTS.md`) | js-harness, by a commit here |
+| The stack's | the gentle-ai blocks, engram's plugin, codegraph's hook and MCP server, context7 | that tool's (#4036 for gentle-ai's blocks) |
+| His machine's | `claude-md-own`, the output style, other plugins | his |
+
+Before an arm spends, the isolation probe runs it beside its base against a fake API, at no
+spend, and checks that the component is on the base's main-model request and not on the arm's
+(`current-without`), or the reverse (`minimal-with`):
+`node evals/isolation-probe.mjs --claude <path> --arm <arm>`. An arm the probe fails measures
+nothing and does not run.
 
 Their order is by measured size, largest first, once G1 and G4 measure each one; until then the
-order is his to choose, told the sizes that are known. Today the suite takes only the arms
-`minimal` and `current` (`evals/suite.mjs`, `CONFIGS`), so this step waits for gap G2.
+order is his to choose, told the sizes that are known.
 
 ## Step 6. Decide, per component (no spend, then one confirming arm)
 
@@ -149,7 +166,10 @@ for its eval. A component is judged over the five tasks of its arm, at one effor
 - It earns its place when, on any task, the report gives the arm with it the higher score.
 - It is a candidate to go when no task gives it the higher score and the arm without it costs
   less in total, over the five tasks, by more than the threshold fixed above (proposed: 10 percent
-  of the total, and beyond the pooled cost SD the report prints).
+  of the total, and by more than the spread of the two totals the report prints in its arms
+  section: each total's `±` is the standard error of the sum of the mean costs, the square root
+  of the summed squared standard errors of the cells, so the difference must exceed the two
+  combined, the square root of the sum of their squares).
 - Otherwise it is not separated: recorded as such, and kept. If most components end here, three
   repeats were too few; more repeats are a new batch, with its cost.
 
@@ -206,8 +226,12 @@ Each one is a task of `odd/tasks/future-model-protocol.md`.
 
 - G1. The payload of the eval home: the payload rows computed over the home an arm runs in, per
   component, without a commit.
-- G2. Arms of one component: `minimal` plus one and `current` minus one, run in one invocation
-  with their base and accepted by the report.
+- G2. Arms of one component: `minimal` plus one and `current` minus one, run beside their base
+  and accepted by the report. Built: `current-without-<id>` for both agents and
+  `minimal-with-mcp-<name>` for Claude (`evals/arms.mjs`), their cuts pinned in the results
+  file, the arms section of the report, and the isolation probe's `--arm`; left: the other
+  components put into `minimal`, which wait for the probe to show `--setting-sources user`
+  loads one alone.
 - G3. A cost statement before a run: the suite prints the trials, the agent time and the list
   cost from the last results on the same model, "unknown" for a cell with none, and starts
   nothing (the precedent is `js-harness codex-review --plan`). The cap windows stay unknown: no
