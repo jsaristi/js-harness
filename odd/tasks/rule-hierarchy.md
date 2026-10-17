@@ -1605,7 +1605,9 @@ until the last check passes.
      changes only by the approved draft of letter G, which is not built.
 5. **The relief line.** It is built before any write and checked with `reliefLineOf`.
    - The line reads: `` rule:<id> proposed on rule/<name>, not landed: <what>; source <kind>;
-     supersedes relief line <n> ``.
+     supersedes relief line <n>; declaration <hash> ``, the hash the twelve hex characters of
+     `declarationOf` (the rule's declaration as written), which the merge queue matches against
+     the landed head's (T16e, item 7, amended 2026-10-16).
    - `<what>` is `<old> to <new>` for a value, `text of <path>` for a text, `retired,
      successors <ids or none>` for a retirement, `new` for a new rule, `form` for a
      form-only change, and `source checked` for `--check-source`.
@@ -2823,8 +2825,16 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     `bin/lib/rules-data.mjs`, with a test (a project with no rules-data, README lines restating a
     value: no row). Advisories kept: A2 a `--check-source` proposal is never confirmed (said);
     A3 the row costs 20-30 s more on a 37k-line push; A6 a relative `JS_HARNESS_HOME` is not
-    resolved as `notify` does. Correction batch: B1 fixed (`checkPushRules` returns no row when `head` has no `bin/lib/rules-data.mjs`, test seen red), the `landed` call guarded (test seen red: a lost checkout after main moved), and a no-default-branch push test (a pin, green at once). Pull request 328 landed on main meanwhile, so this slice goes to main directly: committed as `1f31afd`, main merged as `12773f4`. Codex on `9ff94fe..12773f4`, 4 parts: one P2, a proposal `rules change` writes on the same branch while a land runs would be confirmed though the landed head does not hold it; fixed by counting only proposal lines stamped no later than the landed head's commit (`rules change` stamps its line before that commit), two tests seen red, committed as `ac6cf2c`. Codex on `12773f4..ac6cf2c`: the same P2 not fixed, since a time bound leaves the same second and an amend open. Fixed by content instead: `rules change` ends its proposal line with `; declaration <hash>`, a hash of the declaration it wrote (`declarationOf` in `bin/lib/rules-change-run.mjs`), and the queue confirms only a proposal whose hash is the landed head's; a line with no hash, written before this change, keeps the time bound, now strict. Two tests seen red against `ac6cf2c`. Next: Codex on that fix, the gentle-ai evidence line, push, pull request against main, notify. Then the throughput plan's item 2
+    resolved as `notify` does. Correction batch: B1 fixed (`checkPushRules` returns no row when `head` has no `bin/lib/rules-data.mjs`, test seen red), the `landed` call guarded (test seen red: a lost checkout after main moved), and a no-default-branch push test (a pin, green at once). Pull request 328 landed on main meanwhile, so this slice goes to main directly: committed as `1f31afd`, main merged as `12773f4`. Codex on `9ff94fe..12773f4`, 4 parts: one P2, a proposal `rules change` writes on the same branch while a land runs would be confirmed though the landed head does not hold it; fixed by counting only proposal lines stamped no later than the landed head's commit (`rules change` stamps its line before that commit), two tests seen red, committed as `ac6cf2c`. Codex on `12773f4..ac6cf2c`: the same P2 not fixed, since a time bound leaves the same second and an amend open. Fixed by content instead: `rules change` ends its proposal line with `; declaration <hash>`, a hash of the declaration it wrote (`declarationOf` in `bin/lib/rules-change-run.mjs`), and the queue confirms only a proposal whose hash is the landed head's; a line with no hash, written before this change, keeps the time bound, now strict. Two tests seen red against `ac6cf2c`. Codex refused a second recheck (one recheck a finding); a verifier (Opus 5.5, high) read `9c3f41a`: resolved, no blocker; advisories A1 (the source is outside the hash) and A3 (no CRLF test) are task T16e-f, A2 (the line's spec) is fixed here.
+    gentle-ai evidence of slice (c): high (item 5), approved, lineage review-2ccf3665c662d927 on 9ff94fe..e6c9c44; medium, not due (under_budget) on e6c9c44..1f31afd, 12773f4..ac6cf2c and ac6cf2c..9c3f41a.
+    Next: push, pull request against main, notify; then T2 of `odd/tasks/land-unattended.md` (exit 5 and the gate-first ticket, the lead's yes). Then the throughput plan's item 2
     design (two readers). Throughput item 7 is pull request 323
+  - [ ] T16e-f (kind: build) The landing's match covers the source too: hash the rule with its
+    entry of `docs/rule-sources.json` at the head, since a second `rules change` of the same
+    declaration with another source would be confirmed though the head holds the first source
+    (verifier A1 on `9c3f41a`, 2026-10-16); tests of a CRLF relief file and of lines without a hash
+    beside hashed ones (A3). Codex's second recheck of the P2 was refused by the one-recheck cap, and
+    the range `ac6cf2c..9c3f41a` is recorded as a skip naming this task. Route: inline.
   - [ ] T16f Reach: the turn-start hook, confirmed first with a logging hook; the hash of the
     rules in the installed command; the template's marked block
   - [x] T16g Letter H, the protocol's own home: it replaces protocol 4, opens with the incident
