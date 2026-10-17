@@ -33,6 +33,7 @@ Nothing beyond the usual: the cards themselves are his to answer.
 
 ## Tasks
 - [x] T1 (kind: build) (S4) The board keeps a held session past its window: `readSessionsWindow` reads the last 256 KiB of a transcript last written within seven days, and keeps it when its facts end on a call with no result for the held-call limit, confirmed by the whole read with its subagents' files (`heldPastLimit`, `heldOutsideWindow`). Tests first. Route: inline. RED: `bin/sessions.test.mjs` "stays on the board past the window" got `[]`; a first GREEN broke "--hours widens the window" (a foreground subagent that wrote 45 s ago counted as held from the tail alone), fixed by the whole read; GREEN: `bin/sessions.test.mjs` and `bin/lib/sessions.test.mjs` 540 pass, 0 fail. On the real board it brings back JH 22 (20h 47m), JH 23 (31h 35m), JH 19 (35h 44m) and JH 20 (36h 14m); the look took 32 s, as before (31.8 s).
+- [ ] T3 (kind: verify) (S4) A Codex review of a later range that touches `heldOutsideWindow` confirms 6f2b290 closes the multibyte P2 (L7): the second recheck is refused by `codex-review` by design, so the range 6abc7f0..6f2b290 is recorded as a skip. Route: inline.
 - [x] T2 (kind: docs) (S5) The orchestrator skill (section "Questions to the user") and README. Tests first. Route: inline. RED: `bin/lib/manifest.test.mjs` "how a question reaches the user" failed at the new assertion; GREEN: 174 of 174.
 
 ## Log
