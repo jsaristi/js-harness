@@ -14,6 +14,8 @@ import { ruleValue } from './lib/rules.mjs';
 import { recordPath } from './lib/channel.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { jsonLinesPath } from './lib/codex-reviews.mjs';
+import { gitDirs } from './lib/project.mjs';
+import { liveLineages, readReviewEnds, readReviewStarts, reviewStartsFile } from './lib/review-starts.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
   channelIdle,
@@ -24,6 +26,7 @@ import {
   daysBetween,
   gateFacts,
   landFacts,
+  reviewFacts,
   parseCommitTimes,
   parseMergeFiles,
   parseMerges,
@@ -253,7 +256,30 @@ function appendOnlyFacts(day, ctx) {
   } catch (err) {
     facts.unavailable.lands = err.message;
   }
+  // gentle-ai's store and the recorded starts are read once a run (B6): there is a terminal record per review ever
+  // acknowledged, too many to read again for each day.
+  ctx.reviews ??= (() => {
+    try {
+      return { record: ctx.readReviews(ctx.root, ctx.home, ctx.slug) };
+    } catch (err) {
+      return { unavailable: err.message };
+    }
+  })();
+  if (ctx.reviews.unavailable) facts.unavailable.reviews = ctx.reviews.unavailable;
+  else facts.reviews = reviewFacts(ctx.reviews.record, bounds);
   return facts;
+}
+
+/** The record of the project's gentle-ai reviews (B6): the starts the pause hook kept, and gentle-ai's terminal records
+ * and live lineages in the store under the git common dir. A part that is there and cannot be read throws its code. */
+function readReviewRecord(root, home, slug, run, fileSystem) {
+  const { commonGitDir } = gitDirs(root, run);
+  if (!commonGitDir) throw new Error('no git common dir');
+  return {
+    starts: readReviewStarts(reviewStartsFile(home, slug), { fileSystem }),
+    ends: readReviewEnds(commonGitDir, { fileSystem }),
+    live: liveLineages(commonGitDir, { fileSystem }).map((one) => one.lineage),
+  };
 }
 
 /** The merge queue's land records (`<git common dir>/js-harness/lands.jsonl`): none where the file is not there, a
@@ -486,6 +512,7 @@ export async function throughputMain(
     fileSystem = fs,
     readCodexRuns = (root) => readCodexReviewRuns(root, { spawn: run }),
     readLands = (root) => readLandRecord(root, run, fileSystem),
+    readReviews = (root, home, slug) => readReviewRecord(root, home, slug, run, fileSystem),
     timezoneOffset = () => new Date().getTimezoneOffset(),
   } = {},
 ) {
@@ -501,7 +528,7 @@ export async function throughputMain(
   const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, readLands, out: stdout, err: stderr };
+  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, readLands, readReviews, out: stdout, err: stderr };
   try {
     if (parsed.verb === 'snapshot') return snapshot(ctx, parsed.flags);
     if (parsed.verb === 'status') return status(ctx);

@@ -1524,3 +1524,19 @@ test('uninstallMain says a task the user edited stays recorded while the remote 
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai review starts beside them when there are any', async () => {
+  const home = makeTmpHome();
+  try {
+    const folder = path.join(home, '.js-harness', 'throughput');
+    fs.mkdirSync(path.join(folder, 'C--proj'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-16.json'), '{}');
+    const snapshots = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual(snapshots.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`]);
+    fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
+    const starts = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the gentle-ai review starts of 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

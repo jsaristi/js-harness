@@ -364,7 +364,10 @@ and `CI fallbacks` read the gate log's lines of gates sent to GitHub's machines;
 the recorder of a row reached main says `not recorded` on that row, since nothing wrote a line.
 `test files` reads the time of each test file from the local gates that traced their tests
 (exact tests on), kept beside the gate log in `test-times.jsonl`; a day kept from copies of the
-gate log has no times and says so.
+gate log has no times and says so. `gentle-ai reviews` counts the reviews gentle-ai acknowledged from the
+records it keeps in the git common folder, so it reaches back before the row existed; when each started is
+kept by the pause hook while the review runs, from the first tool call that sees it, so a day before this
+machine began recording them says `started not recorded`. `uninstall` keeps those starts with the snapshots.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17

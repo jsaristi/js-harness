@@ -233,6 +233,38 @@ export function landFacts(records, { from, to }) {
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
 
+/** The gentle-ai reviews of `[from, to)` (B6), from `record`: `starts`, the lines the pause hook recorded
+ * (`readReviewStarts`); `ends`, gentle-ai's terminal records (`readReviewEnds`); `live`, the lineages whose folder is in
+ * its store now. Returns `{ since, started, ended, open, gone }`. `since` is when this machine began recording starts
+ * (the first line's `seenAt`), and a start born before it is not counted, since the ones that burned before were never
+ * seen. A lineage's start is its earliest line. An end counts once its folder is gone (gentle-ai writes the record
+ * first), with the minutes from its start, `null` with none; a start of the day still live is open, and one gone
+ * with no record went without acknowledgement (abandoned, reclaimed or reset). */
+export function reviewFacts({ starts, ends, live }, { from, to }) {
+  const seen = starts.map((one) => Date.parse(one.seenAt)).filter(Number.isFinite);
+  const since = seen.length > 0 ? seen.reduce((a, b) => Math.min(a, b)) : null;
+  const first = new Map();
+  for (const one of starts) {
+    const at = Date.parse(one.at);
+    if (Number.isFinite(at) && !(at >= (first.get(one.lineage) ?? Infinity))) first.set(one.lineage, at);
+  }
+  const alive = new Set(live);
+  const endOf = new Map(ends.filter((one) => !alive.has(one.lineage)).map((one) => [one.lineage, Date.parse(one.at)]));
+  const inDay = (at) => at >= from && at < to;
+  const started = [...first].filter(([, at]) => since !== null && at >= since && inDay(at)).sort((a, b) => a[1] - b[1]).map(([lineage, at]) => ({ lineage, at: new Date(at).toISOString() }));
+  const ended = [...endOf].filter(([, at]) => inDay(at)).sort((a, b) => a[1] - b[1]).map(([lineage, at]) => {
+    const began = first.get(lineage);
+    return { lineage, at: new Date(at).toISOString(), minutes: began !== undefined && began <= at ? Math.round((at - began) / 60000) : null };
+  });
+  return {
+    since: since === null ? null : new Date(since).toISOString(),
+    started,
+    ended,
+    open: started.filter((one) => alive.has(one.lineage)).map((one) => one.lineage),
+    gone: started.filter((one) => !alive.has(one.lineage) && !endOf.has(one.lineage)).map((one) => one.lineage),
+  };
+}
+
 const isObjectLike = (value) => typeof value === 'object' && value !== null;
 
 /** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome, findings,
@@ -293,11 +325,12 @@ const SOURCES = {
   channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
   ready: 'the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main',
   lands: '<git common dir>/js-harness/lands.jsonl, one line per merge-queue --land',
+  reviews: 'gentle-ai\'s store (<git common dir>/gentle-ai/review-transactions: a terminal record per acknowledgement) and the starts the pause hook keeps (<home>/.js-harness/throughput/<slug>/review-starts.jsonl)',
   times: 'test-times.jsonl beside the gate log, one line per gate that traced its tests (exact tests on)',
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'] };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'], reviews: ['reviews'] };
 
 /** Why `day` could not read `source`, or `undefined`. */
 const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
@@ -431,6 +464,24 @@ export function throughputRows(days) {
     return { label, value: [said, notKept].filter(Boolean).join('; '), source };
   };
 
+  // B6's row: the acknowledgements come from gentle-ai's own records, so every day has them; the starts only from
+  // when this machine began recording them, so a day before says so rather than a zero.
+  const reviewsRow = () => {
+    const label = 'gentle-ai reviews';
+    const read = days.filter((day) => day.reviews !== undefined);
+    const ended = read.flatMap((day) => day.reviews.ended);
+    const timed = ended.map((one) => one.minutes).filter(Number.isFinite);
+    const since = read.map((day) => day.reviews.since).find(Boolean) ?? null;
+    const sinceDay = since === null ? null : since.slice(0, 10);
+    const early = read.filter((day) => sinceDay === null || day.day < sinceDay).map((day) => day.day);
+    const counted = read.filter((day) => sinceDay !== null && day.day >= sinceDay);
+    const count = (key) => counted.reduce((sum, day) => sum + day.reviews[key].length, 0);
+    const parts = [`${ended.length} acknowledged${timed.length ? `, median ${Math.round(median(timed))} min (${timed.length} timed, one lineage each)` : ''}`];
+    if (counted.length > 0) parts.push(`${count('started')} started, ${count('open')} open, ${count('gone')} gone without acknowledgement`);
+    if (early.length > 0) parts.push(`started not recorded: ${early.join(', ')} (${since === null ? 'no review start recorded on this machine' : `this machine records starts from ${sinceDay} ${since.slice(11, 16)}Z`})`);
+    return row(label, 'reviews', parts.join('; '));
+  };
+
   const medianOf = (values, unit) => (values.length ? `median ${Math.round(median(values))} ${unit} ${counted(values)}` : 'none');
   return [
     row('pull requests merged', 'git', `${numbers.size} (${(numbers.size / hours).toFixed(2)} an hour)${twice.length ? `; merged twice: ${twice.join(', ')}` : ''}`),
@@ -453,6 +504,7 @@ export function throughputRows(days) {
       : 'none', 'B3'),
     row('load at gate starts', 'gates', loads.length ? `median share ${median(loads).toFixed(2)} (${loads.length}); full at ${loads.filter((share) => share >= 1).length} of ${loads.length}` : 'none'),
     row('Codex reviews', 'codex', `${codex.length} attempts (${codex.filter((run) => run.part).length} parts), median ${codexSeconds.length ? Math.round(median(codexSeconds)) : '-'} s, p90 ${codexSeconds.length ? Math.round(percentile(codexSeconds, 90)) : '-'} s, ${minutes(codexSeconds.reduce((sum, s) => sum + s, 0))} in all; ${findings}`),
+    reviewsRow(),
     row('idle upper bound', 'channel', idle.length
       ? `${idle.length} waits, median ${Math.round(median(idleMinutes))} min, ${(idleMinutes.reduce((sum, m) => sum + m, 0) / 60).toFixed(1)} session-h in all; longest: ${longest.title ?? short(longest.session)} ${Math.round(longest.minutes)} min`
       : 'none'),
