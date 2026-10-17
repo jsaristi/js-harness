@@ -4,6 +4,7 @@
 // repository (./rules-check.mjs), and only then
 // writes the declaration, the sources and docs/RULES.md, and appends one line to the relief file. It never commits:
 // the commit, the gate, the reviews and the pull request are the session's. It runs only in the checkout it changes.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { appendRelief, reliefLineOf, reliefPath } from './channel.mjs';
@@ -31,6 +32,14 @@ export function rulesOfText(text) {
   const end = text.lastIndexOf(';');
   if (start === -1 || end < start) throw new RuleChangeError(`${DATA} is not in the shape writeRules gives`);
   return JSON.parse(text.slice(start + 'export const RULES = '.length, end));
+}
+
+/** The declaration of rule `id` in `text`, the text of `bin/lib/rules-data.mjs`, as the short hash a proposal's relief
+ * line carries, so a landing confirms the proposal whose declaration the landed head holds; `none` when `text` declares
+ * no such rule. */
+export function declarationOf(text, id) {
+  const rule = rulesOfText(text).find((one) => one.id === id);
+  return rule === undefined ? 'none' : crypto.createHash('sha256').update(JSON.stringify(rule)).digest('hex').slice(0, 12);
 }
 
 /** A home that names AGENTS.md, however it is spelled: `./AGENTS.md`, `docs/../AGENTS.md` or another case. */
@@ -251,7 +260,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     const reliefFile = reliefPath(home, slug);
     const relief = fs.existsSync(reliefFile) ? fs.readFileSync(reliefFile, 'utf8') : '';
     const previous = lastLineFor(relief, id);
-    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}`;
+    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}; declaration ${declarationOf(dataText, id)}`;
     try {
       reliefLineOf(line);
     } catch (err) {

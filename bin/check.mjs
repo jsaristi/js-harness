@@ -289,6 +289,27 @@ const doorSide = (base) => ({
   mergeFilter: false,
 });
 
+/** The two sides of a push's row: the lines `head` brings past `base`, the remote's default branch, and a file's text
+ * as `head` holds it. */
+const pushSide = (base, head) => ({
+  strict: false,
+  revs: () => [`${base}...${head}`],
+  text: (git, file) => git(['show', `${head}:${file}`]),
+  mergeFilter: false,
+});
+
+/** The row `rules` of `check --push` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the lines `head`
+ * brings past the default branch of `remote`, read as the door reads them, said as INFO whatever a rule's row says:
+ * the commit refuses, the push reports, the merge refuses. No row when the remote has no default branch to read. */
+function checkPushRules(cwd, { rules = RULES, spawn = spawnSync, head = 'HEAD', remote = 'origin' } = {}) {
+  const branch = defaultBranch(spawn, cwd, remote);
+  if (branch === null) return [];
+  // The harness's own list judges the harness's own repository alone, as `checkOwnRules` has it at a commit.
+  if (!gitOut(spawn, cwd, ['ls-tree', head, '--', RULES_DATA_FILE])?.trim()) return [];
+  return checkListRow(cwd, rules, spawn, pushSide(branch.ref, head))
+    .map((row) => (row.pass ? row : { ...row, pass: true, info: true, detail: `${row.detail}; a push reports it, the merge door refuses it` }));
+}
+
 /** The list `bin/lib/rules-data.mjs` holds at HEAD, read as text and checked as the list the rules accept: `{ list }`,
  * `list` being `null` when the file is absent, or `{ row }` with the failure of the row `rules` that says why it is
  * not one. */
@@ -2504,7 +2525,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     for (const row of rows) console.log(formatRow(row));
     return rows.every((row) => row.pass) ? 0 : 1;
   }
-  // A push runs only the Codex review row. The budget, payload and sensor rows read the working tree,
+  // A push runs the Codex review row and the row `rules` of the lines it brings, as INFO. The budget, payload and sensor rows read the working tree,
   // not the commit being pushed, and the pre-commit gate already ran them on every commit.
   //
   // The other list is the static rows: all a gate knows of the working tree before its sensors, each in a
@@ -2514,7 +2535,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
-    ? [checkCodexReviews(cwd, head, { ...deps, remote })]
+    ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote })]
     : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
