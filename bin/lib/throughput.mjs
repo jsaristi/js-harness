@@ -5,6 +5,7 @@
 
 import { recordedQuestions } from './channel.mjs';
 import { compareSteps, stepsOf } from './progress-pace.mjs';
+import { ruleValue } from './rules.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -594,9 +595,10 @@ export function throughputRows(days) {
   ];
 }
 
-/** Days a side a comparison needs before it judges, the threshold version 2 set (odd/tasks/throughput-review.md,
- * L4 item 4): with fewer, a day-to-day swing like the gate-wait median's 216 s to 69 s reads as a change. */
-export const COMPARE_DAYS = 7;
+/** Days a side a comparison needs before it judges (the rule throughput-compare-days), the threshold version 2 set
+ * (odd/tasks/throughput-review.md, L4 item 4): with fewer, a day-to-day swing like the gate-wait median's 216 s to
+ * 69 s reads as a change. */
+export const COMPARE_DAYS = ruleValue('throughput-compare-days', 'days');
 
 const round1 = (value) => (value === null ? null : Math.round(value * 10) / 10);
 

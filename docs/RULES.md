@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `b38f15d0f9bf`. In force: 37 (16 of Sebastián, 21 of the project). Retired: 0.
+Hash `5f0a81f8c42c`. In force: 38 (16 of Sebastián, 22 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -197,6 +197,11 @@ How long a work session that holds handed work may make no commit, send no notic
 ### throughput-backfill-days
 How many closed days back the heartbeat writes a missing throughput snapshot for: 14 days.
 - Read by: none.
+- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
+
+### throughput-compare-days
+How many days a side a throughput comparison needs before it judges a change: 7 days.
+- Read by: `bin/lib/throughput.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### wait-every
