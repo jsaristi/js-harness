@@ -297,6 +297,21 @@ test('a copy of the gate log made before its day settled keeps the day as partia
   assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', early], { home })).code, 1);
 });
 
+test('--copied-at says when a copy was made, for one that kept its source\'s modification time', async () => {
+  const home = makeHome();
+  const preserved = path.join(home, 'preserved.jsonl');
+  // Copied at 03:00 with its time kept: its last write, 09:03:20 on the 16th, is all the file says.
+  writeCopy(preserved, GATES, Date.parse('2026-10-16T09:03:20Z'));
+  const partial = await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved], { home });
+  assert.match(partial.stdout, /before the day settles; --copied-at <time> says when it was made/);
+  const { code, stdout } = await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved, '--copied-at', '2026-10-17T03:00:00Z'], { home });
+  assert.equal(code, 0);
+  assert.match(stdout, /replaced a partial snapshot/);
+  assert.doesNotMatch(stdout, /partial: the copies end/);
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--copied-at', '2026-10-17T03:00:00Z'], { home })).code, 2);
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved, '--copied-at', 'yesterday'], { home })).code, 2);
+});
+
 test('--against takes a window before the one it compares', async () => {
   const home = makeHome(GATES);
   const { code, stderr } = await run(['--since', '2026-10-15', '--until', '2026-10-16', '--against', '2026-10-16..2026-10-17'], { home });

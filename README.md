@@ -362,7 +362,9 @@ two `gate-max` after its midnight, and the table reads a kept day from there. Ma
 the Codex runs and the channel are append-only and always read live. A kept day is written
 again only by a fuller one, the replacement recorded; `--gate-log <file>` (twice at most) reads
 archived copies of the log instead, for a day the live log has lost; a copy made before the day
-settled may lack its last gates, so the day is kept as partial until then. `throughput status` lists
+settled may lack its last gates, so the day is kept as partial until then. A copy is made no
+earlier than its modification time; one that kept its source's time (`cp -p`) says when it was
+made with `--copied-at <YYYY-MM-DDTHH:MMZ>`. `throughput status` lists
 the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
 leaves the snapshots in place.
 
