@@ -469,3 +469,19 @@ RED observed, then 62 report tests GREEN. Differential check, the report of `8ce
 this one over the committed results (`evals/results`, `evals/results/codex`), with no flag,
 `--json`, `--min-discriminating 3`, `--require-complete` and `--codex-results-dir`: every output
 and exit code the same bytes.
+
+L22 (2026-10-17, 22:52 by `date`) C5 committed `9936192`. The slice from `924d29e` (C3c, C4, C5)
+assessed by gentle-ai: medium, `review_due` false, `under_budget` (926 changed lines), so no
+review was started. Codex reviewed `75bb361..9936192` (the whole branch, C3a on; 4 parts, about
+958,000 input tokens, recorded): parts 2 and 4 correct, three P2 findings in parts 1 and 3, all
+three checked against the code and fixed, each test RED on `9936192` first: (1) runs of an arm
+alone left the minimal-against-current tables empty, so both gates passed on nothing: the report
+now refuses an arm whose base has no trial in the runs; (2) the trust regex wanted a separator
+before the `.codex` placeholder, which in the template stands for the whole path, so the pin
+(`withoutDigest`, read on the template) missed the trust edits that `applyWithout` makes after
+the seed: the separator is now optional; (3) a pair of a whole file and a part of it
+(`claude-md` with a block or `claude-md-own`, Codex's `agents-md` with a block) is the arm
+without the whole alone under another name: `parseArm` refuses it. T10 is written and GREEN in
+the scratchpad (`scratchpad/tree/evals/suite.mjs`, `suite.test.mjs`: `codegraph` and `jsHarness`
+in both stacks, the commit read by `git -C <checkout>` with `+dirty` for a changed tracked file
+outside `evals/results`, null when git cannot say), for its own commit after the push.

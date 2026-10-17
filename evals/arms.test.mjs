@@ -30,6 +30,19 @@ test('a pair is refused unsorted, repeated or larger than two, and a component o
   assert.throws(() => parseArm('current-without-nothing', 'claude'), (err) => err instanceof ArmError && /nothing/.test(err.message));
 });
 
+test('a pair whose one component is a part of the other is refused: it would be the arm without the whole alone', () => {
+  const parts = ['gentle-ai-agent-routing', 'gentle-ai-codegraph-guidance', 'gentle-ai-engram-protocol', 'gentle-ai-orchestrator', 'gentle-ai-persona'];
+  for (const [agent, whole, inside] of [['claude', 'claude-md', [...parts, 'claude-md-own']], ['codex', 'agents-md', parts]]) {
+    for (const part of inside) {
+      const name = `current-without-${[whole, part].sort().join('_')}`;
+      assert.throws(() => parseArm(name, agent), (err) => err instanceof ArmError && err.message.includes(`${whole} holds ${part}`) && err.message.includes(`current-without-${whole}`), name);
+    }
+  }
+  // Two parts of one file are two components, and so is a part beside another file's component.
+  assert.deepEqual(parseArm('current-without-claude-md-own_gentle-ai-persona', 'claude').components, ['claude-md-own', 'gentle-ai-persona']);
+  assert.deepEqual(parseArm('current-without-agents-md_skills', 'codex').components, ['agents-md', 'skills']);
+});
+
 test('minimal-with is taken only for what minimal\'s flags let in, and says why the rest is not', () => {
   assert.deepEqual(parseArm('minimal-with-mcp-engram', 'claude'), { base: 'minimal', direction: 'with', components: ['mcp-engram'] });
   for (const id of ['skills', 'js-harness', 'plugin-engram', 'project']) {

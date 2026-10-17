@@ -391,6 +391,12 @@ export function buildReport(runs) {
   const efforts = [...new Set(bases.map((cell) => cell.effort))].sort(byEffort);
   const cellOf = (task, effort, config) => cells.find((cell) => cell.task === task && cell.effort === effort && cell.config === config) ?? null;
   const arms = [...new Set(cells.map((cell) => cell.config).filter((config) => !CONFIGS.includes(config)))].sort();
+  // An arm is read against its base, and its base is what the gates check: runs of an arm alone would leave both gates
+  // nothing to check, and pass.
+  for (const name of arms) {
+    const { base } = armOf(name, agent);
+    if (!bases.some((cell) => cell.config === base)) throw new ReportError(`the runs hold trials of ${name} but no trial of its base, ${base}: an arm is compared with its base, so its base goes in the same runs`);
+  }
   return {
     runs: runs.map((run) => run.name).sort(),
     ...(agent !== 'claude' && { agent }),

@@ -42,6 +42,11 @@ const minimalWithRefusal = (id) => (id.startsWith('mcp-') ? null : id.startsWith
 
 const PREFIXES = [['current-without-', 'current', 'without'], ['minimal-with-', 'minimal', 'with']];
 
+/** The components that are a part of another, by the whole that holds them: the blocks and the rest of the global
+ * instructions file. A pair of a whole and its part takes out the whole alone. */
+const BLOCKS = ['gentle-ai-agent-routing', 'gentle-ai-codegraph-guidance', 'gentle-ai-engram-protocol', 'gentle-ai-orchestrator', 'gentle-ai-persona'];
+const PARTS = { claude: { 'claude-md': [...BLOCKS, 'claude-md-own'] }, codex: { 'agents-md': BLOCKS } };
+
 /** What the config `name` is for `agent`: `null` for a base arm or any name that is not an arm's; else
  * `{ base, direction, components }`. An arm that names an unknown component, a pair out of order or repeated, more
  * than two, or a component minimal cannot take in, throws an `ArmError` that says which and why. */
@@ -56,6 +61,12 @@ export function parseArm(name, agent) {
   for (const id of components) {
     if (!COMPONENTS[agent].includes(id) && !FAMILY.test(id)) {
       throw new ArmError(`${name}: ${id} is not a component of ${agent === 'codex' ? 'Codex' : 'Claude Code'} (${COMPONENTS[agent].join(', ')}, plugin-<name>, mcp-<name>)`);
+    }
+  }
+  for (const [whole, parts] of Object.entries(PARTS[agent])) {
+    const part = components.find((id) => parts.includes(id));
+    if (part !== undefined && components.includes(whole)) {
+      throw new ArmError(`${name}: ${whole} holds ${part}, so this pair takes out what current-without-${whole} does`);
     }
   }
   if (direction === 'with') {

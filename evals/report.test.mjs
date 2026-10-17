@@ -1002,3 +1002,14 @@ test('a config that is neither a base nor an arm the agent takes is still refuse
     assert.match(message, /minimal and current, and the arms of one component/, config);
   }
 });
+
+test('an arm whose base has no trial in the runs is refused, so neither gate passes on a report with no base to check', () => {
+  for (const [config, base] of [['current-without-skills', 'current'], ['minimal-with-mcp-engram', 'minimal']]) {
+    const runs = [{ name: 'run', file: 'run.json', doc: docOf('run', [...cellTrials({ config }), ...cellTrials({ config: base === 'current' ? 'minimal' : 'current' })]) }];
+    const message = refusal(() => buildReport(runs));
+    assert.match(message, new RegExp(`${config}`), config);
+    assert.match(message, new RegExp(`no trial of its base, ${base}`), config);
+  }
+  const alone = [{ name: 'run', file: 'run.json', doc: docOf('run', cellTrials({ config: 'current-without-skills' })) }];
+  assert.match(refusal(() => buildReport(alone)), /no trial of its base, current/);
+});

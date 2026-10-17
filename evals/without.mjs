@@ -114,8 +114,9 @@ function switchOffPlugin(toml, name) {
 
 // Codex keys the trust of a hook by its place: `[hooks.state.'<.codex>/hooks.json:<event>:<group>:<hook>']`, with
 // the event in snake case and the group the entry's index in the event's list. In the template the `.codex` part is
-// a placeholder (`evals/codex-home.mjs`); a plugin's own hooks.json lies deeper and is not this one.
-const TRUST = /^.*[\\/](?:\.codex|@@TRIAL_CODEX_HOME:\w+@@)[\\/]+hooks\.json:([a-z_]+):(\d+):(\d+)$/i;
+// a placeholder that stands for the whole path to it, so nothing comes before it (`evals/codex-home.mjs`); a
+// plugin's own hooks.json lies deeper and is not this one.
+const TRUST = /^(?:.*[\\/])?(?:\.codex|@@TRIAL_CODEX_HOME:\w+@@)[\\/]+hooks\.json:([a-z_]+):(\d+):(\d+)$/i;
 const snake = (event) => event.replace(/(?<=[a-z0-9])([A-Z])/g, '_$1').toLowerCase();
 
 /** Where each group of each event of `hooksJson` goes once only the entries `keep` takes stay: its new index, or

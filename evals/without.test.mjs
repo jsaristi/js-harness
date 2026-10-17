@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ArmError } from './arms.mjs';
-import { applyWithout, checkWithout } from './without.mjs';
+import { applyWithout, checkWithout, withoutDigest } from './without.mjs';
 
 // C3a of G2 (`odd/tasks/future-model-protocol.md`): an arm of one component is the current arm's home with that
 // component's files and keys taken out, and nothing else changed.
@@ -218,6 +218,22 @@ test('a Codex hook taken out takes its trust with it, and the hooks after it kee
   assert.equal(text.includes(':session_start:1:0'), false);
   const jsh = cut(t, ['js-harness'], 'codex', codexConfigHome);
   assert.equal(config(jsh.root), withoutTable(CONFIG, String.raw`[hooks.state.'C:\h\.codex\hooks.json:session_start:1:0']`));
+});
+
+test('in the template, where the whole path of .codex is a placeholder, a hook\'s trust is remapped the same, and the pin reads it', (t) => {
+  for (const style of ['plain', 'slash']) {
+    const placed = CONFIG.replaceAll(String.raw`C:\h\.codex\hooks.json`, `@@TRIAL_CODEX_HOME:${style}@@${style === 'slash' ? '/' : '\\'}hooks.json`);
+    const root = codexConfigHome(tmp(t));
+    put(root, '.codex/config.toml', placed);
+    const digest = withoutDigest(root, ['hooks'], 'codex');
+    put(root, '.codex/config.toml', placed.replace('hash-of-js-harness', 'another-hash-of-js-harness'));
+    assert.notEqual(withoutDigest(root, ['hooks'], 'codex'), digest, `${style}: the trust a cut moves is in the pin`);
+    put(root, '.codex/config.toml', placed);
+    applyWithout(root, ['hooks'], 'codex');
+    const text = config(root);
+    assert.equal(/hash-of-gentle-ai|hash-of-stop|:stop:/.test(text), false, style);
+    assert.ok(text.includes(':session_start:0:0\']\r\ntrusted_hash = "hash-of-js-harness"'), style);
+  }
 });
 
 test('a Codex server or plugin config.toml does not hold is refused', (t) => {
