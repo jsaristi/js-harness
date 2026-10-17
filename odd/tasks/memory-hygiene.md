@@ -490,6 +490,9 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
     and `memory-pass-days` are declared by `rules change`, each in its own commit (`adf4328`, `2019114`), and
     `hygieneState` reads them from the declared list, which a test can replace. RED: the test that gives a list
     with 10 bytes and 2 days failed; GREEN: memory-hygiene 15, memory 8, rules 34 pass, `rules check` PASS.
+    - gentle-ai: `2b814bf..e231c8a` (`adf4328`, `2019114`, `e231c8a`) assessed `medium`, review not due
+      (`under_budget`, 107 lines). Codex on the same range: "the patch is correct (confidence 0.97)", no finding,
+      recorded. PR 377.
   - Verified (item 1: uninstall now deletes the journal, stamp and lock of a project with no snapshot): an
     independent verifier on `498b418` found no blocker. Twelve uninstall cases never deleted a snapshot, and
     with no folder the output was identical to the baseline. Three of its advisories are fixed test first:
