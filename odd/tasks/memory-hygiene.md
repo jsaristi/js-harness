@@ -508,13 +508,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
 - [x] T10 (kind: build) The full uninstall, D7: `uninstall --global --full` removes the snapshots, the normal one
   offers it, neither removes a project under a pass; from closed PR 263's pieces, on T9's code, tests first
   (L7; route: inline; risk items 1 and 4, so an independent verifier and the slice's review)
-- [ ] T11 (kind: verify) Follow-up of the Codex recheck of 7fe1b24..5018d1b, which left findings 1 ("Point
+- [x] T11 (kind: verify) Follow-up of the Codex recheck of 7fe1b24..5018d1b, which left findings 1 ("Point
   recovery commands at the project checkout") and 4 ("Validate the after-index against its recorded hash") fixed
   only in part: both are fixed in `b761aef` with their tests (gentle-ai approved, `review-66e30d0a70858dbd`), and a
   second recheck is refused by design, so `5018d1b..b761aef` is recorded as a skip. A Codex review of the next
   slice that touches `bin/lib/memory-pass.mjs` or `memoryKeptLine` in `bin/install.mjs` reads them. Open with it,
   from gentle-ai's advisories: a snapshot verified before `b761aef` whose index is not UTF-8 is now refused as
-  damaged (nothing is written); a home holding `"` or `$` prints a command that does not run as copied.
+  damaged (nothing is written); a home holding `"` or `$` prints a command that does not run as copied. Done in L9.
 
 ## Log
 - L1 2026-10-15, his order, verbatim: "Listo adelgacemos la memoria y hagamos un protocolo para
@@ -564,6 +564,27 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   by typing the two values once (`js-harness rules change`, a change of owner). The harness's own rules live in
   `bin/lib/rules-data.mjs`, not `docs/rules.json`, which is a project's list, so the branch is
   `rule/memory-hygiene-budgets`.
+- L9 2026-10-17, T11 built by `JH 5 · canal entre sesiones` on `fix/memory-pass-quoting`, on the lead's order of
+  11:33Z (item 7 of its triage note). The kept line of `uninstall` (`memoryKeptLine`, `bin/install.mjs`) prints
+  the home with `shellWord`, so the printed verify and undo run as copied with a dollar sign or a double quote in
+  the home. `undoHeld` (`bin/lib/memory-pass.mjs`) tells an after-index an older verify wrote as text (it holds
+  U+FFFD) from a damaged one: while the index is as the pass left it, its own bytes stand for the after-index;
+  once written since, the undo is refused for that reason and writes nothing. Tests first, each seen RED. An
+  independent verifier (probes in a scratch clone) confirmed both; it also found this document tripled by a
+  scripted edit (restored from 16301239 and edited again by hand) and that cmd.exe splits a single-quoted home
+  with a space, so on Windows `shellWord` keeps double quotes unless the home holds `$` or a backtick.
+  Commits on origin/main db31c96c (rebased past PR 400, the review-starts clock fix every gate needed from
+  12:00Z): 15ca5bb9, 065780ea (the verifier's two blockers), 8ab6abe7 (gates passed). Codex db31c96..065780e
+  incorrect (0.98), one P2: a Windows home with `$` and a space, in single quotes for PowerShell, splits in
+  cmd.exe; no one form serves both, so the line now says its commands are for PowerShell and gives cmd.exe its
+  own `--home` in double quotes (`cmdExeWord`), test first. Codex recheck db31c96..8ab6abe correct (0.88).
+  `5018d1b..b761aef` stays the recorded skip (a second recheck is refused by design); this slice's reviews read
+  that code, `undoHeld` and `memoryKeptLine`, as the code they change. gentle-ai db31c96c..8ab6abe7 high
+  (item 1), lenses risk and reliability: approved and acknowledged (`review-4794badca4c9c8a7`). Left as later
+  work, its advisories: PowerShell reads the curly double quotes “ ” „ as `"` too, so a Windows home holding one
+  and no `$` breaks the double-quoted form (`bin/install.mjs:85`, a warning); an after-index that holds U+FFFD
+  and was damaged is told as older rather than damaged (`bin/lib/memory-pass.mjs:325`). Per file: install 81,
+  memory-pass 34 pass.
 
 ## Next step (2026-10-16)
 - T10 (JH 21, branch `feat/memory-full-uninstall`, worktree `D:\js-harness-worktrees\memory-full-uninstall`): built

@@ -316,9 +316,16 @@ function undoHeld({ folder, stateDir, stamp, now, manifest }) {
     if (kept === null || sha256(kept) !== manifest.before[name]) throw new PassError(`snapshot ${stamp} is damaged: ${name} is missing or changed; nothing was undone`);
   }
   // The index after the pass, which a merge reads: an index absent after the pass was kept as empty.
-  const afterIndex = readOrNull(path.join(dir, 'after-index.txt'));
+  let afterIndex = readOrNull(path.join(dir, 'after-index.txt'));
   if (afterIndex === null || sha256(afterIndex) !== (after[INDEX] ?? sha256(Buffer.alloc(0)))) {
-    throw new PassError(`snapshot ${stamp} is damaged: after-index.txt is missing or changed; nothing was undone`);
+    // Before b761aef verify wrote it as text, which puts U+FFFD for each byte of an index that is not UTF-8. While
+    // the index is as the pass left it, its own bytes are that after-index; once written since, no merge can
+    // trust the lossy copy.
+    const current = readOrNull(path.join(folder, INDEX));
+    const older = afterIndex !== null && afterIndex.toString('utf8').includes('�');
+    if (older && current !== null && sha256(current) === after[INDEX] && Buffer.from(current.toString('utf8')).equals(afterIndex)) afterIndex = current;
+    else if (older) throw new PassError(`snapshot ${stamp} was verified before the index was kept byte for byte, and its index is not UTF-8: it cannot be merged with the index written since; nothing was undone`);
+    else throw new PassError(`snapshot ${stamp} is damaged: after-index.txt is missing or changed; nothing was undone`);
   }
   const restored = [];
   const removed = [];
