@@ -131,9 +131,9 @@ questions answered, its cost (one command a day, the readers only with a candida
 (the id `throughput-quiet-runs`, cited in the rule-id form once it is declared). Steps 1-3 and 8-10 live in the commands and their help, not in the skill.
 
 ## Tasks
-- [ ] T1 (kind: design) The design above, through two readers. Route: inline, readers as sub-agents.
+- [x] T1 (kind: design) The design above, through two readers. Route: inline, readers as sub-agents. Two rounds (L4, L14).
 - [x] T2 (kind: build) (S2, S6) Unit 1: `throughput`, `snapshot`, `status`, `--against`; README; uninstall of the folder. Route: inline. PRs 357 and 359, merged.
-- [ ] T3 (kind: build) (S3) Unit 2: B3, B4, B5, B6, each with its row. Route: inline.
+- [ ] T3 (kind: build) (S3) Unit 2: B3, B4, B5, B6, each with its row. Route: inline. B3 and the rows PR 365, B5 PR 368, B6 PR 373, B4a PR 378, merged; open only for B4b.
 - [x] T4 (kind: build) (S4) Unit 3: the heartbeat's snapshots and DUE line, `reviewed`, the rule `throughput-quiet-runs`. Route: inline. Commits 26c693cd, 9c5eda8a.
 - [x] T5 (kind: docs) (S5) Unit 4: section 7. Route: inline. Commit 49de368c.
 
@@ -216,5 +216,7 @@ questions answered, its cost (one command a day, the readers only with a candida
 - L35 (2026-10-17): T4 committed as 26c693cd (gate passed; gentle-ai 906afea1..26c693cd medium, not due, under_budget). T5 written test first on the same branch and pull request, since it cites `throughput reviewed`, which only this branch has: section 7 "Reviewing throughput" in bin/lib/protocols-skill.mjs holds steps 4-7 (candidates, with the hard limit as a candidate's condition; readers only with a candidate list; the stop rule with `rule:throughput-quiet-runs` and `rule:throughput-quiet-days`; his decisions), the incident, the five questions, what leaves, its cost and Reviewed by 2026-11-16. The skill test that no cited rule's value is written in the skill searched the bare value, which a one-digit value matches in every date, so no numeric rule could be cited; it now searches the value with its unit ("7 day", "2 review"), the form a restated value takes. docs/SPEC.md says seven protocols.
 - L36 (2026-10-17): T5 committed as 49de368c (gate passed). gentle-ai 906afea1..49de368c medium, not due (under_budget). Codex 30517a3..49de368 in 2 parts: part 2 correct (0.85); part 1 incorrect (0.93) with two P2 findings, both taken and fixed test first: the review line's `js-harness throughput --since <d>` read up to today, unsettled days included, so it now ends `--until <last settled day + 1>`; and a re-measure that found candidates did not make the review daily again, so one recorded since the quiet runs began now breaks them, as a review does.
 
+- L37 (2026-10-17): PR 384 (T4 and T5) merged at 10:35Z as bb4d80c4. T1 checked off (its two rounds are L4 and L14). Left open: B4b, the shown and answered times of an answer in `notify`, which is the channel session JH 26's code and waits for its agreement (asked by message, no answer); until then the questions row says those times are not recorded.
+
 ## Next step
-T4 and T5 built on feat/throughput-trigger (L34-L36): push, open the pull request, notify the lead --kind ready with --pr. B4b only with JH 26's agreement (asked by message, no answer yet). Then the feature closes: T6, the contract run, if the document holds one.
+The feature is done but for B4b. When JH 26 agrees, B4b is built on a branch from origin/main (bin/notify.mjs and bin/lib/channel.mjs keep shownAt and answeredAt on an answer notice that names --question; the questions row already reads them), test first, then gate, assess, evidence line, Codex, PR, notify the lead --kind ready; T3 is checked off with it.
