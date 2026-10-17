@@ -363,3 +363,22 @@ test('a day after B1 and B2 reads its ready notices from the channel and its lan
   assert.match(stdout, /ready to merged +median 60 min, p75 60 min, worst 60 min \(1\) +\[the newest ready notice/);
   assert.match(stdout, /land phases +1 lands, median 300 s, landed 1 of 1 looked at; exit 0 ×1; suite 1, median 270 s +\[<git common dir>\/js-harness\/lands\.jsonl/);
 });
+
+test('a land record that is there and cannot be read is said on its row, never read as no land', async () => {
+  const home = makeHome(GATES);
+  const table = async (readFileSync) => {
+    const out = [];
+    await throughputMain(['--since', '2026-10-17', '--until', '2026-10-18'], {}, {
+      cwd: ROOT, stdout: (l) => out.push(l), stderr: (l) => out.push(l), now: () => Date.parse('2026-10-18T12:00:00Z'), run: fakeGit(), homedir: () => home, readCodexRuns: () => [], fileSystem: { ...fs, readFileSync },
+    });
+    return out.join(String.fromCharCode(10));
+  };
+  const lands = (file) => String(file).replace(/[\\/]+/g, '/').endsWith('/.git/js-harness/lands.jsonl');
+  const denied = await table((file, ...rest) => (lands(file) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest)));
+  assert.match(denied, /land phases +not read: 2026-10-17 EACCES/);
+  // No record at all is a machine where no land ran: nothing to read, and so none.
+  const absent = await table((file, ...rest) => (lands(file) ? (() => { throw Object.assign(new Error('absent'), { code: 'ENOENT' }); })() : fs.readFileSync(file, ...rest)));
+  assert.match(absent, /land phases +none/);
+  const kept = await table((file, ...rest) => (lands(file) ? `${JSON.stringify({ v: 1, startedAt: '2026-10-17T10:00:00Z', endedAt: '2026-10-17T10:01:00Z', considered: [7], landed: [7], phases: [], exit: 0 })}${String.fromCharCode(10)}torn` : fs.readFileSync(file, ...rest)));
+  assert.match(kept, /land phases +1 lands, median 60 s/);
+});
