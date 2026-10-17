@@ -176,3 +176,16 @@ test('an ANSI-C string $\'...\' is literal and its \\\' does not close it (Codex
 test('each context skips only its own heredocs: one inside a $(...) leaves the outer one pending (Codex, 2026-10-14)', () => {
   assert.deepEqual(backticksInDoubleQuotes('cat <<\'OUT\' "$(cat <<\'IN\'\ninner\nIN\n)"\nouter\nOUT\necho "`x`"'), ['x']);
 });
+
+test('a stamp that opens the text before the label is read, and a label never crosses a colon into an event', () => {
+  assert.equal(stampedHour('19:48 JH ORQ: HIS ANSWER to question 11.'), '19:48');
+  assert.equal(stampedHour('05:57 HIS ORDER: go on.'), '05:57');
+  for (const text of [
+    'JH 26 · canal y compactación: compacted at 18:46, resumed.',
+    'JH 26 · canal: paused at 01:10.',
+    'JH 26 · canal: the gate ran at 14:17.',
+    '19:48 the gate passed.',
+    '2026-10-16 19:48 JH ORQ: dated, not stamped.',
+  ]) assert.equal(stampedHour(text), null, text);
+  assert.match(hourRefusal('19:48 JH ORQ: PR 300 landed.', AT_1444), /stamps 19:48, and the clock says 14:44/);
+});

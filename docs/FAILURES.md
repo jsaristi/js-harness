@@ -575,13 +575,19 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
   05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
   relief line, not a feature document
-- Control: check — bin/guard.test.mjs — "a Write or an Edit of a Markdown file whose line opens with
-  today and an hour ahead of the clock is denied" — since 2026-10-15
+- Seen: 2026-10-16 — the record of notices, D--js-harness.jsonl — 73 of the 74 lead notices that
+  opened "HH:MM JH ORQ:" (10-15 to 10-16) were more than a minute off the local clock: notify text
+  sent through Bash met no hour check (bin/guard.mjs:81 holds only message tools)
+- Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
+  the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
   either tool, is denied when its stamped hour is off the clock", on main since pull request 157
-  (2026-10-14); a feature document or a committed block: the control above
+  (2026-10-14); a feature document or a committed block: the documents line below
   (bin/lib/document-hour-guard.mjs, T12b), which refuses only an hour ahead of the clock, since a
   document also records earlier events
+- Proof: documents: bin/guard.test.mjs, "a Write or an Edit of a Markdown file whose line opens with
+  today and an hour ahead of the clock is denied", since 2026-10-15; notices: the control above
+  (odd/tasks/wake-and-flag.md, T4); the relief file stays out, as its opening hour is often an event
 - Was: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or a
   block it commits is read from the clock" — from 2026-10-15 until T12b was built the same day
 - Was: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time

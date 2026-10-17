@@ -21,6 +21,8 @@ from `main`, so their branch names no session (the plan, `throughput-v3-plan.md`
 - `node --test bin/notify.test.mjs` exits 0
 - `node --test bin/lib/sessions.test.mjs` exits 0
 - `node --test bin/reply.test.mjs` exits 0
+- `node --test bin/lib/guard.test.mjs` exits 0
+- `node --test bin/resume.test.mjs` exits 0
 
 ## In scope / Out of scope
 - In: `bin/lib/channel.mjs`, `bin/notify.mjs`, the board's channel lines (`bin/lib/sessions.mjs`), `bin/reply.mjs` and
@@ -49,7 +51,8 @@ Nothing of this feature is his: no spend, nothing irreversible, no product choic
   branch `feat/stop-wake-warning`, from T1)
 - [x] T3 (kind: build) S3: the board flags a tool call open more than N minutes: already built, nothing to add
   (route: none; L3)
-- [ ] T4 (kind: build) S4: the hour guard reads `notify` text sent through Bash (route: inline)
+- [x] T4 (kind: build) S4: the hour guard reads `notify` text sent through Bash (route: inline; branch
+  `feat/notify-hour-check`, from T2)
 
 ## Log
 - L1, 2026-10-17, the lead's notice to JH 26 (a claim of the lead's, not his word): "he approved the throughput plan
@@ -92,6 +95,20 @@ Nothing of this feature is his: no spend, nothing irreversible, no product choic
     counts whenever it was stored); and a call the host moved to the background when it outlived its timeout
     (`toolUseResult.backgroundTaskId`) now counts as a launch after the warning. RED 2, GREEN reply 18.
 
+- L5, T4 built test first on `feat/notify-hour-check`, by a design two readers changed (`jh26-t4-design.md`,
+  Version 2, in the lead's notes folder).
+  - The check is in `notify`, not the guard: `notify` holds the final text (after the shell's quoting, `$(…)` and
+    heredocs, which a guard reading the command line cannot evaluate) and the clock the notice is stamped with, and it
+    covers Codex and scripts. It is held against the notice's own `at`; exit 1, nothing written; an answer is not
+    held to it (his words).
+  - `STAMP` reads the lead's hour-first form (`HH:MM` then a capital), and a title's topic no longer crosses a
+    colon: "<title>: compacted at HH:MM" is an event. Over the record (591 texts) the new pattern gains the 74
+    hour-first lead notices and loses 41, every one a "compacted at" line; `audit's` count of message stamps
+    changes the same way.
+  - `resume's` compaction line now carries the hook's own hour: 7 of 60 such notices had typed it in UTC.
+  - Out: the relief file (its opening hour is often an event), hours in parentheses, the wake notes.
+  - RED: guard 1, notify 1, resume 25 (the expected line). GREEN: guard lib 19, guard 23, notify 143, resume 94,
+    audit 15.
+
 ## Next step
-T4, S4: the hour check on `notify` text, by its design of two readers (`jh26-t4-design.md`, Version 2, in the
-lead's notes folder).
+The feature's tasks are done. Land in order: 349 (T1), then T2's and T4's pull requests, each after its base.

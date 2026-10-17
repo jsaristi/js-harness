@@ -17,6 +17,7 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import { sessionsMain } from './sessions.mjs';
+import { stampOff } from './lib/guard.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
@@ -50,7 +51,7 @@ const USAGE = [
   '  A text, a line or a title that begins with -- goes after a lone --: -- "--a text", --relief -- "--a line", --opening -- "--a title".',
   '    Without it, it is read as an option this command does not know, and refused.',
   '  A notice is a claim of the session that wrote it, never the user\'s word. It sends no message.',
-  '  Exit 2: a usage error, and nothing is written. Exit 1: the file could not be written.',
+  '  Exit 2: a usage error, and nothing is written. Exit 1: the file could not be written, or the text stamps an hour off the clock.',
 ].join('\n');
 
 /** A mistake in the arguments: answered with the usage and exit 2, like a `ChannelInputError`. */
@@ -262,6 +263,17 @@ export async function notifyMain(
   const slug = projectSlug(mainCheckout(run, cwd));
   const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
   const at = new Date(now()).toISOString();
+
+  // An hour the text stamps as its sending is held to the clock the notice is stamped with, as the guard holds a
+  // message's (odd/tasks/wake-and-flag.md, T4): 73 of 74 lead notices that opened "HH:MM JH ORQ" were off. An answer
+  // quotes his words, which are not the sender's stamp.
+  if (parsed.relief === undefined && parsed.opening === undefined && draft.kind !== 'answer') {
+    const off = stampOff(draft.text, new Date(at));
+    if (off !== null) {
+      stderr(`js-harness notify: the text stamps ${off.stamped}, and the clock says ${off.right}. Stamp ${off.right}, or no hour: the record already stamps every notice with its time. Not recorded.`);
+      return 1;
+    }
+  }
 
   if (parsed.relief !== undefined) {
     let written;

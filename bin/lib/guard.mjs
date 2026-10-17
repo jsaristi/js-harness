@@ -65,29 +65,45 @@ export function openingRefusal(toolName, projectData) {
 // other hour: an event's hour also says "local" or "by date". Measured over 877 messages of three days
 // (odd/tasks/honesty-audit.md, Log): 221 matches, 49 of them wrong, none an hour meant as anything but the time of
 // sending.
-const STAMP = /^(?:From\b[^.:\n]{0,90}?[,(]\s*|[A-Z][A-Za-z]{0,3} ?\d{1,3}(?: ·[^,\n]{0,40})?(?:,| at)\s+)(?:20\d\d-\d\d-\d\d\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?::[0-5]\d)?(?=\s*(?:local\b|\(?(?:by|por|read from)\s+(?:a\s+)?`?date`?|by (?:the|my) clock|\(date\)|[.:),]))/;
+// A title's topic never holds a colon, so "JH 26 · canal: compacted at 18:46" is an event after the label.
+const STAMP = /^(?:From\b[^.:\n]{0,90}?[,(]\s*|[A-Z][A-Za-z]{0,3} ?\d{1,3}(?: ·[^,:\n]{0,40})?(?:,| at)\s+)(?:20\d\d-\d\d-\d\d\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?::[0-5]\d)?(?=\s*(?:local\b|\(?(?:by|por|read from)\s+(?:a\s+)?`?date`?|by (?:the|my) clock|\(date\)|[.:),]))/;
+
+// The other place a stamp sits: the hour first, then the label or a word in capitals ("19:48 JH ORQ: ...",
+// "05:57 HIS ORDER: ..."), as the lead opened its notices. Over the record of 2026-10-15 to 10-17 only the lead's 74
+// notices opened so, 73 of them more than a minute off the local clock; no message to another session did but 3,
+// all right (odd/tasks/wake-and-flag.md, T4).
+const HOUR_FIRST = /^((?:[01]?\d|2[0-3]):[0-5]\d)\s+(?=[A-Z])/;
 
 const pad = (n) => String(n).padStart(2, '0');
 
 /** The `HH:MM` that `text` stamps as the time it is sent, or null when its opening carries none. */
 export function stampedHour(text) {
-  const match = STAMP.exec(String(text ?? ''));
+  const match = STAMP.exec(String(text ?? '')) ?? HOUR_FIRST.exec(String(text ?? ''));
   if (match === null) return null;
   const [hours, minutes] = match[1].split(':').map(Number);
   return `${pad(hours)}:${pad(minutes)}`;
 }
 
-/** Why a message whose text is `text` is refused at the local time `now`, or null when it is not: its stamped hour
- * is more than a minute from the clock's, either way, the short way round midnight. Hours the sessions guessed ran
- * ahead of the clock by 2 to 26 minutes, "by date" or not; the refusal gives the right hour. */
-export function hourRefusal(text, now) {
+/** The stamp of `text` and the clock's hour at the local time `now`, `{ stamped, right }`, when the stamp is more
+ * than a minute from the clock either way, the short way round midnight; else null. `notify` holds a notice's text
+ * to it, as `hourRefusal` holds a message's. */
+export function stampOff(text, now) {
   const stamped = stampedHour(text);
   if (stamped === null) return null;
   const [hours, minutes] = stamped.split(':').map(Number);
   // Minute against minute: a stamp names a minute, and 14:43 is right at 14:44:30.
   const apart = Math.abs(hours * 60 + minutes - (now.getHours() * 60 + now.getMinutes())) % 1440;
   if (Math.min(apart, 1440 - apart) <= 1) return null;
-  const right = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return { stamped, right: `${pad(now.getHours())}:${pad(now.getMinutes())}` };
+}
+
+/** Why a message whose text is `text` is refused at the local time `now`, or null when it is not: its stamped hour
+ * is more than a minute from the clock's, either way, the short way round midnight. Hours the sessions guessed ran
+ * ahead of the clock by 2 to 26 minutes, "by date" or not; the refusal gives the right hour. */
+export function hourRefusal(text, now) {
+  const off = stampOff(text, now);
+  if (off === null) return null;
+  const { stamped, right } = off;
   return `js-harness guard: this message stamps ${stamped}, and the clock says ${right}. `
     + `Stamp ${right}, or no hour: an hour in a message is read from the clock in the same step, or left out.`;
 }
