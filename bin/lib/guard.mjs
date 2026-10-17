@@ -286,8 +286,10 @@ export function onFirstParentLine(base, cwd, { run = (args) => spawnSync('git', 
   if (resolved.status !== 0) return null;
   const commit = resolved.stdout.trim();
   // The head's line down to the first commit the base holds, never the whole history: on the line, that walk ends
-  // right above the base; off it, at the fork point. Either way it is as long as the branch.
-  const above = git('rev-list', '--first-parent', 'HEAD', `^${commit}`);
+  // right above the base; off it, at the fork point. Either way it is as long as the branch. Each commit comes with
+  // its parents, and every commit printed is on the head's line, so the base is on it when it is the first parent
+  // of any of them: a walk git cut late (committer dates out of order) prints more, never less (gentle-ai R3).
+  const above = git('rev-list', '--first-parent', '--parents', 'HEAD', `^${commit}`);
   if (above.status !== 0) return null;
   const line = above.stdout.split(/\r?\n/).filter(Boolean);
   if (line.length === 0) {
@@ -295,9 +297,7 @@ export function onFirstParentLine(base, cwd, { run = (args) => spawnSync('git', 
     const head = git('rev-parse', 'HEAD');
     return head.status !== 0 ? null : head.stdout.trim() === commit;
   }
-  const parents = git('rev-list', '--parents', '-n', '1', line[line.length - 1]);
-  if (parents.status !== 0) return null;
-  return parents.stdout.trim().split(/\s+/)[1] === commit;
+  return line.some((entry) => entry.split(/\s+/)[1] === commit);
 }
 
 /** Why the Bash command `command` is refused for the base it gives a gentle-ai review, or null (odd/tasks/gate-wait.md,

@@ -301,6 +301,15 @@ test('the base is looked up in git: a branch the head is behind is refused, and 
   }
 });
 
+test('a base is on the line when it is the first parent of any commit the walk printed, whatever else it printed (gentle-ai R3 on a9109b1)', () => {
+  // A walk git cut late, as committer dates out of order can make it, prints commits below the base too.
+  const printed = { 'rev-parse': 'b\n', 'rev-list': 'h x\nx b\nbelow older\n' };
+  const run = (args) => ({ status: 0, stdout: printed[args[0]] });
+  assert.equal(onFirstParentLine('b', 'D:/p', { run }), true);
+  assert.equal(onFirstParentLine('b', 'D:/p', { run: (args) => ({ status: 0, stdout: { 'rev-parse': 'b\n', 'rev-list': 'h x\nx y\ny z\n' }[args[0]] }) }), false);
+  assert.equal(onFirstParentLine('b', 'D:/p', { run: (args) => ({ status: args[0] === 'rev-list' ? null : 0, stdout: args[0] === 'rev-list' ? '' : 'b\n' }) }), null);
+});
+
 test('the first-parent lookup reads the branch down to its base, not the whole history (the T11 warning of gentle-ai, no depth bound)', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-walk-'));
   const git = (...args) => spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
@@ -329,6 +338,14 @@ test('the first-parent lookup reads the branch down to its base, not the whole h
     git('checkout', '-q', 'main');
     assert.equal(lookup('side'), false);
     assert.equal(lookup('no-such-ref'), null);
+    assert.equal(lookup('main^{tree}'), null);
+    // gentle-ai's R3 on a9109b1: a base merged in by a second parent is off the line and the merge is on it; an
+    // unrelated history walks to a root, which has no parent, and is off the line.
+    git('merge', '-q', '--no-edit', 'side');
+    assert.deepEqual([lookup('side'), lookup('HEAD'), lookup('HEAD~1')], [false, true, true]);
+    git('checkout', '-q', '--orphan', 'other');
+    git('commit', '-q', '--allow-empty', '-m', 'unrelated');
+    assert.equal(lookup('main'), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

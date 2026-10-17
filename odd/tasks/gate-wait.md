@@ -2989,6 +2989,15 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
   - *T13.* The real-repo test's folder now holds a space, as a home like `C:\Users\Ana María`
     puts one in every temp dir, and its command quotes `--cwd`. RED: without the quotes, the test
     fails. GREEN: `bin/lib/guard.test.mjs` and `bin/guard.test.mjs`, 50 pass.
+  - *Reviews.* Committed as `a9109b1` (gate: medium, 90 lines). gentle-ai on `5ea341af..a9109b1`: high by
+    escalation (item 2, the guard decides which review commands are refused), lenses risk and reliability,
+    approved and acknowledged (lineage `review-9cb629c08f739b2c`), two advisories from R3. The warning: the
+    verdict read only the last commit printed, so a walk git cuts late (committer dates out of order) and that
+    prints commits below the base would call a base on the line off it. Each commit now comes with its parents
+    (`--parents`, one git run fewer), and the base is on the line when it is the first parent of any commit
+    printed, since every one is on the head's line. The suggestion: tests for a root, a tree, and a base merged
+    in by a second parent. Both done test first in the next commit (RED: a run that prints a commit below the
+    base was called off the line); lib guard 26, guard 25 pass; the differential check, 32 bases, 0 differ.
 
 ## Next
 
