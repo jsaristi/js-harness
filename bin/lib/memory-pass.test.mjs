@@ -448,7 +448,27 @@ test('an undo from such a snapshot, once the index is written since, is refused 
     asOldVerifyWroteIt(stateDir, stamp, NOT_UTF8);
     write('MEMORY.md', '- [A](a.md) — a\n- [B](b.md) — b\n');
     assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError
-      && err.message === `snapshot ${stamp} was verified before the index was kept byte for byte, and its index is not UTF-8: it cannot be merged with the index written since; nothing was undone`);
+      && err.message === `snapshot ${stamp} was verified before the index was kept byte for byte, and its index is not UTF-8, or its after-index.txt was damaged since: either way it cannot be merged with the index written since; nothing was undone`);
     assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n- [B](b.md) — b\n');
   });
+});
+
+// An after-index damaged after a verify can hold U+FFFD too (memory-hygiene T13). While the index is as the pass left
+// it, an older copy is its text exactly, so any other is damaged; one that is not UTF-8 itself no text write made.
+test('an after-index that holds U+FFFD but is not the text of the index the pass left is damaged, not older, and nothing is undone', () => {
+  const damaged = {
+    'another text': (index) => Buffer.from(index.toString('utf8').replace('a ', 'x ')),
+    'bytes no text write makes': (index) => Buffer.concat([Buffer.from(index.toString('utf8')), Buffer.from([0xfe])]),
+  };
+  for (const [how, damage] of Object.entries(damaged)) {
+    withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+      const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+      fs.writeFileSync(path.join(folder, 'MEMORY.md'), NOT_UTF8);
+      verifyPass({ folder, stateDir, stamp, now: NOW });
+      fs.writeFileSync(path.join(stateDir, 'snapshots', stamp, 'after-index.txt'), damage(NOT_UTF8));
+      assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError
+        && err.message === `snapshot ${stamp} is damaged: after-index.txt is missing or changed; nothing was undone`, how);
+      assert.deepEqual(fs.readFileSync(path.join(folder, 'MEMORY.md')), NOT_UTF8, how);
+    });
+  }
 });

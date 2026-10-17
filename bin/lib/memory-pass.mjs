@@ -319,12 +319,15 @@ function undoHeld({ folder, stateDir, stamp, now, manifest }) {
   let afterIndex = readOrNull(path.join(dir, 'after-index.txt'));
   if (afterIndex === null || sha256(afterIndex) !== (after[INDEX] ?? sha256(Buffer.alloc(0)))) {
     // Before b761aef verify wrote it as text, which puts U+FFFD for each byte of an index that is not UTF-8. While
-    // the index is as the pass left it, its own bytes are that after-index; once written since, no merge can
-    // trust the lossy copy.
+    // the index is as the pass left it, its own bytes are that after-index, and an older copy is exactly their text:
+    // any other is damaged. Once written since, no merge can trust the lossy copy, and an older copy can no longer
+    // be told from a damaged one that holds U+FFFD and is text too.
     const current = readOrNull(path.join(folder, INDEX));
-    const older = afterIndex !== null && afterIndex.toString('utf8').includes('�');
-    if (older && current !== null && sha256(current) === after[INDEX] && Buffer.from(current.toString('utf8')).equals(afterIndex)) afterIndex = current;
-    else if (older) throw new PassError(`snapshot ${stamp} was verified before the index was kept byte for byte, and its index is not UTF-8: it cannot be merged with the index written since; nothing was undone`);
+    const text = afterIndex === null ? null : afterIndex.toString('utf8');
+    const older = text !== null && text.includes('�') && Buffer.from(text).equals(afterIndex);
+    const unchanged = current !== null && sha256(current) === after[INDEX];
+    if (older && unchanged && Buffer.from(current.toString('utf8')).equals(afterIndex)) afterIndex = current;
+    else if (older && !unchanged) throw new PassError(`snapshot ${stamp} was verified before the index was kept byte for byte, and its index is not UTF-8, or its after-index.txt was damaged since: either way it cannot be merged with the index written since; nothing was undone`);
     else throw new PassError(`snapshot ${stamp} is damaged: after-index.txt is missing or changed; nothing was undone`);
   }
   const restored = [];
