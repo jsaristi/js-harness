@@ -33,8 +33,10 @@ each ready pull request the queue prints, commit by commit, the Codex record tha
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
 line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
-refused ticket it waits its turn, and says which), then CircleCI's run
-of a queue/* branch pushed for it and removed after. When both are green, main is pushed as the
+refused ticket it waits its turn, and says which), and at the same time CircleCI's run of a queue/*
+branch pushed for it before the suite starts. The branch is removed once the candidate is red or
+untested on this machine, or once CircleCI answered; a red here still spends that CircleCI run. When
+both are green, main is pushed as the
 candidate, by fast-forward from the main it was built from. A candidate whose every changed path is a
 document main's harness.json declares runs no suite on this machine, as a commit of documents alone
 runs none, and CircleCI's run is its test. A candidate red on this machine is
@@ -44,8 +46,8 @@ changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> la
 <branch>: confirms relief line <n>", for the newest "rule:<id> proposed on <branch>, not landed" line whose
 declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
 write none. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped before it
-ended is no red: nothing is pushed or bisected. Exit 0 landed or nothing to land, 4 red, 3 main moved
-meanwhile (nothing pushed), 5 the suite did not run (nothing pushed), 1 anything else.
+ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or nothing to land, 4 red,
+3 main moved meanwhile (main not pushed), 5 the suite did not run (main not pushed), 1 anything else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
@@ -409,72 +411,90 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
   }
 }
 
-/** `--land`: the candidate at `place`, built on `main`, tested on this machine and then on CircleCI, and main
- * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it and
- * removed afterwards, whatever the result. Main moves by fast-forward only, leased on the `main` the candidate
- * was built from: a main that moved in between is left as it is (exit 3). Red anywhere is exit 4. */
+/** `--land`: the candidate at `place`, built on `main`, tested on this machine and on CircleCI at once, and main
+ * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it before
+ * the local suite starts (odd/tasks/land-unattended.md, D) and removed as soon as its answer no longer matters:
+ * once the candidate is red or untested here, or once CircleCI answered. Main moves by fast-forward only,
+ * leased on the `main` the candidate was built from: a main that moved in between is left as it is (exit 3).
+ * Red anywhere is exit 4. */
 async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail, landed, log }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   log.record.candidate = candidate;
-  // A suite that did not run judged nothing: no red to bisect, and nothing to push (odd/tasks/land-unattended.md).
-  const notRun = (result) => {
-    stdout(`The suite did not run on this machine (${result.said}): nothing was pushed, and nothing was bisected.`);
-    return 5;
-  };
-  const local = suite(place);
-  if (local.notRun) return notRun(local);
-  if (!local.ok && merged.length > 1) {
-    // Bisected (S8): the candidate of the first k pull requests is the commit after the k-th merge, so the
-    // shortest red prefix names the pull request that turns it red. It leaves, the ones after it are merged
-    // again on the green prefix, and that candidate is landed as any other.
-    // A reset that fails leaves another tree in place, and its suite would judge the wrong pull request.
-    const resetTo = (commit, what) => {
-      const reset = gitIn(place, 'reset', '--quiet', '--hard', commit);
-      return reset.ok ? null : fail(`could not reset the candidate to ${what} (${reset.err.split('\n')[0] || 'git gave no reason'}): nothing was pushed.`);
-    };
-    let [low, high] = [1, merged.length];
-    while (low < high) {
-      const mid = Math.floor((low + high) / 2);
-      const failed = resetTo(merged[mid - 1].merge, `the merge of PR ${merged[mid - 1].number}`);
-      if (failed !== null) return failed;
-      const half = suite(place);
-      if (half.notRun) return notRun(half);
-      if (half.ok) low = mid + 1;
-      else high = mid;
-    }
-    const culprit = merged[low - 1];
-    leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${local.said}).`, { said: local.said });
-    const failed = low > 1 ? resetTo(merged[low - 2].merge, `the merge of PR ${merged[low - 2].number}`) : resetTo(main, 'main');
-    if (failed !== null) return failed;
-    const kept = merged.slice(0, low - 1);
-    for (const pr of merged.slice(low)) {
-      // Merged again, so its door runs again on the shorter candidate (odd/tasks/rule-hierarchy.md, "The merge door (T16e)").
-      const step = mergeThroughDoor({ run, gitIn, place, door, pr, stdout });
-      if (step.kind === 'merged') kept.push({ ...pr, merge: step.merge });
-      else if (step.kind === 'broken') return fail(step.line);
-      else if (step.kind === 'door') leaveOut(log, stdout, pr, 'door', `${step.line}.`);
-      else leaveOut(log, stdout, pr, 'merge', `it does not merge into the candidate without PR ${culprit.number}.`);
-    }
-    if (kept.length === 0) {
-      stdout('No pull request is left to land: nothing was pushed.');
-      return 4;
-    }
-    return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed, log });
-  }
-  if (!local.ok) {
-    // One pull request (alone, or the last a bisection kept) is the one that turned it red (Codex, 2026-10-17).
-    log.leave(merged[0], 'red', local.said);
-    stdout(`The candidate is red on this machine (${local.said}): nothing was pushed.`);
-    return 4;
-  }
-  if (!local.skipped) stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
+  // CircleCI starts with the local suite, not after it: the two ran in series, about 2.8 minutes a land. The cost
+  // is one CircleCI run spent on a candidate this machine turns red. Main still waits for both greens.
   // `--no-verify`: the branch is the candidate's run on CircleCI, and no hook judges it; main's push is judged.
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
-  let ci = { state: 'pending' };
   const ciEnded = log.phase('circleci');
+  let ci = { state: 'pending' };
+  let [asked, dropped] = [false, false];
+  // Removes the queue branch once, and ends the CircleCI phase: `dropped` when its answer was not waited for.
+  const drop = () => {
+    if (dropped) return;
+    dropped = true;
+    ciEnded(ci.state === 'green' ? true : ci.state === 'red' ? false : null);
+    const state = !asked ? 'dropped' : ci.state === 'pending' ? 'none' : ci.state;
+    log.record.circleci = { state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
+    const removed = gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
+    // Named, never silent: a queue branch origin keeps runs nothing more, and only a hand removes it.
+    if (!removed.ok) stdout(`Could not remove ${branch} from origin (${removed.err.split('\n')[0] || 'git gave no reason'}): remove it by hand.`);
+  };
   try {
+    // A suite that did not run judged nothing: no red to bisect, and no main to push (odd/tasks/land-unattended.md).
+    const notRun = (result) => {
+      stdout(`The suite did not run on this machine (${result.said}): main was not pushed, and nothing was bisected.`);
+      return 5;
+    };
+    const local = suite(place);
+    if (local.notRun) return notRun(local);
+    if (!local.ok) drop();
+    if (!local.ok && merged.length > 1) {
+      // Bisected (S8): the candidate of the first k pull requests is the commit after the k-th merge, so the
+      // shortest red prefix names the pull request that turns it red. It leaves, the ones after it are merged
+      // again on the green prefix, and that candidate is landed as any other.
+      // A reset that fails leaves another tree in place, and its suite would judge the wrong pull request.
+      const resetTo = (commit, what) => {
+        const reset = gitIn(place, 'reset', '--quiet', '--hard', commit);
+        return reset.ok ? null : fail(`could not reset the candidate to ${what} (${reset.err.split('\n')[0] || 'git gave no reason'}): main was not pushed.`);
+      };
+      let [low, high] = [1, merged.length];
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        const failed = resetTo(merged[mid - 1].merge, `the merge of PR ${merged[mid - 1].number}`);
+        if (failed !== null) return failed;
+        const half = suite(place);
+        if (half.notRun) return notRun(half);
+        if (half.ok) low = mid + 1;
+        else high = mid;
+      }
+      const culprit = merged[low - 1];
+      leaveOut(log, stdout, culprit, 'red', `the candidate turns red on this machine when it is merged (${local.said}).`, { said: local.said });
+      const failed = low > 1 ? resetTo(merged[low - 2].merge, `the merge of PR ${merged[low - 2].number}`) : resetTo(main, 'main');
+      if (failed !== null) return failed;
+      const kept = merged.slice(0, low - 1);
+      for (const pr of merged.slice(low)) {
+        // Merged again, so its door runs again on the shorter candidate (odd/tasks/rule-hierarchy.md, "The merge door (T16e)").
+        const step = mergeThroughDoor({ run, gitIn, place, door, pr, stdout });
+        if (step.kind === 'merged') kept.push({ ...pr, merge: step.merge });
+        else if (step.kind === 'broken') return fail(step.line);
+        else if (step.kind === 'door') leaveOut(log, stdout, pr, 'door', `${step.line}.`);
+        else leaveOut(log, stdout, pr, 'merge', `it does not merge into the candidate without PR ${culprit.number}.`);
+      }
+      if (kept.length === 0) {
+        stdout('No pull request is left to land: main was not pushed.');
+        return 4;
+      }
+      return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed, log });
+    }
+    if (!local.ok) {
+      // One pull request (alone, or the last a bisection kept) is the one that turned it red (Codex, 2026-10-17).
+      log.leave(merged[0], 'red', local.said);
+      stdout(`The candidate is red on this machine (${local.said}): main was not pushed.`);
+      return 4;
+    }
+    if (!local.skipped) stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
+    asked = true;
     for (let waited = 0; waited <= CI_WAIT_MS; waited += CI_POLL_MS) {
       const read = (what) => {
         try {
@@ -489,60 +509,57 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
       if (ci.state !== 'pending') break;
       await sleep(CI_POLL_MS);
     }
-  } finally {
-    ciEnded(ci.state === 'green' ? true : ci.state === 'red' ? false : null);
-    log.record.circleci = { state: ci.state === 'pending' ? 'none' : ci.state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
-    const removed = gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
-    // Named, never silent: a queue branch origin keeps runs nothing more, and only a hand removes it.
-    if (!removed.ok) stdout(`Could not remove ${branch} from origin (${removed.err.split('\n')[0] || 'git gave no reason'}): remove it by hand.`);
-  }
-  if (ci.state === 'red') {
-    stdout(`The candidate is red on CircleCI (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
-    return 4;
-  }
-  if (ci.state !== 'green') {
-    stdout(`CircleCI gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
-    return 4;
-  }
-  stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
-  // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
-  const pushEnded = log.phase('push');
-  const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
-  if (pushed.ok) pushEnded(true);
-  else {
-    const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
-    pushEnded(now === candidate);
-    // A push that reached origin and lost its answer, as a timeout loses it: main is the candidate, landed.
-    if (now === candidate) {
-      stdout(`The push of main reported a failure (${pushed.err.split('\n')[0] || 'git gave no reason'}), and origin's main is the candidate all the same.`);
-    } else if (now && now !== main) {
-      stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
-      return 3;
-    } else {
-      return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+    drop();
+    if (ci.state === 'red') {
+      stdout(`The candidate is red on CircleCI (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
+      return 4;
     }
-  }
-  log.record.landed = merged.map((pr) => pr.number);
-  stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
-  // Main has moved: the relief's lines never turn a land into a failure.
-  try {
-    landed(candidate, merged);
-  } catch (err) {
-    stdout(`Could not write the landing lines of the relief file (${err.message}): main moved all the same.`);
-  }
-  // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
-  // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
-  const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
-  if (!refs.ok) {
-    stdout(`Could not read the heads of the landed pull requests (${refs.err.split('\n')[0] || 'git gave no reason'}): check none moved during the land.`);
+    if (ci.state !== 'green') {
+      stdout(`CircleCI gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
+      return 4;
+    }
+    stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
+    // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
+    const pushEnded = log.phase('push');
+    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
+    if (pushed.ok) pushEnded(true);
+    else {
+      const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
+      pushEnded(now === candidate);
+      // A push that reached origin and lost its answer, as a timeout loses it: main is the candidate, landed.
+      if (now === candidate) {
+        stdout(`The push of main reported a failure (${pushed.err.split('\n')[0] || 'git gave no reason'}), and origin's main is the candidate all the same.`);
+      } else if (now && now !== main) {
+        stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
+        return 3;
+      } else {
+        return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+      }
+    }
+    log.record.landed = merged.map((pr) => pr.number);
+    stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+    // Main has moved: the relief's lines never turn a land into a failure.
+    try {
+      landed(candidate, merged);
+    } catch (err) {
+      stdout(`Could not write the landing lines of the relief file (${err.message}): main moved all the same.`);
+    }
+    // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
+    // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
+    const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
+    if (!refs.ok) {
+      stdout(`Could not read the heads of the landed pull requests (${refs.err.split('\n')[0] || 'git gave no reason'}): check none moved during the land.`);
+      return 0;
+    }
+    const heads = new Map(refs.out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
+    for (const pr of merged) {
+      const head = heads.get(`refs/heads/${pr.headRefName}`);
+      if (head && head !== pr.headRefOid) stdout(`PR ${pr.number} moved to ${head.slice(0, 7)} during the land; its new commits are not in main.`);
+    }
     return 0;
+  } finally {
+    drop();
   }
-  const heads = new Map(refs.out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
-  for (const pr of merged) {
-    const head = heads.get(`refs/heads/${pr.headRefName}`);
-    if (head && head !== pr.headRefOid) stdout(`PR ${pr.number} moved to ${head.slice(0, 7)} during the land; its new commits are not in main.`);
-  }
-  return 0;
 }
 
 export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {

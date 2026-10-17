@@ -212,6 +212,9 @@ const failingGit = (match, answer) => (run) => (command, args, options) => (comm
 const refused = () => ({ status: 1, stdout: '', stderr: 'fatal: refused by the test' });
 
 const remoteBranches = (origin) => git(origin, 'for-each-ref', '--format=%(refname:short)', 'refs/heads').split('\n').filter(Boolean).sort();
+const queueBranches = (origin) => remoteBranches(origin).filter((name) => name.startsWith('queue/'));
+/** Whether a call among `calls` pushed main; the queue branch is pushed by every land that tests a candidate. */
+const pushedMain = (calls) => calls.some((line) => line.startsWith('git push') && line.endsWith(':refs/heads/main'));
 
 test('--land: the candidate green locally and on CircleCI becomes main, by fast-forward, and its queue branch is removed', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
@@ -225,13 +228,14 @@ test('--land: the candidate green locally and on CircleCI becomes main, by fast-
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`);
 });
 
-test('--land: a candidate red locally pushes nothing, not even its queue branch', async () => {
+test('--land: a candidate red locally pushes no main, and the queue branch that started CircleCI is removed', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, said: 'npm run test exited 1' }) });
   assert.equal(code, 4, out.join('\n'));
   assert.equal(git(origin, 'rev-parse', 'main'), main);
-  assert.ok(!calls.some((line) => line.startsWith('git push')));
-  assert.match(out.at(-1), /^The candidate is red on this machine \(npm run test exited 1\): nothing was pushed\.$/);
+  assert.ok(!pushedMain(calls));
+  assert.deepEqual(queueBranches(origin), []);
+  assert.match(out.at(-1), /^The candidate is red on this machine \(npm run test exited 1\): main was not pushed\.$/);
 });
 
 test('--land: a candidate red on CircleCI leaves main as it was', async () => {
@@ -354,7 +358,8 @@ test('--land: a bisection whose reset fails stops, tests nothing more and pushes
   assert.equal(code, 1, out.join('\n'));
   assert.deepEqual(seen, ['suite'], 'the whole candidate only: a tree the reset did not make is never tested');
   assert.equal(git(origin, 'rev-parse', 'main'), main);
-  assert.ok(!calls.some((line) => line.startsWith('git push')));
+  assert.ok(!pushedMain(calls));
+  assert.deepEqual(queueBranches(origin), []);
   assert.match(out.join('\n'), /could not reset the candidate to the merge of PR 1 \(fatal: refused by the test\)/);
 });
 
@@ -1083,8 +1088,9 @@ test('--land whose suite did not run exits 5, bisects nothing and pushes nothing
   assert.equal(code, 5, out.join('\n'));
   assert.equal(runs, 1, 'no bisection');
   assert.equal(git(origin, 'rev-parse', 'main'), main);
-  assert.ok(!calls.some((line) => line.startsWith('git push')));
-  assert.equal(out.at(-1), 'The suite did not run on this machine (gate: no turn in 90 minutes): nothing was pushed, and nothing was bisected.');
+  assert.ok(!pushedMain(calls));
+  assert.deepEqual(queueBranches(origin), []);
+  assert.equal(out.at(-1), 'The suite did not run on this machine (gate: no turn in 90 minutes): main was not pushed, and nothing was bisected.');
 });
 
 test('--land whose suite does not run inside a bisection exits 5 and pushes nothing', async () => {
@@ -1094,8 +1100,9 @@ test('--land whose suite does not run inside a bisection exits 5 and pushes noth
   assert.equal(code, 5, out.join('\n'));
   assert.equal(answers.length, 0);
   assert.equal(git(origin, 'rev-parse', 'main'), main);
-  assert.ok(!calls.some((line) => line.startsWith('git push')));
-  assert.equal(out.at(-1), 'The suite did not run on this machine (the gate was stopped before it ended): nothing was pushed, and nothing was bisected.');
+  assert.ok(!pushedMain(calls));
+  assert.deepEqual(queueBranches(origin), []);
+  assert.equal(out.at(-1), 'The suite did not run on this machine (the gate was stopped before it ended): main was not pushed, and nothing was bisected.');
 });
 
 /** A `run` that answers the gate's calls by their first words after the candidate's bin: `answers[word]`. */
@@ -1188,16 +1195,16 @@ test('a bisected land records each suite run and the pull request that turned th
   assert.equal(code, 0, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
   assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests  1 failed' }]);
-  assert.deepEqual(record.phases, [{ phase: 'suite', ok: false }, { phase: 'suite', ok: true }, { phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }]);
+  assert.deepEqual(record.phases, [{ phase: 'suite', ok: false }, { phase: 'circleci', ok: null }, { phase: 'suite', ok: true }, { phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }]);
   assert.deepEqual(record.landed, [1]);
 });
 
-test('a land whose suite did not run records exit 5, a suite phase that is neither green nor red, and nothing landed', async () => {
+test('a land whose suite did not run records exit 5, a suite and a CircleCI phase that are neither green nor red, a dropped CircleCI run, and nothing landed', async () => {
   const { root, heads } = makeQueueRepo();
   const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, notRun: true, said: 'gate: nothing ran' }) });
   assert.equal(code, 5, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
-  assert.deepEqual([record.exit, record.phases, record.landed, record.circleci, record.said], [5, [{ phase: 'suite', ok: null }], [], null, out.at(-1)]);
+  assert.deepEqual([record.exit, record.phases, record.landed, record.circleci, record.said], [5, [{ phase: 'suite', ok: null }, { phase: 'circleci', ok: null }], [], { state: 'dropped', name: null, conclusion: null, url: null }, out.at(-1)]);
 });
 
 test('--dry-run writes no land record, and a land whose record cannot be written keeps its exit and says so', async () => {
@@ -1216,4 +1223,34 @@ test('a land of one pull request red on this machine records it as left out red,
   assert.equal(code, 4, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
   assert.deepEqual([record.exit, record.leftOut, record.landed], [4, [{ pr: 1, reason: 'red', said: 'npm run test exited 1' }], []]);
+});
+
+test('--land starts CircleCI with the local suite: the queue branch of the candidate is on origin while the suite runs (odd/tasks/land-unattended.md, D)', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  const during = [];
+  const suite = (dir) => {
+    during.push(queueBranches(origin).map((name) => git(origin, 'rev-parse', name)));
+    return { ok: true, candidate: git(dir, 'rev-parse', 'HEAD') };
+  };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite });
+  assert.equal(code, 0, out.join('\n'));
+  const landed = git(origin, 'rev-parse', 'main');
+  assert.deepEqual(during, [[landed]], 'one queue branch, the candidate, pushed before the suite ran');
+  assert.deepEqual(queueBranches(origin), [], 'and removed after CircleCI answered');
+  const [record] = landsOf(root);
+  const at = (name) => Date.parse(record.phases.find((phase) => phase.phase === name).startedAt);
+  assert.ok(at('circleci') <= at('suite'), 'the CircleCI phase starts no later than the suite phase');
+});
+
+test('a land red on this machine removes its queue branch before it bisects, and the shorter candidate gets its own (odd/tasks/land-unattended.md, D)', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  const during = [];
+  const suite = (dir) => {
+    during.push(queueBranches(origin).length);
+    return fs.readFileSync(path.join(dir, 'b.txt'), 'utf8').includes('B from b') ? { ok: false, said: 'FAIL  tests' } : { ok: true };
+  };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(during, [1, 0, 1], 'the red candidate\'s branch goes as it turns red: none while its half is tested, one for the candidate without PR 2');
+  assert.deepEqual(queueBranches(origin), []);
 });
