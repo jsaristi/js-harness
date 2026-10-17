@@ -8,7 +8,8 @@
 //     odd/tasks/session-channel.md, layer 3).
 //   - `SendMessage` and `mcp__ccd_session_mgmt__send_message`: the hour a message stamps as its time of sending
 //     against the clock (`hourRefusal`).
-//   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a `node --test` of
+//   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a gentle-ai review
+//     given a `--base-ref` its head does not contain (`reviewBaseRefusal`; odd/tasks/gate-wait.md, T11); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8).
 //   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
@@ -66,7 +67,7 @@ function rulesTextOf(root, readFile) {
 }
 
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
   if (FILE_TOOLS.has(tool)) {
@@ -74,7 +75,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, allowedModels, backtickRefusal, hourRefusal, modelRefusal, openingRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, allowedModels, backtickRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal } = await import('./lib/guard.mjs');
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
@@ -82,6 +83,9 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
+  const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+  const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
+  if (base !== null) return base;
   const run = testRun ?? (await import('./lib/test-run-warning.mjs')).testRunWarning;
   // The folder the command runs in names its test file as the gate log does (first-version T6a).
   return run(String(input.command ?? ''), { ...(typeof payload.cwd === 'string' && payload.cwd !== '' && { cwd: payload.cwd }) });
@@ -125,6 +129,7 @@ export async function guardMain(argv, {
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
   testRun,
+  baseContains,
   readIndex = (file) => fs.readFileSync(file, 'utf8'),
   claudeConfigDir = process.env.CLAUDE_CONFIG_DIR,
   readTranscript = (file) => fs.readFileSync(file, 'utf8'),
@@ -150,7 +155,7 @@ export async function guardMain(argv, {
   let hint = null;
   try {
     const payload = JSON.parse(readStdin());
-    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir });
+    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains });
     // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
     if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists });
   } catch {

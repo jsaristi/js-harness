@@ -5,7 +5,11 @@ import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, stampedHour } from './guard.mjs';
-import { backtickRefusal, backticksInDoubleQuotes, modelRefusal } from './guard.mjs';
+import { backtickRefusal, backticksInDoubleQuotes, modelRefusal, reviewBaseRefusal } from './guard.mjs';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // 14:44 local on the day of the test: the clock a message is checked against.
 const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
@@ -188,4 +192,69 @@ test('a stamp that opens the text before the label is read, and a label never cr
     '2026-10-16 19:48 JH ORQ: dated, not stamped.',
   ]) assert.equal(stampedHour(text), null, text);
   assert.match(hourRefusal('19:48 JH ORQ: PR 300 landed.', AT_1444), /stamps 19:48, and the clock says 14:44/);
+});
+
+// gate-wait T11: gentle-ai diffs the tree of `--base-ref` against the head's, so a branch name the head is behind puts
+// the default branch's newer work in the candidate, reversed (20 s and 470 lines against 1 s and nothing, 2026-10-17).
+test('a gentle-ai review whose --base-ref is a commit the head does not contain is refused, naming the merge-base command', () => {
+  const asked = [];
+  const contains = (base, cwd) => { asked.push([base, cwd]); return false; };
+  for (const command of [
+    'gentle-ai review assess --cwd D:\\w\\one --agent claude-code --base-ref origin/main --committed-only --json',
+    "gentle-ai review status '--cwd=D:\\w\\one' --contract=gentle-ai.review-integration/v2 --base-ref=origin/main --committed-only=true",
+    'gentle-ai review start --cwd "D:\\w\\one" --base-ref "origin/main" --committed-only',
+  ]) {
+    const reason = reviewBaseRefusal(command, { cwd: 'D:/payload', contains });
+    assert.match(reason, /^js-harness guard: --base-ref origin\/main is not a commit this head contains/, command);
+    assert.match(reason, /git merge-base origin\/main HEAD/, command);
+  }
+  assert.deepEqual(asked, [['origin/main', 'D:\\w\\one'], ['origin/main', 'D:\\w\\one'], ['origin/main', 'D:\\w\\one']]);
+});
+
+test('a base the head contains, one that is no commit, a review command without a base and any other command pass', () => {
+  assert.equal(reviewBaseRefusal('gentle-ai review assess --base-ref origin/main --json', { cwd: 'D:/p', contains: () => true }), null);
+  // A tree (the base_tree a STATUS names) or a name git cannot read: the check cannot tell, so the call runs.
+  assert.equal(reviewBaseRefusal('gentle-ai review start --base-ref 7c00d719 --committed-only', { cwd: 'D:/p', contains: () => null }), null);
+  const never = () => assert.fail('no base to look up');
+  for (const command of [
+    'gentle-ai review assess --cwd D:/p --json',
+    'gentle-ai review acknowledge-approved --lineage=review-1 --base-ref=origin/main',
+    'git diff --base-ref origin/main',
+    'echo gentle-ai review assess --base-ref',
+  ]) assert.equal(reviewBaseRefusal(command, { cwd: 'D:/p', contains: never }), null, command);
+});
+
+test('with no --cwd the folder of the call is the repository the base is looked up in', () => {
+  const asked = [];
+  reviewBaseRefusal('gentle-ai review assess --base-ref=abc123 --json', { cwd: 'D:/payload', contains: (base, cwd) => { asked.push([base, cwd]); return true; } });
+  assert.deepEqual(asked, [['abc123', 'D:/payload']]);
+});
+
+test('the base is looked up in git: a branch the head is behind is refused, its merge-base and the head itself pass', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-base-'));
+  const git = (...args) => spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });
+  try {
+    git('init', '-q', '-b', 'main');
+    fs.writeFileSync(path.join(dir, 'a'), '1');
+    git('add', 'a');
+    git('commit', '-q', '-m', 'one');
+    const fork = git('rev-parse', 'HEAD').stdout.trim();
+    git('checkout', '-q', '-b', 'side');
+    fs.writeFileSync(path.join(dir, 'b'), '1');
+    git('add', 'b');
+    git('commit', '-q', '-m', 'side');
+    git('checkout', '-q', 'main');
+    fs.writeFileSync(path.join(dir, 'a'), '2');
+    git('commit', '-q', '-am', 'main moves');
+    git('checkout', '-q', 'side');
+    const command = (base) => `gentle-ai review assess --cwd ${dir} --base-ref ${base} --committed-only --json`;
+    assert.match(reviewBaseRefusal(command('main'), { cwd: dir }), /--base-ref main is not a commit this head contains/);
+    assert.equal(reviewBaseRefusal(command(fork), { cwd: dir }), null);
+    assert.equal(reviewBaseRefusal(command('HEAD'), { cwd: dir }), null);
+    const tree = git('rev-parse', 'main^{tree}').stdout.trim();
+    assert.equal(reviewBaseRefusal(command(tree), { cwd: dir }), null);
+    assert.equal(reviewBaseRefusal(command('no-such-ref'), { cwd: dir }), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

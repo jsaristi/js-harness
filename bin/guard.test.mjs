@@ -17,7 +17,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -34,6 +34,7 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     // `timed` stands in for the gate log: the seconds a gate ran each file alone, by its name.
     testRun: (command, options) => testRunWarning(command, { env: {}, holder: () => held, fileSeconds: (file) => timed[file], ...options }),
     claudeConfigDir: configDir,
+    baseContains,
     env: {},
     exists,
     readIndex: () => {
@@ -170,6 +171,17 @@ test('a Bash command with backticks inside double quotes is denied; in single qu
   for (const command of ["git commit -m 'fix the `check` row'", 'echo "today is $(date)"']) {
     assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command } }), { code: 0, out: '', err: '' }, command);
   }
+});
+
+test('a gentle-ai review given a base its head does not contain is denied, looked up in the folder of the call; one it contains passes', async () => {
+  const asked = [];
+  const command = 'gentle-ai review assess --agent claude-code --base-ref origin/main --committed-only --json';
+  const refused = await hook({ tool_name: 'Bash', cwd: 'D:/w/behind', tool_input: { command } }, { baseContains: (base, cwd) => { asked.push([base, cwd]); return false; } });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: --base-ref origin\/main is not a commit this head contains/);
+  assert.deepEqual(asked, [['origin/main', 'D:/w/behind']]);
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/w/fresh', tool_input: { command } }, { baseContains: () => true }), { code: 0, out: '', err: '' });
 });
 
 test('a node --test of several files outside a turn is denied while another gate holds the lock, with its warning unchanged', async () => {

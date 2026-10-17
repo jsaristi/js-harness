@@ -2,6 +2,7 @@
 // a `PreToolUse` hook, so it answers the host with the hooks contract's JSON on standard output and always exits 0:
 // an older js-harness on the path answers 2 to a command it does not know, and 2 blocks the host, so every hook
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
+import { spawnSync } from 'node:child_process';
 import { ruleHere, ruleOf } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -205,6 +206,83 @@ export function backtickRefusal(command) {
   return `js-harness guard: backticks inside double quotes run as commands in bash (${shown}). `
     + 'Write the text through a file (Write, then `git commit -F <file>` or `--file`), put it in single quotes, '
     + 'or write $(...) where a command is meant.';
+}
+
+/** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
+ * own. A backslash is kept as it is: a Windows path is written with them. */
+function shellWords(command) {
+  const words = [];
+  let word = null;
+  let quote = null;
+  const text = String(command ?? '');
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (quote !== null) {
+      if (c === quote) quote = null;
+      else word += c;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      word ??= '';
+    } else if (/\s/.test(c)) {
+      if (word !== null) words.push(word);
+      word = null;
+    } else if (c === ';' || c === '|' || c === '&') {
+      if (word !== null) words.push(word);
+      word = null;
+      const pair = text[i + 1] === c && c !== ';';
+      words.push(pair ? c + c : c);
+      if (pair) i += 1;
+    } else {
+      word = (word ?? '') + c;
+    }
+  }
+  if (word !== null) words.push(word);
+  return words;
+}
+
+const SEPARATORS = new Set([';', '&&', '||', '|', '&']);
+const BASE_VERBS = new Set(['assess', 'status', 'start']);
+
+/** The value of `--<name>` among `words`, written `--name value` or `--name=value`, or null. */
+function optionOf(words, name) {
+  for (let i = 0; i < words.length; i += 1) {
+    if (words[i] === `--${name}`) return words[i + 1] ?? null;
+    if (words[i].startsWith(`--${name}=`)) return words[i].slice(name.length + 3);
+  }
+  return null;
+}
+
+/** Whether `base` is a commit the head of the repository at `cwd` contains: true, false, or null when git cannot
+ * tell (a tree, a name it does not know, no repository). */
+function headContains(base, cwd) {
+  const result = spawnSync('git', ['-C', cwd, 'merge-base', '--is-ancestor', `${base}^{commit}`, 'HEAD'], { encoding: 'utf8', windowsHide: true });
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  return null;
+}
+
+/** Why the Bash command `command` is refused for the base it gives a gentle-ai review, or null (odd/tasks/gate-wait.md,
+ * T11). gentle-ai diffs the tree of `--base-ref` against the head's, so a base the head does not contain, such as a
+ * default branch that moved on, puts that branch's newer work in the candidate, reversed: on 2026-10-17 a head 19
+ * commits behind origin/main was assessed as 470 changed lines in 20 s, and as nothing in 1 s from its merge-base.
+ * Only `assess`, `status` and `start` take a base. The repository is the command's `--cwd`, else `cwd`; `contains`
+ * stands in for git. A base git cannot read (a tree, an unknown name) is let run: the check says nothing it cannot tell. */
+export function reviewBaseRefusal(command, { cwd, contains = headContains } = {}) {
+  const words = shellWords(command);
+  for (let i = 0; i < words.length; i += 1) {
+    const atStart = i === 0 || SEPARATORS.has(words[i - 1]);
+    if (!atStart || words[i] !== 'gentle-ai' || words[i + 1] !== 'review' || !BASE_VERBS.has(words[i + 2])) continue;
+    let end = i + 3;
+    while (end < words.length && !SEPARATORS.has(words[end])) end += 1;
+    const own = words.slice(i + 3, end);
+    const base = optionOf(own, 'base-ref');
+    if (base === null || base === '') continue;
+    if (contains(base, optionOf(own, 'cwd') ?? cwd) !== false) continue;
+    return `js-harness guard: --base-ref ${base} is not a commit this head contains, so gentle-ai would review the newer `
+      + `work of ${base} in it, reversed, as this change. Give it a base the head contains: the last reviewed boundary, `
+      + `or --base-ref $(git merge-base ${base} HEAD) (odd/tasks/gate-wait.md, T11).`;
+  }
+  return null;
 }
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
