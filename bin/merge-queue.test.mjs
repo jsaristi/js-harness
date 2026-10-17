@@ -1487,3 +1487,19 @@ test('a removal git refuses is said, and the land still exits 0', async () => {
   assert.ok(out.some((line) => line.startsWith('Could not remove the worktree of PR 1 at ') && line.includes('refused by the test')), out.join('\n'));
   assert.deepEqual(removedOf(root), []);
 });
+
+// `git worktree remove` takes a worktree's ignored files with it, and `git status` does not show them: an eval run kept
+// under `evals/runs/` would be lost with no branch to bring it back (Codex, 2026-10-17, P1).
+test('a land keeps a landed worktree that holds an ignored file', async () => {
+  const { root, heads } = makeQueueRepo();
+  fs.appendFileSync(path.join(root, '.git', 'info', 'exclude'), '*.log\n');
+  const top = path.dirname(root);
+  const holds = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  fs.writeFileSync(path.join(holds, 'run.log'), 'a result no commit holds\n');
+  const clean = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.readFileSync(path.join(holds, 'run.log'), 'utf8'), 'a result no commit holds\n');
+  assert.equal(fs.existsSync(clean), false, out.join('\n'));
+  assert.deepEqual(removedOf(root), [[2, 'wt-b']]);
+});

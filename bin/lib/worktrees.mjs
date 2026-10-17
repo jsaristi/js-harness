@@ -35,7 +35,8 @@ const sameFolder = (a, b) => {
 
 /** The linked worktrees of the repository at `cwd` that can be removed with nothing lost, as `{ path, branch }`, or
  * `null` when git cannot list them: on a branch (in `branches`, when given), outside `.claude/worktrees`, not the one
- * `cwd` is in, not locked, with a head `base` holds, a clean `git status`, and an index unchanged for `IDLE_MINUTES`.
+ * `cwd` is in, not locked, with a head `base` holds, a `git status` clean of ignored files too, and an index unchanged
+ * for `IDLE_MINUTES`.
  * The cheap questions are asked first: a `git status` in each of a hundred worktrees is what this exists to spare.
  * `gitIn(dir, ...args)` answers `{ ok, out }`. */
 export function removableWorktrees({ cwd, base, branches = null, gitIn, now = Date.now, idleMinutes = IDLE_MINUTES }) {
@@ -59,7 +60,9 @@ export function removableWorktrees({ cwd, base, branches = null, gitIn, now = Da
       continue;
     }
     if (now() - changed < idleMinutes * 60_000) continue;
-    const status = gitIn(tree.path, 'status', '--porcelain');
+    // Ignored files too: `git worktree remove` takes them with it, and no branch brings an eval run or a `.env` back
+    // (Codex, 2026-10-17, P1).
+    const status = gitIn(tree.path, 'status', '--porcelain', '--ignored');
     if (!status.ok || status.out.trim() !== '') continue;
     found.push({ path: tree.path, branch: tree.branch });
   }

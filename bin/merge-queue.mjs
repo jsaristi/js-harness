@@ -60,7 +60,12 @@ suite, to its answer or the branch's removal) and of the push, what landed, and 
 A land tells the work session of each pull request it left out why, the failing tests of a red included, by a
 note to that session's number in the channel; the session is the one whose newest ready notice names the pull
 request (js-harness notify --kind ready --pr <n>), and none is told twice the same reason for one ready notice.
-The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.`;
+The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.
+After it lands, a land removes the worktree of each pull request it landed (git worktree remove, never --force)
+when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
+changed for 10 minutes, and it is not under .claude/worktrees, the main one, locked, or the one the land runs
+from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
+no exit.`;
 
 const TIMEOUT_MS = 60_000;
 
