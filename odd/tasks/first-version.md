@@ -487,3 +487,9 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   synced its mirror falls back to Windows saying so. RED: the export `SENSOR_SILENCE_MS` missing. GREEN: the
   seven tests of the silence and the ceiling in `bin/check.test.mjs`, twice, 7 of 7, and
   `bin/lib/rules-bindings.test.mjs` 15 of 15. Not measured: a run in which the silence bound stops a real hang.
+- L30 (2026-10-17, JH 25): T6f reviewed. gentle-ai, lenses reliability and resilience, risk item 4 escalated:
+  approved and acknowledged (lineage `review-eecd8b566b6888dd`) with three advisories. Codex on
+  `760e8fe..9931659`: correct, no finding. Two advisories were races the steady test already showed under load:
+  the quiet test (1.5 s of silence) and the ceiling test (1 s) could stop while node starts, before the first
+  line; both now use the 4 s the steady test uses. The third: no test said the WSL2 run is given the silence
+  bound; the silent fallback test now asserts both runs get `SENSOR_SILENCE_MS`. 5 of 5 of those tests pass.

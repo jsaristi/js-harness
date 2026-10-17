@@ -611,11 +611,12 @@ test('runSensor lets a command that keeps writing run past its silence bound', a
 test('runSensor stops a command silent for its silence bound, and says it was silent', async () => {
   const dir = makeTmpDir();
   try {
+    // 4 s of silence, as above: a shorter bound could run out while node starts, before the first line.
     fs.writeFileSync(path.join(dir, 'quiet.js'), "console.log('then-quiet'); setTimeout(() => {}, 120000);");
     const started = Date.now();
-    const result = await runSensor('node quiet.js', { cwd: dir, timeout: 60000, silence: 1500 });
+    const result = await runSensor('node quiet.js', { cwd: dir, timeout: 60000, silence: 4000 });
     assert.ok(Date.now() - started < 30000, `took ${Date.now() - started} ms`);
-    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', true, 'wrote nothing for 1500 ms']);
+    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', true, 'wrote nothing for 4000 ms']);
     assert.match(result.stdout, /then-quiet/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -626,8 +627,9 @@ test('runSensor still stops at its ceiling a command that keeps writing', async 
   const dir = makeTmpDir();
   try {
     fs.writeFileSync(path.join(dir, 'loop.js'), "setInterval(() => console.log('again'), 100);");
-    const result = await runSensor('node loop.js', { cwd: dir, timeout: 2000, silence: 1000 });
-    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', undefined, 'timed out after 2000 ms']);
+    // The silence bound is the 4 s that node's start fits in above, and the ceiling comes after it.
+    const result = await runSensor('node loop.js', { cwd: dir, timeout: 6000, silence: 4000 });
+    assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', undefined, 'timed out after 6000 ms']);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -5123,7 +5125,7 @@ const reachedMirror = (status, ms = 1200) => ({ status, signal: null, stdout: 's
 function spawnsInTurn(...answers) {
   const spawn = (command, options) => {
     const runner = /--exec bash "(.*)"$/.exec(command);
-    spawn.calls.push({ command, cwd: options.cwd, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
+    spawn.calls.push({ command, cwd: options.cwd, silence: options.silence, script: runner ? fs.readFileSync(spawn.files.get(runner[1]), 'utf8') : null });
     return answers[spawn.calls.length - 1] ?? sensorRan();
   };
   spawn.calls = [];
@@ -5322,7 +5324,7 @@ test('a sensor silent past its bound before WSL2 synced its mirror runs on Windo
   const spawn = spawnsInTurn({ status: null, signal: null, stdout: '', stderr: '', error: silent }, sensorRan());
   const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
   assert.equal(code, 0, output);
-  assert.deepEqual(spawn.calls.map(({ command }) => command.startsWith('wsl.exe')), [true, false]);
+  assert.deepEqual(spawn.calls.map(({ command, silence }) => [command.startsWith('wsl.exe'), silence]), [[true, SENSOR_SILENCE_MS], [false, SENSOR_SILENCE_MS]]);
   assert.match(output, new RegExp(`^PASS {2}tests {2}npm run test passed on Windows: WSL2 did not run it \\(it wrote nothing for ${SENSOR_SILENCE_MS / 1000} s before the mirror was synced\\)$`, 'm'));
 }));
 
