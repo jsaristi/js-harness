@@ -76,3 +76,21 @@ Left:
 - Worktrees `review-starts-clock`, `gate-first-rename`, `memory-pass-quoting`, `review-timeout-rule`, `jh5-closing`: their removal is the lead's.
 
 Cost of the stretch: 10 Codex runs recorded (4 incorrect, all fixed; 2 more refused a second recheck and recorded nothing); 3 gentle-ai reviews acknowledged; 3 independent verifiers (opus) and 2 design readers; context reached the pause twice and the host compacted it at 12:02Z and about 14:04Z.
+
+## Third stretch (2026-10-17, from 14:37Z)
+At 14:37Z the lead, after 407 and 408 landed (main 3586f40), sent one more item: triage item 12, gate-first T7 ("the push guard, codex-review reads a stacked base merge by what was written, with PR #338's five advisories"), with an independent verifier, then gentle-ai and Codex, one branch and PR per work unit.
+
+Delivered:
+- PR 416, gate-first T7 (`feat/stacked-merge-turn`, `odd/tasks/gate-first.md` L-T7, L-T7b): `mergeStart` read a merge by its own lines only when the default branch held its second parent, so a merge of a stacked base was reviewed as the whole range (cd2b689: 4 parts, about 1.2M input tokens, for commits that each had a record). A stacked base whose own code commits each have a record is now read the same way, at HEAD, below HEAD and as a run's base. The verifier found B1 (the base's commits judged by the marks at the base, not at the merge, so an unmarked edit could be covered unread), fixed test first. gentle-ai high (item 2), approved and acknowledged (`review-9d129e558d148edf`); Codex correct (0.87). Ready at 16:06Z.
+- PR 413, PR 338's advisories (`fix/merge-turn-advisories`, `odd/tasks/merge-below-head.md` T5): Codex is looked for before the turn's worktree is made; a run line missing from the log stops the run instead of reading as owing nothing; a turn worktree older than a day is swept though its pid was reused; `mergeTurn` reads the run log with `where`; the turn's failure paths have tests. gentle-ai medium, not due; Codex correct (0.9). Ready at 16:02Z.
+
+Failures and lessons:
+- A test of a stacked side (`check-codex-reviews.test.mjs`, "a merge commit somebody wrote code in…") pinned the old whole-range count; the first gate of T7 failed on it, and its expectation now says what T7 asks.
+- A test that needs mode bits that stop a write is skipped on Windows; its RED was seen in WSL2, with the node at `~/.local/node/bin`.
+- A gentle-ai STATUS sent to `/dev/null` by a scratch script became a file named `nul` in the worktree on Windows, and `git add -A` failed on it; scratch output goes to a scratch file.
+
+Left:
+- PRs 413 and 416: landing is the lead's. Worktrees `stacked-merge-turn`, `merge-turn-advisories`, `jh5-third`: their removal is the lead's.
+- Advisories of T7: a mark removed after the merge (as at the baseline); an `unavailable` skip on a stacked base counts as coverage.
+
+Cost of the stretch: 2 Codex runs recorded (both correct); 1 gentle-ai review acknowledged, 1 not due; 1 explorer and 1 independent verifier (opus).
