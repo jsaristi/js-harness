@@ -162,6 +162,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "memory-index-bytes",
+    "subject": "the bytes the memory index may hold before a memory hygiene pass is due",
+    "owner": "project",
+    "since": "2026-10-17",
+    "value": 4000,
+    "unit": "bytes"
+  },
+  {
     "id": "person-present",
     "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
     "owner": "project",

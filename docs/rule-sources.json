@@ -122,6 +122,10 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "memory-index-bytes": {
+    "kind": "design",
+    "path": "odd/tasks/memory-hygiene.md"
+  },
   "person-present": {
     "kind": "design",
     "path": "odd/tasks/session-channel.md"
