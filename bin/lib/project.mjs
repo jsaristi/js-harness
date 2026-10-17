@@ -1878,6 +1878,7 @@ export function syncProject(cwd, version, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const rm = deps.rm ?? fs.rmSync;
+  const lstat = deps.lstat ?? fs.lstatSync;
   const manifestDeps = { open: deps.open, write: deps.write, close: deps.close };
 
   if (!fs.existsSync(cwd)) return { code: 1, noSuchDirectory: true, cwd };
@@ -1898,20 +1899,25 @@ export function syncProject(cwd, version, deps = {}) {
 
   if (!manifestPresent) {
     const result = writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, true);
-    return syncTemplateBlock(root, { ...result, version, setUp: true }, writeFile);
+    return syncTemplateBlock(root, { ...result, version, setUp: true }, writeFile, lstat);
   }
-  return syncTemplateBlock(root, syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps), writeFile);
+  return syncTemplateBlock(root, syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps), writeFile, lstat);
 }
 
 /** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` rendered
  * again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md, T16f): a `rendered`
  * action, and no longer up to date. An edited block is a `kept` action, said on every sync, and writes nothing. The file
  * is a committed one, so git is what undoes the write; no manifest records it. A refusal is returned as it is. */
-function syncTemplateBlock(root, result, writeFile) {
+function syncTemplateBlock(root, result, writeFile, lstat = fs.lstatSync) {
   if (result.code !== 0) return result;
   const agents = path.join(root, 'AGENTS.md');
   let text;
   try {
+    // A link is not written through: git holds the link, not its target, so it could not give the target back
+    // (Codex, 2026-10-17).
+    const stat = lstat(agents);
+    if (stat.isSymbolicLink()) return { ...result, actions: [...result.actions, kept('AGENTS.md', 'it is a link, so sync does not write through it')] };
+    if (!stat.isFile()) return result;
     text = fs.readFileSync(agents, 'utf8');
   } catch {
     return result; // No AGENTS.md, or none that can be read: there is no block to render.

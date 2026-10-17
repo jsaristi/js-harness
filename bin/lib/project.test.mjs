@@ -3653,3 +3653,49 @@ test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('syncProject does not render the block through an AGENTS.md that is a link: git could not give its target back', (t) => {
+  const root = makeTmpRepo('js-harness-project-template-link-');
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-template-link-target-'));
+  const body = '## What good looks like\nAn older line of the harness.\n';
+  const shared = `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${body}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    const target = path.join(outside, 'AGENTS.md');
+    fs.writeFileSync(target, shared, 'utf8');
+    fs.rmSync(agents);
+    try {
+      fs.symlinkSync(target, agents, 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') {
+        t.skip('symlinks need privileges on this machine');
+        return;
+      }
+      throw err;
+    }
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.deepEqual(result.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: 'it is a link, so sync does not write through it' }]);
+    assert.equal(fs.readFileSync(target, 'utf8'), shared);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('syncProject reads AGENTS.md with lstat, so a link is kept on a machine that cannot make one', () => {
+  const root = makeTmpRepo('js-harness-project-template-lstat-');
+  const body = '## What good looks like\nAn older line of the harness.\n';
+  const text = `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${body}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, text, 'utf8');
+    const lstat = (file, ...rest) => (file === agents ? { isSymbolicLink: () => true, isFile: () => false } : fs.lstatSync(file, ...rest));
+    const result = syncProject(root, '0.1.0', syncDeps({ lstat }));
+    assert.deepEqual(result.actions, [{ kind: 'kept', path: 'AGENTS.md', reason: 'it is a link, so sync does not write through it' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), text);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

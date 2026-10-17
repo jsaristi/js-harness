@@ -4574,6 +4574,12 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     date with exit 0; fixed in the next commit, test seen red (code 1, not up to date, the problem said). Left: a read
     error of `AGENTS.md` is taken as no block (R3, the same as before this change for a missing file), and the
     install log lines of `rendered` have no test of their own (R3, a suggestion).
+  - gentle-ai on `1bf827e`, that fix, assessed by its gate: medium, 21 lines, review not due (`under_budget`). Codex
+    on `db31c96..1bf827e` (121,867 input tokens): incorrect (0.94), one P2: an `AGENTS.md` that is a link was read
+    and written through, so a shared target outside the project was overwritten where git, holding only the link,
+    could not give it back. Fixed in the next commit: sync reads `AGENTS.md` with `lstat` and keeps a link with a
+    `kept` line; RED seen with an injected `lstat`, and a test with a real link that runs where links can be made
+    (the gate's Ubuntu; skipped on this Windows machine).
 
 ## Next step
 **State for a resume, 2026-10-16, T16f second part built by JH 28 on `feat/rules-installed-hash`**
