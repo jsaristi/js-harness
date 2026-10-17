@@ -239,7 +239,7 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
-- [ ] T10 G6, last part: the version of codegraph and the js-harness commit of the workspace recorded
+- [x] T10 G6, last part: the version of codegraph and the js-harness commit of the workspace recorded
   with a run and compared on a resume (S3; route: inline; the lead, 2026-10-14 06:03)
 - [ ] T11 The fingerprint held hours apart: the real templates of both hosts built twice, hours
   apart, outside the home, and their fingerprints compared; a difference names a volatile key to
@@ -488,3 +488,12 @@ outside `evals/results`, null when git cannot say), for its own commit after the
 
 L23 (2026-10-17, JH 21, on the lead's triage of open work; written as L15 on main and renumbered
 when JH 23 merged main into this branch) T5 checked off: G5 `a23f834`, G6a `f6e09fc` and G6b `148d5dd` are on origin/main through pull request 130 (merged as 2f45666e; `git merge-base --is-ancestor 148d5dd origin/main` exits 0). G6's last part, codegraph's version and the js-harness commit, is T10's and stays open there.
+
+L24 (2026-10-17, 23:07 by `date`) Main merged into the branch as `d2a3a8a` (pull request 426 had
+conflicts in two documents) and pushed. T10 done: both stacks record `codegraph` (asked as `doctor`
+asks) and `jsHarness`, the commit of the checkout whose `js-harness init` lays out the workspace
+(`git -C <checkout> rev-parse HEAD`, `+dirty` when a tracked file outside `evals/results` differs,
+null when git cannot say); a resume compares both like every stack field, so a file that recorded
+neither is refused on a resume. Tests RED (8 failing) then GREEN; 112 suite tests pass on the
+merged tree. Checked against the real checkout: `1.6.2` and the head's commit. State of C6a, which
+is half written in the session scratchpad, is in the shared notes folder (`jh23-state.md`).

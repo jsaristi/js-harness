@@ -347,9 +347,10 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
 // ---- what a run was --------------------------------------------------------------------------------------------------
 
 /** The versions a run of each agent records as its stack, as `[key in the document, name in a message]`. */
+const WORKSPACE_FIELDS = [['codegraph', 'codegraph'], ['jsHarness', 'js-harness commit']];
 const STACK_FIELDS = {
-  claude: [['claude', 'claude'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ['engramPlugin', 'engram plugin']],
-  codex: [['codex', 'codex'], ['gentleAi', 'gentle-ai'], ['engram', 'engram']],
+  claude: [['claude', 'claude'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ['engramPlugin', 'engram plugin'], ...WORKSPACE_FIELDS],
+  codex: [['codex', 'codex'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ...WORKSPACE_FIELDS],
 };
 
 /** What differs between the run a results file recorded (`recorded`) and the one about to continue it
@@ -478,12 +479,14 @@ const readInstalledPlugin = (home, pluginId) => {
   }
 };
 
-/** The stack the `current` arm is measured on, `{ claude, gentleAi, engram, engramPlugin }`, each `null` when it
- * cannot be read (never a guess). gentle-ai and engram are asked the way `doctor` asks (`bin/lib/stack.mjs`), the
- * plugin is read from the record Claude Code keeps of what it installed, and the CLI is asked for its own
- * `--version` under the sandbox switches (no updater runs). `spawn`, `platform` and `probeClaude` are injectable. */
+/** The stack the `current` arm is measured on, `{ claude, gentleAi, engram, engramPlugin, codegraph, jsHarness }`,
+ * each `null` when it cannot be read (never a guess). gentle-ai, engram and codegraph are asked the way `doctor`
+ * asks (`bin/lib/stack.mjs`), the plugin is read from the record Claude Code keeps of what it installed, and the CLI
+ * is asked for its own `--version` under the sandbox switches (no updater runs). The last two are what lays out a
+ * trial's workspace (`initWorkspace`): codegraph builds its index, and `js-harness init` of the checkout at `root`
+ * writes the rest (`readWorkspaceCommit`). `spawn`, `platform`, `root` and `probeClaude` are injectable. */
 export function readStack({
-  claude, home, spawn = spawnSync, platform = process.platform, probeClaude = (command) => probeVersion({ command }, SANDBOX_SWITCHES),
+  claude, home, spawn = spawnSync, platform = process.platform, root = CHECKOUT, probeClaude = (command) => probeVersion({ command }, SANDBOX_SWITCHES),
 }) {
   const installed = (id) => installedVersion(id, { spawn, platform });
   return {
@@ -491,6 +494,7 @@ export function readStack({
     gentleAi: installed('gentle-ai'),
     engram: installed('engram'),
     engramPlugin: readInstalledPlugin(home, 'engram@engram'),
+    ...readWorkspaceStack({ spawn, platform, root }),
   };
 }
 
@@ -500,11 +504,36 @@ function installedVersion(id, { spawn, platform }) {
   return state === 'ok' ? version : null;
 }
 
+/** The checkout this file belongs to, whose `js-harness init` the current arm runs in a trial's workspace. */
+const CHECKOUT = fileURLToPath(new URL('..', import.meta.url));
+
+/** What lays out the current arm's workspace, the same under both hosts: `{ codegraph, jsHarness }`. */
+function readWorkspaceStack({ spawn, platform, root }) {
+  return { codegraph: installedVersion('codegraph', { spawn, platform }), jsHarness: readWorkspaceCommit({ spawn, root }) };
+}
+
+/** The commit of the checkout at `root`, with `+dirty` after it when a file git tracks there differs from it, or
+ * `null` when git cannot say either (a commit that cannot be told clean is not recorded as clean). A file git does not
+ * track is left out, and so is `evals/results`, where a run writes its own results file: neither is what `init`
+ * runs. Two dirty checkouts of one commit read the same, so `+dirty` says only that the commit is not all of it. */
+function readWorkspaceCommit({ spawn, root }) {
+  const git = (args) => {
+    const result = spawn('git', ['-C', root, ...args], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+    return result.error || result.status !== 0 ? null : `${result.stdout ?? ''}`;
+  };
+  const commit = git(['rev-parse', 'HEAD'])?.trim();
+  if (!commit || !/^[0-9a-f]{40,64}$/.test(commit)) return null;
+  const changes = git(['status', '--porcelain', '--untracked-files=no', '--', '.', ':(exclude)evals/results']);
+  if (changes === null) return null;
+  return changes.trim() === '' ? commit : `${commit}+dirty`;
+}
+
 const VERSION_HOME_PREFIX = 'js-harness-suite-codex-version-';
 
-/** The stack a Codex run is measured on, `{ codex, gentleAi, engram }`, each `null` when it cannot be read (never a
- * guess). gentle-ai and engram are asked as for Claude Code (`readStack`): they are the same programs under both
- * hosts. There is no fourth field: the engram plugin's version is read from a record Claude Code keeps
+/** The stack a Codex run is measured on, `{ codex, gentleAi, engram, codegraph, jsHarness }`, each `null` when it
+ * cannot be read (never a guess). gentle-ai, engram, codegraph and the js-harness commit are read as for Claude Code
+ * (`readStack`): they are the same programs, and the same checkout lays out the workspace, under both hosts. There is
+ * no engram plugin field: the engram plugin's version is read from a record Claude Code keeps
  * (`installed_plugins.json`), and Codex keeps none of that kind: what its home holds of a plugin is a directory of
  * the plugin cache named by version (`codex-home.mjs`, `copyPluginCache`), which is not read here.
  *
@@ -515,9 +544,9 @@ const VERSION_HOME_PREFIX = 'js-harness-suite-codex-version-';
  * and no configuration, and is removed whatever happens, with the port its environment names given back. So
  * `workRoot` must already have passed `assertWorkRoot`; it is made when it is not there, and it is the caller that
  * knows whether the run goes on, so the caller removes it again when it does not (`suiteMain`). `spawn`, `platform`,
- * `probeCodex(command, env)`, `allocatePort`, `releasePort` and `log` are injectable. */
+ * `root`, `probeCodex(command, env)`, `allocatePort`, `releasePort` and `log` are injectable. */
 export async function readCodexStack({
-  codex, workRoot, spawn = spawnSync, platform = process.platform, probeCodex = (command, env) => probeVersion({ command }, env),
+  codex, workRoot, spawn = spawnSync, platform = process.platform, root = CHECKOUT, probeCodex = (command, env) => probeVersion({ command }, env),
   allocatePort: allocate = allocatePort, releasePort: release = releasePort, log = () => {},
 }) {
   fs.mkdirSync(workRoot, { recursive: true });
@@ -536,7 +565,12 @@ export async function readCodexStack({
   } finally {
     removeDir(home, 'home of the Codex version probe', log);
   }
-  return { codex: version, gentleAi: installedVersion('gentle-ai', { spawn, platform }), engram: installedVersion('engram', { spawn, platform }) };
+  return {
+    codex: version,
+    gentleAi: installedVersion('gentle-ai', { spawn, platform }),
+    engram: installedVersion('engram', { spawn, platform }),
+    ...readWorkspaceStack({ spawn, platform, root }),
+  };
 }
 
 // ---- the headroom summary --------------------------------------------------------------------------------------------
