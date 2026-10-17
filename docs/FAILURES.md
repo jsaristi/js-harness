@@ -1003,6 +1003,27 @@ it or did not follow it.
   memory-rules gap" — since 2026-10-14
 - Proof: `doctor`: no `memory-rules` gap
 
+### rules-row-template-copy-enoent
+A gate on GitHub failed on the first test of `bin/check-rules-row.test.mjs`, "a restated value of a rule
+with no row is an INFO line", in a change that touched nothing of it: `fs.cpSync` stopped with ENOENT on
+the `.git/objects` of the copy it was making of the test's template repository
+(`bin/lib/git-fixture.testkit.mjs:41`, called from `bin/check-rules-row.test.mjs:40`). The template's
+last step is a `git commit`, and since git 2.47 a commit starts `git maintenance run --auto --detach`,
+which holds `.git/objects/maintenance.lock` after the commit returns; the first copy comes right after.
+Node's native copy (`CpSyncCopyDir` in `src/node_file.cc`, 24.21.0) lists a directory and then copies each
+regular file, and reports a file gone in between as ENOENT on the directory it copies into. That the lock
+was the file is inferred, not observed: it is the one regular file of `.git/objects` a fresh repository's
+commit leaves to a process still running, and 200 commits in WSL2 with nothing else running never left it
+for a copy to see. The template now sets `maintenance.auto` to false before its commit. The same cause
+in another fixture is eval-missing-login-workroot-kept.
+- Class: machine
+- Seen: 2026-10-17 — the gate of fix/merge-commit-size (d83be66^..39665eb) on GitHub, run
+  39007490864, Linux, git 2.55.0, node 24.21.0, by JH 24's odd/tasks/land-unattended.md L21 and the
+  lead's notice to JH 28 — `ENOENT, No such file or directory '/tmp/js-harness-rules-row-67kYzh/.git/objects'`,
+  syscall `cp`; the only failing test of the run, and the same tree passed on the next run
+- Control: check — bin/check-rules-row.test.mjs — "a commit in the repository the tests copy starts no
+  detached git maintenance" — since 2026-10-17
+
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
 path.
