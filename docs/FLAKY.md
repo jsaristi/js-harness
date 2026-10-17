@@ -20,15 +20,6 @@ The gate's `flaky` row reads this file: a malformed entry, a path that is no tes
 repository, or a failure that docs/FAILURES.md does not hold fails the gate; an expired entry is listed.
 Other lines are for people.
 
-### evals/suite.test.mjs
-- Owner: JH 21
-- Expires: 2026-10-22
-- Failure: eval-interrupt-process-alive
-
-The test "an interrupt during a real trial against a hanging fake agent leaves nothing of it" finds the
-fake agent's grandchild still running at the suite's exit, under load. The fix is fix/sweep-waits-for-exit:
-after its kills, a run waits, bounded, until the killed process group is gone.
-
 ### evals/codex-configs.test.mjs
 - Owner: JH 21
 - Expires: 2026-10-22
