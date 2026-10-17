@@ -292,7 +292,7 @@ hash of the default branch's list. A rule scoped to the harness's own repository
 behind. In the harness's own checkout that list is read from the main ref with git; anywhere else
 an interactive `doctor` reads it from GitHub on every run, never from the cache, and `--offline`,
 the session-start hook and the TUI's stack block read nothing there (`n/a`), as does a project that
-pins a version. A copy behind is `outdated`, and its fix names the newest copy and the ids of the
+pins another version than the copy's. A copy behind is `outdated`, and its fix names the newest copy and the ids of the
 rules that differ; a list that cannot be read is `unknown`. `--json` adds both hashes and the ids.
 
 ```console

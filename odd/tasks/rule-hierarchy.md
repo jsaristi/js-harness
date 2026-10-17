@@ -2452,8 +2452,10 @@ can drift from the list beside it (protocol 4, "One home"). `shippedRulesHash(li
   its own arguments: `interactive && !offline` is the interactive online `doctor`. This changes
   `doctor`'s stated contract of one round of lookups behind a 6-hour cache (`bin/doctor.mjs:5-7`):
   that comment names the one request this row adds. `JS_HARNESS_REPO` set to another repository,
-  or a project whose `harness.json` pins a version, gives `n/a`: the pin, not `main`, says what the
-  copy should be.
+  or a project whose `harness.json` pins another version than the copy's own, gives `n/a`: the pin,
+  not `main`, says what the copy should be. A pin of the copy's own version is compared: `init`
+  writes one in every project (`bin/lib/project.mjs:848`), and before 1.0.0 every copy is 0.1.0,
+  taken from `main` (a correction after the verifier, below).
 - The text is read by `readListText` as JSON, never imported, and the list must pass `readRules`
   (`bin/lib/rules.mjs:305`) with no fault; a 404, a 429, an HTML page, a cut body or a list of
   something else is `unknown`, never `outdated`. Nothing about `main` is cached, so no failure can
@@ -2469,8 +2471,8 @@ the gaps, the hook's digest and the TUI alike:
 - the host cells and `project` are `n/a`: the copy serves both hosts;
 - `up to date` is `ok` when the two hashes are equal, `outdated` when they differ, `unknown` when
   `main`'s list could not be read, `n/a` where it is not read (outside the checkout with
-  `--offline`, in `--hook` and in the TUI's stack block) or there is nothing to compare with (a pin,
-  another repository);
+  `--offline`, in `--hook` and in the TUI's stack block) or there is nothing to compare with (a pin
+  of another version, another repository);
 - the fix of `outdated` is `INSTALL_NEWEST`, then one line naming the differing ids by kind, so the
   rules that differ are named in a project too, where the hook reads only `docs/rules.json`;
 - in the checkout the session-start digest (built in `hookMain`, `bin/doctor.mjs:376-383`) gets
@@ -2483,7 +2485,8 @@ the gaps, the hook's digest and the TUI alike:
 "unscoped" (the Fix line and the `--json` names), and `docs/RULES.md` gains no second hash.
 
 **What else changes.**
-- `README.md`'s doctor section (`:258-300`): the row and its line in the example.
+- `README.md`'s doctor section (`:258-300`): the row. Its example keeps no line for it: the hash
+  moves with every rule change, so a printed one would go stale.
 - `bin/js-harness.mjs:20`: the doctor line names the harness's own rules beside the stack's tools.
 - `docs/SPEC.md`, "The stack doctor" (`:180-187`): the row in Requirement, Proof and Today.
 - `docs/ROADMAP.md`, the Stack doctor checklist (`:110-119`): one line; the "Release source" row
@@ -2511,6 +2514,8 @@ the gaps, the hook's digest and the TUI alike:
   minutes old (`Cache-Control: max-age=300`).
 - A copy installed from a local tarball (`--source`) cannot be told apart from one from GitHub: the
   manifest names no source.
+- A folder outside git that holds `bin/lib/rules-data.mjs` (the installed package's own) is read as
+  the harness's checkout, finds no main ref, and is `unknown`.
 - Three messages speak of a copy behind: this row, `rules applied` for scoped rules
   (`bin/lib/rules-applied.mjs:360`) and `HOOK_FIX` for a hook command (`bin/lib/stack.mjs:538`).
   Each names a different fact; none is merged here.
@@ -2526,8 +2531,9 @@ the gaps, the hook's digest and the TUI alike:
   checkout the digest moves when `main`'s hash moves.
 - The pins that move by one row: `bin/doctor.test.mjs:148` and `:499-503` (13 lines), the request
   counts at `:580-594` and `:1384-1405` (an online interactive `doctor` with a fresh cache now makes
-  the one request of this row), `bin/js-harness.test.mjs:277`, `bin/tui.test.mjs:435`,
-  `bin/lib/stack.test.mjs:1045` and `:1192`; `bin/clean-home.test.mjs:18` gets the row in `OWN_ROWS`.
+  the one request of this row), `bin/js-harness.test.mjs:277`, `bin/tui.test.mjs:435`;
+  `bin/clean-home.test.mjs:18` gets the row in `OWN_ROWS`. `bin/lib/stack.test.mjs` does not move:
+  the row is not one of `probeStack`'s.
 
 Risk: item 3. The rows are shared code read by `digest.mjs`, the TUI and every `doctor` output, and
 the row adds a network read to an interactive `doctor`. It takes an independent verifier, and a
@@ -2551,6 +2557,13 @@ gentle-ai review escalated at its own commit.
   before the early return at `:188`, `OWN_ROW` dropped as a no-op, the digest's place and its
   text kept apart, the state outside the checkout when nothing is read (`n/a`), and the TUI's
   Doctor item.
+- The independent verifier of `cd6a8e1`: no blocker; every probe passed (offline, in the checkout,
+  online against the real `main`, the hook making no request, the other rows byte-identical to the
+  baseline's, the hook's digest unchanged when the row is not `outdated`). Its advisory that `init`
+  pins `{ version }` in every project, so the row would be `n/a` in every initialized one, is fixed:
+  only a pin of another version gives `n/a`. Its other advisories went into "Not guaranteed" and
+  the pins; the README's other two "private" (lines 13 and 235) were already there at the baseline
+  and stay a follow-up.
 
 ### Signals of done
 The seven of the roadmap, each as something read and not judged.

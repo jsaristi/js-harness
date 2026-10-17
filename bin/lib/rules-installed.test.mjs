@@ -101,10 +101,16 @@ test('offline, in the hook and in the TUI a project makes no request and the row
   assert.equal(row.version, shippedRulesHash(RULES).slice(0, 8));
 });
 
-test('a pinned version or another repository gives n/a and no request', async () => {
+test("a pin of another version or another repository gives n/a and no request, and a pin of the copy's own version is compared", async () => {
   const urls = [];
-  const pinned = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '1.2.3' }, online: true, fetch: refusing(urls) });
+  const pinned = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '1.2.3' }, version: '0.1.0', online: true, fetch: refusing(urls) });
   assert.equal(pinned.upToDate, 'n/a');
+  // `init` pins the version of the copy that ran it in every project (bin/lib/project.mjs, `harness.json`), and every
+  // copy is 0.1.0 before 1.0.0: such a pin says nothing about main's rules, so the row still compares.
+  const own = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '0.1.0' }, version: '0.1.0', online: true, fetch: answering(200, writeRules(RULES), urls) });
+  assert.equal(own.upToDate, 'ok');
+  assert.deepEqual(urls, [MAIN_LIST_URL]);
+  urls.length = 0;
   const fork = await harnessRulesRow({ project: os.tmpdir(), env: { JS_HARNESS_REPO: 'https://example.com/fork.git' }, online: true, fetch: refusing(urls) });
   assert.equal(fork.upToDate, 'n/a');
   const same = await harnessRulesRow({ project: os.tmpdir(), env: { JS_HARNESS_REPO: DEFAULT_REPO }, online: true, fetch: answering(200, writeRules(RULES), urls) });

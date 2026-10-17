@@ -3,6 +3,8 @@
 // second part)"). The stamp is the copy's own list, hashed over its unscoped rules; it is compared with the same hash
 // of the default branch's list, read fresh every time and never cached, so that a failed read is `unknown` and never
 // an old hash in force.
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { RULES } from './rules-data.mjs';
 import { readRules, shippedRulesHash, unscoped } from './rules.mjs';
@@ -62,11 +64,22 @@ function differsOf(copy, main) {
   return Object.fromEntries(KINDS.map((kind) => [kind, diff[kind].map((rule) => rule.id)]));
 }
 
+/** The version of this copy, from its own `package.json`, as `js-harness --version` prints it. */
+function copyVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The row. `project` is the git top `doctor` runs in, `declared` its `harness.json`, `online` true only for an
  * interactive `doctor` that may use the network: the hook, `--offline` and the TUI's stack block make no request.
- * In the harness's own checkout main's list is read with git, offline too. Outside it, a project that pins a version
- * or a `JS_HARNESS_REPO` naming another repository has nothing to compare with here: `n/a`. */
-export async function harnessRulesRow({ project, declared, env = {}, online, spawn = spawnSync, fetch: fetchImpl = fetch, copy = RULES }) {
+ * In the harness's own checkout main's list is read with git, offline too. Outside it, a project that pins another
+ * version than the copy's, or a `JS_HARNESS_REPO` naming another repository, has nothing to compare with here: `n/a`.
+ * A pin of the copy's own version is compared: `init` writes one in every project, and before 1.0.0 every copy is the
+ * same version, taken from main. */
+export async function harnessRulesRow({ project, declared, env = {}, online, spawn = spawnSync, fetch: fetchImpl = fetch, copy = RULES, version = copyVersion() }) {
   const rulesHash = shippedRulesHash(copy);
   const row = (upToDate, main = null, extra = {}) => ({
     id: 'js-harness',
@@ -91,7 +104,8 @@ export async function harnessRulesRow({ project, declared, env = {}, online, spa
     extra = { mainRef: read.mainRef };
   } else {
     const repo = env.JS_HARNESS_REPO;
-    if (typeof declared?.version === 'string' || (repo !== undefined && repo !== DEFAULT_REPO)) return row('n/a');
+    const pinnedElsewhere = typeof declared?.version === 'string' && declared.version !== version;
+    if (pinnedElsewhere || (repo !== undefined && repo !== DEFAULT_REPO)) return row('n/a');
     if (!online) return row('n/a');
     main = await listOnGithub(fetchImpl);
     if (main === null) return row('unknown');
