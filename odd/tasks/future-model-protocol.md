@@ -497,3 +497,8 @@ null when git cannot say); a resume compares both like every stack field, so a f
 neither is refused on a resume. Tests RED (8 failing) then GREEN; 112 suite tests pass on the
 merged tree. Checked against the real checkout: `1.6.2` and the head's commit. State of C6a, which
 is half written in the session scratchpad, is in the shared notes folder (`jh23-state.md`).
+
+L25 (2026-10-17, 23:12 UTC by `date`) Evidence for the merge queue, which left pull request 426 out
+gentle-ai assessed `8ce28f0..8fbfa22` (C4, C5, the Codex fixes) from `924d29e`: medium, not due (`under_budget`).
+gentle-ai assessed T10 `3bb5871` from `d2a3a8a`: medium, not due (`under_budget`, 151 changed lines).
+No review was started for either, by the rule that a slice under budget waits in the slice.
