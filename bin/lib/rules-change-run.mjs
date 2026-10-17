@@ -36,10 +36,13 @@ export function rulesOfText(text) {
 
 /** The declaration of rule `id` in `text`, the text of `bin/lib/rules-data.mjs`, as the short hash a proposal's relief
  * line carries, so a landing confirms the proposal whose declaration the landed head holds; `none` when `text` declares
- * no such rule. */
-export function declarationOf(text, id) {
+ * no such rule. Given `sources`, the parsed `docs/rule-sources.json`, the hash covers the rule's entry there too (none
+ * when it has none), so a second proposal of the same declaration with another source is told apart (T16e-f). */
+export function declarationOf(text, id, sources) {
   const rule = rulesOfText(text).find((one) => one.id === id);
-  return rule === undefined ? 'none' : crypto.createHash('sha256').update(JSON.stringify(rule)).digest('hex').slice(0, 12);
+  if (rule === undefined) return 'none';
+  const held = sources === undefined ? rule : { rule, source: sources[id] ?? null };
+  return crypto.createHash('sha256').update(JSON.stringify(held)).digest('hex').slice(0, 12);
 }
 
 /** A home that names AGENTS.md, however it is spelled: `./AGENTS.md`, `docs/../AGENTS.md` or another case. */
@@ -260,7 +263,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
     const reliefFile = reliefPath(home, slug);
     const relief = fs.existsSync(reliefFile) ? fs.readFileSync(reliefFile, 'utf8') : '';
     const previous = lastLineFor(relief, id);
-    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}; declaration ${declarationOf(dataText, id)}`;
+    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}; declaration and source ${declarationOf(dataText, id, sources)}`;
     try {
       reliefLineOf(line);
     } catch (err) {
