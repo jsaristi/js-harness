@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows, withReadyAt } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -37,7 +37,7 @@ test('the facts of a day are its gates started in it, joined by id, with where t
   assert.deepEqual(facts.gates.map((gate) => gate.id), ['b', 'c', 'd']);
   assert.deepEqual(facts.gates[0], {
     id: 'b', kind: 'check', lock: 'own', session: 's1', startedAt: '2026-10-16T10:00:00Z', endedAt: '2026-10-16T10:04:00Z',
-    seconds: 240, waitedSeconds: 30, result: 'fail', ranIn: 'wsl', failing: ['x fails'], land: null, load: null,
+    seconds: 240, waitedSeconds: 30, result: 'fail', ranIn: 'wsl', traced: false, failing: ['x fails'], land: null, load: null,
   });
   assert.equal(facts.gates[1].ranIn, 'ci');
   assert.equal(facts.gates[2].endedAt, null);
@@ -367,4 +367,35 @@ test('a land record of the day gives its phases, and a land that ran none is sti
   assert.equal(row.value, '3 lands, median 300 s, landed 1 of 6 looked at; exit 0 ×1, 1 ×1, 4 ×1; suite 3, median 200 s, red 1; circleci 1, median 280 s; push 1, median 4 s');
   assert.match(row.source, /lands\.jsonl/);
   assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17' })]), 'land phases').value, 'none');
+});
+
+test('a day keeps each test file\'s runs, total and longest seconds over the gates of the day that kept times', () => {
+  const ends = (id, tests) => [{ v: 1, event: 'start', id, at: '2026-10-17T10:00:00Z', lock: 'own' }, { v: 1, event: 'end', id, at: '2026-10-17T10:04:00Z', seconds: 240, result: 'pass', sensors: [{ name: 'tests', ...tests }] }];
+  const events = [...ends('g1', { shadow: { files: 2 } }), ...ends('g2', { skip: { files: 2, skipped: 1 } }), ...ends('g3', {})];
+  const facts = gateFacts(events, dayBounds('2026-10-17'));
+  assert.deepEqual(facts.gates.map((one) => one.traced), [true, true, false]);
+  const kept = new Map([
+    ['g1', { id: 'g1', files: [{ test: 'a.test.mjs', seconds: 3 }, { test: 'b.test.mjs', seconds: 1 }] }],
+    ['g2', { id: 'g2', files: [{ test: 'a.test.mjs', seconds: 5 }] }],
+    ['other-day', { id: 'other-day', files: [{ test: 'a.test.mjs', seconds: 99 }] }],
+  ]);
+  const times = testTimeFacts(kept, facts.gates.map((one) => one.id));
+  assert.deepEqual(times, { gates: 2, files: [{ test: 'a.test.mjs', runs: 2, seconds: 8, max: 5 }, { test: 'b.test.mjs', runs: 1, seconds: 1, max: 1 }] });
+  const row = rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates, testTimes: times })]), 'test files');
+  assert.equal(row.value, '2 of 2 local gates that traced; slowest by mean: a.test.mjs 4 s (max 5 s, 2 runs), b.test.mjs 1 s (max 1 s, 1 run)');
+  assert.match(row.source, /test-times\.jsonl/);
+  // A day whose facts hold no times (a snapshot or a copy from before B5) says so; a day where nothing traced says that.
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates })]), 'test files').value, 'not recorded: 2026-10-17 (no test times kept)');
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', testTimes: { gates: 0, files: [] } })]), 'test files').value, 'no local gate traced');
+});
+
+test('the test files row counts only local gates among those that traced, and a day whose times could not be read says so', () => {
+  const ends = (id, lock) => [{ v: 1, event: 'start', id, at: '2026-10-17T10:00:00Z', lock }, { v: 1, event: 'end', id, at: '2026-10-17T10:04:00Z', seconds: 240, result: 'pass', sensors: [{ name: 'tests', shadow: { files: 1 } }] }];
+  const facts = gateFacts([...ends('local', 'own'), ...ends('remote', 'ci')], dayBounds('2026-10-17'));
+  const times = { gates: 1, files: [{ test: 'a.test.mjs', runs: 1, seconds: 2, max: 2 }] };
+  // A gate sent to GitHub's machines never writes local times, so it is not one that could have.
+  assert.match(rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates, testTimes: times })]), 'test files').value, /^1 of 1 local gates that traced/);
+  // A day whose times or gate log could not be read was not read, never "not recorded".
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', gates: facts.gates, unavailable: { times: 'EACCES' } })]), 'test files').value, 'not read: 2026-10-17 EACCES');
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { 'gate log': 'EBUSY' } })]), 'test files').value, 'not read: 2026-10-17 EBUSY');
 });

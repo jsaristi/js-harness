@@ -71,6 +71,8 @@ export function gateFacts(events, { from, to }) {
       waitedSeconds: Number.isFinite(start.waitedSeconds) ? start.waitedSeconds : 0,
       result: end?.result ?? null,
       ranIn: tests ? (tests.ranIn ?? 'windows') : null,
+      // Whether its tests ran under the tracer (exact tests in shadow or skip), the gates that can keep test times (B5).
+      traced: Boolean(tests?.shadow || tests?.skip),
       failing: (end?.sensors ?? []).flatMap((sensor) => (Array.isArray(sensor?.failing) ? sensor.failing : [])),
       // The candidate's folder, one per land: a land that bisects runs several gates in it.
       land: /merge-queue/.test(String(start.cwd ?? '')) ? String(start.cwd).split(/[\\/]/).filter(Boolean).at(-1) : null,
@@ -197,6 +199,24 @@ export function withReadyAt(prs, notices) {
   });
 }
 
+/** The test times of the gates `ids` among the lines of `test-times.jsonl` (`readGateTestTimes`, B5), kept per file
+ * so a day's snapshot stays small and days add up exactly: `{ gates, files: [{ test, runs, seconds, max }] }`, `gates`
+ * the gates that kept times and `seconds` the total over `runs`. */
+export function testTimeFacts(byId, ids) {
+  const files = new Map();
+  let gates = 0;
+  for (const id of ids) {
+    const line = byId.get(id);
+    if (!line) continue;
+    gates += 1;
+    for (const { test, seconds } of line.files) {
+      const file = files.get(test) ?? { test, runs: 0, seconds: 0, max: 0 };
+      files.set(test, { test, runs: file.runs + 1, seconds: Math.round((file.seconds + seconds) * 1000) / 1000, max: Math.max(file.max, seconds) });
+    }
+  }
+  return { gates, files: [...files.values()].sort((a, b) => a.test.localeCompare(b.test)) };
+}
+
 /** The lands started in `[from, to)` among the merge queue's records (`<git common dir>/js-harness/lands.jsonl`, B2):
  * `{ startedAt, seconds, exit, landed, considered, phases: [{ phase, seconds, ok }] }`. */
 export function landFacts(records, { from, to }) {
@@ -273,10 +293,11 @@ const SOURCES = {
   channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
   ready: 'the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main',
   lands: '<git common dir>/js-harness/lands.jsonl, one line per merge-queue --land',
+  times: 'test-times.jsonl beside the gate log, one line per gate that traced its tests (exact tests on)',
 };
 
 /** Which source of the facts each row reads, and the key a day's `unavailable` names it by. */
-const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'] };
+const UNAVAILABLE_KEY = { git: ['git'], merge: ['git'], gates: ['gate log'], codex: ['codex'], tasks: ['git', 'tasks'], conflicts: ['git', 'conflicts'], channel: ['channel'], ready: ['git', 'channel'], lands: ['lands'], times: ['gate log', 'times'] };
 
 /** Why `day` could not read `source`, or `undefined`. */
 const unreadOf = (day, source) => UNAVAILABLE_KEY[source].map((key) => day.unavailable?.[key]).find(Boolean);
@@ -323,7 +344,7 @@ export function throughputRows(days) {
     if (early.length === days.length && notRecordedOn) return { label, value: notRecordedOn, source: SOURCES[source] };
     const missing = unread(source, days.filter((day) => !early.includes(day.day)));
     if (missing.length > 0) return { label, value: `not read: ${missing.join('; ')}`, source: SOURCES[source] };
-    const notes = [...(source === 'gates' ? partial : []), notRecordedOn].filter(Boolean);
+    const notes = [...(source === 'gates' || source === 'times' ? partial : []), notRecordedOn].filter(Boolean);
     return { label, value: [value, ...notes].join('; '), source: SOURCES[source] };
   };
 
@@ -386,6 +407,30 @@ export function throughputRows(days) {
     return `${phase} ${runs.length}, median ${Math.round(median(runs.map((one) => one.seconds)))} s${red ? `, red ${red}` : ''}`;
   });
 
+  // B5's row: a day whose facts hold no times (a snapshot or a copy from before B5) is not recorded, one whose gate
+  // log or times could not be read is not read, and the rest say of how many local gates that traced they hold
+  // times, so a gate that traced and kept none is seen. A gate sent to GitHub's machines writes no local times.
+  const testFilesRow = () => {
+    const label = 'test files';
+    const unkept = days.filter((day) => day.testTimes === undefined && !unreadOf(day, 'times')).map((day) => day.day);
+    const notKept = unkept.length > 0 ? `not recorded: ${unkept.join(', ')} (no test times kept)` : null;
+    if (unkept.length === days.length) return { label, value: notKept, source: SOURCES.times };
+    const kept = days.filter((day) => day.testTimes !== undefined);
+    const traced = kept.flatMap((day) => day.gates ?? []).filter((gate) => gate.traced && gate.endedAt && gate.lock !== 'ci').length;
+    const withTimes = kept.reduce((sum, day) => sum + day.testTimes.gates, 0);
+    const files = new Map();
+    for (const file of kept.flatMap((day) => day.testTimes.files)) {
+      const sum = files.get(file.test) ?? { test: file.test, runs: 0, seconds: 0, max: 0 };
+      files.set(file.test, { test: file.test, runs: sum.runs + file.runs, seconds: sum.seconds + file.seconds, max: Math.max(sum.max, file.max) });
+    }
+    const slowest = [...files.values()].sort((a, b) => b.seconds / b.runs - a.seconds / a.runs || a.test.localeCompare(b.test)).slice(0, 5);
+    const value = traced === 0 && withTimes === 0
+      ? 'no local gate traced'
+      : `${withTimes} of ${traced} local gates that traced${slowest.length ? `; slowest by mean: ${slowest.map((file) => `${file.test} ${Math.round(file.seconds / file.runs)} s (max ${Math.round(file.max)} s, ${file.runs} run${file.runs === 1 ? '' : 's'})`).join(', ')}` : ''}`;
+    const { value: said, source } = row(label, 'times', value);
+    return { label, value: [said, notKept].filter(Boolean).join('; '), source };
+  };
+
   const medianOf = (values, unit) => (values.length ? `median ${Math.round(median(values))} ${unit} ${counted(values)}` : 'none');
   return [
     row('pull requests merged', 'git', `${numbers.size} (${(numbers.size / hours).toFixed(2)} an hour)${twice.length ? `; merged twice: ${twice.join(', ')}` : ''}`),
@@ -400,6 +445,7 @@ export function throughputRows(days) {
     row('commit gates', 'gates', `here: ${medianOf(commits.map((gate) => gate.seconds), 's')}, lock free ${medianOf(free, 's')}; GitHub: ${medianOf(github, 's')}`),
     row('lands', 'gates', `${lands.length}, median ${lands.length ? Math.round(median(lands.map((gate) => gate.seconds))) : '-'} s, red ${red.length}; ${lands.length} gates for ${landFolders.size} lands`),
     row('land phases', 'lands', landRecords.length ? `${landRecords.length} lands, median ${Math.round(median(landRecords.map((land) => land.seconds).filter(Number.isFinite)) ?? 0)} s, landed ${landRecords.reduce((sum, land) => sum + land.landed, 0)} of ${landRecords.reduce((sum, land) => sum + land.considered, 0)} looked at; exit ${topNames(landRecords.map((land) => [String(land.exit ?? 'none')]), 9).sort((a, b) => a[0].localeCompare(b[0])).map(([exit, n]) => `${exit} ×${n}`).join(', ')}${phaseNotes.length ? `; ${phaseNotes.join('; ')}` : ''}` : 'none', 'B2'),
+    testFilesRow(),
     row('failing tests', 'gates', topNames(ended.filter((gate) => gate.lock !== 'ci').map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none'),
     row('red tests on CI', 'gates', topNames(ended.filter((gate) => gate.lock === 'ci').map((gate) => gate.failing), 5).map(([name, n]) => `${name} ×${n}`).join(', ') || 'none', 'B3'),
     row('CI fallbacks', 'gates', fallbacks.length
