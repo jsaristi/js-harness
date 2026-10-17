@@ -1564,6 +1564,20 @@ test('--unavailable with a session launches nothing and records the skip as befo
   assert.equal(loggedRun(root), false);
 });
 
+/** What a run says only when it launches, makes or keeps something: a review going, its parts, a kept home.
+ * Whole words, because the output names temporary folders whose random letters can spell one
+ * (test-matches-temp-path in docs/FAILURES.md). */
+const LAUNCH_SAID = /\bkept\b|Codex is reviewing|\bparts?\b/i;
+
+test('what a run says of a launch is not read inside the random letters of a temporary folder its output names', () => {
+  // A skip names the file it recorded in, under the test's temporary folder (CircleCI job 83).
+  assert.doesNotMatch('Recorded the skip of 1a2b3c4..5d6e7f8 in /tmp/js-harness-codex-review-rkpArT/.git/js-harness/codex-reviews.jsonl.', LAUNCH_SAID);
+  assert.doesNotMatch('in /tmp/js-harness-codex-review-ykEpTq/.git', LAUNCH_SAID);
+  for (const said of ['Codex is reviewing part 1 of 2', 'made in 2 parts', 'Part 1 of 2, as Codex rendered its review:', 'the home is kept']) {
+    assert.match(said, LAUNCH_SAID, said);
+  }
+});
+
 // A flag that only shapes a launch says nothing beside `--unavailable`, which launches nothing. It is
 // accepted all the same, as it always was beside an explicit `--session lean`: the skip is what was asked
 // for, and refusing it over a flag that changes nothing of it would only cost a second command. With lean
@@ -1590,7 +1604,7 @@ test('the flags of the lean session beside --unavailable change nothing of the s
       assert.equal(fake.probes.length, 0, `${which}: nor probed`);
       assert.equal(loggedRun(root), false, which);
       assert.deepEqual(listed(state), [], `${which}: no home was made, so none was kept`);
-      assert.doesNotMatch(result.out, /kept|Codex is reviewing|part/i, which);
+      assert.doesNotMatch(result.out, LAUNCH_SAID, which);
       assert.equal(fs.statSync(mine.auth).nlink, 1);
     }
   }
@@ -2123,7 +2137,7 @@ test('without --keep-home nothing is said about a kept home, and none is kept', 
   const mine = fakeHome();
   const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), codexWrites), homedir: mine.homedir });
   assert.equal(result.code, 0, result.err);
-  assert.doesNotMatch(result.out, /kept/);
+  assert.doesNotMatch(result.out, /\bkept\b/);
   assert.deepEqual(listed(mine.homes), []);
 });
 

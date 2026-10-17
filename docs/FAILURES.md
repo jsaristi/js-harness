@@ -1158,6 +1158,16 @@ disk.
 - Seen: 2026-10-10 — relief file, line 101 — 2,357 `js-harness-*` folders dated 10-01 to 10-10,
   counted by the orchestrator; 2,358 at line 105; also odd/tasks/gate-lock.md:316-317
 
+### test-matches-temp-path
+A test read a run's output for words with a pattern that matched inside them, and the output names
+the test's temporary folders, whose random letters can spell one: `/part/i` matched `rkpArT` in
+`/tmp/js-harness-codex-review-rkpArT/`, and the test failed by the folder's name alone.
+- Class: tool
+- Seen: 2026-10-16 — CircleCI job 83 (claimed; the lead's notice to JH 27) — the land of PRs 338 and
+  339 failed at `bin/codex-review.test.mjs:1593`, a test already on `main`
+- Control: check — bin/codex-review.test.mjs — "what a run says of a launch is not read inside the
+  random letters of a temporary folder its output names" — since 2026-10-16
+
 ### test-skipped-here-never-run
 A test that this machine skips is run by no gate, so its expectation went stale and stood red with
 nothing to say so.
