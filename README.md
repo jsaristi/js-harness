@@ -355,6 +355,9 @@ into the object store). The gates are every project's on the machine, as the gat
 --pr`) to its merge, `land phases` reads the merge queue's land record, and `red tests on CI`
 and `CI fallbacks` read the gate log's lines of gates sent to GitHub's machines; a day before
 the recorder of a row reached main says `not recorded` on that row, since nothing wrote a line.
+`test files` reads the time of each test file from the local gates that traced their tests
+(exact tests on), kept beside the gate log in `test-times.jsonl`; a day kept from copies of the
+gate log has no times and says so.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17

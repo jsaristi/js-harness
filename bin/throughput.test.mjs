@@ -382,3 +382,22 @@ test('a land record that is there and cannot be read is said on its row, never r
   const kept = await table((file, ...rest) => (lands(file) ? `${JSON.stringify({ v: 1, startedAt: '2026-10-17T10:00:00Z', endedAt: '2026-10-17T10:01:00Z', considered: [7], landed: [7], phases: [], exit: 0 })}${String.fromCharCode(10)}torn` : fs.readFileSync(file, ...rest)));
   assert.match(kept, /land phases +1 lands, median 60 s/);
 });
+
+test('the test files row reads the live folder\'s test times of the day\'s traced gates, and a day kept from copies has none', async () => {
+  const traced = [
+    { v: 1, event: 'start', id: 't1', at: '2026-10-16T09:00:00Z', cwd: ROOT, command: 'check', pid: 1, lock: 'own', waitedSeconds: 0, waitedFor: [] },
+    { v: 1, event: 'end', id: 't1', at: '2026-10-16T09:03:00Z', seconds: 180, result: 'pass', sensors: [{ name: 'tests', seconds: 170, pass: true, shadow: { files: 1, wouldSkip: 0, failedOfSkipped: [] } }] },
+  ];
+  const home = makeHome(traced);
+  const line = { v: 1, id: 't1', at: '2026-10-16T09:03:01Z', files: [{ test: 'a.test.mjs', seconds: 3.2 }] };
+  fs.writeFileSync(path.join(home, '.js-harness', 'gate-log', 'test-times.jsonl'), JSON.stringify(line) + String.fromCharCode(10));
+  const { stdout } = await run([], { home });
+  assert.match(stdout, /test files +1 of 1 local gates that traced; slowest by mean: a\.test\.mjs 3 s \(max 3 s, 1 run\); partial: 2026-10-16 from 09:00Z +\[test-times\.jsonl/);
+  assert.equal((await run(['snapshot', '--day', '2026-10-16'], { home })).code, 0);
+  assert.match((await run([], { home })).stdout, /test files +1 of 1 local gates that traced; slowest by mean: a\.test\.mjs 3 s/);
+  const fromCopies = makeHome([]);
+  const copy = path.join(fromCopies, 'copy.jsonl');
+  writeCopy(copy, traced);
+  assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', copy], { home: fromCopies })).code, 0);
+  assert.match((await run([], { home: fromCopies })).stdout, /test files +not recorded: 2026-10-16 \(no test times kept\)/);
+});

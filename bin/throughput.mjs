@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readGateLog } from './lib/gate-log.mjs';
+import { readGateLog, readGateTestTimes } from './lib/gate-log.mjs';
 import { paceLogArgs, parsePaceLog } from './lib/progress-pace.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { recordPath } from './lib/channel.mjs';
@@ -30,6 +30,7 @@ import {
   prFacts,
   taskChanges,
   taskCounts,
+  testTimeFacts,
   withReadyAt,
   throughputRows,
   utcDay,
@@ -200,6 +201,9 @@ function rotatingFacts(day, ctx, gateLogs = null, copiedAt = null) {
   const log = readGateLog(ctx.home, { fileSystem });
   if (log.unavailable) facts.unavailable['gate log'] = log.unavailable.join(', ');
   else Object.assign(facts, gateFacts(log.events, dayBounds(day)));
+  // The test times of the day's gates (B5), from the live folder only: a copy of the log carries none, so a day
+  // kept from copies says it has no times rather than none.
+  if (!gateLogs && !log.unavailable) facts.testTimes = testTimeFacts(readGateTestTimes(ctx.home, { fileSystem: ctx.fileSystem }), facts.gates.map((gate) => gate.id));
   // The live log holds every gate up to now; a copy only up to when it was made, which is no earlier than its newest
   // event nor than its modification time. Made before the day settled, it may lack the day's last gates.
   if (gateLogs && log.events?.length) {
