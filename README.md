@@ -705,6 +705,8 @@ orchestrator may write a line in its relief file instead), and how many compacti
 those facts (nobody announces a compaction: he does not compact by hand); then the reliefs of the record (each `relieved` notice, judged by the context its relieved session was at: filled at the pause or another reason) and the Log lines that name a reopening, as candidates for the lead. Under each roster row's
 mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
 and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
+A session that closed with its summary (`notify --kind closed --summary`) and is not archived yet
+gets a `to archive:` line naming the file: the lead reads it, then archives the session.
 
 ```console
 $ js-harness sessions --address orchestrator
