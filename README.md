@@ -585,6 +585,10 @@ the main one, a locked one nor the one the land runs from. The branch stays, so 
 it back; the record names each one removed (`removed`, each `{ pr, path }`). A session still open in such a
 worktree that staged nothing for 10 minutes is not seen: on Windows the removal of a folder in use fails
 and is said; elsewhere the session loses its folder.
+`--prune` removes by the same rule every worktree on a branch origin/main holds, whatever landed it, after
+a fetch; it asks about no pull request, moves nothing and writes no record. `js-harness doctor` counts
+those worktrees in its `worktrees` row, a gap that names `--prune` and each one; its hook, run at every
+session start, does not count them, since that asks a `git status` of each.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
 the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and

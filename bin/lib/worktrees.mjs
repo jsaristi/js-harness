@@ -1,6 +1,7 @@
 // The worktrees a repository can lose with nothing lost (odd/tasks/land-unattended.md, T9 and T10): those on a
 // branch already in main, clean and idle. Left behind by every landed pull request, they slowed every command that
 // lists them: 151 of 184 were such worktrees, and the board took 126 s over them (L22).
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -67,4 +68,15 @@ export function removableWorktrees({ cwd, base, branches = null, gitIn, now = Da
     found.push({ path: tree.path, branch: tree.branch });
   }
   return found;
+}
+
+/** The worktrees `removableWorktrees` gives against origin/main as this clone last fetched it, whatever landed their
+ * branches, or `null` when git cannot say: what `doctor` counts, with no fetch of its own (T10). */
+export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
+  const gitIn = (dir, ...args) => {
+    const result = run('git', args, { cwd: dir, encoding: 'utf8', windowsHide: true });
+    return { ok: !result?.error && result?.status === 0, out: String(result?.stdout ?? ''), err: String(result?.stderr || result?.error?.message || '').trim() };
+  };
+  const base = gitIn(cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
+  return base ? removableWorktrees({ cwd, base, gitIn, now }) : null;
 }

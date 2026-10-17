@@ -1503,3 +1503,33 @@ test('a land keeps a landed worktree that holds an ignored file', async () => {
   assert.equal(fs.existsSync(clean), false, out.join('\n'));
   assert.deepEqual(removedOf(root), [[2, 'wt-b']]);
 });
+
+// The worktrees landed by other means than a land (odd/tasks/land-unattended.md, T10): `--prune` removes, by the rule
+// a land uses, every one whose branch origin/main already holds.
+test('--prune removes every clean, idle worktree on a branch origin/main holds, keeps the others and writes no land record', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  git(root, 'push', '--quiet', 'origin', 'feat/a:main');
+  const top = path.dirname(root);
+  const inMain = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  const notInMain = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { run, calls } = runner([]);
+  const out = [];
+  const code = await mergeQueueMain(['--prune', '--cwd', root], { run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(inMain), false, out.join('\n'));
+  assert.equal(fs.existsSync(notInMain), true);
+  assert.equal(git(root, 'rev-parse', 'feat/a'), heads['feat/a'], 'the branch stays');
+  assert.equal(git(origin, 'rev-parse', 'main'), heads['feat/a'], 'main is not moved');
+  assert.ok(out.some((line) => line.startsWith('Removed the worktree at ') && line.includes('feat/a')), out.join('\n'));
+  assert.equal(out.at(-1), '1 worktree removed.');
+  assert.deepEqual(landsOf(root), []);
+  assert.equal(calls.some((call) => call.startsWith('gh ')), false, 'no pull request is asked about');
+});
+
+test('--prune is a mode of its own: with --land or --dry-run it is a usage error', async () => {
+  for (const argv of [['--prune', '--land'], ['--prune', '--dry-run']]) {
+    const out = [];
+    const code = await mergeQueueMain(argv, { stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+    assert.equal(code, 2, argv.join(' '));
+  }
+});
