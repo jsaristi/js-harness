@@ -209,11 +209,13 @@ export function backtickRefusal(command) {
 }
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
- * own. A backslash is kept as it is: a Windows path is written with them. */
+ * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
+ * as it is: a Windows path is written with them. */
 function shellWords(command) {
   const words = [];
   let word = null;
   let quote = null;
+  const pending = [];
   const text = String(command ?? '');
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
@@ -223,6 +225,25 @@ function shellWords(command) {
     } else if (c === "'" || c === '"') {
       quote = c;
       word ??= '';
+    } else if (c === '<' && text[i + 1] === '<' && text[i + 2] !== '<' && HEREDOC.test(text.slice(i))) {
+      const [found, single, double, bare] = HEREDOC.exec(text.slice(i));
+      if (word !== null) words.push(word);
+      word = null;
+      pending.push({ end: single ?? double ?? bare, tabs: found.startsWith('<<-') });
+      i += found.length - 1;
+    } else if (c === '\n') {
+      if (word !== null) words.push(word);
+      word = null;
+      // Each pending heredoc's body runs to the line that is its delimiter alone (tabs before it for <<-).
+      for (const { end, tabs } of pending.splice(0)) {
+        while (i < text.length) {
+          const next = text.indexOf('\n', i + 1);
+          const line = text.slice(i + 1, next === -1 ? text.length : next).replace(/\r$/, '');
+          i = next === -1 ? text.length : next;
+          if ((tabs ? line.replace(/^\t+/, '') : line) === end) break;
+        }
+      }
+      words.push(';');
     } else if (/\s/.test(c)) {
       if (word !== null) words.push(word);
       word = null;
@@ -255,7 +276,8 @@ function optionOf(words, name) {
 /** Whether `base` is a commit on the first-parent line of the head of the repository at `cwd`: true, false, or null
  * when git cannot tell (a tree, a name it does not know, no repository). */
 function onFirstParentLine(base, cwd) {
-  const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+  // A git that hangs (a loaded machine, a scanner) times out, and a call it cannot judge runs.
+  const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 5000 });
   const resolved = git('rev-parse', '--verify', '--quiet', `${base}^{commit}`);
   if (resolved.status !== 0) return null;
   const line = git('rev-list', '--first-parent', 'HEAD');
@@ -272,15 +294,24 @@ function onFirstParentLine(base, cwd) {
  * stands in for git. A base git cannot read (a tree, an unknown name) is let run: the check says nothing it cannot tell. */
 export function reviewBaseRefusal(command, { cwd, contains = onFirstParentLine } = {}) {
   const words = shellWords(command);
+  // The folder the commands run in, moved by a plain `cd <folder>`; null once a move it cannot follow came.
+  let here = cwd;
   for (let i = 0; i < words.length; i += 1) {
     const atStart = i === 0 || SEPARATORS.has(words[i - 1]);
+    if (atStart && (words[i] === 'cd' || words[i] === 'pushd' || words[i] === 'popd')) {
+      const to = SEPARATORS.has(words[i + 1] ?? ';') ? null : words[i + 1];
+      const followed = words[i] === 'cd' && to !== null && to !== '-' && !/^~|\$/.test(to) && here !== null;
+      here = !followed ? null : /^([A-Za-z]:)?[\\/]/.test(to) ? to : `${String(here).replace(/[\\/]+$/, '')}/${to}`;
+      continue;
+    }
     if (!atStart || words[i] !== 'gentle-ai' || words[i + 1] !== 'review' || !BASE_VERBS.has(words[i + 2])) continue;
     let end = i + 3;
     while (end < words.length && !SEPARATORS.has(words[end])) end += 1;
     const own = words.slice(i + 3, end);
     const base = optionOf(own, 'base-ref');
     if (base === null || base === '') continue;
-    if (contains(base, optionOf(own, 'cwd') ?? cwd) !== false) continue;
+    const repository = optionOf(own, 'cwd') ?? here;
+    if (repository === null || contains(base, repository) !== false) continue;
     return `js-harness guard: --base-ref ${base} is not on this head's first-parent line, where gentle-ai walks for the `
       + 'base: off it the preflight runs about 216 git commands instead of 31 and can time out, and a base the head is '
       + 'behind puts its newer work in the candidate, reversed. Give it, by its hash, a commit on that line: the last '

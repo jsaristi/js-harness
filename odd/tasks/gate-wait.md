@@ -2957,7 +2957,11 @@ tokens; its file is `road1-design-attack.md` in the scratchpad).
 
 ## Next
 
-T11 (JH 5, `feat/review-timeout-rule`): its design version 1 is in Progress, 2026-10-17, for two
-readers; then the manifest line and its test. Before T11, nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
+T11 (JH 5, `feat/review-timeout-rule`): design settled (version 2) and built (7c44b96e, 55336181,
+then the batch for Codex's two P2 and the verifier's two blockers: a newline as a separator, a `cd`
+followed, heredoc bodies skipped, a 5 s git timeout, the protocols wording). Next: a protocols-skill
+test pinning the new text, the guard's help lines, commit, Codex `--again`, gentle-ai with
+`--escalate-item 2`, tick T11 with its evidence, PR, `notify --kind ready`; then JH 5's closing
+summary section (draft in its scratchpad) and `notify --kind closed`. Before T11, nothing: the feature was closed (T10, 2026-10-16). What it left open is in the entry of T10 in
 Progress. Spent on Codex in the feature: 4,854,672 input tokens to 2026-10-13, and 206,415 on
 2026-10-16 by the session "JH 21".

@@ -231,6 +231,29 @@ test('with no --cwd the folder of the call is the repository the base is looked 
   assert.deepEqual(asked, [['abc123', 'D:/payload']]);
 });
 
+// Found by Codex, 2026-10-17: an unquoted newline ends a command as `;` does, and a `cd` before the review moves the
+// repository its base is looked up in.
+test('a review on a later line of the command is checked, and a cd before it names the repository; a cd it cannot follow lets it run', () => {
+  const asked = [];
+  const contains = (base, cwd) => { asked.push([base, cwd]); return false; };
+  assert.match(reviewBaseRefusal('echo start\ngentle-ai review assess --base-ref origin/main --json', { cwd: 'D:/p', contains }), /first-parent line/);
+  assert.match(reviewBaseRefusal('cd D:/w/other && gentle-ai review assess --base-ref origin/main --json', { cwd: 'D:/p', contains }), /first-parent line/);
+  assert.match(reviewBaseRefusal('cd sub; gentle-ai review status --base-ref=origin/main', { cwd: 'D:/p', contains }), /first-parent line/);
+  assert.deepEqual(asked.map(([, cwd]) => cwd.replace(/\\/g, '/')), ['D:/p', 'D:/w/other', 'D:/p/sub']);
+  // A --cwd still wins over a cd; a cd to home, to the last folder or to a variable is not followed: the call runs.
+  assert.match(reviewBaseRefusal('cd D:/w/other && gentle-ai review assess --cwd D:/w/named --base-ref x', { cwd: 'D:/p', contains: (base, cwd) => { asked.push([base, cwd]); return false; } }), /first-parent line/);
+  assert.equal(asked.at(-1)[1], 'D:/w/named');
+  // A heredoc's body is text, not commands, whatever its lines start with; the command after it is read again.
+  const body = "git commit -F - <<'EOF'\nfix(guard): the base\ngentle-ai review assess --base-ref origin/main ran slow\nEOF\n";
+  assert.equal(reviewBaseRefusal(body, { cwd: 'D:/p', contains: () => assert.fail('a heredoc body is not a command') }), null);
+  assert.match(reviewBaseRefusal(`${body}gentle-ai review assess --base-ref origin/main`, { cwd: 'D:/p', contains: () => false }), /first-parent line/);
+  assert.equal(reviewBaseRefusal('cat <<-END\n\tgentle-ai review start --base-ref x\n\tEND\n', { cwd: 'D:/p', contains: () => assert.fail('body') }), null);
+  const never = () => assert.fail('a folder it cannot follow is not looked up');
+  for (const command of ['cd && gentle-ai review assess --base-ref x', 'cd - && gentle-ai review assess --base-ref x', 'cd "$REPO" && gentle-ai review assess --base-ref x', 'pushd D:/w && gentle-ai review assess --base-ref x']) {
+    assert.equal(reviewBaseRefusal(command, { cwd: 'D:/p', contains: never }), null, command);
+  }
+});
+
 test('the base is looked up in git: a branch the head is behind is refused, and so is one merged in by its second parent; the fork point, the merge commit and the head pass', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-base-'));
   const git = (...args) => spawnSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { encoding: 'utf8' });

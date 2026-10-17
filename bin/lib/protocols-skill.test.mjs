@@ -16,6 +16,14 @@ function sections(text) {
   return found;
 }
 
+test('section 3 gives a gentle-ai review a base on the first-parent line, and says what a timeout leaves', () => {
+  const text = protocolsSkillContent();
+  assert.ok(text.includes('a base on the head\'s first-parent line'));
+  assert.ok(text.includes('`js-harness guard` refuses such a base'));
+  assert.ok(text.includes('When a gentle-ai command ends with `operation_timeout`, run that same command once more'));
+  assert.ok(text.includes('the words "not reviewed", and Codex reviews the range'));
+});
+
 test('the protocols skill has a one-line description a host can read, with the version', () => {
   const frontmatter = /^---\nname: js-harness-protocols\ndescription: (.+)\n---\n/.exec(TEXT);
   assert.ok(frontmatter, TEXT.slice(0, 200));
