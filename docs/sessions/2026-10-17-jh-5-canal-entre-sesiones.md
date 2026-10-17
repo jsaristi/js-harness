@@ -49,3 +49,30 @@ Named by the session itself in `e5376fe9`:
 - Notices: 31 in the channel record (25 notes, 3 questions, 2 waiting, 1 closed, at line 255).
 - Commits: 65 `git commit` runs in `e5376fe9`, each code commit through the pre-commit gate.
 - Reviews: 26 `js-harness codex-review` runs (2 with `--unavailable`); gentle-ai acknowledgements at transcript lines 598 and 35761 (#243), the other slices' gentle-ai lines in their pull request bodies.
+
+
+## Second stretch (2026-10-17, after this close)
+The lead reopened this session three times by message: at 11:22Z, for two items of its triage note; at 11:33Z, for two more ("Don't close yet; take the next two from the triage note, one branch and PR each"); and at 13:07Z, for triage item 11, gate-wait T11, to design with two readers and then build. Each piece went test first, through gentle-ai and Codex, onto its own branch and pull request, and ended with a `ready` notice.
+
+Delivered:
+- PR 394, throughput B4b (`odd/tasks/throughput-review.md` L38): a verified answer notice keeps `answeredAt`, and for a question-tool answer `shownAt`. Merged 11:37Z.
+- PR 396, rule-hierarchy T9: `init` writes `reply: true` in `.js-harness.json`. Merged 11:51Z, after main was merged in for a docs-only conflict.
+- PR 400, found on the way, not ordered: from 12:00Z every gate failed on `bin/lib/review-starts.test.mjs`. Its fixed NOW of 2026-10-17T12:00Z fell behind the real birthtimes of the folders it made, so they read as `seen`. Those tests now take a now a minute after the clock (throughput L39). Merged 12:35Z.
+- PR 401, gate-first T6 (L-T6 to L-T6c): a held ticket rename (EPERM, EBUSY, EACCES) is retried, then logged as `first-unclaimed`; the spent paths of a claim have tests. Codex and an independent verifier found the same blocker: the hold's code was written in the tree-key field `code`, so the reader dropped the line. Fixed. gentle-ai high (item 4), approved and acknowledged (`review-482ab063172d1bb1`). Merged 13:06Z.
+- PR 403, memory-hygiene T11 (L9): `uninstall`'s kept line runs as copied in sh, cmd.exe and PowerShell; an older verify's U+FFFD after-index is told apart from a damaged one. The verifier found two blockers: this document tripled by a scripted edit, and cmd.exe splitting single quotes. Codex found one P2: no one Windows form serves both shells when the home holds `$`. All three fixed. gentle-ai high (item 1), approved and acknowledged (`review-4794badca4c9c8a7`). Merged 13:12Z.
+- PR 407, gate-wait T11 (`docs/FAILURES.md` `review-tool-timeout`): the guard refuses a gentle-ai review whose `--base-ref` is off its head's first-parent line, since such a base costs about 216 git runs against 31 and timed out under load, and a base the head is behind puts that branch's newer work into the candidate, reversed. `js-harness-protocols` section 3 says which base to give and what a session does on `operation_timeout`: the same command once more, then the slice goes on with a "not reviewed" line and Codex on the range. Two readers changed the design: the check is the first-parent line, not `merge-base --is-ancestor`. The verifier found two blockers (a `cd` not followed, heredoc bodies read as commands); Codex found two P2, then three more on recheck (a `\` continuation, a relative `--cwd`, a `#` comment), all fixed test first. gentle-ai high (item 2), approved and acknowledged (`review-ea14564f6a7371ed`). Ready at 14:09Z, open when this was written.
+
+Failures and lessons:
+- A `node -e` `String.replace` whose replacement text held `$` tripled a feature document, because `` $` `` pastes everything before the match. Text with `$` goes through the Edit tool.
+- A test with a fixed "now" that also stats real files breaks on the day the clock passes it. Such a test takes a now from the clock.
+- Codex refuses a second recheck by design, so the two skipped ranges (`5018d1b..b761aef`, `828b23b..e464081`) stay recorded skips. The next slice's review reads that code as the code it changes.
+- `notify --kind ready` needs a gentle-ai line in a feature document even for a test-only fix. PR 400's went into the throughput document. The line must name the commit itself: PR 407's first ready was refused because the hash sat on the line before.
+- The pre-push hook refuses a branch while a Codex recheck's findings stand, even though the correction bound makes them later work for gentle-ai. T11's three were fixed in one more commit, and its recheck cleared the push.
+- An apostrophe in a test name breaks a single-quoted JS string and makes the failures check report its control lost; `sed -i` turned a CRLF feature document into LF. Such edits go through the Edit tool.
+
+Left:
+- Advisories recorded as later work. In gate-first T6: EACCES is retried on POSIX too, and the retry bound has no test. In memory-hygiene T11: PowerShell's curly double quotes, and a damaged U+FFFD after-index told as older. In gate-wait T11: the first-parent listing has no depth bound, and one test's temp dir is unquoted.
+- PR 407: landing is the lead's.
+- Worktrees `review-starts-clock`, `gate-first-rename`, `memory-pass-quoting`, `review-timeout-rule`, `jh5-closing`: their removal is the lead's.
+
+Cost of the stretch: 10 Codex runs recorded (4 incorrect, all fixed; 2 more refused a second recheck and recorded nothing); 3 gentle-ai reviews acknowledged; 3 independent verifiers (opus) and 2 design readers; context reached the pause twice and the host compacted it at 12:02Z and about 14:04Z.
