@@ -835,6 +835,27 @@ test('uninstall removes the folder of memory hygiene when no project holds a sna
   }
 });
 
+test('uninstall keeps the snapshots of the throughput review and names their folder, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    const folder = path.join(home, '.js-harness', 'throughput');
+    for (const withManifest of [true, false]) {
+      if (withManifest) install(home, '0.1.0');
+      fs.mkdirSync(path.join(folder, 'C--proj'), { recursive: true });
+      fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-15.json'), '{}');
+      fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-16.json'), '{}');
+      const result = uninstall(home);
+      assert.deepEqual(result.throughputKept, { path: folder, days: 2 }, String(withManifest));
+      assert.equal(fs.existsSync(path.join(folder, 'C--proj', '2026-10-16.json')), true, 'a snapshot is never removed');
+    }
+    fs.rmSync(folder, { recursive: true });
+    install(home, '0.1.0');
+    assert.equal(Object.hasOwn(uninstall(home), 'throughputKept'), false, 'said only when the folder is there');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall keeps the folder of a project whose memory passes left snapshots, names their stamps, and removes the rest', () => {
   const home = makeTmpHome();
   try {

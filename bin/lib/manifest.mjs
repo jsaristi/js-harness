@@ -1294,7 +1294,21 @@ export function uninstall(home, deps = {}) {
   // by the steps below, with a manifest and without, as when `memory` never ran.
   const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
   const result = uninstallInstalled(home, deps);
-  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory) };
+  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory), ...throughputResult(home, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync) };
+}
+
+/** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
+ * the gates of days the gate log has rotated away. Named, with how many days they hold (`null` where the folder
+ * could not be listed), so the person knows what stays; `{}` when there is no folder. */
+function throughputResult(home, statFile, listDir) {
+  const dir = path.join(home, '.js-harness', 'throughput');
+  try {
+    if (!isThere(dir, statFile)) return {};
+    const days = listDir(dir).flatMap((project) => listDir(path.join(dir, project)).filter((name) => name.endsWith('.json'))).length;
+    return { throughputKept: { path: dir, days } };
+  } catch {
+    return { throughputKept: { path: dir, days: null } };
+  }
 }
 
 /** `uninstall` without the folder of memory hygiene, which it removes before calling this. */
