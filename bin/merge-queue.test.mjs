@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
-import { circleciState, failedRows, landingLines, mergeQueueMain } from './merge-queue.mjs';
+import { circleciState, failedRows, landingLines, localSuite, mergeQueueMain } from './merge-queue.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
@@ -1070,4 +1070,73 @@ test('a land confirms the proposal whose declaration its head holds, not a newer
   const { code, out } = await landRule(made);
   assert.equal(code, 0, out.join('\n'));
   assert.match(fs.readFileSync(made.reliefFile, 'utf8'), /\(merge-queue\)\. rule:a landed on main [0-9a-f]{7} from rule\/a: confirms relief line 2\n$/);
+});
+
+test('--land whose suite did not run exits 5, bisects nothing and pushes nothing, with two pull requests', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  let runs = 0;
+  const suite = () => {
+    runs += 1;
+    return { ok: false, notRun: true, said: 'gate: no turn in 90 minutes' };
+  };
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite });
+  assert.equal(code, 5, out.join('\n'));
+  assert.equal(runs, 1, 'no bisection');
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!calls.some((line) => line.startsWith('git push')));
+  assert.equal(out.at(-1), 'The suite did not run on this machine (gate: no turn in 90 minutes): nothing was pushed, and nothing was bisected.');
+});
+
+test('--land whose suite does not run inside a bisection exits 5 and pushes nothing', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const answers = [{ ok: false, said: 'FAIL  tests' }, { ok: false, notRun: true, said: 'the gate was stopped before it ended' }];
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { suite: () => answers.shift() });
+  assert.equal(code, 5, out.join('\n'));
+  assert.equal(answers.length, 0);
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!calls.some((line) => line.startsWith('git push')));
+  assert.equal(out.at(-1), 'The suite did not run on this machine (the gate was stopped before it ended): nothing was pushed, and nothing was bisected.');
+});
+
+/** A `run` that answers the gate's calls by their first words after the candidate's bin: `answers[word]`. */
+function gateRun(answers) {
+  const calls = [];
+  const run = (command, args) => {
+    calls.push(args.slice(1));
+    return answers[args[2] === 'first' ? 'first' : args[1]] ?? { status: 0, stdout: '', stderr: '' };
+  };
+  return { run, calls };
+}
+
+test('localSuite takes a gate-first ticket for the land, then reads a gate that did not run as not run', () => {
+  const place = path.join(os.tmpdir(), 'candidate');
+  const said = [];
+  const { run, calls } = gateRun({ first: { status: 0, stdout: 'ticket 0a1b2c3d: the next check of session s1 goes first', stderr: '' }, gate: { status: 75, stdout: '', stderr: 'js-harness gate: no turn in 90 minutes\nmore' } });
+  const result = localSuite(run, place, { env: { CLAUDE_CODE_SESSION_ID: 's1' }, say: (line) => said.push(line) });
+  assert.deepEqual(calls[0], ['gate', 'first', '--session', 's1', '--tree', place, '--minutes', '60', '--reason', 'the merge queue lands a candidate']);
+  assert.equal(calls[1][0], 'gate');
+  assert.equal(calls[1][1], '--wait');
+  assert.deepEqual(said, ['The land goes first in the gate line: ticket 0a1b2c3d: the next check of session s1 goes first']);
+  assert.deepEqual(result, { ok: false, notRun: true, said: 'js-harness gate: no turn in 90 minutes' });
+});
+
+test('localSuite reads a gate stopped before it ended as not run, and a FAIL row as red', () => {
+  const place = path.join(os.tmpdir(), 'candidate');
+  const stopped = gateRun({ gate: { status: null, stdout: '', stderr: '', error: new Error('spawnSync node ETIMEDOUT') } });
+  assert.deepEqual(localSuite(stopped.run, place, { env: {}, say: () => {} }), { ok: false, notRun: true, said: 'the gate was stopped before it ended (spawnSync node ETIMEDOUT)' });
+  const red = gateRun({ gate: { status: 1, stdout: 'FAIL  tests  1 failed\n', stderr: '' } });
+  assert.deepEqual(localSuite(red.run, place, { env: {}, say: () => {} }), { ok: false, notRun: false, said: 'FAIL  tests  1 failed' });
+});
+
+test('localSuite with no session takes no ticket, and one refused says the land waits its turn', () => {
+  const place = path.join(os.tmpdir(), 'candidate');
+  const none = gateRun({});
+  const quiet = [];
+  assert.equal(localSuite(none.run, place, { env: {}, say: (line) => quiet.push(line) }).ok, true);
+  assert.ok(!none.calls.some((call) => call[1] === 'first'));
+  assert.deepEqual(quiet, ['No gate-first ticket for the land (no session id): it waits its turn in the gate line.']);
+  const refused = gateRun({ first: { status: 1, stdout: '', stderr: 'gate first: two tickets are open: a, b' } });
+  const said = [];
+  assert.equal(localSuite(refused.run, place, { env: { CLAUDE_CODE_SESSION_ID: 's1' }, say: (line) => said.push(line) }).ok, true);
+  assert.deepEqual(said, ['No gate-first ticket for the land (gate first: two tickets are open: a, b): it waits its turn in the gate line.']);
 });

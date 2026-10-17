@@ -452,7 +452,11 @@ lock: CircleCI's run of the whole gate is its test.
 No GitHub workflow runs for a pull request: the one workflow, the gate of a commit (`js-harness check`),
 runs for a push to a `gate/` branch alone.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
-named, and the rest is landed. The pre-push hook refuses every other push of main from a clone; a
+named, and the rest is landed. The land asks `js-harness gate first` for a ticket of the running
+session, so its gate goes first in the line; with no session id or a refused ticket it waits its turn
+and says so. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped
+before it ended is no red: the land exits 5, with nothing pushed and nothing bisected
+(`odd/tasks/land-unattended.md`). The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
 
 A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside

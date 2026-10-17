@@ -28,6 +28,8 @@ A keeper removes only the lead's delay, about 5 minutes off the median, and adds
 - `npm run check` exits 0
 - a land whose gate exits 75 or is killed exits 5, says the suite did not run, pushes nothing and
   bisects nothing, with two or more pull requests in the candidate
+- a land asks `js-harness gate first` for its gate before it waits, and says so; with no session id or
+  a refused ticket it waits its turn in the line and says that
 
 ## In scope / Out of scope
 - In: `bin/merge-queue.mjs` and its test, `README.md`, the help of `bin/js-harness.mjs`, this document,
@@ -82,8 +84,8 @@ A keeper removes only the lead's delay, about 5 minutes off the median, and adds
   about 5 minutes off the median, and the session rule of Design 3.
 
 ## Tasks
-- [ ] T1 (kind: design) This document: version 1 read by two readers, version 2 here. Route: inline.
-- [ ] T2 (kind: build) Design 1, exit 5; tests first. Route: inline.
+- [x] T1 (kind: design) This document: version 1 read by two readers, version 2 here. Route: inline. PR 336, landed.
+- [x] T2 (kind: build) Design 1, exit 5, and Design 2, the land's gate-first ticket (L4); tests first. Route: inline. RED: the test file failed to load on the missing `localSuite` export; GREEN: the 25 tests of `--land` and `localSuite`.
 - [ ] T3 (kind: docs) ROADMAP item 2's row: the method of its baseline, 37 / 127 over 47 pull requests,
   and Designs 2 and 3 as decisions. Route: inline.
 
@@ -102,3 +104,7 @@ A keeper removes only the lead's delay, about 5 minutes off the median, and adds
   repository that uninstall does not remove (`bin/lib/manifest.mjs:1308-1313`) and is not needed; exit 6
   never fired in that day's data. Version 2 keeps exit 5, puts the gate-first ticket and the keeper to
   decisions with their numbers, and drops the queue lock, exit 6 and `--times`.
+- L4 (2026-10-16, the lead's message to JH 24, a claim of that session, not the user's words): "(a) yes, a
+  land takes a gate-first ticket; no check changes. Build it with exit 5 (suite not run, no bisection),
+  test first, after slice (c). (b) The keeper stays deferred by the stop rule (5 of 37 min); I tell him
+  on return, nothing to build." So Design 2 is built with Design 1 in T2, and Design 3 waits.
