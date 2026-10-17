@@ -737,7 +737,8 @@ test('--full goes with --global only, exit 2, and stays an unknown flag of sync'
 });
 
 test('uninstallMain keeps a project under a memory pass with the line that can release its lock, exit 1, in either mode', async () => {
-  const home = makeTmpHome();
+  // A space in the home, as in C:\Users\First Last: the line's commands still run as they are copied.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness cli home '));
   try {
     const planned = snapshotOf(home, 'C--planned', '20261015T120606108Z');
     fs.writeFileSync(path.join(planned, 'lock'), JSON.stringify({ stamp: '20261015T120606108Z', pid: 4242 }));
@@ -746,7 +747,7 @@ test('uninstallMain keeps a project under a memory pass with the line that can r
     fs.writeFileSync(path.join(killed, 'lock'), JSON.stringify({ stamp: '20261016T090000000Z', pid: 4343 }));
     const lines = [
       `kept ${killed}: ${path.join(killed, 'lock')} holds no finished plan (pid 4343); if that process is not running, remove the file and uninstall again`,
-      `kept ${planned}: a memory pass is planned (20261015T120606108Z) for the memory folder C:/memory; run js-harness memory verify or memory undo 20261015T120606108Z in its project, then uninstall again`,
+      `kept ${planned}: a memory pass is planned (20261015T120606108Z) for the memory folder C:/memory; from that project's checkout run js-harness memory verify 20261015T120606108Z --home "${home}" or js-harness memory undo 20261015T120606108Z --home "${home}", then uninstall again`,
     ];
     const normal = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.deepEqual([normal.code, normal.outLines, normal.errLines], [1, [], lines]);

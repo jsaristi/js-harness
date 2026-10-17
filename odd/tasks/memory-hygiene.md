@@ -297,8 +297,9 @@ tells him to remove a kept folder by hand.
    parse, and `manifest` whether that stamp's `manifest.json` exists. Its line follows what can release
    it:
    - a stamp with a manifest: "a memory pass is planned (<stamp>) for the memory folder <the memory
-     folder the manifest records>; run js-harness memory verify or memory undo <stamp> in its project,
-     then uninstall again" (verify and undo run from the project's checkout, not from that folder);
+     folder the manifest records>; from that project's checkout run js-harness memory verify <stamp>
+     --home "<home>" or js-harness memory undo <stamp> --home "<home>", then uninstall again" (verify
+     and undo run from the project's checkout, which no file records, against the uninstall's home);
    - an empty or unreadable lock, or a stamp with no manifest (a plan killed between its lock and its
      snapshot, which verify and undo cannot release): "<lock path> holds no finished plan (pid <pid>);
      if that process is not running, remove the file and uninstall again".
@@ -562,7 +563,13 @@ The audit with the evidence for each is `jh16-memory-notes-audit.md` in the grou
   of a lock released meanwhile throws; the damage check of an undo skips `after-index.txt`. All four fixed, each
   seen RED first: the line names the project, a `--full` right after `--cwd`/`--home` is that flag's missing value,
   `lockLine` of a released lock says to run again, and an undo refuses a snapshot without `after-index.txt`.
-  Per file: memory-pass 30, install 77 pass. Then assess, Codex, PR.
+  Per file: memory-pass 30, install 77 pass. Commit `5018d1b`; gentle-ai approved it (risk and reliability lenses,
+  `review-0edbd08ed86951bf`, acknowledged).
+- Codex rechecked them over `7fe1b24..5018d1b` (recorded): two fixed, two only in part. Fixed in the commit after
+  it, each seen RED first: the locked line gives both commands in full, with the stamp and `--home "<home>"`, from
+  that project's checkout (no file records the checkout's path, and the slug cannot be turned back into it); verify
+  keeps the index after the pass byte for byte, and undo refuses an `after-index.txt` whose hash is not the one
+  `after.json` records, before it merges anything. Per file: memory-pass 32, install 77 pass. Then PR.
 - T1-T7 are done and on main. Open: T8 (a Codex review of the next slice touching `bin/lib/memory-pass.mjs`
   reads the lock fix `2e082ca`; the T9 slice does not touch that file) and T9's rule ids, which wait on his answer
   to L6.1; L6.2 adds a flag only if he wants one. The folder at uninstall and the board row are on

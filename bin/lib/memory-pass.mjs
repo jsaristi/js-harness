@@ -257,7 +257,8 @@ export function verifyPass({ folder, stateDir, stamp, homes = '', approved = [],
 
   const at = new Date(now).toISOString();
   fs.writeFileSync(path.join(dir, 'after.json'), JSON.stringify(after, null, 2));
-  fs.writeFileSync(path.join(dir, 'after-index.txt'), currentText(INDEX) ?? '');
+  // Its bytes as they are, so their hash is the one after.json records and undo can check them.
+  fs.writeFileSync(path.join(dir, 'after-index.txt'), readOrNull(path.join(folder, INDEX)) ?? '');
   if (problems.length > 0) {
     appendJournal(stateDir, { kind: 'verify-refused', stamp, at, problems });
     return { ok: false, problems };
@@ -314,7 +315,11 @@ function undoHeld({ folder, stateDir, stamp, now, manifest }) {
     const kept = readOrNull(path.join(dir, 'files', name));
     if (kept === null || sha256(kept) !== manifest.before[name]) throw new PassError(`snapshot ${stamp} is damaged: ${name} is missing or changed; nothing was undone`);
   }
-  if (readOrNull(path.join(dir, 'after-index.txt')) === null) throw new PassError(`snapshot ${stamp} is damaged: after-index.txt is missing; nothing was undone`);
+  // The index after the pass, which a merge reads: an index absent after the pass was kept as empty.
+  const afterIndex = readOrNull(path.join(dir, 'after-index.txt'));
+  if (afterIndex === null || sha256(afterIndex) !== (after[INDEX] ?? sha256(Buffer.alloc(0)))) {
+    throw new PassError(`snapshot ${stamp} is damaged: after-index.txt is missing or changed; nothing was undone`);
+  }
   const restored = [];
   const removed = [];
   const refused = [];
@@ -338,7 +343,7 @@ function undoHeld({ folder, stateDir, stamp, now, manifest }) {
       // Someone wrote the index since: reverse only the pass's own changes. The lines before the pass come back,
       // except one the pass kept that someone removed since; the lines someone added since stay.
       const lines = (text) => text.split('\n').filter((line) => line !== '');
-      const afterLines = new Set(lines((readOrNull(path.join(dir, 'after-index.txt')) ?? Buffer.from('')).toString('utf8')));
+      const afterLines = new Set(lines(afterIndex.toString('utf8')));
       const currentLines = lines(current.toString('utf8'));
       const currentSet = new Set(currentLines);
       const kept = lines(fs.readFileSync(path.join(dir, 'files', name), 'utf8')).filter((line) => !(afterLines.has(line) && !currentSet.has(line)));

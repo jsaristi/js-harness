@@ -398,3 +398,27 @@ test('an undo from a snapshot whose after-index is gone is refused as damaged, b
     assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n');
   });
 });
+
+test('an undo from a snapshot whose after-index no longer matches the after-state is refused, before it merges the index', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    write('MEMORY.md', '- [A](a.md) — a\n');
+    verifyPass({ folder, stateDir, stamp, now: NOW });
+    // Someone writes the index since, so undo would merge with the after-index, which is now cut short.
+    write('MEMORY.md', '- [A](a.md) — a\n- [B](b.md) — b\n');
+    fs.writeFileSync(path.join(stateDir, 'snapshots', stamp, 'after-index.txt'), '');
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), (err) => err instanceof PassError && /damaged/.test(err.message) && err.message.includes('after-index.txt'));
+    assert.equal(read('MEMORY.md'), '- [A](a.md) — a\n- [B](b.md) — b\n');
+  });
+});
+
+test('verify keeps the index after the pass byte for byte, so its hash is the one after.json records', () => {
+  withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    // A byte that is not UTF-8 does not survive a round trip through a string.
+    fs.writeFileSync(path.join(folder, 'MEMORY.md'), Buffer.concat([Buffer.from('- [A](a.md) — a '), Buffer.from([0xff]), Buffer.from('\n')]));
+    verifyPass({ folder, stateDir, stamp, now: NOW });
+    const dir = path.join(stateDir, 'snapshots', stamp);
+    assert.deepEqual(fs.readFileSync(path.join(dir, 'after-index.txt')), fs.readFileSync(path.join(folder, 'MEMORY.md')));
+  });
+});

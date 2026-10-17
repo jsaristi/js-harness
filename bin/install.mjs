@@ -73,12 +73,13 @@ function reportSessionMessages(home) {
   return 0;
 }
 
-/** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7). */
-function memoryKeptLine(folder) {
+/** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7).
+ * A planned pass is released from its project's checkout, which no file records, against the uninstall's home. */
+function memoryKeptLine(folder, home) {
   switch (folder.reason) {
     case 'locked':
       return folder.stamp !== null && folder.manifest
-        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; run js-harness memory verify or memory undo ${folder.stamp} in its project, then uninstall again`
+        ? `kept ${folder.path}: a memory pass is planned (${folder.stamp}) for ${folder.folder ? `the memory folder ${folder.folder}` : 'the memory folder its plan names'}; from that project's checkout run js-harness memory verify ${folder.stamp} --home "${home}" or js-harness memory undo ${folder.stamp} --home "${home}", then uninstall again`
         : `kept ${folder.path}: ${folder.lock} holds no finished plan (pid ${folder.pid ?? 'unknown'}); if that process is not running, remove the file and uninstall again`;
     case 'locked-whole':
       return `kept ${folder.path}: --full removes it in one piece, and a project in it is under a memory pass; nothing of it was removed`;
@@ -546,7 +547,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
       const count = folder.stamps.length;
       console.log(`kept ${folder.path}: ${count} snapshot${count === 1 ? '' : 's'} of a memory pass (${folder.stamps.join(', ')}), the only copy of what ${count === 1 ? 'that pass' : 'those passes'} changed${folder.journal ? ", with the project's journal" : ''}; js-harness uninstall --global --full removes them`);
     } else {
-      console.error(memoryKeptLine(folder));
+      console.error(memoryKeptLine(folder, home));
     }
   }
   const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
