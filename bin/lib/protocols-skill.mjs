@@ -1,10 +1,10 @@
-// The third skill, `js-harness-protocols`: what to do in six situations, loaded only when a session is in one of
-// them. One skill and not six, because the description of every installed skill is read on every turn. The design
+// The third skill, `js-harness-protocols`: what to do in seven situations, loaded only when a session is in one of
+// them. One skill and not seven, because the description of every installed skill is read on every turn. The design
 // is in odd/tasks/rule-hierarchy.md ("Protocols", T7). Each section opens with the incident it came for and its
 // date, so that it can be withdrawn when the incident has not come back; a rule it relies on is named by its id
 // (`rule:<id>`), never restated, so `js-harness rules change` reaches it with nothing to carry by hand.
 
-/** The six situations, in the order of the index and of the sections. */
+/** The seven situations, in the order of the index and of the sections. */
 export const PROTOCOLS = [
   'Asking the user for a decision',
   'Closing a reply',
@@ -12,12 +12,13 @@ export const PROTOCOLS = [
   'Changing a rule, a new one included',
   'Reporting a mistake',
   'Handing off, to the user, to a session or to a sub-agent',
+  'Reviewing throughput',
 ];
 
 export function protocolsSkillContent(version) {
   return `---
 name: js-harness-protocols
-description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake or handing work off (js-harness v${version}).
+description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off or reviewing throughput (js-harness v${version}).
 ---
 
 # Protocols
@@ -96,5 +97,18 @@ Incident (2026-10-10): a figure that was arithmetic and never measured, that thr
 - A claim that something is absent names the search that proves it, and why that search could have found it.
 - A sub-agent runs on the model and effort that the rules in force give its kind of work (\`rule:subagent-reader-model\`, \`rule:subagent-writer-model\`, \`rule:subagent-effort\`; \`js-harness rules <id>\` prints one); the guard refuses another model where those rules are in force.
 - A plan or a design handed on has passed its double review first (\`rule:double-review\`, section 1).
+
+## 7. ${PROTOCOLS[6]}
+
+Incident (2026-10-16): JH 28 sat 239 minutes idle, 194 of them after its pull request landed, and a red land from a flaky test was relayed as a guess while the gate log held the failing test names; neither was seen until the user asked where the time went.
+
+The measure, the trigger and the re-measure are commands: the heartbeat's \`DUE:\` line names the review and what to run, and \`js-harness throughput\` prints the table. This section is the judgment no command makes.
+- Candidates: each with its baseline, target, cost, owner, risk item, and why quality is unchanged: no check, review or test is removed or weakened, and the land's proof never shrinks. Each figure is marked measured (with the row of the table it comes from), derived, or estimate.
+- Readers: only when a candidate list goes to the user, never on the daily review: it first passes the two readers of section 1 (\`rule:double-review\`), one rerunning the figures and attacking the reasoning, one looking for what is missing; the version the user gets lists what they changed.
+- Stop rule: a candidate whose gain is less than its cost is dropped, and why is written down. Record each review with \`js-harness throughput reviewed --day <day> --found nothing|candidates\`, and what ships with \`js-harness throughput shipped <item>\`. After \`rule:throughput-quiet-runs\` reviews in a row that found nothing, the review comes every \`rule:throughput-quiet-days\` instead of daily; one that finds candidates makes it daily again.
+- His decisions: spend, a protocol change, a security or system setting, anything irreversible, one question at a time (section 1). The lead assigns everything else.
+- Five questions: it happened (the incident); twice in a day, at a cost of up to 64.4 session-hours of turns that ended in silence over two days; a check does the measuring, the trigger, the snapshots and the re-measure, so only this judgment is prose; no section held a recurring review, and sections 1 and 4 are named, not copied; its cost and what leaves follow.
+- What leaves: the hand-written measure scripts in the lead's notes.
+- Cost: one command a day, weekly once quiet, and two readers only with a candidate list. Reviewed by 2026-11-16.
 `;
 }
