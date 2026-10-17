@@ -3072,7 +3072,7 @@ What is known to be open and is no task yet. "Next step" has what waits for him.
   - The title put back exactly; 31 s after the rename, `--address 26` printed `JH 26 · canal y compactación`,
     exit 0, and `--address 29` exited 1.
   - So a rename moves the address at once: the board reads the title the session carries now.
-- 2026-10-16, JH 26, T20b, on `feat/wait-own-notice` from `main` 3a74f8a, by the lead's notice ("the open task
+- 2026-10-16, JH 26, T20b, on `feat/wait-own-notice` from `main` 685a451, by the lead's notice ("the open task
   T20b ... build it test first, gate, gentle-ai, Codex, PR"; a claim of the lead's). Inline, test first.
   - Built: every `js-harness wait` of a work session also looks, before its condition at each tick, for a notice to
     its own number written after it started. The number is the title's, from the transcript `CLAUDE_CODE_SESSION_ID`
