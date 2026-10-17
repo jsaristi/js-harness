@@ -133,6 +133,7 @@ export function failedRows(output) {
 export function localSuite(run, place, { env = process.env, say = () => {} } = {}) {
   const bin = path.join(place, 'bin', 'js-harness.mjs');
   const session = env.CLAUDE_CODE_SESSION_ID;
+  let issued = null;
   if (!session) {
     say('No gate-first ticket for the land (no session id): it waits its turn in the gate line.');
   } else {
@@ -140,8 +141,12 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
     say(ticket.ok
       ? `The land goes first in the gate line: ${ticket.out.trim().split('\n')[0]}`
       : `No gate-first ticket for the land (${ticket.err.split('\n')[0] || `gate first exited ${ticket.status}`}): it waits its turn in the gate line.`);
+    if (ticket.ok) issued = /^ticket ([0-9a-f]{8}):/.exec(ticket.out.trim())?.[1] ?? null;
   }
   const done = answer(run, process.execPath, [bin, 'gate', '--wait', '90', '--', process.execPath, path.join(place, 'bin', 'check.mjs')], place, 120 * 60_000);
+  // A ticket the gate did not claim (it ran nothing, or an older candidate's gate claims none) would hold one
+  // of the two open slots for an hour: cancelled. One the gate claimed is gone, and its cancel exits 1 unsaid.
+  if (issued) answer(run, process.execPath, [bin, 'gate', 'first', '--cancel', issued], place);
   if (done.status === GATE_NOT_RUN) return { ok: false, notRun: true, said: done.err.split('\n')[0] || 'the gate ran nothing' };
   if (done.status === null) return { ok: false, notRun: true, said: `the gate was stopped before it ended${done.err ? ` (${done.err.split('\n')[0]})` : ''}` };
   const last = failedRows(done.out);

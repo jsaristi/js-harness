@@ -1512,8 +1512,8 @@ function ownTicketRows(reason, cwd, lock, env, deps) {
  * the gate log what the claim did: the tickets its sweep found expired, and the claim, with the gates that
  * waited then, which this one passes. Nothing is written with the log switched off (`lock.log` false).
  * Returns the ticket, or `null`. `deps.gateLog` stands in for the writer, as for the gate's own lines. */
-function claimOf(lock, cwd, deps) {
-  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd) });
+export function claimOf(lock, cwd, deps, { named = false } = {}) {
+  const { ticket, expired } = claimTicket({ home: lock.home, session: lock.session, cwd: path.resolve(cwd), named });
   if (lock.log === false) return ticket;
   const written = { ...(deps.gateLog?.append && { append: deps.gateLog.append }) };
   for (const gone of expired) logTicket(lock.home, 'first-expired', gone, {}, written);

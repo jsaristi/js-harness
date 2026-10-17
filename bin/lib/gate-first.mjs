@@ -279,15 +279,17 @@ export function ofTree(tree, cwd, platform) {
  * none, is renamed, read and removed: spent here, whatever the gate comes to. A rename that fails (another
  * gate of the session claimed it first, or it was cancelled) is no claim, and the next ticket is tried. A
  * session that is not known (`null`) claims nothing. Never throws: a ticket that cannot be claimed is no
- * ticket, and the gate waits as any other. */
-export function claimTicket({ home, session, cwd, now = Date.now, platform = process.platform, fileSystem: io = fs }) {
+ * ticket, and the gate waits as any other. With `named`, only a ticket that names the tree `cwd` is claimed:
+ * a `js-harness gate` claims its own folder's ticket (the merge queue's land, odd/tasks/land-unattended.md)
+ * and leaves one that names no tree to the session's next whole check. */
+export function claimTicket({ home, session, cwd, named = false, now = Date.now, platform = process.platform, fileSystem: io = fs }) {
   let expired = [];
   try {
     expired = sweepExpired(home, { now, io });
     if (!isText(session)) return { ticket: null, expired };
     const dir = gateFirstDir(home);
     const mine = readTickets(home, { now, fileSystem: io }).open
-      .filter((ticket) => ticket.session === session && (ticket.tree === null || ofTree(ticket.tree, cwd, platform)));
+      .filter((ticket) => ticket.session === session && (ticket.tree === null ? !named : ofTree(ticket.tree, cwd, platform)));
     for (const candidate of mine) {
       const claimed = path.join(dir, `${candidate.id}.claimed-${process.pid}-${randomBytes(3).toString('hex')}`);
       try {

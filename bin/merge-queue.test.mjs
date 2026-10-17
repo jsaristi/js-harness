@@ -1117,6 +1117,7 @@ test('localSuite takes a gate-first ticket for the land, then reads a gate that 
   assert.equal(calls[1][0], 'gate');
   assert.equal(calls[1][1], '--wait');
   assert.deepEqual(said, ['The land goes first in the gate line: ticket 0a1b2c3d: the next check of session s1 goes first']);
+  assert.deepEqual(calls[2], ['gate', 'first', '--cancel', '0a1b2c3d'], 'a ticket the gate did not claim holds no slot');
   assert.deepEqual(result, { ok: false, notRun: true, said: 'js-harness gate: no turn in 90 minutes' });
 });
 

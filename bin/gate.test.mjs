@@ -1865,3 +1865,13 @@ test('gate stops a command that outlives its bound, with every process it starte
   const [gate] = gatesOf(readGateLog(home).events);
   assert.equal(gate.end?.result, 'timed out', JSON.stringify(gate));
 }));
+
+test('a gate claims the ticket its session issued for its folder, and leaves one that names no folder (odd/tasks/land-unattended.md)', withHome(async (home, dir) => {
+  const env = { JS_HARNESS_HOME: home, CLAUDE_CODE_SESSION_ID: 'sess-a' };
+  assert.equal((await runGateLog(['first', '--session', 'sess-a', '--reason', 'the next check'], env)).code, 0);
+  assert.equal((await runGateLog(['first', '--session', 'sess-a', '--tree', dir, '--reason', 'the merge queue lands a candidate'], env)).code, 0);
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'x'], env, { spawn: ranWith(0) });
+  assert.equal(code, 0, said.join('\n'));
+  assert.deepEqual(readTickets(home).open.map((ticket) => ticket.tree), [null]);
+  assert.equal(ticketEvents(home).filter(({ event }) => event === 'first-claimed').length, 1);
+}));
