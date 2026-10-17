@@ -645,13 +645,21 @@ test('runSensor reports the exit of a command that ended as its bound ran out, n
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
     const kills = [];
-    const running = runSensor('fake', { ...bound, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
-    // Set after the sensor's own timer and for the same time, so it fires right after it in the same turn of the
-    // loop: the way an exit the system already holds is delivered after a timer that ran out at that moment.
-    setTimeout(() => {
+    // The exit is emitted inside the sensor's own timer, right after it runs: the way an exit the system already
+    // holds is delivered after a timer that ran out at that moment. Two timers set apart can land a clock tick
+    // apart and let the deferred decision run first (Codex on 3586f40..9a62f82), so the order is not left to them.
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = (fn, ms, ...args) => realSetTimeout(ms === 50 ? () => {
+      fn();
       child.emit('exit', 0, null);
       child.emit('close');
-    }, 50);
+    } : fn, ms, ...args);
+    let running;
+    try {
+      running = runSensor('fake', { ...bound, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
     const result = await running;
     assert.deepEqual([result.status, result.error, kills], [0, undefined, []], JSON.stringify(bound));
   }

@@ -513,3 +513,8 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   advisories. R3: a killed child may answer `kill(pid, 0)` while it is reaped; the test now waits up to 5 s for it to
   be gone (next commit). Left: the order of two timers of one duration is node's, which the test leans on (R3, a
   suggestion), and no test breaks a silence with a chunk inside the deferred turn (R3).
+  That wait is `9a62f82`; gentle-ai on `22455a7..9a62f82`: medium, not due (`under_budget`). Codex on
+  `3586f40..9a62f82`: one P2, R3's suggestion made a finding: two timers set apart can land a clock tick apart, so
+  the deferred decision could run before the fake exit and fail a correct `runSensor`. The T6h test now emits the
+  exit inside the sensor's own timer, right after it runs (it wraps `setTimeout` only while `runSensor` arms it);
+  it passes, and fails against a copy without the deferral (next commit).
