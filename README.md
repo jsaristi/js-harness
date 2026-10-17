@@ -856,6 +856,34 @@ off the clock is refused with exit 1, the right hour, and nothing written. An ho
 is an event (`JH 5 · canal: compacted at 18:46`), and an answer, which quotes his words, is not
 held to it.
 
+### js-harness permit
+
+The host asks the user before some tool calls even in bypass mode, and a session that meets such a card waits
+in its own window until the user answers it there: on 2026-10-17 five sessions waited 12 to 38 hours. The host
+gives a session no tool to answer another's card; a `PermissionRequest` hook is the one way, and `install`
+registers `js-harness permit --hook` as that hook in Claude Code's settings (600 s timeout; `uninstall` removes
+it).
+
+While the orchestrator holds the relay, a card of another session reaches it first:
+
+```
+$ js-harness permit lease            # the orchestrator, at its start and at each re-arm of its watch (40 minutes)
+$ js-harness permit list             # the waiting cards: id, time left, session, tool, command
+$ js-harness permit allow p1a2b3c4d5
+$ js-harness permit deny p1a2b3c4d5 --reason "its work merged in PR 305"
+$ js-harness permit lease --off      # before the orchestrator is relieved
+```
+
+The hook records the request, tells the orchestrator by a `permit <id>` note in the channel and waits up to
+570 seconds for a verdict. An allow lets the call run; a deny refuses it with the orchestrator's reason, which the
+session reads. With no verdict in time, with no orchestrator holding the relay, for the orchestrator's own cards,
+or on any failure, the hook answers nothing and the card reaches the user as before. Nothing is allowed by a rule:
+only by the orchestrator's verdict, and a `deny` rule in the settings still wins over an allow. Only the session
+holding the relay gives a verdict, never the session that asks; a lease another session holds is replaced or ended
+only with `--take-over`, as a new orchestrator does. Requests, verdicts,
+the lease and `log.jsonl`, one line per outcome, live under `~/.js-harness/channel/permits/<project>/`, which
+`uninstall` removes with the channel.
+
 ### js-harness wake
 
 A boot kills every background command of every session, and the transcripts do not say so: a

@@ -320,6 +320,9 @@ const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
 /** The command of the guard hook, as `bin/lib/manifest.mjs` spells it (`GUARD_HOOK_COMMAND`); the same test holds the two together. */
 const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
 
+/** The command of the permit relay, as `bin/lib/manifest.mjs` spells it (`PERMIT_HOOK_COMMAND`); the same test holds the two together. */
+const PERMIT_HOOK_COMMAND = 'js-harness permit --hook || exit 0';
+
 /** The command of the share check, as `bin/lib/manifest.mjs` spells it (`SHARE_HOOK_COMMAND`); the same test holds the two together. */
 const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 
@@ -347,6 +350,7 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PermissionRequest', command: PERMIT_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: SHARE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'UserPromptSubmit', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|resume', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
