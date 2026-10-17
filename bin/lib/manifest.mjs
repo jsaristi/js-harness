@@ -37,8 +37,8 @@ js-harness commands:
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; a work session's wait also ends on a notice to its own number (exit 3), printing it and the same wait to run again; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
-- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
-- \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a Bash command with backticks inside double quotes, and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
+- \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words. On Claude Code a work session that ends its turn holding work the orchestrator handed it, with nothing in its background to wake it, is turned back once, with the wait to arm.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -168,7 +168,7 @@ How a lead is rotated, where the host nests a session under the one that started
 ## A work session
 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
-- Your commit's gate waits by itself while another runs: \`Gates\` in \`js-harness sessions\` says which runs and which wait. A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too.
+- Commit with a plain \`git commit\`: in a project that holds \`.github/workflows/gate.yml\` its gate sends the tests to GitHub's machines first, and anywhere it waits by itself for its turn here while another runs (\`Gates\` in \`js-harness sessions\` says which runs and which wait). A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too; a commit wrapped in it holds the machine's lock and never goes to GitHub.
 - Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
 - While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does a gentle-ai review, whose reviewer has no tools.
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
@@ -402,7 +402,8 @@ export const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
  * in every session of the machine and changes nothing where the project did not turn it on. Both hosts: it reads only
  * the reply's text, which both send as `last_assistant_message` (Claude Code's payload logged on 2026-10-16; Codex's
  * hooks documentation read the same day). Five seconds, as the share check's: it reads one small file a folder, up to
- * the project's `harness.json`. */
+ * the project's `harness.json`, and, for the wake check of a work session, the end of its transcript, the record of
+ * notices and the openings (533 ms on this project's largest transcript, 64.7 MB, measured on 2026-10-16). */
 function replyHookEntry() {
   return {
     hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 5 }],
@@ -1293,7 +1294,21 @@ export function uninstall(home, deps = {}) {
   // by the steps below, with a manifest and without, as when `memory` never ran.
   const memory = removeMemoryHygieneFolder(home, deps.removeFile ?? fs.rmSync, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync);
   const result = uninstallInstalled(home, deps);
-  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory) };
+  return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory), ...throughputResult(home, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync) };
+}
+
+/** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
+ * the gates of days the gate log has rotated away. Named, with how many days they hold (`null` where the folder
+ * could not be listed), so the person knows what stays; `{}` when there is no folder. */
+function throughputResult(home, statFile, listDir) {
+  const dir = path.join(home, '.js-harness', 'throughput');
+  try {
+    if (!isThere(dir, statFile)) return {};
+    const days = listDir(dir).flatMap((project) => listDir(path.join(dir, project)).filter((name) => name.endsWith('.json'))).length;
+    return { throughputKept: { path: dir, days } };
+  } catch {
+    return { throughputKept: { path: dir, days: null } };
+  }
 }
 
 /** `uninstall` without the folder of memory hygiene, which it removes before calling this. */

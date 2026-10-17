@@ -492,6 +492,10 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     }
   }
   const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
+  if (result.throughputKept) {
+    const { path: folder, days } = result.throughputKept;
+    console.log(`kept ${folder}: ${days === null ? 'the' : days} day snapshot${days === 1 ? '' : 's'} of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`);
+  }
   if (
     result.removed.length === 0 &&
     result.kept.length === 0 &&
@@ -502,7 +506,8 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     result.gateKept.length === 0 &&
     result.channelKept.length === 0 &&
     result.remoteKept.length === 0 &&
-    memoryKept.length === 0
+    memoryKept.length === 0 &&
+    !result.throughputKept
   ) {
     console.log(`nothing installed under ${home}`);
   }

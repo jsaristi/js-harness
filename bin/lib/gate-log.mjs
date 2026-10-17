@@ -363,7 +363,7 @@ function waitSaid({ waitedSeconds, waitedFor }, always = false) {
   return `waited ${wholeSeconds(waitedSeconds)}${gates.length ? ` for ${gates.join(', ')}` : ''}`;
 }
 
-const LOCK_SAID = { parent: "in its parent's turn", none: 'without the lock' };
+const LOCK_SAID = { parent: "in its parent's turn", none: 'without the lock', ci: "on GitHub's machines" };
 
 /** That a gate stopped before its sensors, and for which rows where its line names them. */
 function stopSaid({ rows }) {

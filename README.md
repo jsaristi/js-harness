@@ -71,14 +71,14 @@ quarantine proves no tree for `"sameTree": "skip"`, so the next gate runs the te
 `flaky` row fails a malformed ledger, an empty field included, and lists the expired entries,
 which no longer count.
 
-In a project that holds `.github/workflows/gate.yml`, as this repository does, a gate whose turn
-at the machine's gate lock would wait runs its tests on GitHub's machines instead: it pushes the tree
-being committed to a `gate/<sha>` branch of the remote (`--remote`, `origin` when not given), reads
-that workflow's run in the GitHub repository the remote names with `gh`, deletes the branch, and
-lets the commit through only on green. The `tests` row then names the run. A gate whose turn is
-free runs here, and one that gets no answer from GitHub (a remote not on GitHub, no push, `gh` not
-signed in, no run within 3 minutes, a run cancelled, timed out or past 20) runs here too, after one
-`check:` line on stderr that says why. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
+In a project that holds `.github/workflows/gate.yml`, as this repository does, every commit's gate
+runs its tests on GitHub's machines first, whether or not the machine's gate lock is free: it pushes
+the tree being committed to a `gate/<sha>` branch of the remote (`--remote`, `origin` when not
+given), reads that workflow's run in the GitHub repository the remote names with `gh`, deletes the
+branch, and lets the commit through only on green. The `tests` row then names the run. A gate that
+gets no answer from GitHub (a remote not on GitHub, no push, `gh` not signed in, no run within 3
+minutes, a run cancelled or timed out, or one not done within `rule:ci-gate-bound` of the push,
+which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
 on Windows is left to the merge queue's run on this machine.
 
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
@@ -340,6 +340,62 @@ Pace of origin/main, its first-parent line, by committer day over the last 2 day
   2026-10-16  closed 30  reopened 0  added 22  removed 1  (today, so far)
 Total       closed 111  reopened 0  added 89  removed 2
 A day       closed 55.5  reopened 0  added 44.5  removed 1
+```
+
+### js-harness throughput
+
+The throughput review's measure: a fixed table of a window of UTC days, by default yesterday,
+where every row names the record it was read from and a fact no record holds yet says which
+recorder it waits for, never a zero; a record that could not be read, a git process that failed
+included, is named on its row with why. The tasks are each commit of main compared with the one
+before, as `progress` compares them. It is read-only and fetches nothing: main is `origin/main`
+as last fetched (`git merge-tree`, which names the files of a conflicted merge, writes objects
+into the object store). The gates are every project's on the machine, as the gate lock is.
+
+```console
+$ js-harness throughput --since 2026-10-16 --until 2026-10-17
+Throughput  2026-10-16 to 2026-10-17 (UTC, until excluded; local UTC-05:00: 2026-10-15 19:00 to 2026-10-16 19:00)  D:\js-harness
+  gates: every project of this machine, as the gate lock is; the other rows: this project
+  2026-10-16  snapshot
+pull requests merged         94 (3.92 an hour); merged twice: #292, #305  [git log of origin/main as last fetched]
+ready to merged              not recorded (B1, JH 26)  [a ready notice that names its pull request]
+lock busy                    16.8 h of 24 h; by kind: check 125 / 446 min, land 65 / 230 min, copy 49 / 150 min, run 39 / 111 min, commit 25 / 70 min  [the gate log (~/.js-harness/gate-log)]
+commit gates                 here: median 200 s (150), lock free median 217 s (52); GitHub: median 144 s (75)  [the gate log (~/.js-harness/gate-log)]
+lands                        65, median 216 s, red 8; 65 gates for 49 lands  [the gate log (~/.js-harness/gate-log)]
+…
+```
+
+The gate log rotates in about two days, so `throughput snapshot [--day <day>]` keeps a day's
+gates under the home (`.js-harness/throughput/<project>/<day>.json`) once the day has settled,
+two `gate-max` after its midnight, and the table reads a kept day from there. Main's history,
+the Codex runs and the channel are append-only and always read live. A kept day is written
+again only by a fuller one, the replacement recorded; `--gate-log <file>` (twice at most) reads
+archived copies of the log instead, for a day the live log has lost; a copy made before the day
+settled may lack its last gates, so the day is kept as partial until then. A copy is made no
+earlier than its modification time; one that kept its source's time (`cp -p`) says when it was
+made with `--copied-at <YYYY-MM-DDTHH:MMZ>`. `throughput status` lists
+the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
+leaves the snapshots in place.
+
+```console
+$ js-harness throughput status
+2026-10-15  kept
+2026-10-16  kept
+```
+
+`--against <since>..<until>` compares the window with an equal window before a change, row by
+row, daily value with daily value. The gate-wait median moved from 216 s to 69 s from one day to
+the next with nothing shipped, so under 7 days a side it prints both and how often the median of
+a window that did not change falls outside the before range, and judges nothing; from 7 days a
+row moved only when the after window's median lies outside the before range, which an unchanged
+week does 7% of the time. The window before must end by the one compared.
+
+```console
+$ js-harness throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
+Throughput compared  before 2026-10-15 to 2026-10-16, after 2026-10-16 to 2026-10-17 (UTC days, until excluded)  D:\js-harness
+pull requests merged                     before 80      after 94      not judged: 1 days a side, under 7; with nothing changed, the after median falls outside the before range 100% of the time
+lock busy, h                             before 14.3    after 16.8    not judged: 1 days a side, under 7; with nothing changed, the after median falls outside the before range 100% of the time
+…
 ```
 
 ### js-harness contract
@@ -672,6 +728,12 @@ A pull request ready to land is announced with `--kind ready --pr <number>`: the
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which
 session a pull request belongs to from the record, even when the notice was sent from `main`.
 
+The record stamps every notice with the clock, so the text needs no hour. A text that opens with
+one as its sending (`19:48 JH ORQ: …`, or after the label, `JH 5, 19:48: …`) more than a minute
+off the clock is refused with exit 1, the right hour, and nothing written. An hour after a colon
+is an event (`JH 5 · canal: compacted at 18:46`), and an answer, which quotes his words, is not
+held to it.
+
 ### js-harness wake
 
 A boot kills every background command of every session, and the transcripts do not say so: a
@@ -766,7 +828,7 @@ session, on `Bash`, on `Write` and `Edit`, and on the scheduled-task and cloud t
 standard input and refuses seven things: a sub-agent launched on a model the project's rules do not give;
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
-sidebar, even when he asked for it; a message whose stamped hour is more than a minute off the clock; a shell command with backticks
+sidebar, even when he asked for it; a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a shell command with backticks
 inside double quotes, which bash runs as commands; a heavy `node --test` outside a gate turn while
 another gate holds the machine's lock or an eval batch runs, heavy being several files, or one file
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
@@ -779,7 +841,14 @@ opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 do
 14:44). A document also records earlier events, so an hour behind the clock passes; an `Edit` is
 judged by the lines of the file it leaves that were not already there. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
-as it was. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
+as it was. One more Bash call runs with a hint the agent reads beside its result (the hook's
+`additionalContext`): a `git commit` or `git merge` wrapped in `js-harness gate --`, which holds
+the machine's lock for the commit's whole gate, so the gate runs here and never goes to GitHub,
+while a plain commit waits for its turn by itself. It reads every command the wrapper runs, a
+shell's `-c` included, from the folder the gate's `--cwd` names. A commit with `--no-verify` or `-n`, a merge
+that makes no commit, a commit after the wrapper (`js-harness gate -- npm test && git commit`)
+and a wrapped test run get none: a test run of your own stays wrapped. A denial on the same call
+wins over the hint. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
 Markdown file the hour check besides. An `Edit` is
 judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
 line that was already long there is left to the memory hygiene pass rather than blocking the edit.
@@ -834,6 +903,18 @@ English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decis
 already shown when a `Stop` hook runs, so the session writes its close again in its next words.
 It never turns back a stop the hooks already turned back (`stop_hook_active`), does not run for
 sub-agents, writes nothing and always exits 0.
+
+In the same projects, on Claude Code, it also turns back a work session (a title such as `JH 7 · …`)
+that ends its turn holding work the orchestrator handed it, by a notice to its number or by its
+opening, with nothing running in its background and no cron of its own: nothing would wake it when
+a notice or a land comes, so it is told to arm `js-harness wait --notice-to <number>` in the
+background, or to give the work back with `--kind closed`. A `waiting` notice does not give it
+back: a session that waits still arms a wait. It says so once a handing, as the transcript records
+its earlier block, and again after a background task launched since has ended. A close with the
+decision state is not told, a handing older than the session's transcript belongs to another
+session of that number (except the opening the session read, always stored before it began), a
+call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
+is refused too, both reasons go in one block.
 
 ```console
 $ js-harness reply --hook < stop.json

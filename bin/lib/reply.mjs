@@ -114,13 +114,8 @@ function shapeOf({ states, labels }) {
     + `${states.finished} (name the session to return to). Your reply is already shown: write the close again in your next words.`;
 }
 
-/** Why the reply `text` does not close as the project's labels in `config` ask, or `null` when it does. `running`
- * is how many background tasks of the session run as it stops (the host's `background_tasks`; Codex sends none). */
-export function replyRefusal(text, config, { running = 0 } = {}) {
-  const { lines, fenced, blocks } = linesOf(String(text ?? ''));
-  const { states, labels } = config;
-  const turned = (why) => `js-harness reply: ${why}. ${shapeOf(config)}`;
-
+/** The state lines and the label lines of a reply's `lines`, outside its fenced blocks. */
+function closesOf(lines, fenced, { states, labels }) {
   const found = [];
   const labelLines = [];
   lines.forEach((line, i) => {
@@ -133,6 +128,24 @@ export function replyRefusal(text, config, { running = 0 } = {}) {
       if (startsWithLabel(plain, labels[label])) labelLines.push({ label, line: i });
     }
   });
+  return { found, labelLines };
+}
+
+/** The state the reply `text` closes with in the project's labels of `config` (`working`, `decision`, `cut` or
+ * `finished`), or `null` when it has none or more than one. */
+export function closingState(text, config) {
+  const { lines, fenced } = linesOf(String(text ?? ''));
+  const { found } = closesOf(lines, fenced, config);
+  return found.length === 1 ? found[0].state : null;
+}
+
+/** Why the reply `text` does not close as the project's labels in `config` ask, or `null` when it does. `running`
+ * is how many background tasks of the session run as it stops (the host's `background_tasks`; Codex sends none). */
+export function replyRefusal(text, config, { running = 0 } = {}) {
+  const { lines, fenced, blocks } = linesOf(String(text ?? ''));
+  const { states, labels } = config;
+  const turned = (why) => `js-harness reply: ${why}. ${shapeOf(config)}`;
+  const { found, labelLines } = closesOf(lines, fenced, config);
 
   if (found.length === 0) return turned('the reply has no state line');
   if (found.length > 1) return turned(`the reply has more than one state line (${found.map(({ state }) => states[state]).join(', ')}); it closes with exactly one`);

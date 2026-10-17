@@ -835,6 +835,27 @@ test('uninstall removes the folder of memory hygiene when no project holds a sna
   }
 });
 
+test('uninstall keeps the snapshots of the throughput review and names their folder, with a manifest and without', () => {
+  const home = makeTmpHome();
+  try {
+    const folder = path.join(home, '.js-harness', 'throughput');
+    for (const withManifest of [true, false]) {
+      if (withManifest) install(home, '0.1.0');
+      fs.mkdirSync(path.join(folder, 'C--proj'), { recursive: true });
+      fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-15.json'), '{}');
+      fs.writeFileSync(path.join(folder, 'C--proj', '2026-10-16.json'), '{}');
+      const result = uninstall(home);
+      assert.deepEqual(result.throughputKept, { path: folder, days: 2 }, String(withManifest));
+      assert.equal(fs.existsSync(path.join(folder, 'C--proj', '2026-10-16.json')), true, 'a snapshot is never removed');
+    }
+    fs.rmSync(folder, { recursive: true });
+    install(home, '0.1.0');
+    assert.equal(Object.hasOwn(uninstall(home), 'throughputKept'), false, 'said only when the folder is there');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall keeps the folder of a project whose memory passes left snapshots, names their stamps, and removes the rest', () => {
   const home = makeTmpHome();
   try {
@@ -2312,7 +2333,7 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
   assert.doesNotMatch(text, /never start a gate while another runs/);
   assert.doesNotMatch(text, /a gate is about to start/);
   // A whole test run of a session's own is no gate: the line names the command that puts it in line.
-  assert.ok(text.includes("- Your commit's gate waits by itself while another runs: `Gates` in `js-harness sessions` says which runs and which wait. A whole test run of your own goes through `js-harness gate -- <command>`, which waits for its turn too.\n"));
+  assert.ok(text.includes("- Commit with a plain `git commit`: in a project that holds `.github/workflows/gate.yml` its gate sends the tests to GitHub's machines first, and anywhere it waits by itself for its turn here while another runs (`Gates` in `js-harness sessions` says which runs and which wait). A whole test run of your own goes through `js-harness gate -- <command>`, which waits for its turn too; a commit wrapped in it holds the machine's lock and never goes to GitHub.\n"));
   // A push that waited for a measure's turn held a merge 16 minutes (odd/tasks/gate-turn-guards.md, S1).
   assert.ok(text.includes('\n- Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, `js-harness gate` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (`--cwd <worktree>`).\n'));
   assert.doesNotMatch(text, /Start no whole test run/);

@@ -381,6 +381,21 @@ gate for a change that held no code.
 - Control: check — bin/check.test.mjs — "a merge of the trunk into a branch of documents runs no
   sensor when the merge differs from the side it merges only in documents" — since 2026-10-14
 
+### engram-listener-unseen-at-kill
+A gate failed on one test of `evals/isolation-probe.test.mjs` (line 1734), "the probe stops what the
+trial left listening on its engram port, by number, and leaves nothing behind", in a change that touched
+nothing of the evals. The test asserts that its cleanup found exactly one listener on the trial's port
+when it killed it (`killed` deep-equal to `[[port, 1]]`). That the stand-in server had not yet listened,
+or had already gone, under load is assumed, not checked: the run's own assertion text was not read. Since
+2026-10-16 the file is quarantined in docs/FLAKY.md: it still runs in every gate, and a pass on its rerun
+does not block until the entry expires on 2026-10-23.
+- Class: machine
+- Seen: 2026-10-16 — the land of PR 350 in WSL2, gate log c603935e, under 59 percent load, by the lead's
+  notice to JH 28 (a claim) — the only failure of that test in the gate logs; PR 350 touches nothing of
+  the evals, and the file alone in WSL2 on 350 and main gave 120 pass, 0 fail (JH 24, by the same notice)
+- Control: check — bin/check-flaky.test.mjs — "a red suite whose failed file passes alone and is
+  quarantined does not block, and a rerun row says why" — since 2026-10-16
+
 ### engram-writes-lost
 A session lost what it had written to engram after each of its two compactions.
 - Class: tool
@@ -575,13 +590,19 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-14 — odd/tasks/rule-hierarchy.md, Next step, commit 6e32a44 — JH 7 wrote "about
   05:40" in a block committed when the clock read 05:15; corrected in 16db546. The control stamps a
   relief line, not a feature document
-- Control: check — bin/guard.test.mjs — "a Write or an Edit of a Markdown file whose line opens with
-  today and an hour ahead of the clock is denied" — since 2026-10-15
+- Seen: 2026-10-16 — the record of notices, D--js-harness.jsonl — 73 of the 74 lead notices that
+  opened "HH:MM JH ORQ:" (10-15 to 10-16) were more than a minute off the local clock: notify text
+  sent through Bash met no hour check (bin/guard.mjs:81 holds only message tools)
+- Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
+  the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
   either tool, is denied when its stamped hour is off the clock", on main since pull request 157
-  (2026-10-14); a feature document or a committed block: the control above
+  (2026-10-14); a feature document or a committed block: the documents line below
   (bin/lib/document-hour-guard.mjs, T12b), which refuses only an hour ahead of the clock, since a
   document also records earlier events
+- Proof: documents: bin/guard.test.mjs, "a Write or an Edit of a Markdown file whose line opens with
+  today and an hour ahead of the clock is denied", since 2026-10-15; notices: the control above
+  (odd/tasks/wake-and-flag.md, T4); the relief file stays out, as its opening hour is often an event
 - Was: owed — odd/tasks/session-channel.md — "An hour a session writes in a feature document or a
   block it commits is read from the clock" — from 2026-10-15 until T12b was built the same day
 - Was: check — bin/lib/channel.test.mjs — "a relief line is stamped with the local date and time
@@ -1018,8 +1039,14 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-14 — relief file, line 758 — JH 13 idle from 03:13 and JH 15 from 03:44, both told to
   start after the WSL gate reached `main` (line 759), never woken; the fix owed is the list of what
   is armed before he leaves, in the orchestrator skill (JH 5)
-- Control: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
-  in its background work" — since 2026-10-14
+- Seen: 2026-10-16 — throughput-v3-measure.md (the lead's notes, the window 10-15T00Z to 10-17T00Z) — 31
+  turn ends followed by more than 30 minutes of silence with no background task, 64.4 session-hours
+  in two days (an upper bound: some had nothing to do)
+- Control: check — bin/reply.test.mjs — "a work session that ends its turn holding handed work with
+  nothing in the background is turned back once, with what to arm" — since 2026-10-16
+- Was: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
+  in its background work" — replaced on 2026-10-16, when the reply Stop hook began to check it
+  (odd/tasks/wake-and-flag.md, T2)
 
 ### session-opened-unseen
 A session was opened where he does not see it: a scheduled task opened it in the app's Routines, at

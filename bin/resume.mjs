@@ -89,7 +89,10 @@ const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
-const NOTIFY = `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at <HH:MM by the clock>, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
+// The hour of the compaction is the hook's own clock, since the hook runs at it: 7 of 60 such notices typed it in UTC
+// when the line left it to the session (odd/tasks/wake-and-flag.md, T4).
+const twoDigits = (n) => String(n).padStart(2, '0');
+const notifyLine = (ms) => `Then tell the orchestrator (${ORCHESTRATOR_IS}) in one line that this session was compacted and what it resumes:  js-harness notify --to orchestrator --kind note "<this session's title>: compacted at ${twoDigits(new Date(ms).getHours())}:${twoDigits(new Date(ms).getMinutes())}, resumes <what>"  (it answers with the orchestrator's title, or that there is none).`;
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
@@ -929,7 +932,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now(), quoted })));
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
-  if (!orchestrator) lines.push(NOTIFY);
+  if (!orchestrator) lines.push(notifyLine(now()));
   return lines;
 }
 

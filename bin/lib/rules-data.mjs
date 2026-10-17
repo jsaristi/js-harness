@@ -17,6 +17,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "ci-gate-bound",
+    "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
+    "owner": "project",
+    "since": "2026-10-16",
+    "value": 8,
+    "unit": "minutes",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|jobs?)\\b.{0,60}\\b(?:not done|cancelled|stopped)\\b.{0,15}\\b(?:after|within|past)\\s+{amount}"
+    ]
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",

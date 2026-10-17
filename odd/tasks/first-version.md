@@ -456,3 +456,8 @@ pm`), whose `pack --dry-run --json` prints an object keyed by the package's
   The figure is close to the bound: 1,114 s against the `sensor-timeout` rule's 1,200, where L25's run took
   862 s and L18's 1,398, so the whole suite on Windows sits on that bound by load; T6f, the bound L21 asks him
   about, stays open apart from T6.
+- L27 (2026-10-17, commit-gates-first): "Overflow only" in T7's design above is superseded: every gate a
+  commit's or a merge's hook runs now sends its tests to GitHub first, whether or not the lock is free, and a
+  check by hand stays here (it tests the working tree). The bound from the push is the rule `ci-gate-bound`, 8
+  minutes, and `gate.yml` stops its job two minutes later. Design, readers and figures:
+  `odd/tasks/commit-gates-first.md`.

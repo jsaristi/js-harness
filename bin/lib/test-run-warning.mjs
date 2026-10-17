@@ -64,16 +64,21 @@ export function commandsOf(text) {
 
 const isNode = (word) => /(^|[\\/])node(\.exe)?$/i.test(word?.text ?? '');
 
-/** The words a `js-harness gate` command runs after its `--`, or `null` for a command that is no gate:
- * `js-harness gate ...` or `node .../js-harness.mjs gate ...`. One word after `--` is a command line of
- * its own, as `gate` reads it. */
-function gateWraps(words) {
+/** The commands a `js-harness gate` command runs after its `--`, each as its words, or `null` for a command that
+ * is no gate: `js-harness gate ...` or `node .../js-harness.mjs gate ...`. One word after `--` is a command line
+ * of its own, as `gate` reads it. */
+export function gateCommands(words) {
   const at = /(^|[\\/])js-harness(\.mjs)?$/.test(words[0]?.text ?? '') ? 0 : isNode(words[0]) && /js-harness\.mjs$/.test(words[1]?.text ?? '') ? 1 : -1;
   if (at === -1 || words[at + 1]?.text !== 'gate') return null;
   const split = words.findIndex((word) => word.text === '--');
   if (split === -1) return [];
   const rest = words.slice(split + 1);
-  return rest.length === 1 ? commandsOf(rest[0].text).flat() : rest;
+  return rest.length === 1 ? commandsOf(rest[0].text) : [rest];
+}
+
+/** The words a `js-harness gate` command runs after its `--`, all its commands' in one list (see `gateCommands`). */
+function gateWraps(words) {
+  return gateCommands(words)?.flat() ?? null;
 }
 
 /** The files the `node --test` of `words` names, as `{ files, names }`: `files` is `0` for none (every test
@@ -156,6 +161,18 @@ const WSL = /(^|[\\/])wsl(\.exe)?$/i;
 const SHELL = /(^|[\\/])(sh|bash|dash|zsh)(\.exe)?$/i;
 const KEYWORDS = new Set(['do', 'then', 'else', 'elif', '!', 'time', '{']);
 
+/** The command line a shell's `-c` runs, for words that start with a shell (`sh`, `bash`, `dash`, `zsh`), or `null`
+ * for any other words or a shell with no `-c`. `-c` counts among the shell's options only, before a script or a
+ * `--`, and within a cluster such as `-cl` (Codex, 2026-10-14). */
+export function shellScript(words) {
+  if (!SHELL.test(words[0]?.text ?? '')) return null;
+  let flag = -1;
+  for (let index = 1; index < words.length && /^-[a-zA-Z]+$/.test(words[index].text); index += 1) {
+    if (words[index].text.includes('c')) flag = index;
+  }
+  return flag === -1 || words[flag + 1] === undefined ? null : words[flag + 1].text;
+}
+
 /** The files the first `node --test` that `words` runs names (see `filesOf`), looking through `wsl.exe` and
  * `sh -c`, or `null` where there is none. A script a shell runs is not read. */
 function scan(words, depth = 0) {
@@ -168,14 +185,9 @@ function scan(words, depth = 0) {
     return split === -1 ? null : scan(rest.slice(split + 1), depth + 1);
   }
   if (SHELL.test(rest[0].text)) {
-    // `-c` counts among the shell's options only, before a script or a `--`, and within a cluster such as
-    // `-cl` (Codex, 2026-10-14).
-    let flag = -1;
-    for (let index = 1; index < rest.length && /^-[a-zA-Z]+$/.test(rest[index].text); index += 1) {
-      if (rest[index].text.includes('c')) flag = index;
-    }
-    if (flag === -1 || rest[flag + 1] === undefined) return null;
-    for (const inner of commandsOf(rest[flag + 1].text)) {
+    const script = shellScript(rest);
+    if (script === null) return null;
+    for (const inner of commandsOf(script)) {
       const found = scan(inner, depth + 1);
       if (found !== null) return found;
     }

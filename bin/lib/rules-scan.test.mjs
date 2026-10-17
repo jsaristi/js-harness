@@ -57,6 +57,7 @@ const PLANTED = {
   'agents-budget': { line: 'AGENTS.md stays within its budget of 1500 estimated tokens.', marked: 'AGENTS.md stays within its budget (`rule:agents-budget`).' },
   'codex-review-floor': { line: 'A review is never put under its floor of 300,000 input tokens.', marked: 'A review is never put under its floor (`rule:codex-review-floor`).' },
   'codex-review-margin': { line: 'The plan keeps a margin of 5% of the allowance.', marked: 'The plan keeps its margin (`rule:codex-review-margin`).' },
+  'ci-gate-bound': { line: 'A run on GitHub not done within 20 minutes of the push is cancelled.', marked: 'A run on GitHub not done within `rule:ci-gate-bound` of the push is cancelled.' },
   'codex-review-rate': { line: 'A part is put at 1,200 input tokens a changed line.', marked: 'A part is put at the rate of `rule:codex-review-rate`.' },
   'context-pause': { line: 'Near 88% of its window a session writes its state.', marked: 'At the pause of `rule:context-pause` a session writes its state.' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
