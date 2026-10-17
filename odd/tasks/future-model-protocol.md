@@ -235,7 +235,7 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
   C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
   see L17; C3b `9d82100`, the marker blocks, see L18; C3c `dde2216`, Codex's TOML tables and hook
   trust, see L19; C4 `8ce28f0`, the suite's wiring and pins; C5, the report's arms section, see
-  L21; C6a, C6b and C7 next)
+  L21, in #426; C6a, the probe, see L26; C6b and C7 next)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
@@ -502,3 +502,36 @@ L25 (2026-10-17, 23:12 UTC by `date`) Evidence for the merge queue, which left p
 gentle-ai assessed `8ce28f0..8fbfa22` (C4, C5, the Codex fixes) from `924d29e`: medium, not due (`under_budget`).
 gentle-ai assessed T10 `3bb5871` from `d2a3a8a`: medium, not due (`under_budget`, 151 changed lines).
 No review was started for either, by the rule that a slice under budget waits in the slice.
+
+L26 (2026-10-17, 23:25 UTC by `date`) Pull request 426 landed (main `3badd8b`); C6a on a new branch,
+`feat/eval-arms-probe` from it. The isolation probe runs an arm of one component beside its base:
+`--arm current-without-<id>` (or `arms: ['current', <arm>]`) seeds the arm as the eval does (the
+template, then `applyWithout`), and the fake API tracks, on every `/v1/messages` request, whether it
+carries each component, by what `withoutEvidence` (`evals/without.mjs`) reads of it in the template
+before the cut: its MCP tool prefixes, the markers of the lines it is sent whole, the first characters
+of its skill and agent descriptions. The base must carry it on its main-model request, the arm on no
+request; a component a request carries nothing of (`hooks`, `project`) is reported unseen, a warning
+that fails nothing. An arm without its base, a `minimal-with` arm and a name `parseArm` refuses are
+refused before anything is made. The engram controls do not apply to an arm without `mcp-engram`,
+`plugin-engram` or `hooks`; the contamination check is skipped for an arm that cuts the global
+`CLAUDE.md` or a part of it, where the component check speaks instead. Tests RED (5, written first),
+then GREEN; 161 tests of the probe, `without` and `arms` pass. No probe was run against the real
+`claude`: that is a run on this machine, though with no spend, and it waits for the lead's word.
+
+L27 (2026-10-17, 23:35 UTC by `date`) Codex reviewed C6a (`3badd8b..cb9f1f3`, 221,074 input tokens,
+recorded): three P2 findings, all checked against the code and real, each test RED first, then fixed.
+(1) A plugin's evidence was a tool prefix it may not have: a plugin with no MCP server (the stack's
+`typescript-lsp`) failed the current arm. Now a plugin's evidence is read from its installed folder
+(`installed_plugins.json`, under the home placeholder): its tool prefix only when it declares a
+server (`.mcp.json` or `plugin.json`), and the descriptions of its skills, agents and commands, less
+those kept from the model (`disable-model-invocation: true`). (2) Descriptions and line markers were
+one pool needing two hits, so an arm that kept one skill of several passed: one description is now
+enough, two markers still are for the lines of one file. (3) Every installed output style gave lines;
+now only the style `settings.json` selects does. Found in passing, the same class: any other Markdown
+of a removed folder (a README in `hooks`) gave lines no request carries; now only `CLAUDE.md` and
+`AGENTS.md` do. `HOME_TOKEN` moved to `evals/without.mjs`, which reads it back, and `home.mjs`
+imports it. 205 tests of the probe, `without`, `home` and `arms` pass.
+
+L28 (2026-10-17, 23:39 UTC by `date`) Codex rechecked `cb9f1f3..3f3d59a` (48,783 input tokens, recorded): all three fixed, no new finding.
+gentle-ai assessed C6a `cb9f1f3` from `3badd8b`: medium, not due (`under_budget`, 338 changed lines).
+gentle-ai assessed the slice `cb9f1f3..3f3d59a` (C6a and its fixes) from `3badd8b`: medium, not due (`under_budget`, 498 changed lines).

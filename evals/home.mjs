@@ -20,7 +20,7 @@ import { sandboxEnv } from './configs.mjs';
 import { exists, isWithin, resolveReal } from './paths.mjs';
 import { assertTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
-import { applyWithout, checkWithout } from './without.mjs';
+import { HOME_TOKEN, applyWithout, checkWithout } from './without.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 export const requireAbsolute = (label, value) => {
@@ -45,9 +45,9 @@ const PLUGIN_STATE_FILES = ['installed_plugins.json', 'known_marketplaces.json']
 // to clone again at startup, which is network and a write. Unverified until the real run (T2c).
 const PLUGIN_DIRS = ['cache', 'marketplaces'];
 
-// What a real-home path becomes inside the template: the trial's home is not known until a trial seeds
-// itself, so `seedHome` swaps this prefix for it. The template then names no path of the real machine.
-const HOME_TOKEN = '@@TRIAL_HOME@@';
+// What a real-home path becomes inside the template (`HOME_TOKEN`, from `without.mjs`, which reads it back): the
+// trial's home is not known until a trial seeds itself, so `seedHome` swaps this prefix for it. The template then
+// names no path of the real machine.
 
 const fold = (text) => (process.platform === 'win32' ? text.toLowerCase() : text);
 const slashes = (text) => text.replace(/\\+/g, '/');
