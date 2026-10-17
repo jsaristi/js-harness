@@ -106,9 +106,10 @@ function oneLine(text, max, what) {
  * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. A `ready`
  * says the pull request numbered `pr` is ready to land, so the land can tell whose it is without a branch. An
  * `answer` may name the question it answers with `question`, with `verified` (whether its line was read) and
- * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). Throws a
+ * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). A verified answer may keep
+ * `answeredAt`, the time of his line, and, when the question tool asked, `shownAt`, the time of that call. Throws a
  * `ChannelInputError` for anything that is not a notice. */
-export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, pr, summary }) {
+export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, shownAt, answeredAt, pr, summary }) {
   const role = typeof to === 'string' ? roleNamed(to) : null;
   if (role === null) throw new ChannelInputError('--to takes a role: orchestrator (or ORQ), or the number of a work session');
   if (!NOTICE_KINDS.includes(kind)) throw new ChannelInputError(`--kind takes one of ${NOTICE_KINDS.join(', ')}`);
@@ -116,6 +117,8 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined)) throw new ChannelInputError('only a question takes id, options and waits');
   if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
   if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
+  const timed = shownAt !== undefined || answeredAt !== undefined;
+  if (timed && !(kind === 'answer' && verified === true)) throw new ChannelInputError('only a verified answer takes shownAt and answeredAt');
   if (kind !== 'ready' && pr !== undefined) throw new ChannelInputError('only a ready notice takes --pr');
   if (kind !== 'closed' && summary !== undefined) throw new ChannelInputError('only a closed notice takes --summary');
   if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks the user: --to orchestrator');
@@ -144,10 +147,20 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (typeof verified !== 'boolean') throw new ChannelInputError('verified takes true or false: whether the line of the user\'s words was read');
   if (verified) {
     if (!isObject(copy)) throw new ChannelInputError('a verified answer takes copy, what its line holds (answerCopyOf)');
-    return { ...answer, question: number, verified, copy: answerCopyOf(copy) };
+    const kept = { ...answer, question: number, verified, copy: answerCopyOf(copy) };
+    if (shownAt !== undefined && kept.copy.tool === null) throw new ChannelInputError('shownAt is when the question tool showed the question, and no tool showed an answer typed in the chat');
+    return { ...kept, ...timeOf('shownAt', shownAt), ...timeOf('answeredAt', answeredAt) };
   }
   if (copy !== null) throw new ChannelInputError('an answer that was not verified takes copy null: no transcript could be read');
   return { ...answer, question: number, verified, copy: null };
+}
+
+/** `{ [name]: value }` when `value` is a time (an ISO string the clock reads), `{}` when it is undefined. Throws a
+ * `ChannelInputError` for anything else. */
+function timeOf(name, value) {
+  if (value === undefined) return {};
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) throw new ChannelInputError(`${name} takes a time, as ISO text`);
+  return { [name]: value };
 }
 
 /** The file of the summary a closed notice names (odd/tasks/session-close.md, T2): a Markdown file directly under
