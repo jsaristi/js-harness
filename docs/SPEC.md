@@ -342,7 +342,7 @@ proofs and by those tasks.
 ### The record of notices between sessions
 
 **Problem:** On 2026-10-10 a finished feature sat undelivered for six hours: a session opened from the phone runs in another permission mode, and the app held its messages (the orchestrator's relief file, lines 58-61 and 143, as `odd/tasks/session-channel.md` cites them).
-**Requirement:** Every notice between sessions is written by a command to one record per project, outside any repository, with the time read from the clock, the sender, the role it is for, its kind and one line of text. A usage error writes nothing. The orchestrator learns of a notice by watching the record, never by depending on a message arriving.
+**Requirement:** Every notice between sessions is written by a command to one record per project, outside any repository, with the time read from the clock, the sender, the role it is for, its kind and one line of text. A notice that a pull request is ready carries its number, so the land reads whose pull request it is from the record and not from a branch. A usage error writes nothing. The orchestrator learns of a notice by watching the record, never by depending on a message arriving.
 **Reason:** Messages between sessions can be held, can expire, or do not exist at all (Codex has none); a file every host can append to is the one channel all of them share.
 **Proof:** `node --test bin/lib/channel.test.mjs`, `node --test bin/notify.test.mjs`
 **Discarded:** The repository's git folder as the record's home: there is none outside a repository. Messages as the channel.

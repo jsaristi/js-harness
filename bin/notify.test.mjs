@@ -147,6 +147,10 @@ const USAGE_ERRORS = [
   ['--to', 'orchestrator', '--kind', 'note', 'probe', '--question', '1'], ['--to', 'orchestrator', '--kind', 'withdrawn', 'why'],
   ['--to', 'orchestrator', '--kind', 'answer', '--question', '2', 'A'], ['--to', 'orchestrator', '--kind', 'answer', 'A', '--transcript', '1d16beeb', '--line', '4', '--question', '0'],
   ['--to', 'orchestrator', '--kind', 'answer', 'A', '--transcript', '1d16beeb', '--line', '4', '--question', 'one'], ['--relief', 'a line', '--question', '1'],
+  // A ready notice names its pull request with --pr, digits from 1, and no other kind takes one.
+  ['--to', 'orchestrator', '--kind', 'ready', 'T3 is ready'], ['--to', 'orchestrator', '--kind', 'ready', '--pr', '0', 'T3 is ready'],
+  ['--to', 'orchestrator', '--kind', 'ready', '--pr', '#344', 'T3 is ready'], ['--to', 'orchestrator', '--kind', 'ready', '--pr', '34.4', 'T3 is ready'],
+  ['--to', 'orchestrator', '--kind', 'ready', '--pr'], ['--to', 'orchestrator', '--kind', 'note', '--pr', '344', 'probe'], ['--relief', 'a line', '--pr', '344'],
 ];
 
 const usageName = (argv) => JSON.stringify(argv).replace(/x{20,}/g, (run) => `<${run.length} x>`);
@@ -293,6 +297,21 @@ test('an answer is recorded with the transcript and the line his words are read 
   const [notice] = recorded(machine).notices;
   assert.deepEqual([notice.kind, notice.text, notice.transcript, notice.line], ['answer', 'Entonces la A', '1d16beeb', 406]);
 }));
+
+test('a ready notice is recorded with the number of its pull request, and the confirmation names it', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE);
+  const { code, out } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'ready', '--pr', '344', 'T20b: every wait ends on a notice to its own number']);
+  assert.equal(code, 0);
+  const [notice] = recorded(machine).notices;
+  assert.deepEqual([notice.kind, notice.pr, notice.text], ['ready', 344, 'T20b: every wait ends on a notice to its own number']);
+  assert.match(out[0], /^js-harness notify: recorded ready for pull request 344 for the orchestrator at /);
+}));
+
+test('the usage says what a ready notice takes', async () => {
+  const err = [];
+  assert.equal(await notifyMain([], { stdout: () => {}, stderr: (line) => err.push(line) }), 2);
+  assert.match(err.join('\n'), /A ready notice says a pull request is ready to land, and names it with --pr <n>/);
+});
 
 // --- who sends ---
 
