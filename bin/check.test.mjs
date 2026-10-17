@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
 import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
@@ -632,6 +634,39 @@ test('runSensor still stops at its ceiling a command that keeps writing', async 
     // The silence bound is the 4 s that node's start fits in above, and the ceiling comes after it.
     const result = await runSensor('node loop.js', { cwd: dir, timeout: 6000, silence: 4000 });
     assert.deepEqual([result.error?.code, result.error?.silent, result.error?.message], ['ETIMEDOUT', undefined, 'timed out after 6000 ms']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runSensor reports the exit of a command that ended as its bound ran out, not a timeout (first-version T6h)', async () => {
+  for (const bound of [{ timeout: 50 }, { timeout: 0, silence: 50 }]) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    const kills = [];
+    const running = runSensor('fake', { ...bound, spawn: () => child, killTree: () => kills.push('tree'), killSurvivors: () => kills.push('survivors') });
+    // Set after the sensor's own timer and for the same time, so it fires right after it in the same turn of the
+    // loop: the way an exit the system already holds is delivered after a timer that ran out at that moment.
+    setTimeout(() => {
+      child.emit('exit', 0, null);
+      child.emit('close');
+    }, 50);
+    const result = await running;
+    assert.deepEqual([result.status, result.error, kills], [0, undefined, []], JSON.stringify(bound));
+  }
+});
+
+test('a gate stops a real silent hang at its silence bound: the row says so and the tree it started is gone (first-version T6i)', async () => {
+  const dir = makeTmpDir();
+  try {
+    // The sensor writes once, starts a child that holds on, writes its pid, then says nothing more.
+    fs.writeFileSync(path.join(dir, 'hang.js'), "const { spawn } = require('node:child_process'); const held = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); require('node:fs').writeFileSync('held.pid', String(held.pid)); console.log('started'); setInterval(() => {}, 1000);");
+    const row = await checkSensor(dir, { name: 'tests', command: 'node hang.js' }, { sensorTimeout: 120000, sensorSilence: 4000 });
+    assert.deepEqual([row.pass, row.timedOut, row.detail], [false, true, 'node hang.js wrote nothing for 4 s and was stopped']);
+    assert.match(row.output, /started/);
+    const held = Number(fs.readFileSync(path.join(dir, 'held.pid'), 'utf8'));
+    assert.throws(() => process.kill(held, 0), { code: 'ESRCH' }, `pid ${held} still runs`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
