@@ -3000,6 +3000,17 @@ test('renderBoard prints the channel after the roster: the last notices of the r
   ]);
 });
 
+// odd/tasks/wake-and-flag.md, T1: the board names the pull request a ready notice is for.
+test('renderBoard names the pull request of a ready notice', () => {
+  const ready = { ...noticeOf(60, FROM_TWO, 'orchestrator', 'ready', 'T3 is ready'), pr: 344 };
+  assert.deepEqual(channelSection({ channel: lib.channelOf(recordOf([ready]), []) }), [
+    'Channel',
+    '  H:\\.js-harness\\channel\\D--proj.jsonl  1 notice:',
+    '  | 1m ago  JH 2 · the board to orchestrator  ready for pull request 344  T3 is ready',
+    `  ${lib.CHANNEL_NOT_KNOWN}`,
+  ]);
+});
+
 test('renderBoard prints no channel when there is nothing to show, and says so when the record could not be read', () => {
   assert.equal(channelSection({}), null, 'a board that was given none');
   assert.equal(channelSection({ channel: lib.channelOf(recordOf(), []) }), null, 'no record yet, and no message');

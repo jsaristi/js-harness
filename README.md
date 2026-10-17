@@ -649,6 +649,10 @@ js-harness notify: recorded note for the orchestrator at 2026-10-14T09:24:29.740
 address of the orchestrator: no single one now (sessions --address exit 1): …
 ```
 
+A pull request ready to land is announced with `--kind ready --pr <number>`: the record keeps
+the number, and the board shows it ("ready for pull request 344"), so the land can tell which
+session a pull request belongs to from the record, even when the notice was sent from `main`.
+
 ### js-harness wake
 
 A boot kills every background command of every session, and the transcripts do not say so: a
