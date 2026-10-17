@@ -13,7 +13,7 @@ import { readGateLog } from './lib/gate-log.mjs';
 const FIRST = 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first';
 
 /** The gate log's events after one gate of `ci` (the CI gate's answer), the sensor here passing. */
-async function eventsOf(ci) {
+async function eventsOf(ci, takeGateLock = async () => ({ release: () => {}, beat: () => {}, lost: () => false, waitedMs: 0 })) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-ci-record-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'check-ci-record-home-'));
   fs.writeFileSync(path.join(dir, 'harness.json'), JSON.stringify({ sensors: { tests: 'run-tests' } }));
@@ -23,7 +23,7 @@ async function eventsOf(ci) {
     await checkSensors(dir, {
       spawn: () => ({ status: 0, signal: null, stdout: '', stderr: '' }),
       git: () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' }),
-      takeGateLock: async () => ({ release: () => {}, beat: () => {}, lost: () => false, waitedMs: 0 }),
+      takeGateLock,
       ciGateWanted: () => FIRST,
       runCiGate: async () => ci,
     }, { home, wait: true, waitMinutes: 1, load: false, log: true, env: {}, remote: 'origin' });
@@ -55,4 +55,14 @@ test('a gate with no answer from CI writes why and what the wait cost, under the
   assert.equal(fallback.reason, 'the run never started');
   assert.ok(Number.isFinite(fallback.seconds) && fallback.seconds >= 0);
   assert.equal(start.lock, 'own');
+});
+
+test('a gate with no answer from CI that is then refused the lock here keeps both lines under one id', async () => {
+  const refused = async () => ({ refused: 'held', holder: { cwd: 'C:/other', pid: 7, command: 'check' }, waitedMs: 0 });
+  const events = await eventsOf({ ran: false, why: 'gh cannot read the runs' }, refused);
+  assert.deepEqual(events.map((event) => event.event), ['ci-fallback', 'refused']);
+  const [fallback, refusal] = events;
+  assert.equal(fallback.id, refusal.id);
+  assert.equal(fallback.reason, 'gh cannot read the runs');
+  assert.equal(refusal.reason, 'held');
 });

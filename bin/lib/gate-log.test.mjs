@@ -874,3 +874,20 @@ test('formatGates ends the line of a gate that has who spent the processor with 
   assert.deepEqual(formatGates(gates), formatGates(gates, new Map()));
   assert.deepEqual(formatGates(gates).slice(0, 2), [`${at}  700 s  pass  C:\\work\\one`, `${at}  13 s  pass  C:\\work\\one`]);
 });
+
+test('a ci-fallback line under a gate\'s id is read, and pairs, prints and proves nothing of its own', withHome(async (home) => {
+  const code = 'a'.repeat(64);
+  const fallback = { v: 1, event: 'ci-fallback', id: 'g1', at: AT, seconds: 185, reason: 'no run started' };
+  for (const event of [fallback, start('g1'), end('g1', { code })]) appendGateEvent(home, event);
+  const { events, skipped } = readGateLog(home);
+  assert.equal(skipped, 0);
+  assert.deepEqual(events.map((event) => event.event), ['ci-fallback', 'start', 'end']);
+  // One gate, its start and its end: the fallback before them is neither.
+  const gates = gatesOf(events);
+  assert.equal(gates.length, 1);
+  assert.deepEqual(Object.keys(gates[0]).sort(), ['end', 'start']);
+  assert.equal(formatGates(gates).length, 1);
+  assert.equal(provenBy(events, code).id, 'g1');
+  // Alone, with its gate rotated away, it is no gate at all.
+  assert.deepEqual(gatesOf([fallback]), []);
+}));

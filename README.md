@@ -351,6 +351,10 @@ included, is named on its row with why. The tasks are each commit of main compar
 before, as `progress` compares them. It is read-only and fetches nothing: main is `origin/main`
 as last fetched (`git merge-tree`, which names the files of a conflicted merge, writes objects
 into the object store). The gates are every project's on the machine, as the gate lock is.
+`ready to merged` runs from the newest ready notice naming a pull request (`notify --kind ready
+--pr`) to its merge, `land phases` reads the merge queue's land record, and `red tests on CI`
+and `CI fallbacks` read the gate log's lines of gates sent to GitHub's machines; a day before
+the recorder of a row reached main says `not recorded` on that row, since nothing wrote a line.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17
@@ -358,7 +362,7 @@ Throughput  2026-10-16 to 2026-10-17 (UTC, until excluded; local UTC-05:00: 2026
   gates: every project of this machine, as the gate lock is; the other rows: this project
   2026-10-16  snapshot
 pull requests merged         94 (3.92 an hour); merged twice: #292, #305  [git log of origin/main as last fetched]
-ready to merged              not recorded (B1, JH 26)  [a ready notice that names its pull request]
+ready to merged              not recorded: 2026-10-16 (before B1, 2026-10-17)  [the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main]
 lock busy                    16.8 h of 24 h; by kind: check 125 / 446 min, land 65 / 230 min, copy 49 / 150 min, run 39 / 111 min, commit 25 / 70 min  [the gate log (~/.js-harness/gate-log)]
 commit gates                 here: median 200 s (150), lock free median 217 s (52); GitHub: median 144 s (75)  [the gate log (~/.js-harness/gate-log)]
 lands                        65, median 216 s, red 8; 65 gates for 49 lands  [the gate log (~/.js-harness/gate-log)]
@@ -373,7 +377,7 @@ again only by a fuller one, the replacement recorded; `--gate-log <file>` (twice
 archived copies of the log instead, for a day the live log has lost; a copy made before the day
 settled may lack its last gates, so the day is kept as partial until then. A copy is made no
 earlier than its modification time; one that kept its source's time (`cp -p`) says when it was
-made with `--copied-at <YYYY-MM-DDTHH:MMZ>`. `throughput status` lists
+made with `--copied-at <YYYY-MM-DDTHH:MMZ>`, never a time after now. `throughput status` lists
 the kept days and exits 1 naming each day since the first one kept that has none. Uninstall
 leaves the snapshots in place.
 

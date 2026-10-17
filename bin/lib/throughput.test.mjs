@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -131,7 +131,8 @@ const rowOf = (rows, label) => rows.find((row) => row.label === label);
 test('every row of the table names its source, and a fact no record holds says which recorder it waits for, never a zero', () => {
   const rows = throughputRows([dayOf()]);
   for (const row of rows) assert.ok(row.source, `${row.label} names its source`);
-  assert.match(rowOf(rows, 'ready to merged').value, /^not recorded \(B1, JH 26\)/);
+  assert.equal(rowOf(rows, 'ready to merged').value, 'not recorded: 2026-10-16 (before B1, 2026-10-17)');
+  assert.equal(rowOf(rows, 'land phases').value, 'not recorded: 2026-10-16 (before B2, 2026-10-17)');
   assert.match(rowOf(rows, 'idle with nothing armed').value, /^not recorded \(B8\)/);
   assert.match(rowOf(rows, 'tool calls open long').value, /^not recorded \(G, JH 26\)/);
 });
@@ -249,6 +250,11 @@ test('the chance that an unchanged window\'s median falls outside the before ran
   assert.equal(outsideChance(3, 3), '40%');
   // An even after window's median is a mean of two: at least half of them past the range is a bound, not the chance.
   assert.equal(outsideChance(8, 8), 'at most 8%');
+  // With a side empty there is no range or no median: no chance to state, never a 0%.
+  assert.equal(outsideChance(0, 3), null);
+  assert.equal(outsideChance(3, 0), null);
+  const empty = compareWindows([dayOf()], [dayOf({ gates: [gate({})] })]).find((row) => row.label === 'commit gates here, median s');
+  assert.equal(empty.verdict, 'not judged: 0 days a side, under 7; one side has no value');
 });
 
 test('a gate row of a day whose gate log ends before the day settled is partial, said with when it ends', () => {
@@ -304,4 +310,61 @@ test('a Codex run that recorded no count of findings is not counted as none', ()
   assert.match(rowOf(throughputRows([dayOf({ codex: [run(2), run(null)] })]), 'Codex reviews').value, /; 2 findings, 1 attempt with no count$/);
   assert.match(rowOf(throughputRows([dayOf({ codex: [run(null), run(null)] })]), 'Codex reviews').value, /; findings: 2 attempts with no count$/);
   assert.match(rowOf(throughputRows([dayOf({ codex: [run(0)] })]), 'Codex reviews').value, /; 0 findings$/);
+});
+
+test('a gate CI gave no answer is a fallback of the day, with why and what the wait cost', () => {
+  const events = [
+    { v: 1, event: 'ci-fallback', id: 'g1', at: '2026-10-16T10:00:00Z', seconds: 185, reason: 'the run never started' },
+    { v: 1, event: 'start', id: 'g1', at: '2026-10-16T10:00:01Z', command: 'check', lock: 'own', waitedSeconds: 0 },
+    { v: 1, event: 'end', id: 'g1', at: '2026-10-16T10:04:01Z', seconds: 240, result: 'pass' },
+  ];
+  const facts = gateFacts(events, dayBounds(DAY));
+  assert.deepEqual(facts.fallbacks, [{ id: 'g1', at: '2026-10-16T10:00:00Z', seconds: 185, reason: 'the run never started' }]);
+  assert.equal(facts.gates.length, 1);
+  const rows = throughputRows([dayOf({ day: '2026-10-17', fallbacks: facts.fallbacks, gates: [gate({ lock: 'ci', ranIn: 'ci', failing: ['a test'] }), gate({ id: 'h', lock: 'ci', ranIn: 'ci', failing: ['a test'] })] })]);
+  assert.equal(rowOf(rows, 'CI fallbacks').value, '1, 3 min waited before them; why: the run never started ×1');
+  assert.equal(rowOf(rows, 'red tests on CI').value, 'a test ×2');
+  // The local row counts what it counted before CI's names were kept, so a before and an after read the same thing.
+  assert.equal(rowOf(rows, 'failing tests').value, 'none');
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17' })]), 'CI fallbacks').value, 'none');
+});
+
+test('a day before its recorder reached main says so instead of a zero', () => {
+  const before = rowOf(throughputRows([dayOf({ day: '2026-10-15' }), dayOf()]), 'CI fallbacks');
+  assert.equal(before.value, 'not recorded: 2026-10-15, 2026-10-16 (before B3, 2026-10-17)');
+  const mixed = rowOf(throughputRows([dayOf(), dayOf({ day: '2026-10-17', fallbacks: [{ id: 'g', at: '2026-10-17T10:00:00Z', seconds: 60, reason: 'x' }] })]), 'CI fallbacks');
+  assert.equal(mixed.value, '1, 1 min waited before them; why: x ×1; not recorded: 2026-10-16 (before B3, 2026-10-17)');
+  assert.match(rowOf(throughputRows([dayOf()]), 'red tests on CI').value, /^not recorded: 2026-10-16 \(before B3/);
+});
+
+test('a merged pull request is ready from the newest ready notice naming it before its merge', () => {
+  const notice = (pr, at, kind = 'ready') => ({ kind, pr, at, from: { id: 's' } });
+  const notices = [notice(7, '2026-10-17T04:00:00Z'), notice(7, '2026-10-17T05:00:00Z'), notice(7, '2026-10-17T08:00:00Z'), notice(8, '2026-10-17T05:00:00Z', 'note'), { kind: 'ready', at: '2026-10-17T05:00:00Z' }];
+  const prs = withReadyAt([{ number: 7, mergedAt: '2026-10-17T06:00:00Z' }, { number: 8, mergedAt: '2026-10-17T06:00:00Z' }], notices);
+  assert.deepEqual(prs.map((pr) => pr.readyAt), ['2026-10-17T05:00:00Z', null]);
+  const row = rowOf(throughputRows([dayOf({ day: '2026-10-17', prs: [...prs, { number: 9, mergedAt: '2026-10-17T07:00:00Z', readyAt: '2026-10-17T06:30:00Z' }] })]), 'ready to merged');
+  assert.equal(row.value, 'median 45 min, p75 60 min, worst 60 min (2); no ready notice: #8');
+  assert.match(row.source, /ready notice/);
+  assert.match(rowOf(throughputRows([dayOf()]), 'ready to merged').value, /^not recorded: 2026-10-16 \(before B1, 2026-10-17\)$/);
+  // On B1's own day, a pull request merged before B1 did could not be named by a ready notice: said apart, not missing.
+  const early = rowOf(throughputRows([dayOf({ day: '2026-10-17', prs: [{ number: 5, mergedAt: '2026-10-17T03:00:00Z', readyAt: null }, ...prs] })]), 'ready to merged');
+  assert.equal(early.value, 'median 60 min, p75 60 min, worst 60 min (1); no ready notice: #8; merged before B1 reached main at 03:24Z: 1');
+  assert.match(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { channel: 'no channel record' } })]), 'ready to merged').value, /^not read: 2026-10-17 no channel record$/);
+});
+
+test('a land record of the day gives its phases, and a land that ran none is still a land', () => {
+  const land = (startedAt, exit, phases) => ({ v: 1, startedAt, endedAt: new Date(Date.parse(startedAt) + 300_000).toISOString(), considered: [1, 2], landed: exit === 0 ? [1] : [], phases, exit });
+  const records = [
+    land('2026-10-17T05:00:00Z', 0, [{ phase: 'suite', seconds: 270, ok: true }, { phase: 'circleci', seconds: 280, ok: true }, { phase: 'push', seconds: 4, ok: true }]),
+    land('2026-10-17T06:00:00Z', 4, [{ phase: 'suite', seconds: 200, ok: false }, { phase: 'suite', seconds: 100, ok: true }]),
+    land('2026-10-17T07:00:00Z', 1, []),
+    land('2026-10-16T23:00:00Z', 0, []),
+    { v: 1, startedAt: 'not a time' },
+  ];
+  const lands = landFacts(records, dayBounds('2026-10-17'));
+  assert.deepEqual(lands.map((one) => [one.startedAt, one.seconds, one.exit, one.landed, one.considered]), [['2026-10-17T05:00:00Z', 300, 0, 1, 2], ['2026-10-17T06:00:00Z', 300, 4, 0, 2], ['2026-10-17T07:00:00Z', 300, 1, 0, 2]]);
+  const row = rowOf(throughputRows([dayOf({ day: '2026-10-17', lands })]), 'land phases');
+  assert.equal(row.value, '3 lands, median 300 s, landed 1 of 6 looked at; exit 0 ×1, 1 ×1, 4 ×1; suite 3, median 200 s, red 1; circleci 1, median 280 s; push 1, median 4 s');
+  assert.match(row.source, /lands\.jsonl/);
+  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17' })]), 'land phases').value, 'none');
 });
