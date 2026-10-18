@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord } from './install.mjs';
+import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord, reportSyncProject } from './install.mjs';
 import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
@@ -170,6 +170,17 @@ test('installMain over an older manifest removes a file no longer shipped instea
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// harness-review a3: a project sync printed nothing for these two actions and exited 0 on a failure.
+test('a project sync names what was already gone and what it could not undo, and a failure exits 1', async () => {
+  const result = { actions: [{ kind: 'alreadyGone', path: 'a.json' }, { kind: 'failed', path: 'b.json', reason: 'EPERM' }], code: 0, version: '0.1.0' };
+  const { code, outLines, errLines } = await captureConsole(async () => reportSyncProject(result));
+  assert.equal(code, 1);
+  assert.ok(outLines.includes('already gone a.json'), outLines.join('\n'));
+  assert.ok(errLines.includes('could not undo b.json: EPERM'), errLines.join('\n'));
+  const clean = await captureConsole(async () => reportSyncProject({ ...result, actions: [result.actions[0]] }));
+  assert.equal(clean.code, 0);
 });
 
 test('uninstallMain removes the manifest under --home and exits 0', async () => {

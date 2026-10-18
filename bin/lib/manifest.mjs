@@ -951,7 +951,7 @@ export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, reco
  * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
  * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
  * there before is left with nothing to do. */
-function restoreSettings(manifest, home, listDir) {
+function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
   const restored = [];
   const kept = [];
   for (const record of manifest.settings ?? []) {
@@ -971,11 +971,18 @@ function restoreSettings(manifest, home, listDir) {
     }
     if (record.had) data[record.key] = record.previous;
     else delete data[record.key];
-    if (record.createdFile && Object.keys(data).length === 0) {
-      fs.rmSync(record.path);
-      removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
-    } else {
-      fs.writeFileSync(record.path, serializeJson(data, style), 'utf8');
+    // A write or removal that fails keeps the setting, said as kept, rather than throw out of uninstall halfway
+    // (harness-review a4).
+    try {
+      if (record.createdFile && Object.keys(data).length === 0) {
+        removeFile(record.path);
+        removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
+      } else {
+        writeFile(record.path, serializeJson(data, style), 'utf8');
+      }
+    } catch {
+      kept.push(record.path);
+      continue;
     }
     restored.push(record.path);
   }
@@ -1382,18 +1389,22 @@ function uninstallInstalled(home, deps) {
     return { removed: [...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
   }
 
+  // A component is judged as an optional file is (`keepOptionalFile`): removed while its bytes are the recorded
+  // ones, kept when edited, and kept with the error when it cannot be read or removed, so one locked file no longer
+  // throws out of the run halfway with the manifest left behind (harness-review a4).
   const removed = [];
   const kept = [];
+  const keptFailed = [];
   for (const file of manifest.files) {
     if (!fs.existsSync(file.path)) continue;
-    const current = fs.readFileSync(file.path, 'utf8');
-    if (sha256(current) === file.sha256) {
-      removeFile(file.path);
+    const why = keepOptionalFile(file, removeFile);
+    if (!why) {
       removeEmptyDirsUpTo(path.dirname(file.path), home, listDir);
       removed.push(file.path);
-    } else {
-      kept.push(file.path);
+      continue;
     }
+    kept.push(file.path);
+    if (why.reason !== 'edited') keptFailed.push({ path: file.path, ...why });
   }
 
   // Optional files, compared by their bytes (a launcher need not be UTF-8). Their folder is left even when
@@ -1414,7 +1425,7 @@ function uninstallInstalled(home, deps) {
 
   // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
-  const settings = restoreSettings(manifest, home, listDir);
+  const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
 
   const entriesRemoved = [];
   const entriesKept = [];
@@ -1460,7 +1471,7 @@ function uninstallInstalled(home, deps) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

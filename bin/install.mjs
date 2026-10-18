@@ -308,6 +308,12 @@ function logSyncProjectAction(action) {
     case 'versionRecorded':
       console.log(`recorded ${action.to} in the manifest (was ${action.from ?? 'unrecorded'})`);
       break;
+    case 'alreadyGone':
+      console.log(`already gone ${action.path}`);
+      break;
+    case 'failed':
+      console.error(`could not undo ${action.path}: ${action.reason}`);
+      break;
     case 'kept':
       console.error(`kept ${action.path} (${action.reason})`);
       break;
@@ -325,7 +331,8 @@ function logSyncProjectAction(action) {
 /** Renders `syncProject`'s result and returns the exit code — the project-scope half of `syncMain`.
  * `result.notGitRepo`/`result.notInitialized` are never reached here: the caller reports those itself
  * and names `--global` (T4 design), never as project-scope outcomes to render. */
-function reportSyncProject(result) {
+/** Prints what a project sync did and returns its exit code: 1 when it could not undo something it had written. */
+export function reportSyncProject(result) {
   if (result.noSuchDirectory) {
     console.error(`no such directory: ${result.cwd}`);
     return 1;
@@ -376,7 +383,7 @@ function reportSyncProject(result) {
   } else {
     console.log(`synced project at ${result.version}`);
   }
-  return result.code;
+  return result.code || (result.actions.some((action) => action.kind === 'failed') ? 1 : 0);
 }
 
 /** Scope by location, the same rule as `uninstallMain` (T4 design): inside a git repository that
@@ -479,7 +486,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
   // named it is gone by now: it goes to stderr with the error code and what is left to do.
-  const notUndone = new Map(result.keptOptional.filter((file) => file.reason !== 'edited').map((file) => [file.path, file]));
+  const notUndone = new Map([...result.keptOptional, ...(result.keptFailed ?? [])].filter((file) => file.reason !== 'edited').map((file) => [file.path, file]));
   for (const p of result.kept) {
     const failed = notUndone.get(p);
     if (!failed) {

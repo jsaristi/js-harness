@@ -14,6 +14,8 @@ import {
   install,
   sync,
   uninstall,
+  acceptSessionMessages,
+  userSettingsPath,
   recordOptionalFile,
   forgetOptionalFile,
   installedVersion,
@@ -190,6 +192,48 @@ test('sync keeps a file no longer shipped that was changed since it was written,
     ]);
     assert.equal(Object.keys(synced).includes('pruneKept'), false, 'the report is not part of the manifest written');
     assert.deepEqual(readManifest(home).files.map((f) => f.path).filter((p) => p === edited || p === blocked), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// harness-review a4: one component that could not be read threw out of uninstall halfway, the manifest left behind.
+test('uninstall keeps a component it cannot read, says why, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const [unreadable, ...others] = components.map((component) => component.target(home));
+    fs.rmSync(unreadable);
+    fs.mkdirSync(path.join(unreadable, 'inside'), { recursive: true });
+
+    const result = uninstall(home);
+
+    assert.ok(result.kept.includes(unreadable));
+    assert.deepEqual(result.keptFailed, [{ path: unreadable, reason: 'unreadable', code: result.keptFailed[0].code }]);
+    assert.ok(result.keptFailed[0].code.length > 0);
+    for (const target of others) assert.equal(fs.existsSync(target), false, target);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is gone: the run finished');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// harness-review a4: putting a setting back wrote unguarded, so a failed write threw out of uninstall halfway.
+test('uninstall keeps a setting it cannot write back, and still finishes', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    acceptSessionMessages(home);
+    const settings = userSettingsPath(home);
+    const writeFile = (file, ...rest) => {
+      if (file === settings) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return fs.writeFileSync(file, ...rest);
+    };
+
+    const result = uninstall(home, { writeFile });
+
+    assert.deepEqual(result.settingsKept, [settings]);
+    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is gone: the run finished');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
