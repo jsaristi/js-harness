@@ -525,7 +525,7 @@ test('upgrade with pnpm and --prefix installs with add -g in a home of its own a
 
 /** An upgrade with pnpm into a prefix whose bin folder holds pnpm's lock, stamped `ageMinutes` ago before the
  * run, or taken by the install itself when `ageMinutes` is null; it says whether the lock is left. */
-async function lockAfterUpgrade(ageMinutes) {
+async function lockAfterUpgrade(ageMinutes, { processes = `${process.pid} node /x/js-harness.mjs upgrade --pm pnpm\n` } = {}) {
   const calls = [];
   let lock;
   const spawn = (prefix) => {
@@ -538,6 +538,8 @@ async function lockAfterUpgrade(ageMinutes) {
     return (cmd, args, opts) => {
       calls.push({ cmd, args, opts });
       if (args.includes('add') && ageMinutes === null) fs.mkdirSync(lock, { recursive: true });
+      // The process list `upgrade` reads before it removes a lock (linux: ps).
+      if (cmd === 'ps') return processes === null ? { status: 1, stdout: '', stderr: 'ps: not found' } : { status: 0, stdout: processes, stderr: '' };
       return { status: 0, stdout: args.includes('--version') ? '0.9.0\n' : '', stderr: '' };
     };
   };
@@ -572,6 +574,23 @@ test('upgrade with pnpm keeps a fresh bin lock another install may hold', async 
   const { run, left } = await lockAfterUpgrade(1);
   assert.equal(left, true);
   assert.doesNotMatch(run.err, /removed pnpm's bin lock/);
+});
+
+// T2, gentle-ai R1-002 and Codex P2 on 839b194..eae1e83: a lock taken during this run's install may be another
+// pnpm's that is still linking, so no lock is removed while any pnpm runs, or while the process list cannot be read.
+test('upgrade with pnpm keeps a bin lock taken during its install while another pnpm runs', async () => {
+  const running = `${process.pid} node /x/js-harness.mjs upgrade --pm pnpm\n4242 /usr/local/bin/pnpm add -g other\n`;
+  const { run, left } = await lockAfterUpgrade(null, { processes: running });
+  assert.equal(run.code, 0, run.err);
+  assert.equal(left, true);
+  assert.doesNotMatch(run.err, /removed pnpm's bin lock/);
+});
+
+test('upgrade with pnpm keeps even an old bin lock while a pnpm run by node runs, or when no process list is read', async () => {
+  const byNode = await lockAfterUpgrade(30, { processes: '77 /usr/bin/node /usr/lib/node_modules/pnpm/bin/pnpm.cjs install\n' });
+  assert.equal(byNode.left, true);
+  const unread = await lockAfterUpgrade(30, { processes: null });
+  assert.equal(unread.left, true);
 });
 
 // install-update T8: with no --prefix the sync is run by whatever js-harness the shell finds, so that

@@ -160,10 +160,34 @@ function pnpmBinDir(spawn, words, prefix, platform) {
   return asked.status === 0 && path.isAbsolute(line) ? line : null;
 }
 
-/** Removes pnpm's bin lock when no live install can hold it: one taken since `since` (this run's own install, which
- * has exited), or one older than STALE_LOCK_MS. A lock with anything inside is left (rmdir refuses it). Says what
- * it removed, or `null`. Another install taking the lock during this run's own is not told apart from it. */
-function clearPnpmLock(binDir, since) {
+/** Whether a command line, its words split on spaces with quotes dropped, starts a pnpm: `pnpm` or `pnpm.exe` itself,
+ * or node running pnpm's script. */
+function startsPnpm(commandLine) {
+  const [first = '', second = ''] = commandLine.trim().replace(/"/g, '').split(/\s+/);
+  const base = (word) => word.split(/[\\/]/).at(-1).toLowerCase();
+  if (/^pnpm(\.exe|\.cmd)?$/.test(base(first))) return true;
+  return /^node(\.exe)?$/.test(base(first)) && /^pnpm(\.c?js)?$/.test(base(second));
+}
+
+/** Whether a pnpm other than this process runs on the machine: `true`, `false`, or `null` when the process list could
+ * not be read, which a caller takes as running. Windows answers through PowerShell, which shows a pnpm run by node by
+ * its command line; elsewhere `ps`. Each line is `<pid> <command line>`. */
+function pnpmRunning(spawn, platform) {
+  const listed = platform === 'win32'
+    ? spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }'], { encoding: 'utf8', windowsHide: true })
+    : spawn('ps', ['-A', '-o', 'pid=,args='], { encoding: 'utf8' });
+  if (listed.status !== 0) return null;
+  return String(listed.stdout ?? '').split(/\r?\n/).some((line) => {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    return match !== null && Number(match[1]) !== process.pid && startsPnpm(match[2]);
+  });
+}
+
+/** Removes pnpm's bin lock when no live install can hold it: only while no other pnpm runs (an empty folder does not
+ * show its owner is gone, Codex P2 on 839b194..eae1e83), and then one taken since `since` (this run's own install,
+ * which has exited) or one older than STALE_LOCK_MS. A lock with anything inside is left (rmdir refuses it). Says
+ * what it removed, or `null`. */
+function clearPnpmLock(binDir, since, isPnpmRunning) {
   if (!binDir) return null;
   const lock = path.join(binDir, PNPM_BIN_LOCK);
   let taken;
@@ -175,6 +199,7 @@ function clearPnpmLock(binDir, since) {
   // Two seconds of slack: the file system's stamp and this process's clock are read apart.
   const own = since !== undefined && taken >= since - 2000;
   if (!own && Date.now() - taken <= STALE_LOCK_MS) return null;
+  if (isPnpmRunning() !== false) return null;
   try {
     fs.rmdirSync(lock);
   } catch {
@@ -430,11 +455,12 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   const kind = pmKind(words);
   const plan = installPlan(kind, latest.file ?? latest.spec, opts.prefix, env, platform);
   const binDir = kind === 'pnpm' ? pnpmBinDir(spawn, words, opts.prefix, platform) : null;
-  const staleLock = clearPnpmLock(binDir);
+  const isPnpmRunning = () => pnpmRunning(spawn, platform);
+  const staleLock = clearPnpmLock(binDir, undefined, isPnpmRunning);
   if (staleLock) console.error(staleLock);
   const started = Date.now();
   const installResult = runPm(spawn, words, plan.args, plan.env === env ? undefined : plan.env, platform);
-  const ownLock = clearPnpmLock(binDir, started);
+  const ownLock = clearPnpmLock(binDir, started, isPnpmRunning);
   if (ownLock) console.error(ownLock);
 
   // The verdict on the install is the installed copy's own --version, not the package manager's exit code: pnpm
