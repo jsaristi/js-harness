@@ -384,6 +384,15 @@ proofs and by those tasks.
 **Discarded:** A summary in the closed notice's text: a notice is one line, outside any repository. Requiring the summary of every closed notice the library builds: the record already holds closed notices without one.
 **Today:** `bin/summary.mjs`, `bin/lib/summary.mjs`, `js-harness summary`, `bin/notify.mjs`, `bin/lib/sessions.mjs`, `bin/lib/manifest.mjs`
 
+### A closed session whose process still runs is named
+
+**Problem:** On 2026-10-18 the work session JH 20 sent its closed notice at 01:14Z, yet its Claude Code host process ran on for hours; the desktop app held it as running and refused to archive it, stopping its turn changed nothing, and only ending that process let the lead archive it (odd/tasks/harness-review.md, L50 and T12).
+**Requirement:** The board's roster lists each session that closed or was relieved by its own notice, is not this session and is not archived, while a host process whose command line names it with `--resume` still runs: the session's title, when it ended, the process's pid and when it started, and that the app refuses to archive it until that process ends. The hosts come from the same process listing as the gates; when that listing cannot be read, the roster says the hosts were not read, wherever a closed session could still be running, and never reads it as no process running. `--json` gives each roster row its `host`, `{ pid, createdAt }` or `null`.
+**Reason:** A session that said it closed but still runs costs a refused archive and the lead's time to find why; the process that holds it is on the machine and can be named.
+**Proof:** `node --test bin/lib/sessions.test.mjs`, `node --test bin/sessions.test.mjs`
+**Discarded:** Archiving or ending the process from the command: archiving is the desktop app's, and ending a session's process is the lead's decision, made with the line in front of it. A second process listing for the hosts: each look would start PowerShell twice.
+**Today:** `bin/sessions.mjs`, `bin/lib/sessions.mjs`, `js-harness sessions`
+
 ### A role is the address, and there is one orchestrator
 
 **Problem:** A notice reached an orchestrator that had been relieved: it was sent to the reply address of an earlier message, which belongs to a session and not to the role (relief file, line 78).

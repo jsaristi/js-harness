@@ -2354,7 +2354,7 @@ test('roleNamed reads the role an --address asks for: the orchestrator by either
 const C = 'cccccccc-3333-4333-8333-333333333333';
 const D = 'dddddddd-4444-4444-8444-444444444444';
 const member = (id, title, seconds, more = {}) => ({ id, title, titleSource: 'custom-title', state: 'waiting', lastEntryAt: before(seconds), cwd: 'D:\\proj', gitBranch: 'main', permissionMode: 'bypassPermissions', work: [], tail: [], ...more });
-const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], record: null, opened: 'unknown', where: 'unknown', effort: null, ...more });
+const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], host: null, record: null, opened: 'unknown', where: 'unknown', effort: null, ...more });
 // The app's records (`appSessions`), by the transcript's id: one in Routines for a scheduled task, one in Sessions.
 const inRoutines = (more = {}) => ({ where: 'routines', effort: null, scheduledTaskId: 'task-1', archived: false, title: null, ...more });
 const inSessions = (more = {}) => ({ where: 'sessions', effort: null, scheduledTaskId: null, archived: false, title: null, ...more });
@@ -3075,6 +3075,60 @@ test('renderBoard lists to archive each session that closed with its summary and
   const section = rosterSection(sessions, { record: recordOf(notices), app });
   assert.deepEqual(section.filter((line) => line.includes('to archive')), ['  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it']);
   assert.ok(section.indexOf('  to archive: JH 2 · the board, closed 10m ago: read docs/sessions/2026-01-01-jh-2-the-board.md, then archive it') < section.indexOf(`  ${lib.ROSTER_NOT_KNOWN}`));
+});
+
+// T12 of odd/tasks/harness-review.md: JH 20 closed at 01:14Z, yet its host process ran on and the app refused to archive it.
+test('hostsOf reads the session a Claude Code host runs from its --resume argument, and nothing from other processes', () => {
+  const processes = [
+    { pid: 6656, createdAt: Date.parse(before(7200)), commandLine: `C:\\claude-code\\claude.exe --output-format stream-json --resume=${A.toUpperCase()} --allowedTools=x` },
+    { pid: 7000, createdAt: null, commandLine: `/usr/bin/claude --resume ${B} --verbose` },
+    { pid: 7100, createdAt: null, commandLine: 'C:\\Claude.exe --type=renderer --user-data-dir=C:\\Claude' },
+    { pid: 7200, createdAt: null, commandLine: 'node bin/check.mjs' },
+  ];
+  assert.deepEqual(lib.hostsOf(processes), [
+    { pid: 6656, createdAt: Date.parse(before(7200)), sessionId: A },
+    { pid: 7000, createdAt: null, sessionId: B },
+  ]);
+});
+
+test('renderBoard flags a session that closed or was relieved while its host process still runs, until the app archives it', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60, { self: true }), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'JH 4 · the roster', 240), member('eeeeeeee-5555', 'JH 5 · the wait', 30)];
+  const notices = [
+    noticeOf(600, { id: B }, 'orchestrator', 'closed', 'delivered', { summary: 'docs/sessions/2026-01-01-jh-2-the-board.md' }),
+    noticeOf(700, { id: C }, 'orchestrator', 'closed', 'delivered'),
+    noticeOf(800, { id: D }, 'orchestrator', 'relieved', 'JH ORQ · proj has the role now'),
+    // Its host runs, and it never closed: a live session.
+    noticeOf(900, { id: 'eeeeeeee-5555' }, 'orchestrator', 'opened', 'the next feature'),
+  ];
+  const hosts = { items: [
+    { pid: 4242, createdAt: Date.parse(before(7200)), sessionId: B },
+    { pid: 4343, createdAt: null, sessionId: C },
+    { pid: 4444, createdAt: Date.parse(before(3600)), sessionId: D },
+    { pid: 4545, createdAt: Date.parse(before(3600)), sessionId: 'eeeeeeee-5555' },
+    { pid: 4646, createdAt: Date.parse(before(3600)), sessionId: A },
+  ] };
+  const app = new Map([[D, inSessions({ where: 'archived', archived: true })]]);
+  const section = rosterSection(sessions, { record: recordOf(notices), app, hosts });
+  assert.deepEqual(section.filter((line) => line.includes('still running')), [
+    '  closed but still running: JH 2 · the board, closed 10m ago, host process pid 4242 started 2h 00m ago: the app refuses to archive it while that process runs; stop its turn, or end that process, then archive it',
+    '  closed but still running: JH 3 · the lock, closed 11m ago, host process pid 4343 started at an unknown time: the app refuses to archive it while that process runs; stop its turn, or end that process, then archive it',
+  ]);
+  const roster = lib.rosterOf(sessions, { record: recordOf(notices), app, hosts });
+  assert.deepEqual(roster.rows.find((row) => row.title === 'JH 2 · the board').host, { pid: 4242, createdAt: Date.parse(before(7200)) });
+  assert.equal(roster.rows.find((row) => row.title === 'JH 5 · the wait').host.pid, 4545);
+  // No host listed for a row: no host, and no line.
+  assert.equal(lib.rosterOf(sessions, { record: recordOf(notices), app, hosts: { items: [] } }).rows.every((row) => row.host === null), true);
+});
+
+test('renderBoard says when the host processes could not be read, and only where a closed session could be still running', () => {
+  const sessions = [member(A, 'JH ORQ · proj', 60, { self: true }), member(B, 'JH 2 · the board', 120)];
+  const closed = [noticeOf(600, { id: B }, 'orchestrator', 'closed', 'delivered')];
+  const unread = { unavailable: 'the listing did not finish' };
+  assert.deepEqual(rosterSection(sessions, { record: recordOf(closed), hosts: unread }).filter((line) => line.includes('host processes')), [
+    '  host processes not read (the listing did not finish): a closed session whose process still runs is not flagged',
+  ]);
+  assert.equal(lib.rosterOf(sessions, { record: recordOf(closed), hosts: unread }).hostsUnavailable, 'the listing did not finish');
+  assert.deepEqual(rosterSection(sessions, { record: recordOf([]), hosts: unread }).filter((line) => line.includes('host processes')), []);
 });
 
 // Failure 8 of 2026-10-10 (odd/tasks/rule-hierarchy.md): stopped tasks and archived sessions printed as

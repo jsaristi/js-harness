@@ -961,6 +961,19 @@ export function parseProcessList(stdout) {
   return found;
 }
 
+// The session a Claude Code host process runs, as the desktop app starts one: `--resume=<id>`, or `--resume <id>`.
+const RESUME_PATTERN = /(?:^|\s)"?--resume(?:=|\s+)"?([0-9A-Za-z][0-9A-Za-z-]*)/;
+
+/** The Claude Code host processes among `processes` (`[{ pid, createdAt, commandLine }]`), each with the session it runs:
+ * `[{ pid, createdAt, sessionId }]`, the id in lower case. A host started with no `--resume` names no session and is
+ * not among them (T12 of odd/tasks/harness-review.md). */
+export function hostsOf(processes) {
+  return processes.flatMap(({ pid, createdAt, commandLine }) => {
+    const match = RESUME_PATTERN.exec(commandLine ?? '');
+    return match ? [{ pid, createdAt: createdAt ?? null, sessionId: match[1].toLowerCase() }] : [];
+  });
+}
+
 /** The same list from `ps -A -o pid=,args=`, which gives no start time. */
 export function parsePsList(stdout) {
   return stdout
@@ -1327,7 +1340,7 @@ function recordOfRows(rows, notices) {
  * 13 and 14 days old were in a window of 12 hours). So a transcript is in a row, and holds a role, only
  * when its last timed entry is in the window; the others, and those with no timed entry at all, are
  * counted in `outside`. With no `since` every transcript given is in a row. */
-export function rosterOf(sessions, { worktrees, since, record, app } = {}) {
+export function rosterOf(sessions, { worktrees, since, record, app, hosts } = {}) {
   const trees = worktrees?.available ? worktrees.items : [];
   const groups = new Map();
   let unread = 0;
@@ -1377,13 +1390,22 @@ export function rosterOf(sessions, { worktrees, since, record, app } = {}) {
       worktree: tree?.path ?? null,
       features: sameBranch && tree.plans?.available ? tree.plans.items.map((plan) => plan.path.split('/').at(-1).replace(/\.md$/, '')) : [],
       transcripts: members.map((member) => ({ id: member.id, lastEntryAt: member.lastEntryAt ?? null })),
+      // The host process that runs one of the row's transcripts (`hostsOf`), or `null`: none listed, or no listing.
+      host: hostOfMembers(members, hosts),
       record: null,
     };
   });
   for (const [row, said] of recordOfRows(rows, record?.notices ?? [])) row.record = said;
   const rank = (row) => (row.role === 'orchestrator' ? 0 : row.role === 'work' ? 1 : 2);
   rows.sort((one, other) => rank(one) - rank(other) || (one.number ?? 0) - (other.number ?? 0) || latestFirst(one, other));
-  return { rows, unread, outside };
+  return { rows, unread, outside, ...(typeof hosts?.unavailable === 'string' && { hostsUnavailable: hosts.unavailable }) };
+}
+
+/** The first host of `hosts.items` whose session is one of `members`, as `{ pid, createdAt }`, or `null`. */
+function hostOfMembers(members, hosts) {
+  const ids = new Set(members.map((member) => String(member.id).toLowerCase()));
+  const host = (hosts?.items ?? []).find((item) => ids.has(item.sessionId));
+  return host ? { pid: host.pid, createdAt: host.createdAt } : null;
 }
 
 /** The rows of `roster` that hold the role `wanted` (`roleNamed`): none, the one whose title is the
@@ -3061,6 +3083,18 @@ function rosterLines(roster, now) {
     const status = row.record?.status;
     if (status?.kind !== 'closed' || typeof status.summary !== 'string' || row.where === 'archived') continue;
     lines.push(`  to archive: ${row.title ?? '(no title)'}, closed ${ago(status.at, now)}: read ${status.summary}, then archive it`);
+  }
+  // A session that ended by its own notice but whose host process still runs: the app holds it as running and refuses
+  // to archive it until that process ends (JH 20, 2026-10-18; T12 of odd/tasks/harness-review.md).
+  const endedHere = (row) => row.record?.status && ENDED_KINDS.has(row.record.status.kind) && !row.self && row.where !== 'archived';
+  for (const row of roster.rows) {
+    if (!endedHere(row) || !row.host) continue;
+    const status = row.record.status;
+    const started = row.host.createdAt === null ? 'at an unknown time' : ago(new Date(row.host.createdAt).toISOString(), now);
+    lines.push(`  ${status.kind} but still running: ${row.title ?? '(no title)'}, ${status.kind} ${ago(status.at, now)}, host process pid ${row.host.pid} started ${started}: the app refuses to archive it while that process runs; stop its turn, or end that process, then archive it`);
+  }
+  if (typeof roster.hostsUnavailable === 'string' && roster.rows.some(endedHere)) {
+    lines.push(`  host processes not read (${roster.hostsUnavailable}): a closed session whose process still runs is not flagged`);
   }
   if (roster.unread > 0) lines.push(inNoRow(roster.unread, 'that could not be read'));
   if (roster.outside > 0) lines.push(inNoRow(roster.outside, 'with no entry inside the window'));
