@@ -51,7 +51,8 @@ changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> la
 declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
 write none. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped before it
 ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or nothing to land, 4 red,
-3 main moved meanwhile (main not pushed), 5 the suite did not run (main not pushed), 1 anything else.
+3 main moved meanwhile (main not pushed), 5 the suite did not run or CircleCI gave no result in 30 minutes
+(main not pushed), 1 anything else.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
@@ -611,7 +612,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     }
     if (ci.state !== 'green') {
       stdout(`CircleCI gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
-      return 4;
+      return 5; // no answer judged nothing: not red (harness review b2)
     }
     stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
     // The one push of main the pre-push hook lets through: it says it is the queue's (S9).

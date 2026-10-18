@@ -343,13 +343,12 @@ export function taskChanges(commits, { from, to }) {
   return counts;
 }
 
-/** The checkboxes among `git grep -hE` lines of the task documents: `{ open, done }`, as the measure counted them. */
-export function taskCounts(text) {
+/** The open and done steps of the task documents `[{ path, text }]`, as progress reads them (`stepsOf`): checkboxes
+ * and the rows of a task table, as `taskChanges` counts them (harness review d6). `{ open, done }`. */
+export function taskCounts(files) {
   const counts = { open: 0, done: 0 };
-  for (const line of String(text).split(/\r?\n/)) {
-    const box = /^(?:[^:]*:)?\s*- \[([ xX])\]/.exec(line)?.[1];
-    if (box === ' ') counts.open += 1;
-    else if (box) counts.done += 1;
+  for (const file of files) {
+    for (const step of stepsOf(file.path, file.text)) counts[step.done ? 'done' : 'open'] += 1;
   }
   return counts;
 }
@@ -365,7 +364,7 @@ const SOURCES = {
   merge: "git log of origin/main as last fetched; a merge commit is made when its land builds it, before the land's tests",
   gates: 'the gate log (~/.js-harness/gate-log)',
   codex: '<git common dir>/js-harness/codex-review-runs.jsonl',
-  tasks: 'each commit of origin/main compared with the one before, as progress compares them; open: git grep of the checkboxes of odd/tasks/*.md and docs/ROADMAP.md',
+  tasks: 'each commit of origin/main compared with the one before, as progress compares them; open: the steps of odd/tasks/*.md and docs/ROADMAP.md at each end, as progress reads them',
   conflicts: 'git merge-tree of each merge into a branch on origin/main',
   channel: "the channel (~/.js-harness/channel): a waiting notice to the same session's next one; a session may keep working meanwhile",
   ready: 'the newest ready notice naming the pull request on the channel (notify --kind ready --pr) to its merge commit on origin/main',

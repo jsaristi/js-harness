@@ -144,6 +144,25 @@ test('a merge is refused only for the lines it adds itself, never for those eith
   assert.deepEqual([row.pass, row.lines.map((line) => line.split(' ')[0])], [false, ['bin/c.mjs:1']]);
 }));
 
+// Harness review b1, 2026-10-18: git runs pre-merge-commit before it writes MERGE_HEAD, and names each commit it
+// merges in a GITHEAD_<sha> variable instead; a merge git commits by itself is filtered by those.
+test('in the hook of a merge git commits by itself, with no MERGE_HEAD, the parents named by GITHEAD_<sha> filter the lines', () => inRepo((root) => {
+  const refusing = [{ ...WAIT, row: { refuses: '2026-10-16' } }];
+  git(root, 'checkout', '-q', '-b', 'feature');
+  write(root, 'bin/b.mjs', 'export const B = 1;\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-q', '-m', 'feature');
+  git(root, 'checkout', '-q', 'main');
+  fs.appendFileSync(path.join(root, 'docs/ROADMAP.md'), `${RESTATED}\n`);
+  git(root, 'add', '.');
+  git(root, 'commit', '-q', '-m', 'main restated it before the rule refused');
+  const theirs = git(root, 'rev-parse', 'main');
+  git(root, 'checkout', '-q', 'feature');
+  git(root, 'merge', '-q', '--no-commit', '--no-ff', 'main');
+  fs.rmSync(path.join(root, '.git', 'MERGE_HEAD'));
+  assert.deepEqual(checkOwnRules(root, { rules: refusing, env: { [`GITHEAD_${theirs}`]: 'main' } }), [], 'the merge adds no line of its own');
+}));
+
 test('no row with nothing staged, with no rule that carries patterns, or out of a repository of the harness', () => inRepo((root) => {
   assert.deepEqual(checkOwnRules(root, { rules: [WAIT] }), []);
   fs.appendFileSync(path.join(root, 'docs/ROADMAP.md'), `${RESTATED}\n`);

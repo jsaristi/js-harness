@@ -113,9 +113,12 @@ test('the Codex runs of a day, with their seconds and outcome', () => {
   ]);
 });
 
-test('the open and done tasks are the checkboxes git grep prints, a table row counted by nothing here', () => {
-  const text = ['odd/tasks/a.md:- [ ] T1 one', 'odd/tasks/a.md:  - [x] T2 two', 'docs/ROADMAP.md:- [X] done', 'odd/tasks/a.md:| T3 | row |'].join('\n');
-  assert.deepEqual(taskCounts(text), { open: 1, done: 2 });
+// Harness review d6, 2026-10-18: open counted checkboxes alone, while closed and added count the rows of a task table
+// too; both are now the steps progress reads.
+test('the open and done tasks are the steps progress reads: checkboxes and the rows of a task table', () => {
+  const feature = ['# A', '- [ ] T1 one', '  - [x] T2 two', '', '| ID | Status |', '|---|---|', '| T3 | open |', '| T4 | done |', ''].join('\n');
+  const roadmap = ['# Roadmap', '## Checklist', '', '### F0 One', '- [X] done', ''].join('\n');
+  assert.deepEqual(taskCounts([{ path: 'odd/tasks/a.md', text: feature }, { path: 'docs/ROADMAP.md', text: roadmap }]), { open: 2, done: 3 });
 });
 
 test('a merge that conflicts names its files, from git merge-tree --name-only', () => {

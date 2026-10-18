@@ -57,7 +57,8 @@ export async function windowsDailyMain(
   const slug = projectSlug(mainCheckout(run, cwd));
   const result = await daily({ home, slug, cwd });
   for (const line of result.lines) stdout(line);
-  if (result.told !== null) stdout(result.told);
+  // The end line says the run was told, so a notice that failed prints none (harness review d7).
+  if (result.told !== null && result.failed === null) stdout(result.told);
   if (result.failed !== null) {
     stderr(`js-harness windows-daily: ${result.failed}`);
     return 1;

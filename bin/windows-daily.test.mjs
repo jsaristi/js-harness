@@ -44,9 +44,11 @@ test('a red run told now is printed as its end line', async () => {
 });
 
 test('a notice that could not be written exits 1 and says so', async () => {
-  const { err, deps } = world({ lines: [], told: 'WINDOWS: u failure', failed: 'the notice could not be written' });
+  const { out, err, deps } = world({ lines: [], told: 'WINDOWS: u failure', failed: 'the notice could not be written' });
   assert.equal(await windowsDailyMain([], deps), 1);
   assert.match(err.join('\n'), /the notice could not be written/);
+  // Harness review d7, 2026-10-18: the end line says a run was told; one whose notice failed was not told.
+  assert.deepEqual(out, []);
 });
 
 test('--help prints the usage, and a flag it does not know is refused', async () => {

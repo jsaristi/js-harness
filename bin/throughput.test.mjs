@@ -40,13 +40,16 @@ function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = n
     if (args[0] === 'rev-parse') return origin ? ok('abc\n') : { status: 1, stdout: '', stderr: '' };
     if (args[0] === 'log' && args[1] === '-m') return ok('\u0001m7\n\nodd/tasks/x.md\n');
     if (args[0] === 'log' && args[1] === '--first-parent') return ok(`m7\t${mergedAt}\tp7 h7\tMerge pull request #7 from feat/x\n`);
+    if (args[0] === 'show' && args[1] === 'c1:odd/tasks/a.md') return ok('# A\n- [ ] T1\n- [x] T2\n');
+    if (args[0] === 'show' && args[1] === 'c1:odd/tasks/revisión.md') return ok('# R\n- [ ] T9\n');
     if (args[0] === 'show') return ok('h7\t2026-10-16T10:00:00Z\n');
+    // As git lists a path that is not ASCII: quoted and escaped unless the list is NUL-delimited (Codex, 2026-10-18).
+    if (args[0] === 'ls-tree') return ok(args.includes('-z') ? 'odd/tasks/a.md\0odd/tasks/notes/b.md\0odd/tasks/revisión.md\0' : 'odd/tasks/a.md\nodd/tasks/notes/b.md\n"odd/tasks/revisi\\303\\263n.md"\n');
     if (args[0] === 'rev-list') return ok('c1\n');
     // The history progress reads, one commit compared with the one before (progress-pace.mjs, `paceLogArgs`).
     if (args[0] === '-c' && args.includes('-U100000')) return pace ?? ok('');
     if (args[0] === 'merge-tree' && mergeTree) return mergeTree;
     if (args[0] === 'log' && args[1] === '--merges' && branchMerge) return ok(branchMerge);
-    if (args[0] === 'grep') return ok('odd/tasks/a.md:- [ ] T1\nodd/tasks/a.md:- [x] T2\n');
     if (args[0] === 'log') return ok('');
     return { status: 1, stdout: '', stderr: `unexpected git ${args.join(' ')}` };
   };
@@ -356,7 +359,7 @@ test('the tasks row reads a commit of the history as progress parses it', async 
     ' - [ ] T2 two',
   ].join(nl) + nl;
   const { stdout } = await run([], { home, git: fakeGit({ pace: { status: 0, stdout: history, stderr: '' } }) });
-  assert.match(stdout, /tasks closed and added +closed 1, reopened 0, added 0, removed 0; open 1 to 1/);
+  assert.match(stdout, /tasks closed and added +closed 1, reopened 0, added 0, removed 0; open 2 to 2/);
 });
 
 test('--against takes a window before the one it compares', async () => {
