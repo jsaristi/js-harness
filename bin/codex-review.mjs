@@ -285,8 +285,9 @@ function parseArgs(argv) {
   const keepHome = argv.includes('--keep-home');
   const prompt = get('--prompt') ?? PROMPTS[0];
   if (!PROMPTS.includes(prompt)) throw new ArgError('--prompt must be `codex` or `own`');
+  // A `--doc` beside another prompt is refused in `codexReviewMain`, once it is known whether out of a turn the
+  // own prompt is forced (harness review b10).
   const doc = get('--doc');
-  if (doc !== undefined && prompt !== 'own') throw new ArgError('--doc needs --prompt own: only this command\'s own prompt carries the intent of a feature document');
   /** The count `flag` was given, a positive integer, or `undefined` when the flag is not there; `what` says
    * what it counts, for the error of one that is anything else. */
   const count = (flag, what) => {
@@ -1194,6 +1195,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   if (outOfTurn && args.unavailable === undefined && args.prompt !== 'own') {
     if (argv.includes('--prompt')) log(OWN_OUT_OF_TURN);
     args = { ...args, prompt: 'own' };
+  }
+  if (args.doc !== undefined && args.prompt !== 'own') {
+    error(`--doc needs --prompt own: only this command's own prompt carries the intent of a feature document\n\n${USAGE}`);
+    return 2;
   }
   // The intent the own prompt carries, read before anything runs: a document that cannot be read, or that
   // holds no Goal or no Done when, is a flag given wrong, and no review is started to find that out.

@@ -2345,6 +2345,19 @@ test('--prompt and --doc: a prompt that is not one, and a document with no own p
   assert.equal(loggedRun(root), false);
 });
 
+// Harness review b10, 2026-10-18: out of a turn the own prompt is forced, so a --doc with no --prompt carries
+// its intent there instead of being refused for a prompt that would not have been sent.
+test('out of a turn, --doc with no --prompt or with --prompt codex goes into the own prompt the review is asked with', async () => {
+  const { root, base, head } = makeRepo();
+  const expected = reviewPrompt({ from: base, head, intent: { goal: GOAL, doneWhen: DONE_WHEN }, suiteRan: true });
+  for (const flags of [['--doc', featureDoc()], ['--prompt', 'codex', '--doc', featureDoc()]]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake, {});
+    assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
+    assert.equal(fake.calls[0].child.received.text, expected, flags.join(' '));
+  }
+});
+
 test('a --doc that cannot be read, or holds no Goal or no Done when, is a usage error that names what is missing', async () => {
   const { root, base } = makeRepo();
   const cases = [
