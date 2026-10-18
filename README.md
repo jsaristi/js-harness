@@ -333,7 +333,7 @@ that and how to get the newest copy. When the tags cannot be listed it says why 
 
 ```console
 $ js-harness update
-no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=all github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it (installed: 0.9.0)
+up to date: 0.9.0
 ```
 
 ### js-harness upgrade
@@ -358,8 +358,8 @@ Windows the install runs through cmd.exe, which changes a `"` or a `%`, so a val
 refused before anything is installed.
 
 ```console
-$ js-harness upgrade
-nothing was installed: no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=all github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it
+$ js-harness upgrade --pm pnpm
+up to date: 0.9.0 (the source holds 0.9.0)
 ```
 
 ### js-harness doctor
