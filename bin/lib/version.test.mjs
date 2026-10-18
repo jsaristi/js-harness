@@ -96,18 +96,18 @@ test('installPlan lets npm fetch the one git package it is asked for, and never 
   assert.deepEqual(installPlan('npm', 'github:jsaristi/js-harness#v1.0.0', undefined, {}, 'linux').args, [
     'install',
     '-g',
-    '--allow-git=root',
+    '--allow-git=all',
     'github:jsaristi/js-harness#v1.0.0',
   ]);
   assert.deepEqual(installPlan('npm', 'git+file:///tmp/repo#v1.0.0', '/tmp/p', {}, 'linux').args, [
     'install',
     '-g',
-    '--allow-git=root',
+    '--allow-git=all',
     'git+file:///tmp/repo#v1.0.0',
     '--prefix',
     '/tmp/p',
   ]);
-  assert.ok(!installPlan('npm', '/src/js-harness-1.0.0.tgz', undefined, {}, 'linux').args.includes('--allow-git=root'));
+  assert.ok(!installPlan('npm', '/src/js-harness-1.0.0.tgz', undefined, {}, 'linux').args.includes('--allow-git=all'));
 });
 
 test('installPlan gives pnpm `add -g <spec>` and no --prefix, which pnpm does not have', () => {

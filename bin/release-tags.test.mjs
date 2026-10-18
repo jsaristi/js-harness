@@ -140,7 +140,7 @@ test('upgrade installs the newest tag of the repository with the package manager
     const { code, out, err } = await runCommand(upgradeMain, ['--repo', repo, '--home', home, '--prefix', prefix, '--pm', 'my-pm'], {}, spawn, 'linux');
     assert.equal(code, 0, err);
     assert.match(out, /upgraded to 99\.0\.0/);
-    assert.deepEqual(calls[0], { cmd: 'my-pm', args: ['install', '-g', '--allow-git=root', fileSpec(repo, 'v99.0.0'), '--prefix', prefix] });
+    assert.deepEqual(calls[0], { cmd: 'my-pm', args: ['install', '-g', '--allow-git=all', fileSpec(repo, 'v99.0.0'), '--prefix', prefix] });
     // T2: the installed copy is asked its version before it syncs.
     assert.ok(calls[1].args.includes('--version'), JSON.stringify(calls[1]));
     assert.ok(calls[2].args.includes('sync'), JSON.stringify(calls[2]));

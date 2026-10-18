@@ -13,14 +13,14 @@ It is plain Node with no dependencies. It needs Node 22 or newer and git.
 The repository is public on GitHub; the install reads it from there.
 
 ```sh
-npm i -g --allow-git=root github:jsaristi/js-harness
+npm i -g --allow-git=all github:jsaristi/js-harness
 js-harness install
 cd my-project
 js-harness init
 ```
 
 1. `npm i -g` puts the `js-harness` command on the path; npm 12 fetches a package from git only
-   with `--allow-git=root`. With pnpm: `pnpm add -g github:jsaristi/js-harness`.
+   with `--allow-git`, and npm 11.12 refuses this one under `root`, so `all`. With pnpm: `pnpm add -g github:jsaristi/js-harness`.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
 3. `js-harness init`, in a git repository, writes `harness.json` (the pin, and `"reply": true`,
@@ -74,7 +74,7 @@ No package registry is involved: the tag on GitHub is the release.
    `harness.json` to the new version, run `js-harness sync` with that version installed, and commit
    what it wrote.
 
-A new user installs a release by its tag, `npm i -g --allow-git=root
+A new user installs a release by its tag, `npm i -g --allow-git=all
 github:jsaristi/js-harness#vX.Y.Z` or `pnpm add -g github:jsaristi/js-harness#vX.Y.Z`; the
 commands under Install, with no tag, install the newest main. A tag can be moved by anyone who can
 push to the repository, and no checksum is checked; `git ls-remote
@@ -333,7 +333,7 @@ that and how to get the newest copy. When the tags cannot be listed it says why 
 
 ```console
 $ js-harness update
-no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it (installed: 0.9.0)
+no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=all github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it (installed: 0.9.0)
 ```
 
 ### js-harness upgrade
@@ -345,7 +345,8 @@ tarballs, which wins when named and needs no credential. With no release tagged 
 asked.
 
 The package manager is `npm` unless `--pm <command>` or `JS_HARNESS_PM` names another, such as
-`pnpm`. npm gets `--allow-git=root` for a tag, since npm 12 fetches nothing from git without it;
+`pnpm`. npm gets `--allow-git=all` for a tag, since npm 12 fetches nothing from git without it
+(`all` and not `root`, which npm 11.12 refuses for a global install);
 pnpm gets `add -g`. The install is judged by the installed copy's own `--version`, not by the
 package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file
 in use, and `upgrade` then says so and goes on. With pnpm, its bin folder's lock is removed when
@@ -358,7 +359,7 @@ refused before anything is installed.
 
 ```console
 $ js-harness upgrade
-nothing was installed: no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it
+nothing was installed: no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=all github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it
 ```
 
 ### js-harness doctor

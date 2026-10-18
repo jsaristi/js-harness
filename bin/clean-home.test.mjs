@@ -56,7 +56,7 @@ function releaseRepo(root, version) {
   return repo;
 }
 
-/** A package manager stand-in: `install -g --allow-git=root git+file:///<repo>#<tag> --prefix <dir>` (npm 12 needs the
+/** A package manager stand-in: `install -g --allow-git=all git+file:///<repo>#<tag> --prefix <dir>` (npm 12 needs the
  * option for git, T2) checks that tag out where npm
  * puts a global package under a prefix, which is where `upgrade` runs the installed copy's sync from. It is written
  * into `folder`, where `upgrade` starts it, and named by a relative path with `node` from PATH: `--pm` is split on
@@ -68,7 +68,7 @@ function packageManager(folder) {
     "import path from 'node:path';",
     "import { fileURLToPath } from 'node:url';",
     "const [, , verb, global, allow, spec, flag, prefix] = process.argv;",
-    "if (verb !== 'install' || global !== '-g' || allow !== '--allow-git=root' || flag !== '--prefix' || !spec.startsWith('git+file:')) process.exit(9);",
+    "if (verb !== 'install' || global !== '-g' || allow !== '--allow-git=all' || flag !== '--prefix' || !spec.startsWith('git+file:')) process.exit(9);",
     "const [url, tag] = spec.slice('git+'.length).split('#');",
     "const target = process.platform === 'win32' ? path.join(prefix, 'node_modules', 'js-harness') : path.join(prefix, 'lib', 'node_modules', 'js-harness');",
     "const clone = spawnSync('git', ['clone', '-q', '--depth', '1', '--branch', tag, url, target], { stdio: 'inherit' });",
