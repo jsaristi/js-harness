@@ -645,8 +645,14 @@ test('uninstallMain says a setting it could not write back, with the error code 
     };
     const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
     assert.equal(code, 1, 'a setting left in place is not a clean uninstall');
-    assert.deepEqual(errLines, [`could not put crossSessionInbound back in ${settings} (EPERM): it is no longer recorded, so nothing else will; set it back by hand`]);
+    assert.deepEqual(errLines, [`could not put crossSessionInbound back in ${settings} (EPERM): it is still recorded; run js-harness uninstall --global again, or set it back by hand`]);
     assert.equal(outLines.some((line) => line.includes('modified by you') && line.includes(settings)), false, outLines.join('\n'));
+
+    // The record is kept, so a run again, once the file can be written, puts the setting back and passes.
+    const again = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([again.code, again.errLines], [0, []]);
+    assert.equal(fs.existsSync(settings) ? JSON.parse(fs.readFileSync(settings, 'utf8')).crossSessionInbound : 'gone', 'gone', 'install made the file, so it goes with the setting');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

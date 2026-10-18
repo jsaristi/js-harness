@@ -235,7 +235,8 @@ test('uninstall keeps a setting it cannot write back, and still finishes', () =>
     // Codex on 6b0bc88..05fa584: a failed write is not the user's edit, so it is told apart, with its code.
     assert.deepEqual(result.settingsKept, []);
     assert.deepEqual(result.settingsFailed, [{ path: settings, code: 'EPERM' }]);
-    assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is gone: the run finished');
+    // Its record stays, with the value it had, so a run again can put it back (Codex on 05fa584..cdcce6c).
+    assert.deepEqual(readManifest(home).settings.map((record) => record.path), [settings]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

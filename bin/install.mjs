@@ -502,7 +502,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
   for (const p of result.settingsRestored ?? []) console.log(`put ${SESSION_MESSAGES.key} back in ${p}`);
   for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
-  for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is no longer recorded, so nothing else will; set it back by hand`);
+  for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is still recorded; run js-harness uninstall --global again, or set it back by hand`);
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
   // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.

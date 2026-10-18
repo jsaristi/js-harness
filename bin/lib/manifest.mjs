@@ -955,6 +955,7 @@ function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync
   const restored = [];
   const kept = [];
   const failed = [];
+  const failedRecords = [];
   for (const record of manifest.settings ?? []) {
     if (record.had && record.previous === record.value) continue;
     let settings;
@@ -983,11 +984,12 @@ function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync
       }
     } catch (err) {
       failed.push({ path: record.path, code: err.code ?? 'unknown error' });
+      failedRecords.push(record);
       continue;
     }
     restored.push(record.path);
   }
-  return { restored, kept, failed };
+  return { restored, kept, failed, failedRecords };
 }
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
@@ -1462,8 +1464,12 @@ function uninstallInstalled(home, deps) {
   const guarded = remote.kept.length > 0;
   const stillRecorded = keptRecords.filter((task, i) => tasksKept[i].reason !== 'edited' || guarded);
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
-  if (stillRecorded.length > 0) {
-    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
+  // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
+  // (Codex on 05fa584..cdcce6c).
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0) {
+    // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
+    const keptSettings = settings.failedRecords.map((record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) }));
+    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded, ...(keptSettings.length > 0 && { settings: keptSettings }) });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
