@@ -20,8 +20,9 @@ import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gent
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
+import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run | --land | --prune [--cwd <path>]
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
 Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
 number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
@@ -53,6 +54,13 @@ write none. A gate that ran nothing (no turn in time, or a waiting push took it)
 ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or nothing to land, 4 red,
 3 main moved meanwhile (main not pushed), 5 the suite did not run or CircleCI gave no result in 30 minutes
 (main not pushed), 1 anything else.
+--land --refresh-copy, after a land that moved main, also brings the installed copy the hooks run up to that main
+(odd/tasks/harness-review.md, T4): under the gate lock, the Claude settings are backed up (the newest five kept under
+<home>/.js-harness/refresh-backups), main is installed with pnpm add -g by its sha in up to three tries, the copy is
+verified by its --version (the version main's package.json names) and by the sha its shim names, then js-harness
+install and js-harness doctor run, and the stale pnpm state is pruned. The undo is printed. A land that moved nothing
+refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install fails (the landing
+stands), 75 when the gate lock was not obtained (nothing refreshed).
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
@@ -121,15 +129,17 @@ function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
 }
 
 function parseArgs(argv) {
-  const args = { dryRun: false, land: false, prune: false, cwd: process.cwd() };
+  const args = { dryRun: false, land: false, prune: false, refreshCopy: false, cwd: process.cwd() };
   for (let at = 0; at < argv.length; at += 1) {
     if (argv[at] === '--dry-run') args.dryRun = true;
     else if (argv[at] === '--land') args.land = true;
     else if (argv[at] === '--prune') args.prune = true;
+    else if (argv[at] === '--refresh-copy') args.refreshCopy = true;
     else if (argv[at] === '--cwd' && at + 1 < argv.length) args.cwd = argv[(at += 1)];
     else return null;
   }
-  // One mode, named: a run that pushes main is never what a bare command does.
+  // One mode, named: a run that pushes main is never what a bare command does. --refresh-copy is a part of --land.
+  if (args.refreshCopy && !args.land) return null;
   return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
 
@@ -741,6 +751,25 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
       printOut(`Could not remove the worktrees of the landed pull requests (${err.message}): the land's exit stands.`);
     }
   }
+  let exit = code;
+  if (args.refreshCopy) {
+    // After the land and its removals, as the lead ran update-copy.sh after a land. Only a refresh that fails changes
+    // the exit (REFRESH_FAILED, GATE_NOT_RUN): the landing it follows already stands.
+    const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
+    const sha = landed ? log.record.candidate : null;
+    const refreshed = await (deps.refreshCopy ?? refreshInstalledCopy)({
+      landed,
+      sha,
+      version: landed ? versionAt(sha, args.cwd, deps.run ?? spawnSync) : null,
+      home: harnessHomeOf(env),
+      cwd: args.cwd,
+      env,
+      session: env.CLAUDE_CODE_SESSION_ID || null,
+      stdout: printOut,
+      stderr: printErr,
+    });
+    exit = refreshed === 0 ? code : refreshed;
+  }
   if (log.file && log.record.leftOut.length > 0) {
     // After the land's own last line, and not as its `said`: telling is no part of what the land did. A notice
     // that cannot be written changes no exit either.
@@ -755,12 +784,24 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   if (log.file) {
     // Written after the land ended, whatever its end: a record that cannot be written changes no exit.
     try {
+      // The land's own exit: a refresh that failed after it is no part of what the land did.
       log.write(code);
     } catch (err) {
       stdout(`Could not write the land record to ${log.file} (${err.message}): the land's exit stands.`);
     }
   }
-  return code;
+  return exit;
+}
+
+/** The version the package.json of `sha` names, read by git, or null when it names none (the copy's refresh says so). */
+function versionAt(sha, cwd, run) {
+  const shown = answer(run, 'git', ['show', `${sha}:package.json`], cwd);
+  if (!shown.ok) return null;
+  try {
+    return JSON.parse(shown.out).version ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
