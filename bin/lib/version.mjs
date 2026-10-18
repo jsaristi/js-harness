@@ -25,7 +25,7 @@ export function isNewer(candidate, current) {
  * ahead of the newest tag comes from, and the only source where a repository holds no release tag
  * (docs/ROADMAP.md, "Versioning"), so `upgrade` has no release to install and says this instead. It names npm, with the
  * option npm 12 needs to fetch from git, and pnpm: a copy that pnpm installed is not the one npm would replace. */
-export const INSTALL_NEWEST = 'npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it';
+export const INSTALL_NEWEST = 'npm i -g --allow-git=all github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it';
 
 /** The repository whose tags are the releases (docs/ROADMAP.md, "Release source"): public since 2026-10-16, read
  * with the machine's git. */
@@ -107,9 +107,11 @@ export function pmKind(words) {
  * of a global bin folder (T2 of odd/tasks/harness-review.md, L7). */
 export function installPlan(kind, spec, prefix, env, platform) {
   if (kind !== 'pnpm') {
-    // npm 12 refuses a package fetched from git unless `allow-git` says otherwise; `root` lets in the one git
-    // package named here and none among its dependencies (it has none). An older npm warns of an unknown option.
-    const args = isGitSpec(spec) ? ['install', '-g', '--allow-git=root', spec] : ['install', '-g', spec];
+    // npm 12 refuses a package fetched from git unless `allow-git` says otherwise. `all`, not `root`: npm 11.12
+    // (the one Node 24.15 ships) counts the package of a global install as a non-root one and refuses it under
+    // `root` (EALLOWGIT, measured 2026-10-18 under WSL2), while npm 12.2 takes either. js-harness has no
+    // dependencies, so `all` lets in no git package `root` would keep out. An older npm warns of an unknown option.
+    const args = isGitSpec(spec) ? ['install', '-g', '--allow-git=all', spec] : ['install', '-g', spec];
     return { args: prefix ? [...args, '--prefix', prefix] : args, env };
   }
   const args = ['add', '-g', spec];

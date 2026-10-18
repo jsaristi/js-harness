@@ -1048,7 +1048,7 @@ test('doctorMain --json carries a multi-step fix as an array, in the row fix map
 
 // --- the hook commands check: the copy on the path answers the recorded `js-harness resume` hook commands ---
 
-const HOOK_GAP_FIX = 'the js-harness on the path is older than these entries: run js-harness upgrade, or install the newest copy (npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it), then run js-harness doctor again';
+const HOOK_GAP_FIX = 'the js-harness on the path is older than these entries: run js-harness upgrade, or install the newest copy (npm i -g --allow-git=all github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it), then run js-harness doctor again';
 
 test('doctorMain reports a recorded hook command that the copy on the path does not answer, in the table, under Fix and in --json', async () => {
   const home = makeTmpHome();
@@ -2156,7 +2156,7 @@ test("doctorMain names an installed copy whose unscoped rules differ from main's
 
     const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
     assert.match(text.output, new RegExp(`\\njs-harness\\s+${shippedRulesHash(RULES).slice(0, 8)}\\s+n/a\\s+n/a\\s+n/a\\s+outdated\\n`));
-    assert.match(text.output, /\n {2}js-harness \(upToDate\):\n {4}the installed copy's unscoped rules differ from main's: install the newest copy \(npm i -g --allow-git=root github:jsaristi\/js-harness/);
+    assert.match(text.output, /\n {2}js-harness \(upToDate\):\n {4}the installed copy's unscoped rules differ from main's: install the newest copy \(npm i -g --allow-git=all github:jsaristi\/js-harness/);
     assert.match(text.output, new RegExp(`\\n {4}unscoped rules on main that differ: changed ${id}\\n`));
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });

@@ -146,7 +146,7 @@ test('update with no source says no release is tagged yet, how to get the newest
   assert.match(out, /no release of js-harness is tagged yet/);
   // Tagging starts at 0.9.0 (docs/ROADMAP.md, "Versioning"): the line no longer names a first tagged version.
   assert.doesNotMatch(out, /tagged from/);
-  assert.match(out, /npm i -g --allow-git=root github:jsaristi\/js-harness/);
+  assert.match(out, /npm i -g --allow-git=all github:jsaristi\/js-harness/);
   assert.match(out, new RegExp(`installed: ${escaped(currentVersion())}`));
   assert.doesNotMatch(out, /update available/);
   assert.equal(err, '');
@@ -164,7 +164,7 @@ test('upgrade with no source installs nothing and runs no sync, whatever a regis
     assert.equal(code, 1);
     assert.match(err, /nothing was installed/);
     assert.match(err, /no release of js-harness is tagged yet/);
-    assert.match(err, /npm i -g --allow-git=root github:jsaristi\/js-harness/);
+    assert.match(err, /npm i -g --allow-git=all github:jsaristi\/js-harness/);
     assert.equal(out, '');
     assert.deepEqual(registry.calls, []);
   } finally {
