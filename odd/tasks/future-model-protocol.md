@@ -231,20 +231,21 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
   assessed medium and under budget by gentle-ai; G6b, the record and the refusal, next; left of
   G6: codegraph's version and the js-harness commit
 - [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
-- [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
+- [x] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
   C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
   see L17; C3b `9d82100`, the marker blocks, see L18; C3c `dde2216`, Codex's TOML tables and hook
   trust, see L19; C4 `8ce28f0`, the suite's wiring and pins; C5, the report's arms section, see
   L21, in #426; C6a, the probe, see L26, in #428; C6b, `minimal-with-mcp-<name>`, and C7, the
-  documents, see L29)
+  documents, see L29, with Codex's fix of the minimal-with pin, L30, in #429)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
 - [x] T10 G6, last part: the version of codegraph and the js-harness commit of the workspace recorded
   with a run and compared on a resume (S3; route: inline; the lead, 2026-10-14 06:03)
-- [ ] T11 The fingerprint held hours apart: the real templates of both hosts built twice, hours
+- [x] T11 The fingerprint held hours apart: the real templates of both hosts built twice, hours
   apart, outside the home, and their fingerprints compared; a difference names a volatile key to
-  leave out (S3; route: inline, free)
+  leave out (S3; route: inline, free). Three volatile kinds left out in `e64e1df` (#430), see L32;
+  held with the fix two hours apart, see L34
 - [x] T12 PR 130 holds main: once jsaristi/js-harness#124 is merged, `origin/main` merged in once,
   the gate passed, pushed, the lead told
 
@@ -580,3 +581,13 @@ later, compared file by file.
 
 L33 (2026-10-18, 00:28 UTC by `date`) Codex reviewed `f0cd67b..e64e1df` (138,105 input tokens, recorded): correct, no finding.
 gentle-ai assessed `e64e1df` from `f0cd67b`: medium, not due (`under_budget`, 71 changed lines).
+
+L34 (2026-10-18, 02:24 UTC by `date`) T11, second half: done. Two builds with the fix, at 00:23 and
+02:23 UTC, kept every file's settled hash. The only files that differ are js-harness's own skills
+(`js-harness` and `js-harness-orchestrator` of both hosts), reinstalled at 02:22 after #437 landed:
+a real change of the setup, which the fingerprint must catch. Two `.in_use/<pid>` markers went with
+the session that left them and are no longer counted. The global `settings.json` is the same, and
+its change at 23:02 of the first half was real too: #425 (the permit relay, landed 22:58) added the
+`hooks.PermissionRequest` entry `js-harness permit --hook` to the install manifest, and the install
+after the land wrote it. So a fingerprint now moves only when what an arm runs on moves; between
+lands of js-harness itself it holds. Nothing spent.
