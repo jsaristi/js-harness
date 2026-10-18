@@ -47,6 +47,7 @@ First request of a one-word prompt, estimated tokens:
 | Instruction source | `AGENTS.md` on every turn — Claude Code reads it natively; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
 | Release source | Built 2026-10-16 (`odd/tasks/first-version.md`, T4 and T4b), no release tagged yet: git tags in the repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it is public since 2026-10-16 (Name, home), and that step still has no date. No release is tagged and none will be while the harness is experimental: tagging starts at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986), and until then `sync` says a pin cannot be installed by its number instead of naming a tag. No command asks a package registry about the name `js-harness`, which nobody holds there: `status --global`, `update` and `upgrade` read the newest `vX.Y.Z` tag with `git ls-remote` (`--repo` or `JS_HARNESS_REPO` names another repository, a test's local one), and until the first tag they say that no release is tagged yet; `--source`, a folder of tarballs, still wins when named (2026-10-13, `odd/tasks/install-update.md`, T5; tags 2026-10-16). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
+| Versioning | The first tag is v0.9.0, a rehearsal release, and the first definitive one is v1.0.0, which adds one new feature so that `upgrade` from 0.9.0 to 1.0.0 proves the update path before the version calls itself stable; patches after it are 1.0.1, 1.0.2. This replaces "tagging starts at 1.0.0" in Release source. Asked, between "0.9.0 → 1.0.0 (Recomendada)" and "1.0.0 → 1.1.0", he tapped the first (the lead's transcript `e152c9d8`, line 29367, 2026-10-18T01:51Z), after asking "o prefieres que la version inicial sea la 0.9.0?" (line 29353). Each tag still waits for his yes; the work is `odd/tasks/harness-review.md` |
 | License | MIT, in `LICENSE` and `package.json`. Chosen before the repository went public for free parallel CI gates (`odd/tasks/first-version.md`, S7): asked which license, among MIT, Apache-2.0, AGPL-3.0 or none, he tapped "MIT (Recomendada)" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 10941, 2026-10-16T10:55Z, read with `js-harness sessions --quote`) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
@@ -201,6 +202,17 @@ te tienen bloqueado al ser una ia ese es el problema"); measured on nine pages, 
 - [x] The `resume --pause` hook names the next rung after a blocked WebFetch
 - [x] And after a WebFetch that failed as a tool error, through a `PostToolUseFailure` entry `install` writes (Sebastián, 2026-10-16: "Sí, agregala (Recomendada)")
 - [x] Reviewed (gentle-ai and Codex) and merged (`jsaristi/js-harness#204`, its `PostToolUseFailure` entry `#260`)
+
+### Review and release
+The whole harness reviewed and documented, the lead's manual steps automated, the application tested end to
+end, and v0.9.0 then v1.0.0 released so the update between them is proven (Sebastián, 2026-10-18: "Listo
+apliquemos todo esto y despues de todo hacemos un test completo de la aplicacion para ver si funciona";
+`odd/tasks/harness-review.md`).
+- [ ] The lead's manual steps are commands with tests (watch and lease, land and copy, archive, openings)
+- [ ] Every command reviewed against its help, README and SPEC, and every finding fixed or written down
+- [ ] The full application test passes on Windows and WSL2
+- [ ] v0.9.0 tagged and installed from its tag by real pnpm and npm
+- [ ] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0
 
 ## F5 result
 

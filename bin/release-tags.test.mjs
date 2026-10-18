@@ -163,7 +163,9 @@ test('a repository whose tags cannot be listed: status says unknown and why, upd
       const run = await runCommand(main, ['--repo', missing, '--home', home]);
       assert.equal(run.code, 1, main.name);
       assert.match(run.err, /cannot list the tags of .*no-such-repository/, main.name);
-      assert.match(run.err, /private/, main.name);
+      // The default repository is public since 2026-10-16: the line no longer claims it is private.
+      assert.doesNotMatch(run.err, /the repository is private/, main.name);
+      assert.match(run.err, /git needs to reach the repository, and a credential when it is private/, main.name);
       assert.match(run.err, /--source/, main.name);
     }
   } finally {
