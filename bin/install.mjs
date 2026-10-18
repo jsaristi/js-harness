@@ -281,8 +281,11 @@ export async function installMain(argv, env = process.env, deps = {}) {
   }
   const { home, acceptMessages } = parsed;
   const version = currentVersion();
-  const manifest = install(home, version, deps);
+  // `sync`, not `install`: over an older manifest it also removes what is no longer shipped, which `install` alone
+  // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
+  const manifest = sync(home, version, deps);
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
+  for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
   return acceptMessages ? reportSessionMessages(home) : 0;
@@ -419,6 +422,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
+  for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   return 0;
 }
 

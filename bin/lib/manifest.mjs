@@ -1231,14 +1231,28 @@ export function sync(home, version, deps = {}) {
     // current targets, not against this run's successful writes — so a component that is still
     // declared but merely failed to (re)write this run (carried forward above with `skipped: true`)
     // is never treated as "no longer shipped" and deleted.
+    // A file no longer shipped is removed only while its bytes are the ones recorded, as `uninstall` does: one the
+    // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
+    // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
+    // longer recorded; `pruneKept` says which and why.
     const declaredTargets = new Set(components.map((c) => c.target(home)));
+    const pruneKept = [];
     for (const file of previous.files) {
-      if (declaredTargets.has(file.path)) continue;
-      if (fs.existsSync(file.path)) {
+      if (declaredTargets.has(file.path) || !fs.existsSync(file.path)) continue;
+      try {
+        if (sha256(fs.readFileSync(file.path)) !== file.sha256) {
+          pruneKept.push({ path: file.path, reason: 'changed since it was written' });
+          continue;
+        }
         fs.rmSync(file.path);
-        removeEmptyDirsUpTo(path.dirname(file.path), home, deps.listDir);
+      } catch (err) {
+        pruneKept.push({ path: file.path, reason: err.message });
+        continue;
       }
+      removeEmptyDirsUpTo(path.dirname(file.path), home, deps.listDir);
     }
+    // Not enumerable: what was kept is this run's report, not part of the manifest written above.
+    Object.defineProperty(manifest, 'pruneKept', { value: pruneKept, enumerable: false });
 
     const keptEntries = manifest.entries ?? [];
     for (const entry of previous.entries ?? []) {

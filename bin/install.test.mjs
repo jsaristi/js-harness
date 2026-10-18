@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord } from './install.mjs';
 import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
@@ -126,6 +127,46 @@ test('syncMain updates the manifest under --home and exits 0', async () => {
     const code = await syncMain(['--global', '--home', home]);
     assert.equal(code, 0);
     assert.equal(readManifest(home).version, currentVersion());
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// harness-review a1: a file no longer shipped that the user changed is kept, and the sync says so.
+test('syncMain names a file no longer shipped that it kept because it changed', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const edited = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+    fs.mkdirSync(path.dirname(edited), { recursive: true });
+    fs.writeFileSync(edited, 'the user edited this', 'utf8');
+    const manifest = readManifest(home);
+    manifest.files.push({ path: edited, sha256: '0'.repeat(64) });
+    fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+    const { code, outLines } = await captureConsole(() => syncMain(['--global', '--home', home]));
+    assert.equal(code, 0);
+    assert.ok(outLines.includes(`kept ${edited}: changed since it was written; no longer shipped, and no longer recorded`), outLines.join('\n'));
+    assert.equal(fs.existsSync(edited), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// harness-review a2: install over an older manifest dropped the records of what is no longer declared and left
+// those files behind, unrecorded; it now removes them as sync does, keeping one the user changed.
+test('installMain over an older manifest removes a file no longer shipped instead of leaving it unrecorded', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const orphan = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+    fs.mkdirSync(path.dirname(orphan), { recursive: true });
+    fs.writeFileSync(orphan, 'stale content', 'utf8');
+    const manifest = readManifest(home);
+    manifest.files.push({ path: orphan, sha256: createHash('sha256').update('stale content').digest('hex') });
+    fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+    const { code } = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(code, 0);
+    assert.equal(fs.existsSync(orphan), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

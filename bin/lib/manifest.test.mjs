@@ -163,6 +163,38 @@ test('sync removes a file that the current components no longer ship', () => {
   }
 });
 
+// harness-review a1: the prune deleted a file no longer shipped without comparing its bytes, so an edit was lost.
+test('sync keeps a file no longer shipped that was changed since it was written, or that it cannot remove, and says so', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = install(home, '0.1.0');
+    const edited = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+    fs.mkdirSync(path.dirname(edited), { recursive: true });
+    fs.writeFileSync(edited, 'the user edited this', 'utf8');
+    // A folder where the recorded file was: removing it as a file fails.
+    const blocked = path.join(home, '.claude', 'skills', 'js-harness-gone', 'SKILL.md');
+    fs.mkdirSync(path.join(blocked, 'inside'), { recursive: true });
+    const stale = {
+      version: '0.1.0',
+      files: [...manifest.files, { path: edited, sha256: sha256('stale content') }, { path: blocked, sha256: sha256('x') }],
+    };
+    fs.writeFileSync(manifestPath(home), JSON.stringify(stale, null, 2));
+
+    const synced = sync(home, '0.2.0');
+
+    assert.equal(fs.readFileSync(edited, 'utf8'), 'the user edited this');
+    assert.equal(fs.existsSync(blocked), true);
+    assert.deepEqual(synced.pruneKept.map(({ path: kept, reason }) => [kept, reason === 'changed since it was written' ? reason : 'error']), [
+      [edited, 'changed since it was written'],
+      [blocked, 'error'],
+    ]);
+    assert.equal(Object.keys(synced).includes('pruneKept'), false, 'the report is not part of the manifest written');
+    assert.deepEqual(readManifest(home).files.map((f) => f.path).filter((p) => p === edited || p === blocked), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall removes unmodified files, keeps modified ones, and deletes the manifest', () => {
   const home = makeTmpHome();
   try {
