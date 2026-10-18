@@ -1072,8 +1072,8 @@ test('replyHookProblem names the run that let a reply with no state through wher
 
 test('replyHookProblem names a run that turned back a reply it should let stop, and one that printed no JSON or did not exit 0', () => {
   assert.equal(replyHookProblem({ ...REPLY_RIGHT, passed: REPLY_BLOCK }), `the reply check turned back a reply that closes with its state: ${REPLY_BLOCK.stdout.trim()}`);
-  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: REPLY_BLOCK }), `the reply check turned back a reply in the practice project, whose harness.json does not turn it on: ${REPLY_BLOCK.stdout.trim()}`);
-  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: printed('') }), 'the reply check printed nothing in the practice project, though a Stop hook answers with JSON');
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: REPLY_BLOCK }), `the reply check turned back a reply outside any project, where no harness.json turns it on: ${REPLY_BLOCK.stdout.trim()}`);
+  assert.equal(replyHookProblem({ ...REPLY_RIGHT, plain: printed('') }), 'the reply check printed nothing outside any project, though a Stop hook answers with JSON');
   assert.equal(replyHookProblem({ ...REPLY_RIGHT, passed: { status: 2, stdout: '' } }), 'the reply check exited 2 on the reply that closes with its state, not 0');
 });
 

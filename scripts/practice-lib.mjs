@@ -500,7 +500,7 @@ export const JOURNEY = Object.freeze([
   { id: 'pause-hook', title: 'the context pause hook prints its notice once in the project, and nothing outside it' },
   { id: 'channel', title: 'a notice recorded in the installed project is read back on its board, and nothing reaches the real home' },
   { id: 'opening-tools', title: 'the guard lets the scheduled-task and cloud tools pass in the project, and refuses them where the rule is declared, naming start_session' },
-  { id: 'reply-hook', title: 'the reply check turns back a reply with no state where harness.json turns it on, lets a closed reply stop, and turns nothing back in the project' },
+  { id: 'reply-hook', title: 'the reply check turns back a reply with no state where harness.json turns it on, lets a closed reply stop, and turns nothing back outside any project' },
   { id: 'host-loads', title: 'a real Claude Code session in the project loads the skills and AGENTS.md, runs the three hook entries, and leaves nothing in the real home' },
   { id: 'real-home-after', title: 'the real home is unchanged' },
   { id: 'record', title: 'one line is appended to record.jsonl' },
@@ -1082,10 +1082,10 @@ function replyAnswer(run, which) {
 }
 
 /** What is wrong with the three runs of the reply check, or `null`. `refused` is a reply with no state, in a folder whose
- * `harness.json` holds `"reply": true`: it must be turned back with `decision: "block"` and a reason that names the
- * English label `Working`. `passed` is a reply there that closes with `Working — …`, and `plain` the reply with no state
- * in the practice project, whose `harness.json` from `init` has no `reply` key: both must print `{}`. Each run is
- * `{ status, stdout }` of the child. */
+ * `harness.json` holds `"reply": true` (the practice project, whose `harness.json` from `init` turns the check on):
+ * it must be turned back with `decision: "block"` and a reason that names the English label `Working`. `passed` is a
+ * reply there that closes with `Working — …`, and `plain` the reply with no state in a folder outside any project, where
+ * no `harness.json` lies above: both must print `{}`. Each run is `{ status, stdout }` of the child. */
 export function replyHookProblem({ refused, passed, plain }) {
   const turned = replyAnswer(refused, 'the reply with no state');
   if (turned.problem) return turned.problem;
@@ -1094,11 +1094,11 @@ export function replyHookProblem({ refused, passed, plain }) {
   if (!reason.includes('Working')) return `the reply check turned the reply back without naming the state Working: ${reason}`;
   for (const [run, which, where] of [
     [passed, 'the reply that closes with its state', 'a reply that closes with its state'],
-    [plain, 'the reply in the practice project', 'a reply in the practice project, whose harness.json does not turn it on'],
+    [plain, 'the reply outside any project', 'a reply outside any project, where no harness.json turns it on'],
   ]) {
     const read = replyAnswer(run, which);
     if (read.problem) return read.problem;
-    if (read.printed === '') return `the reply check printed nothing in ${run === plain ? 'the practice project' : 'the folder whose harness.json turns it on'}, though a Stop hook answers with JSON`;
+    if (read.printed === '') return `the reply check printed nothing ${run === plain ? 'outside any project' : 'in the folder whose harness.json turns it on'}, though a Stop hook answers with JSON`;
     if (read.answer === undefined || Object.keys(read.answer).length !== 0) return `the reply check turned back ${where}: ${read.printed}`;
   }
   return null;
