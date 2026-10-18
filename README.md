@@ -60,8 +60,9 @@ No package registry is involved: the tag on GitHub is the release.
 1. The bump: on a branch, `version` in `package.json` goes to the new version, and the branch lands
    on main through the merge queue like any change.
 2. The full test, on the landed commit: `npm run check`, then the release proof with each package
-   manager, `npm run release-proof -- --repo . --to v0.10.0 --pm npm` for 0.9.0 (`--to` is the
-   next minor) and the same with `--pm pnpm`. With `--repo .` the proof clones this repository into
+   manager, `npm run release-proof -- --repo . --to v<next minor> --pm npm`, and the same with
+   `--pm pnpm`. `--to` is the minor after the version released (`v0.10.0` for 0.9.0, `v1.1.0` for
+   1.0.0 and for 1.0.1); the proof refuses any other and names the one it expects. With `--repo .` the proof clones this repository into
    a temp folder and tags the clone, so it needs no real tag; it installs into throwaway folders, upgrades, moves a project's
    pin, uninstalls, and fails unless the throwaway home ends as it started.
 3. The tag: `git tag vX.Y.Z <commit>` on that same commit, then `git push origin vX.Y.Z`. The
@@ -75,7 +76,11 @@ No package registry is involved: the tag on GitHub is the release.
 
 A new user installs a release by its tag, `npm i -g --allow-git=root
 github:jsaristi/js-harness#vX.Y.Z` or `pnpm add -g github:jsaristi/js-harness#vX.Y.Z`; the
-commands under Install, with no tag, install the newest main.
+commands under Install, with no tag, install the newest main. A tag can be moved by anyone who can
+push to the repository, and no checksum is checked; `git ls-remote
+https://github.com/jsaristi/js-harness "refs/tags/vX.Y.Z*"` prints the commit a tag names (on the
+line ending `^{}` for an annotated tag), and `#<that commit>` in place of `#vX.Y.Z` installs that
+commit exactly.
 
 ## Commands
 
