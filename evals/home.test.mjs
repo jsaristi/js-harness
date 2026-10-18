@@ -694,6 +694,38 @@ test('the fingerprint leaves out what a day of sessions changes: the counters of
   assert.deepEqual(busy, base);
 });
 
+test('the fingerprint leaves out what open sessions and syncs change, found two hours apart (T11): in-use markers, marketplace and synced-skill timestamps', () => {
+  const synced = (home, manifest) => {
+    const dir = path.join(home, '.claude', 'skills', 'synced', 'org_user');
+    write(path.join(dir, 'docs', 'SKILL.md'), '# docs\n');
+    write(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    return dir;
+  };
+  const skill = { skillId: 'docs', name: 'docs', updatedAt: '2026-09-14T19:41:02Z' };
+  const base = fingerprintAfter((home) => synced(home, { lastUpdated: 1, skills: [skill] }));
+  const busy = fingerprintAfter((home) => {
+    write(path.join(synced(home, { lastUpdated: 2, skills: [skill] }), '.last-complete-round'), 'round-2 claude-desktop,cli');
+    const plugins = path.join(home, '.claude', 'plugins');
+    write(path.join(plugins, 'cache', 'mk', 'p', '1.0.0', '.in_use', '4242'), '');
+    const file = path.join(plugins, 'known_marketplaces.json');
+    const json = readJson(file);
+    write(file, JSON.stringify({ ...json, mk: { ...json.mk, lastUpdated: '2026-10-17T22:40:57.727Z' } }, null, 2));
+  });
+  assert.deepEqual(busy, base);
+
+  const moved = (change) => {
+    const after = fingerprintAfter((home) => change(home));
+    return Object.keys(after.items).filter((item) => after.items[item] !== base.items[item]);
+  };
+  assert.deepEqual(moved((home) => synced(home, { lastUpdated: 1, skills: [{ ...skill, updatedAt: '2026-10-18T00:00:00Z' }] })), ['.claude/skills'], 'a synced skill updated is a change');
+  assert.deepEqual(moved((home) => {
+    synced(home, { lastUpdated: 1, skills: [skill] });
+    const file = path.join(home, '.claude', 'plugins', 'known_marketplaces.json');
+    const json = readJson(file);
+    write(file, JSON.stringify({ ...json, mk: { ...json.mk, source: { source: 'github', repo: 'o/other' } } }, null, 2));
+  }), ['.claude/plugins'], 'a marketplace that moved is a change');
+});
+
 test('the fingerprint moves when the setup moves, and names the item that did', () => {
   const base = fingerprintAfter();
   const edited = fingerprintAfter((home) => write(path.join(home, '.claude', 'CLAUDE.md'), '# global instructions, edited\n'));
