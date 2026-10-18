@@ -559,3 +559,6 @@ server stopped it; with `current` absent the setup check no longer caught it. It
 `minimalWithDigest`, the SHA-256 of the servers it puts in as the template holds them; a test
 first shows another server changing continues the run and its own changing stops it, the file
 untouched.
+
+L31 (2026-10-18, 00:08 UTC by `date`) Codex rechecked `fe56f2f..8ce9afe` (43,990 input tokens, recorded): the finding fixed, none new.
+gentle-ai assessed the slice `d7dc0a1..8ce9afe` (C6b, C7 and the fix) from `b743fd0`: medium, not due (`under_budget`, 375 changed lines).
