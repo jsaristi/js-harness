@@ -180,11 +180,11 @@ async function main() {
       const result = run(process.execPath, [binPath, 'status', '--global', '--source', releasesDir, '--home', home]);
       assertThat(result.status === 0, `status exited ${result.status}: ${result.stderr}`);
       assertThat(
-        /latest available: 0\.2\.0/.test(result.stdout),
+        result.stdout.includes(`latest available: ${TO}`),
         `expected "latest available: ${TO}" in:\n${result.stdout}`,
       );
       assertThat(
-        /update available: 0\.2\.0/.test(result.stdout),
+        result.stdout.includes(`update available: ${TO}`),
         `expected "update available: ${TO}" in:\n${result.stdout}`,
       );
     });
