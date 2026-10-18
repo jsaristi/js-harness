@@ -160,10 +160,10 @@ function pnpmBinDir(spawn, words, prefix, platform) {
   return asked.status === 0 && path.isAbsolute(line) ? line : null;
 }
 
-/** Whether a command line, its words split on spaces with quotes dropped, starts a pnpm: `pnpm` or `pnpm.exe` itself,
- * or node running pnpm's script. */
+/** Whether a command line starts a pnpm: `pnpm` or `pnpm.exe` itself, or node running pnpm's script. A word in double
+ * quotes, as Windows writes a path that holds a space, is one word. */
 function startsPnpm(commandLine) {
-  const [first = '', second = ''] = commandLine.trim().replace(/"/g, '').split(/\s+/);
+  const [first = '', second = ''] = [...commandLine.trim().matchAll(/"([^"]*)"|(\S+)/g)].slice(0, 2).map((m) => m[1] ?? m[2]);
   const base = (word) => word.split(/[\\/]/).at(-1).toLowerCase();
   if (/^pnpm(\.exe|\.cmd)?$/.test(base(first))) return true;
   return /^node(\.exe)?$/.test(base(first)) && /^pnpm(\.c?js)?$/.test(base(second));

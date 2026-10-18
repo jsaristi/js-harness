@@ -591,6 +591,11 @@ test('upgrade with pnpm keeps even an old bin lock while a pnpm run by node runs
   assert.equal(byNode.left, true);
   const unread = await lockAfterUpgrade(30, { processes: null });
   assert.equal(unread.left, true);
+  // Codex on eae1e83..6b53cd0: Windows quotes a program's path when it holds a space.
+  const quoted = await lockAfterUpgrade(30, { processes: '88 "C:\\Program Files\\pnpm\\pnpm.exe" add -g other\n' });
+  assert.equal(quoted.left, true);
+  const quotedNode = await lockAfterUpgrade(30, { processes: '89 "C:\\Program Files\\nodejs\\node.exe" "C:\\Program Files\\pnpm\\bin\\pnpm.cjs" i\n' });
+  assert.equal(quotedNode.left, true);
 });
 
 // install-update T8: with no --prefix the sync is run by whatever js-harness the shell finds, so that
