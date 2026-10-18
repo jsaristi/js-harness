@@ -136,7 +136,8 @@ and Claude Code has no project switch for one claude.ai connector, only `disable
 turns all of them off. D6 does only for the skills that are not a plugin's: `skillOverrides` returns `on`
 for every plugin skill, and docx, pptx, xlsx, pdf, google-workspace, morning and import-memory come from
 the `anthropic-skills` plugin there; the only project switch for them, `enabledPlugins`, turns the whole
-plugin off. Both are his questions 6 and 7 (T7).
+plugin off. He chose to keep both on (L13), so D4 and D6 are closed as not reachable per project in the
+desktop app; the entries above stay, since they hold in the CLI.
 
 ## Tasks
 - [x] T1 (kind: design) Measure the fixed load per category and owner; one recommendation per category (this document)
@@ -145,7 +146,7 @@ plugin off. Both are his questions 6 and 7 (T7).
 - [x] T4 (kind: build) His decisions applied: D4, D5, D6 made and measured, each with its undo and backup; D1 is the code's budget; D2 waits on #4036; D3 is nothing
 - [x] T5 (kind: verify) Gate, gentle-ai review, Codex review, PR ready, the lead told: PR 203, landed 2026-10-16
 - [ ] T6 (kind: build) When gentle-ai #4036 ships (D2): back up `~/.claude/CLAUDE.md`, exclude the orchestrator and agent-routing blocks through gentle-ai, measure before and after
-- [ ] T7 (kind: build) D4 and D6 in the desktop app, as he answers questions 6 (the `anthropic-skills` plugin) and 7 (`disableClaudeAiConnectors`): each change backed up, recorded in the table above with its undo, and measured in the next desktop session
+- [x] T7 (kind: design) D4 and D6 in the desktop app, his questions 6 (the `anthropic-skills` plugin) and 7 (`disableClaudeAiConnectors`): he kept both on, so neither is reachable per project there; nothing changed on the machine (L13)
 
 ## Log
 - L1 (2026-10-15 05:52, the lead's notice to session 20): "Lead: GO. Your feature: the fixed context load of a session (~119k before any message; his concern 05:50). Full brief: C:/Users/Oficina/AppData/Roaming/Claude/side-session-notes/local_a8ef1e36-0003-4a3d-b6b5-9d18df61ab3e/jh20-brief-fixed-load.md"
@@ -160,3 +161,4 @@ plugin off. Both are his questions 6 and 7 (T7).
 - L10 (2026-10-15) PR 203 conflicted again with main (87914bf): main added `checkExactCount` to the same rows line of `bin/check.mjs`. Merged main; the fixed load row stays last, after the exact count rows.
 - L11 (2026-10-16) gentle-ai 4.2.0 assessed the work-unit commits no review covered, each slice from a detached worktree at its last commit (`review assess --base-ref <boundary> --committed-only`): 29b37ee..107754e (cf4280d, 107754e) medium, not due (under_budget); 387ef65..d1f0dd9 medium, not due (under_budget). No review started; the two merges of main are not candidates. Codex covers every code commit.
 - L12 (2026-10-16 02:2x) After the app restarted, this session read its own state: `session_connectors_status` lists context7 `disabled` but Claude Docs (connector 1a59c906) `connected` with 8 tools, and `get_usage` puts Skills at 7,031 tokens, the figure before D6. Read in Claude Code 2.1.29x (`claude.exe`): the skill filter is `if(e.type!=="prompt"||e.source==="plugin")return"on"`, so `skillOverrides` never hides a plugin's skill; `disableClaudeAiConnectors` is described as "When true in any settings source, claude.ai MCP cloud connectors are not auto-fetched or connected"; `enabledPlugins` takes `plugin@marketplace: false` in `.claude/settings.local.json`. The headless saving of D6 (L5) came from the non-plugin skills. gentle-ai #4036 still open (checked 2026-10-16), so T6 waits. Asked him through the lead: questions 6 (D6) and 7 (D4).
+- L13 (2026-10-17, relayed by the lead) His answers, verbatim. D4, Claude Docs cannot be turned off per project, `disableClaudeAiConnectors` turns off all of them: "Dejalo prendido (Recomendada)". D6, the `anthropic-skills` plugin can only be turned off whole: "Dejalas prendidas (Recomendada)". Both closed as not reachable per project in the desktop app: the connector stays at about 1.2k tokens and Skills at 7,031 (the `get_usage` reading of L12). F2's open step left is T6 (D2), which waits on gentle-ai #4036.
