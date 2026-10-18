@@ -218,3 +218,37 @@ test('pruneStalePnpm removes nothing while a pnpm process runs, or when the proc
     assert.ok(fs.existsSync(stale), 'the folder stays');
   }
 });
+
+// gentle-ai review-fb9f66ace187f6fe, R4-doctor-exit-ignored: a doctor that failed was printed and the refresh exited 0.
+test('refreshCopy fails when js-harness doctor exits non-zero after the install', async () => {
+  const m = machine({ prev: PREV });
+  const spawn = (cmd, args, opts) => (cmd === 'js-harness' && args[0] === 'doctor' ? { status: 1, stdout: '', stderr: '' } : m.spawn(cmd, args, opts));
+  const run = await refresh(m, { spawn });
+  assert.equal(run.code, 6, run.out);
+  assert.match(run.err, /js-harness doctor exited 1/);
+});
+
+// gentle-ai review-fb9f66ace187f6fe, R4-prune-dangling-link-throws: a link of the store whose target was gone threw out
+// of the prune, after the copy was installed.
+test('pruneStalePnpm leaves a link whose target is gone and goes on', () => {
+  const top = tempDir('js-harness-prune-link-');
+  const bin = path.join(top, 'pnpm', 'bin');
+  const v11 = path.join(top, 'pnpm', 'global', 'v11');
+  const stale = 'ffee00-fedcba9876543210-1';
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(path.join(v11, stale), { recursive: true });
+  const old = new Date(NOW - 60 * 60_000);
+  fs.utimesSync(path.join(v11, stale), old, old);
+  const dangling = path.join(v11, 'js-harness');
+  const fsys = {
+    ...fs,
+    readdirSync: (dir, ...rest) => (dir === v11 ? [...fs.readdirSync(dir, ...rest), 'js-harness'] : fs.readdirSync(dir, ...rest)),
+    lstatSync: (entry, ...rest) => (entry === dangling ? { isSymbolicLink: () => true, isDirectory: () => false, mtimeMs: 0 } : fs.lstatSync(entry, ...rest)),
+    realpathSync: (entry, ...rest) => {
+      if (entry === dangling) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return fs.realpathSync(entry, ...rest);
+    },
+  };
+  const result = pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false, fsys });
+  assert.equal(result.removed, 1);
+});

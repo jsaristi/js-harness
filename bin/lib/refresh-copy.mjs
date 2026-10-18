@@ -87,7 +87,12 @@ export function pruneStalePnpm({ binDir, now = Date.now, isPnpmRunning, fsys = f
   const used = new Set();
   for (const name of names(store)) {
     const entry = path.join(store, name);
-    if (fsys.lstatSync(entry).isSymbolicLink()) used.add(path.basename(fsys.realpathSync(entry)));
+    if (!fsys.lstatSync(entry).isSymbolicLink()) continue;
+    try {
+      used.add(path.basename(fsys.realpathSync(entry)));
+    } catch {
+      // A link whose target is gone names no folder in use; it is left as it is.
+    }
   }
   for (const name of names(binDir)) {
     let text;
@@ -269,6 +274,7 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
     if (pruned.broken.length) code = fail('a shim does not reach its target after the prune');
   }
   if (installed.status !== 0) code = fail(`js-harness install exited ${installed.status}`);
+  if (doctor.status !== 0) code = fail(`js-harness doctor exited ${doctor.status}`);
   undo();
   return code;
 }

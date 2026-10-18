@@ -20,7 +20,7 @@ import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gent
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
-import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
+import { REFRESH_FAILED, refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
@@ -757,17 +757,24 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     // the exit (REFRESH_FAILED, GATE_NOT_RUN): the landing it follows already stands.
     const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
     const sha = landed ? log.record.candidate : null;
-    const refreshed = await (deps.refreshCopy ?? refreshInstalledCopy)({
-      landed,
-      sha,
-      version: landed ? versionAt(sha, args.cwd, deps.run ?? spawnSync) : null,
-      home: harnessHomeOf(env),
-      cwd: args.cwd,
-      env,
-      session: env.CLAUDE_CODE_SESSION_ID || null,
-      stdout: printOut,
-      stderr: printErr,
-    });
+    let refreshed;
+    try {
+      refreshed = await (deps.refreshCopy ?? refreshInstalledCopy)({
+        landed,
+        sha,
+        version: landed ? versionAt(sha, args.cwd, deps.run ?? spawnSync) : null,
+        home: harnessHomeOf(env),
+        cwd: args.cwd,
+        env,
+        session: env.CLAUDE_CODE_SESSION_ID || null,
+        stdout: printOut,
+        stderr: printErr,
+      });
+    } catch (err) {
+      // A refresh that threw still lets the land record below be written: main has moved whatever the refresh did.
+      printErr(`refresh failed: ${err.message}`);
+      refreshed = REFRESH_FAILED;
+    }
     exit = refreshed === 0 ? code : refreshed;
   }
   if (log.file && log.record.leftOut.length > 0) {

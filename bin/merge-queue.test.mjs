@@ -1651,6 +1651,17 @@ test('--land --refresh-copy exits with the refresh code when the refresh fails, 
   assert.ok(out.some((line) => line.startsWith('Landed: main ')), 'the land printed its landing');
 });
 
+// gentle-ai review-fb9f66ace187f6fe, R4-refresh-uncaught-skips-land-record: a refresh that threw ended the run before
+// the land record was written, though main had moved.
+test('--land --refresh-copy whose refresh throws still records the land with its own exit, and exits 6', async () => {
+  const { root, heads } = makeQueueRepo();
+  const { code, out } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { refresh: () => { throw new Error('boom'); } });
+  assert.equal(code, 6, out.join('\n'));
+  assert.ok(out.some((line) => /refresh failed: .*boom/.test(line)), out.join('\n'));
+  const record = fs.readFileSync(path.join(root, '.git', 'js-harness', 'lands.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line)).at(-1);
+  assert.equal(record.exit, 0);
+});
+
 test('--land --refresh-copy with nothing ready asks the refresh that nothing landed, so it refreshes nothing', async () => {
   const { root } = makeQueueRepo();
   const { code, out, asked } = await landRefreshing(root, []);
