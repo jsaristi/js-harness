@@ -144,6 +144,7 @@ export async function memoryMain(
   {
     cwd: defaultCwd = process.cwd(),
     home: defaultHome = os.homedir(),
+    env = process.env,
     stdout = console.log,
     stderr = console.error,
     now = Date.now(),
@@ -158,7 +159,9 @@ export async function memoryMain(
     return 2;
   }
   const { subcommand, args, flags } = parsed;
-  const home = path.resolve(flags.home ?? defaultHome);
+  // The home every other command reads: `--home`, else `JS_HARNESS_HOME`, else the OS home; an empty
+  // `JS_HARNESS_HOME` counts as unset.
+  const home = path.resolve(flags.home ?? (env.JS_HARNESS_HOME || defaultHome));
   const project = path.resolve(flags.cwd ?? defaultCwd);
   const { slug, folder } = memoryLocation({ home, project, run });
   const stateDir = path.dirname(journalPath(home, slug));

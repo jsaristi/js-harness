@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -278,6 +279,28 @@ test('with no docs/FAILURES.md every form of the command says so and exits 0', a
       assert.match(stdout, /^no docs\/FAILURES\.md: no failure is recorded/, argv.join(' '));
       assert.equal(stderr, '', argv.join(' '));
     }
+  });
+});
+
+test('run from a folder under the top of a git repository, every form reads the register at the top', async () => {
+  await inProject(FULL, async (dir) => {
+    execFileSync('git', ['init', '-q'], { cwd: dir });
+    const below = path.join(dir, 'bin');
+    const fromBelow = await run([], below);
+    assert.deepEqual([fromBelow.code, fromBelow.stderr], [0, '']);
+    assert.equal(fromBelow.stdout, (await run([], dir)).stdout);
+    assert.doesNotMatch(fromBelow.stdout, /no docs\/FAILURES\.md/);
+    assert.equal((await run(['gate-reaches-its-bound'], below)).code, 0);
+    assert.equal((await run(['check', '--settled'], below)).code, (await run(['check', '--settled'], dir)).code);
+  });
+});
+
+test('outside a git repository the register is read from the folder it is run in', async () => {
+  await inProject(FULL, async (dir) => {
+    const notARepository = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
+    const { code, stdout } = await run([], dir, { spawn: notARepository });
+    assert.equal(code, 0);
+    assert.doesNotMatch(stdout, /no docs\/FAILURES\.md/);
   });
 });
 
