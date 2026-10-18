@@ -261,10 +261,14 @@ export function sealTemplate(templateDir, { kind, warnings, ...extra }) {
 // `odd/tasks/future-model-protocol.md`): left out of the fingerprint, or every run resumed the next day would be
 // refused. `.claude.json` keeps Claude Code's counters and caches beside the MCP servers, which alone are setup;
 // gentle-ai's state keeps three timestamps beside its settings; Codex's `config.toml` keeps a table per project
-// and the notices it has shown beside its configuration.
+// and the notices it has shown beside its configuration. Two builds two hours apart (T11) found three more: each
+// marketplace's `lastUpdated`, the `lastUpdated` of a skill sync's manifest (each skill keeps its own `updatedAt`,
+// which is setup), and two kinds of file that are only bookkeeping, a sync's round marker and the `.in_use/<pid>`
+// marker a running session leaves in the plugin version it loaded.
 const STATE_TIMESTAMPS = ['last_update_check', 'last_synced_at', 'rdd_mode_recorded_at'];
 const TOML_HEADER = /^\s*\[/;
 const TOML_SESSION_TABLE = /^\s*\[(projects\.|notice(\]|\.))/;
+const withoutKey = (json, key) => Object.fromEntries(Object.entries(json).filter(([name]) => name !== key));
 const SETTLED = {
   '.claude/.claude.json': (text) => JSON.stringify(JSON.parse(text).mcpServers ?? null),
   '.gentle-ai/state.json': (text) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(text)).filter(([key]) => !STATE_TIMESTAMPS.includes(key)))),
@@ -275,20 +279,30 @@ const SETTLED = {
       return !skipping;
     }).join('\n');
   },
+  '.claude/plugins/known_marketplaces.json': (text) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(text))
+    .map(([name, entry]) => [name, isObject(entry) ? withoutKey(entry, 'lastUpdated') : entry]))),
 };
+const SYNC_MANIFEST = /^\.claude\/skills\/synced\/[^/]+\/manifest\.json$/;
+const BOOKKEEPING = [/^\.claude\/skills\/synced\/[^/]+\/\.last-complete-round$/, /^\.claude\/plugins\/cache\/.*\/\.in_use\/[^/]+$/];
 
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
 /** The bytes of the payload file `rel` as the fingerprint reads them: `raw` itself, or the part of it that is setup
- * when a day of sessions changes the rest (`SETTLED`). */
-export const settledBytes = (rel, raw) => (Object.hasOwn(SETTLED, rel) ? SETTLED[rel](Buffer.from(raw).toString('utf8')) : raw);
+ * when a day of sessions changes the rest (`SETTLED`, a skill sync's manifest). */
+export const settledBytes = (rel, raw) => {
+  if (Object.hasOwn(SETTLED, rel)) return SETTLED[rel](Buffer.from(raw).toString('utf8'));
+  if (SYNC_MANIFEST.test(rel)) return JSON.stringify(withoutKey(JSON.parse(Buffer.from(raw).toString('utf8')), 'lastUpdated'));
+  return raw;
+};
 
 /** The fingerprint of the payload in `root`, whose `files` are its inventory: one sha256 per item (the first two
- * segments of a path, such as `.claude/skills`) over its files' paths and settled contents, and one over the items.
- * Two templates of the same setup have the same fingerprint; the items say which part of a setup moved. */
+ * segments of a path, such as `.claude/skills`) over its files' paths and settled contents, and one over the items;
+ * a file that is only bookkeeping (`BOOKKEEPING`) is left out. Two templates of the same setup have the same
+ * fingerprint; the items say which part of a setup moved. */
 export function fingerprintOf(root, files = inventory(root)) {
   const lines = new Map();
   for (const { path: rel } of files) {
+    if (BOOKKEEPING.some((pattern) => pattern.test(rel))) continue;
     const item = rel.split('/').slice(0, 2).join('/');
     const raw = fs.readFileSync(path.join(root, ...rel.split('/')));
     lines.set(item, [...(lines.get(item) ?? []), `${rel}\0${sha256(settledBytes(rel, raw))}\n`]);

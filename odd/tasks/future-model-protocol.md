@@ -562,3 +562,18 @@ untouched.
 
 L31 (2026-10-18, 00:08 UTC by `date`) Codex rechecked `fe56f2f..8ce9afe` (43,990 input tokens, recorded): the finding fixed, none new.
 gentle-ai assessed the slice `d7dc0a1..8ce9afe` (C6b, C7 and the fix) from `b743fd0`: medium, not due (`under_budget`, 375 changed lines).
+
+L32 (2026-10-18, 00:25 UTC by `date`) T11, first half. The real templates of both hosts were built
+outside the home at 22:20 and at 00:20 UTC, and only their fingerprints kept. Both differed. Claude:
+`.claude/plugins`, `.claude/skills`, `.claude/settings.json`; Codex: `.codex/skills`. Read in the real
+home by modification time, the changes are of three kinds. Volatile, now left out: the
+`.in_use/<pid>` marker a running session leaves in the plugin version it loaded, each marketplace's
+`lastUpdated` in `known_marketplaces.json` (the official one refreshed at 22:40), and a skill
+sync's bookkeeping, the `lastUpdated` of its `manifest.json` and its `.last-complete-round` file
+(each synced skill keeps its own `updatedAt`, which stays setup). Real: the three js-harness skills
+of both hosts, rewritten when the installed copy was updated after a land. Unknown: the global
+`settings.json`, written at 23:02 with no earlier copy to compare; a copy is now kept beside the
+next builds. Test first in `evals/home.test.mjs`: the three volatile kinds leave the fingerprint
+as it was, a synced skill updated or a marketplace moved still changes it. 226 tests of home,
+codex-home, suite and without pass. Second half: a build at 00:23 with the fix and one two hours
+later, compared file by file.
