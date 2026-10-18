@@ -709,20 +709,19 @@ const STEPS = {
 
   'reply-hook': (ctx) => {
     const { project, root } = ctx.layout;
-    // A folder of the journey's root whose harness.json turns the check on with the English labels; no harness.json lies
-    // above the root, so this file is the nearest one. The practice project keeps init's harness.json, which has no reply
-    // key: a project that installs the harness has the check off until it asks for it.
-    const replying = path.join(root, 'replying');
-    fs.mkdirSync(replying, { recursive: true });
-    fs.writeFileSync(path.join(replying, 'harness.json'), `${JSON.stringify({ reply: true }, null, 2)}\n`);
+    // The practice project keeps init's harness.json, which turns the check on with the English labels (his answer
+    // "Prendido por defecto", odd/tasks/rule-hierarchy.md T9). A folder of the journey's root outside the project has no
+    // harness.json above it, since none lies above the root, so the check is off there.
+    const outside = path.join(root, 'reply-outside');
+    fs.mkdirSync(outside, { recursive: true });
     const sessionId = `practice-reply-${randomUUID()}`;
     const unclosed = 'Merged the change; next I write its documentation.';
-    const refused = replyHook(ctx, replying, replyHookInput({ sessionId, cwd: replying, message: unclosed }));
-    const passed = replyHook(ctx, replying, replyHookInput({ sessionId, cwd: replying, message: 'Merged the change.\n\n**Working** — the gate of the next commit wakes me.' }));
-    const plain = replyHook(ctx, project, replyHookInput({ sessionId, cwd: project, message: unclosed }));
+    const refused = replyHook(ctx, project, replyHookInput({ sessionId, cwd: project, message: unclosed }));
+    const passed = replyHook(ctx, project, replyHookInput({ sessionId, cwd: project, message: 'Merged the change.\n\n**Working** — the gate of the next commit wakes me.' }));
+    const plain = replyHook(ctx, outside, replyHookInput({ sessionId, cwd: outside, message: unclosed }));
     const problem = replyHookProblem({ refused, passed, plain });
     assertThat(problem === null, problem);
-    return `the reply check turned back a reply with no state in ${replying}, whose harness.json turns it on, let a reply that closes with Working stop there, and turned nothing back in ${project}; all three exited 0`;
+    return `the reply check turned back a reply with no state in ${project}, whose harness.json from init turns it on, let a reply that closes with Working stop there, and turned nothing back in ${outside}, where no harness.json lies above; all three exited 0`;
   },
 
   'host-loads': (ctx) => {
