@@ -4,11 +4,13 @@
 // install`, doctor), prune-pnpm.sh (stale pnpm state) and run-gated.mjs (the gate lock, taken as `js-harness gate` takes
 // it). The install and its verdict are the upgrade path's own (`installCopy` in bin/update.mjs, T2). Every effect goes
 // through an injected spawn, clock, sleep, lock and file system, so a test installs nothing.
-import { spawnSync } from 'node:child_process';
+import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { takeGateTurn } from '../check.mjs';
 import { GATE_NOT_RUN } from '../gate.mjs';
 import { installCopy, pnpmBinDir, pnpmRunning } from '../update.mjs';
@@ -29,6 +31,9 @@ const SHA = /^[0-9a-f]{40}$/;
 /** pnpm's temporary install folders in its global store: `<hex>-<16 hex>-<digits>`. */
 const INSTALL_FOLDER = /^[0-9a-f]+-[0-9a-f]{16}-[0-9]+$/;
 
+/** The flag this file is run with as the child that does the held part (`heldInChild`). */
+const HELD_FLAG = '--refresh-held';
+
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The pnpm global folder (`global/v11/<name>`) the js-harness shim in `binDir` runs, as update-copy.sh read it: the
@@ -43,6 +48,15 @@ function shimManifest(binDir, fsys) {
   }
   const named = /global\/v11\/([^/"\s]+)/.exec(shim);
   return named ? path.join(path.dirname(binDir), 'global', 'v11', named[1], 'package.json') : null;
+}
+
+/** The entry the shim in `binDir` runs (`<copy>/node_modules/js-harness/bin/js-harness.mjs`), or null when the shim names
+ * no copy or the entry is not there. */
+function copyEntry(binDir, fsys) {
+  const manifest = shimManifest(binDir, fsys);
+  if (manifest === null) return null;
+  const entry = path.join(path.dirname(manifest), 'node_modules', 'js-harness', 'bin', 'js-harness.mjs');
+  return fsys.existsSync(entry) ? entry : null;
 }
 
 /** The sha the copy's manifest names (`js-harness#<sha>`), or null when the shim names none. */
@@ -183,7 +197,8 @@ export async function refreshCopy({
   sha,
   version,
   home = process.env.JS_HARNESS_HOME || os.homedir(),
-  settings = path.join(os.homedir(), '.claude', 'settings.json'),
+  // The settings `js-harness install` writes: those of the same home (Codex P2 on 93de70b..2e6f86b).
+  settings = path.join(home, '.claude', 'settings.json'),
   cwd = process.cwd(),
   env = process.env,
   platform = process.platform,
@@ -192,6 +207,7 @@ export async function refreshCopy({
   now = Date.now,
   sleep = defaultSleep,
   takeGateLock,
+  runHeld = heldInChild,
   session = null,
   stdout = console.log,
   stderr = console.error,
@@ -216,7 +232,7 @@ export async function refreshCopy({
   }
   const { lock } = turn;
   try {
-    return await refreshHoldingLock({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr, fail });
+    return await runHeld({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr });
   } finally {
     const lost = lock.lost();
     lock.release();
@@ -224,7 +240,41 @@ export async function refreshCopy({
   }
 }
 
-async function refreshHoldingLock({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr, fail }) {
+/** The held part run in this process: what a test runs, with its injected spawn, files, clock and sleep. */
+export function heldInProcess(opts) {
+  return refreshHoldingLock(opts);
+}
+
+/** The held part run in a child node process, which is how a refresh runs it. The install inside it runs by spawnSync
+ * for minutes; in this process that would stop the gate lock's beat, and a waiting gate would take the lock as a dead
+ * one's (Codex P2 on 93de70b..2e6f86b). Here this process only waits, so its lock beats. The child's lines are passed
+ * on as they come; its exit is the refresh's, REFRESH_FAILED when it could not run or ended by a signal. */
+export function heldInChild({ sha, version, home, settings, env, platform, stdout, stderr }, { entry = fileURLToPath(import.meta.url) } = {}) {
+  return new Promise((resolve) => {
+    const child = spawnChild(process.execPath, [entry, HELD_FLAG, JSON.stringify({ sha, version, home, settings, platform })], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const ended = [];
+    for (const [stream, say] of [[child.stdout, stdout], [child.stderr, stderr]]) {
+      const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+      lines.on('line', say);
+      ended.push(new Promise((done) => lines.on('close', done)));
+    }
+    let failed = null;
+    child.on('error', (err) => {
+      failed = err;
+    });
+    child.on('close', async (code) => {
+      await Promise.all(ended);
+      if (failed) stderr(`refresh failed: the refresh could not run in a child process: ${failed.message}`);
+      resolve(failed || code === null ? REFRESH_FAILED : code);
+    });
+  });
+}
+
+async function refreshHoldingLock({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr }) {
+  const fail = (line) => {
+    stderr(`refresh failed: ${line}`);
+    return REFRESH_FAILED;
+  };
   const words = ['pnpm'];
   const binDir = pnpmBinDir(spawn, words, undefined, platform);
   if (!binDir) return fail("pnpm's global bin folder is not known: `pnpm bin -g` gave none");
@@ -241,15 +291,22 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
   }
   stdout(`refresh: installing main ${sha.slice(0, 7)} (version ${version}); the copy named ${previous ? previous.slice(0, 7) : 'no sha'} before`);
 
+  // The copy is verified, and then run, by the path of the entry its shim names, never by a `js-harness` the PATH finds:
+  // an older copy first on the PATH would pass for it (Codex P2 on 93de70b..2e6f86b).
+  const answerOf = (entry) => (entry === null ? '' : (spawn(process.execPath, [entry, '--version'], { encoding: 'utf8' }).stdout ?? '').trim());
   let copy;
+  let entry = null;
+  let answered = '';
+  let shimmed = null;
   for (let attempt = 1; attempt <= TRIES; attempt += 1) {
     copy = installCopy({ words, spec: `github:jsaristi/js-harness#${sha}`, version, env, spawn, platform, label: 'refresh', say: stdout });
-    if (copy.ok && namedSha(binDir, fsys) === sha) break;
+    shimmed = namedSha(binDir, fsys);
+    entry = copyEntry(binDir, fsys);
+    answered = answerOf(entry);
+    if (answered === version && shimmed === sha) break;
     if (attempt < TRIES) await sleep(TRY_PAUSE_MS);
   }
   if (!copy.ok && copy.packageManager) for (const line of copy.lines) stderr(line);
-  const answered = copy.answered ?? '';
-  const shimmed = namedSha(binDir, fsys);
   if (answered !== version || shimmed !== sha) {
     if (answered !== version) stderr(`refresh failed: the installed copy answers ${answered || 'nothing'}, not ${version}`);
     if (shimmed !== sha) stderr(`refresh failed: the installed copy does not name ${sha} (its shim names ${shimmed ?? 'no sha'})`);
@@ -258,10 +315,10 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
   }
   stdout(`refresh: the installed copy answers ${version} and names ${sha}`);
 
-  const installed = spawn('js-harness', ['install'], { shell: true, encoding: 'utf8' });
+  const installed = spawn(process.execPath, [entry, 'install'], { encoding: 'utf8' });
   stdout(`js-harness install exit ${installed.status}`);
   stdout(`settings after: ${settingsHash(settings, fsys) ?? 'no settings file'}`);
-  const doctor = spawn('js-harness', ['doctor'], { shell: true, encoding: 'utf8' });
+  const doctor = spawn(process.execPath, [entry, 'doctor'], { encoding: 'utf8' });
   stdout(`js-harness doctor exit ${doctor.status}`);
 
   const pruned = pruneStalePnpm({ binDir, now, isPnpmRunning: () => pnpmRunning(spawn, platform), fsys });
@@ -277,4 +334,17 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
   if (doctor.status !== 0) code = fail(`js-harness doctor exited ${doctor.status}`);
   undo();
   return code;
+}
+
+// Run as the child of `heldInChild`: the held part with the real spawn, files, clock and sleep; its exit is the refresh's.
+if (process.argv[2] === HELD_FLAG && path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  const { sha, version, home, settings, platform } = JSON.parse(process.argv[3]);
+  refreshHoldingLock({ sha, version, home, settings, env: process.env, platform, spawn: spawnSync, fsys: fs, now: Date.now, sleep: defaultSleep, stdout: console.log, stderr: console.error })
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((err) => {
+      console.error(`refresh failed: ${err.message}`);
+      process.exitCode = REFRESH_FAILED;
+    });
 }

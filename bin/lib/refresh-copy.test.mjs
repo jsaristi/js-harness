@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pruneStalePnpm, refreshCopy } from './refresh-copy.mjs';
+import { heldInChild, heldInProcess, pruneStalePnpm, refreshCopy } from './refresh-copy.mjs';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const PREV = 'fedcba9876543210fedcba9876543210fedcba98';
@@ -27,7 +27,7 @@ const tempDir = (prefix) => {
 /** A machine for one refresh: a pnpm home with the shim `js-harness` names its copy by (`prev`, when given), a Claude
  * settings file and a js-harness home. `add -g <spec>` writes the copy of the spec's sha and answers `MAIN_VERSION`
  * when `deliver` is true, else leaves the shim as it was; `answers` replaces what `js-harness --version` says. */
-function machine({ prev = null, deliver = true, answers = null, addStatus = 0 } = {}) {
+function machine({ prev = null, deliver = true, answers = null, pathAnswers = null, addStatus = 0 } = {}) {
   const top = tempDir('js-harness-refresh-');
   const pnpmHome = path.join(top, 'pnpm');
   const binDir = path.join(pnpmHome, 'bin');
@@ -43,6 +43,8 @@ function machine({ prev = null, deliver = true, answers = null, addStatus = 0 } 
     const folder = path.join(pnpmHome, 'global', 'v11', 'h-1');
     fs.mkdirSync(folder, { recursive: true });
     fs.writeFileSync(path.join(folder, 'package.json'), JSON.stringify({ dependencies: { 'js-harness': `github:jsaristi/js-harness#${sha}` } }));
+    fs.mkdirSync(path.join(folder, 'node_modules', 'js-harness', 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'node_modules', 'js-harness', 'bin', 'js-harness.mjs'), '');
     fs.writeFileSync(path.join(binDir, 'js-harness'), 'exec "$basedir/../global/v11/h-1/node_modules/js-harness/bin/js-harness.mjs"\n');
   };
   if (prev) writeCopy(prev);
@@ -57,7 +59,13 @@ function machine({ prev = null, deliver = true, answers = null, addStatus = 0 } 
       return { status: addStatus, stdout: '', stderr: addStatus === 0 ? '' : 'ERR_PNPM_X\n' };
     }
     if (cmd === 'ps') return ok('');
-    if (cmd === 'js-harness' && args[0] === '--version') return ok(`${answers ?? state.version}\n`);
+    // The copy the shim names, run by its own path: it answers what was installed (or `answers`).
+    if (cmd === process.execPath && /js-harness\.mjs$/.test(args[0] ?? '')) {
+      calls.push(['js-harness', ...args.slice(1)].join(' '));
+      return args[1] === '--version' ? ok(`${answers ?? state.version}\n`) : ok('');
+    }
+    // A `js-harness` the PATH finds: the same copy, unless `pathAnswers` makes it another one.
+    if (cmd === 'js-harness' && args[0] === '--version') return ok(`${pathAnswers ?? answers ?? state.version}\n`);
     if (cmd === 'js-harness') return ok('');
     return { status: 1, stdout: '', stderr: `unexpected ${cmd}` };
   };
@@ -88,6 +96,7 @@ function refresh(m, over = {}) {
     sleep: async (ms) => m.sleeps.push(ms),
     now: () => NOW,
     takeGateLock: lockOf(),
+    runHeld: heldInProcess,
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
     ...over,
@@ -219,10 +228,63 @@ test('pruneStalePnpm removes nothing while a pnpm process runs, or when the proc
   }
 });
 
+// Codex on 93de70b..2e6f86b, P2: the copy was verified by the `js-harness` the PATH finds while the shim's sha was read
+// from pnpm's copy, and install ran the PATH one: an older copy first on the PATH passed both checks and wrote the hooks.
+test('refreshCopy verifies and runs the copy the shim names, by its path, not the one the PATH finds', async () => {
+  const m = machine({ prev: PREV, pathAnswers: MAIN_VERSION, answers: '0.9.0' });
+  const run = await refresh(m);
+  assert.equal(run.code, 6, run.out);
+  assert.match(run.err, new RegExp(`answers 0\\.9\\.0, not ${MAIN_VERSION}`));
+  const good = machine({ prev: PREV });
+  const ran = [];
+  const spawn = (cmd, args, opts) => {
+    ran.push([cmd, ...args]);
+    return good.spawn(cmd, args, opts);
+  };
+  assert.equal((await refresh(good, { spawn })).code, 0);
+  const entry = path.join(good.pnpmHome, 'global', 'v11', 'h-1', 'node_modules', 'js-harness', 'bin', 'js-harness.mjs');
+  for (const step of ['install', 'doctor']) {
+    assert.ok(ran.some((one) => one[0] === process.execPath && one[1] === entry && one[2] === step), `${step} runs the verified copy`);
+    assert.ok(!ran.some((one) => one[0] === 'js-harness' && one[1] === step), `${step} does not run the PATH one`);
+  }
+});
+
+// Codex on 93de70b..2e6f86b, P2: the settings backed up were the OS home's while install wrote those of JS_HARNESS_HOME.
+test('refreshCopy backs up the settings of the harness home it is given', async () => {
+  const m = machine({ prev: PREV });
+  const own = path.join(m.home, '.claude', 'settings.json');
+  fs.mkdirSync(path.dirname(own), { recursive: true });
+  fs.writeFileSync(own, '{"own":true}\n');
+  const run = await refresh(m, { settings: undefined });
+  assert.equal(run.code, 0, run.err);
+  const dir = path.join(m.home, '.js-harness', 'refresh-backups');
+  const [copy] = fs.readdirSync(dir);
+  assert.equal(fs.readFileSync(path.join(dir, copy), 'utf8'), '{"own":true}\n');
+});
+
+// Codex on 93de70b..2e6f86b, P2: the install ran by spawnSync in the process that holds the gate lock, so the lock could
+// not beat for as long as pnpm took and a waiting gate could take it as a dead one's.
+test('heldInChild runs the held part in another process, so this one goes on running its timers, and gives its exit and lines', async () => {
+  const dir = tempDir('js-harness-held-');
+  const entry = path.join(dir, 'held.mjs');
+  // Blocks its own event loop for 400 ms, as a synchronous install does, then says a line on each stream.
+  fs.writeFileSync(entry, "const end = Date.now() + 400; while (Date.now() < end) {}\nconsole.log('out line');\nconsole.error('err line');\nprocess.exit(6);\n");
+  let ticks = 0;
+  const timer = setInterval(() => { ticks += 1; }, 50);
+  const out = [];
+  const err = [];
+  const code = await heldInChild({ sha: SHA, version: MAIN_VERSION, home: dir, settings: path.join(dir, 's.json'), env: process.env, platform: process.platform, stdout: (line) => out.push(line), stderr: (line) => err.push(line) }, { entry });
+  clearInterval(timer);
+  assert.equal(code, 6);
+  assert.ok(ticks >= 4, `the timers of this process ran ${ticks} times while the child blocked`);
+  assert.deepEqual(out, ['out line']);
+  assert.deepEqual(err, ['err line']);
+});
+
 // gentle-ai review-fb9f66ace187f6fe, R4-doctor-exit-ignored: a doctor that failed was printed and the refresh exited 0.
 test('refreshCopy fails when js-harness doctor exits non-zero after the install', async () => {
   const m = machine({ prev: PREV });
-  const spawn = (cmd, args, opts) => (cmd === 'js-harness' && args[0] === 'doctor' ? { status: 1, stdout: '', stderr: '' } : m.spawn(cmd, args, opts));
+  const spawn = (cmd, args, opts) => (cmd === process.execPath && args[1] === 'doctor' ? { status: 1, stdout: '', stderr: '' } : m.spawn(cmd, args, opts));
   const run = await refresh(m, { spawn });
   assert.equal(run.code, 6, run.out);
   assert.match(run.err, /js-harness doctor exited 1/);
