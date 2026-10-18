@@ -9,6 +9,7 @@ import {
   copyCandidatesOf,
   homeDifferences,
   hostFilesProblem,
+  installProblem,
   isolatedPnpmEnv,
   manifestProblem,
   movePin,
@@ -116,6 +117,24 @@ test('stepsFor lists the steps of an install-only proof, and adds the project an
     'uninstall',
     'compare-home',
   ]);
+});
+
+test('installProblem judges an install by the copy it left, as upgrade does: a copy of the version passes whatever the exit', () => {
+  // pnpm on Windows can install the version and then exit 1 when its cleanup hits os error 32 (L7 of odd/tasks/harness-review.md).
+  assert.equal(installProblem({ status: 1 }, '0.9.0\n', '0.9.0', 'pnpm install of v0.9.0'), null);
+  assert.equal(installProblem({ status: 0 }, '0.9.0', '0.9.0', 'pnpm install of v0.9.0'), null);
+  assert.equal(
+    installProblem({ status: 1 }, '', '0.9.0', 'pnpm install of v0.9.0'),
+    'pnpm install of v0.9.0 exited 1, and no copy answers 0.9.0',
+  );
+  assert.equal(
+    installProblem({ status: null, error: { code: 'ENOENT' } }, '', '0.9.0', 'pnpm install of v0.9.0'),
+    'pnpm install of v0.9.0 exited ENOENT, and no copy answers 0.9.0',
+  );
+  assert.equal(
+    installProblem({ status: 0 }, '0.8.0', '0.9.0', 'pnpm install of v0.9.0'),
+    'pnpm install of v0.9.0 exited 0, but the copy answers "0.8.0", not 0.9.0',
+  );
 });
 
 test('versionProblem passes a copy that answers its version alone, and names both versions when it does not', () => {

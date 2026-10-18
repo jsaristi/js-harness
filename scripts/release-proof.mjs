@@ -15,6 +15,7 @@ import {
   copyCandidatesOf,
   homeDifferences,
   hostFilesProblem,
+  installProblem,
   manifestProblem,
   movePin,
   parseArgs,
@@ -149,17 +150,25 @@ async function main() {
     },
     'install-from': () => {
       const plan = installPlan(opts.pm, tagSpec(repo, opts.from), prefix, process.env, process.platform);
+      let result;
       if (opts.pm === 'npm') {
         assertThat(fs.existsSync(npmCli), `npm CLI not found at ${npmCli}: set JS_HARNESS_E2E_NPM_CLI to your real npm-cli.js`);
-        assertRun(npm(npmCli, plan.args, { env: plan.env, maxBuffer: MAX_BUFFER }), `npm install of ${opts.from}`);
+        result = npm(npmCli, plan.args, { env: plan.env, maxBuffer: MAX_BUFFER });
       } else if (process.platform === 'win32') {
         // On Windows pnpm is a .cmd file, which runs only through a shell, as `upgrade` runs it.
-        assertRun(spawnSync(['pnpm', ...plan.args].join(' '), { encoding: 'utf8', env: plan.env, shell: true, maxBuffer: MAX_BUFFER }), `pnpm install of ${opts.from}`);
+        result = spawnSync(['pnpm', ...plan.args].join(' '), { encoding: 'utf8', env: plan.env, shell: true, maxBuffer: MAX_BUFFER });
       } else {
-        assertRun(spawnSync('pnpm', plan.args, { encoding: 'utf8', env: plan.env, maxBuffer: MAX_BUFFER }), `pnpm install of ${opts.from}`);
+        result = spawnSync('pnpm', plan.args, { encoding: 'utf8', env: plan.env, maxBuffer: MAX_BUFFER });
       }
-      const versionFault = versionProblem(assertRun(js(copyOf(fromVersion), ['--version']), 'js-harness --version'), fromVersion);
-      assertThat(versionFault === null, versionFault);
+      // The copy the install left is the verdict, not the exit code (installProblem); a copy that is not there answers nothing.
+      let answered = '';
+      try {
+        answered = js(copyOf(fromVersion), ['--version']).stdout ?? '';
+      } catch {
+        answered = '';
+      }
+      const installFault = installProblem(result, answered, fromVersion, `${opts.pm} install of ${opts.from}`);
+      assertThat(installFault === null, installFault && `${installFault}: ${lastLines(`${result.stdout ?? ''}${result.stderr ?? ''}`)}`);
     },
     'seed-home': () => {
       seeded = seededHostFiles();

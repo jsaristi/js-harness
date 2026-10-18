@@ -86,6 +86,18 @@ export function stepsFor({ to, local }) {
   return [...(local ? ['prepare-repo'] : []), ...install, ...(to === null ? [] : upgrade), 'uninstall', 'compare-home'];
 }
 
+/** What is wrong with an install, or `null`: it is judged by the copy it left, which must answer `version`
+ * (`answered`, its `--version` output, empty when there is no copy), not by the package manager's exit, as `upgrade`
+ * judges it (`installCopy` in bin/update.mjs): pnpm on Windows can install and then exit 1 on os error 32. */
+export function installProblem(result, answered, version, label) {
+  const got = String(answered).trim();
+  if (got === version) return null;
+  if (result.error || result.status !== 0) {
+    return `${label} exited ${result.status ?? result.error?.code}, and ${got ? `the copy answers "${got}", not ${version}` : `no copy answers ${version}`}`;
+  }
+  return `${label} exited 0, but the copy answers "${got}", not ${version}`;
+}
+
 /** What is wrong with the output of `--version` (one line, the version alone), or `null`. */
 export function versionProblem(stdout, expected) {
   const got = String(stdout).trim();
