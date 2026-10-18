@@ -307,6 +307,22 @@ function renderLists(root, { sources, findings, readers, sentences }, stdout, st
   return 0;
 }
 
+/** Whether two folders are the same one, through links, and without case on Windows. */
+function samePlace(a, b) {
+  const real = (dir) => {
+    try {
+      return fs.realpathSync(dir);
+    } catch {
+      return path.resolve(dir);
+    }
+  };
+  const [one, two] = [real(a), real(b)];
+  return process.platform === 'win32' ? one.toLowerCase() === two.toLowerCase() : one === two;
+}
+
+/** The lines of a child's output, without the last newline; none for no output. */
+const linesOf = (text) => (text ? String(text).replace(/\r?\n$/, '').split(/\r?\n/) : []);
+
 /** The project folder `cwd` is in, as git names its top, or `cwd` itself when git gives no top (no repository, or no git). */
 function projectOf(run, cwd) {
   const result = run('git', ['rev-parse', '--show-toplevel'], { cwd });
@@ -422,6 +438,15 @@ export async function rulesMain(argv, {
       return 1;
     }
     if (!harnessRepository) return projectForm(parsed, top, { run, stdout, stderr });
+    // Run through an installed copy inside a checkout of the harness, these forms would judge the copy's rules and
+    // write the copy's list: the checkout's own command is the one that knows its rules (harness review b8).
+    if (root === PACKAGE_ROOT && !samePlace(top, PACKAGE_ROOT) && fs.existsSync(path.join(top, 'bin', 'rules.mjs'))) {
+      const own = run(process.execPath, [path.join(top, 'bin', 'rules.mjs'), ...argv], { cwd, env, stdio: ['inherit', 'pipe', 'pipe'] });
+      for (const line of linesOf(own.stdout)) stdout(line);
+      for (const line of linesOf(own.stderr)) stderr(line);
+      if (own.error) stderr(`could not run ${path.join(top, 'bin', 'rules.mjs')}: ${own.error.message}`);
+      return own.status ?? 1;
+    }
   }
 
   if (parsed.command === 'change') {

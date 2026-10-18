@@ -550,3 +550,27 @@ test('rules --hook is answered by the turn-start hook, through the dispatcher an
     fs.rmSync(outside, { recursive: true, force: true });
   }
 });
+
+// Harness review b8, 2026-10-18: run through an installed copy inside the harness's own checkout, `rules` judged the
+// installed package's rules and wrote its docs/RULES.md. The checkout's own command is the one that judges it.
+test('in a checkout of the harness that is not the package it runs from, every form but applied is the checkout\'s own command', async () => {
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rules-checkout-'));
+  try {
+    fs.mkdirSync(path.join(top, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(top, 'bin', 'lib', 'rules-data.mjs'), 'export const RULES = [];\n');
+    fs.writeFileSync(path.join(top, 'bin', 'rules.mjs'), '// the checkout\'s own command\n');
+    const calls = [];
+    const run = (command, args, options) => {
+      calls.push([command, ...args]);
+      if (command === 'git') return { status: 0, stdout: `${top}\n`, stderr: '' };
+      return { status: 3, stdout: 'from the checkout\n', stderr: 'its warning\n' };
+    };
+    const out = [];
+    const err = [];
+    const code = await rulesMain(['check'], { cwd: top, run, stdout: (line) => out.push(line), stderr: (line) => err.push(line) });
+    assert.deepEqual([code, out, err], [3, ['from the checkout'], ['its warning']]);
+    assert.deepEqual(calls.at(-1), [process.execPath, path.join(top, 'bin', 'rules.mjs'), 'check']);
+  } finally {
+    fs.rmSync(top, { recursive: true, force: true });
+  }
+});
