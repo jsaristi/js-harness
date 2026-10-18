@@ -5708,6 +5708,19 @@ test('check --push passes a v* tag whose package.json at the tagged commit is th
   }
 });
 
+test('check --push passes an annotated v* tag, whose sha the hook passes is the tag object, by the commit it tags', async () => {
+  const { dir } = tagRepo('1.0.0');
+  try {
+    git(dir, 'tag', '-a', 'v1.0.0', '-m', 'release 1.0.0');
+    const object = git(dir, 'rev-parse', 'refs/tags/v1.0.0');
+    assert.notEqual(object, git(dir, 'rev-parse', 'HEAD'));
+    const { output } = await runCheck(['--push', '--remote', 'up', '--head', object, '--ref', 'refs/tags/v1.0.0', '--cwd', dir], { JS_HARNESS_HOME: dir });
+    assert.match(output, /^PASS {2}tag {2}tag v1\.0\.0 names version 1\.0\.0/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('check --push refuses a v* tag whose package.json at the tagged commit is another version, and names both', async () => {
   const { dir } = tagRepo('0.9.0');
   try {
@@ -5736,7 +5749,8 @@ test('check --push leaves a ref that is not a v* tag unchecked against the versi
   const { dir } = tagRepo('0.9.0');
   try {
     const head = git(dir, 'rev-parse', 'HEAD');
-    for (const ref of ['refs/heads/feature', 'refs/tags/release-1', undefined]) {
+    // A tag that starts with v but is not shaped vX.Y.Z is not a release: upgrade only reads vX.Y.Z tags (bin/update.mjs).
+    for (const ref of ['refs/heads/feature', 'refs/tags/release-1', 'refs/tags/vendor-snapshot', 'refs/tags/v1.0', undefined]) {
       const flags = ref === undefined ? [] : ['--ref', ref];
       const { output } = await runCheck(['--push', '--remote', 'up', '--head', head, ...flags, '--cwd', dir], { JS_HARNESS_HOME: dir });
       assert.doesNotMatch(output, /^(PASS|FAIL|INFO) {2}tag /m, `${ref}`);

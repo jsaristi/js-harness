@@ -107,7 +107,7 @@ async function main() {
   /** The bin of the copy of `version` under the prefix: npm's folder, or the pnpm copy of that version. */
   function copyOf(version) {
     if (opts.pm === 'npm') return path.join(globalPackageDir(prefix), 'bin', 'js-harness.mjs');
-    const copies = copyCandidatesOf(prefix, (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []), (file) => fs.existsSync(file))
+    const copies = copyCandidatesOf(prefix, (dir) => (fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? fs.readdirSync(dir) : []), (file) => fs.existsSync(file))
       .map((root) => ({ root, version: readVersion(root) }));
     const root = pickCopy(copies, version);
     if (root === null) throw new Error(`no ${opts.pm} copy of js-harness ${version} under ${prefix}`);

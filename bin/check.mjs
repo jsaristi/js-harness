@@ -311,11 +311,12 @@ const pushSide = (base, head) => ({
   mergeFilter: false,
 });
 
-/** The row of a `v*` tag pushed (`ref` is the name the pre-push hook passes, `refs/tags/v<version>`): the `version` in
+/** The row of a version tag pushed (`ref` is the name the pre-push hook passes, `refs/tags/vX.Y.Z`): the `version` in
  * package.json at the tagged commit must be that tag without its v, or the push is refused. `upgrade` refuses a copy
- * whose manifest says another version (bin/update.mjs). No row for any other ref. */
+ * whose manifest says another version (bin/update.mjs). No row for any other ref, a tag such as `vendor-snapshot`
+ * included: only a version tag is a release. */
 function checkTagRow(cwd, { ref, head = 'HEAD', spawn = spawnSync } = {}) {
-  const tagged = /^refs\/tags\/v(.+)$/.exec(ref ?? '');
+  const tagged = /^refs\/tags\/v(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?)$/.exec(ref ?? '');
   if (!tagged) return [];
   const version = tagged[1];
   const tag = `v${version}`;
