@@ -33,9 +33,9 @@ function resolvePm(pm, env) {
   return pm ?? env.JS_HARNESS_PM ?? 'npm';
 }
 
-/** What the commands say where the repository holds no release tag: none is tagged before 1.0.0
- * (docs/ROADMAP.md, "Release source"), and how a machine gets the newest copy until then. */
-export const NO_RELEASE = `no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get the newest copy: ${INSTALL_NEWEST}`;
+/** What the commands say where the repository holds no release tag (the first is v0.9.0, docs/ROADMAP.md, "Versioning"),
+ * and how a machine gets the newest copy then. */
+export const NO_RELEASE = `no release of js-harness is tagged yet; to get the newest copy: ${INSTALL_NEWEST}`;
 
 /** How long `git ls-remote` may take to list the tags before the lookup gives up. */
 const TAG_LOOKUP_MS = 30_000;

@@ -106,7 +106,7 @@ test("a pin of another version or another repository gives n/a and no request, a
   const pinned = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '1.2.3' }, version: '0.1.0', online: true, fetch: refusing(urls) });
   assert.equal(pinned.upToDate, 'n/a');
   // `init` pins the version of the copy that ran it in every project (bin/lib/project.mjs, `harness.json`), and every
-  // copy is 0.1.0 before 1.0.0: such a pin says nothing about main's rules, so the row still compares.
+  // copy that follows main carries main's version: such a pin says nothing about main's rules, so the row still compares.
   const own = await harnessRulesRow({ project: os.tmpdir(), declared: { version: '0.1.0' }, version: '0.1.0', online: true, fetch: answering(200, writeRules(RULES), urls) });
   assert.equal(own.upToDate, 'ok');
   assert.deepEqual(urls, [MAIN_LIST_URL]);

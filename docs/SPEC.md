@@ -172,7 +172,7 @@ proofs and by those tasks.
 
 **Problem:** Update and upgrade asked the npm registry for a name nobody holds and installed what it printed with no comparison (`odd/tasks/install-update.md`, T5); until a release source existed no command could update a machine (`odd/tasks/first-version.md`).
 **Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in.
-**Reason:** The machine's git already holds what the repository needs to be read, and no registry holds the package; tagging starts at 1.0.0, the first complete version (`docs/ROADMAP.md`).
+**Reason:** The machine's git already holds what the repository needs to be read, and no registry holds the package; tagging starts at v0.9.0, a rehearsal release, and v1.0.0 is the first definitive one (`docs/ROADMAP.md`, "Versioning").
 **Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`
 **Discarded:** The npm registry as the source. An npm publish, planned for a public repository and left without a date.
 **Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `js-harness update`, `js-harness upgrade`

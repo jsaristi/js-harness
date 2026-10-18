@@ -19,7 +19,7 @@ import {
   invalidHarnessJsonMessage,
   howToPinClause,
 } from './lib/project.mjs';
-import { INSTALL_NEWEST } from './lib/version.mjs';
+import { DEFAULT_REPO, INSTALL_NEWEST, tagSpec } from './lib/version.mjs';
 
 const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
 const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full]]';
@@ -353,12 +353,13 @@ function reportSyncProject(result) {
     return 1;
   }
   if (result.pinMismatch) {
-    // No version is tagged before 1.0.0 (docs/ROADMAP.md, "Release source"), so a pin cannot be installed
-    // by its number: the one copy a machine can install is the default branch's.
+    // A tagged version is installed by its tag (docs/ROADMAP.md, "Versioning"); a pin that no tag names, such as a copy
+    // that follows main, is reached with the newest copy.
     console.error(
       `harness.json pins js-harness ${result.pin} but ${result.version} is running; nothing was written. ` +
-        `No version of js-harness is tagged yet, so ${result.pin} cannot be installed by its number. ` +
-        `If ${result.pin} is the newer one, install the newest copy on this machine (${INSTALL_NEWEST}) and run js-harness sync again; ` +
+        `If ${result.pin} is the newer one, install it by its tag (npm i -g ${tagSpec(DEFAULT_REPO, `v${result.pin}`)}, ` +
+        'or the same with the package manager that installed it) when that version is tagged, ' +
+        `or the newest copy (${INSTALL_NEWEST}), and run js-harness sync again; ` +
         `otherwise set the pin to ${result.version} in harness.json and commit it.`,
     );
     return 1;

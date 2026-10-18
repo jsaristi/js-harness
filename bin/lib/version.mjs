@@ -21,9 +21,9 @@ export function isNewer(candidate, current) {
   return compareSemver(candidate, current) > 0;
 }
 
-/** How a machine gets the newest copy today, in words for a message: from the default branch, since no
- * version is tagged or published before 1.0.0 (docs/ROADMAP.md, "Release source"), so `upgrade` has no
- * release to install and says this instead. It names npm and says the rest: a copy that pnpm installed is
+/** How a machine gets the newest copy, in words for a message: from the default branch, which is where a copy
+ * ahead of the newest tag comes from, and the only source where a repository holds no release tag
+ * (docs/ROADMAP.md, "Versioning"), so `upgrade` has no release to install and says this instead. It names npm and says the rest: a copy that pnpm installed is
  * not the one npm would replace. */
 export const INSTALL_NEWEST = 'npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it';
 

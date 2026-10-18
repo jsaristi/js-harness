@@ -537,9 +537,9 @@ export function hookCommandPlan(commands) {
   return plan;
 }
 
-// The fix of the hook commands check: the newest copy, installed by hand as `INSTALL_NEWEST` says. `upgrade` is not
-// the fix yet: no release is tagged before 1.0.0, so with no folder of tarballs named it installs nothing.
-const HOOK_FIX = `the js-harness on the path is older than these entries: install the newest copy (${INSTALL_NEWEST}), then run js-harness doctor again`;
+// The fix of the hook commands check: `upgrade` to the newest release, or, for entries written by a copy ahead of
+// the newest tag (one that follows main), the newest copy installed by hand as `INSTALL_NEWEST` says.
+const HOOK_FIX = `the js-harness on the path is older than these entries: run js-harness upgrade, or install the newest copy (${INSTALL_NEWEST}), then run js-harness doctor again`;
 // The first line of a tried command's standard error that a gap line shows; the rest is not the answer.
 const STDERR_LINE_MAX = 160;
 
