@@ -242,9 +242,10 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
 - [x] T10 G6, last part: the version of codegraph and the js-harness commit of the workspace recorded
   with a run and compared on a resume (S3; route: inline; the lead, 2026-10-14 06:03)
-- [ ] T11 The fingerprint held hours apart: the real templates of both hosts built twice, hours
+- [x] T11 The fingerprint held hours apart: the real templates of both hosts built twice, hours
   apart, outside the home, and their fingerprints compared; a difference names a volatile key to
-  leave out (S3; route: inline, free)
+  leave out (S3; route: inline, free). Three volatile kinds left out in `e64e1df` (#430), see L32;
+  held with the fix two hours apart, see L34
 - [x] T12 PR 130 holds main: once jsaristi/js-harness#124 is merged, `origin/main` merged in once,
   the gate passed, pushed, the lead told
 
@@ -580,3 +581,13 @@ later, compared file by file.
 
 L33 (2026-10-18, 00:28 UTC by `date`) Codex reviewed `f0cd67b..e64e1df` (138,105 input tokens, recorded): correct, no finding.
 gentle-ai assessed `e64e1df` from `f0cd67b`: medium, not due (`under_budget`, 71 changed lines).
+
+L34 (2026-10-18, 02:24 UTC by `date`) T11, second half: done. Two builds with the fix, at 00:23 and
+02:23 UTC, kept every file's settled hash. The only files that differ are js-harness's own skills
+(`js-harness` and `js-harness-orchestrator` of both hosts), reinstalled at 02:22 after #437 landed:
+a real change of the setup, which the fingerprint must catch. Two `.in_use/<pid>` markers went with
+the session that left them and are no longer counted. The global `settings.json` is the same, and
+its change at 23:02 of the first half was real too: #425 (the permit relay, landed 22:58) added the
+`hooks.PermissionRequest` entry `js-harness permit --hook` to the install manifest, and the install
+after the land wrote it. So a fingerprint now moves only when what an arm runs on moves; between
+lands of js-harness itself it holds. Nothing spent.
