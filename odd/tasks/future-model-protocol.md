@@ -577,3 +577,6 @@ next builds. Test first in `evals/home.test.mjs`: the three volatile kinds leave
 as it was, a synced skill updated or a marketplace moved still changes it. 226 tests of home,
 codex-home, suite and without pass. Second half: a build at 00:23 with the fix and one two hours
 later, compared file by file.
+
+L33 (2026-10-18, 00:28 UTC by `date`) Codex reviewed `f0cd67b..e64e1df` (138,105 input tokens, recorded): correct, no finding.
+gentle-ai assessed `e64e1df` from `f0cd67b`: medium, not due (`under_budget`, 71 changed lines).
