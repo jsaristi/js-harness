@@ -5686,6 +5686,71 @@ test('check --push reads only the lines the head brings past the remote\'s defau
   }
 });
 
+// T9 (harness review, 2026-10-18): a `v*` tag is refused when package.json at the tagged commit is not the tag without its v,
+// because `upgrade` refuses a copy whose manifest says another version (bin/update.mjs). The hook names the pushed ref with --ref.
+// `version` null writes a package.json with no version in it.
+const tagRepo = (version) => pushRepo('up', {
+  base: null,
+  change: (dir) => putFile(dir, 'package.json', `${JSON.stringify({ name: 'js-harness', version: version ?? undefined })}\n`),
+});
+
+// The fixture's head commit adds package.json, a code file with no Codex record, so the codex-review row fails in these
+// tests too: what they assert is the tag row, and the exit code only where the tag row decides it.
+test('check --push passes a v* tag whose package.json at the tagged commit is that version', async () => {
+  const { dir } = tagRepo('1.0.0');
+  try {
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const { output } = await runCheck(['--push', '--remote', 'up', '--head', head, '--ref', 'refs/tags/v1.0.0', '--cwd', dir], { JS_HARNESS_HOME: dir });
+    assert.match(output, /^PASS {2}tag {2}tag v1\.0\.0 names version 1\.0\.0, the version package\.json holds at [0-9a-f]{7}$/m);
+    assert.doesNotMatch(output, /^FAIL {2}tag /m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push refuses a v* tag whose package.json at the tagged commit is another version, and names both', async () => {
+  const { dir } = tagRepo('0.9.0');
+  try {
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const { code, output } = await runCheck(['--push', '--remote', 'up', '--head', head, '--ref', 'refs/tags/v1.0.0', '--cwd', dir], { JS_HARNESS_HOME: dir });
+    assert.equal(code, 1, output);
+    assert.match(output, /^FAIL {2}tag {2}tag v1\.0\.0 is refused: package\.json at [0-9a-f]{7} says version 0\.9\.0, not 1\.0\.0 \(the tag without its v\)/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push refuses a v* tag whose tagged commit has no version in package.json', async () => {
+  const { dir } = tagRepo(null);
+  try {
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const { code, output } = await runCheck(['--push', '--remote', 'up', '--head', head, '--ref', 'refs/tags/v1.0.0', '--cwd', dir], { JS_HARNESS_HOME: dir });
+    assert.equal(code, 1, output);
+    assert.match(output, /^FAIL {2}tag {2}tag v1\.0\.0 is refused: package\.json at [0-9a-f]{7} has no version, not 1\.0\.0 \(the tag without its v\)/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --push leaves a ref that is not a v* tag unchecked against the version, and a push with no --ref has no tag row', async () => {
+  const { dir } = tagRepo('0.9.0');
+  try {
+    const head = git(dir, 'rev-parse', 'HEAD');
+    for (const ref of ['refs/heads/feature', 'refs/tags/release-1', undefined]) {
+      const flags = ref === undefined ? [] : ['--ref', ref];
+      const { output } = await runCheck(['--push', '--remote', 'up', '--head', head, ...flags, '--cwd', dir], { JS_HARNESS_HOME: dir });
+      assert.doesNotMatch(output, /^(PASS|FAIL|INFO) {2}tag /m, `${ref}`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('check --ref goes with --push, and is a usage error without it', async () => {
+  const { code, errOutput } = await runCheck(['--ref', 'refs/tags/v1.0.0'], {}, {});
+  assert.deepEqual([code, errOutput.split('\n')[0]], [2, '--ref goes with --push']);
+});
+
 test('check --push gives no row rules where the remote has no default branch to read the push against', async () => {
   const { dir } = doorRepo({ change: restateRoadmap });
   try {

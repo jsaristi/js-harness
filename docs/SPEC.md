@@ -171,11 +171,11 @@ proofs and by those tasks.
 ### Releases
 
 **Problem:** Update and upgrade asked the npm registry for a name nobody holds and installed what it printed with no comparison (`odd/tasks/install-update.md`, T5); until a release source existed no command could update a machine (`odd/tasks/first-version.md`).
-**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in.
+**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in; a pushed `v*` tag is refused by `check --push` when `package.json` at the tagged commit names another version than the tag without its `v`; `scripts/release-proof.mjs` installs a tag with real npm or pnpm into throwaway folders, upgrades to a second tag, moves a project's pin and uninstalls, and the home must be as it started.
 **Reason:** The machine's git already holds what the repository needs to be read, and no registry holds the package; tagging starts at v0.9.0, a rehearsal release, and v1.0.0 is the first definitive one (`docs/ROADMAP.md`, "Versioning").
-**Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`
+**Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`, `node --test bin/check.test.mjs`, `node --test scripts/release-proof-lib.test.mjs`
 **Discarded:** The npm registry as the source. An npm publish, planned for a public repository and left without a date.
-**Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `js-harness update`, `js-harness upgrade`
+**Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `bin/check.mjs`, `.githooks/pre-push`, `scripts/release-proof.mjs`, `scripts/release-proof-lib.mjs`, `js-harness update`, `js-harness upgrade`
 
 ### Project init
 

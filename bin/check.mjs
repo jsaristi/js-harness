@@ -311,6 +311,28 @@ const pushSide = (base, head) => ({
   mergeFilter: false,
 });
 
+/** The row of a `v*` tag pushed (`ref` is the name the pre-push hook passes, `refs/tags/v<version>`): the `version` in
+ * package.json at the tagged commit must be that tag without its v, or the push is refused. `upgrade` refuses a copy
+ * whose manifest says another version (bin/update.mjs). No row for any other ref. */
+function checkTagRow(cwd, { ref, head = 'HEAD', spawn = spawnSync } = {}) {
+  const tagged = /^refs\/tags\/v(.+)$/.exec(ref ?? '');
+  if (!tagged) return [];
+  const version = tagged[1];
+  const tag = `v${version}`;
+  const commit = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
+  if (!commit) return [{ name: 'tag', pass: false, detail: `tag ${tag} is refused: ${head} does not name a commit` }];
+  const short = commit.slice(0, 7);
+  let says = null;
+  try {
+    says = JSON.parse(gitOut(spawn, cwd, ['show', `${commit}:package.json`]) ?? 'null')?.version ?? null;
+  } catch {
+    says = null; // a package.json that does not parse says no version
+  }
+  if (says === version) return [{ name: 'tag', pass: true, detail: `tag ${tag} names version ${version}, the version package.json holds at ${short}` }];
+  const what = says === null ? 'has no version' : `says version ${says}`;
+  return [{ name: 'tag', pass: false, detail: `tag ${tag} is refused: package.json at ${short} ${what}, not ${version} (the tag without its v)` }];
+}
+
 /** The row `rules` of `check --push` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the lines `head`
  * brings past the default branch of `remote`, read as the door reads them, said as INFO whatever a rule's row says:
  * the commit refuses, the push reports, the merge refuses. No row when the remote has no default branch to read. */
@@ -2518,7 +2540,7 @@ export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Dat
 }
 
 const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--ref <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
   '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',
   '       --door --base <rev> [--branch <name>]: runs only the rule rows over the lines <rev>..HEAD brings, judged by the running list, and the failures row, and exits 1 when one refuses (the merge door of merge-queue, odd/tasks/rule-hierarchy.md); --branch names the pull request\'s branch, which may change bin/lib/rules-data.mjs only when it is a rule/ branch',
@@ -2554,7 +2576,7 @@ export function parseGateWait(argv) {
   return { noWait, waitMinutes: wait === undefined ? GATE_WAIT_MS / 60_000 : Number(wait) };
 }
 
-const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--wait', '--first', '--base', '--branch'];
+const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--ref', '--wait', '--first', '--base', '--branch'];
 const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door'];
 // The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
 // `--door` uses none of them, so one of them with it is refused rather than ignored.
@@ -2594,7 +2616,10 @@ function parseArgs(argv, env) {
   const gate = GATE_FLAGS.find((flag) => door && argv.includes(flag));
   if (gate !== undefined) throw new CheckArgError(`--door runs no gate: ${gate} goes with a gate, not with --door`);
   if (!door && (base !== null || branch !== null)) throw new CheckArgError('--base and --branch go with --door');
+  const ref = get('--ref') ?? null;
+  if (ref !== null && !argv.includes('--push')) throw new CheckArgError('--ref goes with --push');
   return {
+    ref,
     first: first?.trim(),
     cwd: get('--cwd') ?? process.cwd(),
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
@@ -2630,7 +2655,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     console.error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const { cwd, home, push, head, remote, noWait, waitMinutes } = parsed;
+  const { cwd, home, push, head, remote, noWait, waitMinutes, ref } = parsed;
   // The merge door runs the rule rows of the lines a pull request brings, and nothing else: no budget, no sensors, no lock.
   if (parsed.door) {
     const rows = [...checkDoor(cwd, { rules: deps.rules, spawn: deps.git, base: parsed.base, branch: parsed.branch }), ...checkFailures(cwd)];
@@ -2647,7 +2672,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
-    ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote })]
+    ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
     : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
