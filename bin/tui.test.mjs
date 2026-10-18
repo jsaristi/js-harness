@@ -103,6 +103,36 @@ test('render notes an available update in the header', () => {
   assert.match(render(state).join('\n'), /update available: 0\.2\.0/);
 });
 
+test('render says a newer copy is installed, and offers no update, while the menu runs an older one', () => {
+  const state = initialState({ installedVersion: '1.0.0', updateAvailable: null, installedCopy: '1.1.0' });
+  assert.equal(render(state)[0], 'js-harness 1.0.0  (1.1.0 installed: quit and open js-harness again to use it)');
+  // The same version, or none recorded, changes nothing in the header.
+  for (const installedCopy of ['1.0.0', null]) {
+    assert.equal(render(initialState({ installedVersion: '1.0.0', updateAvailable: null, installedCopy }))[0], 'js-harness 1.0.0');
+  }
+});
+
+test('runTui reads the update again after a command: an Upgrade that installed the release says to open the menu again', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  let upgraded = false;
+  const done = runTui({
+    installedVersion: '1.0.0',
+    updateAvailable: '1.1.0',
+    readUpdate: () => (upgraded ? { updateAvailable: null, installedCopy: '1.1.0' } : { updateAvailable: '1.1.0', installedCopy: '1.0.0' }),
+    commands: { ...noCommands, status: async () => { upgraded = true; } },
+    stdin,
+    stdout,
+  });
+  assert.match(stdout.chunks.at(-1), /^js-harness 1\.0\.0 {2}\(update available: 1\.1\.0\)$/m);
+  stdin.emit('data', '\r');
+  await flush();
+  assert.match(stdout.chunks.at(-1), /^js-harness 1\.0\.0 {2}\(1\.1\.0 installed: quit and open js-harness again to use it\)$/m);
+  assert.doesNotMatch(stdout.chunks.at(-1), /update available/);
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
 test('render shows a confirmation prompt in confirm mode', () => {
   const base = initialState({ installedVersion: '0.1.0', updateAvailable: null });
   const state = { ...base, mode: 'confirm', pending: 'uninstall' };

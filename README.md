@@ -344,8 +344,10 @@ folder>` names another repository), or the newest tarball of `--source <dir>`, a
 tarballs, which wins when named and needs no credential. With no release tagged it installs nothing and exits 1; no package registry is ever
 asked.
 
-The package manager is `npm` unless `--pm <command>` or `JS_HARNESS_PM` names another, such as
-`pnpm`. npm gets `--allow-git=all` for a tag, since npm 12 fetches nothing from git without it
+The package manager is `--pm <command>`, else `JS_HARNESS_PM`, else the one that installed the copy
+running now: `pnpm` for a copy in pnpm's global folder, `npm` otherwise. The menu's Upgrade passes
+no `--pm`, so it upgrades a pnpm copy with pnpm; after it the menu's header says the new version is
+installed and to open the menu again, since the one open keeps the old code. npm gets `--allow-git=all` for a tag, since npm 12 fetches nothing from git without it
 (`all` and not `root`, which npm 11.12 refuses for a global install);
 pnpm gets `add -g`. The install is judged by the installed copy's own `--version`, not by the
 package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file

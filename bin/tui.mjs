@@ -11,6 +11,7 @@ import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
+import { installedVersion as manifestVersion } from './lib/manifest.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { remoteMain } from './remote.mjs';
@@ -177,13 +178,14 @@ export async function computeStackState({ home, cwd, spawn, platform, fetch: fet
  * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
  * stack block simply does not render (see `render` below), so older callers keep working. `location` is
  * a `projectLocation` result; omitted, the TUI is outside any repository and shows the machine menu. */
-export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, memorySnapshots = false }) {
+export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, memorySnapshots = false, installedCopy = null }) {
   const menu = buildMenu(location);
   return {
     mode: 'menu',
     selected: firstSelectable(menu),
     installedVersion,
     updateAvailable,
+    installedCopy,
     stack,
     location,
     menu,
@@ -243,7 +245,10 @@ export function handleKey(state, key) {
 /** Pure: state -> the lines to draw. The stack block (T5) renders above the menu, straight from
  * `state.stack` — this function never probes anything itself, see `computeStackState`. */
 export function render(state) {
-  const updateNote = state.updateAvailable ? `  (update available: ${state.updateAvailable})` : '';
+  // A newer copy installed under the home (an Upgrade from this menu) runs only in a new process: this one keeps
+  // its code, so the header says to open the menu again instead of offering the update once more (release-095 F1).
+  const reopen = state.installedCopy && isNewer(state.installedCopy, state.installedVersion);
+  const updateNote = reopen ? `  (${state.installedCopy} installed: quit and open js-harness again to use it)` : state.updateAvailable ? `  (update available: ${state.updateAvailable})` : '';
   const lines = [`js-harness ${state.installedVersion}${updateNote}`];
   if (Array.isArray(state.stack)) {
     for (const row of state.stack) {
@@ -287,17 +292,19 @@ function screenText(state) {
 export function runTui({
   installedVersion,
   updateAvailable,
+  installedCopy = null,
   stack,
   location,
   memorySnapshots = false,
   readLocation,
   readStack,
   readSnapshots,
+  readUpdate,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack, location, memorySnapshots });
+  let state = initialState({ installedVersion, updateAvailable, stack, location, memorySnapshots, installedCopy });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -346,6 +353,14 @@ export function runTui({
             state = { ...state, memorySnapshots: await readSnapshots() };
           } catch (err) {
             console.error(`reading the memory snapshots failed: ${oneLine(err)}`);
+          }
+        }
+        if (readUpdate) {
+          try {
+            const { updateAvailable: available = null, installedCopy = null } = (await readUpdate()) ?? {};
+            state = { ...state, updateAvailable: available, installedCopy };
+          } catch (err) {
+            console.error(`reading the installed version failed: ${oneLine(err)}`);
           }
         }
         stdin.resume();
@@ -428,13 +443,20 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
 
   // The newest release: in a folder of tarballs when one is named, else the repository's tags (`git ls-remote`).
   const source = get('--source') ?? env.JS_HARNESS_SOURCE;
-  let updateAvailable = null;
+  let latest = null;
   try {
-    const latest = resolveLatest({ source });
-    if (latest && isNewer(latest.version, installedVersion)) updateAvailable = latest.version;
+    latest = resolveLatest({ source });
   } catch {
-    updateAvailable = null;
+    latest = null;
   }
+  // The release is looked up once; what the home's manifest records is read again after each command, since an
+  // Upgrade installs a newer copy than the one running this menu.
+  const readUpdate = () => {
+    const installedCopy = manifestVersion(home);
+    const newest = installedCopy && isNewer(installedCopy, installedVersion) ? installedCopy : installedVersion;
+    return { installedCopy, updateAvailable: latest && isNewer(latest.version, newest) ? latest.version : null };
+  };
+  const { updateAvailable, installedCopy } = readUpdate();
 
   // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
   const location = projectLocation(cwd);
@@ -445,6 +467,8 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   return runTui({
     installedVersion,
     updateAvailable,
+    installedCopy,
+    readUpdate,
     stack,
     location,
     readLocation: () => projectLocation(cwd),

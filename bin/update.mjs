@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
@@ -30,8 +31,14 @@ function parseArgs(argv, env) {
   };
 }
 
-function resolvePm(pm, env) {
-  return pm ?? env.JS_HARNESS_PM ?? 'npm';
+/** A copy in pnpm's global folder, `<pnpm home>/global/v<n>/...`, as Node resolves it with links followed: through
+ * `node_modules/.pnpm/js-harness@<source>/node_modules/js-harness` for one installed from GitHub (see `pnpmCopy`). */
+const PNPM_GLOBAL_COPY = /[\\/]global[\\/]v\d+[\\/](?:.*[\\/])?node_modules[\\/]js-harness[\\/]/i;
+
+/** The package manager of an upgrade: `--pm`, else `JS_HARNESS_PM`, else the one that installed the copy running now,
+ * read from where it lies: the TUI's Upgrade passes no `--pm`, and npm over a copy pnpm installed fails (release-095 S3). */
+function resolvePm(pm, env, copyPath = fileURLToPath(import.meta.url)) {
+  return pm ?? env.JS_HARNESS_PM ?? (PNPM_GLOBAL_COPY.test(copyPath) ? 'pnpm' : 'npm');
 }
 
 /** What the commands say where the repository holds no release tag (the first is v0.9.0, docs/ROADMAP.md, "Versioning"),
@@ -474,7 +481,7 @@ const PNPM_LOCK_NOTE =
   'and never while a pnpm runs';
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep } = {}) {
+export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep, copyPath } = {}) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
   // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
   const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source', '--prefix', '--pm'] });
@@ -501,7 +508,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // What is installed: the tarball of the folder the caller named, or the repository at its release tag; never a
   // name on a registry. The install and its verdict are `installCopy`'s, which `merge-queue --refresh-copy` shares.
-  const words = splitCommand(resolvePm(opts.pm, env));
+  const words = splitCommand(resolvePm(opts.pm, env, copyPath));
   // A failed install is tried again, as the land's refresh does (bin/lib/refresh-copy.mjs): on Windows pnpm can fail
   // with os error 32 while a file it just wrote is held, and the same install works a little later (harness-review L58).
   let copy;
