@@ -59,6 +59,36 @@ export function openingRefusal(toolName, projectData) {
     + 'it is refused even when he asked for it.';
 }
 
+/** The tool that starts a session in the desktop app, a row in his sidebar. */
+export const SESSION_TOOL = 'mcp__ccd_session__start_session';
+
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** Why the `start_session` call whose input is `toolInput` is refused, or null. A session started with no effort runs
+ * at the effort of the one that started it: on 2026-10-16 two work sessions started so ran at max for two days while
+ * the rule `session-effort` says high (odd/tasks/harness-review.md, T6c). Where that rule gives a value, a call that
+ * carries a brief (`prompt`) is refused when it names no effort, a fork included since a fork cannot set its own, or
+ * one above the rule's; a call with no brief (an offer's title, a proposal started as proposed) passes. Where the
+ * rule is not declared nothing is refused. */
+export function sessionEffortRefusal(toolInput, projectData) {
+  if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
+  const rule = ruleHere('session-effort', undefined, projectData);
+  if (!Object.hasOwn(rule, 'value')) return null;
+  const effort = toolInput.context === 'fork' ? undefined : toolInput.effort;
+  if (effort === undefined || effort === null || effort === '') {
+    return 'js-harness guard: start_session names no effort, so the new session would run at this session\'s '
+      + `(rule session-effort: ${rule.value}). Pass effort "${rule.value}" or lower with context "fresh"; a fork cannot set its own effort.`;
+  }
+  const asked = EFFORTS.indexOf(effort);
+  if (asked === -1) {
+    return `js-harness guard: start_session asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. `
+      + `Pass effort "${rule.value}" or lower.`;
+  }
+  if (asked <= EFFORTS.indexOf(rule.value)) return null;
+  return `js-harness guard: start_session asks for effort "${effort}", above the rule session-effort: ${rule.value}. `
+    + `Pass effort "${rule.value}" or lower; a higher one is his to set.`;
+}
+
 // The hour a message stamps as the time it is sent: in its opening header, after nothing but the sender's label
 // and an optional date, and followed by a stamp word or a stop. The label is "From <someone>" or a session's
 // title as the harness names sessions, a short code and a number with an optional topic ("JH 5 · canal, ",

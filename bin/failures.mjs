@@ -5,7 +5,9 @@
 // the project, and writes nothing; only an editor writes the register. Zero dependencies.
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { holdsPhrase, parseRegister, summarize } from './lib/failures.mjs';
+import { gitTopLevel } from './lib/project.mjs';
 
 const REGISTER = 'docs/FAILURES.md';
 const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled]';
@@ -156,8 +158,9 @@ function renderCounts(counts) {
  * refuses while an entry is not settled, which is how a contract's "Done when" carries the register.
  * Exit 0; 1 when the register is refused, an id is not in it or `--settled` finds an entry that is
  * not settled; 2, with usage on stderr and no file read, for an argument it does not know. With no
- * `docs/FAILURES.md` nothing is recorded, so nothing is refused: it says so and exits 0. */
-export async function failuresMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, readFile = readText } = {}) {
+ * `docs/FAILURES.md` nothing is recorded, so nothing is refused: it says so and exits 0. The register is
+ * read at the top of the git repository `cwd` is in, so a subfolder finds it; outside one, in `cwd`. */
+export async function failuresMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, readFile = readText, spawn = spawnSync } = {}) {
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -166,7 +169,7 @@ export async function failuresMain(argv, { cwd = process.cwd(), stdout = console
     return 2;
   }
 
-  const read = readRegister(path.resolve(cwd), readFile);
+  const read = readRegister(path.resolve(gitTopLevel(cwd, spawn) ?? cwd), readFile);
   if (!read) {
     stdout(`no ${REGISTER}: no failure is recorded`);
     return 0;

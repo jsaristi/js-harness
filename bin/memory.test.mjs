@@ -46,6 +46,26 @@ test('status exits 1 and names each reason when a pass is due', async () => {
   });
 });
 
+test('status reads the home JS_HARNESS_HOME names when no --home is given, and --home still wins', async () => {
+  await withProject(async ({ home, project, folder }) => {
+    write(path.join(folder, 'MEMORY.md'), `- [a](a.md) — ${'x'.repeat(200)}\n`);
+    write(path.join(folder, 'a.md'), note('feedback'));
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-memory-os-home-'));
+    try {
+      const env = { JS_HARNESS_HOME: home };
+      const fromEnv = await run(['status', '--cwd', project], { home: elsewhere, env });
+      assert.equal(fromEnv.code, 1);
+      assert.match(fromEnv.out, /^ {2}line-chars {2}1 line over 150 characters: 1$/m);
+      const fromFlag = await run(['status', '--json', '--cwd', project, '--home', elsewhere], { env });
+      assert.equal(JSON.parse(fromFlag.out).folder, path.join(elsewhere, '.claude', 'projects', path.basename(path.dirname(folder)), 'memory'));
+      const emptyEnv = await run(['status', '--json', '--cwd', project], { home: elsewhere, env: { JS_HARNESS_HOME: '' } });
+      assert.equal(JSON.parse(emptyEnv.out).folder, path.join(elsewhere, '.claude', 'projects', path.basename(path.dirname(folder)), 'memory'));
+    } finally {
+      fs.rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+});
+
 test('status exits 0 and says nothing is due after a recent verified pass', async () => {
   await withProject(async ({ home, project, folder, journal }) => {
     write(path.join(folder, 'MEMORY.md'), '- [a](a.md) — hook\n');

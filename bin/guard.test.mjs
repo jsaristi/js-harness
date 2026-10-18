@@ -73,6 +73,19 @@ test('a scheduled-task or cloud tool that opens a session is denied in the proje
   assert.deepEqual(await hook({ tool_name: 'mcp__scheduled-tasks__delete_scheduled_task', cwd: 'D:/project', tool_input: { id: 'x' } }), { code: 0, out: '', err: '' }, 'delete passes');
 });
 
+// odd/tasks/harness-review.md, T6c: a session started with no effort ran at the max of the session that started it.
+test('a session started with no effort, or above the rule session-effort, is denied where the rule is declared', async () => {
+  const brief = { initiation: 'own_initiative', title: 'T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
+  for (const tool_input of [brief, { ...brief, effort: 'max' }, { ...brief, context: 'fork' }]) {
+    const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input });
+    assert.equal(denied(refused).permissionDecision, 'deny', JSON.stringify(tool_input));
+    assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: start_session .*session-effort: high/, JSON.stringify(tool_input));
+  }
+  const passes = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, effort: 'high' } }), passes);
+  assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: brief }, { rulesText: null }), passes, 'no rules');
+});
+
 // Section 17, "The try": the lead's real try, as a hand reproduction makes it, through the public command in this
 // repository, which declares the rule. The payload is read from a file: in Git Bash, `echo` of it turns the path's
 // `\\` into `\`, a bad JSON escape, and the guard, which exits 0 on any failure, prints nothing.
