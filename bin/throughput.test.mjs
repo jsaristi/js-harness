@@ -40,13 +40,14 @@ function fakeGit({ origin = true, branchMerge = null, mergeTree = null, pace = n
     if (args[0] === 'rev-parse') return origin ? ok('abc\n') : { status: 1, stdout: '', stderr: '' };
     if (args[0] === 'log' && args[1] === '-m') return ok('\u0001m7\n\nodd/tasks/x.md\n');
     if (args[0] === 'log' && args[1] === '--first-parent') return ok(`m7\t${mergedAt}\tp7 h7\tMerge pull request #7 from feat/x\n`);
+    if (args[0] === 'show' && args[1] === 'c1:odd/tasks/a.md') return ok('# A\n- [ ] T1\n- [x] T2\n');
     if (args[0] === 'show') return ok('h7\t2026-10-16T10:00:00Z\n');
+    if (args[0] === 'ls-tree') return ok('odd/tasks/a.md\nodd/tasks/notes/b.md\n');
     if (args[0] === 'rev-list') return ok('c1\n');
     // The history progress reads, one commit compared with the one before (progress-pace.mjs, `paceLogArgs`).
     if (args[0] === '-c' && args.includes('-U100000')) return pace ?? ok('');
     if (args[0] === 'merge-tree' && mergeTree) return mergeTree;
     if (args[0] === 'log' && args[1] === '--merges' && branchMerge) return ok(branchMerge);
-    if (args[0] === 'grep') return ok('odd/tasks/a.md:- [ ] T1\nodd/tasks/a.md:- [x] T2\n');
     if (args[0] === 'log') return ok('');
     return { status: 1, stdout: '', stderr: `unexpected git ${args.join(' ')}` };
   };

@@ -173,9 +173,16 @@ function gitFacts(ctx, { from, to }) {
     const commit = git(run, root, ['rev-list', '-1', '--first-parent', `--before=${new Date(ms).toISOString()}`, 'origin/main']);
     const sha = firstLine(commit.stdout);
     if (commit.error || commit.status !== 0 || sha === '') return null;
-    // git grep exits 1 when nothing matches, which is a count of none.
-    const boxes = git(run, root, ['grep', '-hE', '^\\s*- \\[[ xX]\\]', sha, '--', 'odd/tasks/*.md', 'docs/ROADMAP.md']);
-    return boxes.error || boxes.status > 1 ? null : taskCounts(boxes.stdout);
+    // Each task document whole, so a task table's rows count as progress counts them (harness review d6).
+    const listed = git(run, root, ['ls-tree', '-r', '--name-only', sha, '--', 'odd/tasks', 'docs/ROADMAP.md']);
+    if (listed.error || listed.status !== 0) return null;
+    const files = [];
+    for (const file of listed.stdout.split(/\r?\n/).filter((name) => name === 'docs/ROADMAP.md' || /^odd\/tasks\/[^/]+\.md$/.test(name))) {
+      const shown = git(run, root, ['show', `${sha}:${file}`]);
+      if (shown.error || shown.status !== 0) return null;
+      files.push({ path: file, text: shown.stdout });
+    }
+    return taskCounts(files);
   };
   const start = countAt(from);
   const end = countAt(to);
