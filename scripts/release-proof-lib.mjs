@@ -13,7 +13,8 @@ export const USAGE = [
   '  --repo  where the tags come from: a URL or a folder. "." clones this repository into a temp folder and tags the',
   '          clone with throwaway versions (v<package version> and the next minor). Default: the GitHub repository of package.json.',
   '  --from  the release tag installed first. Default: v<package version>.',
-  '  --to    the release tag `upgrade` moves to, then the pin of a project moves to it. Omitted: install and uninstall only.',
+  '  --to    the release tag `upgrade` moves to, then the pin of a project moves to it. Omitted: install and uninstall only,',
+  '          except with --repo ., where it is the throwaway tag of the next minor.',
   '  --pm    npm or pnpm, the package manager that installs. Default: npm.',
   'Everything is installed into throwaway folders: never the real home, nor the real pnpm or npm folders.',
 ].join('\n');
@@ -38,7 +39,8 @@ export function tagVersion(tag) {
 export function parseArgs(argv, pkg) {
   if (argv.includes('--help') || argv.includes('-h')) return { help: true };
   const opts = { help: false, repo: repoFromPackage(pkg), from: `v${pkg.version}`, to: null, pm: 'npm' };
-  for (let i = 0; i < argv.length; i += 1) {
+  // `npm run release-proof -- <flags>` through a pnpm shim passes the `--` on; one before the flags is skipped.
+  for (let i = argv[0] === '--' ? 1 : 0; i < argv.length; i += 1) {
     const flag = argv[i];
     if (!VALUED.includes(flag)) throw new ReleaseProofArgError(`unknown argument: ${flag}`);
     const value = argv[i + 1];
@@ -53,6 +55,8 @@ export function parseArgs(argv, pkg) {
       opts[flag.slice(2)] = value;
     }
   }
+  // A local proof tags its clone with the next minor anyway (`throwawayTags`), so it always upgrades to it.
+  if (opts.repo === '.' && opts.to === null) opts.to = throwawayTags(pkg.version).to;
   return opts;
 }
 

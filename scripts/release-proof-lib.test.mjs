@@ -53,6 +53,19 @@ test('parseArgs reads --repo, --from, --to and --pm', () => {
   });
 });
 
+// T10's verifier (2026-10-18): the Done-when lines run `--repo .` with no `--to`, which proved no upgrade, and
+// `npm run release-proof -- ...` through this machine's npm, a pnpm shim, passes the `--` on to the script.
+test('parseArgs gives --repo . the throwaway tag of the bump as --to, so a local proof always upgrades', () => {
+  assert.equal(parseArgs(['--repo', '.'], PKG).to, 'v0.2.0');
+  assert.equal(parseArgs(['--repo', '.', '--to', 'v0.2.0'], PKG).to, 'v0.2.0');
+  assert.equal(parseArgs(['--repo', 'https://example.test/x.git'], PKG).to, null);
+});
+
+test('parseArgs skips the -- a package manager passes on before the flags', () => {
+  assert.deepEqual(parseArgs(['--', '--repo', '.', '--pm', 'pnpm'], PKG), parseArgs(['--repo', '.', '--pm', 'pnpm'], PKG));
+  assert.throws(() => parseArgs(['--repo', '.', '--'], PKG), /unknown argument: --/);
+});
+
 test('parseArgs answers --help, alone or with other flags, and the usage names every flag', () => {
   assert.deepEqual(parseArgs(['--help'], PKG), { help: true });
   assert.deepEqual(parseArgs(['--repo', '.', '-h'], PKG), { help: true });

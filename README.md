@@ -60,11 +60,11 @@ No package registry is involved: the tag on GitHub is the release.
 1. The bump: on a branch, `version` in `package.json` goes to the new version, and the branch lands
    on main through the merge queue like any change.
 2. The full test, on the landed commit: `npm run check`, then the release proof with each package
-   manager, `npm run release-proof -- --repo . --to v<next minor> --pm npm`, and the same with
-   `--pm pnpm`. `--to` is the minor after the version released (`v0.10.0` for 0.9.0, `v1.1.0` for
-   1.0.0 and for 1.0.1); the proof refuses any other and names the one it expects. With `--repo .` the proof clones this repository into
-   a temp folder and tags the clone, so it needs no real tag; it installs into throwaway folders, upgrades, moves a project's
-   pin, uninstalls, and fails unless the throwaway home ends as it started.
+   manager, `npm run release-proof -- --repo . --pm npm`, and the same with `--pm pnpm`. With
+   `--repo .` the proof clones this repository into a temp folder and tags the clone twice, with
+   the version released and the minor after it (`v0.9.0` and `v0.10.0` for 0.9.0), so it needs no
+   real tag; it installs the first into throwaway folders, upgrades to the second, moves a
+   project's pin, uninstalls, and fails unless the throwaway home ends as it started.
 3. The tag: `git tag vX.Y.Z <commit>` on that same commit, then `git push origin vX.Y.Z`. The
    pre-push hook refuses a tag whose `package.json` at the tagged commit says another version.
    Once the tag exists, `npm run release-proof -- --from vX.Y.Z` proves it from GitHub itself.
@@ -349,7 +349,9 @@ The package manager is `npm` unless `--pm <command>` or `JS_HARNESS_PM` names an
 pnpm gets `add -g`. The install is judged by the installed copy's own `--version`, not by the
 package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file
 in use, and `upgrade` then says so and goes on. With pnpm, its bin folder's lock is removed when
-the install left it, or when it is older than ten minutes. `--prefix <dir>` installs into a
+the install left it, or when it is older than ten minutes, and never while another pnpm runs.
+Where `npm` on the path is a shim that runs pnpm, as on a machine where pnpm installed js-harness,
+name pnpm: `--pm pnpm`, since pnpm refuses npm's `--allow-git`. `--prefix <dir>` installs into a
 folder of its own: npm's prefix, or pnpm's home with every folder pnpm writes inside it. On
 Windows the install runs through cmd.exe, which changes a `"` or a `%`, so a value holding either is
 refused before anything is installed.

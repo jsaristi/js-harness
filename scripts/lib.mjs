@@ -9,12 +9,13 @@ import { fileURLToPath } from 'node:url';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The real npm CLI, bypassing a PATH `npm` that may be a shim (on this machine, pnpm's). */
-export function resolveNpmCli(env = process.env) {
-  return (
-    env.JS_HARNESS_E2E_NPM_CLI ??
-    path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
-  );
+/** The real npm CLI, bypassing a PATH `npm` that may be a shim (on this machine, pnpm's): the one installed with the
+ * running node, beside `node.exe` on Windows and under `<prefix>/lib/node_modules` elsewhere. */
+export function resolveNpmCli(env = process.env, { execPath = process.execPath, platform = process.platform } = {}) {
+  if (env.JS_HARNESS_E2E_NPM_CLI) return env.JS_HARNESS_E2E_NPM_CLI;
+  const nodeDir = path.dirname(execPath);
+  const modules = platform === 'win32' ? path.join(nodeDir, 'node_modules') : path.join(path.dirname(nodeDir), 'lib', 'node_modules');
+  return path.join(modules, 'npm', 'bin', 'npm-cli.js');
 }
 
 export function run(cmd, args, opts = {}) {
