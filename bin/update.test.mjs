@@ -71,14 +71,14 @@ function squattedRegistry() {
 }
 
 /** Runs one of the three commands and returns its exit code with everything it printed. */
-async function runCommand(main, argv, env = {}, spawn = noProcess, platform = undefined) {
+async function runCommand(main, argv, env = {}, spawn = noProcess, platform = undefined, extra = { sleep: async () => {} }) {
   const out = [];
   const err = [];
   const original = { log: console.log, error: console.error };
   console.log = (line) => out.push(String(line));
   console.error = (line) => err.push(String(line));
   try {
-    const code = await main(argv, { JS_HARNESS_REPO: taglessRepo, ...env }, spawn, platform);
+    const code = await main(argv, { JS_HARNESS_REPO: taglessRepo, ...env }, spawn, platform, extra);
     return { code, out: out.join('\n'), err: err.join('\n') };
   } finally {
     Object.assign(console, original);
@@ -241,10 +241,11 @@ test('upgrade installs with --pm split in words, else JS_HARNESS_PM, else npm', 
     const variable = await runCommand(upgradeMain, ['--source', source, '--home', home], { JS_HARNESS_PM: 'my-pm' }, spawn, 'linux');
     const neither = await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn, 'linux');
 
+    // Each run tries the install three times before it gives up.
     assert.deepEqual(calls.filter((call) => call.args.includes('install')), [
-      { cmd: 'node', args: ['cli.js', 'install', '-g', tarball] },
-      { cmd: 'my-pm', args: ['install', '-g', tarball] },
-      { cmd: 'npm', args: ['install', '-g', tarball] },
+      ...Array(3).fill({ cmd: 'node', args: ['cli.js', 'install', '-g', tarball] }),
+      ...Array(3).fill({ cmd: 'my-pm', args: ['install', '-g', tarball] }),
+      ...Array(3).fill({ cmd: 'npm', args: ['install', '-g', tarball] }),
     ]);
     for (const run of [flag, variable, neither]) {
       assert.equal(run.code, 3);
@@ -483,7 +484,7 @@ test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the sync
 
 /** A prefix where npm's POSIX layout holds a copy of js-harness, a home whose manifest says `recorded`, and a source
  * of NEWER; `run(spawn)` upgrades into them on linux and gives back what it printed. */
-async function prefixUpgrade(spawn, { pm, recorded = NEWER, layout = ['lib', 'node_modules'] } = {}) {
+async function prefixUpgrade(spawn, { pm, recorded = NEWER, layout = ['lib', 'node_modules'], sleeps = [] } = {}) {
   const home = makeTmpDir('js-harness-upgrade-home-t2-');
   const prefix = makeTmpDir('js-harness-upgrade-prefix-t2-');
   const source = makeSource(NEWER);
@@ -493,7 +494,7 @@ async function prefixUpgrade(spawn, { pm, recorded = NEWER, layout = ['lib', 'no
     fs.writeFileSync(path.join(binDir, 'js-harness.mjs'), '// stub, never executed in this test');
     install(home, recorded);
     const argv = ['--source', source, '--prefix', prefix, '--home', home, ...(pm ? ['--pm', pm] : [])];
-    const run = await runCommand(upgradeMain, argv, {}, spawn(prefix), 'linux');
+    const run = await runCommand(upgradeMain, argv, {}, spawn(prefix), 'linux', { sleep: async (ms) => sleeps.push(ms) });
     return { ...run, prefix, bin: path.join(binDir, 'js-harness.mjs') };
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -527,6 +528,46 @@ test('upgrade fails when the package manager exits non-zero and the installed co
   const run = await prefixUpgrade(installExits(1, '0.1.0', calls));
   assert.equal(run.code, 1);
   assert.match(run.err, /upgrade failed: npm exited 1/);
+  assert.ok(!calls.some((call) => call.args.includes('sync')), 'nothing was synced');
+});
+
+/** A stand-in where every install exits 1 with os error 32 and the copy answers NEWER from install `goodFrom` on. */
+function installsFailUntil(goodFrom, calls) {
+  let installs = 0;
+  return () => (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    if (args.includes('install') || args.includes('add')) {
+      installs += 1;
+      return { status: 1, stdout: '', stderr: 'os error 32' };
+    }
+    const answer = installs >= goodFrom ? NEWER : '0.1.0';
+    return { status: 0, stdout: args.includes('--version') ? `${answer}\n` : '', stderr: '' };
+  };
+}
+const installsOf = (calls) => calls.filter((call) => call.args.includes('install') || call.args.includes('add')).length;
+
+// harness-review L58: the first upgrade from 0.9.0 to 1.0.0 failed on os error 32 and the same command worked later;
+// the land's refresh tries three times, and upgrade now does too.
+test('upgrade tries the install again after a failed one, and goes on when a later try installs the copy', async () => {
+  const calls = [];
+  const sleeps = [];
+  const run = await prefixUpgrade(installsFailUntil(2, calls), { sleeps });
+  assert.equal(run.code, 0, run.err);
+  assert.equal(installsOf(calls), 2);
+  assert.deepEqual(sleeps, [20_000]);
+  assert.match(run.err, new RegExp(`upgrade: npm exited 1 and the copy is not ${NEWER_RE} yet: trying again in 20 s \\(try 2 of 3\\)`));
+  assert.match(run.out, new RegExp('upgraded to ' + NEWER_RE));
+});
+
+test('upgrade stops after three failed tries and says how many it made', async () => {
+  const calls = [];
+  const sleeps = [];
+  const run = await prefixUpgrade(installsFailUntil(Infinity, calls), { sleeps });
+  assert.equal(run.code, 1);
+  assert.equal(installsOf(calls), 3);
+  assert.deepEqual(sleeps, [20_000, 20_000]);
+  assert.match(run.err, /upgrade failed: npm exited 1/);
+  assert.match(run.err, /nothing was installed after 3 tries/);
   assert.ok(!calls.some((call) => call.args.includes('sync')), 'nothing was synced');
 });
 
@@ -804,7 +845,7 @@ test('upgradeMain returns a non-zero code and skips sync when install fails', as
       calls.push({ cmd, args });
       return { status: 1, stdout: '', stderr: 'boom' };
     };
-    const code = await upgradeMain(['--source', source, '--home', home], {}, spawn, 'linux');
+    const code = await upgradeMain(['--source', source, '--home', home], {}, spawn, 'linux', { sleep: async () => {} });
     assert.equal(code, 1);
     // T2: the installed copy is asked its version before the exit code is believed; nothing is synced.
     assert.deepEqual(calls[0].args, ['install', '-g', path.join(source, `js-harness-${NEWER}.tgz`)]);

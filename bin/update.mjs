@@ -466,7 +466,15 @@ export function installCopy({ words, spec, version, prefix, env, spawn, platform
   return { ok: false, status: 1, answered, packageManager: false, lines: [pathCopyRefusal(answered, version)] };
 }
 
-export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
+/** Tries of an upgrade's install, and the pause before each try after the first: those of the land's refresh. */
+const UPGRADE_TRIES = 3;
+const UPGRADE_PAUSE_MS = 20_000;
+const PNPM_LOCK_NOTE =
+  `with pnpm, a ${PNPM_BIN_LOCK} folder left in its bin folder is removed by the next upgrade once it is ten minutes old, ` +
+  'and never while a pnpm runs';
+const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep } = {}) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
   // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
   const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source', '--prefix', '--pm'] });
@@ -494,20 +502,29 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   // What is installed: the tarball of the folder the caller named, or the repository at its release tag; never a
   // name on a registry. The install and its verdict are `installCopy`'s, which `merge-queue --refresh-copy` shares.
   const words = splitCommand(resolvePm(opts.pm, env));
-  const copy = installCopy({
-    words,
-    spec: latest.file ?? latest.spec,
-    version: latest.version,
-    prefix: opts.prefix,
-    env,
-    spawn,
-    platform,
-    label: 'upgrade',
-    also: [opts.home ?? ''],
-    say: (line) => console.error(line),
-  });
+  // A failed install is tried again, as the land's refresh does (bin/lib/refresh-copy.mjs): on Windows pnpm can fail
+  // with os error 32 while a file it just wrote is held, and the same install works a little later (harness-review L58).
+  let copy;
+  for (let attempt = 1; attempt <= UPGRADE_TRIES; attempt += 1) {
+    copy = installCopy({
+      words,
+      spec: latest.file ?? latest.spec,
+      version: latest.version,
+      prefix: opts.prefix,
+      env,
+      spawn,
+      platform,
+      label: 'upgrade',
+      also: [opts.home ?? ''],
+      say: (line) => console.error(line),
+    });
+    if (copy.ok || !copy.packageManager || attempt === UPGRADE_TRIES) break;
+    console.error(`upgrade: ${words[0]} exited ${copy.status} and the copy is not ${latest.version} yet: trying again in ${UPGRADE_PAUSE_MS / 1000} s (try ${attempt + 1} of ${UPGRADE_TRIES})`);
+    await sleep(UPGRADE_PAUSE_MS);
+  }
   if (!copy.ok) {
     for (const line of copy.lines) console.error(line);
+    if (copy.packageManager) console.error(`nothing was installed after ${UPGRADE_TRIES} tries; ${PNPM_LOCK_NOTE}`);
     return copy.status;
   }
   if (copy.status !== 0) {
