@@ -106,3 +106,18 @@ test('the note of a session with no wait says to re-arm none, and a long list is
   assert.ok(many.length <= NOTICE_TEXT_MAX, String(many.length));
   assert.match(many, /and \d+ more: js-harness wake lists them/);
 });
+
+// Harness review c1, 2026-10-18: a session cleared or restarted before the boot leaves two transcripts under one
+// title, and both were planned, so one number got two wake notes and the old transcript's dead waits to re-arm.
+test('two transcripts of one title are one session: the newest is planned, and the older one\'s waits are not', () => {
+  const OLD_WAIT = 'js-harness wait --pr 99 --for 60';
+  const texts = [
+    { id: 'old', text: transcript(titled('JH 5 · canal'), prompt('before the clear', at(3, 0)), ...background('o1', 'ob1', OLD_WAIT, at(3, 10))) },
+    { id: 'new', text: transcript(titled('JH 5 · canal'), prompt('after the clear', at(4, 0)), ...background('n1', 'nb1', WAIT, at(4, 30))) },
+    { id: 'u1', text: transcript(prompt('untitled one', at(4, 1))) },
+    { id: 'u2', text: transcript(prompt('untitled two', at(4, 2))) },
+  ];
+  const plan = wakePlan({ bootAt: BOOT, transcripts: texts, openingOf: () => null });
+  assert.deepEqual(plan.map((one) => one.id), ['new', 'u2', 'u1']);
+  assert.deepEqual(plan[0].waits, [WAIT]);
+});

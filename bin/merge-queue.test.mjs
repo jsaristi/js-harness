@@ -1603,3 +1603,83 @@ test('a land keeps a landed worktree of the Orca app, under orca/workspaces', as
   assert.equal(fs.existsSync(orcas), true, out.join('\n'));
   assert.deepEqual(removedOf(root), []);
 });
+
+// T4 (S5b): `--land --refresh-copy` refreshes the installed copy after a land that moved main, through `refreshCopy`
+// (bin/lib/refresh-copy.mjs), which is passed here as a stand-in so no package manager runs.
+async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'] } = {}) {
+  const { run } = landRunner(prs, [[circle('completed', 'success')]]);
+  const out = [];
+  const asked = [];
+  const code = await mergeQueueMain([...args, '--cwd', root], {
+    run,
+    covered: () => ({ pass: true }),
+    suite: () => ({ ok: true }),
+    sleep: async () => {},
+    stdout: (line) => out.push(line),
+    stderr: (line) => out.push(line),
+    refreshCopy: async (opts) => {
+      asked.push(opts);
+      return refresh(opts);
+    },
+  });
+  return { code, out, asked };
+}
+
+test('--refresh-copy is a mode of --land: alone or with --dry-run it is a usage error, and the usage names it', async () => {
+  const out = [];
+  const io = { run: runner([]).run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) };
+  assert.equal(await mergeQueueMain(['--refresh-copy'], io), 2);
+  assert.equal(await mergeQueueMain(['--dry-run', '--refresh-copy'], io), 2);
+  const usage = [];
+  assert.equal(await mergeQueueMain(['--help'], { stdout: (line) => usage.push(line) }), 0);
+  assert.match(usage.join('\n'), /\[--refresh-copy\]/);
+});
+
+test('--land --refresh-copy asks for the refresh after a land, with the sha main was pushed to, and the land stands', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  const { code, out, asked } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].landed, true);
+  assert.equal(asked[0].sha, git(origin, 'rev-parse', 'main'));
+});
+
+test('--land --refresh-copy exits with the refresh code when the refresh fails, after the land printed its landing', async () => {
+  const { root, heads } = makeQueueRepo();
+  const { code, out } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { refresh: () => 6 });
+  assert.equal(code, 6, out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('Landed: main ')), 'the land printed its landing');
+});
+
+// gentle-ai review-fb9f66ace187f6fe, R4-refresh-uncaught-skips-land-record: a refresh that threw ended the run before
+// the land record was written, though main had moved.
+test('--land --refresh-copy whose refresh throws still records the land with its own exit, and exits 6', async () => {
+  const { root, heads } = makeQueueRepo();
+  const { code, out } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { refresh: () => { throw new Error('boom'); } });
+  assert.equal(code, 6, out.join('\n'));
+  assert.ok(out.some((line) => /refresh failed: .*boom/.test(line)), out.join('\n'));
+  const record = fs.readFileSync(path.join(root, '.git', 'js-harness', 'lands.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line)).at(-1);
+  assert.equal(record.exit, 0);
+});
+
+test('--land --refresh-copy with nothing ready asks the refresh that nothing landed, so it refreshes nothing', async () => {
+  const { root } = makeQueueRepo();
+  const { code, out, asked } = await landRefreshing(root, []);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].landed, false);
+});
+
+test('--land without --refresh-copy behaves as before: no refresh is asked for, no package manager runs, the last line is the landing', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const spawned = [];
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], {
+    wrap: (run) => (command, args, options) => {
+      if (command !== 'git' && command !== 'gh') spawned.push(command);
+      return run(command, args, options);
+    },
+  });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(spawned, []);
+  assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${git(origin, 'rev-parse', 'main').slice(0, 7)}, with PR 1.`);
+});

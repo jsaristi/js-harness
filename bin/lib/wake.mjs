@@ -55,7 +55,8 @@ function readTranscript(text, bootMs) {
  *   boot and had not ended by then: the waits the boot killed, which the session re-arms. `killed` counts
  *   its other background work the boot killed, which is not re-armed by a note: it is no declared wait.
  *
- * Sessions come in the order of their last entry before the boot, the newest first. */
+ * Sessions come in the order of their last entry before the boot, the newest first. Transcripts of one title are
+ * one session (a clear or a restart starts a new transcript): only the newest is planned. */
 export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () => null, windowMs = WAKE_WINDOW_MS }) {
   const bootMs = timeOf(bootAt);
   if (!Number.isFinite(bootMs)) throw new Error(`the boot time is no time: ${bootAt}`);
@@ -82,7 +83,15 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
       lastAt: new Date(lastAt).toISOString(),
     });
   }
-  return plan.sort((a, b) => timeOf(b.lastAt) - timeOf(a.lastAt));
+  // A clear or a restart leaves an older transcript under the same title: one session, planned once, by its newest
+  // transcript, so the older one's waits, dead before the boot, are not re-armed (harness review c1).
+  const seen = new Set();
+  return plan.sort((a, b) => timeOf(b.lastAt) - timeOf(a.lastAt)).filter((one) => {
+    if (one.title === null) return true;
+    if (seen.has(one.title)) return false;
+    seen.add(one.title);
+    return true;
+  });
 }
 
 /** A command line as one line: a notice holds no line break (`newNotice`), and the shell runs a command

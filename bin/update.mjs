@@ -154,7 +154,7 @@ const PNPM_BIN_LOCK = '.pnpm-global-bin.lock';
 const STALE_LOCK_MS = 10 * 60_000;
 
 /** The global bin folder pnpm uses: the prefix's own, else what `pnpm bin -g` answers; `null` when it does not. */
-function pnpmBinDir(spawn, words, prefix, platform) {
+export function pnpmBinDir(spawn, words, prefix, platform) {
   if (prefix) return path.join(prefix, 'bin');
   const asked = runPm(spawn, words, ['bin', '-g'], undefined, platform);
   const line = String(asked.stdout ?? '').trim().split(/\r?\n/).at(-1) ?? '';
@@ -173,7 +173,7 @@ function startsPnpm(commandLine) {
 /** Whether a pnpm other than this process runs on the machine: `true`, `false`, or `null` when the process list could
  * not be read, which a caller takes as running. Windows answers through PowerShell, which shows a pnpm run by node by
  * its command line; elsewhere `ps`. Each line is `<pid> <command line>`. */
-function pnpmRunning(spawn, platform) {
+export function pnpmRunning(spawn, platform) {
   const listed = platform === 'win32'
     ? spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }'], { encoding: 'utf8', windowsHide: true })
     : spawn('ps', ['-A', '-o', 'pid=,args='], { encoding: 'utf8' });
@@ -425,6 +425,47 @@ function prefixCopyVersion(spawn, bin) {
   return asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
 }
 
+/** The install of an upgrade (T2 of odd/tasks/harness-review.md), shared with `merge-queue --refresh-copy`
+ * (bin/lib/refresh-copy.mjs): `spec` installed with the package manager `words`, and judged by the copy it left, never
+ * by the package manager's exit code. pnpm exits 1 when its cleanup hits os error 32 after a good install (L7). With
+ * `prefix` the copy is where the package manager laid it out; without one it is whatever `js-harness` the shell
+ * resolves on PATH, which also runs the sync, so only the version just installed is let to write (T8). `also` lists
+ * words the Windows command line must not carry either. `say` is told of each pnpm bin lock it removes. Returns
+ * `{ ok: true, status, bin }`, where `status` is the package manager's exit and `bin` the copy's entry under `prefix`
+ * (null without one); else `{ ok: false, status, lines }`: what to say and the exit to give. */
+export function installCopy({ words, spec, version, prefix, env, spawn, platform, label, also = [], say = () => {} }) {
+  const kind = pmKind(words);
+  const plan = installPlan(kind, spec, prefix, env, platform);
+  const unsafe = platform === 'win32' ? [...words, ...plan.args, ...also].find((word) => /["%]/.test(word)) : undefined;
+  if (unsafe !== undefined) {
+    return { ok: false, status: 1, answered: '', packageManager: false, lines: [`${label}: ${unsafe} holds " or %, which cmd.exe would change: nothing was installed`] };
+  }
+  const binDir = kind === 'pnpm' ? pnpmBinDir(spawn, words, prefix, platform) : null;
+  const isPnpmRunning = () => pnpmRunning(spawn, platform);
+  const staleLock = clearPnpmLock(binDir, undefined, isPnpmRunning);
+  if (staleLock) say(staleLock);
+  const started = Date.now();
+  const installResult = runPm(spawn, words, plan.args, plan.env === env ? undefined : plan.env, platform);
+  const ownLock = clearPnpmLock(binDir, started, isPnpmRunning);
+  if (ownLock) say(ownLock);
+
+  // The verdict on the install is the installed copy's own --version, not the package manager's exit code (T2, L7).
+  const bin = prefix ? (kind === 'pnpm' ? pnpmCopy(prefix, version) : upgradedBinPath(prefix, platform)) : null;
+  const answered = prefix ? (bin ? prefixCopyVersion(spawn, bin) : '') : pathCopyVersion(spawn);
+  if (answered === version) return { ok: true, status: installResult.status, bin, answered };
+  if (installResult.status !== 0) {
+    const how = installResult.error ? `could not be started (${installResult.error.code ?? installResult.error.message})` : `exited ${installResult.status}`;
+    // The package manager's output was captured, so its last lines say why.
+    const said = String(installResult.stderr ?? '').trim().split(/\r?\n/).slice(-5).join('\n');
+    return { ok: false, status: installResult.status ?? 1, answered, packageManager: true, lines: [`${label} failed: ${words[0]} ${how}${said ? `:\n${said}` : ''}`] };
+  }
+  if (prefix) {
+    const said = PLAIN_VERSION.test(answered) ? `answers ${answered}` : 'does not answer --version';
+    return { ok: false, status: 1, answered, packageManager: false, lines: [`the copy installed under ${prefix} ${said}, not ${version}: nothing was synced`] };
+  }
+  return { ok: false, status: 1, answered, packageManager: false, lines: [pathCopyRefusal(answered, version)] };
+}
+
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
   // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
@@ -451,49 +492,28 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   }
 
   // What is installed: the tarball of the folder the caller named, or the repository at its release tag; never a
-  // name on a registry.
+  // name on a registry. The install and its verdict are `installCopy`'s, which `merge-queue --refresh-copy` shares.
   const words = splitCommand(resolvePm(opts.pm, env));
-  const kind = pmKind(words);
-  const plan = installPlan(kind, latest.file ?? latest.spec, opts.prefix, env, platform);
-  const unsafe = platform === 'win32' ? [...words, ...plan.args, opts.home ?? ''].find((word) => /["%]/.test(word)) : undefined;
-  if (unsafe !== undefined) {
-    console.error(`upgrade: ${unsafe} holds " or %, which cmd.exe would change: nothing was installed`);
-    return 1;
+  const copy = installCopy({
+    words,
+    spec: latest.file ?? latest.spec,
+    version: latest.version,
+    prefix: opts.prefix,
+    env,
+    spawn,
+    platform,
+    label: 'upgrade',
+    also: [opts.home ?? ''],
+    say: (line) => console.error(line),
+  });
+  if (!copy.ok) {
+    for (const line of copy.lines) console.error(line);
+    return copy.status;
   }
-  const binDir = kind === 'pnpm' ? pnpmBinDir(spawn, words, opts.prefix, platform) : null;
-  const isPnpmRunning = () => pnpmRunning(spawn, platform);
-  const staleLock = clearPnpmLock(binDir, undefined, isPnpmRunning);
-  if (staleLock) console.error(staleLock);
-  const started = Date.now();
-  const installResult = runPm(spawn, words, plan.args, plan.env === env ? undefined : plan.env, platform);
-  const ownLock = clearPnpmLock(binDir, started, isPnpmRunning);
-  if (ownLock) console.error(ownLock);
-
-  // The verdict on the install is the installed copy's own --version, not the package manager's exit code: pnpm
-  // exits 1 when its cleanup hits os error 32 after a good install (T2 of odd/tasks/harness-review.md, L7). With
-  // --prefix the copy is where the package manager laid it out; without one, it is whatever `js-harness` the shell
-  // resolves on PATH, which also runs the sync, so only the version just installed is let to write (T8).
-  const bin = opts.prefix ? (kind === 'pnpm' ? pnpmCopy(opts.prefix, latest.version) : upgradedBinPath(opts.prefix, platform)) : null;
-  const answered = opts.prefix ? (bin ? prefixCopyVersion(spawn, bin) : '') : pathCopyVersion(spawn);
-  if (answered !== latest.version) {
-    if (installResult.status !== 0) {
-      const how = installResult.error ? `could not be started (${installResult.error.code ?? installResult.error.message})` : `exited ${installResult.status}`;
-      // The package manager's output was captured, so its last lines say why.
-      const said = String(installResult.stderr ?? '').trim().split(/\r?\n/).slice(-5).join('\n');
-      console.error(`upgrade failed: ${words[0]} ${how}${said ? `:\n${said}` : ''}`);
-      return installResult.status ?? 1;
-    }
-    if (opts.prefix) {
-      const said = PLAIN_VERSION.test(answered) ? `answers ${answered}` : 'does not answer --version';
-      console.error(`the copy installed under ${opts.prefix} ${said}, not ${latest.version}: nothing was synced`);
-    } else {
-      console.error(pathCopyRefusal(answered, latest.version));
-    }
-    return 1;
+  if (copy.status !== 0) {
+    console.error(`${words[0]} exited ${copy.status}, but the copy it installed answers ${latest.version}: going on`);
   }
-  if (installResult.status !== 0) {
-    console.error(`${words[0]} exited ${installResult.status}, but the copy it installed answers ${latest.version}: going on`);
-  }
+  const { bin } = copy;
 
   // Re-run the NEWLY installed binary's own sync, so files on disk match the new release rather than whatever
   // this (old) process would have written. `--global` (T4): upgrade runs from any folder, and inside a git
