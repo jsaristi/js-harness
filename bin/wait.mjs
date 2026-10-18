@@ -32,12 +32,15 @@ const USAGE = [
   "  --notice-to <role>: a notice addressed to orchestrator (or ORQ), or to a work session's number, is in the channel",
   '    record and was written after the wait started; its kind, sender and text are printed.',
   '  --notice-to orchestrator (or ORQ) run by a session that holds the relay lease (js-harness permit lease): every check',
-  '    renews that lease to now plus the longer of 40 minutes and --every plus 5 minutes, so it outlasts the wait; another',
+  '    renews that lease to now plus the longer of the default minutes of a lease (js-harness permit lease) and --every plus 5 minutes, so it outlasts the wait; another',
   '    session\'s lease, an expired one, or none is left as it is, and a failure to renew is said once on stderr.',
   "  Every wait run by a work session (its title's number, read from the transcript CLAUDE_CODE_SESSION_ID names) also",
   '    ends on a notice to that number written after it started (exit 3): it prints the notice and the same wait to',
   '    run again. A session with no number keeps its one condition.',
-  '  Exit 2: a usage error, and nothing is checked.',
+  '  --cwd <path> is the folder the checks run from (the repository); --home <path> is the harness home whose channel record',
+  '    is read (JS_HARNESS_HOME, else the user\'s home).',
+  '  Exit codes: 0 the condition holds; 1 the time ran out, or the pull request closed without merging; 2 a usage error, with',
+  '    nothing checked; 3 a notice to this work session\'s number ended the wait.',
 ].join('\n');
 
 /** A mistake in the arguments: answered with the usage and exit 2, before anything is checked. */
