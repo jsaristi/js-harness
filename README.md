@@ -351,6 +351,10 @@ pnpm gets `add -g`. The install is judged by the installed copy's own `--version
 package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file
 in use, and `upgrade` then says so and goes on. With pnpm, its bin folder's lock is removed when
 the install left it, or when it is older than ten minutes, and never while another pnpm runs.
+When the copy does not answer the new version after a failed install, `upgrade` tries again, up to
+three tries 20 seconds apart; after the third it says how many it made and that a lock left behind
+is removed by the next upgrade once it is ten minutes old. After an upgrade from a tag, the undo
+`--refresh-copy` prints names that tag.
 Where `npm` on the path is a shim that runs pnpm, as on a machine where pnpm installed js-harness,
 name pnpm: `--pm pnpm`, since pnpm refuses npm's `--allow-git`. `--prefix <dir>` installs into a
 folder of its own: npm's prefix, or pnpm's home with every folder pnpm writes inside it. On

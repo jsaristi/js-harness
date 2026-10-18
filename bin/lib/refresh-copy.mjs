@@ -69,7 +69,8 @@ function namedSha(binDir, fsys) {
   } catch {
     return null;
   }
-  return /js-harness#([0-9a-f]{40})/.exec(text)?.[1] ?? null;
+  // A copy `upgrade` installed names its release tag instead (harness-review L58); the undo names that.
+  return /js-harness#([0-9a-f]{40}|v\d+\.\d+\.\d+)(?![\w.])/.exec(text)?.[1] ?? null;
 }
 
 /** Removes what failed pnpm installs leave behind, and only that (prune-pnpm.sh, read by its rules): the install
@@ -289,7 +290,7 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
   } else {
     stdout('settings before: no settings file to back up');
   }
-  stdout(`refresh: installing main ${sha.slice(0, 7)} (version ${version}); the copy named ${previous ? previous.slice(0, 7) : 'no sha'} before`);
+  stdout(`refresh: installing main ${sha.slice(0, 7)} (version ${version}); the copy named ${previous ? previous.slice(0, previous.startsWith('v') ? undefined : 7) : 'no sha'} before`);
 
   // The copy is verified, and then run, by the path of the entry its shim names, never by a `js-harness` the PATH finds:
   // an older copy first on the PATH would pass for it (Codex P2 on 93de70b..2e6f86b).

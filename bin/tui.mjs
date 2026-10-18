@@ -426,7 +426,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   const installedVersion = currentVersion();
   const { fetch: fetchImpl = fetch, now } = io;
 
-  // No release to look for unless a folder of tarballs was named: opening the menu starts no process for it.
+  // The newest release: in a folder of tarballs when one is named, else the repository's tags (`git ls-remote`).
   const source = get('--source') ?? env.JS_HARNESS_SOURCE;
   let updateAvailable = null;
   try {

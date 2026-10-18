@@ -176,6 +176,15 @@ test('refreshCopy prints the undo: the previous sha, the settings copy, and how 
   assert.equal(fs.readFileSync(backup, 'utf8'), '{"hooks":{}}\n');
 });
 
+// harness-review L58: after `upgrade` the copy is the one of a release tag, which names no sha; the undo names the tag.
+test('refreshCopy names the release tag of a copy upgrade installed, in its undo and as the copy before', async () => {
+  const m = machine({ prev: 'v0.9.0' });
+  const run = await refresh(m);
+  assert.equal(run.code, 0, run.err);
+  assert.match(run.out, /the copy named v0\.9\.0 before/);
+  assert.match(run.out, /^undo: js-harness uninstall --global, then pnpm add -g github:jsaristi\/js-harness#v0\.9\.0, then js-harness install;/m);
+});
+
 test('refreshCopy does nothing when the gate lock is not obtained: no install, exit 75', async () => {
   const m = machine({ prev: PREV });
   const run = await refresh(m, { takeGateLock: lockOf({ refused: 'launcher gone' }) });
