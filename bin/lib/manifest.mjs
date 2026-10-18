@@ -951,9 +951,11 @@ export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, reco
  * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
  * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
  * there before is left with nothing to do. */
-function restoreSettings(manifest, home, listDir) {
+function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
   const restored = [];
   const kept = [];
+  const failed = [];
+  const failedRecords = [];
   for (const record of manifest.settings ?? []) {
     if (record.had && record.previous === record.value) continue;
     let settings;
@@ -971,15 +973,23 @@ function restoreSettings(manifest, home, listDir) {
     }
     if (record.had) data[record.key] = record.previous;
     else delete data[record.key];
-    if (record.createdFile && Object.keys(data).length === 0) {
-      fs.rmSync(record.path);
-      removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
-    } else {
-      fs.writeFileSync(record.path, serializeJson(data, style), 'utf8');
+    // A write or removal that fails keeps the setting, said as kept, rather than throw out of uninstall halfway
+    // (harness-review a4).
+    try {
+      if (record.createdFile && Object.keys(data).length === 0) {
+        removeFile(record.path);
+        removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
+      } else {
+        writeFile(record.path, serializeJson(data, style), 'utf8');
+      }
+    } catch (err) {
+      failed.push({ path: record.path, code: err.code ?? 'unknown error' });
+      failedRecords.push(record);
+      continue;
     }
     restored.push(record.path);
   }
-  return { restored, kept };
+  return { restored, kept, failed, failedRecords };
 }
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
@@ -1231,14 +1241,28 @@ export function sync(home, version, deps = {}) {
     // current targets, not against this run's successful writes — so a component that is still
     // declared but merely failed to (re)write this run (carried forward above with `skipped: true`)
     // is never treated as "no longer shipped" and deleted.
+    // A file no longer shipped is removed only while its bytes are the ones recorded, as `uninstall` does: one the
+    // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
+    // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
+    // longer recorded; `pruneKept` says which and why.
     const declaredTargets = new Set(components.map((c) => c.target(home)));
+    const pruneKept = [];
     for (const file of previous.files) {
-      if (declaredTargets.has(file.path)) continue;
-      if (fs.existsSync(file.path)) {
+      if (declaredTargets.has(file.path) || !fs.existsSync(file.path)) continue;
+      try {
+        if (sha256(fs.readFileSync(file.path)) !== file.sha256) {
+          pruneKept.push({ path: file.path, reason: 'changed since it was written' });
+          continue;
+        }
         fs.rmSync(file.path);
-        removeEmptyDirsUpTo(path.dirname(file.path), home, deps.listDir);
+      } catch (err) {
+        pruneKept.push({ path: file.path, reason: err.message });
+        continue;
       }
+      removeEmptyDirsUpTo(path.dirname(file.path), home, deps.listDir);
     }
+    // Not enumerable: what was kept is this run's report, not part of the manifest written above.
+    Object.defineProperty(manifest, 'pruneKept', { value: pruneKept, enumerable: false });
 
     const keptEntries = manifest.entries ?? [];
     for (const entry of previous.entries ?? []) {
@@ -1368,18 +1392,22 @@ function uninstallInstalled(home, deps) {
     return { removed: [...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed], kept: [], keptOptional: [], entriesRemoved: [], entriesKept: [], tasksRemoved: [], tasksKept: [], gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
   }
 
+  // A component is judged as an optional file is (`keepOptionalFile`): removed while its bytes are the recorded
+  // ones, kept when edited, and kept with the error when it cannot be read or removed, so one locked file no longer
+  // throws out of the run halfway with the manifest left behind (harness-review a4).
   const removed = [];
   const kept = [];
+  const keptFailed = [];
   for (const file of manifest.files) {
     if (!fs.existsSync(file.path)) continue;
-    const current = fs.readFileSync(file.path, 'utf8');
-    if (sha256(current) === file.sha256) {
-      removeFile(file.path);
+    const why = keepOptionalFile(file, removeFile);
+    if (!why) {
       removeEmptyDirsUpTo(path.dirname(file.path), home, listDir);
       removed.push(file.path);
-    } else {
-      kept.push(file.path);
+      continue;
     }
+    kept.push(file.path);
+    if (why.reason !== 'edited') keptFailed.push({ path: file.path, ...why });
   }
 
   // Optional files, compared by their bytes (a launcher need not be UTF-8). Their folder is left even when
@@ -1400,7 +1428,7 @@ function uninstallInstalled(home, deps) {
 
   // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
-  const settings = restoreSettings(manifest, home, listDir);
+  const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
 
   const entriesRemoved = [];
   const entriesKept = [];
@@ -1436,8 +1464,12 @@ function uninstallInstalled(home, deps) {
   const guarded = remote.kept.length > 0;
   const stillRecorded = keptRecords.filter((task, i) => tasksKept[i].reason !== 'edited' || guarded);
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
-  if (stillRecorded.length > 0) {
-    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded });
+  // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
+  // (Codex on 05fa584..cdcce6c).
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0) {
+    // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
+    const keptSettings = settings.failedRecords.map((record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) }));
+    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded, ...(keptSettings.length > 0 && { settings: keptSettings }) });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
@@ -1445,8 +1477,8 @@ function uninstallInstalled(home, deps) {
   removeCreatedFolders(manifest.entries, home, listDir);
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
-  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
-  return { removed, kept, keptOptional, entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

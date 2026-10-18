@@ -281,8 +281,11 @@ export async function installMain(argv, env = process.env, deps = {}) {
   }
   const { home, acceptMessages } = parsed;
   const version = currentVersion();
-  const manifest = install(home, version, deps);
+  // `sync`, not `install`: over an older manifest it also removes what is no longer shipped, which `install` alone
+  // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
+  const manifest = sync(home, version, deps);
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
+  for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
   return acceptMessages ? reportSessionMessages(home) : 0;
@@ -305,6 +308,12 @@ function logSyncProjectAction(action) {
     case 'versionRecorded':
       console.log(`recorded ${action.to} in the manifest (was ${action.from ?? 'unrecorded'})`);
       break;
+    case 'alreadyGone':
+      console.log(`already gone ${action.path}`);
+      break;
+    case 'failed':
+      console.error(`could not undo ${action.path}: ${action.reason}`);
+      break;
     case 'kept':
       console.error(`kept ${action.path} (${action.reason})`);
       break;
@@ -322,7 +331,8 @@ function logSyncProjectAction(action) {
 /** Renders `syncProject`'s result and returns the exit code — the project-scope half of `syncMain`.
  * `result.notGitRepo`/`result.notInitialized` are never reached here: the caller reports those itself
  * and names `--global` (T4 design), never as project-scope outcomes to render. */
-function reportSyncProject(result) {
+/** Prints what a project sync did and returns its exit code: 1 when it could not undo something it had written. */
+export function reportSyncProject(result) {
   if (result.noSuchDirectory) {
     console.error(`no such directory: ${result.cwd}`);
     return 1;
@@ -373,7 +383,7 @@ function reportSyncProject(result) {
   } else {
     console.log(`synced project at ${result.version}`);
   }
-  return result.code;
+  return result.code || (result.actions.some((action) => action.kind === 'failed') ? 1 : 0);
 }
 
 /** Scope by location, the same rule as `uninstallMain` (T4 design): inside a git repository that
@@ -419,6 +429,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
+  for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   return 0;
 }
 
@@ -475,7 +486,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
   // named it is gone by now: it goes to stderr with the error code and what is left to do.
-  const notUndone = new Map(result.keptOptional.filter((file) => file.reason !== 'edited').map((file) => [file.path, file]));
+  const notUndone = new Map([...result.keptOptional, ...(result.keptFailed ?? [])].filter((file) => file.reason !== 'edited').map((file) => [file.path, file]));
   for (const p of result.kept) {
     const failed = notUndone.get(p);
     if (!failed) {
@@ -491,6 +502,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
   for (const p of result.settingsRestored ?? []) console.log(`put ${SESSION_MESSAGES.key} back in ${p}`);
   for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
+  for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is still recorded; run js-harness uninstall --global again, or set it back by hand`);
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
   // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.
@@ -597,5 +609,5 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  return notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
 }

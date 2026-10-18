@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord } from './install.mjs';
-import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
+import { createHash } from 'node:crypto';
+import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord, reportSyncProject } from './install.mjs';
+import { acceptSessionMessages, entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, userSettingsPath } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
@@ -129,6 +130,57 @@ test('syncMain updates the manifest under --home and exits 0', async () => {
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// harness-review a1: a file no longer shipped that the user changed is kept, and the sync says so.
+test('syncMain names a file no longer shipped that it kept because it changed', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const edited = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+    fs.mkdirSync(path.dirname(edited), { recursive: true });
+    fs.writeFileSync(edited, 'the user edited this', 'utf8');
+    const manifest = readManifest(home);
+    manifest.files.push({ path: edited, sha256: '0'.repeat(64) });
+    fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+    const { code, outLines } = await captureConsole(() => syncMain(['--global', '--home', home]));
+    assert.equal(code, 0);
+    assert.ok(outLines.includes(`kept ${edited}: changed since it was written; no longer shipped, and no longer recorded`), outLines.join('\n'));
+    assert.equal(fs.existsSync(edited), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// harness-review a2: install over an older manifest dropped the records of what is no longer declared and left
+// those files behind, unrecorded; it now removes them as sync does, keeping one the user changed.
+test('installMain over an older manifest removes a file no longer shipped instead of leaving it unrecorded', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    const orphan = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+    fs.mkdirSync(path.dirname(orphan), { recursive: true });
+    fs.writeFileSync(orphan, 'stale content', 'utf8');
+    const manifest = readManifest(home);
+    manifest.files.push({ path: orphan, sha256: createHash('sha256').update('stale content').digest('hex') });
+    fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+    const { code } = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(code, 0);
+    assert.equal(fs.existsSync(orphan), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// harness-review a3: a project sync printed nothing for these two actions and exited 0 on a failure.
+test('a project sync names what was already gone and what it could not undo, and a failure exits 1', async () => {
+  const result = { actions: [{ kind: 'alreadyGone', path: 'a.json' }, { kind: 'failed', path: 'b.json', reason: 'EPERM' }], code: 0, version: '0.1.0' };
+  const { code, outLines, errLines } = await captureConsole(async () => reportSyncProject(result));
+  assert.equal(code, 1);
+  assert.ok(outLines.includes('already gone a.json'), outLines.join('\n'));
+  assert.ok(errLines.includes('could not undo b.json: EPERM'), errLines.join('\n'));
+  const clean = await captureConsole(async () => reportSyncProject({ ...result, actions: [result.actions[0]] }));
+  assert.equal(clean.code, 0);
 });
 
 test('uninstallMain removes the manifest under --home and exits 0', async () => {
@@ -574,6 +626,33 @@ test('uninstallMain says a gate log it could not remove was left, with the error
     const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
     assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
     assert.deepEqual(unseen.errLines, [`could not remove ${gateLogDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Found in review (Codex), 2026-10-18: a setting it could not write back was printed as modified by the user,
+// and the run exited 0 with the record gone. It is now said as a failure, with what to do, and fails.
+test('uninstallMain says a setting it could not write back, with the error code and what to do, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    acceptSessionMessages(home);
+    const settings = userSettingsPath(home);
+    const writeFile = (file, ...rest) => {
+      if (file === settings) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return fs.writeFileSync(file, ...rest);
+    };
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
+    assert.equal(code, 1, 'a setting left in place is not a clean uninstall');
+    assert.deepEqual(errLines, [`could not put crossSessionInbound back in ${settings} (EPERM): it is still recorded; run js-harness uninstall --global again, or set it back by hand`]);
+    assert.equal(outLines.some((line) => line.includes('modified by you') && line.includes(settings)), false, outLines.join('\n'));
+
+    // The record is kept, so a run again, once the file can be written, puts the setting back and passes.
+    const again = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([again.code, again.errLines], [0, []]);
+    assert.equal(fs.existsSync(settings) ? JSON.parse(fs.readFileSync(settings, 'utf8')).crossSessionInbound : 'gone', 'gone', 'install made the file, so it goes with the setting');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
