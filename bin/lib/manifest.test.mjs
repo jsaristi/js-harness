@@ -1247,7 +1247,7 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
   assert.deepEqual(guardHook.pointer, ['hooks', 'PreToolUse']);
   assert.deepEqual(guardHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(guardHook.entry(), {
-    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger)$',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session)$',
     hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
   });
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
@@ -1258,9 +1258,9 @@ test('the guard matcher is anchored: each tool it names matches, and a tool it d
   const named = [
     'Agent', 'SendMessage', 'mcp__ccd_session_mgmt__send_message', 'Bash', 'Write', 'Edit',
     'mcp__scheduled-tasks__create_scheduled_task', 'mcp__scheduled-tasks__update_scheduled_task',
-    'mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger',
+    'mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger', 'mcp__ccd_session__start_session',
   ];
-  assert.equal(named.length, 10);
+  assert.equal(named.length, 11);
   for (const tool of named) assert.ok(matcher.test(tool), tool);
   for (const tool of ['TodoWrite', 'NotebookEdit', 'MultiEdit', 'mcp__scheduled-tasks__delete_scheduled_task', 'mcp__scheduled-tasks__list_scheduled_tasks', 'CronCreate']) {
     assert.equal(matcher.test(tool), false, tool);
@@ -2536,12 +2536,19 @@ test('the orchestrator skill says the opening of a new work session comes back a
 
 // Every question of the project reaches the user in one place, the orchestrator's chat, through the host's
 // question tool; it is recorded before it is asked and its answer after, so a compaction loses neither.
+test('the orchestrator skill lands ready pull requests with the merge queue before any merge by hand (harness-review e1)', () => {
+  const text = components[2].content('0.1.0');
+  const queue = text.indexOf('`js-harness merge-queue --land`');
+  assert.ok(queue > 0, 'the skill names the merge queue');
+  assert.ok(queue < text.indexOf('A pull request that changes code is merged on a green run'), 'the queue comes before the hand-merge rules');
+});
+
 test('the orchestrator skill says how a question reaches the user: recorded, asked in one place, answered and carried', () => {
   const text = components[2].content('0.1.0');
   assert.ok(text.includes('\n## Questions to the user\n'));
   assert.ok(text.includes('`js-harness notify --to orchestrator --kind question`'));
-  assert.ok(text.includes('`--kind answer --question <n>`'));
-  assert.ok(text.includes('`--kind withdrawn --question <n>'));
+  assert.ok(text.includes('`--to orchestrator --kind answer --question <n>`'));
+  assert.ok(text.includes('`--to orchestrator --kind withdrawn --question <n>'));
   assert.ok(text.includes('The question tool holds the session that calls it until the user answers'));
   assert.ok(text.includes('in the reply to their next message'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));

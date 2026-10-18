@@ -60,7 +60,7 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 ### session-effort
 The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: `bin/rules.mjs`.
+- Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
 
 ### session-model

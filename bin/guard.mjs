@@ -6,6 +6,8 @@
 //   - The four tools that open a session in the app's Routines or in the cloud (`OPENING_TOOLS`): refused where the
 //     rule `sessions-open-in-sidebar` is declared, and the reason names `start_session` (`openingRefusal`;
 //     odd/tasks/session-channel.md, layer 3).
+//   - `mcp__ccd_session__start_session`: a session started with no effort, or above the rule `session-effort`, where
+//     that rule is declared (`sessionEffortRefusal`; odd/tasks/harness-review.md, T6c).
 //   - `SendMessage` and `mcp__ccd_session_mgmt__send_message`: the hour a message stamps as its time of sending
 //     against the clock (`hourRefusal`).
 //   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a recursive `rm` or
@@ -35,7 +37,8 @@ import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
 const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
-  + '  sessions-open-in-sidebar), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
+  + '  sessions-open-in-sidebar), a start_session that names no effort or one above the rule session-effort (where\n'
+  + '  the rules declare it), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
   + '  file that stamps today with an hour ahead of the clock; lets a git commit or merge wrapped in js-harness gate --\n'
@@ -77,10 +80,11 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal } = await import('./lib/guard.mjs');
-  if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && !MESSAGE_TOOLS.has(tool)) return null;
+  const { OPENING_TOOLS, SESSION_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal } = await import('./lib/guard.mjs');
+  if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
+  if (tool === SESSION_TOOL) return sessionEffortRefusal(input, rulesTextOf(rootOf(), readFile));
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
   const backticks = backtickRefusal(input.command);

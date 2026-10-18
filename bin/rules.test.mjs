@@ -381,10 +381,12 @@ test('applied in a project that does not declare the rules holds nothing to them
 });
 
 test('the three rules with no short name are read by the command, so the check lists it as their reader', async () => {
-  for (const id of ['session-model', 'session-effort', 'subagent-effort']) {
+  // session-effort is also read by the guard, which refuses a session started above it (harness-review T6c).
+  const readers = { 'session-model': 'Read by: bin/rules.mjs', 'session-effort': 'Read by: bin/lib/guard.mjs, bin/rules.mjs', 'subagent-effort': 'Read by: bin/rules.mjs' };
+  for (const [id, line] of Object.entries(readers)) {
     const out = [];
     assert.equal(await rulesMain([id], { stdout: (line) => out.push(line), stderr: () => {} }), 0);
-    assert.ok(out.includes('Read by: bin/rules.mjs'), `${id}: ${out.join('\n')}`);
+    assert.ok(out.includes(line), `${id}: ${out.join('\n')}`);
   }
 });
 
