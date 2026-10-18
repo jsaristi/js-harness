@@ -210,10 +210,21 @@ manifest of them.
 
 ```console
 $ js-harness install
-installed js-harness 0.1.0 (6 files) into ~
+installed js-harness 0.9.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-…
+registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
+registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
+registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
+registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
+registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session)$)
+registered hook entry in ~\.claude\settings.json: js-harness permit --hook || exit 0 (PermissionRequest)
+registered hook entry in ~\.claude\settings.json: js-harness guard --stop || exit 0 (Stop)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)
+registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
+registered hook entry in ~\.claude\settings.json: js-harness reply --hook || exit 0 (Stop)
+registered hook entry in ~\.codex\hooks.json: js-harness reply --hook || exit 0 (Stop)
 ```
 
 ### js-harness loop
@@ -273,7 +284,7 @@ for the project to commit; an edited block is kept and said.
 
 ```console
 $ js-harness sync
-up to date at 0.1.0
+up to date at 0.9.0
 ```
 
 ### js-harness uninstall
@@ -307,8 +318,8 @@ up. With `--global`, shows the machine's installed version, its manifest and the
 ```console
 $ js-harness status
 project: my-project
-pinned version: 0.1.0
-running version: 0.1.0
+pinned version: 0.9.0
+running version: 0.9.0
 this clone: set up (manifest: my-project\.git\js-harness\manifest.json)
 pin and running version: match
 ```
@@ -322,7 +333,7 @@ that and how to get the newest copy. When the tags cannot be listed it says why 
 
 ```console
 $ js-harness update
-no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it (installed: 0.1.0)
+no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it (installed: 0.9.0)
 ```
 
 ### js-harness upgrade
