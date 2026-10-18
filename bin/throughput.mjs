@@ -174,10 +174,11 @@ function gitFacts(ctx, { from, to }) {
     const sha = firstLine(commit.stdout);
     if (commit.error || commit.status !== 0 || sha === '') return null;
     // Each task document whole, so a task table's rows count as progress counts them (harness review d6).
-    const listed = git(run, root, ['ls-tree', '-r', '--name-only', sha, '--', 'odd/tasks', 'docs/ROADMAP.md']);
+    // NUL-delimited, so a path that is not ASCII comes whole rather than quoted, as `paceLogArgs` reads it (Codex).
+    const listed = git(run, root, ['ls-tree', '-r', '-z', '--name-only', sha, '--', 'odd/tasks', 'docs/ROADMAP.md']);
     if (listed.error || listed.status !== 0) return null;
     const files = [];
-    for (const file of listed.stdout.split(/\r?\n/).filter((name) => name === 'docs/ROADMAP.md' || /^odd\/tasks\/[^/]+\.md$/.test(name))) {
+    for (const file of listed.stdout.split('\0').filter((name) => name === 'docs/ROADMAP.md' || /^odd\/tasks\/[^/]+\.md$/.test(name))) {
       const shown = git(run, root, ['show', `${sha}:${file}`]);
       if (shown.error || shown.status !== 0) return null;
       files.push({ path: file, text: shown.stdout });
