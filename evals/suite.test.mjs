@@ -1856,14 +1856,58 @@ test('an arm is continued on the same cut, and refused on another or on none, be
   }
 });
 
-test('a run that names a minimal-with arm is refused until that arm is built, and nothing runs; --plan still states it', async () => {
+test('a minimal-with arm runs as minimal does with its one server from the template put in, and that server is pinned (G2, C6b)', async () => {
+  const m = machine();
+  write(path.join(m.realHome, '.claude.json'), JSON.stringify({ mcpServers: { context7: { command: 'c7' }, other: { command: 'o' } } }));
+  const { run, held } = seedingRun(m, '.claude/mcp-with.json');
+  const { io, deps } = depsFor(m, { runTrial: run });
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal,minimal-with-mcp-context7', '--efforts': 'medium' }), ENV, deps), 0, io.err);
+  assert.deepEqual(held, { minimal: false, 'minimal-with-mcp-context7': true });
+  const configs = new Map(run.trials.map((trial) => [trial.config.name, trial.config]));
+  const home = path.join(m.base, 'a-home');
+  assert.deepEqual(configs.get('minimal-with-mcp-context7').args({ effort: 'medium', home }), [...configs.get('minimal').args({ effort: 'medium', home }), '--mcp-config', path.join(home, '.claude', 'mcp-with.json')]);
+  const seeded = JSON.parse(fs.readFileSync(path.join(m.base, 'seeded', 'minimal-with-mcp-context7-alpha-medium', '.claude', 'mcp-with.json'), 'utf8'));
+  assert.deepEqual(seeded, { mcpServers: { context7: { command: 'c7' } } });
+  const doc = readDoc(m);
+  const pin = doc.arms?.['minimal-with-mcp-context7'];
+  assert.deepEqual({ ...pin, sha256: '' }, { base: 'minimal', components: ['mcp-context7'], sha256: '' });
+  assert.match(pin.sha256, /^[0-9a-f]{64}$/);
+  assert.equal('setup' in doc, false, 'the setup is the current arm\'s, and this run has none');
+  assert.deepEqual(templatesIn(m.workRoot), []);
+});
+
+test('a minimal-with arm is pinned by the server it puts in: another server changing continues it, its own changing stops it', async () => {
+  const m = machine();
+  const servers = (context7) => write(path.join(m.realHome, '.claude.json'), JSON.stringify({ mcpServers: { context7, other: { command: 'o' } } }));
+  const argv = (repeats) => runArgv(m, { '--configs': 'minimal,minimal-with-mcp-context7', '--efforts': 'medium', '--repeats': repeats });
+  servers({ command: 'c7' });
+  const first = depsFor(m);
+  assert.equal(await suiteMain(argv('1'), ENV, first.deps), 0, first.io.err);
+  const pinned = readDoc(m).arms['minimal-with-mcp-context7'].sha256;
+
+  write(path.join(m.realHome, '.claude.json'), JSON.stringify({ mcpServers: { context7: { command: 'c7' }, other: { command: 'changed' } } }));
+  const same = depsFor(m);
+  assert.equal(await suiteMain(argv('2'), ENV, same.deps), 0, same.io.err);
+  assert.equal(same.deps.runTrial.asked.length, first.deps.runTrial.asked.length, 'a server the arm does not put in is no part of its pin');
+  assert.equal(readDoc(m).arms['minimal-with-mcp-context7'].sha256, pinned);
+
+  servers({ command: 'c7', args: ['--other'] });
+  const before = fs.readFileSync(resultsFile(m));
+  const again = depsFor(m);
+  assert.equal(await suiteMain(argv('3'), ENV, again.deps), 1);
+  assert.match(again.io.err, new RegExp(`cut of minimal-with-mcp-context7: sha256 ${pinned.slice(0, 12)} -> sha256 [0-9a-f]{12}`));
+  assert.deepEqual(again.deps.runTrial.asked, []);
+  assert.deepEqual(fs.readFileSync(resultsFile(m)), before);
+});
+
+test('a minimal-with arm whose server the home does not hold stops the run before any trial; --plan states an arm\'s trials as unknown', async () => {
   const m = machine();
   const { io, deps } = depsFor(m);
-  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal,minimal-with-mcp-engram' }), ENV, deps), 2);
-  assert.match(io.err, /minimal-with-mcp-engram/);
-  assert.match(io.err, /not built yet/);
+  assert.equal(await suiteMain(runArgv(m, { '--configs': 'minimal,minimal-with-mcp-engram' }), ENV, deps), 1);
+  assert.match(io.err, /mcp-engram is not in the current arm's home/);
   assert.deepEqual(deps.runTrial.asked, []);
-  nothingCreated(m);
+  assert.equal(fs.existsSync(resultsFile(m)), false);
+  assert.deepEqual(templatesIn(m.workRoot), []);
   const plan = depsFor(m);
   assert.equal(await suiteMain([...runArgv(m, { '--configs': 'current,current-without-skills', '--efforts': 'medium' }), '--plan'], {}, plan.deps), 0, plan.io.err);
   assert.match(plan.io.out, /unknown for 4 trials, .*alpha current-without-skills medium \(1\)/);

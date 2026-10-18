@@ -41,8 +41,8 @@ import { markBatch } from '../bin/lib/batch-mark.mjs';
 import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
 import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
-import { HONESTY_CONFIGS, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, honestyConfig, honestyPin, minimalConfig, subagentConfig, subagentPin } from './configs.mjs';
-import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate, settledBytes } from './home.mjs';
+import { HONESTY_CONFIGS, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, honestyConfig, honestyPin, minimalConfig, minimalWithConfig, subagentConfig, subagentPin } from './configs.mjs';
+import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate, minimalWithDigest, seedMinimalWith, settledBytes } from './home.mjs';
 import { checkResults, reportLines, summarize } from './honesty-report.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { ArmError, parseArm } from './arms.mjs';
@@ -426,12 +426,16 @@ function fromTemplate(name, agent) {
   }
 }
 
-/** What a run pins of each arm of one component, `{ base, components, sha256 }` by name: the digest of what its
- * filter takes out of the template payload in `payload` (`withoutDigest`). */
-function armPins(names, agent, payload) {
+/** What a run pins of each arm of one component, `{ base, components, sha256 }` by name: for an arm of current the
+ * digest of what its filter takes out of the template payload (`withoutDigest`), for an arm of minimal the digest of
+ * the servers it puts in (`minimalWithDigest`), each read from the template in `templateDir`. */
+function armPins(names, agent, templateDir) {
   return Object.fromEntries(names.map((name) => {
     const { base, components } = parseArm(name, agent);
-    return [name, { base, components, sha256: withoutDigest(payload, components, agent, settledBytes) }];
+    const sha256 = base === 'minimal'
+      ? minimalWithDigest(templateDir, components)
+      : withoutDigest(path.join(templateDir, PAYLOAD), components, agent, settledBytes);
+    return [name, { base, components, sha256 }];
   }));
 }
 
@@ -865,14 +869,9 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
   }
 
   // The arms of one component (G2 of `odd/tasks/future-model-protocol.md`): those taken out of current run in a home
-  // seeded from its template. A minimal-with arm is named and planned, but its home is not built yet: run as it is it
-  // would be the minimal arm under another name, so a run that names one stops here.
+  // seeded from its template; a minimal-with arm (an MCP server, the only kind `parseArm` lets in) runs as minimal with
+  // that server read from the same template.
   const arms = args.configs.filter((name) => parseArm(name, agentOf(args)) !== null);
-  const unbuilt = arms.filter((name) => parseArm(name, agentOf(args)).base !== 'current');
-  if (unbuilt.length > 0) {
-    warn(`${unbuilt.join(', ')}: the minimal-with arms are not built yet, so no trial of them can run; --plan states what they would cost.\n`);
-    return 2;
-  }
 
   const binaryFlag = COMMAND_LINES[agentOf(args)].binary;
   const binary = codex ? args.codex : args.claude;
@@ -1017,8 +1016,10 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     for (const signal of SIGNALS) proc.on(signal, onSignal);
     let seed;
     const seeds = {};
-    // An arm of one component is always beside its base (`parseArgs`), so a run of one builds the template too.
-    if (args.configs.includes('current')) {
+    // Every arm of one component is read from the template, a minimal-with arm too, so a run of one builds it; the setup
+    // recorded is the current arm's, checked and written only when the run holds it.
+    const withCurrent = args.configs.includes('current');
+    if (withCurrent || arms.length > 0) {
       fs.mkdirSync(workRoot, { recursive: true });
       templateParent = fs.mkdtempSync(path.join(workRoot, TEMPLATE_PREFIX));
       const templateDir = path.join(templateParent, 'template');
@@ -1029,7 +1030,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       // The setup the current arm runs on (G6 of `odd/tasks/future-model-protocol.md`): recorded with the run, and a
       // run continued only on the same one. A file whose current trials were recorded before setups were has none,
       // so nothing says what they ran on, and it is not continued either.
-      const changes = setupChanges(doc, built.fingerprint);
+      const changes = withCurrent ? setupChanges(doc, built.fingerprint) : [];
       if (changes.length > 0) {
         warn(refusalOf(file, changes));
         return 1;
@@ -1037,17 +1038,17 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       // Each arm of one component is the same template with a filter after the seed, pinned by what the filter takes
       // out: a component the template does not hold, or a cut that moved since the file was recorded, stops the run
       // here, before any trial, and nothing is written.
-      const pins = armPins(arms, agentOf(args), path.join(templateDir, PAYLOAD));
+      const pins = armPins(arms, agentOf(args), templateDir);
       const cuts = armChanges(doc, pins);
       if (cuts.length > 0) {
         warn(refusalOf(file, cuts));
         return 1;
       }
-      doc.setup = built.fingerprint;
+      if (withCurrent) doc.setup = built.fingerprint;
       if (arms.length > 0) doc.arms = { ...doc.arms, ...pins };
       const seedOf = codex ? seedFromCodexTemplate : seedFromTemplate;
       seed = seedOf(templateDir, { runInit });
-      for (const name of arms) seeds[name] = seedOf(templateDir, { runInit, without: pins[name].components });
+      for (const name of arms) seeds[name] = pins[name].base === 'minimal' ? seedMinimalWith(templateDir, pins[name].components) : seedOf(templateDir, { runInit, without: pins[name].components });
     }
     let configs;
     if (codex) {
@@ -1059,7 +1060,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     } else {
       const options = { command: args.claude, model, permissionMode: args.permissionMode };
       const configOf = (name) => (name === 'current' ? currentConfig({ ...options, seed })
-        : Object.hasOwn(seeds, name) ? currentConfig({ ...options, name, seed: seeds[name] })
+        : Object.hasOwn(seeds, name) ? (parseArm(name, 'claude').base === 'minimal' ? minimalWithConfig : currentConfig)({ ...options, name, seed: seeds[name] })
         : isSubagentConfig(name) ? subagentConfig(name, options) : isHonestyConfig(name) ? honestyConfig(name, options) : minimalConfig(options));
       // The token goes into the trial's env here and nowhere else: the allowlist inherits CLAUDE_CODE_OAUTH_TOKEN
       // from the launching environment, and this overrides whatever that holds. A subagent config lays its two

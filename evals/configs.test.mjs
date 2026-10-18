@@ -8,7 +8,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   DELEGATION_MODES, HONESTY_CONFIGS, HONESTY_SENTENCES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig,
-  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, minimalConfig, prepareSandbox, sandboxEnv, sandboxPaths, subagentConfig, subagentPin,
+  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, minimalConfig, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
+  subagentConfig, subagentPin,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
 import { childEnv, loadTask, planTrials, runTrial } from './runner.mjs';
@@ -209,6 +210,18 @@ test('minimal passes the shared flags, then no settings, no MCP and no slash com
     assert.ok(args.includes(''), 'the empty string is its own argv element');
     assert.ok(!args.includes('--bare'));
   }
+});
+
+test('a minimal-with arm is the minimal arm under its own name, with the server it puts in passed by --mcp-config from the trial home (G2, C6b)', async () => {
+  const seeded = [];
+  const config = minimalWithConfig({ ...OPTIONS, name: 'minimal-with-mcp-context7', seed: async (context) => seeded.push(context.home) });
+  assert.equal(config.name, 'minimal-with-mcp-context7');
+  assert.equal(minimalWithMcpFile(HOME), path.join(HOME, '.claude', 'mcp-with.json'));
+  assert.deepEqual(config.args({ effort: 'medium', home: HOME }), [...sharedArgs('medium'), ...MINIMAL_ONLY, '--mcp-config', minimalWithMcpFile(HOME)]);
+  assert.deepEqual(config.env({ home: HOME, prepared: { engramPort: PORT } }), minimalConfig(OPTIONS).env({ home: HOME, prepared: { engramPort: PORT } }));
+  assert.throws(() => config.args({ effort: 'medium' }), /home/);
+  assert.throws(() => minimalWithConfig({ ...OPTIONS, seed: async () => {} }), /name/);
+  assert.throws(() => minimalWithConfig({ ...OPTIONS, name: 'minimal-with-mcp-context7' }), /seed/);
 });
 
 test('current passes only the shared flags, and --effort is the one flag that varies', () => {

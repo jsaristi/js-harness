@@ -105,7 +105,16 @@ const servers = (() => {
   }
 })().filter((name) => name !== 'engram');
 if (mode === 'keeps-servers' && hasPlugin && !servers.includes('context7')) servers.push('context7');
-const TOOLS = [{ name: 'Bash' }, { name: 'Write' }, { name: 'Read' }, ...(hasPlugin ? [{ name: 'mcp__engram__mem_save' }, { name: 'Agent' }, ...servers.map((name) => ({ name: `mcp__${name}__ping` }))] : [])];
+// A minimal-with arm's server, which the real claude reads from `--mcp-config`: the stand-in reads the file that flag
+// names in the sandbox, since the probe's tests replace the arguments it is given.
+const putIn = (() => {
+  try {
+    return Object.keys(JSON.parse(readIfThere(path.join(process.env.CLAUDE_CONFIG_DIR ?? '', 'mcp-with.json')) || '{}').mcpServers ?? {});
+  } catch {
+    return [];
+  }
+})();
+const TOOLS = [{ name: 'Bash' }, { name: 'Write' }, { name: 'Read' }, ...putIn.map((name) => ({ name: `mcp__${name}__ping` })), ...(hasPlugin ? [{ name: 'mcp__engram__mem_save' }, { name: 'Agent' }, ...servers.map((name) => ({ name: `mcp__${name}__ping` }))] : [])];
 const post = async (messages, { model = 'claude-opus-5-5', system: sent = system, tools = TOOLS } = {}) => {
   const response = await fetch(`${process.env.ANTHROPIC_BASE_URL}/v1/messages?beta=true`, {
     method: 'POST',

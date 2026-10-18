@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { buildTemplate, initWorkspace, removeTemplate, seedFromTemplate, seedHome } from './home.mjs';
-import { currentConfig, minimalConfig, prepareSandbox, sandboxEnv } from './configs.mjs';
+import { buildTemplate, initWorkspace, removeTemplate, seedFromTemplate, seedHome, seedMinimalWith } from './home.mjs';
+import { currentConfig, minimalConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv } from './configs.mjs';
 import { childEnv, loadTask, runTrial } from './runner.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -642,6 +642,27 @@ test('a seed without components takes them out of the trial\'s home, and without
   assert.equal(calls.length, 0, 'an arm without project does not run js-harness init');
   await seedFromTemplate(templateDir, { runInit, without: ['agents'] })({ home: path.join(tmp('trial'), 'home'), workspace: tmp('workspace'), engramPort: PORT });
   assert.equal(calls.length, 1);
+});
+
+test('the seed of a minimal-with arm writes only the server it puts in, as the current arm would get it, and nothing else of the template (G2, C6b)', async () => {
+  const { templateDir } = setup();
+  assert.throws(() => seedMinimalWith(templateDir, ['mcp-nothing']), /mcp-nothing is not in the current arm's home/);
+  assert.throws(() => seedMinimalWith(templateDir, ['skills']), /minimal-with/);
+  assert.throws(() => seedMinimalWith(tmp('nothing-here'), ['mcp-other']), /template/);
+
+  const home = path.join(tmp('trial'), 'home');
+  fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+  await seedMinimalWith(templateDir, ['mcp-other'])({ home, workspace: tmp('workspace'), engramPort: PORT });
+  assert.deepEqual(JSON.parse(fs.readFileSync(minimalWithMcpFile(home), 'utf8')), { mcpServers: { other: { command: 'other', args: [], env: { KEEP: '1' } } } });
+  assert.deepEqual(fs.readdirSync(home), ['.claude'], 'nothing else of the template is in the home');
+  assert.deepEqual(fs.readdirSync(path.join(home, '.claude')), ['mcp-with.json']);
+
+  const engramHome = path.join(tmp('trial'), 'home');
+  fs.mkdirSync(path.join(engramHome, '.claude'), { recursive: true });
+  await seedMinimalWith(templateDir, ['mcp-engram'])({ home: engramHome, workspace: tmp('workspace'), engramPort: PORT });
+  assert.deepEqual(JSON.parse(fs.readFileSync(minimalWithMcpFile(engramHome), 'utf8')).mcpServers.engram, {
+    command: 'engram', args: ['mcp'], env: { ENGRAM_DATA_DIR: path.join(engramHome, '.engram'), ENGRAM_PORT: String(PORT) },
+  }, 'the engram server is the trial\'s own, as seedHome makes it');
 });
 
 // ---- the fingerprint of the setup (G6 of odd/tasks/future-model-protocol.md) ---------------------------

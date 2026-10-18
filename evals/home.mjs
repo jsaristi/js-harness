@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sandboxEnv } from './configs.mjs';
+import { minimalWithMcpFile, sandboxEnv } from './configs.mjs';
 import { exists, isWithin, resolveReal } from './paths.mjs';
 import { assertTrialPort } from './ports.mjs';
 import { childEnv } from './runner.mjs';
@@ -343,13 +343,55 @@ export function seedHome(templateDir, home, { engramPort } = {}) {
   const claudeJson = path.join(home, '.claude', '.claude.json');
   if (fs.existsSync(claudeJson)) {
     const json = JSON.parse(fs.readFileSync(claudeJson, 'utf8'));
-    if (isObject(json.mcpServers?.engram)) {
-      const engram = json.mcpServers.engram;
-      const { ENGRAM_URL, ENGRAM_SOCKET, ...kept } = isObject(engram.env) ? engram.env : {};
-      engram.env = { ...kept, ENGRAM_DATA_DIR: path.join(home, '.engram'), ENGRAM_PORT: String(engramPort) };
-    }
+    if (isObject(json.mcpServers?.engram)) trialEngram(json.mcpServers.engram, home, engramPort);
     writeJson(claudeJson, json);
   }
+}
+
+/** Makes the engram server entry `engram` the trial's own, in place: its data in `<home>/.engram`, its port
+ * `engramPort`, and no `ENGRAM_URL` or `ENGRAM_SOCKET` that would reach another server. */
+function trialEngram(engram, home, engramPort) {
+  const { ENGRAM_URL, ENGRAM_SOCKET, ...kept } = isObject(engram.env) ? engram.env : {};
+  engram.env = { ...kept, ENGRAM_DATA_DIR: path.join(home, '.engram'), ENGRAM_PORT: String(engramPort) };
+}
+
+/** The servers a minimal-with arm puts in, by name, as the template's `.claude.json` holds them. Throws unless
+ * `templateDir` is a template, every id of `components` is a server's (`mcp-<name>`) and the template holds it. */
+function chosenServers(templateDir, components) {
+  readTemplate(templateDir);
+  const servers = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(templateDir, PAYLOAD, '.claude', '.claude.json'), 'utf8')).mcpServers ?? {};
+    } catch {
+      return {};
+    }
+  })();
+  const names = components.map((id) => {
+    if (!id.startsWith('mcp-')) throw new Error(`${id}: a minimal-with arm puts in an MCP server only`);
+    const name = id.slice('mcp-'.length);
+    if (!isObject(servers[name])) throw new Error(`${id} is not in the current arm's home, so an arm with it would be the minimal arm under another name`);
+    return name;
+  });
+  return Object.fromEntries(names.map((name) => [name, servers[name]]));
+}
+
+/** The pin of a minimal-with arm: the SHA-256 of the servers it puts in, as the template holds them, so a change to
+ * one of them stops a run that recorded trials with the other, and a change to any other server does not. */
+export function minimalWithDigest(templateDir, components) {
+  return crypto.createHash('sha256').update(JSON.stringify(chosenServers(templateDir, components))).digest('hex');
+}
+
+/** The `seed` of a minimal-with arm of MCP servers (`minimalWithConfig`): writes to `minimalWithMcpFile` of the trial's
+ * home only the servers `components` names, as the current arm would get them (`trialEngram` for engram's), and
+ * nothing else of the template. Checked now, when the seed is made (`chosenServers`). */
+export function seedMinimalWith(templateDir, components) {
+  const servers = chosenServers(templateDir, components);
+  return async ({ home, engramPort }) => {
+    assertTrialPort(engramPort);
+    const chosen = structuredClone(servers);
+    if (chosen.engram) trialEngram(chosen.engram, home, engramPort);
+    writeJson(minimalWithMcpFile(home), { mcpServers: chosen });
+  };
 }
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
