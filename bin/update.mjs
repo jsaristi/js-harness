@@ -128,7 +128,8 @@ function quoteForShell(value, platform) {
 
 /** A word for a cmd.exe line: as it is when it holds nothing cmd.exe reads, else quoted. A `.cmd` file found on the
  * path and named in quotes gets a wrong `%~dp0`, the folder pnpm's own shim starts from ("El sistema no puede
- * encontrar la ruta especificada", T2), so a plain command name is never quoted. */
+ * encontrar la ruta especificada", T2), so a plain command name is never quoted. Quotes do not keep cmd.exe from
+ * expanding `%NAME%`, and a `"` ends them, so `upgradeMain` refuses a word holding either before it runs. */
 function cmdWord(word) {
   return /^[\w@+=:,./\\-]+$/.test(word) ? word : quoteForShell(word, 'win32');
 }
@@ -454,6 +455,11 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   const words = splitCommand(resolvePm(opts.pm, env));
   const kind = pmKind(words);
   const plan = installPlan(kind, latest.file ?? latest.spec, opts.prefix, env, platform);
+  const unsafe = platform === 'win32' ? [...words, ...plan.args, opts.home ?? ''].find((word) => /["%]/.test(word)) : undefined;
+  if (unsafe !== undefined) {
+    console.error(`upgrade: ${unsafe} holds " or %, which cmd.exe would change: nothing was installed`);
+    return 1;
+  }
   const binDir = kind === 'pnpm' ? pnpmBinDir(spawn, words, opts.prefix, platform) : null;
   const isPnpmRunning = () => pnpmRunning(spawn, platform);
   const staleLock = clearPnpmLock(binDir, undefined, isPnpmRunning);

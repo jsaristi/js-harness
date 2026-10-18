@@ -373,6 +373,34 @@ test('updateMain reports an update the source holds and still exits 0', async ()
   }
 });
 
+// harness-review R1-001: cmd.exe expands %NAME% inside quotes and a " ends them, so such a value would reach npm
+// changed; it is refused before anything runs.
+test('on Windows a value holding " or % is refused before the install, with nothing run', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-');
+  const source = makeTmpDir('js-harness-upgrade-src-');
+  try {
+    fs.writeFileSync(path.join(source, 'js-harness-0.9.0.tgz'), '');
+    for (const argv of [['--prefix', path.join(home, '100%TEMP%')], ['--pm', 'npm --cache "x']]) {
+      const calls = [];
+      const lines = [];
+      const original = console.error;
+      console.error = (line) => lines.push(String(line));
+      let code;
+      try {
+        code = await upgradeMain(['--source', source, '--home', home, ...argv], {}, pathCopyAnswers('0.9.0', calls), 'win32');
+      } finally {
+        console.error = original;
+      }
+      assert.equal(code, 1, argv.join(' '));
+      assert.equal(calls.length, 0, argv.join(' '));
+      assert.match(lines.join('\n'), /^upgrade: .* holds " or %, which cmd\.exe would change: nothing was installed$/m, argv.join(' '));
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
 test('upgradeMain installs the resolved spec and syncs the newly installed binary (win32 layout)', async () => {
   const home = makeTmpDir('js-harness-upgrade-home-');
   const prefix = makeTmpDir('js-harness-upgrade-prefix-');

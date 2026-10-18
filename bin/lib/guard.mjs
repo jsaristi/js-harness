@@ -79,7 +79,12 @@ export function sessionEffortRefusal(toolInput, projectData) {
     return 'js-harness guard: start_session names no effort, so the new session would run at this session\'s '
       + `(rule session-effort: ${rule.value}). Pass effort "${rule.value}" or lower with context "fresh"; a fork cannot set its own effort.`;
   }
-  if (EFFORTS.indexOf(effort) <= EFFORTS.indexOf(rule.value)) return null;
+  const asked = EFFORTS.indexOf(effort);
+  if (asked === -1) {
+    return `js-harness guard: start_session asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. `
+      + `Pass effort "${rule.value}" or lower.`;
+  }
+  if (asked <= EFFORTS.indexOf(rule.value)) return null;
   return `js-harness guard: start_session asks for effort "${effort}", above the rule session-effort: ${rule.value}. `
     + `Pass effort "${rule.value}" or lower; a higher one is his to set.`;
 }

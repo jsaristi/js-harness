@@ -134,6 +134,8 @@ test('in this repository a session started with no effort, or above the rule\'s,
       + 'above the rule session-effort: high. Pass effort "high" or lower; a higher one is his to set.', effort);
   }
   assert.equal(sessionEffortRefusal({ ...BRIEF, context: 'fork' }, HERE), noEffort);
+  assert.equal(sessionEffortRefusal({ ...BRIEF, effort: 'ultra' }, HERE), 'js-harness guard: start_session asks for effort "ultra", '
+    + 'which is not one of low, medium, high, xhigh, max. Pass effort "high" or lower.');
 });
 
 test('a session started at the rule\'s effort or lower passes, and so do the calls that carry no brief', () => {

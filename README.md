@@ -283,7 +283,9 @@ pnpm gets `add -g`. The install is judged by the installed copy's own `--version
 package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file
 in use, and `upgrade` then says so and goes on. With pnpm, its bin folder's lock is removed when
 the install left it, or when it is older than ten minutes. `--prefix <dir>` installs into a
-folder of its own: npm's prefix, or pnpm's home with every folder pnpm writes inside it.
+folder of its own: npm's prefix, or pnpm's home with every folder pnpm writes inside it. On
+Windows the install runs through cmd.exe, which changes a `"` or a `%`, so a value holding either is
+refused before anything is installed.
 
 ```console
 $ js-harness upgrade
