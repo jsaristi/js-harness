@@ -41,6 +41,19 @@ export function copyRepoToStaging(dest, repoRoot = REPO_ROOT) {
   });
 }
 
+/** The next minor of `version` (`x.y.z`), its patch back to 0: the release an upgrade proof installs over it. */
+export function nextVersion(version) {
+  const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version));
+  if (!parts) throw new Error(`${JSON.stringify(version)} is not a version x.y.z`);
+  return `${parts[1]}.${Number(parts[2]) + 1}.0`;
+}
+
+/** Where `npm install -g --prefix <prefix>` puts this package: `<prefix>/node_modules` on Windows,
+ * `<prefix>/lib/node_modules` elsewhere. */
+export function globalPackageDir(prefix, platform = process.platform) {
+  return platform === 'win32' ? path.join(prefix, 'node_modules', 'js-harness') : path.join(prefix, 'lib', 'node_modules', 'js-harness');
+}
+
 export function bumpVersion(dir, version) {
   const pkgPath = path.join(dir, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));

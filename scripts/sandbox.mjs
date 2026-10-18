@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion } from './lib.mjs';
+import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion, nextVersion } from './lib.mjs';
 
 function assertThat(condition, message) {
   if (!condition) throw new Error(message);
@@ -40,6 +40,8 @@ function main() {
 
   copyRepoToStaging(stage);
   const baseVersion = JSON.parse(fs.readFileSync(path.join(stage, 'package.json'), 'utf8')).version;
+  // The upgrade goes to the next minor of the repository's version, whatever it is (harness review e6).
+  const TO = nextVersion(baseVersion);
 
   const pack01 = npm(npmCli, ['pack', '--pack-destination', sandboxRoot], { cwd: stage });
   assertThat(pack01.status === 0, `npm pack (${baseVersion}) exited ${pack01.status}: ${pack01.stderr}`);
@@ -52,12 +54,12 @@ function main() {
   const binPath = installedBinPath(prefix);
   assertThat(fs.existsSync(binPath), `expected the installed bin at ${binPath}`);
 
-  bumpVersion(stage, '0.2.0');
+  bumpVersion(stage, TO);
   const pack02 = npm(npmCli, ['pack', '--pack-destination', releases], { cwd: stage });
-  assertThat(pack02.status === 0, `npm pack (0.2.0) exited ${pack02.status}: ${pack02.stderr}`);
+  assertThat(pack02.status === 0, `npm pack (${TO}) exited ${pack02.status}: ${pack02.stderr}`);
   assertThat(
-    fs.existsSync(path.join(releases, 'js-harness-0.2.0.tgz')),
-    'expected js-harness-0.2.0.tgz in releases/',
+    fs.existsSync(path.join(releases, `js-harness-${TO}.tgz`)),
+    `expected js-harness-${TO}.tgz in releases/`,
   );
 
   const node = process.execPath;
@@ -113,10 +115,10 @@ function main() {
   console.log(`Launch: ${launchCommand}`);
   console.log('');
   console.log('Try, in order:');
-  console.log(`  Status    -> installed ${baseVersion}, update available: 0.2.0`);
+  console.log(`  Status    -> installed ${baseVersion}, update available: ${TO}`);
   console.log('  Install   -> writes the skill files + manifest under the sandbox home');
-  console.log('  Upgrade   -> installs 0.2.0 into the sandbox prefix and re-syncs');
-  console.log('  Status    -> now 0.2.0, no update available');
+  console.log(`  Upgrade   -> installs ${TO} into the sandbox prefix and re-syncs`);
+  console.log(`  Status    -> now ${TO}, no update available`);
   console.log('  Uninstall -> removes exactly what Install/Upgrade wrote');
   console.log('');
   console.log(`Delete afterwards: remove ${sandboxRoot} recursively.`);
