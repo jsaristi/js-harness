@@ -1344,10 +1344,10 @@ test('syncMain with a pin different from the running version writes nothing, exi
     const message = errLines.join('\n');
     assert.match(message, /9\.9\.9/);
     assert.ok(message.includes(currentVersion()));
-    // No version is tagged before 1.0.0: the message names no install by a tag, only what works today.
-    assert.equal(message.includes('#v'), false, 'no version is tagged, so no command installs one by its tag');
-    assert.match(message, /no version of js-harness is tagged yet/i);
-    assert.ok(message.includes('install the newest copy on this machine (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it) and '), 'the newest copy is the one that can be installed, by whichever package manager put the old one there');
+    // Versions are tagged (docs/ROADMAP.md, "Versioning"): the message names the install of the pinned version by its
+    // tag, and the newest copy for a pin that is not tagged.
+    assert.doesNotMatch(message, /tagged yet/i);
+    assert.ok(message.includes('install it by its tag (npm i -g github:jsaristi/js-harness#v9.9.9, or the same with the package manager that installed it) when that version is tagged, or the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), and '), 'the pinned version is installed by its tag, by whichever package manager put the old one there');
     assert.ok(message.includes(`set the pin to ${currentVersion()} in harness.json`));
     assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
     assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')), false);

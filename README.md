@@ -260,12 +260,12 @@ pin and running version: match
 
 Says whether a newer release exists: the newest `vX.Y.Z` tag of the repository, read with
 `git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
-another repository). No release is tagged before 1.0.0, so for now it says that and how to get
-the newest copy. When the tags cannot be listed it says why and exits 1.
+another repository). Releases are tagged from v0.9.0; where the repository holds no tag it says
+that and how to get the newest copy. When the tags cannot be listed it says why and exits 1.
 
 ```console
 $ js-harness update
-no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get the newest copy: npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it (installed: 0.1.0)
+no release of js-harness is tagged yet; to get the newest copy: npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it (installed: 0.1.0)
 ```
 
 ### js-harness upgrade
@@ -278,7 +278,7 @@ asked.
 
 ```console
 $ js-harness upgrade
-nothing was installed: no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get the newest copy: npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it
+nothing was installed: no release of js-harness is tagged yet; to get the newest copy: npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it
 ```
 
 ### js-harness doctor
@@ -867,7 +867,7 @@ it).
 While the orchestrator holds the relay, a card of another session reaches it first:
 
 ```
-$ js-harness permit lease            # the orchestrator, at its start and at each re-arm of its watch (40 minutes)
+$ js-harness permit lease            # the orchestrator, at its start (40 minutes; its wait renews it)
 $ js-harness permit list             # the waiting cards: id, time left, session, tool, command
 $ js-harness permit allow p1a2b3c4d5
 $ js-harness permit deny p1a2b3c4d5 --reason "its work merged in PR 305"
@@ -929,6 +929,10 @@ Waits in the background for one condition and ends when it holds: a pull request
 commit or a file content on `origin/main`, or a notice addressed to a session in the channel
 record. It says at start what it waits for and what ends it, so a session keeps working instead
 of ending its turn to wait.
+
+A wait for a notice to the orchestrator, run by the session that holds the permit relay's lease,
+renews that lease on every tick, to the longer of 40 minutes and its interval plus 5, so the
+relay does not lapse while the lead waits; it never takes or changes another session's lease.
 
 A work session's wait, whatever its condition, also ends on a notice to that session's own
 number, so a session that waits on a pull request still wakes for the lead. The number is read

@@ -78,8 +78,8 @@ function copyVersion() {
  * In the harness's own checkout main's list is read with git, offline too. Outside it, a project that pins another
  * version than the copy's, or a `JS_HARNESS_REPO` naming another repository, has nothing to compare with here: `n/a`;
  * a pinned project and a copy whose own version cannot be read is `unknown`, since the pin may be the copy's.
- * A pin of the copy's own version is compared: `init` writes one in every project, and before 1.0.0 every copy is the
- * same version, taken from main. */
+ * A pin of the copy's own version is compared: `init` writes one in every project, and a copy that follows main
+ * carries main's version. */
 export async function harnessRulesRow({ project, declared, env = {}, online, spawn = spawnSync, fetch: fetchImpl = fetch, copy = RULES, version = copyVersion() }) {
   const rulesHash = shippedRulesHash(copy);
   const row = (upToDate, main = null, extra = {}) => ({

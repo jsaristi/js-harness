@@ -1048,7 +1048,7 @@ test('doctorMain --json carries a multi-step fix as an array, in the row fix map
 
 // --- the hook commands check: the copy on the path answers the recorded `js-harness resume` hook commands ---
 
-const HOOK_GAP_FIX = 'the js-harness on the path is older than these entries: install the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), then run js-harness doctor again';
+const HOOK_GAP_FIX = 'the js-harness on the path is older than these entries: run js-harness upgrade, or install the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), then run js-harness doctor again';
 
 test('doctorMain reports a recorded hook command that the copy on the path does not answer, in the table, under Fix and in --json', async () => {
   const home = makeTmpHome();
@@ -1079,7 +1079,7 @@ test('doctorMain reports a recorded hook command that the copy on the path does 
     const text = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
     assert.equal(text.code, 0);
     assert.match(text.output, /hook-commands\s+n\/a\s+stale\s+n\/a\s+n\/a/);
-    assert.match(text.output, /\n  hook-commands \(claude\):\n    the js-harness on the path is older than these entries: install the newest copy \(npm i -g/);
+    assert.match(text.output, /\n  hook-commands \(claude\):\n    the js-harness on the path is older than these entries: run js-harness upgrade, or install the newest copy \(npm i -g/);
     assert.match(text.output, /\n    js-harness resume --pause: exit 2; stderr: Unknown command: resume\n/);
 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });

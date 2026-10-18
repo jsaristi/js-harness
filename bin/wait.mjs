@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { readNotices, senderOf } from './lib/channel.mjs';
 import { mainCheckout, projectSlug, roleNamed, roleOfTitle } from './lib/sessions.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { renewOwnLease } from './permit.mjs';
 
 /** How often a wait checks, and how long it waits, when --every and --for do not say: the declared rules
  * `wait-every` and `wait-for` (bin/lib/rules-data.mjs). */
@@ -30,6 +31,9 @@ const USAGE = [
   '  --main-file <path> --contains <text>: the file of origin/main holds the text, after git fetch origin.',
   "  --notice-to <role>: a notice addressed to orchestrator (or ORQ), or to a work session's number, is in the channel",
   '    record and was written after the wait started; its kind, sender and text are printed.',
+  '  --notice-to orchestrator (or ORQ) run by a session that holds the relay lease (js-harness permit lease): every check',
+  '    renews that lease to now plus the longer of 40 minutes and --every plus 5 minutes, so it outlasts the wait; another',
+  '    session\'s lease, an expired one, or none is left as it is, and a failure to renew is said once on stderr.',
   "  Every wait run by a work session (its title's number, read from the transcript CLAUDE_CODE_SESSION_ID names) also",
   '    ends on a notice to that number written after it started (exit 3): it prints the notice and the same wait to',
   '    run again. A session with no number keeps its one condition.',
@@ -250,6 +254,7 @@ export async function waitMain(
     readFile = (file) => fs.readFileSync(file, 'utf8'),
     readdir = (dir) => fs.readdirSync(dir),
     homedir = os.homedir,
+    renew = renewOwnLease,
   } = {},
 ) {
   let parsed;
@@ -276,11 +281,31 @@ export async function waitMain(
   const own = number === null ? null : { role: 'work', number };
   const watched = own !== null && !(parsed.condition.kind === 'notice' && parsed.condition.role.role === 'work' && parsed.condition.role.number === number);
   const ends = watched ? `ends when it holds, on a notice to ${number}, or after ${minutes} minutes` : `ends when it holds, or after ${minutes} minutes`;
-  stdout(`js-harness wait: waits for ${phrase}; ${ends}; stop it with TaskStop when it is no longer needed`);
+
+  // A notice wait for the orchestrator renews the relay lease its session holds, on every check (odd/tasks/harness-review.md,
+  // T3, S5a), so the lease outlasts the wait. The opening line says so only when the first renewal holds the lease.
+  const leaseSession = parsed.condition.kind === 'notice' && parsed.condition.role.role === 'orchestrator' ? env.CLAUDE_CODE_SESSION_ID : undefined;
+  let leaseRoot = null;
+  let lastLeaseReason = null;
+  const renewLease = () => {
+    try {
+      leaseRoot ??= mainCheckout(bounded, cwd);
+      return renew({ home, cwd, session: leaseSession, now: new Date(now()), everySeconds: seconds, projectRoot: () => leaseRoot }).renewed;
+    } catch (err) {
+      if (err.message !== lastLeaseReason) {
+        lastLeaseReason = err.message;
+        stderr(`js-harness wait: the relay lease is not renewed (${err.message}); it is tried again at the next tick`);
+      }
+      return false;
+    }
+  };
+  const renews = leaseSession !== undefined && leaseSession !== '' && renewLease();
+  stdout(`js-harness wait: waits for ${phrase}; ${ends}${renews ? '; renews the relay lease while it waits' : ''}; stop it with TaskStop when it is no longer needed`);
 
   let lastReason = null;
   let lastWatchReason = null;
   for (;;) {
+    if (leaseSession !== undefined && leaseSession !== '') renewLease();
     if (watched) {
       let looked;
       try {

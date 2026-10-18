@@ -1565,7 +1565,7 @@ test('hookCommandPlan plans a command named twice, with and without its guard, o
   ]);
 });
 
-const HOOK_FIX = 'the js-harness on the path is older than these entries: install the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), then run js-harness doctor again';
+const HOOK_FIX = 'the js-harness on the path is older than these entries: run js-harness upgrade, or install the newest copy (npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it), then run js-harness doctor again';
 
 function findCheck(id) {
   const check = checks.find((c) => c.id === id);

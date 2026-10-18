@@ -33,9 +33,9 @@ function resolvePm(pm, env) {
   return pm ?? env.JS_HARNESS_PM ?? 'npm';
 }
 
-/** What the commands say where the repository holds no release tag: none is tagged before 1.0.0
- * (docs/ROADMAP.md, "Release source"), and how a machine gets the newest copy until then. */
-export const NO_RELEASE = `no release of js-harness is tagged yet (versions are tagged from 1.0.0); to get the newest copy: ${INSTALL_NEWEST}`;
+/** What the commands say where the repository holds no release tag (the first is v0.9.0, docs/ROADMAP.md, "Versioning"),
+ * and how a machine gets the newest copy then. */
+export const NO_RELEASE = `no release of js-harness is tagged yet; to get the newest copy: ${INSTALL_NEWEST}`;
 
 /** How long `git ls-remote` may take to list the tags before the lookup gives up. */
 const TAG_LOOKUP_MS = 30_000;
@@ -43,8 +43,8 @@ const TAG_LOOKUP_MS = 30_000;
 class TagLookupError extends Error {}
 
 /** The newest release: in `source`, a folder of `npm pack` tarballs the caller named with `--source` or
- * `JS_HARNESS_SOURCE`, as `{ version, file }`; else the newest `vX.Y.Z` tag of `repo` (the private repository
- * unless `--repo` or `JS_HARNESS_REPO` names another), as `{ version, spec }`, read with the machine's git and its
+ * `JS_HARNESS_SOURCE`, as `{ version, file }`; else the newest `vX.Y.Z` tag of `repo` (the public
+ * repository unless `--repo` or `JS_HARNESS_REPO` names another), as `{ version, spec }`, read with the machine's git and its
  * own credentials. `null` when the folder or the repository holds no release. The public registry is never asked
  * about the name `js-harness`, which nobody holds there, so whoever registered it would decide what `upgrade`
  * installs and runs. A source folder that cannot be read throws, as `fs.readdirSync` does; tags that cannot be
@@ -73,8 +73,8 @@ function latestFor(opts) {
   } catch (err) {
     if (err instanceof TagLookupError) {
       return {
-        problem: `cannot list the tags of ${opts.repo}: ${err.message}; the repository is private, so git needs a ` +
-          'credential for it, or name a folder of release tarballs with --source',
+        problem: `cannot list the tags of ${opts.repo}: ${err.message}; git needs to reach the repository, and a ` +
+          'credential when it is private, or name a folder of release tarballs with --source',
       };
     }
     return { problem: `cannot read the source folder ${opts.source}: ${err.code ?? err.message}` };

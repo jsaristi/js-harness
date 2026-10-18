@@ -153,6 +153,23 @@ function optionValue(args, name) {
   return at === -1 ? undefined : args[at + 1];
 }
 
+/**
+ * Renews the lease that `session` holds for the project of `cwd`, for `wait` (odd/tasks/harness-review.md, T3): the
+ * lease moves to now plus the longer of LEASE_MINUTES and the wait's interval plus 5 minutes. It changes nothing
+ * unless `session` holds the lease at `now`: another session's, an expired one, none, or no session id. Returns
+ * `{ renewed, until }`; a failure to write throws.
+ */
+export function renewOwnLease({ home, cwd, session, now, everySeconds, projectRoot = gitProjectRoot }) {
+  if (typeof session !== 'string' || session === '') return { renewed: false };
+  const dir = permitsDir(home, projectSlug(projectRoot(cwd)));
+  const held = heldLease(dir, now);
+  if (held === null || held.session !== session) return { renewed: false };
+  const minutes = Math.max(LEASE_MINUTES, everySeconds / 60 + 5);
+  const until = new Date(now.getTime() + minutes * 60 * 1000).toISOString();
+  writeJson(path.join(dir, 'lease.json'), { schema: SCHEMA, session, until });
+  return { renewed: true, until };
+}
+
 function lease(args, deps, dir) {
   // A lease another session holds is not replaced or ended by mistake: only with --take-over, as a new lead would.
   const held = heldLease(dir, deps.now());

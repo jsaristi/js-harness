@@ -15,7 +15,7 @@ Commands:
   sync        Move the project to its pinned version (inside one) or re-write the machine install (--global, or outside a git repository).
   uninstall   Undo the project (inside one) or the machine install (--global, or outside a git repository). --full also removes the memory snapshots, the only copy of what a pass changed; files you modified and the memory notes themselves are kept either way. It goes with --global.
   status      Show the project's pin and this clone (inside one) or the machine's installed, manifest and latest versions (--global, or outside a git repository).
-  update      Say whether a newer release exists: the newest vX.Y.Z tag of the repository, read with the machine's git (--repo <url or folder> names another). None is tagged before 1.0.0, so it says that and how to get the newest copy; --source <dir> reads a folder of npm pack tarballs instead. Tags that cannot be listed exit 1 and say why.
+  update      Say whether a newer release exists: the newest vX.Y.Z tag of the repository, read with the machine's git (--repo <url or folder> names another). When none is tagged it says that and how to get the newest copy; --source <dir> reads a folder of npm pack tarballs instead. Tags that cannot be listed exit 1 and say why.
   upgrade     Install the newer release, the repository at its newest vX.Y.Z tag (or the newest tarball of --source <dir>), then sync with the installed copy. With no release tagged it installs nothing and exits 1: no package registry is ever asked.
   doctor      Report the stack's tools: installed, configured, up to date; whether the installed copy's rules are behind main's; and the worktrees on branches main already holds.
   progress    Show roadmap and feature progress from their checkboxes.
