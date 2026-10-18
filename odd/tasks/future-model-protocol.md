@@ -551,3 +551,11 @@ Step 4's run and cost their own 15 trials; `minimal-with` holds only for MCP ser
 gentle-ai blocks and `claude-md-own`; `hooks` are settings entries; the project's `AGENTS.md` unverified;
 the probe before any spend), Step 6's spread defined as the standard error of the totals the report
 prints, and G2 marked built. 410 tests of the probe, suite, configs, home, without and arms: 409 pass, 0 fail.
+
+L30 (2026-10-18, 00:01 UTC by `date`) Codex reviewed `d7dc0a1..fe56f2f` (297,789 input tokens,
+recorded): one P2, taken. A minimal-with arm was pinned by `withoutDigest`, the digest of what is
+left once its server is cut, so a change to that server continued a run and a change to any other
+server stopped it; with `current` absent the setup check no longer caught it. Its pin is now
+`minimalWithDigest`, the SHA-256 of the servers it puts in as the template holds them; a test
+first shows another server changing continues the run and its own changing stops it, the file
+untouched.

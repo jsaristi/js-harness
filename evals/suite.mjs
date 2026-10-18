@@ -42,7 +42,7 @@ import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
 import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
 import { HONESTY_CONFIGS, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, currentConfig, defaultWorkRoot, assertWorkRoot, ensureSandboxDirs, honestyConfig, honestyPin, minimalConfig, minimalWithConfig, subagentConfig, subagentPin } from './configs.mjs';
-import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate, seedMinimalWith, settledBytes } from './home.mjs';
+import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate, minimalWithDigest, seedMinimalWith, settledBytes } from './home.mjs';
 import { checkResults, reportLines, summarize } from './honesty-report.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { ArmError, parseArm } from './arms.mjs';
@@ -426,12 +426,16 @@ function fromTemplate(name, agent) {
   }
 }
 
-/** What a run pins of each arm of one component, `{ base, components, sha256 }` by name: the digest of what its
- * filter takes out of the template payload in `payload` (`withoutDigest`). */
-function armPins(names, agent, payload) {
+/** What a run pins of each arm of one component, `{ base, components, sha256 }` by name: for an arm of current the
+ * digest of what its filter takes out of the template payload (`withoutDigest`), for an arm of minimal the digest of
+ * the servers it puts in (`minimalWithDigest`), each read from the template in `templateDir`. */
+function armPins(names, agent, templateDir) {
   return Object.fromEntries(names.map((name) => {
     const { base, components } = parseArm(name, agent);
-    return [name, { base, components, sha256: withoutDigest(payload, components, agent, settledBytes) }];
+    const sha256 = base === 'minimal'
+      ? minimalWithDigest(templateDir, components)
+      : withoutDigest(path.join(templateDir, PAYLOAD), components, agent, settledBytes);
+    return [name, { base, components, sha256 }];
   }));
 }
 
@@ -1034,7 +1038,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
       // Each arm of one component is the same template with a filter after the seed, pinned by what the filter takes
       // out: a component the template does not hold, or a cut that moved since the file was recorded, stops the run
       // here, before any trial, and nothing is written.
-      const pins = armPins(arms, agentOf(args), path.join(templateDir, PAYLOAD));
+      const pins = armPins(arms, agentOf(args), templateDir);
       const cuts = armChanges(doc, pins);
       if (cuts.length > 0) {
         warn(refusalOf(file, cuts));

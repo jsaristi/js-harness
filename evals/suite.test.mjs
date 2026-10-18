@@ -1876,6 +1876,30 @@ test('a minimal-with arm runs as minimal does with its one server from the templ
   assert.deepEqual(templatesIn(m.workRoot), []);
 });
 
+test('a minimal-with arm is pinned by the server it puts in: another server changing continues it, its own changing stops it', async () => {
+  const m = machine();
+  const servers = (context7) => write(path.join(m.realHome, '.claude.json'), JSON.stringify({ mcpServers: { context7, other: { command: 'o' } } }));
+  const argv = (repeats) => runArgv(m, { '--configs': 'minimal,minimal-with-mcp-context7', '--efforts': 'medium', '--repeats': repeats });
+  servers({ command: 'c7' });
+  const first = depsFor(m);
+  assert.equal(await suiteMain(argv('1'), ENV, first.deps), 0, first.io.err);
+  const pinned = readDoc(m).arms['minimal-with-mcp-context7'].sha256;
+
+  write(path.join(m.realHome, '.claude.json'), JSON.stringify({ mcpServers: { context7: { command: 'c7' }, other: { command: 'changed' } } }));
+  const same = depsFor(m);
+  assert.equal(await suiteMain(argv('2'), ENV, same.deps), 0, same.io.err);
+  assert.equal(same.deps.runTrial.asked.length, first.deps.runTrial.asked.length, 'a server the arm does not put in is no part of its pin');
+  assert.equal(readDoc(m).arms['minimal-with-mcp-context7'].sha256, pinned);
+
+  servers({ command: 'c7', args: ['--other'] });
+  const before = fs.readFileSync(resultsFile(m));
+  const again = depsFor(m);
+  assert.equal(await suiteMain(argv('3'), ENV, again.deps), 1);
+  assert.match(again.io.err, new RegExp(`cut of minimal-with-mcp-context7: sha256 ${pinned.slice(0, 12)} -> sha256 [0-9a-f]{12}`));
+  assert.deepEqual(again.deps.runTrial.asked, []);
+  assert.deepEqual(fs.readFileSync(resultsFile(m)), before);
+});
+
 test('a minimal-with arm whose server the home does not hold stops the run before any trial; --plan states an arm\'s trials as unknown', async () => {
   const m = machine();
   const { io, deps } = depsFor(m);

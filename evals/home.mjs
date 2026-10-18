@@ -355,11 +355,9 @@ function trialEngram(engram, home, engramPort) {
   engram.env = { ...kept, ENGRAM_DATA_DIR: path.join(home, '.engram'), ENGRAM_PORT: String(engramPort) };
 }
 
-/** The `seed` of a minimal-with arm of MCP servers (`minimalWithConfig`): writes to `minimalWithMcpFile` of the trial's
- * home only the servers `components` names (`mcp-<name>`), as the template's `.claude.json` holds them and the current
- * arm would get them (`trialEngram` for engram's), and nothing else of the template. Checked now, when the seed is made:
- * a template, components that are servers, and servers it holds. */
-export function seedMinimalWith(templateDir, components) {
+/** The servers a minimal-with arm puts in, by name, as the template's `.claude.json` holds them. Throws unless
+ * `templateDir` is a template, every id of `components` is a server's (`mcp-<name>`) and the template holds it. */
+function chosenServers(templateDir, components) {
   readTemplate(templateDir);
   const servers = (() => {
     try {
@@ -374,9 +372,23 @@ export function seedMinimalWith(templateDir, components) {
     if (!isObject(servers[name])) throw new Error(`${id} is not in the current arm's home, so an arm with it would be the minimal arm under another name`);
     return name;
   });
+  return Object.fromEntries(names.map((name) => [name, servers[name]]));
+}
+
+/** The pin of a minimal-with arm: the SHA-256 of the servers it puts in, as the template holds them, so a change to
+ * one of them stops a run that recorded trials with the other, and a change to any other server does not. */
+export function minimalWithDigest(templateDir, components) {
+  return crypto.createHash('sha256').update(JSON.stringify(chosenServers(templateDir, components))).digest('hex');
+}
+
+/** The `seed` of a minimal-with arm of MCP servers (`minimalWithConfig`): writes to `minimalWithMcpFile` of the trial's
+ * home only the servers `components` names, as the current arm would get them (`trialEngram` for engram's), and
+ * nothing else of the template. Checked now, when the seed is made (`chosenServers`). */
+export function seedMinimalWith(templateDir, components) {
+  const servers = chosenServers(templateDir, components);
   return async ({ home, engramPort }) => {
     assertTrialPort(engramPort);
-    const chosen = Object.fromEntries(names.map((name) => [name, structuredClone(servers[name])]));
+    const chosen = structuredClone(servers);
     if (chosen.engram) trialEngram(chosen.engram, home, engramPort);
     writeJson(minimalWithMcpFile(home), { mcpServers: chosen });
   };
