@@ -963,13 +963,19 @@ export function parseProcessList(stdout) {
 
 // The session a Claude Code host process runs, as the desktop app starts one: `--resume=<id>`, or `--resume <id>`.
 const RESUME_PATTERN = /(?:^|\s)"?--resume(?:=|\s+)"?([0-9A-Za-z][0-9A-Za-z-]*)/;
+// The executable of a command line, quoted or bare; only `claude` or `claude.exe` is a host, so a wrapper that
+// passes `--resume` on (a node script, `cmd /c claude ...`) is not named in its place.
+const EXECUTABLE_PATTERN = /^\s*(?:"([^"]*)"|(\S+))/;
+const HOST_EXECUTABLE = /^claude(?:\.exe)?$/i;
 
 /** The Claude Code host processes among `processes` (`[{ pid, createdAt, commandLine }]`), each with the session it runs:
  * `[{ pid, createdAt, sessionId }]`, the id in lower case. A host started with no `--resume` names no session and is
- * not among them (T12 of odd/tasks/harness-review.md). */
+ * not among them, nor is a process whose executable is not claude (T12 of odd/tasks/harness-review.md). */
 export function hostsOf(processes) {
   return processes.flatMap(({ pid, createdAt, commandLine }) => {
-    const match = RESUME_PATTERN.exec(commandLine ?? '');
+    const executable = EXECUTABLE_PATTERN.exec(commandLine ?? '');
+    const name = executable ? (executable[1] ?? executable[2]).split(/[\\/]/).pop() : '';
+    const match = HOST_EXECUTABLE.test(name) ? RESUME_PATTERN.exec(commandLine) : null;
     return match ? [{ pid, createdAt: createdAt ?? null, sessionId: match[1].toLowerCase() }] : [];
   });
 }

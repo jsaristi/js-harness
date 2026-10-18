@@ -3091,6 +3091,16 @@ test('hostsOf reads the session a Claude Code host runs from its --resume argume
   ]);
 });
 
+test('hostsOf counts only a process whose executable is claude, so a wrapper that passes --resume on is not named', () => {
+  const processes = [
+    { pid: 8000, createdAt: null, commandLine: `"C:\\Program Files\\Claude Code\\claude.exe" --resume=${A}` },
+    { pid: 8100, createdAt: null, commandLine: `node C:\\tools\\wrapper.js --resume=${B}` },
+    { pid: 8200, createdAt: null, commandLine: `cmd.exe /c claude --resume ${C}` },
+    { pid: 8300, createdAt: null, commandLine: `/opt/claudette/bin/runner --resume ${D}` },
+  ];
+  assert.deepEqual(lib.hostsOf(processes), [{ pid: 8000, createdAt: null, sessionId: A }]);
+});
+
 test('renderBoard flags a session that closed or was relieved while its host process still runs, until the app archives it', () => {
   const sessions = [member(A, 'JH ORQ · proj', 60, { self: true }), member(B, 'JH 2 · the board', 120), member(C, 'JH 3 · the lock', 180), member(D, 'JH 4 · the roster', 240), member('eeeeeeee-5555', 'JH 5 · the wait', 30)];
   const notices = [
