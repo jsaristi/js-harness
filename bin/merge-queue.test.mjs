@@ -249,6 +249,16 @@ test('--land: a candidate red on CircleCI leaves main as it was', async () => {
   assert.match(out.at(-1), /^The candidate is red on CircleCI \(check: failure, https:\/\/app\.circleci\.com\/x\): main was not pushed\.$/);
 });
 
+// Harness review b2, 2026-10-18: a CircleCI that never answered judged nothing, so it is no red (4) but 5.
+test('--land: a candidate CircleCI gave no result for leaves main as it was, and exits 5, not red', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[circle('in_progress')]] });
+  assert.equal(code, 5, out.join('\n'));
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.deepEqual(queueBranches(origin), []);
+  assert.equal(out.at(-1), 'CircleCI gave no result for the candidate in 30 minutes: main was not pushed.');
+});
+
 test('--land: a main that moved while the candidate was tested is not overwritten', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   const other = path.join(path.dirname(origin), 'other');
