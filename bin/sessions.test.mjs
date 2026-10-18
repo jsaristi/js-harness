@@ -844,7 +844,33 @@ test('the Windows listing keeps the command line of a dispatcher that runs check
   for (const line of [hook, 'node "C:\\Users\\me\\npm\\node_modules\\js-harness\\bin\\js-harness.mjs" check --push', 'node bin/js-harness.mjs "check"', 'node /usr/local/bin/js-harness check', 'node D:/proj/bin/check.mjs', 'NODE.EXE D:\\PROJ\\BIN\\JS-HARNESS.MJS CHECK']) {
     assert.match(line, kept);
   }
-  for (const line of ['node bin/js-harness.mjs sessions --watch', 'node D:\\js-harness\\bin\\remote.mjs start', 'claude.exe --resume']) assert.doesNotMatch(line, kept);
+  for (const line of ['node bin/js-harness.mjs sessions --watch', 'node D:\\js-harness\\bin\\remote.mjs start', 'claude.exe --type=renderer']) assert.doesNotMatch(line, kept);
+  // A Claude Code host is kept too, for the roster's closed sessions that still run (T12 of odd/tasks/harness-review.md).
+  for (const line of [`claude.exe --output-format stream-json --resume=${SESSION_B}`, 'claude --resume bbbbbbbb-2222']) assert.match(line, kept);
+}));
+
+// T12 of odd/tasks/harness-review.md: JH 20 sent its close, its host process ran on, and the app refused to archive it.
+test('the roster flags a session that closed while its host process still runs, read from the one Windows listing, in the text and in --json', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_B, 'JH 2 · delivered', 300);
+  writeNotice(machine, 250, sender(SESSION_B, 'JH 2 · delivered'), 'orchestrator', 'closed', 'delivered; nothing more goes to this session');
+  const host = `C:\\claude-code\\claude.exe --output-format stream-json --resume=${SESSION_B} --allowedTools=x`;
+  const listing = ['4242\t1\t1767268620000\tclaude.exe', `C\t4242\t${host}`, 'OK\t1', ''].join('\r\n');
+  const fake = fakeRun(machine, { powershell: () => ok(listing) });
+  const { stdout } = await runSessions(machine, [], { run: fake.run, listProcesses: undefined, platform: 'win32' });
+  assert.deepEqual(sectionOf(stdout, 'Roster', 'Channel').filter((line) => line.includes('still running')), [
+    '  closed but still running: JH 2 · delivered, closed 4m ago, host process pid 4242 started 3m ago: the app refuses to archive it while that process runs; stop its turn, or end that process, then archive it',
+  ]);
+  assert.equal(fake.calls.filter((made) => made.command === 'powershell').length, 1, 'the gates and the hosts come from one listing');
+  const json = await runSessions(machine, ['--json'], { run: fakeRun(machine, { powershell: () => ok(listing) }).run, listProcesses: undefined, platform: 'win32' });
+  const board = JSON.parse(json.stdout);
+  assert.deepEqual(board.roster.rows.find((row) => row.title === 'JH 2 · delivered').host, { pid: 4242, createdAt: 1767268620000 });
+  assert.deepEqual(board.gates.items, [], 'a host process is no gate');
+
+  const failing = fakeRun(machine, { powershell: () => ({ status: 1, stdout: '', stderr: 'Access denied\r\n' }) });
+  const failed = await runSessions(machine, [], { run: failing.run, listProcesses: undefined, platform: 'win32' });
+  assert.deepEqual(sectionOf(failed.stdout, 'Roster', 'Channel').filter((line) => line.includes('host processes')), [
+    '  host processes not read (Access denied): a closed session whose process still runs is not flagged',
+  ]);
 }));
 
 // Codex review of 764c9b0, finding 5: PowerShell writes in the console's code page (850 or 437 on a Windows

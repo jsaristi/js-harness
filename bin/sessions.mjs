@@ -63,7 +63,7 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -248,8 +248,8 @@ function parseArgs(argv) {
 }
 
 // One row of the shared listing (`Format-ProcessRow`, bin/lib/process-tree.mjs) and one `C` line per
-// process whose command line mentions `check.mjs`, or the dispatcher followed by `check`; `findGates`
-// decides which of those are gates. The last line is `OK` with the number of `C` lines written, which
+// process whose command line mentions `check.mjs`, or the dispatcher followed by `check`, or `--resume`;
+// `findGates` decides which of those are gates, and `hostsOf` which are Claude Code hosts and of what session. The last line is `OK` with the number of `C` lines written, which
 // `parseProcessList` compares with the lines it read: a listing that stopped half way, or lost a line, is
 // refused. Tabs and line breaks in a command line become spaces, so a line of output is always one fact.
 // Progress output is off: under `-EncodedCommand` it would arrive as CLIXML. The output is UTF-8 because
@@ -265,7 +265,7 @@ try {
   $written = 0
   foreach ($process in @(Get-CimInstance Win32_Process)) {
     $line = $process.CommandLine
-    if (-not $line -or $line -notmatch 'check\.mjs|js-harness(\.mjs)?"?\s+"?check') { continue }
+    if (-not $line -or $line -notmatch 'check\.mjs|js-harness(\.mjs)?"?\s+"?check|--resume[= ]') { continue }
     Format-ProcessRow $process
     'C' + [char]9 + $process.ProcessId + [char]9 + ($line -replace '\s+', ' ')
     $written += 1
@@ -647,7 +647,28 @@ export async function sessionsMain(
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
     // in line, and read the other way round more of them would be shown as not yet in line. The waiters
     // before the holder: a gate that takes the lock between the two reads is then in one of them.
-    const gates = readGates(listProcesses, worktrees.available ? worktrees.items.map((tree) => tree.path) : [], { lockLibraryBeside });
+    // One listing for the gates and the hosts: each look starts PowerShell once on Windows, and both read the same moment.
+    let listed;
+    const listOnce = () => {
+      if (listed === undefined) {
+        try {
+          listed = { processes: listProcesses() };
+        } catch (err) {
+          listed = { error: err };
+        }
+      }
+      if (listed.error) throw listed.error;
+      return listed.processes;
+    };
+    const gates = readGates(listOnce, worktrees.available ? worktrees.items.map((tree) => tree.path) : [], { lockLibraryBeside });
+    // A listing that failed leaves the hosts unread, never "none runs": a closed session could still be running.
+    const hosts = (() => {
+      try {
+        return { items: hostsOf(listOnce()) };
+      } catch (err) {
+        return { unavailable: err.message };
+      }
+    })();
     const gateLock = readGateLock(() => {
       // Against the clock of this moment, not the one the look began at: the transcripts, `git` and the
       // process listing took their time (16 s, measured here), and a holder whose last beat was a
@@ -680,7 +701,7 @@ export async function sessionsMain(
       // channel's record, the openings and the gate log under the home: what the heartbeat reads too, without a transcript.
       stalled: stalledOf(generatedAt),
       // The window lists a transcript whose file changed; a row of the roster wants an entry of that time.
-      roster: rosterOf(sessions, { worktrees, since, record, app }),
+      roster: rosterOf(sessions, { worktrees, since, record, app, hosts }),
       // The record's last notices and the last messages between these sessions: `notify` writes the
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),
