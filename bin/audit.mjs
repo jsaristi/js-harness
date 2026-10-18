@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import readline from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { auditEntries } from './lib/audit.mjs';
+import { linesOf } from './lib/lines.mjs';
 import { DEFAULT_CONTEXT_WINDOW } from './lib/sessions.mjs';
 import { dayOf } from './lib/subagent-count.mjs';
 import { recordFolders } from './subagents.mjs';
@@ -52,19 +52,6 @@ function parseArgs(argv) {
 
 /** `day` moved by `delta` days, both `YYYY-MM-DD`. */
 const shiftDay = (day, delta) => new Date(Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
-
-/** The lines of `file` as the transcript writes them, each ended by `\n` (a `\r` before it dropped), streamed. Not
- * Node's readline: it also ends a line at U+2028 and U+2029, which JSON leaves unescaped inside a string, so the
- * line numbers after one would be off and the entry holding it would not parse. */
-async function* linesOf(file) {
-  let rest = '';
-  for await (const chunk of fs.createReadStream(file, { encoding: 'utf8' })) {
-    const parts = (rest + chunk).split('\n');
-    rest = parts.pop();
-    for (const part of parts) yield part.endsWith('\r') ? part.slice(0, -1) : part;
-  }
-  if (rest !== '') yield rest;
-}
 
 /** The audit of the transcript `file`: its title and what `auditEntries` counts in its entries inside the window.
  * Streamed, and only the lines that can hold a reply or the title are parsed: a transcript runs to hundreds of
