@@ -5,9 +5,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import readline from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { callsOf, countOf, dayOf, launchesOf, usageOf } from './lib/subagent-count.mjs';
+import { linesOf } from './lib/lines.mjs';
 import { mainCheckout, parseWorktreeList, projectSlug } from './lib/sessions.mjs';
 
 const USAGE = 'Usage: js-harness subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
@@ -71,8 +71,7 @@ export function recordFolders({ cwd, env, homedir, run }) {
 /** Each line of `file` parsed, handed to `keep`; a line that is not JSON is skipped. Streamed: a session's
  * record can be hundreds of megabytes. */
 async function eachEntry(file, keep) {
-  const lines = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
-  for await (const line of lines) {
+  for await (const line of linesOf(file)) {
     if (line === '') continue;
     let entry;
     try {

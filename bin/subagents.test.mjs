@@ -84,6 +84,25 @@ test('subagents keeps no text of any message or description, in its lines or its
   }
 });
 
+// T6 of odd/tasks/harness-review.md, d1: JSON leaves U+2028 and U+2029 unescaped inside a string, and Node's readline
+// ends a line at each, so the entry holding one did not parse and its launches were not counted.
+test('an entry holding U+2028 or U+2029 inside a string is still counted', async () => {
+  const records = makeRecords();
+  try {
+    const file = path.join(records.config, 'projects', projectSlug(records.main), 's1.jsonl');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(`"prompt":"${SECRET}"`, '"prompt":"one two three"'));
+    assert.ok(fs.readFileSync(file, 'utf8').includes(' '), 'the record holds the separator raw');
+    const { code, stdout } = await subagents(['--json'], records);
+    assert.equal(code, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.count.total.launches, 2);
+    // The session's entry holding the Agent call is read: the call is found, so whether it inherited is known.
+    assert.equal(parsed.launches.find((launch) => launch.agentId === 'a1').inherited, false);
+  } finally {
+    records.cleanup();
+  }
+});
+
 test('--day and --days choose the local days counted', async () => {
   const records = makeRecords();
   try {

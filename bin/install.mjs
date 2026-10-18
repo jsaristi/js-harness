@@ -357,8 +357,8 @@ function reportSyncProject(result) {
     // that follows main, is reached with the newest copy.
     console.error(
       `harness.json pins js-harness ${result.pin} but ${result.version} is running; nothing was written. ` +
-        `If ${result.pin} is the newer one, install it by its tag (npm i -g ${tagSpec(DEFAULT_REPO, `v${result.pin}`)}, ` +
-        'or the same with the package manager that installed it) when that version is tagged, ' +
+        `If ${result.pin} is the newer one, install it by its tag (npm i -g --allow-git=root ${tagSpec(DEFAULT_REPO, `v${result.pin}`)}, ` +
+        `or pnpm add -g ${tagSpec(DEFAULT_REPO, `v${result.pin}`)} where pnpm installed it) when that version is tagged, ` +
         `or the newest copy (${INSTALL_NEWEST}), and run js-harness sync again; ` +
         `otherwise set the pin to ${result.version} in harness.json and commit it.`,
     );

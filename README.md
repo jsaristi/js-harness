@@ -13,13 +13,14 @@ It is plain Node with no dependencies. It needs Node 22 or newer and git.
 The repository is public on GitHub; the install reads it from there.
 
 ```sh
-npm i -g github:jsaristi/js-harness
+npm i -g --allow-git=root github:jsaristi/js-harness
 js-harness install
 cd my-project
 js-harness init
 ```
 
-1. `npm i -g` puts the `js-harness` command on the path.
+1. `npm i -g` puts the `js-harness` command on the path; npm 12 fetches a package from git only
+   with `--allow-git=root`. With pnpm: `pnpm add -g github:jsaristi/js-harness`.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
 3. `js-harness init`, in a git repository, writes `harness.json` (the pin, and `"reply": true`,
@@ -265,7 +266,7 @@ that and how to get the newest copy. When the tags cannot be listed it says why 
 
 ```console
 $ js-harness update
-no release of js-harness is tagged yet; to get the newest copy: npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it (installed: 0.1.0)
+no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it (installed: 0.1.0)
 ```
 
 ### js-harness upgrade
@@ -276,9 +277,17 @@ tarball of `--source <dir>`, a folder of `npm pack` tarballs, which wins when na
 credential. With no release tagged it installs nothing and exits 1; no package registry is ever
 asked.
 
+The package manager is `npm` unless `--pm <command>` or `JS_HARNESS_PM` names another, such as
+`pnpm`. npm gets `--allow-git=root` for a tag, since npm 12 fetches nothing from git without it;
+pnpm gets `add -g`. The install is judged by the installed copy's own `--version`, not by the
+package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file
+in use, and `upgrade` then says so and goes on. With pnpm, its bin folder's lock is removed when
+the install left it, or when it is older than ten minutes. `--prefix <dir>` installs into a
+folder of its own: npm's prefix, or pnpm's home with every folder pnpm writes inside it.
+
 ```console
 $ js-harness upgrade
-nothing was installed: no release of js-harness is tagged yet; to get the newest copy: npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it
+nothing was installed: no release of js-harness is tagged yet; to get the newest copy: npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it
 ```
 
 ### js-harness doctor

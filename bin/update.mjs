@@ -3,13 +3,14 @@
 // because on this machine `npm` on PATH is a pnpm shim; it installs a release and is never asked which
 // release is the latest: the repository's tags say that (see `resolveLatest`). `status` also answers by location (T5 design); see
 // `statusMain` for which folders report the project, the machine install, or refuse.
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
-import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, splitCommand, installArgs, isNewer } from './lib/version.mjs';
+import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, splitCommand, pmKind, installPlan, isNewer } from './lib/version.mjs';
 import { unknownArgument } from './lib/args.mjs';
 
 const PKG_NAME = 'js-harness';
@@ -88,11 +89,123 @@ function upgradedBinPath(prefix, platform) {
     : path.join(prefix, 'lib', 'node_modules', PKG_NAME, 'bin', 'js-harness.mjs');
 }
 
+/** Where pnpm laid out the copy of js-harness under `prefix`, its home: `<prefix>/global/v<n>/<hash>/node_modules/
+ * js-harness` on pnpm 12 (L7), or without the hash folder. The copy of `version` when its package says so, else
+ * the first found, whose own `--version` then refuses it; `null` when there is none. */
+function pnpmCopy(prefix, version) {
+  const globalDir = path.join(prefix, 'global');
+  const list = (dir) => {
+    try {
+      return fs.readdirSync(dir);
+    } catch {
+      return [];
+    }
+  };
+  const copies = [];
+  for (const store of list(globalDir)) {
+    for (const parent of [path.join(globalDir, store), ...list(path.join(globalDir, store)).map((hash) => path.join(globalDir, store, hash))]) {
+      const root = path.join(parent, 'node_modules', PKG_NAME);
+      if (fs.existsSync(path.join(root, 'bin', 'js-harness.mjs'))) copies.push(root);
+    }
+  }
+  const versionOf = (root) => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+    } catch {
+      return null;
+    }
+  };
+  const root = copies.find((copy) => versionOf(copy) === version) ?? copies[0];
+  return root ? path.join(root, 'bin', 'js-harness.mjs') : null;
+}
+
 /** Quotes a value for a shell command line built by joining tokens with spaces (see `shell: true`
  * in `child_process.spawn`, which does not escape array elements on its own). Simple, not
  * bulletproof: assumes the value has no embedded quote of its own platform's kind. */
 function quoteForShell(value, platform) {
   return platform === 'win32' ? `"${value}"` : `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/** A word for a cmd.exe line: as it is when it holds nothing cmd.exe reads, else quoted. A `.cmd` file found on the
+ * path and named in quotes gets a wrong `%~dp0`, the folder pnpm's own shim starts from ("El sistema no puede
+ * encontrar la ruta especificada", T2), so a plain command name is never quoted. */
+function cmdWord(word) {
+  return /^[\w@+=:,./\\-]+$/.test(word) ? word : quoteForShell(word, 'win32');
+}
+
+/** Starts the package manager. On Windows `npm` and `pnpm` are often `.cmd` files, which Node starts only through a
+ * shell, so there it runs as one line, with no argument array beside `shell: true` (Node's DEP0190). `env` is
+ * passed only when the install needs its own (pnpm's isolated home); otherwise the child inherits. */
+function runPm(spawn, words, args, env, platform) {
+  const opts = env ? { encoding: 'utf8', env } : { encoding: 'utf8' };
+  if (platform === 'win32') {
+    return spawn([...words, ...args].map(cmdWord).join(' '), [], { ...opts, shell: true });
+  }
+  const [cmd, ...head] = words;
+  return spawn(cmd, [...head, ...args], opts);
+}
+
+/** pnpm's lock on its global bin folder: a folder it takes while it links commands, and leaves behind when its
+ * cleanup fails (os error 32 on Windows), after which the next install waits five minutes on it and times out
+ * (update-copy.sh, 2026-10-15). */
+const PNPM_BIN_LOCK = '.pnpm-global-bin.lock';
+/** No live install holds the lock this long: pnpm itself gives up waiting on it after five minutes. */
+const STALE_LOCK_MS = 10 * 60_000;
+
+/** The global bin folder pnpm uses: the prefix's own, else what `pnpm bin -g` answers; `null` when it does not. */
+function pnpmBinDir(spawn, words, prefix, platform) {
+  if (prefix) return path.join(prefix, 'bin');
+  const asked = runPm(spawn, words, ['bin', '-g'], undefined, platform);
+  const line = String(asked.stdout ?? '').trim().split(/\r?\n/).at(-1) ?? '';
+  return asked.status === 0 && path.isAbsolute(line) ? line : null;
+}
+
+/** Whether a command line starts a pnpm: `pnpm` or `pnpm.exe` itself, or node running pnpm's script. A word in double
+ * quotes, as Windows writes a path that holds a space, is one word. */
+function startsPnpm(commandLine) {
+  const [first = '', second = ''] = [...commandLine.trim().matchAll(/"([^"]*)"|(\S+)/g)].slice(0, 2).map((m) => m[1] ?? m[2]);
+  const base = (word) => word.split(/[\\/]/).at(-1).toLowerCase();
+  if (/^pnpm(\.exe|\.cmd)?$/.test(base(first))) return true;
+  return /^node(\.exe)?$/.test(base(first)) && /^pnpm(\.c?js)?$/.test(base(second));
+}
+
+/** Whether a pnpm other than this process runs on the machine: `true`, `false`, or `null` when the process list could
+ * not be read, which a caller takes as running. Windows answers through PowerShell, which shows a pnpm run by node by
+ * its command line; elsewhere `ps`. Each line is `<pid> <command line>`. */
+function pnpmRunning(spawn, platform) {
+  const listed = platform === 'win32'
+    ? spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }'], { encoding: 'utf8', windowsHide: true })
+    : spawn('ps', ['-A', '-o', 'pid=,args='], { encoding: 'utf8' });
+  if (listed.status !== 0) return null;
+  return String(listed.stdout ?? '').split(/\r?\n/).some((line) => {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    return match !== null && Number(match[1]) !== process.pid && startsPnpm(match[2]);
+  });
+}
+
+/** Removes pnpm's bin lock when no live install can hold it: only while no other pnpm runs (an empty folder does not
+ * show its owner is gone, Codex P2 on 839b194..eae1e83), and then one taken since `since` (this run's own install,
+ * which has exited) or one older than STALE_LOCK_MS. A lock with anything inside is left (rmdir refuses it). Says
+ * what it removed, or `null`. */
+function clearPnpmLock(binDir, since, isPnpmRunning) {
+  if (!binDir) return null;
+  const lock = path.join(binDir, PNPM_BIN_LOCK);
+  let taken;
+  try {
+    taken = fs.statSync(lock).mtimeMs;
+  } catch {
+    return null;
+  }
+  // Two seconds of slack: the file system's stamp and this process's clock are read apart.
+  const own = since !== undefined && taken >= since - 2000;
+  if (!own && Date.now() - taken <= STALE_LOCK_MS) return null;
+  if (isPnpmRunning() !== false) return null;
+  try {
+    fs.rmdirSync(lock);
+  } catch {
+    return null;
+  }
+  return `removed pnpm's bin lock ${lock}, ${own ? 'left by this install' : `taken at ${new Date(taken).toISOString()}`}`;
 }
 
 const STATUS_USAGE =
@@ -286,10 +399,7 @@ const PLAIN_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?$/;
  * than this) is not the upgraded one either. Nothing is written by the question. The one way out it names
  * is the sync itself, run with the upgraded copy: a second `upgrade` is no way out, since the install
  * already happened and that run would find nothing newer, say "up to date" and sync nothing. */
-function pathCopyRefusal(spawn, version) {
-  const asked = spawn('js-harness', ['--version'], { shell: true, encoding: 'utf8' });
-  const answered = asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
-  if (answered === version) return null;
+function pathCopyRefusal(answered, version) {
   const found = PLAIN_VERSION.test(answered)
     ? `the js-harness on the path is ${answered}, not the upgraded ${version}`
     : `the js-harness on the path did not answer --version, so it is not the upgraded ${version}`;
@@ -298,6 +408,20 @@ function pathCopyRefusal(spawn, version) {
     'Run `js-harness sync --global` with the copy that was just installed, by its own path: ' +
     'the one the shell finds first is another.'
   );
+}
+
+/** What the `js-harness` the shell finds first answers to `--version`, asked through the same shell the sync
+ * would run it through, or '' when it does not answer. Nothing is written by the question. */
+function pathCopyVersion(spawn) {
+  const asked = spawn('js-harness', ['--version'], { shell: true, encoding: 'utf8' });
+  return asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
+}
+
+/** What the copy at `bin`, the one an install under `--prefix` laid out, answers to `--version`, or '' when it does
+ * not answer. */
+function prefixCopyVersion(spawn, bin) {
+  const asked = spawn(process.execPath, [bin, '--version'], { encoding: 'utf8' });
+  return asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
 }
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform) {
@@ -327,28 +451,50 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // What is installed: the tarball of the folder the caller named, or the repository at its release tag; never a
   // name on a registry.
-  const [cmd, ...head] = splitCommand(resolvePm(opts.pm, env));
-  const installResult = spawn(cmd, [...head, ...installArgs(latest.file ?? latest.spec, opts.prefix)], { encoding: 'utf8' });
+  const words = splitCommand(resolvePm(opts.pm, env));
+  const kind = pmKind(words);
+  const plan = installPlan(kind, latest.file ?? latest.spec, opts.prefix, env, platform);
+  const binDir = kind === 'pnpm' ? pnpmBinDir(spawn, words, opts.prefix, platform) : null;
+  const isPnpmRunning = () => pnpmRunning(spawn, platform);
+  const staleLock = clearPnpmLock(binDir, undefined, isPnpmRunning);
+  if (staleLock) console.error(staleLock);
+  const started = Date.now();
+  const installResult = runPm(spawn, words, plan.args, plan.env === env ? undefined : plan.env, platform);
+  const ownLock = clearPnpmLock(binDir, started, isPnpmRunning);
+  if (ownLock) console.error(ownLock);
+
+  // The verdict on the install is the installed copy's own --version, not the package manager's exit code: pnpm
+  // exits 1 when its cleanup hits os error 32 after a good install (T2 of odd/tasks/harness-review.md, L7). With
+  // --prefix the copy is where the package manager laid it out; without one, it is whatever `js-harness` the shell
+  // resolves on PATH, which also runs the sync, so only the version just installed is let to write (T8).
+  const bin = opts.prefix ? (kind === 'pnpm' ? pnpmCopy(opts.prefix, latest.version) : upgradedBinPath(opts.prefix, platform)) : null;
+  const answered = opts.prefix ? (bin ? prefixCopyVersion(spawn, bin) : '') : pathCopyVersion(spawn);
+  if (answered !== latest.version) {
+    if (installResult.status !== 0) {
+      const how = installResult.error ? `could not be started (${installResult.error.code ?? installResult.error.message})` : `exited ${installResult.status}`;
+      // The package manager's output was captured, so its last lines say why.
+      const said = String(installResult.stderr ?? '').trim().split(/\r?\n/).slice(-5).join('\n');
+      console.error(`upgrade failed: ${words[0]} ${how}${said ? `:\n${said}` : ''}`);
+      return installResult.status ?? 1;
+    }
+    if (opts.prefix) {
+      const said = PLAIN_VERSION.test(answered) ? `answers ${answered}` : 'does not answer --version';
+      console.error(`the copy installed under ${opts.prefix} ${said}, not ${latest.version}: nothing was synced`);
+    } else {
+      console.error(pathCopyRefusal(answered, latest.version));
+    }
+    return 1;
+  }
   if (installResult.status !== 0) {
-    console.error(`upgrade failed: ${cmd} exited ${installResult.status}`);
-    return installResult.status ?? 1;
+    console.error(`${words[0]} exited ${installResult.status}, but the copy it installed answers ${latest.version}: going on`);
   }
 
-  // Re-run the NEWLY installed binary's own sync, so files on disk match the new release
-  // rather than whatever this (old) process would have written. With --prefix we know exactly
-  // where npm put it; without one, it is whatever `js-harness` the shell resolves on PATH, so that
-  // copy says its version first and only the version just installed is let to write (T8). `--global`
-  // (T4): upgrade runs from any folder, and inside a git repository a plain `sync` would act on that
-  // project (or refuse for it) instead of the machine install this is meant to bring up to date.
-  if (!opts.prefix) {
-    const refusal = pathCopyRefusal(spawn, latest.version);
-    if (refusal) {
-      console.error(refusal);
-      return 1;
-    }
-  }
+  // Re-run the NEWLY installed binary's own sync, so files on disk match the new release rather than whatever
+  // this (old) process would have written. `--global` (T4): upgrade runs from any folder, and inside a git
+  // repository a plain `sync` would act on that project (or refuse for it) instead of the machine install this is
+  // meant to bring up to date.
   const syncResult = opts.prefix
-    ? spawn(process.execPath, [upgradedBinPath(opts.prefix, platform), 'sync', '--home', opts.home, '--global'], {
+    ? spawn(process.execPath, [bin, 'sync', '--home', opts.home, '--global'], {
         encoding: 'utf8',
       })
     : spawn('js-harness', ['sync', '--home', quoteForShell(opts.home, platform), '--global'], {
