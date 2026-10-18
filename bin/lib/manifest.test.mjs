@@ -2550,7 +2550,10 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes("- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find."));
   // odd/tasks/held-sessions.md, S8 and T7: the lead holds the permit relay and judges each card it brings.
   assert.ok(text.includes('- The permit relay (`js-harness permit`): while you lead, hold it with `js-harness permit lease`'));
-  assert.ok(text.includes('`js-harness permit deny <id> --reason "<why>"` when it is obsolete, unsafe, or touches what is the user\'s'));
+  assert.ok(text.includes('`js-harness permit deny <id> --reason "<why>"` when it is obsolete or unsafe'));
+  // odd/tasks/held-sessions.md, S9: a card that is his is brought to him with a recommendation; he chooses.
+  assert.ok(text.includes('A card that touches what is the user\'s (spend, publishing, anything irreversible outside the project, credentials, their security settings), or is important enough to be their call, you never decide alone: bring it to them in the orchestrator\'s chat that turn, through the question tool'));
+  assert.ok(text.includes('then apply their choice with `js-harness permit allow <id>` or `js-harness permit deny <id> --reason'));
   assert.ok(text.includes('`js-harness permit lease --off`'));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
   assert.ok(text.includes('- A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (`rule:double-review`, `js-harness-protocols` section 1), and says what its readers changed, or names by path the reviewed text it rests on.'));
