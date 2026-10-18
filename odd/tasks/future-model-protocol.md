@@ -231,12 +231,12 @@ the report prints a pooled cost SD per task only, so the spread of a total must 
   assessed medium and under budget by gentle-ai; G6b, the record and the refusal, next; left of
   G6: codegraph's version and the js-harness commit
 - [x] T6 G3, a cost statement before a run (S3; route: inline): `--plan` on `evals/suite.mjs`, with `evals/plan.mjs`
-- [ ] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
+- [x] T7 G2, arms of one component (S3; route: inline; designed, see "Design of G2"; commits C1 to C7;
   C1 `fa39244` and C2 `21a06bf` merged in #141; C3a `776b03a`, the filters of paths and JSON keys,
   see L17; C3b `9d82100`, the marker blocks, see L18; C3c `dde2216`, Codex's TOML tables and hook
   trust, see L19; C4 `8ce28f0`, the suite's wiring and pins; C5, the report's arms section, see
   L21, in #426; C6a, the probe, see L26, in #428; C6b, `minimal-with-mcp-<name>`, and C7, the
-  documents, see L29)
+  documents, see L29, with Codex's fix of the minimal-with pin, L30, in #429)
 - [ ] T8 G1 and G4, the payload of the eval home and the whole first request (S3; after the WSL
   gate, if cleared)
 - [ ] T9 G7, a new model noticed (S3; after the WSL gate, if cleared)
