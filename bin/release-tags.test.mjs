@@ -38,14 +38,14 @@ function makeRepo(tags) {
   return dir;
 }
 
-async function runCommand(main, argv, env = {}, spawn = noProcess) {
+async function runCommand(main, argv, env = {}, spawn = noProcess, platform = undefined) {
   const out = [];
   const err = [];
   const original = { log: console.log, error: console.error };
   console.log = (line) => out.push(String(line));
   console.error = (line) => err.push(String(line));
   try {
-    const code = await main(argv, env, spawn);
+    const code = await main(argv, env, spawn, platform);
     return { code, out: out.join('\n'), err: err.join('\n') };
   } finally {
     Object.assign(console, original);
@@ -134,15 +134,17 @@ test('upgrade installs the newest tag of the repository with the package manager
     calls.push({ cmd, args });
     // The sync of the installed copy records the new version, as the real one would.
     if (args.includes('sync')) install(home, '99.0.0');
-    return { status: 0, stdout: '', stderr: '' };
+    return { status: 0, stdout: args.includes('--version') ? '99.0.0\n' : '', stderr: '' };
   };
   try {
-    const { code, out, err } = await runCommand(upgradeMain, ['--repo', repo, '--home', home, '--prefix', prefix, '--pm', 'my-pm'], {}, spawn);
+    const { code, out, err } = await runCommand(upgradeMain, ['--repo', repo, '--home', home, '--prefix', prefix, '--pm', 'my-pm'], {}, spawn, 'linux');
     assert.equal(code, 0, err);
     assert.match(out, /upgraded to 99\.0\.0/);
-    assert.deepEqual(calls[0], { cmd: 'my-pm', args: ['install', '-g', fileSpec(repo, 'v99.0.0'), '--prefix', prefix] });
-    assert.ok(calls[1].args.includes('sync'), JSON.stringify(calls[1]));
-    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0], { cmd: 'my-pm', args: ['install', '-g', '--allow-git=root', fileSpec(repo, 'v99.0.0'), '--prefix', prefix] });
+    // T2: the installed copy is asked its version before it syncs.
+    assert.ok(calls[1].args.includes('--version'), JSON.stringify(calls[1]));
+    assert.ok(calls[2].args.includes('sync'), JSON.stringify(calls[2]));
+    assert.equal(calls.length, 3);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });

@@ -23,9 +23,9 @@ export function isNewer(candidate, current) {
 
 /** How a machine gets the newest copy, in words for a message: from the default branch, which is where a copy
  * ahead of the newest tag comes from, and the only source where a repository holds no release tag
- * (docs/ROADMAP.md, "Versioning"), so `upgrade` has no release to install and says this instead. It names npm and says the rest: a copy that pnpm installed is
- * not the one npm would replace. */
-export const INSTALL_NEWEST = 'npm i -g github:jsaristi/js-harness, or the same with the package manager that installed it';
+ * (docs/ROADMAP.md, "Versioning"), so `upgrade` has no release to install and says this instead. It names npm, with the
+ * option npm 12 needs to fetch from git, and pnpm: a copy that pnpm installed is not the one npm would replace. */
+export const INSTALL_NEWEST = 'npm i -g --allow-git=root github:jsaristi/js-harness, or pnpm add -g github:jsaristi/js-harness where pnpm installed it';
 
 /** The repository whose tags are the releases (docs/ROADMAP.md, "Release source"): public since 2026-10-16, read
  * with the machine's git. */
@@ -60,6 +60,11 @@ export function tagSpec(repo, tag) {
   return `git+${url}#${tag}`;
 }
 
+/** Whether a spec `tagSpec` could have made: one a package manager fetches with git, not a tarball's path. */
+export function isGitSpec(spec) {
+  return /^(github:|git\+|git:\/\/)/.test(spec);
+}
+
 /** Extracts the version out of a `js-harness-<semver>.tgz` (an `npm pack` output name), or null. */
 export function parseTarballVersion(filename) {
   const m = TARBALL_RE.exec(filename);
@@ -88,9 +93,42 @@ export function splitCommand(pm) {
   return pm.trim().split(/\s+/);
 }
 
-/** Builds argv for `<pm> install -g <spec>`, with an optional `--prefix`. */
-export function installArgs(spec, prefix) {
-  const args = ['install', '-g', spec];
-  if (prefix) args.push('--prefix', prefix);
-  return args;
+/** Which package manager a command's words name: `pnpm` when one word is pnpm itself (`pnpm`, `pnpm.exe`,
+ * `node .../pnpm.cjs`), else `npm`, whose arguments every other command is given. */
+export function pmKind(words) {
+  return words.some((word) => /(^|[\\/])pnpm(\.exe|\.cmd|\.c?js)?$/i.test(word)) ? 'pnpm' : 'npm';
+}
+
+/** The install of `spec` by a package manager of `kind`, as `{ args, env }`. npm takes `install -g <spec>` and an
+ * optional `--prefix`. pnpm takes `add -g <spec>` (on pnpm 12 `install -g` does the same; `add` is the verb every
+ * pnpm version documents) and has no `--prefix`: a prefix becomes its home. pnpm 12 reads its folders from
+ * `pnpm_config_*`, not `npm_config_*`, and a `global-bin-dir` in the user's own config wins over `PNPM_HOME`, so
+ * every folder it writes is named inside the prefix and its bin folder goes first on the path, which pnpm requires
+ * of a global bin folder (T2 of odd/tasks/harness-review.md, L7). */
+export function installPlan(kind, spec, prefix, env, platform) {
+  if (kind !== 'pnpm') {
+    // npm 12 refuses a package fetched from git unless `allow-git` says otherwise; `root` lets in the one git
+    // package named here and none among its dependencies (it has none). An older npm warns of an unknown option.
+    const args = isGitSpec(spec) ? ['install', '-g', '--allow-git=root', spec] : ['install', '-g', spec];
+    return { args: prefix ? [...args, '--prefix', prefix] : args, env };
+  }
+  const args = ['add', '-g', spec];
+  if (!prefix) return { args, env };
+  const bin = path.join(prefix, 'bin');
+  // Windows names the variable `Path`, and its lookup ignores case: the key already there is the one extended.
+  const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
+  const delimiter = platform === 'win32' ? ';' : ':';
+  return {
+    args,
+    env: {
+      ...env,
+      PNPM_HOME: prefix,
+      pnpm_config_global_bin_dir: bin,
+      pnpm_config_global_dir: path.join(prefix, 'global'),
+      pnpm_config_store_dir: path.join(prefix, 'store'),
+      pnpm_config_cache_dir: path.join(prefix, 'cache'),
+      pnpm_config_state_dir: path.join(prefix, 'state'),
+      [pathKey]: env[pathKey] ? `${bin}${delimiter}${env[pathKey]}` : bin,
+    },
+  };
 }

@@ -10,7 +10,8 @@ import {
   pickLatestTarball,
   latestFromSource,
   splitCommand,
-  installArgs,
+  pmKind,
+  installPlan,
 } from './version.mjs';
 
 test('compareSemver orders by major, then minor, then patch', () => {
@@ -68,13 +69,68 @@ test('splitCommand splits a package-manager command into argv', () => {
   assert.deepEqual(splitCommand('  node   cli.js  '), ['node', 'cli.js']);
 });
 
-test('installArgs builds `install -g <spec>`, with an optional --prefix', () => {
-  assert.deepEqual(installArgs('C:/src/js-harness-0.2.0.tgz'), ['install', '-g', 'C:/src/js-harness-0.2.0.tgz']);
-  assert.deepEqual(installArgs('C:/src/js-harness-0.2.0.tgz', 'C:/tmp/prefix'), [
+test('pmKind names pnpm when a word of the command is pnpm, and npm for anything else', () => {
+  assert.equal(pmKind(['pnpm']), 'pnpm');
+  assert.equal(pmKind(['pnpm.exe']), 'pnpm');
+  assert.equal(pmKind(['node', 'C:/tools/pnpm/bin/pnpm.cjs']), 'pnpm');
+  assert.equal(pmKind(['npm']), 'npm');
+  assert.equal(pmKind(['node', 'C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js']), 'npm');
+  assert.equal(pmKind(['my-pm']), 'npm');
+  assert.equal(pmKind(['node', 'C:/pnpm-projects/cli.js']), 'npm');
+});
+
+test('installPlan gives npm `install -g <spec>`, with an optional --prefix, and its environment unchanged', () => {
+  const env = { PATH: '/usr/bin' };
+  assert.deepEqual(installPlan('npm', 'C:/src/js-harness-0.2.0.tgz', undefined, env, 'linux'), {
+    args: ['install', '-g', 'C:/src/js-harness-0.2.0.tgz'],
+    env,
+  });
+  assert.deepEqual(installPlan('npm', 'C:/src/js-harness-0.2.0.tgz', 'C:/tmp/prefix', env, 'linux'), {
+    args: ['install', '-g', 'C:/src/js-harness-0.2.0.tgz', '--prefix', 'C:/tmp/prefix'],
+    env,
+  });
+});
+
+// T2: npm 12 refuses a package fetched from git by default (EALLOWGIT, `allow-git` "none"), measured 2026-10-18.
+test('installPlan lets npm fetch the one git package it is asked for, and never a tarball through that door', () => {
+  assert.deepEqual(installPlan('npm', 'github:jsaristi/js-harness#v1.0.0', undefined, {}, 'linux').args, [
     'install',
     '-g',
-    'C:/src/js-harness-0.2.0.tgz',
-    '--prefix',
-    'C:/tmp/prefix',
+    '--allow-git=root',
+    'github:jsaristi/js-harness#v1.0.0',
   ]);
+  assert.deepEqual(installPlan('npm', 'git+file:///tmp/repo#v1.0.0', '/tmp/p', {}, 'linux').args, [
+    'install',
+    '-g',
+    '--allow-git=root',
+    'git+file:///tmp/repo#v1.0.0',
+    '--prefix',
+    '/tmp/p',
+  ]);
+  assert.ok(!installPlan('npm', '/src/js-harness-1.0.0.tgz', undefined, {}, 'linux').args.includes('--allow-git=root'));
+});
+
+test('installPlan gives pnpm `add -g <spec>` and no --prefix, which pnpm does not have', () => {
+  const env = { PATH: '/usr/bin' };
+  assert.deepEqual(installPlan('pnpm', 'github:o/r#v1.0.0', undefined, env, 'linux'), { args: ['add', '-g', 'github:o/r#v1.0.0'], env });
+  assert.deepEqual(installPlan('pnpm', 'github:o/r#v1.0.0', '/tmp/p', env, 'linux').args, ['add', '-g', 'github:o/r#v1.0.0']);
+});
+
+// T2 of odd/tasks/harness-review.md, L7: pnpm 12 reads its folders from `pnpm_config_*`, not `npm_config_*`, and a
+// global-bin-dir in the user's own config wins over PNPM_HOME, so a prefix sets every folder pnpm writes, and puts
+// its bin folder first on the path, which pnpm requires of a global bin folder.
+test('installPlan keeps an isolated pnpm install inside the prefix, its bin folder first on the path', () => {
+  const prefix = path.join('C:', 'tmp', 'prefix');
+  const plan = installPlan('pnpm', 'github:o/r#v1.0.0', prefix, { Path: 'C:\\Windows', HOME: 'C:\\Users\\me' }, 'win32');
+  assert.equal(plan.env.PNPM_HOME, prefix);
+  assert.equal(plan.env.pnpm_config_global_bin_dir, path.join(prefix, 'bin'));
+  for (const key of ['global_dir', 'store_dir', 'cache_dir', 'state_dir']) {
+    assert.ok(plan.env[`pnpm_config_${key}`].startsWith(prefix + path.sep), key);
+  }
+  // Windows names the path `Path`: the same key is extended, never a second one beside it.
+  assert.equal(plan.env.Path, `${path.join(prefix, 'bin')};C:\\Windows`);
+  assert.equal(plan.env.PATH, undefined);
+  assert.equal(plan.env.HOME, 'C:\\Users\\me');
+  const posix = installPlan('pnpm', 'x', '/tmp/p', { PATH: '/usr/bin' }, 'linux');
+  assert.equal(posix.env.PATH, `${path.join('/tmp/p', 'bin')}:/usr/bin`);
 });

@@ -66,14 +66,14 @@ function squattedRegistry() {
 }
 
 /** Runs one of the three commands and returns its exit code with everything it printed. */
-async function runCommand(main, argv, env = {}, spawn = noProcess) {
+async function runCommand(main, argv, env = {}, spawn = noProcess, platform = undefined) {
   const out = [];
   const err = [];
   const original = { log: console.log, error: console.error };
   console.log = (line) => out.push(String(line));
   console.error = (line) => err.push(String(line));
   try {
-    const code = await main(argv, { JS_HARNESS_REPO: taglessRepo, ...env }, spawn);
+    const code = await main(argv, { JS_HARNESS_REPO: taglessRepo, ...env }, spawn, platform);
     return { code, out: out.join('\n'), err: err.join('\n') };
   } finally {
     Object.assign(console, original);
@@ -141,7 +141,7 @@ test('update with no source says no release is tagged yet, how to get the newest
   assert.match(out, /no release of js-harness is tagged yet/);
   // Tagging starts at 0.9.0 (docs/ROADMAP.md, "Versioning"): the line no longer names a first tagged version.
   assert.doesNotMatch(out, /tagged from/);
-  assert.match(out, /npm i -g github:jsaristi\/js-harness/);
+  assert.match(out, /npm i -g --allow-git=root github:jsaristi\/js-harness/);
   assert.match(out, new RegExp(`installed: ${escaped(currentVersion())}`));
   assert.doesNotMatch(out, /update available/);
   assert.equal(err, '');
@@ -159,7 +159,7 @@ test('upgrade with no source installs nothing and runs no sync, whatever a regis
     assert.equal(code, 1);
     assert.match(err, /nothing was installed/);
     assert.match(err, /no release of js-harness is tagged yet/);
-    assert.match(err, /npm i -g github:jsaristi\/js-harness/);
+    assert.match(err, /npm i -g --allow-git=root github:jsaristi\/js-harness/);
     assert.equal(out, '');
     assert.deepEqual(registry.calls, []);
   } finally {
@@ -225,17 +225,18 @@ test('upgrade installs with --pm split in words, else JS_HARNESS_PM, else npm', 
   const source = makeSource('99.0.0');
   const tarball = path.join(source, 'js-harness-99.0.0.tgz');
   const calls = [];
-  // The install fails, so each run stops at its first process: the one this test reads.
+  // The install fails and no copy answers the new version, so each run stops after asking: the install is the
+  // process this test reads.
   const spawn = (cmd, args) => {
     calls.push({ cmd, args });
     return { status: 3, stdout: '', stderr: '' };
   };
   try {
-    const flag = await runCommand(upgradeMain, ['--source', source, '--home', home, '--pm', 'node cli.js'], { JS_HARNESS_PM: 'my-pm' }, spawn);
-    const variable = await runCommand(upgradeMain, ['--source', source, '--home', home], { JS_HARNESS_PM: 'my-pm' }, spawn);
-    const neither = await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn);
+    const flag = await runCommand(upgradeMain, ['--source', source, '--home', home, '--pm', 'node cli.js'], { JS_HARNESS_PM: 'my-pm' }, spawn, 'linux');
+    const variable = await runCommand(upgradeMain, ['--source', source, '--home', home], { JS_HARNESS_PM: 'my-pm' }, spawn, 'linux');
+    const neither = await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn, 'linux');
 
-    assert.deepEqual(calls, [
+    assert.deepEqual(calls.filter((call) => call.args.includes('install')), [
       { cmd: 'node', args: ['cli.js', 'install', '-g', tarball] },
       { cmd: 'my-pm', args: ['install', '-g', tarball] },
       { cmd: 'npm', args: ['install', '-g', tarball] },
@@ -385,10 +386,7 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
     install(home, '0.9.0');
 
     const calls = [];
-    const spawn = (cmd, args) => {
-      calls.push({ cmd, args });
-      return { status: 0, stdout: '', stderr: '' };
-    };
+    const spawn = pathCopyAnswers('0.9.0', calls);
 
     const code = await upgradeMain(
       ['--source', source, '--prefix', prefix, '--home', home],
@@ -398,17 +396,18 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
     );
 
     assert.equal(code, 0);
-    assert.equal(calls.length, 2, 'expected one install call and one sync call');
-    assert.deepEqual(calls[0].args, [
-      'install',
-      '-g',
-      path.join(source, 'js-harness-0.9.0.tgz'),
-      '--prefix',
-      prefix,
-    ]);
-    assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
+    assert.equal(calls.length, 3, 'expected the install, the installed copy asked its version, and its sync');
+    // T2: on Windows `npm` is a .cmd file, which Node starts only through a shell, so the install is one line; the
+    // command's name is never quoted, since a .cmd named in quotes gets a wrong %~dp0.
+    assert.deepEqual(calls[0].args, []);
+    assert.equal(calls[0].opts.shell, true);
+    assert.ok(calls[0].cmd.startsWith('npm install -g '), calls[0].cmd);
+    assert.ok(calls[0].cmd.includes(path.join(source, 'js-harness-0.9.0.tgz')), calls[0].cmd);
+    assert.ok(calls[0].cmd.includes(`--prefix ${prefix}`) || calls[0].cmd.includes(`--prefix "${prefix}"`), calls[0].cmd);
+    assert.deepEqual(calls[1].args, [path.join(binDir, 'js-harness.mjs'), '--version']);
+    assert.equal(calls[2].args[0], path.join(binDir, 'js-harness.mjs'));
     // T4: --global, or the newly installed binary's sync would act on the project it runs in.
-    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home, '--global']);
+    assert.deepEqual(calls[2].args.slice(1), ['sync', '--home', home, '--global']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });
@@ -428,10 +427,7 @@ test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the sync
     install(home, '0.9.0');
 
     const calls = [];
-    const spawn = (cmd, args) => {
-      calls.push({ cmd, args });
-      return { status: 0, stdout: '', stderr: '' };
-    };
+    const spawn = pathCopyAnswers('0.9.0', calls);
 
     const code = await upgradeMain(
       ['--source', source, '--prefix', prefix, '--home', home],
@@ -441,14 +437,141 @@ test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the sync
     );
 
     assert.equal(code, 0);
-    assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
+    assert.deepEqual(calls[0], { cmd: 'npm', args: ['install', '-g', path.join(source, 'js-harness-0.9.0.tgz'), '--prefix', prefix], opts: calls[0].opts });
+    assert.equal(calls[2].args[0], path.join(binDir, 'js-harness.mjs'));
     // T4: --global, or the newly installed binary's sync would act on the project it runs in.
-    assert.deepEqual(calls[1].args.slice(1), ['sync', '--home', home, '--global']);
+    assert.deepEqual(calls[2].args.slice(1), ['sync', '--home', home, '--global']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });
     fs.rmSync(source, { recursive: true, force: true });
   }
+});
+
+/** A prefix where npm's POSIX layout holds a copy of js-harness, a home whose manifest says `recorded`, and a source
+ * of 0.9.0; `run(spawn)` upgrades into them on linux and gives back what it printed. */
+async function prefixUpgrade(spawn, { pm, recorded = '0.9.0', layout = ['lib', 'node_modules'] } = {}) {
+  const home = makeTmpDir('js-harness-upgrade-home-t2-');
+  const prefix = makeTmpDir('js-harness-upgrade-prefix-t2-');
+  const source = makeSource('0.9.0');
+  try {
+    const binDir = path.join(prefix, ...layout, 'js-harness', 'bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(path.join(binDir, 'js-harness.mjs'), '// stub, never executed in this test');
+    install(home, recorded);
+    const argv = ['--source', source, '--prefix', prefix, '--home', home, ...(pm ? ['--pm', pm] : [])];
+    const run = await runCommand(upgradeMain, argv, {}, spawn(prefix), 'linux');
+    return { ...run, prefix, bin: path.join(binDir, 'js-harness.mjs') };
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(prefix, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+}
+
+/** A stand-in where the install exits `installStatus` and the installed copy answers `--version` with `answer`. */
+function installExits(installStatus, answer, calls) {
+  return () => (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    if (args.includes('install') || args.includes('add')) return { status: installStatus, stdout: '', stderr: 'os error 32' };
+    return { status: 0, stdout: args.includes('--version') ? `${answer}\n` : '', stderr: '' };
+  };
+}
+
+// T2 of odd/tasks/harness-review.md: pnpm exits 1 on its cleanup (os error 32) after a good install, so the
+// package manager's exit code is not the verdict; the installed copy's own --version is.
+test('upgrade goes on when the package manager exits non-zero but the installed copy answers the new version', async () => {
+  const calls = [];
+  const run = await prefixUpgrade(installExits(1, '0.9.0', calls));
+  assert.equal(run.code, 0, run.err);
+  assert.match(run.err, /npm exited 1, but the copy it installed answers 0\.9\.0: going on/);
+  assert.match(run.out, /upgraded to 0\.9\.0/);
+  assert.ok(calls.some((call) => call.args.includes('sync')), 'the sync ran');
+});
+
+test('upgrade fails when the package manager exits non-zero and the installed copy does not answer the new version', async () => {
+  const calls = [];
+  const run = await prefixUpgrade(installExits(1, '0.1.0', calls));
+  assert.equal(run.code, 1);
+  assert.match(run.err, /upgrade failed: npm exited 1/);
+  assert.ok(!calls.some((call) => call.args.includes('sync')), 'nothing was synced');
+});
+
+test('upgrade refuses a copy under --prefix that answers another version even when the install exited 0', async () => {
+  const calls = [];
+  const run = await prefixUpgrade(installExits(0, '0.1.0', calls));
+  assert.equal(run.code, 1);
+  assert.match(run.err, /the copy installed under .+ answers 0\.1\.0, not 0\.9\.0: nothing was synced/);
+  assert.ok(!calls.some((call) => call.args.includes('sync')), 'nothing was synced');
+});
+
+test('upgrade with pnpm and --prefix installs with add -g in a home of its own and syncs the copy pnpm laid out', async () => {
+  const calls = [];
+  const spawn = () => (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    return { status: 0, stdout: args.includes('--version') ? '0.9.0\n' : '', stderr: '' };
+  };
+  // pnpm 12 puts a global package in `<global dir>/v11/<hash>/node_modules/<name>` (L7).
+  const run = await prefixUpgrade(spawn, { pm: 'pnpm', layout: ['global', 'v11', '1d87c-18df7ea8ad4c5424-0', 'node_modules'] });
+  assert.equal(run.code, 0, run.err);
+  assert.equal(calls[0].cmd, 'pnpm');
+  assert.deepEqual(calls[0].args.slice(0, 2), ['add', '-g']);
+  assert.ok(!calls[0].args.includes('--prefix'));
+  assert.equal(calls[0].opts.env.PNPM_HOME, run.prefix);
+  assert.equal(calls[0].opts.env.pnpm_config_global_bin_dir, path.join(run.prefix, 'bin'));
+  assert.deepEqual(calls[1].args, [run.bin, '--version']);
+  assert.equal(calls[2].args[0], run.bin);
+});
+
+/** An upgrade with pnpm into a prefix whose bin folder holds pnpm's lock, stamped `ageMinutes` ago before the
+ * run, or taken by the install itself when `ageMinutes` is null; it says whether the lock is left. */
+async function lockAfterUpgrade(ageMinutes) {
+  const calls = [];
+  let lock;
+  const spawn = (prefix) => {
+    lock = path.join(prefix, 'bin', '.pnpm-global-bin.lock');
+    if (ageMinutes !== null) {
+      fs.mkdirSync(lock, { recursive: true });
+      const then = new Date(Date.now() - ageMinutes * 60_000);
+      fs.utimesSync(lock, then, then);
+    }
+    return (cmd, args, opts) => {
+      calls.push({ cmd, args, opts });
+      if (args.includes('add') && ageMinutes === null) fs.mkdirSync(lock, { recursive: true });
+      return { status: 0, stdout: args.includes('--version') ? '0.9.0\n' : '', stderr: '' };
+    };
+  };
+  let left;
+  const run = await prefixUpgrade((prefix) => {
+    const inner = spawn(prefix);
+    return (cmd, args, opts) => {
+      const result = inner(cmd, args, opts);
+      if (args.includes('sync')) left = fs.existsSync(lock);
+      return result;
+    };
+  }, { pm: 'pnpm', layout: ['global', 'v11', 'h-1-0', 'node_modules'] });
+  return { run, left };
+}
+
+// T2: a pnpm whose cleanup failed leaves its bin lock, and the next install waits five minutes on it and times out
+// (update-copy.sh, 2026-10-15). A lock its own install took, or one older than any live install holds it, is removed.
+test('upgrade with pnpm removes the bin lock its own install left', async () => {
+  const { run, left } = await lockAfterUpgrade(null);
+  assert.equal(run.code, 0, run.err);
+  assert.equal(left, false);
+  assert.match(run.err, /removed pnpm's bin lock/);
+});
+
+test('upgrade with pnpm removes a bin lock older than ten minutes before it installs', async () => {
+  const { run, left } = await lockAfterUpgrade(30);
+  assert.equal(run.code, 0, run.err);
+  assert.equal(left, false);
+});
+
+test('upgrade with pnpm keeps a fresh bin lock another install may hold', async () => {
+  const { run, left } = await lockAfterUpgrade(1);
+  assert.equal(left, true);
+  assert.doesNotMatch(run.err, /removed pnpm's bin lock/);
 });
 
 // install-update T8: with no --prefix the sync is run by whatever js-harness the shell finds, so that
@@ -569,10 +692,7 @@ test('upgradeMain resolves --prefix from JS_HARNESS_PREFIX when the flag is abse
     install(home, '0.9.0');
 
     const calls = [];
-    const spawn = (cmd, args) => {
-      calls.push({ cmd, args });
-      return { status: 0, stdout: '', stderr: '' };
-    };
+    const spawn = pathCopyAnswers('0.9.0', calls);
 
     const code = await upgradeMain(
       ['--source', source, '--home', home],
@@ -582,7 +702,8 @@ test('upgradeMain resolves --prefix from JS_HARNESS_PREFIX when the flag is abse
     );
 
     assert.equal(code, 0);
-    assert.equal(calls[1].args[0], path.join(binDir, 'js-harness.mjs'));
+    assert.deepEqual(calls[1].args, [path.join(binDir, 'js-harness.mjs'), '--version']);
+    assert.equal(calls[2].args[0], path.join(binDir, 'js-harness.mjs'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });
@@ -626,9 +747,11 @@ test('upgradeMain returns a non-zero code and skips sync when install fails', as
       calls.push({ cmd, args });
       return { status: 1, stdout: '', stderr: 'boom' };
     };
-    const code = await upgradeMain(['--source', source, '--home', home], {}, spawn);
+    const code = await upgradeMain(['--source', source, '--home', home], {}, spawn, 'linux');
     assert.equal(code, 1);
-    assert.equal(calls.length, 1);
+    // T2: the installed copy is asked its version before the exit code is believed; nothing is synced.
+    assert.deepEqual(calls[0].args, ['install', '-g', path.join(source, 'js-harness-0.9.0.tgz')]);
+    assert.ok(!calls.some((call) => call.args.includes('sync')));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(source, { recursive: true, force: true });
