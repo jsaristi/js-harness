@@ -210,9 +210,9 @@ apliquemos todo esto y despues de todo hacemos un test completo de la aplicacion
 `odd/tasks/harness-review.md`).
 - [ ] The lead's manual steps are commands with tests (watch and lease, land and copy, archive, openings)
 - [ ] Every command reviewed against its help, README and SPEC, and every finding fixed or written down
-- [ ] The full application test passes on Windows and WSL2
-- [ ] v0.9.0 tagged and installed from its tag by real pnpm and npm
-- [ ] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0
+- [x] The full application test passes on Windows and WSL2
+- [x] v0.9.0 tagged and installed from its tag by real pnpm and npm
+- [x] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0
 
 ## F5 result
 
