@@ -54,7 +54,7 @@ proofs and by those tasks.
 ### The commit gate
 
 **Problem:** F1 asked that `git commit` run the gate (`odd/tasks/f1-skeleton.md`). Later a static row that failed was printed only after about seventeen minutes of sensors and the wait for the lock (`odd/tasks/gate-turn.md`), and git runs no pre-commit hook for the commit a merge makes by itself.
-**Requirement:** One command is the single gate: the same gate runs before every commit, a merge's commit included, and refuses it when red. Its static rows (the project's rules, the failures register, the instruction budget, the contracts, the citations, the functions, the payload, the fixed load, the flaky ledger, this specification) run first, each in a second or less, and a failing one stops the gate before it waits for the machine's lock or runs a sensor. A row that informs never stops it.
+**Requirement:** One command is the single gate: the same gate runs before every commit a person makes, and refuses it when red. A merge's commit that git makes by itself runs this repository's own `pre-merge-commit` hook (`.githooks/pre-merge-commit`), because git runs no pre-commit hook for it; an installed project's hook is the pre-commit one only, so its merge commits made by git are not gated. Its static rows (the project's rules, the failures register, the instruction budget, the contracts, the citations, the functions, the payload, the fixed load, the commit size where this repository's `reviewed-commit-lines` rule is in force, the exact tests of a project that declares them, the flaky ledger, this specification) run first, each in a second or less, and a failing one stops the gate before it waits for the machine's lock or runs a sensor. A row that informs never stops it.
 **Reason:** A red check means the commit is not ready yet (`AGENTS.md`); a fault known in a second must not cost a whole gate.
 **Proof:** `node --test bin/check.test.mjs`, `node --test bin/check-exit.test.mjs`
 **Discarded:** Setting `core.hooksPath` in a project: it silently disables `.git/hooks`; `init` writes into the hooks path instead.
@@ -166,7 +166,7 @@ proofs and by those tasks.
 **Reason:** Anything written outside the repository must come out exactly, or removing the harness costs a purge script.
 **Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/install-session-messages.test.mjs`
 **Discarded:** Assuming npm: on this machine `npm` is a pnpm shim. Owning a host's settings file whole instead of one entry.
-**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`
+**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
 
 ### Releases
 
@@ -189,7 +189,7 @@ proofs and by those tasks.
 ### The stack doctor
 
 **Problem:** A gap was found only by accident: codegraph was registered in Claude Code but not in Codex (`odd/tasks/stack-doctor.md`).
-**Requirement:** The doctor reports each tool of the stack as installed, configured per host and project, and up to date, or unknown, with that tool's own fix command; it caches the latest versions, fails open offline and never installs or configures another tool. A session-start hook speaks only when the list of gaps changed, as a message to the person and never as text for the model, and always exits 0. A tool of the stack, or the Claude CLI on PATH, whose version moved since the versions last reviewed is a gap until its review is recorded (`docs/FAILURES.md`, cli-updated-itself). The installed copy's rules with no scope are compared, by their hash, with the default branch's, read fresh and never cached, so that a copy behind main is `outdated` with its fix and a list that cannot be read is `unknown`.
+**Requirement:** The doctor reports each tool of the stack as installed, configured per host and project, and up to date, or unknown, with that tool's own fix command; it caches the latest versions, fails open offline and never installs or configures another tool. A session-start hook speaks only when the list of gaps changed, as a message to the person and never as text for the model, and always exits 0. A tool of the stack, or the Claude CLI on PATH, whose version moved since the versions last reviewed is a gap until its review is recorded (`docs/FAILURES.md`, cli-updated-itself). The installed copy's rules with no scope are compared, by their hash, with the default branch's, read fresh and never cached, so that a copy behind main is `outdated` with its fix and a list that cannot be read is `unknown`. Further rows: the Claude account check (the CLI and the desktop app name one account, neither identifier printed), the remote server check (`remote`), the `host-update` row for the Claude desktop app and its CLI (reviewed by `--host-reviewed`), the `gentle-ai-sync` row (`--gentle-ai-reviewed`), the `stack-update` row (`--stack-reviewed`), the `unseen` row, and, interactively, the `worktrees` row.
 **Reason:** A notice costs no model tokens when it comes only on start or resume, and only when something changed. A tool that updates itself was seen only when a measurement was about to run on it.
 **Proof:** `node --test bin/doctor.test.mjs`, `node --test bin/doctor-hook.test.mjs`, `node --test bin/lib/stack.test.mjs`, `node --test bin/lib/stack-update.test.mjs`, `node --test bin/lib/rules-installed.test.mjs`
 **Discarded:** Plain-text hook output: it enters the model's context. Recommending another tool's own upgrade command where that tool says not to.
@@ -202,7 +202,7 @@ proofs and by those tasks.
 **Reason:** Progress is computed by a command, not reinterpreted by a model.
 **Proof:** `node --test bin/progress.test.mjs`, `node --test bin/lib/progress.test.mjs`
 **Discarded:** A published page. Editing checkboxes from the command.
-**Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `js-harness progress`
+**Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `bin/lib/progress-pace.mjs` (progress --pace), `js-harness progress`
 
 ### The throughput review
 
@@ -211,7 +211,7 @@ proofs and by those tasks.
 **Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts.
 **Proof:** `node --test bin/throughput.test.mjs`, `node --test bin/lib/throughput.test.mjs`
 **Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
-**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput`
+**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput` (with snapshot, status, reviewed and shipped)
 
 ### The task contract
 
@@ -225,7 +225,7 @@ proofs and by those tasks.
 ### The Codex review
 
 **Problem:** The Codex review of each approved slice depended on the agent remembering, and nothing noticed a skip (`odd/tasks/project-init.md`). On 2026-09-29 every shell command of a review failed after a Codex update, and in 6 of 41 reviews the model never read the diff yet answered (`odd/tasks/codex-exec-review.md`).
-**Requirement:** A command runs Codex's review of a range and records it only on evidence that the reviewer read the diff (a completed turn, and every changed line of the patch in the output of its successful commands), never on its wording; an explicit skip is recorded with its reason; the pre-push hook refuses a push whose code commits no record covers. A merge of the default branch, or of a stacked base whose own code commits each have a record (`odd/tasks/gate-first.md`, T7), is reviewed by what was written in it: at HEAD as the range, and below HEAD, after code commits that each have a record, in a turn of its own before the commits after it, where two turns cost less than one review (`odd/tasks/merge-below-head.md`).
+**Requirement:** A command runs Codex's review of a range and records it only on evidence that the reviewer read the diff (a completed turn, and every changed line of the patch in the output of its successful commands), never on its wording; an explicit skip is recorded with its reason; the pre-push hook refuses a push whose code commits no record covers, and a push whose head is a Codex review that owes a correction never rechecked (a recheck that left findings open passes with a warning; `check --push`, `bin/check.mjs` `correctionOwed`). A merge of the default branch, or of a stacked base whose own code commits each have a record (`odd/tasks/gate-first.md`, T7), is reviewed by what was written in it: at HEAD as the range, and below HEAD, after code commits that each have a record, in a turn of its own before the commits after it, where two turns cost less than one review (`odd/tasks/merge-below-head.md`).
 **Reason:** A second reviewer after gentle-ai, and a skip must be explicit, never silent.
 **Proof:** `node --test bin/codex-review.test.mjs`, `node --test bin/check-codex-reviews.test.mjs`, `node --test bin/pre-push-hook.test.mjs`, `node --test bin/lib/codex-reviews.test.mjs`
 **Discarded:** The Codex plugin's review: it passes no per-thread setting and returns only text. Reading gentle-ai's or the plugin's own state as the record: pruned, opaque and free to change.
@@ -283,7 +283,7 @@ proofs and by those tasks.
 **Reason:** The end of a background task is what wakes a session, so a detached daemon would wake no one; process ids are reused fast; the host shell's path is not the user's.
 **Proof:** `node --test bin/loop.test.mjs`, `node --test bin/loop-bodies.test.mjs`
 **Discarded:** Compare-and-remove of a stale record by moving it aside: a third session could claim the freed name, so a lock per name replaced it. One-shot jobs as loops.
-**Today:** `bin/loop.mjs`, `bin/lib/loops.mjs`, `js-harness loop`
+**Today:** `bin/loop.mjs`, `bin/lib/loops.mjs`, `bin/lib/stall.mjs` (the stalled work sessions that the heartbeat names and the board lists, from the session-stall rule), `js-harness loop`
 
 ### Waiting and waking
 
@@ -324,7 +324,7 @@ proofs and by those tasks.
 ### The guard
 
 **Problem:** Sub-agents ran on models the owner's rule of 2026-10-10 did not allow; hours were wrong in 33 of 153 messages; backticks inside double quotes ate a command's name; two whole test runs beside a gate both missed their bounds; memory index lines reached 844 characters; 93 of 267 stated context shares were wrong (`odd/tasks/honesty-audit.md`, `odd/tasks/test-run-warning.md`).
-**Requirement:** A hook before each tool call refuses, with the host's deny and a reason: a sub-agent on a model the project's rules do not give (only where those rules are in force), a message to another session whose stated hour is more than a minute off the clock (after its label, or first, before it), a document hour ahead of the clock, a shell command with backticks inside double quotes, a test run of several files outside a gate's turn while another gate holds the lock, a line over the limit in a memory index, and the tools that open sessions out of sight where the project says so. A stop hook turns the stop back when a reply states its own context share more than 2 points from the recorded one, and never loops. Both write nothing and always exit 0, so an older copy can never block.
+**Requirement:** A hook before each tool call refuses, with the host's deny and a reason: a sub-agent on a model the project's rules do not give (only where those rules are in force), a message to another session whose stated hour is more than a minute off the clock (after its label, or first, before it), a document hour ahead of the clock, a shell command with backticks inside double quotes, a test run of several files outside a gate's turn while another gate holds the lock, a line over the limit in a memory index, the tools that open sessions out of sight where the project says so, a `start_session` with a brief that names no effort or one above the project's `session-effort` rule where that rule is declared (a fork included), a recursive `rm` or `rmdir` of a drive's root or of a folder at its top, and a gentle-ai review (`assess`, `status`, `start`) whose `--base-ref` is off the head's first-parent line. A stop hook turns the stop back when a reply states its own context share more than 2 points from the recorded one, and never loops. Both write nothing and always exit 0, so an older copy can never block.
 **Reason:** Each rule had a measured failure and the owner's order to refuse it; a refusal at the call is the one reader every call meets.
 **Proof:** `node --test bin/guard.test.mjs`, `node --test bin/lib/guard.test.mjs`, `node --test bin/lib/test-run-warning.test.mjs`
 **Discarded:** Reading effort: a hook before a tool call cannot. Taking back a reply with a wrong share: impossible; turning the stop back is the nearest. A warning instead of a refusal for test runs. The first backtick detector: 20 hits for 1 real.

@@ -50,13 +50,13 @@ const USAGE = [
   '    gate log nor the channel record was written for --quiet minutes (30); with a STALLED line per session (exit 0)',
   '    when a work session the orchestrator handed work to (a notice to its number, or its opening) and that has not',
   '    given it back (waiting, closed or relieved) makes no commit, notice or gate for --stall minutes (the rule',
-  '    session-stall, 60), and again each time that quiet doubles; one already stalled at the start is named on an',
+  '    session-stall when not given), and again each time that quiet doubles; one already stalled at the start is named on an',
   '    "already stalled:" line and waits for its doubling; with a WINDOWS line (exit 0) when the daily Windows run,',
   '    read every --windows minutes (60; 0 for never; js-harness windows-daily reads it by hand), is red and was not',
   '    told before; with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
   '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
   '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
-  '    js-harness throughput snapshot does, the settled days of the last throughput-backfill-days (14) that the gate',
+  '    js-harness throughput snapshot does, the settled days of the window the rule throughput-backfill-days gives that the gate',
   '    log holds and that have no snapshot, never while a gate holds the lock;',
   '    channel-watch ends with the first notice in the channel record written by a session other than its owner',
   '    (exit 0), or after --for minutes (30, exit 1).',
@@ -89,7 +89,7 @@ const FLAGS_OF = {
 
 function parseArgs(argv) {
   const [verb, ...rest] = argv;
-  if (!Object.hasOwn(FLAGS_OF, verb ?? '')) throw new LoopArgError(verb === undefined ? 'a subcommand is required: run, status or stop' : `unknown subcommand: ${verb}`);
+  if (!Object.hasOwn(FLAGS_OF, verb ?? '')) throw new LoopArgError(verb === undefined ? 'a subcommand is required: run, status, stop, heartbeat or channel-watch' : `unknown subcommand: ${verb}`);
   const allowed = new Set(FLAGS_OF[verb]);
   const parsed = { verb, flags: {}, positional: [], command: [] };
   for (let i = 0; i < rest.length; i += 1) {

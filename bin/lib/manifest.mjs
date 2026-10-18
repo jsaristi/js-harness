@@ -26,7 +26,7 @@ js-harness commands:
 - \`js-harness install\` — write the skills and the session-start hook entries, and record a manifest under the home.
 - \`js-harness sync --global\` — re-write installed files for the running version.
 - \`js-harness update\` — say whether a newer release exists, and how to get the newest copy when none is tagged.
-- \`js-harness upgrade\` — install the newer release of a folder of tarballs (\`--source <dir>\`), then sync; with no source it installs nothing.
+- \`js-harness upgrade\` — install the newer release, the repository's newest \`vX.Y.Z\` tag (\`--repo <url or folder>\` names another), or the newest tarball of a folder of \`npm pack\` tarballs (\`--source <dir>\`, which wins when named), then sync; with no release tagged it installs nothing and exits 1.
 - \`js-harness uninstall --global\` — remove exactly what install wrote; it keeps the memory snapshots, the only copy of what a memory pass changed, and \`--full\` removes them too.
 - \`js-harness codex-review --base <rev>\` — run \`codex exec review\` over <rev>..HEAD and record it, only when its successful commands showed every changed line of the patch; \`--unavailable <reason>\` records a skip when Codex cannot run. Where the project's \`codexReview\` switch is off at HEAD it starts nothing and records nothing.
 - \`js-harness check\` — the gate of a commit. Its sensors run one gate at a time on the machine: it waits for its turn, in the order the gates arrived, and gives up once the lock has gone ${ruleValue('gate-wait', 'minutes')} minutes without changing hands (\`--wait <minutes>\`), or refuses at once (\`--no-wait\`).

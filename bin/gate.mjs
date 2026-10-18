@@ -55,7 +55,8 @@ const USAGE = [
 const GATE_LOG_LAST = 20;
 
 /** The exit code of a `gate` that ran nothing because the lock was not its to take: with `--no-wait`, held
- * or with a gate ahead of it in the line, or past the bound of its wait. It is the "try again later" of
+ * or with a gate ahead of it in the line, past the bound of its wait, or with its `--ready` check failing before
+ * the wait or after it. It is the "try again later" of
  * sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
  * a caller can tell "did not run" from "ran and failed". A usage error is 2, as everywhere here. */
 export const GATE_NOT_RUN = 75;
@@ -292,7 +293,7 @@ function gateFirstMain(argv, env) {
  * The lock is taken as a gate takes it (`takeGateTurn` of `check`), in its turn: the lock is a line, and
  * this gate takes it after the gates that arrived before it. Held by another, it is waited for, and the
  * wait is said on stderr, as is a wait behind a gate that only waits ahead. The wait is given up once the
- * lock has gone an hour without changing hands, or as many minutes as `--wait` says: that is no bound on
+ * lock has gone as many minutes as `--wait` says without changing hands (the rule `gate-wait` when not given): that is no bound on
  * the whole of a wait, which behind a line that moves is as long as the line. `--no-wait` refuses at once,
  * for a lock that is held and for a gate that waits ahead of this one. A lock that cannot be taken at all
  * does not stop the command: it runs without it, and stderr says so. The holder's file says

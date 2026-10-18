@@ -458,7 +458,7 @@ test('--help lists wait, and wait with no condition exits 2 with its usage throu
 test('--help lists notify, and notify with nothing to write exits 2 with its usage through the dispatcher', () => {
   assert.match(
     run(['--help']).stdout,
-    /^ {2}notify\s+Append one notice to the project's channel record.*js-harness notify --to orchestrator\|<number> --kind opened\|waiting\|closed\|note\|answer\|relieved "<one line>".*--transcript.*--line.*address of the role, as sessions --address gives it.*exit is 0 once the notice is recorded.*--relief "<one line>".*relief file.*--opening "<title>".*standard input.*claim.*never the user's word/m,
+    /^ {2}notify\s+Append one notice to the project's channel record.*js-harness notify --to orchestrator\|<number> --kind opened\|waiting\|closed\|note\|answer\|relieved\|question\|withdrawn\|ready "<one line>".*--transcript.*--line.*address of the role, as sessions --address gives it.*exit is 0 once the notice is recorded.*--relief "<one line>".*relief file.*--opening "<title>".*standard input.*claim.*never the user's word/m,
   );
   const result = run(['notify', '--to', 'orchestrator']);
   assert.equal(result.status, 2);
