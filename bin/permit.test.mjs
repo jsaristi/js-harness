@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { permitMain, permitsDir } from './permit.mjs';
+import { permitMain, permitsDir, renewOwnLease } from './permit.mjs';
 import { readNotices } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
@@ -210,3 +210,44 @@ test('the public command answers nothing and exits 0 on a payload it cannot read
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// renewOwnLease (odd/tasks/harness-review.md, T3, S5a): `wait` renews the lease its own session holds, and only that.
+const renewLease = (machine, session, everySeconds, now = machine.clock) => renewOwnLease({
+  home: machine.home, cwd: machine.root, session, now: new Date(now), everySeconds, projectRoot: () => machine.root,
+});
+const leaseFileOf = (machine) => path.join(permitsDir(machine.home, machine.slug), 'lease.json');
+const readLeaseText = (machine) => (fs.existsSync(leaseFileOf(machine)) ? fs.readFileSync(leaseFileOf(machine), 'utf8') : null);
+const MINUTE = 60 * 1000;
+
+function writeHeldLease(machine, session, until) {
+  fs.mkdirSync(permitsDir(machine.home, machine.slug), { recursive: true });
+  fs.writeFileSync(leaseFileOf(machine), `${JSON.stringify({ schema: 'js-harness.permit/v1', session, until: new Date(until).toISOString() })}\n`, 'utf8');
+}
+
+test('renewOwnLease moves the lease its session holds to now plus 40 minutes, or the interval plus 5 minutes when that is longer', withMachine(async (machine) => {
+  writeHeldLease(machine, LEAD, START + 10 * MINUTE);
+  assert.deepEqual(renewLease(machine, LEAD, 1200), { renewed: true, until: new Date(START + 40 * MINUTE).toISOString() });
+  assert.deepEqual(JSON.parse(readLeaseText(machine)), { schema: 'js-harness.permit/v1', session: LEAD, until: new Date(START + 40 * MINUTE).toISOString() });
+  const later = START + 30 * MINUTE;
+  assert.equal(renewLease(machine, LEAD, 3600, later).renewed, true);
+  assert.equal(JSON.parse(readLeaseText(machine)).until, new Date(later + 65 * MINUTE).toISOString());
+}));
+
+test('renewOwnLease never takes, creates or changes a lease another session holds, an expired lease, or none', withMachine(async (machine) => {
+  writeHeldLease(machine, WORKER, START + 40 * MINUTE);
+  const other = readLeaseText(machine);
+  assert.deepEqual(renewLease(machine, LEAD, 1200), { renewed: false });
+  assert.equal(readLeaseText(machine), other);
+
+  writeHeldLease(machine, LEAD, START - MINUTE);
+  const expired = readLeaseText(machine);
+  assert.deepEqual(renewLease(machine, LEAD, 1200), { renewed: false });
+  assert.equal(readLeaseText(machine), expired);
+
+  fs.rmSync(leaseFileOf(machine));
+  assert.deepEqual(renewLease(machine, LEAD, 1200), { renewed: false });
+  assert.equal(readLeaseText(machine), null);
+
+  assert.deepEqual(renewLease(machine, undefined, 1200), { renewed: false });
+  assert.equal(readLeaseText(machine), null);
+}));

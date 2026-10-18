@@ -1,16 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { WAIT_EVERY_SECONDS, WAIT_FOR_MINUTES, waitMain } from './wait.mjs';
 import { NOTICE_SCHEMA, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { permitsDir } from './permit.mjs';
 
-// Every seam is fake: the clock, the sleep, git, gh and the channel record. No test runs git or gh, sleeps, or
-// reads or writes a file; the project and the harness home are paths that are only named.
+// Every seam is fake: the clock, the sleep, git, gh and the channel record. No test runs git or gh or sleeps. The
+// project and the harness home are paths that are only named, except the lease tests, which write a lease in a
+// scratch folder under os.tmpdir() that they remove.
 const T0 = Date.parse('2026-10-14T12:00:00.000Z');
 const CWD = path.resolve('wait-test-project');
 const HOME = path.resolve('wait-test-home');
-const RECORD = recordPath(HOME, projectSlug(CWD));
 const ORQ = { role: 'orchestrator', number: null };
 const WORK = (number) => ({ role: 'work', number });
 
@@ -57,8 +60,9 @@ function noticeLine({ at, to, kind = 'note', text = 'a note', title = 'JH 5 · c
 /** The fake world of one run. `answer(command, args, state)` is what git and gh return. `onSleep(state)` runs after
  * each sleep, so that a test can write the record while the wait waits. `record` is the channel's text, or `null`
  * for no file; `readError` is what reading the record fails with, when given. */
-function world({ answer = () => ok(), onSleep = () => {}, record = null, readError = null, transcript = null } = {}) {
-  const state = { clock: T0, sleeps: [], calls: [], timeouts: [], outAtCall: [], out: [], err: [], record };
+function world({ answer = () => ok(), onSleep = () => {}, record = null, readError = null, transcript = null, home = HOME } = {}) {
+  const recordFile = recordPath(home, projectSlug(CWD));
+  const state ={ clock: T0, sleeps: [], calls: [], timeouts: [], outAtCall: [], out: [], err: [], record };
   // The waiting session's own transcript, where `senderOf` reads its title: `{ title }`, a title it was given, or
   // `{ title: null }`, a transcript with none (a phone session's).
   const transcriptFile = path.join(PROJECT_DIR, `${SELF_ID}.jsonl`);
@@ -83,8 +87,8 @@ function world({ answer = () => ok(), onSleep = () => {}, record = null, readErr
       return answer(command, commandArgs, state);
     },
     readFile: (file) => {
-      if (file === RECORD && readError !== null) throw readError;
-      if (file === RECORD && state.record !== null) return state.record;
+      if (file === recordFile && readError !== null) throw readError;
+      if (file === recordFile && state.record !== null) return state.record;
       if (file === transcriptFile && transcriptText !== null) return transcriptText;
       throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
     },
@@ -345,5 +349,135 @@ test('usage errors exit 2 with the usage, and nothing is checked', async () => {
     assert.deepEqual(state.calls, [], label);
     assert.deepEqual(state.out, [], label);
     assert.match(state.err.join('\n'), /^js-harness wait: .+\n\nUsage: js-harness wait \(--pr <number> \| --main-has <commit>/, label);
+  }
+});
+
+// Lease renewal (odd/tasks/harness-review.md, T3, S5a): a notice wait for the orchestrator renews the relay lease its
+// session holds, on every tick. The lease lives in a scratch home under os.tmpdir(); the clock is the fake one.
+const LEASE_SCHEMA = 'js-harness.permit/v1';
+const MIN = 60000;
+const OTHER_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
+const renewing = (phrase, minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for ${phrase}; ends when it holds, or after ${minutes} minutes; renews the relay lease while it waits; stop it with TaskStop when it is no longer needed`;
+
+function leaseHome() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-wait-lease-'));
+  return { dir, home: path.join(dir, 'home') };
+}
+
+/** The lease file of CWD's project under `home`. */
+const leaseFileOf = (home) => path.join(permitsDir(home, projectSlug(CWD)), 'lease.json');
+
+/** Writes a lease of `session` until `until` (ms) under `home`; `null` as the session writes none. */
+function writeLease(home, session, until) {
+  const file = leaseFileOf(home);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ schema: LEASE_SCHEMA, session, until: new Date(until).toISOString() })}\n`, 'utf8');
+  return file;
+}
+
+const readOrNull = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+const ORQ_ARGS = (home, ...extra) => ['--cwd', CWD, '--home', home, '--notice-to', 'orchestrator', ...extra];
+
+test('--notice-to orchestrator renews the lease its session holds on each tick, so the lease outlasts the wait', async () => {
+  const { dir, home } = leaseHome();
+  try {
+    const file = writeLease(home, SELF_ID, T0 + 40 * MIN);
+    const { state, deps } = world({ home });
+    assert.equal(await waitMain(ORQ_ARGS(home, '--every', '1200', '--for', '60'), SELF_ENV, deps), 1);
+    // Checks at 0, 20, 40 and 60 minutes; the last renewal is at the deadline: 60 + 40 minutes.
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).until, new Date(T0 + 100 * MIN).toISOString());
+    assert.equal(state.out[0], renewing('a notice to orchestrator', 60));
+    assert.deepEqual(state.err, []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the renewed lease lasts the interval plus 5 minutes when that is longer than 40 minutes', async () => {
+  const { dir, home } = leaseHome();
+  try {
+    const file = writeLease(home, SELF_ID, T0 + 40 * MIN);
+    const { deps } = world({ home });
+    assert.equal(await waitMain(ORQ_ARGS(home, '--every', '3600', '--for', '120'), SELF_ENV, deps), 1);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).until, new Date(T0 + (120 + 65) * MIN).toISOString());
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the lease is never taken, created or changed when another session holds it, when it is expired, when there is none, or with no session id', async () => {
+  const cases = [
+    ['another session holds it', SELF_ENV, (home) => writeLease(home, OTHER_ID, T0 + 40 * MIN)],
+    ['it is expired', SELF_ENV, (home) => writeLease(home, SELF_ID, T0 - MIN)],
+    ['there is no lease', SELF_ENV, () => {}],
+    ['no session id is given', { CLAUDE_CONFIG_DIR: CLAUDE_HOME }, (home) => writeLease(home, SELF_ID, T0 + 40 * MIN)],
+  ];
+  for (const [label, env, prepare] of cases) {
+    const { dir, home } = leaseHome();
+    try {
+      prepare(home);
+      const file = leaseFileOf(home);
+      const before = readOrNull(file);
+      const { state, deps } = world({ home });
+      assert.equal(await waitMain(ORQ_ARGS(home, '--every', '1200', '--for', '60'), env, deps), 1, label);
+      assert.equal(state.out[0], start('a notice to orchestrator', 60), label);
+      assert.deepEqual(state.err, [], label);
+      assert.equal(readOrNull(file), before, label);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('waits on another condition never touch the lease, even one their session holds', async () => {
+  const cases = [
+    ['--pr', '136'],
+    ['--main-has', 'abc1234'],
+    ['--main-file', 'docs/a.md', '--contains', 'text'],
+    ['--notice-to', '3'],
+  ];
+  for (const extra of cases) {
+    const label = JSON.stringify(extra);
+    const { dir, home } = leaseHome();
+    try {
+      const file = writeLease(home, SELF_ID, T0 + 40 * MIN);
+      const before = fs.readFileSync(file, 'utf8');
+      const { deps } = world({ home, answer: (command) => (command === 'gh' ? ok('MERGED\n') : ok('the text')) });
+      await waitMain(['--cwd', CWD, '--home', home, ...extra, '--for', '1'], SELF_ENV, deps);
+      assert.equal(fs.readFileSync(file, 'utf8'), before, label);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('a failure to renew the lease is said once on stderr, the wait goes on, and its opening line does not claim a renewal', async () => {
+  const { dir, home } = leaseHome();
+  try {
+    const { state, deps } = world({ home });
+    const renew = () => {
+      throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+    };
+    assert.equal(await waitMain(ORQ_ARGS(home, '--every', '1200', '--for', '60'), SELF_ENV, { ...deps, renew }), 1);
+    assert.deepEqual(state.err, ['js-harness wait: the relay lease is not renewed (EPERM: operation not permitted); it is tried again at the next tick']);
+    assert.equal(state.out[0], start('a notice to orchestrator', 60));
+    assert.match(state.out.at(-1), /did not hold after 60 minutes; the time ran out/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a notice wait by a session with no lease ends as before: the same lines, exit 0, and no lease written', async () => {
+  const { dir, home } = leaseHome();
+  try {
+    const { state, deps } = world({ home, record: noticeLine({ at: T0 + 1000, to: ORQ, text: 'hola' }) });
+    assert.equal(await waitMain(ORQ_ARGS(home), SELF_ENV, deps), 0);
+    assert.equal(state.out[0], start('a notice to orchestrator'));
+    assert.match(state.out[1], /^js-harness wait: a notice to orchestrator holds \(\d\d:\d\d\)$/);
+    assert.equal(state.out[2], 'note from JH 5 · canal entre sesiones: hola');
+    assert.equal(state.out.length, 3);
+    assert.equal(readOrNull(leaseFileOf(home)), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
