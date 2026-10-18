@@ -198,8 +198,8 @@ export function discoverSensors(cwd) {
  * odd/tasks/rule-hierarchy.md). The project's row fails on any finding of `js-harness rules check`: a phrase gone from its
  * file, a sensor no longer declared, a rule deleted since HEAD, or a list that cannot be read. A list that cannot be
  * read fails this row only: no other row reads it, so the gate still prints every row before it stops. */
-export function checkOwnRules(cwd, { rules = RULES, spawn = spawnSync } = {}) {
-  if (fs.existsSync(path.join(cwd, 'bin', 'lib', 'rules-data.mjs'))) return checkListRow(cwd, rules, spawn);
+export function checkOwnRules(cwd, { rules = RULES, spawn = spawnSync, env = process.env } = {}) {
+  if (fs.existsSync(path.join(cwd, 'bin', 'lib', 'rules-data.mjs'))) return checkListRow(cwd, rules, spawn, STAGED, env);
   const found = discoverSensors(cwd);
   let read;
   try {
@@ -238,7 +238,7 @@ const shortLine = (text) => (text.trim().length > 160 ? `${text.trim().slice(0, 
  * change adds no line to a text in force, or git does not answer. `side` names the two sides of the diff and how a
  * file's text is read: the commit's are `STAGED`, the merge door's are `doorSide` (odd/tasks/rule-hierarchy.md, "The
  * merge door (T16e)"), where a git that does not answer is a failure and the merge of a parent is not filtered. */
-function checkListRow(cwd, rules, spawn, side = STAGED) {
+function checkListRow(cwd, rules, spawn, side = STAGED, env = process.env) {
   const scanned = rules.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns));
   if (scanned.length === 0) return [];
   const git = hookGit(cwd, spawn);
@@ -249,9 +249,16 @@ function checkListRow(cwd, rules, spawn, side = STAGED) {
   if (!diff) return [];
   const key = (one) => `${one.file}\n${one.line}\n${one.text}`;
   let added = addedLines(diff).filter((one) => isTextInForce(one.file));
-  if (side.mergeFilter && git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null) {
-    const fromTheirs = new Set(addedLines(diffOf('MERGE_HEAD') ?? '').map(key));
-    added = added.filter((one) => fromTheirs.has(key(one)));
+  if (side.mergeFilter) {
+    // git runs pre-merge-commit before it writes MERGE_HEAD, and names there each commit it merges in a variable
+    // GITHEAD_<sha> (harness review b1); a merge committed by hand has MERGE_HEAD.
+    const theirs = git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null
+      ? ['MERGE_HEAD']
+      : Object.keys(env).map((name) => /^GITHEAD_([0-9a-f]{40,64})$/.exec(name)?.[1]).filter(Boolean);
+    for (const parent of theirs) {
+      const fromTheirs = new Set(addedLines(diffOf(parent) ?? '').map(key));
+      added = added.filter((one) => fromTheirs.has(key(one)));
+    }
   }
   if (added.length === 0) return [];
   const inForce = new Map();
