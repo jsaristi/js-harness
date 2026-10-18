@@ -16,6 +16,7 @@
     "check": "node bin/check.mjs",
     "test": "node --test",
     "e2e": "node scripts/e2e.mjs",
+    "release-proof": "node scripts/release-proof.mjs",
     "sandbox": "node scripts/sandbox.mjs",
     "practice": "node scripts/practice.mjs",
     "hooks": "git config core.hooksPath .githooks"

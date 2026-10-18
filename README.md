@@ -120,7 +120,9 @@ Three more forms of `check` share the same command:
   refuses a push whose code commits no Codex record covers, and a push whose head is a review that
   owes a correction never rechecked; a recheck that left findings open passes with a warning. Its
   `rules` row lists the lines the push brings past the remote's default branch, as INFO: the push
-  reports them, and the merge door refuses them.
+  reports them, and the merge door refuses them. A pushed `vX.Y.Z` tag is refused when `package.json` at the
+  tagged commit names another version than the tag without its `v` (`check --push --ref`, which the
+  pre-push hook passes for each tag): `upgrade` would refuse that copy.
 - `js-harness check --door --base <rev> [--branch <name>]` runs only the rule rows of the lines
   `<rev>..HEAD` brings, and the failures row, for merge-queue's door. It exits 1 when one refuses.
   `--branch` names the pull request's branch, which may change `bin/lib/rules-data.mjs` only when it

@@ -18,7 +18,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   esac
   # A delete pushes nothing (its local sha is all zeros), so there is nothing to review.
   case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  # A version tag names its version to the check (--ref), which refuses the push when package.json at the tagged commit says another one.
+  case "$remote_ref" in
+    refs/tags/v*) ref_flag="--ref $remote_ref" ;;
+    *) ref_flag= ;;
+  esac
   # The check gets /dev/null: a child that inherits stdin would read the rest of the ref list.
-  node "$root/bin/check.mjs" --push --remote "$1" --head "$local_sha" < /dev/null || status=1
+  node "$root/bin/check.mjs" --push --remote "$1" --head "$local_sha" $ref_flag < /dev/null || status=1
 done
 exit $status
