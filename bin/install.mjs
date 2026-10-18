@@ -502,6 +502,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
   for (const p of result.settingsRestored ?? []) console.log(`put ${SESSION_MESSAGES.key} back in ${p}`);
   for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
+  for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is no longer recorded, so nothing else will; set it back by hand`);
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
   // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.
@@ -608,5 +609,5 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  return notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
 }

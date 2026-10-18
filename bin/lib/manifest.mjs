@@ -954,6 +954,7 @@ export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, reco
 function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
   const restored = [];
   const kept = [];
+  const failed = [];
   for (const record of manifest.settings ?? []) {
     if (record.had && record.previous === record.value) continue;
     let settings;
@@ -980,13 +981,13 @@ function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync
       } else {
         writeFile(record.path, serializeJson(data, style), 'utf8');
       }
-    } catch {
-      kept.push(record.path);
+    } catch (err) {
+      failed.push({ path: record.path, code: err.code ?? 'unknown error' });
       continue;
     }
     restored.push(record.path);
   }
-  return { restored, kept };
+  return { restored, kept, failed };
 }
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
@@ -1470,7 +1471,7 @@ function uninstallInstalled(home, deps) {
   removeCreatedFolders(manifest.entries, home, listDir);
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
-  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept } : {};
+  const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 

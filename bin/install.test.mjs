@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord, reportSyncProject } from './install.mjs';
-import { entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
+import { acceptSessionMessages, entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, userSettingsPath } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
@@ -626,6 +626,27 @@ test('uninstallMain says a gate log it could not remove was left, with the error
     const unseen = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { statFile }));
     assert.deepEqual([unseen.code, unseen.outLines], [1, []]);
     assert.deepEqual(unseen.errLines, [`could not remove ${gateLogDir(home)} (EACCES): it is still there and nothing records it; remove it by hand, or run js-harness uninstall --global again`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Found in review (Codex), 2026-10-18: a setting it could not write back was printed as modified by the user,
+// and the run exited 0 with the record gone. It is now said as a failure, with what to do, and fails.
+test('uninstallMain says a setting it could not write back, with the error code and what to do, and fails', async () => {
+  const home = makeTmpHome();
+  try {
+    await captureConsole(() => installMain(['--home', home]));
+    acceptSessionMessages(home);
+    const settings = userSettingsPath(home);
+    const writeFile = (file, ...rest) => {
+      if (file === settings) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return fs.writeFileSync(file, ...rest);
+    };
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
+    assert.equal(code, 1, 'a setting left in place is not a clean uninstall');
+    assert.deepEqual(errLines, [`could not put crossSessionInbound back in ${settings} (EPERM): it is no longer recorded, so nothing else will; set it back by hand`]);
+    assert.equal(outLines.some((line) => line.includes('modified by you') && line.includes(settings)), false, outLines.join('\n'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

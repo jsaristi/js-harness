@@ -232,7 +232,9 @@ test('uninstall keeps a setting it cannot write back, and still finishes', () =>
 
     const result = uninstall(home, { writeFile });
 
-    assert.deepEqual(result.settingsKept, [settings]);
+    // Codex on 6b0bc88..05fa584: a failed write is not the user's edit, so it is told apart, with its code.
+    assert.deepEqual(result.settingsKept, []);
+    assert.deepEqual(result.settingsFailed, [{ path: settings, code: 'EPERM' }]);
     assert.equal(fs.existsSync(manifestPath(home)), false, 'the manifest is gone: the run finished');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
