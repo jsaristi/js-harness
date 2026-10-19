@@ -331,6 +331,18 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   The redaction over the real export and home copy gives the same result before and after.
 
 ## Next step
-Commit D7 (scope switch); record the Codex review of 84dd74b5..83df03c2 when it lands. Then T5
-summary, T6 restore/verify, T4's measurement, T3 init on GitHub with the default scope
-(js-harness only) after telling the lead, T7 proofs, T8 docs.
+State at 08:2xZ (read the hour from git log of this commit). Commits on feat/memory-backup:
+186a7c79, 22bbe6e8, 83df03c2 (slice 1, gentle-ai review-1c2fa0ab4d5b178c approved, Codex record
+84dd74b5..83df03c2 with 9 findings), 766dfa29 scope switch D7, 95288eb0 the 9 Codex fixes,
+1bdae974 key-body fix (slice 2, gentle-ai review-c35f7b854150c92e approved and burned). Codex
+recheck of 83df03c2..1bdae974 runs with --part-lines 800 in the detached worktree
+D:/js-harness-worktrees/backup-codex-review (output $TEMP/codex4.txt); when it lands, record
+fixed/open in L7, remove that worktree, fix any blocker. T5: bin/lib/backup-summary.mjs and its
+test (5 green) are committed; still to build in bin/backup.mjs, test first: `backup summary`
+(prints), pushSummary in runBackup (config.summaryRepo, daily, private-terms.txt in the clone,
+origin of the summary repo must be jsaristi/js-harness on github.com, orphan commit by
+hash-object/mktree/commit-tree, push --force-with-lease to refs/heads/memory-summary, failure
+recorded in last.json and never fails the backup), init seeds private-terms.txt from the
+Projects line of `engram stats --all`. A real-data dry run of the summary read clean (6.7 KB,
+4 lines dropped). Then T6 restore/verify, T4 measurement, T3 init (tell the lead first), T7, T8.
+Scratchpad exp/ and collect/ hold private data: delete at the end.
