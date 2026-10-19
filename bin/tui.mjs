@@ -458,7 +458,8 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   const source = get('--source') ?? env.JS_HARNESS_SOURCE;
   let latest = null;
   try {
-    latest = resolveLatest({ source });
+    // The repository JS_HARNESS_REPO names, as update and status read it, so the header and those items agree.
+    latest = resolveLatest({ source, repo: env.JS_HARNESS_REPO });
   } catch {
     latest = null;
   }
