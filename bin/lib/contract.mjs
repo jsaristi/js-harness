@@ -112,6 +112,21 @@ export function doneWhen(markdown) {
   return { commands, checks };
 }
 
+// A code span right before `exits 0`: the done-when form where it is not a list item of its own, as in a
+// roadmap's table cell (odd/tasks/onboarding.md, D6).
+const SPAN_EXITS_ZERO_PATTERN = /(`+)(.+?)\1(?!`)\s*exits 0\b/gi;
+
+/** The commands `text` names in the done-when form, a code span right before `exits 0`, in order; an empty span
+ * and a template placeholder (`<command>`) are none. */
+export function commandsIn(text) {
+  const commands = [];
+  for (const match of text.matchAll(SPAN_EXITS_ZERO_PATTERN)) {
+    const span = match[2].trim();
+    if (span && !PLACEHOLDER_PATTERN.test(span)) commands.push(span);
+  }
+  return commands;
+}
+
 /** `{ ok, errors }`: one human-readable reason per problem — a missing or empty section, a `Done
  * when` with no command, a command still holding a placeholder, an `Effort` that is not `medium` or
  * `high` when there is one, a task whose `(kind: …)` is not one of TASK_KINDS. Static only: it never runs

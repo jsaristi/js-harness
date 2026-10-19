@@ -264,6 +264,17 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   only, for `onboarding|pre ?plan|plan casi|roadmap completo|nuevo proyecto.*plan`: the 2026-09-26 thread on
   pre-plan, plan and roadmap (transcript `c580b1d8`, lines 234-510) and principle 7 (transcript `e152c9d8`, line
   29030). Both are used above: the first point of "What exists", and the Why.
+- L4 (2026-10-19) His answer, relayed by the lead (Pregunta 21): "Construirlo (Recommended)". The lead asks: build
+  v3 with tests, gentle-ai review per work unit, Codex review and PRs it lands with merge-queue; bring the branch up to
+  date with main first; do not touch package.json (release 0.96.0 is being cut; onboarding ships in the release
+  after); tell it each PR number. Branch merged with main at a4d43ed0.
+- L5 (2026-10-19) Slices swapped, since the stages use the check: slice 1 is `onboard check`, `hash` and `template`
+  (`bin/lib/onboard.mjs`, `bin/onboard.mjs`, `commandsIn` in `bin/lib/contract.mjs`, `cellsOf` exported from
+  `bin/lib/progress.mjs`, the dispatcher's help, README); slice 2 is bare `onboard` (stages, resume), `init`'s closing
+  line and SPEC. Lib tests RED observed (module missing), then 16/16 GREEN; command 6/6 GREEN. Topic 7 reads "What the
+  owner decides alone".
+- Next step: commit slice 1, run `npm run check`, assess and review it (gentle-ai, then `js-harness codex-review
+  --base a4d43ed0`), push, open the PR, tell the lead (local_bd0ae465) its number; then slice 2.
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.
