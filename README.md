@@ -41,8 +41,9 @@ npm rm -g js-harness
 `uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
 and names them; `uninstall --global --full` removes them too. Files you modified and the memory
 notes themselves are kept either way. `uninstall --global --everything` removes all that js-harness
-keeps on the machine and then the program itself, so `npm rm -g` is not needed after it; the TUI
-offers it as "Uninstall everything". Projects' files are kept.
+keeps on the machine and then the program itself, so `npm rm -g` is not needed after it. Projects'
+files are kept. Each kind has a name too (`uninstall project`, `machine`, `snapshots`,
+`everything`), and the TUI's Uninstall opens a submenu of them.
 
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
@@ -197,13 +198,45 @@ wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
 manifest: my-project\.git\js-harness\manifest.json
+next: in a Claude Code or Codex session, run js-harness onboard
 ```
 
-The example is a project with code. What `init` adds beyond the first four files follows the
+The last line appears only while the project has no `docs/ROADMAP.md`. The example is a project with code. What `init` adds beyond the first four files follows the
 switches in `harness.json` `"functions"` (`js-harness functions` shows each one and why): the
 pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map's `codegraph init`
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code
 map is off prints `codegraph init skipped: the code map is off` and gets no `.codegraph/`.
+
+### js-harness onboard
+
+The pre-plan and the roadmap of a project after `init`, written by the session the owner talks to;
+the command calls no model. With no verb it reads the files and git, prints the stage the
+onboarding is in (Read, Interview, Pre-plan, its review, Plan, its review, Close, then awaiting
+merge and onboarded) and what the session does next, so a new session, a compaction or the other
+host resumes by running it again; an onboarding on another branch is named with its worktree or
+the switch that resumes it. `check` names what is still missing and the stage it sends the work
+back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file.
+
+```console
+$ js-harness onboard
+Stage 1 of 7, Read: no onboarding document yet.
+First: git switch -c onboarding, the branch the onboarding is committed on, so a session in another worktree finds it.
+Do: js-harness onboard template feature --write; then read the repository (README, manifests, git log, docs, codegraph where there is code). Write the owner's request verbatim in L1, and what exists under ## What exists, each with its evidence. Check O1.
+Then: commit, and run js-harness onboard again.
+$ js-harness onboard template feature --write
+wrote odd/tasks/onboarding.md
+$ js-harness onboard check
+FAIL  odd/tasks/onboarding.md: topic 1 is not answered yet (back to stage 2, Interview)
+FAIL  docs/origin.md: missing: js-harness onboard template origin --write starts it (back to stage 3, Pre-plan)
+FAIL  AGENTS.md: has no line "The plan is docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/." (back to stage 7, Close)
+$ js-harness onboard hash
+interview sha256:d4b3c1a78dbe
+origin    missing
+roadmap   missing
+```
+
+The `check` is cut to three of its findings. A project with a plan of its own and no onboarding
+anywhere is left alone, exit 1. The design is `odd/tasks/onboarding.md`.
 
 ### js-harness install
 
@@ -304,8 +337,26 @@ installed by no package manager, and one in a project's `node_modules` (or npx's
 project's dependency, so the program is kept and the line says why. The program counts as
 removed only once its folder is gone, whatever the manager's exit code. While a gate runs, or the
 folder or anything above it could not be removed, it removes nothing more and says to run it
-again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
-and ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
+again. It cannot be undone; the TUI's Everything asks once, naming all of it, and the TUI
+ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
+
+Each kind also has a name, and a named kind never acts by location:
+
+| Kind | Same as | Removes | Keeps |
+|---|---|---|---|
+| `uninstall project [--cwd <path>]` | `uninstall` inside a project | what `init` recorded in this clone | files you edited, the machine install |
+| `uninstall machine` | `uninstall --global` | what `install` recorded, and the folders js-harness keeps in the home | files you edited, the memory snapshots, the throughput records, the program |
+| `uninstall snapshots` | `uninstall --global --full` | the same, and the memory snapshots | the throughput records, the program |
+| `uninstall everything` | `uninstall --global --everything` | the same, the whole `.js-harness` folder and the program | projects' files |
+
+`uninstall project` outside an initialized project exits 1 and removes nothing; it never falls
+through to the machine. A kind given `--global`, `--full` or `--everything`, or a machine kind
+given `--cwd`, is a usage error.
+
+In the TUI, Uninstall opens a submenu of the same kinds: Project (inside a project `init`
+touched), Machine, Machine + memory snapshots, Everything and Back. Each kind asks y/N with a
+line that says what it removes and what it keeps; a yes runs it and returns to the menu, Back
+or Escape returns without running anything.
 
 ```console
 $ js-harness uninstall

@@ -162,9 +162,9 @@ proofs and by those tasks.
 ### Install and undo exactly
 
 **Problem:** The predecessor stack needed four hand-written purge scripts to uninstall (`AGENTS.md`, `odd/tasks/install-update.md`). Sessions of two permission classes could not message each other: Claude Code delivers only within a class unless a user setting says otherwise (`odd/tasks/commands-and-doctor.md`).
-**Requirement:** Every file written outside a repository is recorded in a manifest under the home with its hash; uninstall removes exactly those and keeps, and reports, a file the user edited. An entry grafted into a JSON file the harness does not own (a hook in a host's settings) is recorded by file, pointer and entry: install adds no duplicate, uninstall removes only that entry and deletes the file only if the harness created it and it is now empty. An opt-in sets the user setting that lets sessions of other permission classes message each other, and uninstall puts back what was there. Each command acts on the project inside one and on the machine elsewhere; a status says what is pinned, installed and latest.
+**Requirement:** Every file written outside a repository is recorded in a manifest under the home with its hash; uninstall removes exactly those and keeps, and reports, a file the user edited. An entry grafted into a JSON file the harness does not own (a hook in a host's settings) is recorded by file, pointer and entry: install adds no duplicate, uninstall removes only that entry and deletes the file only if the harness created it and it is now empty. An opt-in sets the user setting that lets sessions of other permission classes message each other, and uninstall puts back what was there. Each command acts on the project inside one and on the machine elsewhere; each kind of uninstall (project, machine, machine and memory snapshots, everything) also has a name that never acts by location, in the CLI and as an item of the TUI's Uninstall submenu, each saying what it removes and what it keeps; a status says what is pinned, installed and latest.
 **Reason:** Anything written outside the repository must come out exactly, or removing the harness costs a purge script.
-**Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/install-session-messages.test.mjs`
+**Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/install-session-messages.test.mjs`, `node --test bin/uninstall-kinds.test.mjs`, `node --test bin/tui.test.mjs`
 **Discarded:** Assuming npm: on this machine `npm` is a pnpm shim. Owning a host's settings file whole instead of one entry.
 **Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
 
@@ -203,6 +203,15 @@ proofs and by those tasks.
 **Proof:** `node --test bin/progress.test.mjs`, `node --test bin/lib/progress.test.mjs`
 **Discarded:** A published page. Editing checkboxes from the command.
 **Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `bin/lib/progress-pace.mjs` (progress --pace), `js-harness progress`
+
+### Onboarding
+
+**Problem:** A project set up with `init` had no plan, and js-harness's own was made by hand (pre-plan, then roadmap); his request of 2026-10-19 asks for the pre-plan and the plan to be made with the AI when the harness is installed (`odd/tasks/onboarding.md`).
+**Requirement:** The session the owner talks to writes, from an interview of one question at a time, an onboarding document, a pre-plan (`docs/origin.md`) and a roadmap (`docs/ROADMAP.md`) that `progress` reads; the command calls no model, writes skeletons that never overwrite a file, prints the hashes an approval records, and checks statically that the roadmap carries the pre-plan's phases and open decisions, that each phase's done-when names a command, that both approvals hold the files as they are, that both reviews ran, and that `AGENTS.md` points every session at the roadmap. With no verb it prints the stage the onboarding is in, read from the files and git alone, so any session resumes it, and names the branch and worktree of one in progress elsewhere; `init` points a project with no roadmap at it.
+**Reason:** Work follows the objective and the plan (principle 7), so a project starts from a plan the owner approved, and its shape is held by a check, not by a model's memory.
+**Proof:** `node --test bin/onboard.test.mjs`, `node --test bin/lib/onboard.test.mjs`, `node --test bin/init.test.mjs`
+**Discarded:** A model called by the command: an interview needs the owner in the loop, and spend from a hidden child is not seen. A skill of its own: every turn would pay for it.
+**Today:** `bin/onboard.mjs`, `bin/lib/onboard.mjs`, `js-harness onboard`
 
 ### The throughput review
 

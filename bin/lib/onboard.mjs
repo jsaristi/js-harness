@@ -1,0 +1,586 @@
+// The onboarding of a project: the skeletons of its three documents and the static check of what a session wrote
+// into them — see odd/tasks/onboarding.md, D5-D7. No fs here: every function takes the files' text (or `null` for a
+// missing file), so the tests use inline fixture strings. The check never runs a command.
+import crypto from 'node:crypto';
+import { commandsIn, parseContract, tasksOf } from './contract.mjs';
+import { cellsOf, parseRoadmap } from './progress.mjs';
+
+export const ONBOARDING_PATH = 'odd/tasks/onboarding.md';
+export const ORIGIN_PATH = 'docs/origin.md';
+export const ROADMAP_PATH = 'docs/ROADMAP.md';
+export const AGENTS_PATH = 'AGENTS.md';
+
+/** The line the Close stage adds to `AGENTS.md`, outside the harness block, so every later session starts there. */
+export const ROADMAP_LINE = "The plan is docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/.";
+
+/** The nine topics of the interview, in the order they are asked (D3). */
+export const TOPICS = [
+  'What the project is and for whom',
+  'The outcome that makes it worth doing',
+  'What exists today',
+  'Decisions already made, the language of the artifacts among them',
+  'Constraints and their reasons',
+  'In and out of scope for the first usable version',
+  'What the owner decides alone',
+  'Order: what comes first, and what can wait',
+  'Risks and unknowns',
+];
+/** The topics a plan cannot be made without, so they cannot be left unknown (D3). */
+const REQUIRED_TOPICS = [1, 2, 7];
+/** REQUIRED_TOPICS as the output names them: "1, 2 and 7". */
+const REQUIRED_LIST = `${REQUIRED_TOPICS.slice(0, -1).join(', ')} and ${REQUIRED_TOPICS.at(-1)}`;
+
+/** The stages a finding sends the work back to, by number (D2). */
+export const STAGES = {
+  1: 'Read',
+  2: 'Interview',
+  3: 'Pre-plan',
+  4: 'Pre-plan review',
+  5: 'Plan',
+  6: 'Plan review',
+  7: 'Close',
+};
+
+const ORIGIN_SECTIONS = ['Status', 'Goal', 'Why', 'What exists', 'Decisions already made', 'Principles', 'Phases', 'Not built', 'Risks', 'Open decisions', 'Sources'];
+
+export function featureTemplate() {
+  return `# Onboarding
+
+Written by \`js-harness onboard template feature\`. \`js-harness onboard\` reads the stage from this file; run it to resume.
+
+## Goal
+An approved pre-plan (\`${ORIGIN_PATH}\`) and roadmap (\`${ROADMAP_PATH}\`) for this project, that every later session starts from.
+
+## Why
+A project starts from a plan the owner approved, so the work follows its objective and not the moment's judgment.
+
+## Done when
+- \`js-harness onboard check\` exits 0
+
+## In scope / Out of scope
+- In: \`${ORIGIN_PATH}\`, \`${ROADMAP_PATH}\`, \`${AGENTS_PATH}\` outside its js-harness block, this document.
+- Out: the project's code — onboarding plans the work and builds none of it.
+
+## Constraints
+- One question to the owner at a time — because each answer is recorded verbatim and may change the next question.
+
+## Ask me before
+The two approvals: the pre-plan and the roadmap.
+
+## What exists
+<what the repository holds today, each with its evidence: a path, or a command and its output>
+
+## Interview
+<!-- A topic is checked once answered ("— answered (L<n>)") or marked unknown with its open decision ("— unknown (OD<n>)"). -->
+${TOPICS.map((title, i) => `- [ ] ${i + 1} ${title}`).join('\n')}
+
+## Tasks
+<!-- O2 records the interview's hash; O3 and O5, the files' hashes and the Log line of the owner's yes: "(origin sha256:<12 hex>; L<n>)", as \`js-harness onboard hash\` prints them. -->
+- [ ] O1 Repository read
+- [ ] O2 Pre-plan written
+- [ ] O3 Pre-plan approved
+- [ ] O4 Roadmap written
+- [ ] O5 Roadmap approved
+- [ ] O6 Closed
+
+## Reviews
+<!-- One item per round of the two readers: "Pre-plan round <n>: ..." or "Roadmap round <n>: ...", what each reader found and what changed. -->
+
+## Log
+- L1 <date> The owner's request, verbatim: "<his words>"
+`;
+}
+
+export function originTemplate(name) {
+  return `# ${name}: origin
+
+## Status
+The pre-plan of this project, written by its onboarding (\`${ONBOARDING_PATH}\`) from the owner's answers. Frozen once
+the onboarding closes: what changes after that is recorded in [ROADMAP.md](ROADMAP.md).
+
+## Goal
+<one sentence: the outcome, not the steps>
+
+## Why
+<the owner's reason, in his words, with the date>
+
+## What exists
+<what the project has today, each with its evidence>
+
+## Decisions already made
+| Area | Decision | The owner's words |
+|------|----------|-------------------|
+| <area> | <decision> | "<his words>" (<date>) |
+
+## Principles
+1. <a principle of this project> — <why>
+
+## Phases
+| Phase | Goal | Done when |
+|-------|------|-----------|
+| <phase> | <goal> | \`<command>\` exits 0 |
+
+## Not built
+<what the installed stack already does, so this project does not build it>
+
+## Risks
+- <a risk> — <what it would cost>
+
+## Open decisions
+<!-- One item per decision that is the owner's, asked one at a time: "OD<n> ...". A decided one adds "(decided: ..., <date>)". -->
+- OD1 <a decision that is the owner's>
+
+## Sources
+- <date> <the owner's answer to topic n, or a research link>
+`;
+}
+
+export function roadmapTemplate() {
+  return `# Roadmap
+
+The one living plan of this project. Each fact lives in one place:
+
+- **This file**: the plan. What comes next is read under [Next](#next), and nowhere else.
+- [origin.md](origin.md): where the plan came from, frozen.
+- \`odd/tasks/\`: one document per feature, with its tasks, progress and evidence.
+
+## Principles
+1. <a principle, carried from the pre-plan>
+
+## Decided
+| Area | Decision |
+|------|----------|
+| <area> | <decision> |
+
+## Phases
+<!-- One row per phase of the pre-plan, the same names as under Checklist. Done when: a command, \`<command>\` exits 0. -->
+| Phase | Goal | Done when | State |
+|-------|------|-----------|-------|
+| <phase> | <goal> | \`<command>\` exits 0 | Not started |
+
+## Checklist
+
+### <phase>
+- [ ] <what is true when this step is done: one feature or less>
+
+## Next
+<the first unchecked step, and the text that starts its session>
+
+## Open decisions
+- OD1 <every decision still open in the pre-plan, by its ID>
+
+## Risks
+- <a risk> — <what it would cost>
+`;
+}
+
+/** The first 12 hex of the sha256 of `text` with LF line ends, so a CRLF checkout hashes as its LF one. */
+export function shortHash(text) {
+  return crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
+}
+
+/** The hashes an approval records (D2): of the interview's section, of the pre-plan and of the roadmap; `null` for
+ * what is missing. */
+export function hashes({ onboarding, origin, roadmap }) {
+  const interview = onboarding === null ? undefined : parseContract(onboarding).get('Interview');
+  return {
+    interview: interview === undefined ? null : shortHash(interview),
+    origin: origin === null ? null : shortHash(origin),
+    roadmap: roadmap === null ? null : shortHash(roadmap),
+  };
+}
+
+// A template line still to fill: a `<...>` placeholder that is no HTML comment.
+const PLACEHOLDER = /<[^<>!][^<>]*>/;
+// An interview topic: its box, its number, the rest of the line.
+const TOPIC_LINE = /^\s*[-*+]\s+\[([ xX])\]\s+(\d+)\b(.*)$/;
+const UNKNOWN = /\bunknown \(OD\d+\)/i;
+const RECORDED_HASH = /\b(interview|origin|roadmap) sha256:([0-9a-f]{12})\b/g;
+const LOG_REFERENCE = /\bL\d+\b/g;
+// A Log entry: its ID at the start of a list item.
+const LOG_ITEM = /^\s*[-*+]\s+(L\d+)\b/;
+// An open decision's ID at the start of a list item.
+const DECISION_ITEM = /^\s*[-*+]\s+(OD\d+)\b(.*)$/;
+
+/** The lines of `template` that are placeholders and appear unchanged in `text`. */
+function templateLinesLeft(text, template) {
+  const present = new Set(text.replace(/\r\n/g, '\n').split('\n').map((line) => line.trim()));
+  return template.split('\n')
+    .map((line) => line.trim())
+    .filter((line) => PLACEHOLDER.test(line) && !line.startsWith('<!--') && present.has(line));
+}
+
+/** The rows of the first table in `body` whose header names `Phase`, keyed by that cell: `Map(name -> cells)`, with
+ * the header's cells, or `null` when there is no such table. */
+function phaseTable(body) {
+  let header = null;
+  let started = false;
+  const rows = new Map();
+  for (const line of body.split('\n')) {
+    const cells = cellsOf(line);
+    if (cells === null) {
+      if (started) break;
+      header = null;
+      continue;
+    }
+    if (!header) {
+      if (cells.some((cell) => /^phase$/i.test(cell))) header = cells;
+      continue;
+    }
+    if (!started) {
+      started = true; // the delimiter row
+      continue;
+    }
+    rows.set(cells[header.findIndex((cell) => /^phase$/i.test(cell))], cells);
+  }
+  return header ? { header, rows } : null;
+}
+
+/** The open decisions under `## Open decisions` of `body`: the IDs of items that do not say `(decided`. */
+function openDecisions(body) {
+  const open = [];
+  for (const line of (body ?? '').split('\n')) {
+    const item = line.match(DECISION_ITEM);
+    if (item && !/\(decided\b/i.test(item[2])) open.push(item[1]);
+  }
+  return open;
+}
+
+/** The interview's topics by number, the first line of each: `Map(n -> { done, rest })`. */
+function interviewTopics(onboarding) {
+  const topics = new Map();
+  for (const line of (parseContract(onboarding).get('Interview') ?? '').split('\n')) {
+    const topic = line.match(TOPIC_LINE);
+    if (topic && !topics.has(Number(topic[2]))) topics.set(Number(topic[2]), { done: topic[1] !== ' ', rest: topic[3] });
+  }
+  return topics;
+}
+
+/** The numbers of the topics the interview still has to ask, in order: missing, unchecked, or required and unknown. */
+function topicsLeft(onboarding) {
+  const topics = interviewTopics(onboarding);
+  return TOPICS.map((title, i) => i + 1).filter((n) => {
+    const topic = topics.get(n);
+    return !topic?.done || (REQUIRED_TOPICS.includes(n) && UNKNOWN.test(topic.rest));
+  });
+}
+
+/** The interview's findings (stage 2). */
+function interviewFindings(onboarding) {
+  const findings = [];
+  const topics = interviewTopics(onboarding);
+  for (let n = 1; n <= TOPICS.length; n += 1) {
+    if (!topics.has(n)) findings.push(`the interview has no topic ${n}`);
+  }
+  for (const [n, topic] of topics) {
+    if (!topic.done) findings.push(`topic ${n} is not answered yet`);
+  }
+  for (const n of REQUIRED_TOPICS) {
+    const topic = topics.get(n);
+    if (topic?.done && UNKNOWN.test(topic.rest)) findings.push(`topic ${n} is marked unknown: topics ${REQUIRED_LIST} need an answer`);
+  }
+  return findings.map((message) => ({ file: ONBOARDING_PATH, stage: 2, message }));
+}
+
+/** Where each recorded hash is taken from, as a finding names it. */
+const HASHED = { interview: '## Interview', origin: ORIGIN_PATH, roadmap: ROADMAP_PATH };
+
+/** The hashes a task's item records, by name: `Map(name -> 12 hex)`. */
+function recordedHashes(task) {
+  return new Map([...task.text.matchAll(RECORDED_HASH)].map((m) => [m[1], m[2]]));
+}
+
+/** The names among `files` whose hash `task` records and that hash differently now. */
+function changedSince(task, files, current) {
+  const recorded = recordedHashes(task);
+  return files.filter((name) => recorded.has(name) && current[name] !== null && recorded.get(name) !== current[name]);
+}
+
+/** The tasks that record what they were made from, in the order of their stages (D2). */
+const RECORDS = [
+  { id: 'O2', stage: 3, unchecked: 'the pre-plan is not written from the interview yet', files: ['interview'], approval: false },
+  { id: 'O3', stage: 4, unchecked: 'the pre-plan has no approval yet', files: ['origin'], approval: true },
+  { id: 'O5', stage: 6, unchecked: 'the roadmap has no approval yet', files: ['roadmap', 'origin'], approval: true },
+];
+
+/** One recorded task's findings: checked, and each hash it must record matching the text as it is now; for an
+ * approval (`logged`, the IDs under `## Log`), also the Log line of the owner's yes. `task.text` is the whole item. */
+function recordFindings(task, { id, unchecked, stage, files, current, compare, logged = null }) {
+  const at = (message) => ({ file: ONBOARDING_PATH, stage, message });
+  if (!task?.done) return [at(`${id} is not checked: ${unchecked}`)];
+  const findings = [];
+  const recorded = recordedHashes(task);
+  for (const name of files) {
+    if (!recorded.has(name)) findings.push(at(`${id} records no ${name} sha256: js-harness onboard hash prints it`));
+    else if (compare && current[name] !== null && recorded.get(name) !== current[name]) {
+      findings.push(at(`${id} records ${name} sha256:${recorded.get(name)}, but ${HASHED[name]} is sha256:${current[name]}: it changed since its approval`));
+    }
+  }
+  if (logged !== null) {
+    const references = [...task.text.matchAll(LOG_REFERENCE)].map((m) => m[0]);
+    if (references.length === 0) findings.push(at(`${id} names no Log line (L<n>) with the owner's yes`));
+    for (const reference of references.filter((ref) => !logged.has(ref))) {
+      findings.push(at(`${id} names ${reference}, which is not under ## Log`));
+    }
+  }
+  return findings;
+}
+
+/** The onboarding's tasks by ID, each with `text`, its whole item, continuation lines included. */
+export function onboardingTasks(onboarding) {
+  const lines = onboarding.replace(/\r\n/g, '\n').split('\n');
+  return new Map(tasksOf(onboarding).map((task) => [task.id, { ...task, text: lines.slice(task.start - 1, task.end).join('\n') }]));
+}
+
+/** The IDs of the entries under `## Log`. */
+function logIds(onboarding) {
+  const ids = new Set();
+  for (const line of (parseContract(onboarding).get('Log') ?? '').split('\n')) {
+    const item = line.match(LOG_ITEM);
+    if (item) ids.add(item[1]);
+  }
+  return ids;
+}
+
+/** The roadmap's findings (stage 5): its phases, steps, rows and done-when commands, and its ties to the pre-plan. */
+function roadmapFindings(roadmap, origin) {
+  const at = (message) => ({ file: ROADMAP_PATH, stage: 5, message });
+  const findings = [];
+  const sections = parseContract(roadmap);
+  const { phases } = parseRoadmap(roadmap);
+  const table = phaseTable(sections.get('Phases') ?? '');
+  const rows = table?.rows ?? new Map();
+  if (phases.length === 0) findings.push(at('no phase under ## Checklist: one ### heading per phase, its steps under it'));
+  if (!table) findings.push(at('no table under ## Phases with a Phase column'));
+  for (const phase of phases) {
+    if (phase.total === 0) findings.push(at(`phase "${phase.title}" has no step`));
+    if (table && !rows.has(phase.title)) findings.push(at(`phase "${phase.title}" has no row in ## Phases`));
+  }
+  const names = new Set(phases.map((phase) => phase.title));
+  for (const name of rows.keys()) {
+    if (!names.has(name)) findings.push(at(`the ## Phases row "${name}" has no phase under ## Checklist`));
+  }
+  const doneWhen = table?.header.findIndex((cell) => /^done when$/i.test(cell)) ?? -1;
+  if (table && doneWhen === -1) findings.push(at('the ## Phases table has no Done when column'));
+  for (const [name, cells] of rows) {
+    if (doneWhen !== -1 && commandsIn(cells[doneWhen] ?? '').length === 0) {
+      findings.push(at(`the Done when of "${name}" names no command: write \`<command>\` exits 0`));
+    }
+  }
+  if (origin !== null) {
+    for (const name of phaseTable(parseContract(origin).get('Phases') ?? '')?.rows.keys() ?? []) {
+      if (!names.has(name)) findings.push(at(`the pre-plan phase "${name}" is not a roadmap phase`));
+    }
+  }
+  if (!sections.get('Next')) findings.push(at('no ## Next: the first unchecked step and the text that starts its session'));
+  if (origin !== null) {
+    const carried = sections.get('Open decisions') ?? '';
+    for (const id of openDecisions(parseContract(origin).get('Open decisions'))) {
+      if (!new RegExp(`\\b${id}\\b`).test(carried)) findings.push(at(`${id} is open in ${ORIGIN_PATH} and not under ## Open decisions`));
+    }
+  }
+  for (const line of templateLinesLeft(roadmap, roadmapTemplate())) findings.push(at(`still holds the template line "${line}"`));
+  return findings;
+}
+
+/** Every finding of an onboarding, in the order of the stages they send the work back to: `{ file, stage, message }`.
+ * `files` holds each file's text, `null` where it is missing; `agentsTemplate` is the base `AGENTS.md` `init` writes,
+ * whose placeholder lines must be gone. With `plan`, only the roadmap and its ties to the pre-plan (stage 5). Once
+ * O6 closes the onboarding, the approvals are no longer compared with the files, which live on. */
+export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agentsTemplate = '', plan = false } = {}) {
+  const findings = [];
+  const missing = (file, stage, template) => ({ file, stage, message: `missing: js-harness onboard template ${template} --write starts it` });
+  if (plan) {
+    if (roadmap === null) return [missing(ROADMAP_PATH, 5, 'roadmap')];
+    return roadmapFindings(roadmap, origin);
+  }
+
+  if (onboarding === null) findings.push(missing(ONBOARDING_PATH, 1, 'feature'));
+  else {
+    findings.push(...interviewFindings(onboarding));
+    const tasks = onboardingTasks(onboarding);
+    const compare = !tasks.get('O6')?.done;
+    const current = hashes({ onboarding, origin, roadmap });
+    const logged = logIds(onboarding);
+    for (const record of RECORDS) {
+      findings.push(...recordFindings(tasks.get(record.id), { ...record, current, compare, logged: record.approval ? logged : null }));
+    }
+    const reviews = (parseContract(onboarding).get('Reviews') ?? '').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, ''));
+    for (const [round, stage, what] of [['Pre-plan', 4, 'the pre-plan'], ['Roadmap', 6, 'the roadmap']]) {
+      if (!reviews.some((line) => line.toLowerCase().startsWith(round.toLowerCase()))) {
+        findings.push({ file: ONBOARDING_PATH, stage, message: `## Reviews has no "${round}" round: two readers read ${what} before the owner` });
+      }
+    }
+    for (const line of templateLinesLeft(onboarding, featureTemplate())) {
+      findings.push({ file: ONBOARDING_PATH, stage: 2, message: `still holds the template line "${line}"` });
+    }
+  }
+
+  if (origin === null) findings.push(missing(ORIGIN_PATH, 3, 'origin'));
+  else {
+    const sections = parseContract(origin);
+    for (const title of ORIGIN_SECTIONS) {
+      if (!sections.get(title)) findings.push({ file: ORIGIN_PATH, stage: 3, message: `missing section "## ${title}"` });
+    }
+    for (const line of templateLinesLeft(origin, originTemplate(''))) {
+      findings.push({ file: ORIGIN_PATH, stage: 3, message: `still holds the template line "${line}"` });
+    }
+  }
+
+  if (roadmap === null) findings.push(missing(ROADMAP_PATH, 5, 'roadmap'));
+  else findings.push(...roadmapFindings(roadmap, origin));
+
+  const close = (message) => ({ file: AGENTS_PATH, stage: 7, message });
+  if (agents === null) findings.push(close('missing: js-harness init writes one'));
+  else {
+    if (!agents.includes(ROADMAP_LINE)) findings.push(close(`has no line "${ROADMAP_LINE}"`));
+    for (const line of templateLinesLeft(agents, agentsTemplate)) findings.push(close(`still holds the template line "${line}"`));
+  }
+
+  return findings.map((finding, order) => ({ ...finding, order })).sort((a, b) => a.stage - b.stage || a.order - b.order)
+    .map(({ order, ...finding }) => finding);
+}
+
+/** A finding as `check` and the Close stage print it. */
+export function findingLine({ file, stage, message }) {
+  return `FAIL  ${file}: ${message} (back to stage ${stage}, ${STAGES[stage]})`;
+}
+
+/** The stage the onboarding is in, read from its files alone (D2): the first whose record is missing or no longer
+ * holds. `{ stage: 1 }`, `{ stage: 2, topic, answered }`, `{ stage: 3 | 4 | 6, changed }` (changed: its record
+ * names a hash that moved), `{ stage: 5 }`, `{ stage: 7, findings }`, or `{ stage: 'done' }` once the check passes
+ * and O6 is checked. */
+export function currentStage(files, { agentsTemplate = '' } = {}) {
+  const { onboarding } = files;
+  if (onboarding === null) return { stage: 1 };
+  const tasks = onboardingTasks(onboarding);
+  if (!tasks.get('O1')?.done) return { stage: 1 };
+  const left = topicsLeft(onboarding);
+  if (left.length > 0) return { stage: 2, topic: left[0], answered: TOPICS.length - left.length };
+  const compare = !tasks.get('O6')?.done;
+  const current = hashes(files);
+  for (const { id, stage, files: names } of RECORDS) {
+    // O4 records no hash, only that the roadmap is written; a checked task whose file is gone is not done.
+    if (id === 'O5' && (!tasks.get('O4')?.done || files.roadmap === null)) return { stage: 5 };
+    const task = tasks.get(id);
+    if (id === 'O2' && files.origin === null) return { stage, changed: false };
+    const changed = Boolean(task?.done) && compare && changedSince(task, names, current).length > 0;
+    if (!task?.done || changed) return { stage, changed };
+  }
+  const findings = checkOnboarding(files, { agentsTemplate });
+  if (findings.length > 0 || compare) return { stage: 7, findings };
+  return { stage: 'done' };
+}
+
+const THEN = 'Then: commit, and run js-harness onboard again.';
+
+/** What the session does at `at`, the result of currentStage, as lines of the command's output. */
+function stageLines(at, files, git) {
+  const current = hashes(files);
+  const tasks = files.onboarding === null ? new Map() : onboardingTasks(files.onboarding);
+  const heading = (what) => `Stage ${at.stage} of 7, ${STAGES[at.stage]}: ${what}`;
+  switch (at.stage) {
+    case 1: {
+      const fresh = files.onboarding === null;
+      return [
+        heading(fresh ? 'no onboarding document yet.' : 'O1 is not checked yet.'),
+        ...(fresh && git.branch !== 'onboarding' ? ['First: git switch -c onboarding, the branch the onboarding is committed on, so a session in another worktree finds it.'] : []),
+        `Do: ${fresh ? 'js-harness onboard template feature --write; then ' : ''}read the repository (README, manifests, git log, docs, codegraph where there is code). Write the owner's request verbatim in L1, and what exists under ## What exists, each with its evidence. Check O1.`,
+        THEN,
+      ];
+    }
+    case 2:
+      return [
+        heading(`topic ${at.topic} of ${TOPICS.length}, "${TOPICS[at.topic - 1]}" (${at.answered} of ${TOPICS.length} answered).`),
+        `Do: ask the owner about this topic only, one question, and wait for the answer. Log it verbatim with its date as the next L<n>, and check the topic "— answered (L<n>)", or "— unknown (OD<n>)" with the open decision in the Log. Topics ${REQUIRED_LIST} cannot be unknown.`,
+        'Then: commit every three answers, and run js-harness onboard again.',
+      ];
+    case 3:
+      return [
+        heading(at.changed ? '## Interview changed since O2 recorded it.' : 'the interview is complete.'),
+        `Do: ${files.origin === null ? `js-harness onboard template origin --write, then fill ${ORIGIN_PATH}` : `revise ${ORIGIN_PATH}`} from the interview: every section, the owner's words with their dates, each unknown topic as an open decision.`,
+        `Record: check O2 with "(interview sha256:${current.interview})", the hash js-harness onboard hash prints.`,
+        THEN,
+      ];
+    case 4:
+      return [
+        heading(at.changed ? `${ORIGIN_PATH} changed since its approval.` : `${ORIGIN_PATH} waits for the owner's approval.`),
+        `Do: two readers read ${ORIGIN_PATH} against the interview; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question: is the pre-plan approved?`,
+        `Record: a yes is logged verbatim, and O3 checked with "(origin sha256:${current.origin}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again.`,
+        THEN,
+      ];
+    case 5:
+      return [
+        heading('the pre-plan is approved.'),
+        `Do: ${files.roadmap === null ? `js-harness onboard template roadmap --write, then fill ${ROADMAP_PATH}` : `fill ${ROADMAP_PATH}`} from the approved pre-plan: every pre-plan phase with its steps under ## Checklist, a done-when command per phase, ## Next, and every open decision. Run js-harness onboard check --plan until it exits 0, then check O4.`,
+        THEN,
+      ];
+    case 6: {
+      const moved = at.changed ? changedSince(tasks.get('O5'), ['roadmap', 'origin'], current) : [];
+      const what = moved.includes('roadmap') ? `${ROADMAP_PATH} changed since its approval.`
+        : moved.includes('origin') ? `${ORIGIN_PATH} changed since the roadmap's approval: revise the roadmap from it first.`
+          : `${ROADMAP_PATH} waits for the owner's approval.`;
+      return [
+        heading(what),
+        `Do: two readers read ${ROADMAP_PATH} against the approved pre-plan; record their round under ## Reviews as "Roadmap round <n>: ..." and take what they find. Then ask the owner one question: is the roadmap approved?`,
+        `Record: a yes is logged verbatim, and O5 checked with "(roadmap sha256:${current.roadmap}, origin sha256:${current.origin}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again.`,
+        THEN,
+      ];
+    }
+    default: {
+      const count = at.findings.length;
+      return [
+        heading(count > 0 ? `${count} finding${count === 1 ? '' : 's'} left.` : 'js-harness onboard check passes; O6 is not checked yet.'),
+        ...at.findings.map(findingLine),
+        `Do: fill ${AGENTS_PATH} outside its js-harness block: "What this project is" and "Constraints" from topics 1, 4, 5 and 7, the checking command under "How it works", and the line "${ROADMAP_LINE}". Fix each finding at the stage it names.`,
+        'Then: once js-harness onboard check exits 0, check O6 and commit.',
+      ];
+    }
+  }
+}
+
+/** Where an onboarding on another branch is, and how to resume it (D7). */
+function elsewhereLine({ branch, worktree, remote = false, local = null }, git) {
+  if (branch === git.defaultBranch || (remote && branch.endsWith(`/${git.defaultBranch}`))) {
+    return `The onboarding is on ${branch}: merge ${branch} into this branch, or switch to it.`;
+  }
+  if (worktree) return `Onboarding in progress on branch ${branch}, checked out in ${worktree}: open a session there and run js-harness onboard.`;
+  if (local) return `Onboarding in progress on branch ${branch}: git switch ${local}, then git merge ${branch}, resumes it here.`;
+  return `Onboarding in progress on branch ${branch}: git switch ${remote ? '--track ' : ''}${branch} resumes it here.`;
+}
+
+/** What bare `onboard` prints, and its exit code: `{ code, lines }`. `git` says where the session is: `branch` (or
+ * `null` when detached), `defaultBranch`, `defaultHasRoadmap`, `elsewhere` (other branches holding an onboarding
+ * document: `{ branch, worktree, remote, local }`, `local` naming a local branch of a remote's name that lacks it) and `uncommitted` (the onboarding's files git has not committed). */
+export function stageReport(files, { agentsTemplate = '', git }) {
+  if (files.onboarding === null) {
+    if (git.elsewhere.length > 0) return { code: 0, lines: git.elsewhere.map((place) => elsewhereLine(place, git)) };
+    const own = [[ORIGIN_PATH, files.origin], [ROADMAP_PATH, files.roadmap]].filter(([, text]) => text !== null).map(([file]) => file);
+    if (own.length > 0) {
+      return {
+        code: 1,
+        lines: [
+          `This project has a plan of its own: ${own.join(', ')}.`,
+          'Onboarding a plan of another shape is not supported yet: move it aside to onboard this project, or keep it as the plan.',
+        ],
+      };
+    }
+  }
+  const at = currentStage(files, { agentsTemplate });
+  let lines;
+  if (at.stage !== 'done') lines = stageLines(at, files, git);
+  else if (git.branch !== git.defaultBranch && !git.defaultHasRoadmap) {
+    const branch = git.branch ?? 'HEAD';
+    lines = [
+      `Awaiting merge: the onboarding is complete on branch ${branch}, and ${git.defaultBranch} has no ${ROADMAP_PATH} yet.`,
+      `Merging it is the owner's decision, under this repository's policy. To propose it: git push -u origin ${branch}, then gh pr create --base ${git.defaultBranch} --head ${branch}.`,
+    ];
+  } else {
+    const next = (parseContract(files.roadmap).get('Next') ?? '').split('\n').map((line) => line.trim()).filter(Boolean).join(' ');
+    lines = [`Onboarded: ${ROADMAP_PATH} is the plan.`, `Next: ${next}`];
+  }
+  if (git.uncommitted.length > 0) {
+    lines.push(`Not committed: ${git.uncommitted.join(', ')}. Commit them on this branch, so the next session finds them.`);
+  }
+  return { code: 0, lines };
+}

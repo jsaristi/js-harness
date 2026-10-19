@@ -18,7 +18,6 @@ import {
   summarizeStackRow,
   computeStackState,
   buildCommands,
-  hasMemorySnapshots,
 } from './tui.mjs';
 import { installMain } from './install.mjs';
 import { manifestPath, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
@@ -135,7 +134,7 @@ test('runTui reads the update again after a command: an Upgrade that installed t
 
 test('render shows a confirmation prompt in confirm mode', () => {
   const base = initialState({ installedVersion: '0.1.0', updateAvailable: null });
-  const state = { ...base, mode: 'confirm', pending: 'uninstall' };
+  const state = { ...base, mode: 'confirm', pending: 'uninstall-machine' };
   assert.match(render(state).join('\n'), /Uninstall.*\(y\/N\)/);
 });
 
@@ -158,59 +157,85 @@ test('enter on a non-destructive item requests it be run and stays on the menu',
   assert.deepEqual(effect, { type: 'run', command: 'status' });
 });
 
-test('enter on Uninstall asks for confirmation instead of running it directly', () => {
-  let state = initialState({ installedVersion: '0.1.0', updateAvailable: null });
-  const uninstallIndex = MENU_ITEMS.indexOf('uninstall');
-  state = { ...state, selected: uninstallIndex };
-  const { state: next, effect } = handleKey(state, 'enter');
-  assert.equal(next.mode, 'confirm');
-  assert.equal(next.pending, 'uninstall');
+// odd/tasks/uninstall-kinds.md, S2: one Uninstall item opens a submenu of the kinds, each asking its own y/N.
+const KIND_LABELS = ['Machine', 'Machine + memory snapshots', 'Everything', 'Back'];
+
+/** The menu state with Uninstall selected, and the submenu Enter opens on it. */
+function openUninstall(location) {
+  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null, location });
+  const onUninstall = { ...base, selected: base.menu.findIndex((entry) => entry.id === 'uninstall') };
+  return { onUninstall, ...handleKey(onUninstall, 'enter') };
+}
+
+test('enter on Uninstall opens the submenu of the kinds, without running or asking anything', () => {
+  const { state, effect } = openUninstall();
   assert.equal(effect, null);
+  assert.equal(state.mode, 'menu');
+  assert.deepEqual(state.menu.filter((entry) => !entry.header).map((entry) => entry.label), KIND_LABELS, 'outside a project there is no Project kind');
+  assert.equal(state.menu[state.selected].id, 'uninstall-machine', 'the first kind is selected');
+  const text = render(state).join('\n');
+  assert.match(text, /^uninstall$/m, 'the submenu says what it is');
+  assert.match(text, /^> Machine$/m);
+  assert.match(text, /^ {2}Everything$/m);
+  assert.doesNotMatch(text, /^ {2}Doctor$/m, 'the main menu is not drawn under it');
 });
 
-test('y confirms the uninstall; anything else cancels back to the menu', () => {
-  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null });
-  const confirming = { ...base, mode: 'confirm', pending: 'uninstall' };
-
-  const yes = handleKey(confirming, 'y');
-  assert.equal(yes.state.mode, 'menu');
-  assert.deepEqual(yes.effect, { type: 'run', command: 'uninstall' });
-
-  const no = handleKey(confirming, 'n');
-  assert.equal(no.state.mode, 'menu');
-  assert.equal(no.effect, null);
-
-  const escaped = handleKey(confirming, 'escape');
-  assert.equal(escaped.state.mode, 'menu');
-  assert.equal(escaped.effect, null);
+test('inside an initialized project the submenu starts with Project', () => {
+  for (const location of [INITIALIZED, STALE, INVALID, NO_PIN]) {
+    const { state } = openUninstall(location);
+    assert.deepEqual(state.menu.filter((entry) => !entry.header).map((entry) => entry.label), ['Project', ...KIND_LABELS], location.kind);
+    assert.equal(state.menu[state.selected].id, 'uninstall-project', location.kind);
+  }
+  const { state } = openUninstall(NOT_INITIALIZED);
+  assert.deepEqual(state.menu.filter((entry) => !entry.header).map((entry) => entry.label), KIND_LABELS, 'a repository init never touched has nothing to undo');
 });
 
-// T10 (odd/tasks/memory-hygiene.md, D7.8): with memory snapshots in the home, the yes to Uninstall is followed by a
-// second question, whose yes adds --full; without them the yes runs the uninstall as before.
-test('with memory snapshots, the yes to Uninstall asks whether to remove them too: y full, n or enter normal, escape cancels', () => {
-  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true });
-  const asked = handleKey({ ...base, mode: 'confirm', pending: 'uninstall' }, 'y');
-  assert.deepEqual([asked.state.mode, asked.state.pending, asked.effect], ['confirm', 'uninstall-full', null]);
-  assert.match(render(asked.state).join('\n'), /Remove the memory snapshots too, the only copy of what a pass changed\? \(y\/N\)$/);
-  assert.deepEqual(handleKey(asked.state, 'y').effect, { type: 'run', command: 'uninstall-full' });
-  assert.deepEqual(handleKey(asked.state, 'n').effect, { type: 'run', command: 'uninstall' });
-  assert.deepEqual(handleKey(asked.state, 'enter').effect, { type: 'run', command: 'uninstall' });
-  const escaped = handleKey(asked.state, 'escape');
-  assert.deepEqual([escaped.state.mode, escaped.effect], ['menu', null]);
+test('Back and escape leave the submenu for the menu, on Uninstall; q still quits', () => {
+  const { onUninstall, state } = openUninstall(INITIALIZED);
+  const onBack = { ...state, selected: state.menu.findIndex((entry) => entry.id === 'back') };
+  for (const [what, left] of [['Back', handleKey(onBack, 'enter')], ['escape', handleKey(state, 'escape')]]) {
+    assert.equal(left.effect, null, what);
+    assert.deepEqual(left.state.menu, onUninstall.menu, `${what}: the main menu is back`);
+    assert.equal(left.state.menu[left.state.selected].id, 'uninstall', `${what}: on Uninstall`);
+  }
+  assert.deepEqual(handleKey(state, 'quit').effect, { type: 'quit' });
 });
 
-test('buildCommands uninstall-full removes the memory snapshots, which the normal uninstall keeps', async () => {
+test('each kind asks its own question, saying what it removes and what it keeps; y runs it from the menu, anything else stays in the submenu', () => {
+  const prompts = {
+    'uninstall-project': /^Undo js-harness in this project\? It removes what init recorded in this clone and keeps the files you edited and the machine install\. \(y\/N\)$/,
+    'uninstall-machine': /^Uninstall js-harness from this home\? It removes what install recorded and the folders js-harness keeps here, and keeps the files you edited, the memory snapshots, the throughput records and the program\. \(y\/N\)$/,
+    'uninstall-snapshots': /^Uninstall js-harness from this home and remove the memory snapshots, the only copy of what a pass changed\? It keeps the files you edited, the throughput records and the program\. \(y\/N\)$/,
+    'uninstall-everything': /^Remove everything js-harness keeps on this machine: the whole \.js-harness folder of this home \(the lead's notes, the backups, the memory snapshots\) and the js-harness program itself\? It keeps the projects' files\. This cannot be undone\. \(y\/N\)$/,
+  };
+  const { onUninstall, state } = openUninstall(INITIALIZED);
+  for (const [kind, prompt] of Object.entries(prompts)) {
+    const asked = handleKey({ ...state, selected: state.menu.findIndex((entry) => entry.id === kind) }, 'enter');
+    assert.deepEqual([asked.state.mode, asked.state.pending, asked.effect], ['confirm', kind, null], kind);
+    assert.match(render(asked.state).at(-1), prompt, kind);
+    const yes = handleKey(asked.state, 'y');
+    assert.deepEqual(yes.effect, { type: 'run', command: kind }, kind);
+    assert.equal(yes.state.mode, 'menu', kind);
+    assert.deepEqual(yes.state.menu, onUninstall.menu, `${kind}: the command runs from the main menu`);
+    for (const key of ['n', 'enter', 'escape']) {
+      const no = handleKey(asked.state, key);
+      assert.equal(no.effect, null, `${kind} ${key}`);
+      assert.deepEqual([no.state.mode, no.state.menu[no.state.selected].id], ['menu', kind], `${kind} ${key}: back in the submenu`);
+    }
+  }
+});
+
+test('buildCommands uninstall-snapshots removes the memory snapshots, which uninstall-machine keeps', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-home-'));
   const originalLog = console.log;
   try {
-    const project = path.join(home, '.js-harness', 'memory-hygiene', 'C--proj');
-    fs.mkdirSync(path.join(project, 'snapshots', '20261015T120606108Z'), { recursive: true });
-    assert.equal(hasMemorySnapshots(home), true);
+    const snapshot = path.join(home, '.js-harness', 'memory-hygiene', 'C--proj', 'snapshots', '20261015T120606108Z');
+    fs.mkdirSync(snapshot, { recursive: true });
     console.log = () => {};
-    assert.equal(await buildCommands({ home }).uninstall(), 0);
-    assert.equal(hasMemorySnapshots(home), true, 'the normal uninstall keeps them');
-    assert.equal(await buildCommands({ home })['uninstall-full'](), 0);
-    assert.equal(hasMemorySnapshots(home), false);
+    assert.equal(await buildCommands({ home })['uninstall-machine'](), 0);
+    assert.equal(fs.existsSync(snapshot), true, 'the machine uninstall keeps them');
+    assert.equal(await buildCommands({ home })['uninstall-snapshots'](), 0);
+    assert.equal(fs.existsSync(snapshot), false);
     assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
   } finally {
     console.log = originalLog;
@@ -262,62 +287,34 @@ test('runTui asks for confirmation before uninstalling', async () => {
     install: async () => calls.push('install'),
     update: async () => calls.push('update'),
     upgrade: async () => calls.push('upgrade'),
-    uninstall: async () => calls.push('uninstall'),
+    'uninstall-machine': async () => calls.push('uninstall-machine'),
   };
 
   const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
 
   for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'j');
+  stdin.emit('data', '\r'); // Enter opens the submenu, on Machine
+  await flush();
+  assert.match(stdout.chunks.at(-1), /^> Machine$/m);
   stdin.emit('data', '\r'); // Enter opens the confirmation
   await flush();
   assert.ok(stdout.chunks.at(-1).includes('y/N'));
 
   stdin.emit('data', 'y');
   await flush();
+  assert.match(stdout.chunks.at(-1), /^> Uninstall$/m, 'the menu is drawn again, on Uninstall');
   stdin.emit('data', 'q');
 
   const code = await done;
   assert.equal(code, 0);
-  assert.deepEqual(calls, ['uninstall']);
+  assert.deepEqual(calls, ['uninstall-machine']);
 });
 
-test('runTui asks the second question while snapshots are there, and reads again after each command whether they are', async () => {
-  const stdin = makeFakeStdin();
-  const stdout = makeFakeStdout();
-  const calls = [];
-  let snapshots = true;
-  const commands = {
-    uninstall: async () => calls.push('uninstall'),
-    'uninstall-full': async () => {
-      calls.push('uninstall-full');
-      snapshots = false;
-    },
-  };
-  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true, readSnapshots: () => snapshots, commands, stdin, stdout });
-  for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'j');
-  for (const key of ['\r', 'y', 'n', '\r', 'y', 'y', '\r', 'y']) {
-    stdin.emit('data', key);
-    await flush();
-  }
-  stdin.emit('data', 'q');
-  assert.equal(await done, 0);
-  assert.deepEqual(calls, ['uninstall', 'uninstall-full', 'uninstall'], 'with none left, the yes runs the uninstall alone');
-});
-
-// release-095 S5 (Pregunta 17): Uninstall everything sits after Uninstall, asks once, naming the folder and the
-// program, and runs `uninstall --global --everything`.
-test('Uninstall everything follows Uninstall, asks naming the folder and the program, y runs it, n cancels', () => {
-  assert.equal(MENU_ITEMS.indexOf('uninstall-everything'), MENU_ITEMS.indexOf('uninstall') + 1);
-  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true });
-  assert.match(render(base).join('\n'), /^ {2}Uninstall everything$/m);
-  const asked = handleKey({ ...base, selected: MENU_ITEMS.indexOf('uninstall-everything') }, 'enter');
-  assert.deepEqual([asked.state.mode, asked.state.pending, asked.effect], ['confirm', 'uninstall-everything', null]);
-  assert.match(
-    render(asked.state).join('\n'),
-    /Remove everything js-harness keeps on this machine: the whole \.js-harness folder of this home \(the lead's notes, the backups, the memory snapshots\) and the js-harness program itself\? This cannot be undone\. \(y\/N\)$/,
-  );
-  assert.deepEqual(handleKey(asked.state, 'y').effect, { type: 'run', command: 'uninstall-everything' }, 'one question, snapshots or not');
-  for (const key of ['n', 'enter', 'escape']) assert.deepEqual(handleKey(asked.state, key).effect, null, key);
+// release-095 S5 (Pregunta 17): Everything asks once, naming the folder and the program, and runs
+// `uninstall everything`; it is the last kind of the submenu, before Back.
+test('Everything is the last kind of the submenu, before Back', () => {
+  const { state } = openUninstall();
+  assert.deepEqual(state.menu.slice(-2).map((entry) => entry.id), ['uninstall-everything', 'back']);
 });
 
 test('runTui quits once Uninstall everything succeeds, and stays in the menu when it fails', async () => {
@@ -333,14 +330,15 @@ test('runTui quits once Uninstall everything succeeds, and stays in the menu whe
       },
     };
     const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
-    for (let i = 0; i < MENU_ITEMS.indexOf('uninstall-everything'); i++) stdin.emit('data', 'j');
-    for (const key of ['\r', 'y']) {
+    for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'j');
+    // Uninstall, then Everything (the third kind outside a project), then the yes.
+    for (const key of ['\r', 'j', 'j', '\r', 'y']) {
       stdin.emit('data', key);
       await flush();
     }
     if (result !== 0) {
-      // Still in the menu: back to the top, run Status, then quit.
-      for (let i = 0; i < MENU_ITEMS.indexOf('uninstall-everything'); i++) stdin.emit('data', 'k');
+      // Still in the menu, on Uninstall: back to the top, run Status, then quit.
+      for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'k');
       stdin.emit('data', '\r');
       await flush();
       stdin.emit('data', 'q');
@@ -410,7 +408,7 @@ test('tuiMain opens the menu when the home\'s manifest cannot be read, as it did
     await flush();
     stdin.emit('data', 'q');
     assert.equal(await done, 0);
-    assert.ok(stdout.chunks.join('').includes('Uninstall everything'));
+    assert.match(stdout.chunks.join(''), /^ {2}Uninstall$/m);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -755,8 +753,8 @@ test('runTui keeps a command\'s output on screen and draws the menu below it', a
   await done;
 });
 
-// The TUI runs outside or inside a project alike, and its uninstall entry is the machine one: it
-// must pass --global, or inside a git repository it would act on (or refuse for) that project.
+// The TUI runs outside or inside a project alike, and its Machine kind must reach the machine: it runs
+// `uninstall machine`, or inside a git repository it would act on (or refuse for) that project.
 test('buildCommands uninstall undoes the machine install even when run inside a git repository', async () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-repo-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-home-'));
@@ -768,7 +766,7 @@ test('buildCommands uninstall undoes the machine install even when run inside a 
     await installMain(['--home', home]);
     process.chdir(repo);
 
-    const code = await buildCommands({ home }).uninstall();
+    const code = await buildCommands({ home })['uninstall-machine']();
 
     assert.equal(code, 0);
     assert.equal(fs.existsSync(manifestPath(home)), false);
@@ -794,7 +792,7 @@ test('buildCommands uninstall cannot reach the real schtasks from a test: a reco
     const task = { name: 'js-harness-remote-x', command: 'conhost.exe', arguments: '--headless node remote.mjs start --watchdog' };
     recordScheduledTask(home, task);
 
-    const code = await buildCommands({ home }).uninstall();
+    const code = await buildCommands({ home })['uninstall-machine']();
 
     assert.equal(code, 1, 'a task left behind is not a clean uninstall');
     assert.match(errors.join('\n'), /^could not look for scheduled task js-harness-remote-x \(the real schtasks\.exe is never run from a test/);
@@ -843,7 +841,7 @@ const NO_PIN = { kind: 'noPin', root: '/repo', harnessJsonPath: '/repo/harness.j
 /** A menu as one comparable list: headers as `[label]`, items by id. */
 const ids = (menu) => menu.map((entry) => (entry.header ? `[${entry.label}]` : entry.id));
 const REMOTE_MENU = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
-const PROJECT_MENU = ['[project]', 'project-sync', 'project-status', 'project-uninstall', ...REMOTE_MENU];
+const PROJECT_MENU = ['[project]', 'project-sync', 'project-status', ...REMOTE_MENU];
 
 function stateAt(location, id) {
   const state = initialState({ installedVersion: '0.1.0', updateAvailable: null, location });
@@ -864,7 +862,7 @@ test('buildMenu is exactly today\'s machine menu outside a git repository', () =
   }
   assert.deepEqual(
     buildMenu(NOT_GIT).map((entry) => entry.label),
-    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Uninstall everything', 'Quit'],
+    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Quit'],
   );
 });
 
@@ -891,14 +889,15 @@ test('buildMenu offers the remote server after the project items in every git re
   assert.equal(everyLabel.some((label) => /login/i.test(label)), false, 'the login launcher is not offered here');
 });
 
-test('buildMenu offers Sync, Status and Uninstall in an initialized project, stale, invalid and unpinned ones included', () => {
+test('buildMenu offers Sync and Status in an initialized project, stale, invalid and unpinned ones included, and one Uninstall', () => {
   for (const location of [INITIALIZED, STALE, INVALID, NO_PIN]) {
     const menu = buildMenu(location);
     assert.deepEqual(ids(menu), [...PROJECT_MENU, '[machine]', ...MENU_ITEMS], location.kind);
     assert.deepEqual(
-      menu.slice(1, 4).map((entry) => entry.label),
-      ['Sync', 'Status', 'Uninstall'],
+      menu.slice(1, 3).map((entry) => entry.label),
+      ['Sync', 'Status'],
     );
+    assert.equal(menu.filter((entry) => entry.label === 'Uninstall').length, 1, `${location.kind}: its submenu holds the project kind`);
   }
 });
 
@@ -954,24 +953,6 @@ test('Init is a selectable project command; Sync and Status run directly', () =>
   assert.deepEqual(press(stateAt(INITIALIZED, 'status'), 'enter').effect, { type: 'run', command: 'status' });
 });
 
-test('the two uninstalls ask different questions and run different commands', () => {
-  const project = press(stateAt(INITIALIZED, 'project-uninstall'), 'enter');
-  assert.equal(project.effect, null);
-  assert.equal(project.state.mode, 'confirm');
-  assert.equal(project.state.pending, 'project-uninstall');
-  assert.match(render(project.state).join('\n'), /Undo js-harness in this project\? \(y\/N\)/);
-  assert.doesNotMatch(render(project.state).join('\n'), /from this home/);
-  assert.deepEqual(handleKey(project.state, 'y').effect, { type: 'run', command: 'project-uninstall' });
-  assert.equal(handleKey(project.state, 'n').effect, null);
-
-  const machine = press(stateAt(INITIALIZED, 'uninstall'), 'enter');
-  assert.equal(machine.state.mode, 'confirm');
-  assert.equal(machine.state.pending, 'uninstall');
-  assert.match(render(machine.state).join('\n'), /Uninstall js-harness from this home\? \(y\/N\)/);
-  assert.doesNotMatch(render(machine.state).join('\n'), /in this project/);
-  assert.deepEqual(handleKey(machine.state, 'y').effect, { type: 'run', command: 'uninstall' });
-});
-
 test('Remote status and Remote start run directly; Remote stop asks first, saying what it ends', () => {
   for (const location of [NOT_INITIALIZED, INITIALIZED]) {
     assert.deepEqual(press(stateAt(location, 'project-remote-status'), 'enter').effect, { type: 'run', command: 'project-remote-status' });
@@ -1016,7 +997,7 @@ test('withLocation lands on a selectable, in-range item when the selected one di
   const afterInit = withLocation(stateAt(NOT_INITIALIZED, 'project-init'), INITIALIZED);
   assert.equal(afterInit.menu[afterInit.selected].id, 'project-sync');
   // After a project `uninstall`: back to Init.
-  const afterUninstall = withLocation(stateAt(INITIALIZED, 'project-uninstall'), NOT_INITIALIZED);
+  const afterUninstall = withLocation(stateAt(INITIALIZED, 'project-status'), NOT_INITIALIZED);
   assert.equal(afterUninstall.menu[afterUninstall.selected].id, 'project-init');
   // Out of the repository entirely: the machine menu, selection in range.
   const outside = withLocation(stateAt(INITIALIZED, 'project-status'), NOT_GIT);
@@ -1111,7 +1092,7 @@ test('buildCommands binds the project commands to the root: init, status, sync, 
     assert.equal(sync.result, 0, sync.lines.join('\n'));
     assert.match(sync.lines.join('\n'), /up to date/);
 
-    const uninstall = await silently(() => commands['project-uninstall']());
+    const uninstall = await silently(() => commands['uninstall-project']());
     assert.equal(uninstall.result, 0, uninstall.lines.join('\n'));
     assert.equal(fs.existsSync(path.join(repo, 'harness.json')), false);
 
@@ -1126,7 +1107,7 @@ test('buildCommands binds the project commands to the root: init, status, sync, 
 // the menu was last built for, not the one the TUI happened to open on.
 test('buildCommands has every project command with no root, and each refuses cleanly without a location', async () => {
   const commands = buildCommands({ home: os.tmpdir() });
-  for (const id of ['project-init', 'project-sync', 'project-status', 'project-uninstall']) {
+  for (const id of ['project-init', 'project-sync', 'project-status', 'uninstall-project']) {
     assert.equal(typeof commands[id], 'function', id);
     await assert.rejects(() => commands[id](), /no project/, id);
   }
@@ -1396,15 +1377,17 @@ test('tuiMain in a repository shows the project section, inits it, and offers Sy
       assert.match(afterInit, /^> Sync$/m);
       assert.doesNotMatch(afterInit, /Init/);
 
-      stdin.emit('data', 'j');
-      stdin.emit('data', 'j'); // Uninstall (project)
+      stdin.emit('data', 'k'); // from Sync, up wraps to Quit
+      stdin.emit('data', 'k'); // Uninstall
+      stdin.emit('data', '\r'); // the submenu, on Project
       stdin.emit('data', '\r');
       await flush();
-      assert.match(stdout.chunks.at(-1), /Undo js-harness in this project\? \(y\/N\)/);
+      assert.match(stdout.chunks.at(-1), /Undo js-harness in this project\? .*\(y\/N\)/);
       stdin.emit('data', 'y');
       await flush();
       assert.equal(fs.existsSync(path.join(repo, 'harness.json')), false);
-      assert.match(stdout.chunks.at(-1), /^> Init$/m, 'the menu goes back to Init once the project is undone');
+      assert.match(stdout.chunks.at(-1), /^ {2}Init$/m, 'the menu offers Init again once the project is undone');
+      assert.match(stdout.chunks.at(-1), /^> Uninstall$/m, 'the selection stays on Uninstall, which is still there');
 
       stdin.emit('data', 'q');
       return running;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CONTRACT_TEMPLATE, isContract, parseContract, validateContract, doneWhen, tasksOf, taskModes, modeLine } from './contract.mjs';
+import { CONTRACT_TEMPLATE, commandsIn, isContract, parseContract, validateContract, doneWhen, tasksOf, taskModes, modeLine } from './contract.mjs';
 
 /** A complete contract; each test breaks one thing in it. */
 const GOOD = [
@@ -348,4 +348,16 @@ test('## Effort is optional: a contract without it passes, one with a wrong valu
 
 test('an empty ## Effort is still named as an empty section, as before it became optional', () => {
   assert.deepEqual(validateContract(withSection('Effort', '')).errors, ['section "## Effort" is empty']);
+});
+
+test('commandsIn finds each code span right before "exits 0" in a sentence or a table cell, and no placeholder', () => {
+  assert.deepEqual(commandsIn('`npm test` exits 0 and `node e2e.mjs` exits 0; the page loads'), ['npm test', 'node e2e.mjs']);
+  assert.deepEqual(commandsIn('the page loads, then `npm test`  exits 0'), ['npm test']);
+  assert.deepEqual(commandsIn('`npm test` passes'), []);
+  assert.deepEqual(commandsIn('`<command>` exits 0'), []);
+  assert.deepEqual(commandsIn('`` exits 0'), []);
+  // A span never runs over its closing delimiter into a later one.
+  assert.deepEqual(commandsIn('`npm run build` then `npm test` exits 0'), ['npm test']);
+  assert.deepEqual(commandsIn('`catalog` works; `<command>` exits 0'), []);
+  assert.deepEqual(commandsIn('``a ` b`` exits 0'), ['a ` b']);
 });

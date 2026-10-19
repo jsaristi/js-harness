@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 // Zero-dependency TUI: rendering and key handling are pure (state + key -> state), so they are
 // unit-tested without a terminal. Only `runTui`/`tuiMain` below touch real stdin/stdout.
-import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
-import { hygieneDir } from './lib/memory-hygiene.mjs';
 import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
@@ -18,7 +15,12 @@ import { remoteMain } from './remote.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
-export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'uninstall-everything', 'quit'];
+export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
+/** The kinds of uninstall in the submenu Uninstall opens (odd/tasks/uninstall-kinds.md, S2), each run by the kind of
+ * `js-harness uninstall` of the same name; `uninstall-project` is there only inside a project init touched. */
+const MACHINE_UNINSTALL_ITEMS = ['uninstall-machine', 'uninstall-snapshots', 'uninstall-everything'];
+/** Where there is a project to undo: the project section offers Sync and Status, and the submenu Project. */
+const UNDOABLE_LOCATIONS = ['initialized', 'noPin', 'staleManifest', 'invalidHarnessJson'];
 /** The remote-control server of the repository, last in the project section. */
 const REMOTE_ITEMS = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
 const MENU_LABELS = {
@@ -28,45 +30,30 @@ const MENU_LABELS = {
   update: 'Update',
   upgrade: 'Upgrade',
   uninstall: 'Uninstall',
-  'uninstall-everything': 'Uninstall everything',
+  'uninstall-project': 'Project',
+  'uninstall-machine': 'Machine',
+  'uninstall-snapshots': 'Machine + memory snapshots',
+  'uninstall-everything': 'Everything',
+  back: 'Back',
   quit: 'Quit',
   'project-init': 'Init',
   'project-sync': 'Sync',
   'project-status': 'Status',
-  'project-uninstall': 'Uninstall',
   'project-remote-status': 'Remote status',
   'project-remote-start': 'Remote start',
   'project-remote-stop': 'Remote stop',
 };
-// The uninstalls ask before they run; each prompt names what it undoes. A command has a prompt here
-// exactly when it asks first, and `state.pending` names the command the open prompt is for. Stopping the
+// Each kind of uninstall asks before it runs; its prompt names what it removes and what it keeps. A command has a
+// prompt here exactly when it asks first, and `state.pending` names the command the open prompt is for. Stopping the
 // remote server asks too: the sessions the phone opened through it end with it.
 const CONFIRM_PROMPTS = {
-  uninstall: 'Uninstall js-harness from this home? (y/N)',
-  'project-uninstall': 'Undo js-harness in this project? (y/N)',
+  'uninstall-project': 'Undo js-harness in this project? It removes what init recorded in this clone and keeps the files you edited and the machine install. (y/N)',
+  'uninstall-machine': 'Uninstall js-harness from this home? It removes what install recorded and the folders js-harness keeps here, and keeps the files you edited, the memory snapshots, the throughput records and the program. (y/N)',
+  'uninstall-snapshots': 'Uninstall js-harness from this home and remove the memory snapshots, the only copy of what a pass changed? It keeps the files you edited, the throughput records and the program. (y/N)',
+  // It names the snapshots too (release-095 S5, Pregunta 17).
+  'uninstall-everything': "Remove everything js-harness keeps on this machine: the whole .js-harness folder of this home (the lead's notes, the backups, the memory snapshots) and the js-harness program itself? It keeps the projects' files. This cannot be undone. (y/N)",
   'project-remote-stop': 'Stop the remote server of this project? The sessions opened through it end. (y/N)',
-  // Asked after the yes to Uninstall, only while the home holds memory snapshots (D7.8 of odd/tasks/memory-hygiene.md).
-  'uninstall-full': 'Remove the memory snapshots too, the only copy of what a pass changed? (y/N)',
-  // One question, snapshots or not: it already names them (release-095 S5, Pregunta 17).
-  'uninstall-everything': 'Remove everything js-harness keeps on this machine: the whole .js-harness folder of this home (the lead\'s notes, the backups, the memory snapshots) and the js-harness program itself? This cannot be undone. (y/N)',
 };
-
-/** Whether the home holds a snapshot of a memory pass, the copy only `uninstall --full` removes. False when the
- * folder cannot be read: the menu then asks one question, and the uninstall still keeps the snapshots. */
-export function hasMemorySnapshots(home) {
-  try {
-    const dir = hygieneDir(home);
-    return fs.readdirSync(dir).some((slug) => {
-      try {
-        return fs.readdirSync(path.join(dir, slug, 'snapshots')).length > 0;
-      } catch {
-        return false;
-      }
-    });
-  } catch {
-    return false;
-  }
-}
 
 // --- T5: the menu by location. Data built by a pure function, so it is tested without a terminal ---
 
@@ -74,9 +61,9 @@ const item = (id) => ({ id, label: MENU_LABELS[id] });
 const header = (label) => ({ header: true, label });
 
 /** The menu for where the TUI opened (a `projectLocation` result): outside a git repository exactly the
- * machine menu; inside one, a non-selectable `project` header with Init (not initialized) or Sync, Status
- * and Uninstall (initialized, a stale manifest or a bad `harness.json` included: `status` and `sync` name
- * the problem and `uninstall` clears it), then a non-selectable `machine` header with the machine items.
+ * machine menu; inside one, a non-selectable `project` header with Init (not initialized) or Sync and Status
+ * (initialized, a stale manifest or a bad `harness.json` included: `status` and `sync` name the problem, and the
+ * Project kind of the Uninstall submenu clears it), then a non-selectable `machine` header with the machine items.
  * In every one of those the project section ends with Remote status, start and stop: `js-harness remote`
  * acts on any git repository, initialized or not. The login launcher (`--at-login`) is not offered here.
  * Entries are `{ id, label }`, or `{ header: true, label }` for a section header. */
@@ -84,10 +71,15 @@ export function buildMenu(location = { kind: 'notGit' }) {
   const machine = MENU_ITEMS.map(item);
   const section = (...ids) => [header('project'), ...[...ids, ...REMOTE_ITEMS].map(item), header('machine'), ...machine];
   if (location.kind === 'notInitialized') return section('project-init');
-  if (['initialized', 'noPin', 'staleManifest', 'invalidHarnessJson'].includes(location.kind)) {
-    return section('project-sync', 'project-status', 'project-uninstall');
-  }
+  if (UNDOABLE_LOCATIONS.includes(location.kind)) return section('project-sync', 'project-status');
   return machine;
+}
+
+/** The submenu Uninstall opens: an `uninstall` header, the kinds (Project first, where there is a project to undo),
+ * and Back. */
+export function buildUninstallMenu(location = { kind: 'notGit' }) {
+  const kinds = UNDOABLE_LOCATIONS.includes(location.kind) ? ['uninstall-project', ...MACHINE_UNINSTALL_ITEMS] : MACHINE_UNINSTALL_ITEMS;
+  return [header('uninstall'), ...[...kinds, 'back'].map(item)];
 }
 
 function firstSelectable(menu) {
@@ -120,7 +112,7 @@ export function withLocation(state, location) {
       if (menu[selected].header) selected = stepSelection(menu, selected, 1);
     }
   }
-  return { ...state, location, menu, selected, pending: undefined };
+  return { ...state, location, menu, selected, pending: undefined, parent: undefined };
 }
 
 // --- T5: the stack block — one compact line per doctor row, from local probes + cache only ---
@@ -181,7 +173,7 @@ export async function computeStackState({ home, cwd, spawn, platform, fetch: fet
  * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
  * stack block simply does not render (see `render` below), so older callers keep working. `location` is
  * a `projectLocation` result; omitted, the TUI is outside any repository and shows the machine menu. */
-export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, memorySnapshots = false, installedCopy = null }) {
+export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, installedCopy = null }) {
   const menu = buildMenu(location);
   return {
     mode: 'menu',
@@ -192,7 +184,6 @@ export function initialState({ installedVersion, updateAvailable, stack, locatio
     stack,
     location,
     menu,
-    memorySnapshots,
   };
 }
 
@@ -211,23 +202,23 @@ export function normalizeKey(chunk) {
   return chunk;
 }
 
+/** Pure: the menu the submenu was opened from, back in place, with the selection where it was. */
+function leaveSubmenu(state) {
+  return { ...state, mode: 'menu', pending: undefined, menu: state.parent.menu, selected: state.parent.selected, parent: undefined };
+}
+
 /**
  * Pure reducer: (state, normalized key) -> { state, effect }. `effect` is null,
- * `{ type: 'run', command }`, or `{ type: 'quit' }` — the shell performs it, the reducer never does.
+ * `{ type: 'run', command }`, or `{ type: 'quit' }` — the shell performs it, the reducer never does. While the
+ * Uninstall submenu is open, `state.parent` holds the menu it was opened from: a yes runs the kind from that menu,
+ * and Back or Escape returns to it.
  */
 export function handleKey(state, key) {
   if (state.mode === 'confirm') {
-    const next = { ...state, mode: 'menu', pending: undefined };
-    if (state.pending === 'uninstall' && key === 'y' && state.memorySnapshots) return { state: { ...state, pending: 'uninstall-full' }, effect: null };
-    // The second question is asked after a yes: its no (or Enter, the default) still uninstalls, keeping them.
-    if (state.pending === 'uninstall-full') {
-      if (key === 'y') return { state: next, effect: { type: 'run', command: 'uninstall-full' } };
-      if (key === 'n' || key === 'enter') return { state: next, effect: { type: 'run', command: 'uninstall' } };
-      return { state: next, effect: null };
-    }
-    if (key === 'y') return { state: next, effect: { type: 'run', command: state.pending } };
-    return { state: next, effect: null };
+    if (key === 'y') return { state: state.parent ? leaveSubmenu(state) : { ...state, mode: 'menu', pending: undefined }, effect: { type: 'run', command: state.pending } };
+    return { state: { ...state, mode: 'menu', pending: undefined }, effect: null };
   }
+  if (state.parent && key === 'escape') return { state: leaveSubmenu(state), effect: null };
 
   if (key === 'up' || key === 'down') {
     const selected = stepSelection(state.menu, state.selected, key === 'up' ? -1 : 1);
@@ -239,6 +230,11 @@ export function handleKey(state, key) {
   if (key === 'enter') {
     const command = state.menu[state.selected].id;
     if (command === 'quit') return { state: { ...state, mode: 'done' }, effect: { type: 'quit' } };
+    if (command === 'back') return { state: leaveSubmenu(state), effect: null };
+    if (command === 'uninstall') {
+      const menu = buildUninstallMenu(state.location);
+      return { state: { ...state, parent: { menu: state.menu, selected: state.selected }, menu, selected: firstSelectable(menu) }, effect: null };
+    }
     if (Object.hasOwn(CONFIRM_PROMPTS, command)) return { state: { ...state, mode: 'confirm', pending: command }, effect: null };
     return { state, effect: { type: 'run', command } };
   }
@@ -290,24 +286,21 @@ function screenText(state) {
  * `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every command,
  * since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStack`
  * (sync or async) does the same for the stack block above the menu: `init` creating `.codegraph/` changes
- * codegraph's project state, and `uninstall` the reverse. `readSnapshots` reads again whether the home holds memory
- * snapshots (`memorySnapshots` at the start), which decides whether Uninstall asks its second question. */
+ * codegraph's project state, and `uninstall` the reverse. */
 export function runTui({
   installedVersion,
   updateAvailable,
   installedCopy = null,
   stack,
   location,
-  memorySnapshots = false,
   readLocation,
   readStack,
-  readSnapshots,
   readUpdate,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack, location, memorySnapshots, installedCopy });
+  let state = initialState({ installedVersion, updateAvailable, stack, location, installedCopy });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -360,13 +353,6 @@ export function runTui({
             console.error(`refreshing the stack failed: ${oneLine(err)}`);
           }
         }
-        if (readSnapshots) {
-          try {
-            state = { ...state, memorySnapshots: await readSnapshots() };
-          } catch (err) {
-            console.error(`reading the memory snapshots failed: ${oneLine(err)}`);
-          }
-        }
         if (readUpdate) {
           try {
             const { updateAvailable: available = null, installedCopy = null } = (await readUpdate()) ?? {};
@@ -393,7 +379,8 @@ export function runTui({
 }
 
 /** The commands the menu runs, each bound to `home`. The machine ones do not change scope with the folder:
- * `status`, `sync` and `uninstall` pass `--global`, so the same Enter never acts on a project. (`doctor`
+ * `status` and `sync` pass `--global`, and each kind of uninstall names its kind, which never acts by location,
+ * so the same Enter never acts on a project. (`doctor`
  * reads the folder's project, like the stack block, so it gets `--cwd`.) Every project command exists
  * whatever the TUI opened on, and takes the location the menu was last built for: it acts on that
  * location's `root` (the repository's top-level) with `--cwd`, so a repository that appears, or a project
@@ -423,7 +410,7 @@ export function buildCommands({
     'project-init': async (location) => initMain(argsAt(location), env),
     'project-sync': async (location) => syncMain(argsAt(location), env),
     'project-status': async (location) => statusMain(argsAt(location), env, spawn),
-    'project-uninstall': async (location) => uninstallMain(argsAt(location), env),
+    'uninstall-project': async (location) => uninstallMain(['project', ...argsAt(location)], env),
     // `remote` takes the same `--cwd` and `--home` for its three subcommands, and nothing else is passed.
     'project-remote-status': async (location) => remote(['status', ...argsAt(location)], env),
     'project-remote-start': async (location) => remote(['start', ...argsAt(location)], env),
@@ -434,9 +421,9 @@ export function buildCommands({
     update: () => updateMain(['--home', home, ...fromSource], env, spawn),
     upgrade: () => upgradeMain(['--home', home, ...fromSource], env, spawn),
     sync: () => syncMain(['--global', '--home', home]),
-    uninstall: () => uninstallMain(['--global', '--home', home]),
-    'uninstall-full': () => uninstallMain(['--global', '--full', '--home', home]),
-    'uninstall-everything': () => uninstallMain(['--global', '--everything', '--home', home]),
+    'uninstall-machine': () => uninstallMain(['machine', '--home', home]),
+    'uninstall-snapshots': () => uninstallMain(['snapshots', '--home', home]),
+    'uninstall-everything': () => uninstallMain(['everything', '--home', home]),
   };
 }
 
@@ -495,8 +482,6 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     // The same offline probes as at start, never the network: `computeStackState` always calls
     // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
     readStack: () => computeStackState({ home, cwd, spawn, fetch: fetchImpl, now }),
-    memorySnapshots: hasMemorySnapshots(home),
-    readSnapshots: () => hasMemorySnapshots(home),
     commands,
     ...io,
   });

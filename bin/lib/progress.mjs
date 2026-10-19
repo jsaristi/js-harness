@@ -265,7 +265,7 @@ const TASK_ID_PATTERN = /^T\d+[a-z]*$/i;
 const DELIMITER_CELL_PATTERN = /^:?-+:?$/;
 
 /** The trimmed cells of a table row, or `null` for a line that is not one: a row here starts with a pipe. */
-function cellsOf(line) {
+export function cellsOf(line) {
   const trimmed = line.trim();
   if (!trimmed.startsWith('|')) return null;
   const closed = trimmed.length > 1 && trimmed.endsWith('|') && !trimmed.endsWith('\\|');
