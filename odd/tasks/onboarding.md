@@ -255,6 +255,9 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   - Unguaranteed: version 3's fixes were not read again (the protocol allows no third round). That nine topics are enough for every kind of project, and that a model fills the sections well;
     `onboard check` proves the plan's structure and its ties to the interview, not that its judgment is good. The
     readers and his two approvals are what stand for that.
+- Code reviews of the build, one line per commit:
+  - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
+  - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
