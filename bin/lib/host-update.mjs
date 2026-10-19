@@ -101,7 +101,9 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
       // A restart of the app turns Remote Control off; his standing yes to turning it back on each time is in
       // odd/tasks/host-update-check.md (L9).
       'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
-      'report the benefits, the behavior changes and the breaking changes to the user',
+      // His words of 2026-10-19: a full account of what improved, changed and was fixed, what it does to the harness
+      // and what to change; a patch the public changelog skips is still reported, from what was seen.
+      'report to the user in full: what improved, what changed and what was fixed; how each helps or hurts the harness; and what the harness should change to work better. A version the changelog has no entry for is said so, with what was observed instead (tools, hooks, behavior)',
       'then record the review: js-harness doctor --host-reviewed',
     ];
   }

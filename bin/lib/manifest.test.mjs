@@ -2673,6 +2673,12 @@ test('the orchestrator skill merges code on a green run of the merge with the cu
   assert.ok(text.includes('- Where the project has no such run,'), 'the gate rule stays for a project without CI');
 });
 
+test('the orchestrator skill has a command shown to the user say what it does, in the terminal and in a reply', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes("a command typed into their Terminal panel ends with `; Write-Host 'NOTE: <what it does, in plain words>'`, printed beside it"));
+  assert.ok(text.includes('a command given in a reply has that note right under its block'));
+});
+
 test('the orchestrator skill lists what is checked before the user leaves', () => {
   const text = components[2].content('0.1.0');
   assert.ok(text.includes('- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.'));

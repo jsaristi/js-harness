@@ -1892,7 +1892,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
       '    read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
       '    check that the harness hooks in ~/.claude/settings.json still run',
       '    turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
-      '    report the benefits, the behavior changes and the breaking changes to the user',
+      '    report to the user in full: what improved, what changed and what was fixed; how each helps or hurts the harness; and what the harness should change to work better. A version the changelog has no entry for is said so, with what was observed instead (tools, hooks, behavior)',
       '    then record the review: js-harness doctor --host-reviewed',
     ].join('\n');
     assert.ok(table.output.includes(`\n${steps}\n`), table.output);
