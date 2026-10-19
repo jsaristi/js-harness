@@ -41,8 +41,9 @@ npm rm -g js-harness
 `uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
 and names them; `uninstall --global --full` removes them too. Files you modified and the memory
 notes themselves are kept either way. `uninstall --global --everything` removes all that js-harness
-keeps on the machine and then the program itself, so `npm rm -g` is not needed after it; the TUI
-offers it as "Uninstall everything". Projects' files are kept.
+keeps on the machine and then the program itself, so `npm rm -g` is not needed after it. Projects'
+files are kept. Each kind has a name too (`uninstall project`, `machine`, `snapshots`,
+`everything`), and the TUI's Uninstall opens a submenu of them.
 
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
@@ -336,8 +337,8 @@ installed by no package manager, and one in a project's `node_modules` (or npx's
 project's dependency, so the program is kept and the line says why. The program counts as
 removed only once its folder is gone, whatever the manager's exit code. While a gate runs, or the
 folder or anything above it could not be removed, it removes nothing more and says to run it
-again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
-and ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
+again. It cannot be undone; the TUI's Everything asks once, naming all of it, and the TUI
+ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
 
 Each kind also has a name, and a named kind never acts by location:
 
@@ -351,6 +352,11 @@ Each kind also has a name, and a named kind never acts by location:
 `uninstall project` outside an initialized project exits 1 and removes nothing; it never falls
 through to the machine. A kind given `--global`, `--full` or `--everything`, or a machine kind
 given `--cwd`, is a usage error.
+
+In the TUI, Uninstall opens a submenu of the same kinds: Project (inside a project `init`
+touched), Machine, Machine + memory snapshots, Everything and Back. Each kind asks y/N with a
+line that says what it removes and what it keeps; a yes runs it and returns to the menu, Back
+or Escape returns without running anything.
 
 ```console
 $ js-harness uninstall

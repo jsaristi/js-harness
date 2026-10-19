@@ -51,8 +51,12 @@ Nothing left: the product choice was asked and answered (L2).
 - [x] T1 (S3, S4, kind: build) Slice 1: the kinds in `uninstallMain`, usage, help, README, SPEC, with tests that
   prove what each kind removes and what it leaves. Route: inline. RED: `bin/uninstall-kinds.test.mjs` 0/8 (each kind
   read as an unknown flag). GREEN: 8/8; `bin/install.test.mjs` and `bin/js-harness.test.mjs` 145/145 unchanged.
-- [ ] T2 (S2, kind: build) Slice 2: the TUI submenu (one Uninstall item, the kinds as its items, Back, a y/N per
-  kind), commands through the kinds, README, with tests. Route: inline.
+- [x] T2 (S2, kind: build) Slice 2: the TUI submenu (one Uninstall item, the kinds as its items, Back, a y/N per
+  kind), commands through the kinds, README, SPEC, ROADMAP, with tests. Route: inline. RED: `bin/tui.test.mjs` 17 of
+  84 failing. GREEN: 84/84 with `bin/uninstall-kinds.test.mjs`, `bin/js-harness.test.mjs`, `bin/readme.test.mjs`
+  (142 in all). The second question of Uninstall (D7.8 of memory-hygiene) is gone: Machine + memory snapshots is its
+  own item, so `hasMemorySnapshots` and `readSnapshots` went with it. After a project uninstall the selection stays
+  on Uninstall, which survives, instead of jumping to Init.
 - [ ] T3 (kind: verify) Gate, gentle-ai review per slice, Codex review per code slice, pull request.
 
 ## Log
