@@ -37,3 +37,5 @@ Whether the rule is his as worded: question 24.
   JH de JS Harnes pero la idea es que tenga el udentificador del proyecto". The orchestrator asked to reword the rule
   to match: `<code>` is the project's own identifier, declared in harness.json "code". Reworded by `rules change
   session-title`, quoting both his phrases (checked by the command), after merging origin/main into this branch.
+- L4 (2026-10-19): the rewording committed as 57a6aebd (gate passed on CI; gentle-ai 57a6aebd medium, not due,
+  under_budget, 24 lines; Codex correct, 0.94, no findings). The guard that reads the code is PR 469.
