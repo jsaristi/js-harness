@@ -44,7 +44,7 @@ Commands:
   fetch       Read a public page through r.jina.ai, the rung after a WebFetch the site refused as AI traffic: js-harness fetch <url>. It prints the page and exits 0, or exits 3 when this rung is blocked too (r.jina.ai answers a challenge page with HTTP 200, so the body is read), saying why and that the next rung is the built-in browser's get_page_text. It sends no cookie and no key, and refuses with exit 1 a host that is not public, a URL with a user or a password, or a query that names a secret.
   backup      The memory that survives the machine: backup run exports Engram (every project), copies the Claude memory folders, the js-harness home and reference copies of the config, blanks every secret value, bundles the commits on no remote, and pushes it all to a private GitHub repository through a clone under the home (.js-harness/memory-backup). It refuses an export that lost more than a tenth of any count (--allow-shrink when meant), a clone whose origin is not the configured repository, a repository that does not read PRIVATE just before the push, and a backup another machine made (--adopt). backup init --repo <owner/name> creates the repository private when it does not exist and clones it; backup status prints the last success, the last failure and the commits to push; backup --hook is the Stop hook install registers in both hosts, which starts a run detached when one is due (30 minutes since the last success and something changed) and does nothing where init never ran.
 
-js-harness --version prints the version of this copy, alone on one line.
+js-harness --version (or -v, or version) prints the version of this copy, alone on one line.
 
 Environment: JS_HARNESS_HOME, JS_HARNESS_SOURCE, JS_HARNESS_PREFIX are used when --home/--source/--prefix are not given; JS_HARNESS_REPO is the release repository of update, upgrade and status when --repo is not given; JS_HARNESS_PM is the package manager of upgrade when --pm is not given.
 `;
@@ -114,7 +114,7 @@ async function run(argv, { stdin = process.stdin, stdout = process.stdout, tui, 
 
   // The version alone on one line: `upgrade` asks it of the copy on the path before it lets that copy
   // sync (install-update T8), so nothing else may share the line.
-  if (command === '--version') {
+  if (command === '--version' || command === '-v' || command === 'version') {
     console.log((await import('./install.mjs')).currentVersion());
     return 0;
   }
