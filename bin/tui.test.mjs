@@ -391,6 +391,23 @@ test('tuiMain with no source asks no package manager for a release and shows no 
   assert.ok(!stdout.chunks.join('').includes('update available'));
 });
 
+test('tuiMain opens the menu when the home\'s manifest cannot be read, as it did before it read the manifest', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-bad-manifest-'));
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  try {
+    fs.mkdirSync(path.dirname(manifestPath(home)), { recursive: true });
+    fs.writeFileSync(manifestPath(home), '{');
+    const done = tuiMain(['--cwd', nonGitDir, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }), { stdin, stdout });
+    await flush();
+    stdin.emit('data', 'q');
+    assert.equal(await done, 0);
+    assert.ok(stdout.chunks.join('').includes('Uninstall everything'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('tuiMain shows the update a named source folder holds, and its commands read that same folder', async () => {
   const source = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-source-'));
   const stdin = makeFakeStdin();

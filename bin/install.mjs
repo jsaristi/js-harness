@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { checkoutOf, copyPackageManager, installedPackageRoot, npmPrefixOf, runPm } from './lib/package-manager.mjs';
+import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import {
@@ -635,32 +635,52 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
  * copy running now. A copy no manager installed (a checkout) is no package to remove: a global uninstall would remove
  * another copy. Returns the exit code. */
 function removeEverything(dir, deps) {
-  let code = 0;
+  const existsSync = deps.existsSync ?? fs.existsSync;
   try {
     const names = fs.readdirSync(dir).sort();
-    fs.rmSync(dir, { recursive: true, force: true });
+    (deps.rmSync ?? fs.rmSync)(dir, { recursive: true, force: true });
     console.log(`removed ${dir}${names.length > 0 ? `: ${names.join(', ')}` : ''}`);
   } catch (err) {
+    // Nothing more is removed, so the same command finishes the job once the folder is free.
     if (err.code !== 'ENOENT') {
-      console.error(`could not remove ${dir} (${err.code ?? err.message}): what is left of it is still there; remove it by hand`);
-      code = 1;
+      console.error(`could not remove ${dir} (${err.code ?? err.message}): kept the js-harness program; once nothing holds the folder, run js-harness uninstall --global --everything again`);
+      return 1;
     }
   }
   const copyPath = deps.copyPath ?? fileURLToPath(import.meta.url);
   const root = installedPackageRoot(copyPath);
   if (root === null) {
     console.log(`kept the js-harness program: this one runs from ${checkoutOf(copyPath)}, which no package manager installed`);
-    return code;
+    return 0;
   }
   const pm = copyPackageManager(copyPath);
-  const args = pm === 'pnpm' ? ['remove', '-g', 'js-harness'] : ['uninstall', '-g', '--prefix', npmPrefixOf(root), 'js-harness'];
-  const ran = runPm(deps.spawn ?? spawnSync, [pm], args, undefined, deps.platform ?? process.platform);
+  // A project's own copy, or npx's, is no global install: npm -g --prefix there would remove that project's file.
+  const project = pm === 'npm' ? dependentProjectOf(root, existsSync) : null;
+  if (project !== null) {
+    console.log(`kept the js-harness program: this one is a dependency of ${project}, not a global install`);
+    return 0;
+  }
+  const platform = deps.platform ?? process.platform;
+  const prefix = pm === 'npm' ? npmPrefixOf(root) : null;
+  const args = pm === 'pnpm' ? ['remove', '-g', 'js-harness'] : ['uninstall', '-g', '--prefix', prefix, 'js-harness'];
+  const byHand = `${pm} ${args.map((word) => shownWord(word, platform)).join(' ')}`;
+  // Quotes keep neither %NAME% nor a " from cmd.exe, so such a folder is refused before anything runs, as upgrade does.
+  if (platform === 'win32' && prefix !== null && /[%"]/.test(prefix)) {
+    console.error(`could not remove the js-harness program: its folder ${prefix} holds a % or a " that cmd.exe would read; remove it with ${byHand}`);
+    return 1;
+  }
+  const ran = runPm(deps.spawn ?? spawnSync, [pm], args, undefined, platform);
+  // A manager can exit 0 having removed nothing (npm, for a prefix that holds no such package): the folder says.
+  if (ran.status === 0 && existsSync(root)) {
+    console.error(`could not remove the js-harness program: ${pm} exited 0 and ${root} is still there; run ${byHand}`);
+    return 1;
+  }
   if (ran.status === 0) {
     console.log(`removed the js-harness program: ${pm} ${args.join(' ')}`);
-    return code;
+    return 0;
   }
   const said = String(ran.stderr ?? '').trim().split(/\r?\n/).at(-1);
   const how = ran.error ? `could not be started (${ran.error.code ?? ran.error.message})` : `exited ${ran.status}`;
-  console.error(`could not remove the js-harness program: ${pm} ${how}${said ? ` (${said})` : ''}; run ${pm} ${args.join(' ')}`);
+  console.error(`could not remove the js-harness program: ${pm} ${how}${said ? ` (${said})` : ''}; run ${byHand}`);
   return 1;
 }

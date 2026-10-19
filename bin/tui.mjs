@@ -464,8 +464,14 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   }
   // The release is looked up once; what the home's manifest records is read again after each command, since an
   // Upgrade installs a newer copy than the one running this menu.
+  // A manifest that cannot be read names no copy: the menu opens all the same, as it did before it read one.
   const readUpdate = () => {
-    const installedCopy = manifestVersion(home);
+    let installedCopy = null;
+    try {
+      installedCopy = manifestVersion(home);
+    } catch {
+      installedCopy = null;
+    }
     const newest = installedCopy && isNewer(installedCopy, installedVersion) ? installedCopy : installedVersion;
     return { installedCopy, updateAvailable: latest && isNewer(latest.version, newest) ? latest.version : null };
   };

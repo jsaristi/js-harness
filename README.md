@@ -300,9 +300,11 @@ memory folder while a pass holds its lock: the line says what releases it.
 (the lead's notes, the backups, the throughput records and anything else under it), and the
 js-harness program, removed by the package manager that installed the copy running it (pnpm's
 `remove -g`, or npm's `uninstall -g` with that copy's own prefix). A copy run from a checkout was
-installed by no package manager, so the program is kept and the line says where it runs from.
-While a gate runs or anything above it could not be removed, it removes nothing more and says to
-run it again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
+installed by no package manager, and one in a project's `node_modules` (or npx's cache) is that
+project's dependency, so the program is kept and the line says why. The program counts as
+removed only once its folder is gone, whatever the manager's exit code. While a gate runs, or the
+folder or anything above it could not be removed, it removes nothing more and says to run it
+again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
 and ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
 
 ```console
