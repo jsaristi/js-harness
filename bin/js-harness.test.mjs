@@ -74,6 +74,18 @@ test('--version prints the version of this copy, alone on one line, and exits 0;
   assert.match(run(['--help']).stdout, /^js-harness --version /m);
 });
 
+// He typed `js-harness -v` and got "Unknown command" (2026-10-19): -v and version print what --version prints.
+test('-v and version print the version alone on one line, as --version does, and the help names both', () => {
+  const { version } = JSON.parse(fs.readFileSync(path.join(path.dirname(dispatcher), '..', 'package.json'), 'utf8'));
+  for (const word of ['-v', 'version']) {
+    const result = run([word]);
+    assert.equal(result.status, 0, word);
+    assert.equal(result.stdout, `${version}\n`, word);
+    assert.equal(result.stderr, '', word);
+  }
+  assert.match(run(['--help']).stdout, /^js-harness --version \(or -v, or version\) /m);
+});
+
 test('the merge-queue help says each code commit needs its gentle-ai line on its branch, and the coverage is printed commit by commit (T16e, slice b)', () => {
   assert.match(run(['--help']).stdout, /merge-queue .*Each code commit made after the cut-over is named, by its hash or a range a\.\.b that holds it, on a gentle-ai line its pull request adds to a feature document \(odd\/tasks\), and the queue prints each code commit's Codex record and that line\./);
 });
