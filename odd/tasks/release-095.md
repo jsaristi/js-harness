@@ -16,14 +16,14 @@ v1.0.0 was tagged before the TUI had been walked item by item, and he wants 1.0.
 
 ## In scope / Out of scope
 - In: `package.json`'s version, `bin/tui.mjs`, `bin/update.mjs`, `bin/lib/version.mjs`, a walk script under `scripts/`, README, this document.
-- Out: tags other than v0.95.0 and v1.0.0, because publishing is his; his security settings.
+- Out: tags other than v0.95.0, v0.96.0 and v1.0.0, because publishing is his; his security settings.
 
 ## Constraints
 - Destructive items (Uninstall, project Uninstall, Remote stop) run only against a scratch home or repository, because his real home and remote server are in use.
 - The old v1.0.0 tag is deleted from GitHub only after v0.95.0 is pushed, so a release tag exists at every moment.
 
 ## Ask me before
-Anything beyond the two tags he approved in Pregunta 16.
+Anything beyond the two tags he approved in Pregunta 16 and v0.96.0 (S6).
 
 ## Specs
 - S1 (L1) "hace actualicacion no al 1.0.0 si no a la 0.95.0 algo asi  cuando ya este definitivo y todo funcionando ahi si a la 1.0.0 y probemos todo lo de la tui hasta que funcione perfecto"
@@ -31,12 +31,14 @@ Anything beyond the two tags he approved in Pregunta 16.
 - S3 Upgrade with no `--pm` and no `JS_HARNESS_PM` uses the package manager that installed the running copy: pnpm for a copy in pnpm's global folder, else npm. Found 2026-10-18: the TUI's Upgrade passes no `--pm`, so on his pnpm copy it ran npm.
 - S4 After an Upgrade from the menu, the menu's header says the new version is installed and to open the menu again, and offers no update. Found by the walk, 2026-10-18 (F1): it still said "update available" for the version just installed.
 - S5 (L4) "quiero que el uninstall tenga varios osea el normal, que desinstala informacion y el que borra completamente todo"; Pregunta 17 answered "Todo, incluido el programa (Recommended)". `uninstall --global --everything` does `--full`, then removes the whole `.js-harness` folder of the home, then the program by the package manager that installed the running copy (pnpm `remove -g js-harness`; npm `uninstall -g --prefix <that copy's prefix> js-harness`); a copy run from a checkout keeps the program and says so. While a gate runs or anything could not be removed it removes nothing more and exits 1. It needs `--global`. The TUI offers it as "Uninstall everything" after Uninstall, asks once, and ends once it succeeds. Projects' files are kept.
+- S6 (L11) "Entonces no salgamos de una vez con la version 1.0.0 sino pasemos a la 0.96.0"
 
 ## Tasks
 - [x] T1 (kind: build) (S3) Upgrade picks pnpm for a copy pnpm installed. Route: inline.
 - [x] T2 (kind: build) (S1, S4) `scripts/tui-walk.mjs`: every menu item through its keys, in a scratch home and repository; fix what it finds. Route: inline.
 - [x] T3 (kind: verify) (S2) `package.json` 0.95.0 landed; tag v0.95.0 pushed; tag v1.0.0 deleted on GitHub; his copy down to v0.9.0, then up to 0.95.0 by the TUI's Upgrade. Route: inline.
-- [ ] T4 (kind: verify) (S1, S2) `package.json` 1.0.0 landed; tag v1.0.0 on that commit; his copy from 0.95.0 to 1.0.0 by the TUI's Upgrade with no `--pm`; his own walk. Route: inline.
+- [ ] T6 (kind: verify) (S6) `package.json` 0.96.0 landed; tag v0.96.0 on that commit; his copy from 0.95.0 to 0.96.0 by the TUI's Upgrade with no `--pm`. Route: inline.
+- [ ] T4 (kind: verify) (S1, S2) `package.json` 1.0.0 landed; tag v1.0.0 on that commit; his copy from the last 0.9x to 1.0.0 by the TUI's Upgrade with no `--pm`; his own walk. Route: inline.
 - [x] T5 (kind: build) (S5) `uninstall --global --everything` and the TUI's "Uninstall everything", with the walk step. Route: inline. Risk: item 1 (it deletes stored data and the program): an independent verifier after its checks. Commits: 44b1e3ea, 448a3c1f, be586c2a.
 
 ## Log
@@ -50,3 +52,4 @@ Anything beyond the two tags he approved in Pregunta 16.
 - L8 (2026-10-19, T3) package.json set to 0.95.0 on its own branch after PR 459 landed (main feafd776), so the tag v0.95.0 names a commit whose package says 0.95.0; then v0.95.0 is tagged and pushed, the published v1.0.0 tag is deleted (Pregunta 16), and his copy goes to v0.9.0 and up by the TUI's Upgrade.
 - L9 (2026-10-19, T3) gentle-ai: 95ed6543 and a218e1ae (feafd776..a218e1ae) assessed medium by the gate, review not due (under_budget). Codex over feafd776..a218e1ae: correct (0.96). The fix: the TUI header read the default repository while Update and Status read JS_HARNESS_REPO, and its test asked the real tags, so at 0.95.0 it failed on GitHub's machines once v1.0.0 was published.
 - L10 (2026-10-19, T3) Done. PR 460 landed (a8ceaab3, 0.95.0); tag v0.95.0 pushed on a8ceaab3 (the pre-push hook: the tag names the version package.json holds). The published v1.0.0 tag deleted on GitHub and locally (it named 76f46575; no GitHub Release held it), so GitHub holds v0.9.0 and v0.95.0. His copy: `pnpm add -g github:jsaristi/js-harness#v0.9.0` exited 1 (os error 32 on a pnpm bin backup) but answered 0.9.0, then `js-harness install` 0, doctor 0, status "update available: 0.95.0". The TUI of that 0.9.0 copy, driven by its keys with JS_HARNESS_PM=pnpm, showed "js-harness 0.9.0  (update available: 0.95.0)"; Upgrade failed twice on pnpm's os error 32 (pnpm renaming its new global folder; 0.9.0 has no retry, which PR 457 added after it) and the third press said "upgraded to 0.95.0". After it the 0.9.0 header still offered 0.95.0, the F1 defect 0.95.0 fixes. The copy now: package and manifest 0.95.0, latest 0.95.0, doctor 0, settings hash unchanged (eb14ca97); its own TUI opens as "js-harness 0.95.0" with no update. Next, T4 waits for his own walk of the TUI on 0.95.0 (S1: 1.0.0 once it is definitive and all works).
+- L11 (2026-10-19, T6) His words, S6 verbatim (transcript 908805db line 4228), after he approved the memory backup of every project, the public memory summary and building onboarding (Preguntas 20 to 22). Read as: the next release is 0.96.0, not 1.0.0, and 1.0.0 still waits for the definitive commit (T4). 0.96.0 is cut from main 200edb4, which holds the memory backup (PR 462); onboarding ships in the release after it, since it is not built yet.
