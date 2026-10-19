@@ -67,7 +67,7 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
       }
       if (cmd === 'engram' && args[0] === 'stats') {
         const e = state.engram;
-        return { status: 0, stdout: `Engram Memory Stats\n  Sessions:     ${e.sessions.length}\n  Observations: ${e.observations.length}\n  Prompts:      ${e.prompts.length}\n`, stderr: '' };
+        return { status: 0, stdout: `Engram Memory Stats\n  Sessions:     ${e.sessions.length}\n  Observations: ${e.observations.length}\n  Prompts:      ${e.prompts.length}\n  Projects:     js-harness, clientproject, v\n`, stderr: '' };
       }
       if (cmd === 'engram' && args[0] === 'version') return { status: 0, stdout: 'engram 3.4.0\n', stderr: '' };
       if (cmd === 'gh' && args[1] === 'view') {
@@ -332,6 +332,20 @@ test('backup init creates the repository private when it is missing, refuses a p
   assert.match(deps.stderr.text, /reads PUBLIC, not PRIVATE/);
   assert.equal(await backupMain(['init', '--repo', 'jsaristi/js-harness'], deps), 1);
   assert.match(deps.stderr.text, /public repository/);
+});
+
+test('backup init seeds private-terms.txt from the other Engram projects, and keeps one already there', async (t) => {
+  const { paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const terms = fs.readFileSync(path.join(paths.clone, 'private-terms.txt'), 'utf8');
+  assert.match(terms, /^# /, 'it says what it is for');
+  assert.deepEqual(terms.split('\n').filter((line) => line && !line.startsWith('#')), ['clientproject']);
+  fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'added by hand\n');
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+  assert.equal(fs.readFileSync(path.join(paths.clone, 'private-terms.txt'), 'utf8'), 'added by hand\n');
 });
 
 test('backup status names the last success, the last failure and the commits to push', async (t) => {

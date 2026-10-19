@@ -335,8 +335,12 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   names) and #5 (`a-b/app` and `a/b/app` shared a bundle name). Both fixed test first in the
   next commit; it is the follow-up the recheck asks for, reviewed with the T5 slice.
 
+- L8 2026-10-19. T5, part 1: `init` seeds private-terms.txt in the clone from the Projects line of
+  `engram stats --all` (other projects, longer than three letters) and keeps one already there;
+  test written first but the code was written before it ran, so no RED was observed. 15 green.
+
 ## Next step
-State after L7. Commits on feat/memory-backup:
+State after L8: T5 part 2 is next (`backup summary` prints; pushSummary in runBackup). Commits on feat/memory-backup:
 186a7c79, 22bbe6e8, 83df03c2 (slice 1, gentle-ai review-1c2fa0ab4d5b178c approved, Codex record
 84dd74b5..83df03c2 with 9 findings), 766dfa29 scope switch D7, 95288eb0 the 9 Codex fixes,
 1bdae974 key-body fix (slice 2, gentle-ai review-c35f7b854150c92e approved and burned). Codex

@@ -18,6 +18,7 @@ import {
   readJson,
   scopeArgs,
 } from './lib/backup.mjs';
+import { seedTerms } from './lib/backup-summary.mjs';
 
 const USAGE = [
   'Usage: js-harness backup <run | status | init | --hook>',
@@ -381,6 +382,14 @@ function initCommand(args, deps) {
   const config = { ...(readJson(paths.config) ?? {}), repo };
   if (!Array.isArray(config.bundles)) config.bundles = deps.bundles ?? [];
   writeJson(paths.config, config);
+  // The terms the public summary must never name (D4), kept in the private clone so a restore brings them back.
+  const termsFile = path.join(paths.clone, 'private-terms.txt');
+  if (!fs.existsSync(termsFile)) {
+    const listed = deps.run('engram', ['stats', '--all']).stdout.match(/^\s*Projects:\s*(.*)$/m)?.[1] ?? '';
+    const terms = seedTerms(listed.split(',').map((name) => name.trim()).filter(Boolean));
+    const header = '# Whole words the public memory summary never prints, one per line; add your own.\n';
+    fs.writeFileSync(termsFile, `${header}${terms.map((term) => `${term}\n`).join('')}`);
+  }
   deps.stdout.write(`backup: ${repo} reads PRIVATE; clone in ${paths.clone}\n`);
   return 0;
 }
