@@ -349,7 +349,20 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   `--summary-repo`, else the install's main checkout (`--git-common-dir`, never a session
   worktree) when its origin passes the same guard. 18 backup command tests green.
 
+- L10 2026-10-19. gentle-ai review of 1bdae974..f272876e (lineage review-63e64cd40723d76f, high
+  by --escalate-item 2, lenses risk, resilience, reliability, consent granted unasked):
+  approved, acknowledged, authority burned; ten advisory findings, none blocking. Fixed test first
+  (RED seen): R3-terms-seed-silent-empty (a failed `engram stats` at init wrote an empty terms
+  list, which passes every line; now no file is written and init says so) and
+  R4-stale-summary-error (`status` showed a refusal older than the last push). Left as later
+  work, by reason: the bundle-rename orphans (no backup was ever pushed under the old name, and a
+  bundle no manifest names is kept on purpose); short project names unseeded (three letters or
+  fewer are left out so `v` does not drop every line; he adds his own); a failed summary waits a
+  day (it is a summary; a refusal retried every 30 minutes would fetch every run); the lease path
+  untested (needs a push racing between ls-remote and push).
+
 ## Next step
+State after L10: next codex-review of 1bdae974..f272876e from a detached worktree, then T6.
 State after L9: T5 done; next the gentle-ai review of 1bdae974..HEAD (escalate item 2), then
 codex-review from a detached worktree (base 1bdae974), then T6. Earlier state, for the record:
 State after L8: T5 part 2 is next (`backup summary` prints; pushSummary in runBackup). Commits on feat/memory-backup:

@@ -472,6 +472,26 @@ test('backup run pushes the summary to memory-summary at most daily, one orphan 
   assert.match(last().summaryError.error, /private-terms\.txt/);
   assert.equal(await backupMain(['status'], deps), 0);
   assert.match(deps.stdout.text, new RegExp(`^summary: last pushed ${last().lastSummary.pushedAt}, ${second.slice(0, 8)}; last refused .*private-terms\\.txt`, 'm'));
+
+  fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'clientproject\n');
+  state.now += 25 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.notEqual(branch(), second);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['status'], deps), 0);
+  assert.match(deps.stdout.text, /^summary: last pushed [^;]*$/m, 'a refusal older than the last push is not shown');
+});
+
+test('backup init writes no private-terms.txt when engram cannot list the projects, and says so', async (t) => {
+  const { paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const run = deps.run;
+  deps.run = (cmd, args, options) =>
+    cmd === 'engram' && args[0] === 'stats' ? { status: 1, stdout: '', stderr: 'engram: database locked' } : run(cmd, args, options);
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+  assert.equal(fs.existsSync(path.join(paths.clone, 'private-terms.txt')), false, 'an empty list would let the summary through unchecked');
+  assert.match(deps.stderr.text, /private-terms\.txt.*database locked/);
 });
 
 test('backup status names the last success, the last failure and the commits to push', async (t) => {

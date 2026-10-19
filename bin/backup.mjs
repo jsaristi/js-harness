@@ -401,7 +401,9 @@ function statusCommand(deps) {
   ];
   if (config.summaryRepo) {
     const pushed = last.lastSummary?.pushedAt ? `last pushed ${last.lastSummary.pushedAt}, ${last.lastSummary.commit.slice(0, 8)}` : 'never pushed';
-    const refused = last.summaryError ? `; last refused ${last.summaryError.at}, ${last.summaryError.error}` : '';
+    // A refusal the last attempt outlived is history, not state.
+    const current = last.summaryError && !(Date.parse(last.lastSummary?.at ?? '') > Date.parse(last.summaryError.at));
+    const refused = current ? `; last refused ${last.summaryError.at}, ${last.summaryError.error}` : '';
     lines.push(`summary: ${pushed}${refused}`);
   }
   deps.stdout.write(`${lines.join('\n')}\n`);
@@ -511,10 +513,16 @@ function initCommand(args, deps) {
   // The terms the public summary must never name (D4), kept in the private clone so a restore brings them back.
   const termsFile = path.join(paths.clone, 'private-terms.txt');
   if (!fs.existsSync(termsFile)) {
-    const listed = deps.run('engram', ['stats', '--all']).stdout.match(/^\s*Projects:\s*(.*)$/m)?.[1] ?? '';
-    const terms = seedTerms(listed.split(',').map((name) => name.trim()).filter(Boolean));
-    const header = '# Whole words the public memory summary never prints, one per line; add your own.\n';
-    fs.writeFileSync(termsFile, `${header}${terms.map((term) => `${term}\n`).join('')}`);
+    const stats = deps.run('engram', ['stats', '--all']);
+    const listed = stats.stdout.match(/^\s*Projects:\s*(.*)$/m)?.[1];
+    if (stats.status !== 0 || listed === undefined) {
+      // An empty list would pass every line; with no file the summary is not pushed until the next init seeds it.
+      deps.stderr.write(`backup init: private-terms.txt not written, engram stats failed: ${(stats.stderr || stats.stdout).trim()}\n`);
+    } else {
+      const terms = seedTerms(listed.split(',').map((name) => name.trim()).filter(Boolean));
+      const header = '# Whole words the public memory summary never prints, one per line; add your own.\n';
+      fs.writeFileSync(termsFile, `${header}${terms.map((term) => `${term}\n`).join('')}`);
+    }
   }
   deps.stdout.write(`backup: ${repo} reads PRIVATE; clone in ${paths.clone}\n`);
   return 0;
