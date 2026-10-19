@@ -451,8 +451,22 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   - gentle-ai: 6be0196f assessed medium at its own head (base 58dbba61), not due: under_budget.
   - gentle-ai: b3f8770d and f8518ae6 in lineage review-77262cce2103442b (risk, reliability), approved, burned.
   - gentle-ai: 4fb74595 assessed medium at its own head (base f8518ae6), not due: under_budget.
+- L19 2026-10-19. Sebastián's answers, through the lead: Pregunta 20 "Todos los proyectos
+  (Recommended)": every project goes to jsaristi/js-harness-memory, secrets blanked,
+  abogadaclaudiajimenez included; set as `"scope": "all"` in config.json (init keeps it).
+  Pregunta 22 "Publicarlo (Recommended)": init --summary-repo D:/js-harness, run, verify
+  --summary. The lead added: "Do the summary's commit to the public repo through a branch and PR,
+  never a direct push to main; I land it with merge-queue", and not to touch package.json. The
+  summary is an orphan commit on `memory-summary`, never main, so a PR into main would replace the
+  repository; asked the lead whether the branch push stands. The private run went first.
 
 ## Next step
+State after L18 (lead, by message): Sebastián answered Pregunta 20 "Todos los proyectos
+(Recommended)" (scope all, secrets blanked) and Pregunta 22 "Publicarlo (Recommended)" (init
+--summary-repo D:/js-harness, run, verify --summary). The lead asked for the summary through a
+branch and PR, never main, and not to touch package.json (release 0.96.0). Open question to the
+lead: the summary is an orphan commit on `memory-summary`, which is not main; a PR of it into main
+would replace the repository. Doing now: scope "all" in config.json, private run, verify --from.
 State after L17: the contract's lines run except `verify --summary` against the public repo,
 which waits on Sebastián's read of the preview (through the lead); then the PR.
 State after L16: Codex recheck of the emphasis fix (base f8518ae6); then T4 (the detached child
