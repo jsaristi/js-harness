@@ -2,18 +2,21 @@
 // odd/tasks/onboarding.md. `check` holds what the session wrote to the shape the design asks for and never runs a
 // command; `hash` prints what an approval records; `template` prints a document's skeleton, and with `--write`
 // creates it, never over a file that exists. The rules are bin/lib/onboard.mjs. Zero dependencies.
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, STAGES,
-  checkOnboarding, featureTemplate, hashes, originTemplate, roadmapTemplate,
+  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH,
+  checkOnboarding, featureTemplate, findingLine, hashes, originTemplate, roadmapTemplate, stageReport,
 } from './lib/onboard.mjs';
 import { agentsTemplate, projectLocation } from './lib/project.mjs';
 
 const USAGE = [
-  'Usage: js-harness onboard check [--plan] [--cwd <path>]',
+  'Usage: js-harness onboard [--cwd <path>]',
+  '       js-harness onboard check [--plan] [--cwd <path>]',
   '       js-harness onboard hash [--cwd <path>]',
   '       js-harness onboard template feature|origin|roadmap [--write] [--cwd <path>]',
+  'With no verb: the stage the onboarding is in, read from its files and git, and what the session does next.',
   'check: the onboarding document, docs/origin.md, docs/ROADMAP.md and AGENTS.md against the shape the onboarding',
   'asks for, each finding with the stage it sends the work back to; --plan reads only the roadmap and its ties to the',
   'pre-plan. hash: the sha256 an approval records. template: a skeleton on stdout; --write creates its file instead,',
@@ -42,11 +45,13 @@ function parseArgs(argv, cwd) {
     else if (!arg.startsWith('-')) parsed.words.push(arg);
     else return { error: `unknown argument: ${arg}` };
   }
-  const [verb, ...rest] = parsed.words;
-  const flagsOf = { check: ['plan'], hash: [], template: ['write'] };
-  if (!Object.hasOwn(flagsOf, verb)) return { error: verb === undefined ? 'a verb is required' : `unknown argument: ${verb}` };
+  const [word, ...rest] = parsed.words;
+  // No verb is the stage: what the session does next.
+  const verb = word ?? 'stage';
+  const flagsOf = { stage: [], check: ['plan'], hash: [], template: ['write'] };
+  if (word === 'stage' || !Object.hasOwn(flagsOf, verb)) return { error: `unknown argument: ${word}` };
   for (const flag of ['plan', 'write']) {
-    if (parsed[flag] && !flagsOf[verb].includes(flag)) return { error: `--${flag} is not an option of ${verb}` };
+    if (parsed[flag] && !flagsOf[verb].includes(flag)) return { error: `--${flag} is not an option of ${word ?? 'onboard with no verb'}` };
   }
   if (verb === 'template') {
     if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) return { error: 'template takes one of feature, origin, roadmap' };
@@ -93,9 +98,74 @@ function readFiles(root) {
   };
 }
 
+/** git's trimmed output in `root`, or `null` when it fails. */
+function git(root, ...args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+/** The branch a merge lands on: origin's HEAD, else a local `main` or `master`, else git's configured default. */
+function defaultBranch(root) {
+  const remote = git(root, 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD');
+  if (remote) return remote.slice(remote.indexOf('/') + 1);
+  for (const name of ['main', 'master']) {
+    if (git(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${name}`) !== null) return name;
+  }
+  return git(root, 'config', 'init.defaultBranch') || 'main';
+}
+
+/** Whether `ref` holds `file`, committed. */
+function holds(root, ref, file) {
+  return git(root, 'cat-file', '-e', `${ref}:${file}`) !== null;
+}
+
+/** The other branches, local and remote, whose tip holds an onboarding document, each with the worktree it is
+ * checked out in (D7). A remote branch with a local one of the same name is the local one. */
+function elsewhere(root, branch) {
+  const worktrees = new Map();
+  let folder = null;
+  for (const line of (git(root, 'worktree', 'list', '--porcelain') ?? '').split('\n')) {
+    if (line.startsWith('worktree ')) folder = line.slice('worktree '.length);
+    else if (line.startsWith('branch refs/heads/')) worktrees.set(line.slice('branch refs/heads/'.length), folder);
+  }
+  const refs = (git(root, 'for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes') ?? '').split('\n').filter(Boolean);
+  const locals = new Set(refs.filter((ref) => ref.startsWith('refs/heads/')).map((ref) => ref.slice('refs/heads/'.length)));
+  const found = [];
+  for (const ref of refs) {
+    const local = ref.startsWith('refs/heads/');
+    const name = local ? ref.slice('refs/heads/'.length) : ref.slice('refs/remotes/'.length);
+    if (name === branch || name.endsWith('/HEAD')) continue;
+    if (!local && locals.has(name.slice(name.indexOf('/') + 1))) continue;
+    if (holds(root, ref, ONBOARDING_PATH)) found.push({ branch: name, worktree: local ? worktrees.get(name) ?? null : null, remote: !local });
+  }
+  return found;
+}
+
+/** Where the session is, as stageReport reads it. */
+function gitContext(root, files) {
+  const branch = git(root, 'symbolic-ref', '--quiet', '--short', 'HEAD');
+  const main = defaultBranch(root);
+  const defaultHasRoadmap = branch === main ? files.roadmap !== null : [main, `origin/${main}`].some((ref) => holds(root, ref, ROADMAP_PATH));
+  const status = git(root, 'status', '--porcelain', '--untracked-files=all', '--', ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, AGENTS_PATH) ?? '';
+  return {
+    branch,
+    defaultBranch: main,
+    defaultHasRoadmap,
+    elsewhere: files.onboarding === null ? elsewhere(root, branch) : [],
+    uncommitted: status.split('\n').filter(Boolean).map((line) => line.slice(3)),
+  };
+}
+
+function stage(root, { stdout }) {
+  const files = readFiles(root);
+  const { code, lines } = stageReport(files, { agentsTemplate: agentsTemplate(root), git: gitContext(root, files) });
+  for (const line of lines) stdout(line);
+  return code;
+}
+
 function check(root, plan, { stdout }) {
   const findings = checkOnboarding(readFiles(root), { agentsTemplate: agentsTemplate(root), plan });
-  for (const { file, stage, message } of findings) stdout(`FAIL  ${file}: ${message} (back to stage ${stage}, ${STAGES[stage]})`);
+  for (const finding of findings) stdout(findingLine(finding));
   if (findings.length > 0) return 1;
   stdout(`PASS  ${plan ? ROADMAP_PATH : [ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, AGENTS_PATH].join(', ')}`);
   return 0;
@@ -163,6 +233,7 @@ export async function onboardMain(argv, env = process.env, { cwd = process.cwd()
     return 1;
   }
   const io = { stdout, stderr };
+  if (args.verb === 'stage') return stage(root, io);
   if (args.verb === 'check') return check(root, args.plan, io);
   if (args.verb === 'hash') return hash(root, io);
   return template(root, args.template, args.write, io);

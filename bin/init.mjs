@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // CLI surface for `js-harness init`: writes the committed per-project files and a project
 // manifest — see bin/lib/project.mjs and odd/tasks/project-init.md, "T2 design".
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { currentVersion } from './install.mjs';
+import { ROADMAP_PATH } from './lib/onboard.mjs';
 import { initProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
 
 const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
@@ -127,5 +130,7 @@ export async function initMain(argv, env = process.env, deps = {}) {
 
   for (const action of result.actions) logAction(action);
   console.log(`manifest: ${result.manifestPath}`);
+  // A project with no plan yet is pointed at its onboarding (odd/tasks/onboarding.md, D8); init never starts it.
+  if (!fs.existsSync(path.join(result.root, ROADMAP_PATH))) console.log('next: in a Claude Code or Codex session, run js-harness onboard');
   return 0;
 }

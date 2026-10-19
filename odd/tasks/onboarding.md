@@ -60,7 +60,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
-- [ ] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
+- [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [ ] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests
 - [ ] T4 (kind: verify) The one real onboarding of the done-when
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
@@ -282,8 +282,14 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   recorded) found four P2: that same pattern, a Log reference that resolves to no entry, approval metadata on a
   continuation line, and `template --write` through a linked directory. All but the first advisory are fixed in one
   commit with a RED test each (5 RED observed, then 68/68 GREEN).
-- Next step: gate and review the fix commit (Codex `--base 51e4c07e`), push, open the PR, tell the lead
-  (local_bd0ae465) its number; then slice 2 (T3).
+- L7 (2026-10-19) The fix commit 5bc31869 passed the gate (gentle-ai: under budget) and Codex (correct, 0.96). PR 466
+  holds slice 1; the lead was told. Slice 2 is built on branch `feat/onboarding-stages`, cut from it so 466 does not
+  grow in the queue. It has `currentStage` and `stageReport` in the lib, bare `onboard` with the git it reads (the
+  default branch, other branches and their worktrees, and what is uncommitted), and `init`'s closing line. The
+  fixtures moved to `bin/lib/onboard.testkit.mjs`. RED was observed for the missing export, the four command tests
+  and init's line; then 136/136 GREEN across the touched suites.
+- Next step: commit slice 2, gate, gentle-ai review of the commit (base 5bc31869), Codex `--base 5bc31869`, PR on
+  top of 466, tell the lead; then T4.
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.
