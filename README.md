@@ -197,9 +197,10 @@ wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
 manifest: my-project\.git\js-harness\manifest.json
+next: in a Claude Code or Codex session, run js-harness onboard
 ```
 
-The example is a project with code. What `init` adds beyond the first four files follows the
+The last line appears only while the project has no `docs/ROADMAP.md`. The example is a project with code. What `init` adds beyond the first four files follows the
 switches in `harness.json` `"functions"` (`js-harness functions` shows each one and why): the
 pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map's `codegraph init`
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code
@@ -208,10 +209,19 @@ map is off prints `codegraph init skipped: the code map is off` and gets no `.co
 ### js-harness onboard
 
 The pre-plan and the roadmap of a project after `init`, written by the session the owner talks to;
-the command calls no model. `check` names what is still missing and the stage it sends the work
+the command calls no model. With no verb it reads the files and git, prints the stage the
+onboarding is in (Read, Interview, Pre-plan, its review, Plan, its review, Close, then awaiting
+merge and onboarded) and what the session does next, so a new session, a compaction or the other
+host resumes by running it again; an onboarding on another branch is named with its worktree or
+the switch that resumes it. `check` names what is still missing and the stage it sends the work
 back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file.
 
 ```console
+$ js-harness onboard
+Stage 1 of 7, Read: no onboarding document yet.
+First: git switch -c onboarding, the branch the onboarding is committed on, so a session in another worktree finds it.
+Do: js-harness onboard template feature --write; then read the repository (README, manifests, git log, docs, codegraph where there is code). Write the owner's request verbatim in L1, and what exists under ## What exists, each with its evidence. Check O1.
+Then: commit, and run js-harness onboard again.
 $ js-harness onboard template feature --write
 wrote odd/tasks/onboarding.md
 $ js-harness onboard check
@@ -224,7 +234,8 @@ origin    missing
 roadmap   missing
 ```
 
-The example is cut to three of its findings. The design is `odd/tasks/onboarding.md`.
+The `check` is cut to three of its findings. A project with a plan of its own and no onboarding
+anywhere is left alone, exit 1. The design is `odd/tasks/onboarding.md`.
 
 ### js-harness install
 

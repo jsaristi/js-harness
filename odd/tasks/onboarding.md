@@ -60,7 +60,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
-- [ ] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
+- [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [ ] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests
 - [ ] T4 (kind: verify) The one real onboarding of the done-when
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
@@ -258,6 +258,9 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
+  - gentle-ai: `2fede5c1..12aa07ce` approved after one bounded correction (readability, reliability; lineage review-bf067ebd0c1e7217, acknowledged): R3-uncommitted-trim fixed in `12aa07ce`. Codex over 6e99eda..ef60d12: one P2.
+  - gentle-ai: `ef60d123` assessed `medium`, review not due (`under_budget`, 13 lines), from that review's advisories; Codex in 6e99eda..ef60d12.
+  - gentle-ai: `04163529` assessed `medium`, review not due (`under_budget`, 44 lines): Codex's P2 on a remote branch hidden behind a local one, fixed with its RED test.
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -282,8 +285,25 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   recorded) found four P2: that same pattern, a Log reference that resolves to no entry, approval metadata on a
   continuation line, and `template --write` through a linked directory. All but the first advisory are fixed in one
   commit with a RED test each (5 RED observed, then 68/68 GREEN).
-- Next step: gate and review the fix commit (Codex `--base 51e4c07e`), push, open the PR, tell the lead
-  (local_bd0ae465) its number; then slice 2 (T3).
+- L7 (2026-10-19) The fix commit 5bc31869 passed the gate (gentle-ai: under budget) and Codex (correct, 0.96). PR 466
+  holds slice 1; the lead was told. Slice 2 is built on branch `feat/onboarding-stages`, cut from it so 466 does not
+  grow in the queue. It has `currentStage` and `stageReport` in the lib, bare `onboard` with the git it reads (the
+  default branch, other branches and their worktrees, and what is uncommitted), and `init`'s closing line. The
+  fixtures moved to `bin/lib/onboard.testkit.mjs`. RED was observed for the missing export, the four command tests
+  and init's line; then 136/136 GREEN across the touched suites.
+- L8 (2026-10-19) The merge queue left PR 466 out for want of a gentle-ai line naming 5bc31869. 6e99edaf adds one
+  line per code commit under `## Reviews`, and the lead was told. Slice 2, on `feat/onboarding-stages` in this
+  worktree, has these commits:
+  - 2fede5c1, the stages;
+  - 12aa07ce and ef60d123, fixes from gentle-ai's review;
+  - 04163529, Codex's P2.
+  Each has its line under `## Reviews`.
+- Next step (session JH 30, worktree compassionate-allen-842d94, branch feat/onboarding-stages):
+  1. Run `js-harness codex-review --base ef60d123` (it covers 04163529).
+  2. Push, and open the PR of slice 2 on main. It holds 466's commits until 466 lands. Its body needs a gentle-ai
+     line.
+  3. SendMessage the lead (local_bd0ae465), signed JH 30, with the PR number.
+  4. Then T4: one real onboarding in a scratch project.
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.
