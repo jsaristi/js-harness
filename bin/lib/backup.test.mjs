@@ -94,6 +94,8 @@ test('collectFiles copies the Claude memory folders and the js-harness home, lea
   write(path.join(home, '.js-harness', 'restored-config', 'claude', 'settings.json'), '{}\n');
   write(path.join(home, '.js-harness', 'restored-bundles', 'p-1.bundle'), 'bundle\n');
   write(path.join(home, '.js-harness', 'restore-progress.json'), '{}\n');
+  write(path.join(home, '.js-harness', 'codex-review-homes', 'run-1', 'auth.json'), '{"tokens":{"id_token":"x"}}\n');
+  write(path.join(home, '.js-harness', 'codex-review-homes', 'run-1', 'thread-writer-locks', 'a.lock'), '');
 
   const { files, redacted } = collectFiles({ home, dest });
 
