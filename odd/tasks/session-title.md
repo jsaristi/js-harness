@@ -56,7 +56,7 @@ review.
   guard 29/29, lib/guard 33/33, channel 57/57, sessions 244/244, manifest 180/180, rules 35/35, js-harness 44/44.
   The check lives in `bin/lib/session-title-guard.mjs`, not `bin/lib/guard.mjs`: it reads the title shape from
   `bin/lib/sessions.mjs`, which costs 34 ms to load, and `bin/lib/guard.mjs` loads on every Bash call.
-- [ ] T2 (kind: verify): gate, gentle-ai review, Codex review, pull request, ready notice to the orchestrator.
+- [x] T2 (kind: verify): gate, gentle-ai review, Codex review, pull request, ready notice to the orchestrator.
 
 ## Log
 - L1 (2026-10-19, his words, verbatim): see S1. The brief of the orchestrator (JH ORQ) named what failed: the three
@@ -87,3 +87,6 @@ review.
   under_budget). Codex 2411023..7451151: incorrect (confidence 0.98), one P2, taken: an opening file listed and not
   readable was counted and dropped, so `--next-number` could print a taken number with exit 0. Fixed test first
   (RED 56/57): such a file is named in `unavailable`, so the command exits 2 and the refusal warns.
+- L6 (2026-10-19): the fix committed as 1d020ae8 (gate passed on CI; gentle-ai 74511510..1d020ae8 medium, not due,
+  under_budget). Codex 7451151..1d020ae: correct (0.99), the P2 fixed. Next step: push feat/session-title, open the
+  pull request, `js-harness notify --to orchestrator --kind ready --pr <n>`; the orchestrator lands it.
