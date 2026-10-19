@@ -225,6 +225,9 @@ test('a command for his terminal with no note at its end is refused, and the ref
     "npm test; Write-Host 'NOTE: x'",
     "Write-Host 'NOTE: runs the tests of this repository'; npm test",
     "npm test # NOTE: runs the tests of this repository",
+    // Codex's finding on 4ed1cc5: a word of the note must not reach past its closing quote into a later command.
+    "npm test; Write-Host 'NOTE: runs tests'; echo 'done'",
+    "npm test; Write-Host 'note: runs the tests of this repository'",
   ]) {
     assert.match(
       terminalNoteRefusal(command),

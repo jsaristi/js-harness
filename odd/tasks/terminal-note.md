@@ -63,3 +63,9 @@ Nothing: both rules are his words; spend is one gate, one gentle-ai review and o
   session's environment files from the SessionStart hooks had grown to 81 duplicated `export` lines over its
   compactions; deduplicating them did not help, so the host held them in memory, and that they caused it is not
   proven. After the reboot the shell works. Not fixed here; proposed as its own task.
+- L4 (2026-10-19): T1 and T2 committed as 4ed1cc5d (gate passed). gentle-ai e4adf3be..4ed1cc5d medium, not due
+  (under_budget). Independent verifier (risk item 2, a guard): S1 and S2 met, no blockers, 250/250; advisories: a
+  lowercase `note:` passed, and a quote could count inside a word. Codex e4adf3b..4ed1cc5: incorrect (confidence 1),
+  one P2, taken: a word of the note could reach past its closing quote, so `npm test; Write-Host 'NOTE: runs tests';
+  echo 'done'` passed. Fixed test first (RED 32/33): a word holds no quote, and `NOTE:` is matched in capitals; the
+  lowercase advisory is pinned by the same test.

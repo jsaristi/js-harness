@@ -242,8 +242,9 @@ export function backtickRefusal(command) {
 export const TERMINAL_TOOL = 'mcp__terminal__run_in_terminal';
 
 // The note that ends a command for his terminal: PowerShell's Write-Host, or echo in an SSH host's shell, printing
-// 'NOTE: ' and at least four words. Single quotes, because the tool refuses anything a shell would compute.
-const TERMINAL_NOTE = /;\s*(?:write-host|echo)\s+'NOTE: [^']*\S+\s+\S+\s+\S+\s+\S+[^']*'\s*$/i;
+// 'NOTE: ' and at least four words. Single quotes, because the tool refuses anything a shell would compute. A word
+// holds no quote, so the note cannot reach past its closing quote into a later command (Codex, on 4ed1cc5).
+const TERMINAL_NOTE = /;\s*(?:[Ww]rite-[Hh]ost|echo)\s+'NOTE: (?:[^'\s]+\s+){3}[^'\s]+[^']*'\s*$/;
 
 /** Why the command `command`, typed into the user's terminal, is refused, or null: it does not end with a note that
  * says what it does. His request of 2026-10-19 (odd/tasks/terminal-note.md, S1): he reads the note beside the command,
