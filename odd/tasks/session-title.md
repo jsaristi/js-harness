@@ -68,7 +68,7 @@ review.
   naming JH 32 and passed a `proposal_id` call. Known limit: a session that never wrote a notice, read an opening or
   was addressed is not in the channel, so its number is not seen; the title the app shows is not read, since that
   needs the transcripts, which the guard does not read on a `start_session`.
-- L3 (2026-10-19): T1 committed as 50460499 (gate passed; gentle-ai 24110236..50460499 high through item 2, the
+- L3 (2026-10-19): T1 committed as 8f43aebb (gate passed; gentle-ai 8f43aebb high through item 2, the
   guard, so due). Independent verifier (opus, read-only, risk item 2): S1-S4 met, the `findOpenings` refactor
   byte-identical on 8 lookups, `bin/lib/guard.mjs` loads no `sessions.mjs`. One blocker, taken: the orchestrator
   skill rotates the lead with `start_session` (`bin/lib/manifest.mjs:170`), and the guard refused `JH ORQ · lead`,
@@ -76,24 +76,24 @@ review.
   skill, README, SPEC and the rule's subject say so. Advisories taken: `--next-number` exits 2, not 1, when a source
   could not be read and no code is known; the rule says it holds the shape only; a help typo; its block above the
   `--opening` comment. Left: ties between codes, a stray notice to a large number, titles with a non-breaking space.
-- L4 (2026-10-19): the fix committed as 144d03ea (gate passed). gentle-ai: 24110236..144d03ea, high through item
+- L4 (2026-10-19): the fix committed as 55177c5e (gate passed). gentle-ai: 8f43aebb..55177c5e, high through item
   2, lenses risk, readability and reliability, consent granted as pre-granted; approved and acknowledged (lineage
   review-0955e6a5595ae4c8, authority burned), nine non-blocking findings. Taken in the next commit: the guard no
   longer fails open when the next number cannot be read (the refusal stands without its number); the refusal names
   `<code> ORQ · <purpose>` for a new lead; a number that is not whole counts for nothing; a stray space lost in
   `bin/lib/channel.test.mjs`; this document's Done when, scope and cost constraint. Left: the modules load on every
   `start_session` (the check is synchronous; the record is still read for a bad title alone).
-- L5 (2026-10-19): the hardening committed as 74511510 (gate passed; gentle-ai 144d03ea..74511510 medium, not due,
+- L5 (2026-10-19): the hardening committed as b97cfdf7 (gate passed; gentle-ai b97cfdf7 medium, not due,
   under_budget). Codex 2411023..7451151: incorrect (confidence 0.98), one P2, taken: an opening file listed and not
   readable was counted and dropped, so `--next-number` could print a taken number with exit 0. Fixed test first
   (RED 56/57): such a file is named in `unavailable`, so the command exits 2 and the refusal warns.
-- L6 (2026-10-19): the fix committed as 1d020ae8 (gate passed on CI; gentle-ai 74511510..1d020ae8 medium, not due,
+- L6 (2026-10-19): the fix committed as fede4d1a (gate passed on CI; gentle-ai fede4d1a medium, not due,
   under_budget). Codex 7451151..1d020ae: correct (0.99), the P2 fixed. Next step: push feat/session-title, open the
   pull request, `js-harness notify --to orchestrator --kind ready --pr <n>`; the orchestrator lands it.
 - L7 (2026-10-19): the merge door left PR 469 out ("this pull request changes bin/lib/rules-data.mjs and is not from
   a rule/ branch: a rule changes only by js-harness rules change"), and the orchestrator asked to split it. The rule
   is declared by `js-harness rules change session-title` on `rule/session-title` (73f78044, gate passed on CI;
-  gentle-ai medium, not due, under_budget; Codex 21aa1b3..73f7804 correct, 0.92), PR 470; its source now quotes his
+  gentle-ai medium, not due, under_budget; Codex correct, 0.92), PR 470; its source now quotes his
   whole report, checked by the command. Question 24 asks him to accept the rule as his. This branch is rebased onto
   it, so PR 469 changes `bin/lib/rules-data.mjs` and `docs/rule-sources.json` no more and `docs/RULES.md` only in its
   "Read by" line. Next step: the orchestrator lands PR 470, then PR 469.
@@ -102,3 +102,7 @@ review.
   `--next-number` could print a taken number with exit 0. Fixed test first (RED on the torn line): such lines are
   named in `unavailable`. The real record has none (`skipped 0` over 813 notices), so the command still prints
   `JH 33` with exit 0 there.
+- L9 (2026-10-19): the fix committed as 2074cfac (gate passed on CI; gentle-ai 2074cfac medium, not due,
+  under_budget; Codex ec8b073..2074cfa correct, 0.99, the P2 fixed). The merge queue reads the review evidence by
+  the commits' new names, so L3-L6 name them after the rebase: 50460499 is 8f43aebb, 144d03ea is 55177c5e,
+  74511510 is b97cfdf7 and 1d020ae8 is fede4d1a; the reviews ran on the old ones, with the same changes.
