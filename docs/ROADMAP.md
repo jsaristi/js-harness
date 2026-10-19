@@ -222,9 +222,9 @@ de las memorias ... si por alguna razon despues de la limpiezas que le hago al c
 borrar las memorias o me toca que reinstalar el sistema operativo voy a perder todo"). Pregunta 18 named two
 ways; Pregunta 19 chose "Los dos (Recommended)". A first copy was made by hand on 2026-10-19 in
 `D:\js-harness-backup\2026-10-19` (5,074 observations, read back).
-- [ ] Design, past its two readers: what the backup holds, when it runs, how restore is proven
+- [x] Design, past its two readers: what the backup holds, when it runs, how restore is proven
 - [ ] A living summary in the public repository, regenerated each cycle, project matters only (decisions, conventions, state, open work; nothing personal), that a session reads to catch up
-- [ ] The full Engram export in a private repository of its own, pushed at each session's close
+- [x] The full Engram export in a private repository of its own, pushed at each session's close
 - [ ] Restore proven from both on a scratch home
 
 ### Onboarding

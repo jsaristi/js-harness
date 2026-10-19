@@ -286,11 +286,11 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
 - [x] T1 (kind: design) The design above, past two read-only readers, their findings above
 - [x] T2 (kind: build) `backup run` and `status`: export, shrink refusal, secrets, trees, bundle, manifest, push guard (186a7c79, 22bbe6e8, 83df03c2; inline)
 - [x] T3 (kind: build) `backup init`: create the private repository, verify its visibility, clone, `RESTORE.md` (built with T2; run for real in L15: jsaristi/js-harness-memory, PRIVATE)
-- [ ] T4 (kind: build) `backup --hook`, its manifest entries, throttle, lock; the detached child measured on both hosts
+- [x] T4 (kind: build) `backup --hook`, its manifest entries, throttle, lock; the detached child measured on both hosts (L17: alive after the host exits, on both)
 - [x] T5 (kind: build) `backup summary` and its privacy check; the `memory-summary` branch (c305bc02, 67f30eeb, adb90694, 362ef31e and the next commit; inline)
 - [x] T6 (kind: build) `backup restore` and `verify`, both copies; `doctor --hook` line (next commit; inline)
 - [x] T7 (kind: verify) Restore proven from both copies on a scratch home; the Done-when commands (L15: private side from GitHub, all ok; the summary from the preview file, as the lead set while the public push waits)
-- [ ] T8 (kind: docs) Help, README, roadmap lines checked off
+- [x] T8 (kind: docs) Help, README, roadmap lines checked off (L17: the two roadmap lines that wait on the public push stay open)
 
 ## Log
 - L1 2026-10-19, the lead's brief: "Build the roadmap section \"Memory that survives the machine\"
@@ -430,8 +430,25 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   case): only a leading '-' is part of a slug now. Accepted trade-off: a private term at the
   end of a hyphenated slug (`prefix-client`) is kept, which is the slug case itself. The
   preview regenerated after the fix is identical and still verifies. The lead has its path.
+- L17 2026-10-19 10:18Z. Codex recheck of f8518ae..4fb7459: 1 of 1 fixed (0.99), recorded. T4
+  measured with a probe that starts its child exactly as `startDetached` does (node on the
+  entry, detached, stdio ignored, windowsHide, unref) and a child that writes `start`, then
+  `alive` eight seconds later. Claude Code 2.1.301, `claude -p` in a scratch project whose
+  .claude/settings.json held only that Stop hook: `start claude pid 776 10:15:29.131Z`, host
+  gone 10:15:31, `alive claude pid 776 10:15:37.151Z`. Codex 0.162.1, `codex exec
+  --dangerously-bypass-hook-trust` with a scratch CODEX_HOME holding a link to the login, hooks
+  on and only that Stop hook: `start codex pid 14332 10:16:21.163Z`, host gone 10:16:22.013,
+  `alive codex pid 14332 10:16:29.179Z`. The child outlives the host on both, so no `async`
+  fallback is needed. Found on the way: Codex runs a hook only when config.toml's `hooks.state`
+  records it as trusted, and ~/.codex/config.toml has no entry for `stop:1:0`, the installed
+  `js-harness reply --hook`, so that hook likely never runs in Codex; the backup hook will need
+  the same trust there (README says so). A harness-wide follow-up, not this feature's.
+  main merged in (c829d703, no conflict) to check off the roadmap: the design and the private
+  repository lines; the public summary and "Restore proven from both" wait on the public push.
 
 ## Next step
+State after L17: the contract's lines run except `verify --summary` against the public repo,
+which waits on Sebastián's read of the preview (through the lead); then the PR.
 State after L16: Codex recheck of the emphasis fix (base f8518ae6); then T4 (the detached child
 on a real Stop hook, both hosts), T8, the PR. The public push waits for Sebastián's read of the
 preview, through the lead.

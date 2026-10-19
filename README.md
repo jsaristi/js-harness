@@ -1274,7 +1274,9 @@ Engram, the Claude memory folders or `~/.js-harness` loses nothing that was back
 home and reference copies of the Claude, Codex and Engram config, blanks every secret value it
 finds (a token, a key, a field named like a credential), bundles the commits of `D:/js-harness`
 that are on no remote, and pushes it all to a private GitHub repository through a clone under
-`~/.js-harness/memory-backup`. A run with nothing new commits nothing.
+`~/.js-harness/memory-backup`. A run with nothing new commits nothing. The home is copied without
+its logs, its own backup clone, what a restore left there, and codex-review's per-run Codex homes,
+which hold a link to Codex's login.
 
 The scope is the `scope` field of `~/.js-harness/memory-backup/config.json`: `"all"` backs up
 every Engram project and every Claude memory folder, a project name only that project and the
@@ -1290,7 +1292,7 @@ that does not read `PRIVATE` just before the push; and a backup another machine 
 (`--adopt`, the first run after a reinstall). The push never waits for a sign-in prompt and gives
 up after two minutes; the next run pushes what is owed.
 
-Once a day a run also refreshes a short public summary on the `memory-summary` branch of
+Once a day, when `init` named a summary checkout, a run also refreshes a short public summary on the `memory-summary` branch of
 `jsaristi/js-harness`, one file in one commit replaced each time; any clone reads it with
 `git fetch origin memory-summary` and `git show FETCH_HEAD:SUMMARY.md`. It is built from an
 allowlist, never filtered from everything: each roadmap phase's share, its open items, the
@@ -1307,7 +1309,8 @@ shows it first);
 every URL of its origin must be `jsaristi/js-harness` on github.com, or no summary is pushed.
 `backup status` prints the last success, the last failure and the commits to push, and
 `doctor` shows a `memory-backup` row that goes stale, with the reason, when no backup succeeded in
-a day, so the session-start hook says it stopped.
+a day, a run failed after the last success, or the clone is gone, so the session-start hook says
+it stopped.
 
 After a reinstall, the steps are in `RESTORE.md` in the private repository (`init` writes it);
 in short, before any session and before `install`:
@@ -1317,8 +1320,9 @@ $ node bin/js-harness.mjs backup restore --from https://github.com/<owner>/<name
 $ node bin/js-harness.mjs backup verify --from https://github.com/<owner>/<name>.git
 ```
 
-`restore` imports Engram (refused when that Engram already holds observations, unless
-`--merge`), puts back the memory folders (`--map <old path>=<new path>` for a project now
+`restore` works on this user's home unless `--home <dir>` names another. It imports Engram
+(refused when that Engram already holds observations or its count cannot be read, unless
+`--merge`; a restore run again skips the import it already did), puts back the memory folders (`--map <old path>=<new path>` for a project now
 elsewhere) and `~/.js-harness` without its install manifest, never over a live file, and leaves the
 old config files in `~/.js-harness/restored-config` to compare by hand. `verify --from` restores
 into a scratch home and checks the four counts and every file byte for byte; `verify --summary`
@@ -1326,6 +1330,10 @@ checks the public summary's sections and privacy. The private clone keeps every 
 (`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers in both hosts: when a
 backup is due (30 minutes since the last success, and Engram, a memory folder or the home
 changed since) it starts a run detached and returns; where `init` never ran it does nothing.
+The detached run outlives the hook and the host in both: measured on Claude Code 2.1.301 and Codex
+0.162.1, the child was alive seconds after the host process exited. Codex runs a hook only once its
+config records it as trusted (`hooks.state` in `config.toml`); until then only Claude Code's Stop
+hook starts backups.
 
 ```console
 $ js-harness backup status
