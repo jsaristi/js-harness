@@ -2,8 +2,8 @@
 
 Locator: `odd/tasks/stack-install.md` · Engram mirror: `odd/stack-install/tasks` · Branch: `feat/stack-install`, in
 `D:\js-harness-worktrees\stack-install`, cut from `origin/main` at `24110236` · Session: JH 31 · instalar complementos ·
-Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` after his yes. Design version 2: version 1
-after its two readers (see `## Reviews`).
+Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` after his yes. Design version 3: version 1
+after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -168,7 +168,7 @@ plan, asks him (through the lead where there is one), then runs one tool per cal
   `doctor`'s fix. Exits 0 when nothing mandatory is missing, 1 when something is, 2 on a usage error. `--json` prints
   `{ mandatory: [{ tool, dimension, run, undo }], manual: [{ tool, dimension, why, fix }], optional: [...] }`, the shape
   onboarding reads (D8).
-- `js-harness stack install [--home] [--cwd] [--tool <id>]... [--yes]`: D4. Exits 0 when no mandatory gap is left that
+- `js-harness stack install [--home] [--cwd] [--pm npm|pnpm] [--prefix <dir>] [--tool <id>]... [--yes]`: D4. Exits 0 when no mandatory gap is left that
   it could run, 1 when one is (declined, failed or timed out), 2 on a usage error.
 - The TUI gets one machine item, "Install the stack", shown only while `stack` reports a mandatory gap; it runs `stack
   install` in the terminal, so D4's prompts are the TUI's consent.
@@ -176,6 +176,11 @@ plan, asks him (through the lead where there is one), then runs one tool per cal
   unasked; a flag there would make one command both silent and downloading.
 
 ### D6. How it runs a command
+- The package manager is resolved as `upgrade` resolves it: `--pm`, else `JS_HARNESS_PM`, else the one that installed
+  the running copy (`resolvePm`, `bin/update.mjs:36-39`, `copyPackageManager`, `bin/lib/package-manager.mjs:40-42`),
+  never from the word `npm`: here `npm.cmd` is `pnpm %*`, so `pmKind(['npm'])` would say npm and give pnpm a
+  `--prefix` it has no option for. The record keeps the manager and its prefix, and the undo is that manager's own
+  remove (`pnpm remove -g` with the same `PNPM_HOME` and folders, or `npm uninstall -g --prefix`).
 - Package installs through `installPlan` and `runPm` (pnpm or npm, cmd.exe quoting). `claude` and `codex` the same
   way: one joined line with `shell: true` on win32, each word through `cmdWord`; a word holding `%` or `"` is refused,
   never run, as `upgradeMain` does.
@@ -189,13 +194,17 @@ plan, asks him (through the lead where there is one), then runs one tool per cal
 ### D7. The record, and its undo
 - A new array `stack` in the machine manifest, added to `ON_REQUEST` and to the kept-records write-back, one record
   per row run, keyed by tool and dimension (a second run replaces it): `{ tool, dimension, run, undo, applies, env, at }`,
-  where `applies` is what D2's last column checks (the version installed, or the registration's name). It is written
+  where `applies` is what D2's last column checks: for a package, the version installed; for a registration, the
+  entry the command wrote, read back right after it ran (Claude's `mcpServers.codegraph` object, which
+  `claudeJsonMcpServer` already returns, `bin/lib/stack.mjs:105-112`; Codex's `[mcp_servers.codegraph]` table, read
+  by a new reader of that one section), since the probes see only that a name is present
+  (`bin/lib/stack.mjs:87-97`) and a name alone cannot tell the harness's entry from his own. It is written
   **before** the command starts, so a run killed halfway leaves something `uninstall` can try.
 - After the command, the row is probed: still a gap after a failure, and the record is dropped, since nothing of it
   stayed and a later install of his own must not be undone; `ok`, and it stays with the version read.
 - `uninstall --global` undoes the records in reverse order, printing each undo before running it. Before each, it
   probes: a tool already gone loses its record; one whose `applies` no longer holds (he upgraded codex, or registered
-  codegraph again by hand) is kept and named, its record dropped; otherwise the undo runs, and one that fails keeps its
+  codegraph again by hand with another entry) is kept and named, its record dropped; otherwise the undo runs, and one that fails keeps its
   record, alone, so a second `uninstall --global` finishes it, as scheduled tasks are kept. Why `--global` and not
   `--everything`: `AGENTS.md` names `uninstall` as the undo of what the harness writes, and these are the harness's
   writes; a tool he wants to keep he installs himself, and then nothing records it.
@@ -213,6 +222,8 @@ onboarding's files; a note in the shared notes folder hands that session this co
 - A scratch folder under the system temp folder holds the home, `APPDATA`, `LOCALAPPDATA`, the package prefix (pnpm's
   folders through `installPlan`) and a `bin` of shims for exactly `node`, the package manager, `git` and `claude`, so
   no folder of his real tools is on its PATH: on this machine node's folder is also where his global codegraph lives.
+  The scratch PATH is that `bin` and the prefix's own `bin` (where the installed `codex` and `codegraph` land), for
+  every command it runs, `doctor` included; it passes `--pm pnpm` (or the manager the machine has) explicitly.
 - Before and after, it hashes his real `~/.claude.json`, `~/.claude/settings.json`, `~/.codex/config.toml`,
   `~/.codex/AGENTS.md`, the listing of his global packages (`pnpm ls -g`) and the user PATH
   (`reg query HKCU\Environment /v Path`); any difference fails the trial.
@@ -241,6 +252,15 @@ onboarding's files; a note in the shared notes folder hands that session this co
     under `--yes`; D7 drops a failed row's record, probes before undo, carries `stack` in the write-back; D9 rebuilt
     (shims, scratch PATH for `doctor`, `ok` not "no gap", a longer hash list with the registry PATH, out of the
     contract). Not taken: putting the undo behind `--everything` (D7 says why).
+- Round 2 (2026-10-19), on version 2, one read-only reader (opus), only on round 1's 13 blockers: 7 closed, 5 closed
+  under F1's option 1 (both gentle-ai undo blockers, `go install`'s GOPATH, gentle-ai's other writes, engram's data;
+  the hash list too, for the four rows), 1 open: the manager was still read from the word `npm`, which here runs pnpm.
+  One new blocker from version 2's own fix: `applies` held only a registration's name, which cannot tell his entry
+  from the harness's. Checked and not blockers: `claude mcp add` under a scratch `USERPROFILE` reads and writes only
+  the scratch `.claude.json` (it ran `claude mcp get codegraph` there and removed the folder); moving `APPDATA` and
+  `LOCALAPPDATA` breaks nothing. Advisory: the trial's PATH must hold the prefix's `bin`.
+  - Taken in version 3: D6 resolves the manager as `upgrade` does and records it; D7's `applies` for a registration is
+    the entry written, read back; D9's PATH holds the prefix's `bin` and passes `--pm`. Not read again.
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "tenemos que colocar el modulo de install 3rd plugins o complementos
@@ -248,3 +268,6 @@ onboarding's files; a note in the shared notes folder hands that session this co
   feature document past two readers; product decisions go to the orchestrator one at a time; build it test-first
   after his yes.
 - L2 (2026-10-19) Version 1 committed (47851203); round 1 of its readers in `## Reviews`; version 2 written from it.
+- L3 (2026-10-19) Version 2 committed (e5505407). F1 sent to the orchestrator as question 23 (recommended: option 1).
+  Round 2 on the blockers in `## Reviews`; version 3 written from it. Next: his answer to question 23, then the
+  question of his yes to the design.
