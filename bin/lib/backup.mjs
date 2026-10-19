@@ -12,12 +12,13 @@ export const REDACTED = '<redacted>';
  * away from public (D1). A pattern's first group, when it has one, is the part kept before the value. Values never
  * hold a quote or a backslash, so a blanked JSON document stays JSON. */
 const SECRETS = [
-  // Through its END line, never past a quote; a key cut before its END, through its whole base64 lines (line breaks raw
-  // or escaped in JSON) and a cut END's dashes, so the prose after a key is kept either way. The empty first group is
-  // the part kept (nothing); the second is the key's type, so the END matched is its own.
+  // Through its END line, never past a quote. A key with no END, through each base64 run after it, past spaces and line
+  // breaks raw or escaped in JSON: a run of 16 or more, or a shorter one that ends its line, then a cut END's dashes.
+  // Prose words are short and end in a space, so the prose after a key is kept either way. The empty first group is the
+  // part kept (nothing); the second is the key's type, so the END matched is its own.
   [
     'private key',
-    /()-----BEGIN ([A-Z ]*)PRIVATE KEY-----(?:[^"]*?-----END \2PRIVATE KEY-----|(?:(?:\r?\n|\\(?:r\\)?n)[A-Za-z0-9+/=]+(?=\r?\n|\\(?:r\\)?n|"|$))*(?:(?:\r?\n|\\(?:r\\)?n)-+(?="|$))?)/g,
+    /()-----BEGIN ([A-Z ]*)PRIVATE KEY-----(?:[^"]*?-----END \2PRIVATE KEY-----|(?:(?:[ \t]|\r?\n|\\(?:r\\)?n)+(?:[A-Za-z0-9+/=]{16,}|[A-Za-z0-9+/=]+(?=\r?\n|\\(?:r\\)?n|"|$)))*(?:(?:\r?\n|\\(?:r\\)?n)-+(?="|$))?)/g,
   ],
   ['GitHub token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/g],
   // `sk-ant-api03-…`: a run of 20 or more without a hyphen, holding a digit, so `risk-assessment-…` is not one; or a

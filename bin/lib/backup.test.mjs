@@ -63,6 +63,14 @@ test('redactSecrets blanks a private key up to its end line and keeps the prose 
   // A key cut before its end line is blanked through its base64 lines, and the line after them stays.
   const cut = `-----BEGIN RSA PRIVATE KEY-----\n${body}\n${body}\nImportant memory about the project.`;
   assert.equal(redactSecrets(cut).text, '<redacted>\nImportant memory about the project.');
+  // With no end line, a body pasted on one line or split by spaces, or a cut one whose last line runs into an
+  // ellipsis, is blanked as well: no base64 run of the key is left.
+  for (const [text, rest] of [
+    [`-----BEGIN RSA PRIVATE KEY----- ${body} ${body}`, ''],
+    [`-----BEGIN RSA PRIVATE KEY-----\n${body}\n${body}... and so on`, '... and so on'],
+  ]) {
+    assert.equal(redactSecrets(text).text, `<redacted>${rest}`, text);
+  }
 });
 
 test('redactSecrets keeps a JSON document parseable', () => {
