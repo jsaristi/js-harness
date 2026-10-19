@@ -11,13 +11,14 @@ import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
+import { installedVersion as manifestVersion } from './lib/manifest.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { remoteMain } from './remote.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
-export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
+export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'uninstall-everything', 'quit'];
 /** The remote-control server of the repository, last in the project section. */
 const REMOTE_ITEMS = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
 const MENU_LABELS = {
@@ -27,6 +28,7 @@ const MENU_LABELS = {
   update: 'Update',
   upgrade: 'Upgrade',
   uninstall: 'Uninstall',
+  'uninstall-everything': 'Uninstall everything',
   quit: 'Quit',
   'project-init': 'Init',
   'project-sync': 'Sync',
@@ -45,6 +47,8 @@ const CONFIRM_PROMPTS = {
   'project-remote-stop': 'Stop the remote server of this project? The sessions opened through it end. (y/N)',
   // Asked after the yes to Uninstall, only while the home holds memory snapshots (D7.8 of odd/tasks/memory-hygiene.md).
   'uninstall-full': 'Remove the memory snapshots too, the only copy of what a pass changed? (y/N)',
+  // One question, snapshots or not: it already names them (release-095 S5, Pregunta 17).
+  'uninstall-everything': 'Remove everything js-harness keeps on this machine: the whole .js-harness folder of this home (the lead\'s notes, the backups, the memory snapshots) and the js-harness program itself? This cannot be undone. (y/N)',
 };
 
 /** Whether the home holds a snapshot of a memory pass, the copy only `uninstall --full` removes. False when the
@@ -177,13 +181,14 @@ export async function computeStackState({ home, cwd, spawn, platform, fetch: fet
  * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
  * stack block simply does not render (see `render` below), so older callers keep working. `location` is
  * a `projectLocation` result; omitted, the TUI is outside any repository and shows the machine menu. */
-export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, memorySnapshots = false }) {
+export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, memorySnapshots = false, installedCopy = null }) {
   const menu = buildMenu(location);
   return {
     mode: 'menu',
     selected: firstSelectable(menu),
     installedVersion,
     updateAvailable,
+    installedCopy,
     stack,
     location,
     menu,
@@ -243,7 +248,10 @@ export function handleKey(state, key) {
 /** Pure: state -> the lines to draw. The stack block (T5) renders above the menu, straight from
  * `state.stack` — this function never probes anything itself, see `computeStackState`. */
 export function render(state) {
-  const updateNote = state.updateAvailable ? `  (update available: ${state.updateAvailable})` : '';
+  // A newer copy installed under the home (an Upgrade from this menu) runs only in a new process: this one keeps
+  // its code, so the header says to open the menu again instead of offering the update once more (release-095 F1).
+  const reopen = state.installedCopy && isNewer(state.installedCopy, state.installedVersion);
+  const updateNote = reopen ? `  (${state.installedCopy} installed: quit and open js-harness again to use it)` : state.updateAvailable ? `  (update available: ${state.updateAvailable})` : '';
   const lines = [`js-harness ${state.installedVersion}${updateNote}`];
   if (Array.isArray(state.stack)) {
     for (const row of state.stack) {
@@ -287,17 +295,19 @@ function screenText(state) {
 export function runTui({
   installedVersion,
   updateAvailable,
+  installedCopy = null,
   stack,
   location,
   memorySnapshots = false,
   readLocation,
   readStack,
   readSnapshots,
+  readUpdate,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack, location, memorySnapshots });
+  let state = initialState({ installedVersion, updateAvailable, stack, location, memorySnapshots, installedCopy });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -322,10 +332,19 @@ export function runTui({
         stdin.pause();
         // Whatever the command or the re-read does, the terminal comes back: a failure is one line on
         // stderr, the previous location stays, and the menu is drawn again below.
+        let code = null;
         try {
-          await commands[effect.command](state.location);
+          code = await commands[effect.command](state.location);
         } catch (err) {
           console.error(`${effect.command} failed: ${oneLine(err)}`);
+        }
+        // Once everything is gone, the program included, there is no menu left to offer: the TUI ends. A failure
+        // keeps the menu, since what it kept is still installed and the uninstall can be run again.
+        if (effect.command === 'uninstall-everything' && code === 0) {
+          stdin.setRawMode?.(false);
+          stdin.removeListener('data', onData);
+          resolve(0);
+          return;
         }
         if (readLocation) {
           try {
@@ -346,6 +365,14 @@ export function runTui({
             state = { ...state, memorySnapshots: await readSnapshots() };
           } catch (err) {
             console.error(`reading the memory snapshots failed: ${oneLine(err)}`);
+          }
+        }
+        if (readUpdate) {
+          try {
+            const { updateAvailable: available = null, installedCopy = null } = (await readUpdate()) ?? {};
+            state = { ...state, updateAvailable: available, installedCopy };
+          } catch (err) {
+            console.error(`reading the installed version failed: ${oneLine(err)}`);
           }
         }
         stdin.resume();
@@ -409,6 +436,7 @@ export function buildCommands({
     sync: () => syncMain(['--global', '--home', home]),
     uninstall: () => uninstallMain(['--global', '--home', home]),
     'uninstall-full': () => uninstallMain(['--global', '--full', '--home', home]),
+    'uninstall-everything': () => uninstallMain(['--global', '--everything', '--home', home]),
   };
 }
 
@@ -428,13 +456,26 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
 
   // The newest release: in a folder of tarballs when one is named, else the repository's tags (`git ls-remote`).
   const source = get('--source') ?? env.JS_HARNESS_SOURCE;
-  let updateAvailable = null;
+  let latest = null;
   try {
-    const latest = resolveLatest({ source });
-    if (latest && isNewer(latest.version, installedVersion)) updateAvailable = latest.version;
+    latest = resolveLatest({ source });
   } catch {
-    updateAvailable = null;
+    latest = null;
   }
+  // The release is looked up once; what the home's manifest records is read again after each command, since an
+  // Upgrade installs a newer copy than the one running this menu.
+  // A manifest that cannot be read names no copy: the menu opens all the same, as it did before it read one.
+  const readUpdate = () => {
+    let installedCopy = null;
+    try {
+      installedCopy = manifestVersion(home);
+    } catch {
+      installedCopy = null;
+    }
+    const newest = installedCopy && isNewer(installedCopy, installedVersion) ? installedCopy : installedVersion;
+    return { installedCopy, updateAvailable: latest && isNewer(latest.version, newest) ? latest.version : null };
+  };
+  const { updateAvailable, installedCopy } = readUpdate();
 
   // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
   const location = projectLocation(cwd);
@@ -445,6 +486,8 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   return runTui({
     installedVersion,
     updateAvailable,
+    installedCopy,
+    readUpdate,
     stack,
     location,
     readLocation: () => projectLocation(cwd),

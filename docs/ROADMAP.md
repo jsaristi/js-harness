@@ -215,6 +215,25 @@ apliquemos todo esto y despues de todo hacemos un test completo de la aplicacion
 - [x] v0.9.0 tagged and installed from its tag by real pnpm and npm
 - [x] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0
 
+### Memory that survives the machine
+His machine is slow and he cleans it with PC Manager; a past cleanup lost Engram's memories, and a
+reinstall would lose the project's whole history (Sebastián, 2026-10-19: "Es muy importante para mi lo
+de las memorias ... si por alguna razon despues de la limpiezas que le hago al computador se llegan a
+borrar las memorias o me toca que reinstalar el sistema operativo voy a perder todo"). Pregunta 18 named two
+ways; Pregunta 19 chose "Los dos (Recommended)". A first copy was made by hand on 2026-10-19 in
+`D:\js-harness-backup\2026-10-19` (5,074 observations, read back).
+- [ ] Design, past its two readers: what the backup holds, when it runs, how restore is proven
+- [ ] A living summary in the public repository, regenerated each cycle, project matters only (decisions, conventions, state, open work; nothing personal), that a session reads to catch up
+- [ ] The full Engram export in a private repository of its own, pushed at each session's close
+- [ ] Restore proven from both on a scratch home
+
+### Onboarding
+Sebastián, 2026-10-19: "una funcionalidad de onboarding para que cuando instalemos el harnes en un proyecto
+hagamos todo el pre plan y el plan ya con la ia para ejecutar un roadmap completo y bien estructurado del
+proyecto".
+- [ ] Design, past its two readers: the interview, the pre-plan, the plan and the roadmap it writes
+- [ ] `js-harness onboard` after `init`, with tests
+
 ## F5 result
 
 Five tasks, three trials per config and effort, Opus 5.5 under `bypassPermissions`, Claude Code

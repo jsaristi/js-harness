@@ -257,6 +257,30 @@ test('upgrade installs with --pm split in words, else JS_HARNESS_PM, else npm', 
   }
 });
 
+test('upgrade with no --pm and no JS_HARNESS_PM uses pnpm for a copy in pnpm\'s global folder, else npm', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-copy-pm-');
+  const source = makeSource('99.0.0');
+  const tarball = path.join(source, 'js-harness-99.0.0.tgz');
+  const calls = [];
+  const spawn = (cmd, args) => {
+    calls.push({ cmd, args });
+    return { status: 3, stdout: '', stderr: '' };
+  };
+  // Where Node resolves a copy pnpm 12 installed from GitHub: through its `.pnpm` store, links followed (2026-10-18).
+  const pnpmCopy = path.join('C:', 'Users', 'u', 'AppData', 'Local', 'pnpm', 'global', 'v11', '2bf18-18dfb749e282f510-0', 'node_modules', '.pnpm', 'js-harness@https+++codeload_84cb763e', 'node_modules', 'js-harness', 'bin', 'update.mjs');
+  const npmCopy = path.join('C:', 'nvm4w', 'nodejs', 'node_modules', 'js-harness', 'bin', 'update.mjs');
+  try {
+    // The TUI's Upgrade passes no --pm: the copy that runs says which package manager installed it.
+    await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn, 'linux', { sleep: async () => {}, copyPath: pnpmCopy });
+    await runCommand(upgradeMain, ['--source', source, '--home', home], {}, spawn, 'linux', { sleep: async () => {}, copyPath: npmCopy });
+    const installs = calls.filter((call) => call.args.includes('-g') && call.args.includes(tarball));
+    assert.deepEqual(installs.map((call) => call.cmd), ['pnpm', 'pnpm', 'pnpm', 'npm', 'npm', 'npm']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
 test('upgrade installs nothing when the source holds no release newer than the installed one', async () => {
   const home = makeTmpDir('js-harness-upgrade-home-same-');
   const source = makeSource(currentVersion());

@@ -103,6 +103,36 @@ test('render notes an available update in the header', () => {
   assert.match(render(state).join('\n'), /update available: 0\.2\.0/);
 });
 
+test('render says a newer copy is installed, and offers no update, while the menu runs an older one', () => {
+  const state = initialState({ installedVersion: '1.0.0', updateAvailable: null, installedCopy: '1.1.0' });
+  assert.equal(render(state)[0], 'js-harness 1.0.0  (1.1.0 installed: quit and open js-harness again to use it)');
+  // The same version, or none recorded, changes nothing in the header.
+  for (const installedCopy of ['1.0.0', null]) {
+    assert.equal(render(initialState({ installedVersion: '1.0.0', updateAvailable: null, installedCopy }))[0], 'js-harness 1.0.0');
+  }
+});
+
+test('runTui reads the update again after a command: an Upgrade that installed the release says to open the menu again', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  let upgraded = false;
+  const done = runTui({
+    installedVersion: '1.0.0',
+    updateAvailable: '1.1.0',
+    readUpdate: () => (upgraded ? { updateAvailable: null, installedCopy: '1.1.0' } : { updateAvailable: '1.1.0', installedCopy: '1.0.0' }),
+    commands: { ...noCommands, status: async () => { upgraded = true; } },
+    stdin,
+    stdout,
+  });
+  assert.match(stdout.chunks.at(-1), /^js-harness 1\.0\.0 {2}\(update available: 1\.1\.0\)$/m);
+  stdin.emit('data', '\r');
+  await flush();
+  assert.match(stdout.chunks.at(-1), /^js-harness 1\.0\.0 {2}\(1\.1\.0 installed: quit and open js-harness again to use it\)$/m);
+  assert.doesNotMatch(stdout.chunks.at(-1), /update available/);
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
 test('render shows a confirmation prompt in confirm mode', () => {
   const base = initialState({ installedVersion: '0.1.0', updateAvailable: null });
   const state = { ...base, mode: 'confirm', pending: 'uninstall' };
@@ -274,6 +304,69 @@ test('runTui asks the second question while snapshots are there, and reads again
   assert.deepEqual(calls, ['uninstall', 'uninstall-full', 'uninstall'], 'with none left, the yes runs the uninstall alone');
 });
 
+// release-095 S5 (Pregunta 17): Uninstall everything sits after Uninstall, asks once, naming the folder and the
+// program, and runs `uninstall --global --everything`.
+test('Uninstall everything follows Uninstall, asks naming the folder and the program, y runs it, n cancels', () => {
+  assert.equal(MENU_ITEMS.indexOf('uninstall-everything'), MENU_ITEMS.indexOf('uninstall') + 1);
+  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true });
+  assert.match(render(base).join('\n'), /^ {2}Uninstall everything$/m);
+  const asked = handleKey({ ...base, selected: MENU_ITEMS.indexOf('uninstall-everything') }, 'enter');
+  assert.deepEqual([asked.state.mode, asked.state.pending, asked.effect], ['confirm', 'uninstall-everything', null]);
+  assert.match(
+    render(asked.state).join('\n'),
+    /Remove everything js-harness keeps on this machine: the whole \.js-harness folder of this home \(the lead's notes, the backups, the memory snapshots\) and the js-harness program itself\? This cannot be undone\. \(y\/N\)$/,
+  );
+  assert.deepEqual(handleKey(asked.state, 'y').effect, { type: 'run', command: 'uninstall-everything' }, 'one question, snapshots or not');
+  for (const key of ['n', 'enter', 'escape']) assert.deepEqual(handleKey(asked.state, key).effect, null, key);
+});
+
+test('runTui quits once Uninstall everything succeeds, and stays in the menu when it fails', async () => {
+  for (const [result, expected] of [[0, ['uninstall-everything']], [1, ['uninstall-everything', 'status']]]) {
+    const stdin = makeFakeStdin();
+    const stdout = makeFakeStdout();
+    const calls = [];
+    const commands = {
+      status: async () => calls.push('status'),
+      'uninstall-everything': async () => {
+        calls.push('uninstall-everything');
+        return result;
+      },
+    };
+    const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+    for (let i = 0; i < MENU_ITEMS.indexOf('uninstall-everything'); i++) stdin.emit('data', 'j');
+    for (const key of ['\r', 'y']) {
+      stdin.emit('data', key);
+      await flush();
+    }
+    if (result !== 0) {
+      // Still in the menu: back to the top, run Status, then quit.
+      for (let i = 0; i < MENU_ITEMS.indexOf('uninstall-everything'); i++) stdin.emit('data', 'k');
+      stdin.emit('data', '\r');
+      await flush();
+      stdin.emit('data', 'q');
+    }
+    assert.equal(await done, 0, `result ${result}`);
+    assert.deepEqual(calls, expected, `result ${result}`);
+  }
+});
+
+test('buildCommands uninstall-everything removes the whole folder and, run from a checkout, keeps the program', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-home-'));
+  const originalLog = console.log;
+  const lines = [];
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness', 'memory-hygiene', 'C--proj', 'snapshots', '20261015T120606108Z'), { recursive: true });
+    fs.mkdirSync(path.join(home, '.js-harness', 'relief'), { recursive: true });
+    console.log = (line) => lines.push(String(line));
+    assert.equal(await buildCommands({ home })['uninstall-everything'](), 0);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+    assert.ok(lines.some((line) => line.startsWith('kept the js-harness program: this one runs from ')), lines.join('\n'));
+  } finally {
+    console.log = originalLog;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- CLI entry: tuiMain ---
 
 // Opening the menu asks no package manager which release is the latest: the name `js-harness` is nobody's
@@ -296,6 +389,23 @@ test('tuiMain with no source asks no package manager for a release and shows no 
   assert.equal(code, 0);
   assert.deepEqual(calls.filter((call) => call.includes('view')), []);
   assert.ok(!stdout.chunks.join('').includes('update available'));
+});
+
+test('tuiMain opens the menu when the home\'s manifest cannot be read, as it did before it read the manifest', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-bad-manifest-'));
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  try {
+    fs.mkdirSync(path.dirname(manifestPath(home)), { recursive: true });
+    fs.writeFileSync(manifestPath(home), '{');
+    const done = tuiMain(['--cwd', nonGitDir, '--home', home], {}, () => ({ status: 0, stdout: '', stderr: '' }), { stdin, stdout });
+    await flush();
+    stdin.emit('data', 'q');
+    assert.equal(await done, 0);
+    assert.ok(stdout.chunks.join('').includes('Uninstall everything'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('tuiMain shows the update a named source folder holds, and its commands read that same folder', async () => {
@@ -746,7 +856,7 @@ test('buildMenu is exactly today\'s machine menu outside a git repository', () =
   }
   assert.deepEqual(
     buildMenu(NOT_GIT).map((entry) => entry.label),
-    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Quit'],
+    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Uninstall everything', 'Quit'],
   );
 });
 
