@@ -127,6 +127,23 @@ test('exportEngram writes the export where it belongs only after reading it back
   assert.deepEqual(fs.readdirSync(path.join(dest, 'engram')), ['export.json'], 'no temporary file is left');
 });
 
+test('exportEngram never writes the raw export inside the clone, so a run killed mid-way leaves nothing git would add', (t) => {
+  const dest = path.join(scratch(t), 'repo');
+  const raw = [];
+  const run = (cmd, args) => {
+    raw.push(args[1]);
+    fs.writeFileSync(args[1], JSON.stringify({ ...EXPORT, observations: [{ id: 1, content: 'token ghp_' + 'a'.repeat(36) }] }));
+    // A run the host kills here never reaches its cleanup: what it wrote stays where it was written.
+    throw new Error('killed');
+  };
+
+  assert.throws(() => exportEngram({ dest, run }), /killed/);
+
+  assert.equal(path.relative(dest, raw[0]).startsWith('..'), true, `the raw export went to ${raw[0]}, inside the clone`);
+  const inClone = fs.existsSync(dest) ? fs.readdirSync(dest, { recursive: true }) : [];
+  assert.deepEqual(inClone.filter((name) => !fs.statSync(path.join(dest, name)).isDirectory()), []);
+});
+
 test('exportEngram keeps the previous export when the new one fails, is not JSON, or lost observations', (t) => {
   const dest = scratch(t);
   write(path.join(dest, 'engram', 'export.json'), JSON.stringify(EXPORT));

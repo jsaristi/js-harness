@@ -174,14 +174,16 @@ function withoutTime(data) {
   return JSON.stringify(rest);
 }
 
-/** Runs `engram export --all` into a temporary file beside the clone's `engram/export.json`, reads it back, blanks its
- * secrets, and only then puts it in place. Throws, leaving the previous export as it was, when the export fails, is not
- * JSON, or holds fewer of any count than the last one by more than `SHRINK_LIMIT` (unless `allowShrink`). When the new
- * export differs from the last only in `exported_at`, the file is left untouched (`changed: false`). */
+/** Runs `engram export --all` into a temporary file beside the clone, reads it back, blanks its secrets, and only then
+ * puts it in place as the clone's `engram/export.json`. Throws, leaving the previous export as it was, when the export
+ * fails, is not JSON, or holds fewer of any count than the last one by more than `SHRINK_LIMIT` (unless `allowShrink`).
+ * When the new export differs from the last only in `exported_at`, the file is left untouched (`changed: false`). */
 export function exportEngram({ dest, run = defaultRun, allowShrink = false }) {
   const dir = path.join(dest, 'engram');
   const target = path.join(dir, 'export.json');
-  const temp = path.join(dir, `export.json.${process.pid}.tmp`);
+  // The raw export holds every secret: it lives outside the clone, so a run killed before its cleanup leaves nothing a
+  // later `git add -A` would push, and under one fixed name, so the next run overwrites what a dead one left.
+  const temp = `${dest}.export.tmp`;
   fs.mkdirSync(dir, { recursive: true });
   try {
     const result = run('engram', ['export', temp, '--all']);
