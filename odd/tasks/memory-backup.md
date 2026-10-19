@@ -384,7 +384,21 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   restore (kept and listed), config copies go to restored-config. 120 tests green across backup,
   doctor and doctor-hook.
 
+- L13 2026-10-19. T6 committed (26a5b3ee) after two gate refusals: a stray CR in docs/SPEC.md,
+  and the dispatch test listing doctor's rows without memory-backup. The lead (by message): steps
+  1 and 2 after the reviews (private repo, private push, scope js-harness); step 3, the public
+  push, waits for Sebastián to read its content first. So the summary is opt-in in code: init sets
+  summaryRepo only with --summary-repo, and `backup summary --summary-repo <dir>` previews it
+  (test first, RED seen).
+
 ## Next step
+State after L13 (context pause at 86%): commit the opt-in change; gentle-ai review of
+f3640a6e..HEAD (escalate item 1: restore writes Engram and a home) and Codex of the same range
+from a detached worktree; then for real `backup init --repo jsaristi/js-harness-memory` (no
+--summary-repo) and `backup run` (private only, scope js-harness); then
+`backup summary --summary-repo D:/js-harness` into
+C:\Users\Oficina\AppData\Roaming\Claude\side-session-notes\local_bd0ae465-dea2-48dc-91c5-964f400801be\memory-summary-preview.md
+and tell the lead (JH ORQ) its path; T7 `backup verify --from` on the private repo; T4; T8.
 State after L12: commit T6; then gentle-ai review of f3640a6e..HEAD and Codex of the same range;
 then T4 (the detached child on a real Stop hook), T3 (init on the real private repository: tell
 the lead first), T7, T8.

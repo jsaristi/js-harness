@@ -34,7 +34,7 @@ const USAGE = [
   '    (the first run after a reinstall). Once a day it also pushes the public summary to the memory-summary branch;',
   '    a summary that cannot be pushed is recorded and never fails the backup.',
   '  status  The last run, the last success, the last failure and why, and the commits still to push.',
-  '  summary  Print the public summary as the next run would push it: the roadmap and feature documents on the',
+  '  summary [--summary-repo <dir>]  Print the public summary as the next run would push it: the roadmap and feature documents on the',
   "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
   '    private-terms.txt.',
   '  init --repo <owner/name> [--summary-repo <dir>]  Create the repository private when it does not exist, check it',
@@ -387,10 +387,12 @@ function buildPublicSummary(deps, paths, config) {
   return renderSummary({ roadmap: show('docs/ROADMAP.md'), features, observations, terms });
 }
 
-function summaryCommand(deps) {
+function summaryCommand(args, deps) {
   const paths = backupPaths(deps.home);
+  const config = readJson(paths.config) ?? {};
+  const named = valueOf(args, '--summary-repo');
   try {
-    deps.stdout.write(buildPublicSummary(deps, paths, readJson(paths.config) ?? {}).text);
+    deps.stdout.write(buildPublicSummary(deps, paths, named ? { ...config, summaryRepo: path.resolve(named) } : config).text);
     return 0;
   } catch (error) {
     deps.stderr.write(`backup summary: ${error.message}\n`);
@@ -625,8 +627,8 @@ function initCommand(args, deps) {
   }
   const config = { ...(readJson(paths.config) ?? {}), repo };
   if (!Array.isArray(config.bundles)) config.bundles = deps.bundles ?? [];
-  // The checkout whose main the public summary reads (D4): the one named, else js-harness's own when it is a checkout
-  // of the public repository; an installed package is none, and then no summary is pushed.
+  // The checkout whose main the public summary reads (D4), only when named: a push to a public repository cannot be
+  // taken back, so it is never a default, and its first content is read first with `backup summary --summary-repo`.
   const s = args.indexOf('--summary-repo');
   if (s !== -1) {
     const named = path.resolve(args[s + 1] ?? '');
@@ -636,8 +638,6 @@ function initCommand(args, deps) {
       return 1;
     }
     config.summaryRepo = named;
-  } else if (!config.summaryRepo && deps.packageRoot && fs.existsSync(path.join(deps.packageRoot, '.git'))) {
-    if (!summaryRefusal(deps, deps.packageRoot)) config.summaryRepo = path.resolve(deps.packageRoot);
   }
   writeJson(paths.config, config);
   fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(repo));
@@ -670,13 +670,6 @@ function defaultDeps() {
     stdout: process.stdout,
     stderr: process.stderr,
     bundles: ['D:/js-harness'].filter((dir) => fs.existsSync(path.join(dir, '.git'))),
-    // The main checkout this install runs from, never a session's worktree, which goes when the session does; read only
-    // by `init`, so a hook spawns no git for it.
-    get packageRoot() {
-      const here = fileURLToPath(new URL('..', import.meta.url));
-      const common = defaultRun('git', ['-C', here, 'rev-parse', '--path-format=absolute', '--git-common-dir']);
-      return common.status === 0 ? path.dirname(common.stdout.trim()) : undefined;
-    },
     // Node itself on this install's own entry point: no `.cmd` shim, no shell between the hook and the run.
     startDetached: (args) => {
       const entry = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
@@ -690,7 +683,7 @@ export async function backupMain(args, deps = defaultDeps()) {
   const [sub, ...rest] = args;
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
-  if (sub === 'summary') return summaryCommand(deps);
+  if (sub === 'summary') return summaryCommand(rest, deps);
   if (sub === 'restore') return restoreCommand(rest, deps);
   if (sub === 'verify') return verifyCommand(rest, deps);
   if (sub === 'init') return initCommand(rest, deps);

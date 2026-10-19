@@ -1287,7 +1287,8 @@ the clone's `private-terms.txt` is dropped and counted; without that file nothin
 
 `backup init --repo <owner/name>` creates the repository private when it does not exist, checks
 it reads `PRIVATE`, clones it, and seeds `private-terms.txt` with the other Engram projects'
-names. The summary reads the checkout `--summary-repo <dir>` names, else this install's own;
+names. The summary reads the checkout `--summary-repo <dir>` names, and only then (a public push cannot be taken back; `backup summary --summary-repo <dir>`
+shows it first);
 every URL of its origin must be `jsaristi/js-harness` on github.com, or no summary is pushed.
 `backup status` prints the last success, the last failure and the commits to push, and
 `doctor` shows a `memory-backup` row that goes stale, with the reason, when no backup succeeded in

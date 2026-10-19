@@ -379,25 +379,26 @@ test('backup init seeds private-terms.txt from the other Engram projects, and ke
 });
 
 /** A repository standing for the public one: a bare remote and a clone with a roadmap and one feature on main. */
-test('backup init names the summary repository: --summary-repo, else its own checkout of the public repository', async (t) => {
+test('the public summary is opt-in: init names a summary repository only when --summary-repo says so', async (t) => {
   const { root, paths, deps, state } = setup(t);
-  const { work } = summarySource(root);
+  const { bare, work } = summarySource(root);
   state.summaryRepo = work;
   const summaryRepo = () => JSON.parse(fs.readFileSync(paths.config, 'utf8')).summaryRepo;
 
-  deps.packageRoot = work;
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
-  assert.equal(summaryRepo(), path.resolve(work), 'its own checkout, whose origin is the public repository');
+  assert.equal(summaryRepo(), undefined, 'a push to a public repository is never a default');
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(defaultRun('git', ['--git-dir', bare, 'rev-parse', '-q', '--verify', 'refs/heads/memory-summary']).status, 1, 'nothing public pushed');
 
-  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [] }));
+  deps.stdout = sink();
+  assert.equal(await backupMain(['summary', '--summary-repo', work], deps), 0, deps.stderr.text);
+  assert.match(deps.stdout.text, /^# js-harness memory summary$/m, 'the summary can be read before anyone opts in');
+
   state.summaryUrls = ['https://github.com/someone/fork.git'];
-  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
-  assert.equal(summaryRepo(), undefined, 'a checkout of another repository is not taken');
   assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo', work], deps), 1);
   assert.match(deps.stderr.text, /someone\/fork/);
 
   state.summaryUrls = ['https://github.com/jsaristi/js-harness.git'];
-  deps.packageRoot = undefined;
   assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo', work], deps), 0, deps.stderr.text);
   assert.equal(summaryRepo(), path.resolve(work));
 });
