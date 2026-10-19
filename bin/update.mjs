@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { copyPackageManager, quoteForShell, runPm } from './lib/package-manager.mjs';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
@@ -31,14 +32,11 @@ function parseArgs(argv, env) {
   };
 }
 
-/** A copy in pnpm's global folder, `<pnpm home>/global/v<n>/...`, as Node resolves it with links followed: through
- * `node_modules/.pnpm/js-harness@<source>/node_modules/js-harness` for one installed from GitHub (see `pnpmCopy`). */
-const PNPM_GLOBAL_COPY = /[\\/]global[\\/]v\d+[\\/](?:.*[\\/])?node_modules[\\/]js-harness[\\/]/i;
 
 /** The package manager of an upgrade: `--pm`, else `JS_HARNESS_PM`, else the one that installed the copy running now,
  * read from where it lies: the TUI's Upgrade passes no `--pm`, and npm over a copy pnpm installed fails (release-095 S3). */
 function resolvePm(pm, env, copyPath = fileURLToPath(import.meta.url)) {
-  return pm ?? env.JS_HARNESS_PM ?? (PNPM_GLOBAL_COPY.test(copyPath) ? 'pnpm' : 'npm');
+  return pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
 }
 
 /** What the commands say where the repository holds no release tag (the first is v0.9.0, docs/ROADMAP.md, "Versioning"),
@@ -126,32 +124,8 @@ function pnpmCopy(prefix, version) {
   return root ? path.join(root, 'bin', 'js-harness.mjs') : null;
 }
 
-/** Quotes a value for a shell command line built by joining tokens with spaces (see `shell: true`
- * in `child_process.spawn`, which does not escape array elements on its own). Simple, not
- * bulletproof: assumes the value has no embedded quote of its own platform's kind. */
-function quoteForShell(value, platform) {
-  return platform === 'win32' ? `"${value}"` : `'${value.replace(/'/g, "'\\''")}'`;
-}
 
-/** A word for a cmd.exe line: as it is when it holds nothing cmd.exe reads, else quoted. A `.cmd` file found on the
- * path and named in quotes gets a wrong `%~dp0`, the folder pnpm's own shim starts from ("El sistema no puede
- * encontrar la ruta especificada", T2), so a plain command name is never quoted. Quotes do not keep cmd.exe from
- * expanding `%NAME%`, and a `"` ends them, so `upgradeMain` refuses a word holding either before it runs. */
-function cmdWord(word) {
-  return /^[\w@+=:,./\\-]+$/.test(word) ? word : quoteForShell(word, 'win32');
-}
 
-/** Starts the package manager. On Windows `npm` and `pnpm` are often `.cmd` files, which Node starts only through a
- * shell, so there it runs as one line, with no argument array beside `shell: true` (Node's DEP0190). `env` is
- * passed only when the install needs its own (pnpm's isolated home); otherwise the child inherits. */
-function runPm(spawn, words, args, env, platform) {
-  const opts = env ? { encoding: 'utf8', env } : { encoding: 'utf8' };
-  if (platform === 'win32') {
-    return spawn([...words, ...args].map(cmdWord).join(' '), [], { ...opts, shell: true });
-  }
-  const [cmd, ...head] = words;
-  return spawn(cmd, [...head, ...args], opts);
-}
 
 /** pnpm's lock on its global bin folder: a folder it takes while it links commands, and leaves behind when its
  * cleanup fails (os error 32 on Windows), after which the next install waits five minutes on it and times out

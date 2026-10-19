@@ -304,6 +304,69 @@ test('runTui asks the second question while snapshots are there, and reads again
   assert.deepEqual(calls, ['uninstall', 'uninstall-full', 'uninstall'], 'with none left, the yes runs the uninstall alone');
 });
 
+// release-095 S5 (Pregunta 17): Uninstall everything sits after Uninstall, asks once, naming the folder and the
+// program, and runs `uninstall --global --everything`.
+test('Uninstall everything follows Uninstall, asks naming the folder and the program, y runs it, n cancels', () => {
+  assert.equal(MENU_ITEMS.indexOf('uninstall-everything'), MENU_ITEMS.indexOf('uninstall') + 1);
+  const base = initialState({ installedVersion: '0.1.0', updateAvailable: null, memorySnapshots: true });
+  assert.match(render(base).join('\n'), /^ {2}Uninstall everything$/m);
+  const asked = handleKey({ ...base, selected: MENU_ITEMS.indexOf('uninstall-everything') }, 'enter');
+  assert.deepEqual([asked.state.mode, asked.state.pending, asked.effect], ['confirm', 'uninstall-everything', null]);
+  assert.match(
+    render(asked.state).join('\n'),
+    /Remove everything js-harness keeps on this machine: the whole \.js-harness folder of this home \(the lead's notes, the backups, the memory snapshots\) and the js-harness program itself\? This cannot be undone\. \(y\/N\)$/,
+  );
+  assert.deepEqual(handleKey(asked.state, 'y').effect, { type: 'run', command: 'uninstall-everything' }, 'one question, snapshots or not');
+  for (const key of ['n', 'enter', 'escape']) assert.deepEqual(handleKey(asked.state, key).effect, null, key);
+});
+
+test('runTui quits once Uninstall everything succeeds, and stays in the menu when it fails', async () => {
+  for (const [result, expected] of [[0, ['uninstall-everything']], [1, ['uninstall-everything', 'status']]]) {
+    const stdin = makeFakeStdin();
+    const stdout = makeFakeStdout();
+    const calls = [];
+    const commands = {
+      status: async () => calls.push('status'),
+      'uninstall-everything': async () => {
+        calls.push('uninstall-everything');
+        return result;
+      },
+    };
+    const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+    for (let i = 0; i < MENU_ITEMS.indexOf('uninstall-everything'); i++) stdin.emit('data', 'j');
+    for (const key of ['\r', 'y']) {
+      stdin.emit('data', key);
+      await flush();
+    }
+    if (result !== 0) {
+      // Still in the menu: back to the top, run Status, then quit.
+      for (let i = 0; i < MENU_ITEMS.indexOf('uninstall-everything'); i++) stdin.emit('data', 'k');
+      stdin.emit('data', '\r');
+      await flush();
+      stdin.emit('data', 'q');
+    }
+    assert.equal(await done, 0, `result ${result}`);
+    assert.deepEqual(calls, expected, `result ${result}`);
+  }
+});
+
+test('buildCommands uninstall-everything removes the whole folder and, run from a checkout, keeps the program', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-home-'));
+  const originalLog = console.log;
+  const lines = [];
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness', 'memory-hygiene', 'C--proj', 'snapshots', '20261015T120606108Z'), { recursive: true });
+    fs.mkdirSync(path.join(home, '.js-harness', 'relief'), { recursive: true });
+    console.log = (line) => lines.push(String(line));
+    assert.equal(await buildCommands({ home })['uninstall-everything'](), 0);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+    assert.ok(lines.some((line) => line.startsWith('kept the js-harness program: this one runs from ')), lines.join('\n'));
+  } finally {
+    console.log = originalLog;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- CLI entry: tuiMain ---
 
 // Opening the menu asks no package manager which release is the latest: the name `js-harness` is nobody's
@@ -776,7 +839,7 @@ test('buildMenu is exactly today\'s machine menu outside a git repository', () =
   }
   assert.deepEqual(
     buildMenu(NOT_GIT).map((entry) => entry.label),
-    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Quit'],
+    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Uninstall everything', 'Quit'],
   );
 });
 

@@ -793,6 +793,105 @@ test('uninstallMain --global --full removes the memory snapshots and names each 
   }
 });
 
+// --- release-095 S5: the full uninstall, `--everything` ---
+
+const PNPM_COPY = path.join('C:', 'pnpm', 'global', 'v11', '2bf18-0', 'node_modules', '.pnpm', 'js-harness@x', 'node_modules', 'js-harness', 'bin', 'install.mjs');
+const NPM_COPY = path.join('C:', 'nvm4w', 'nodejs', 'node_modules', 'js-harness', 'bin', 'install.mjs');
+
+/** A home with what a working machine keeps under `.js-harness` beside the install: the lead's files, backups, a
+ * throughput day and a memory snapshot. */
+async function livedInHome() {
+  const home = makeTmpHome();
+  await captureConsole(() => installMain(['--home', home]));
+  for (const [folder, file] of [['relief', 'D--proj.md'], ['lead', 'state.md'], ['backups', 'b.json'], ['throughput', path.join('proj', '2026-10-17.json')]]) {
+    fs.mkdirSync(path.dirname(path.join(home, '.js-harness', folder, file)), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', folder, file), 'x');
+  }
+  snapshotOf(home, 'C--proj', '20261015T120606108Z');
+  return home;
+}
+
+function recordingSpawn(status = 0) {
+  const calls = [];
+  const spawn = (cmd, args, opts) => {
+    calls.push({ cmd, args });
+    return { status, stdout: '', stderr: status === 0 ? '' : 'ERR_PNPM_SOMETHING' };
+  };
+  return { spawn, calls };
+}
+
+test('uninstallMain --global --everything removes the whole .js-harness folder and the program, with the manager that installed it', async () => {
+  // npm is given the prefix of the copy that runs, so it removes that copy and no other.
+  for (const [copyPath, pm, words] of [[PNPM_COPY, 'pnpm', ['remove', '-g', 'js-harness']], [NPM_COPY, 'npm', ['uninstall', '-g', '--prefix', path.join('C:', 'nvm4w', 'nodejs'), 'js-harness']]]) {
+    const home = await livedInHome();
+    const { spawn, calls } = recordingSpawn();
+    try {
+      const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath }));
+      assert.deepEqual([code, errLines], [0, []], pm);
+      assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of .js-harness is left');
+      assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness', 'SKILL.md')), false, 'the install is undone as by uninstall');
+      assert.ok(outLines.includes(`removed ${path.join(home, '.js-harness')}: backups, lead, relief, throughput`), outLines.join('\n'));
+      assert.ok(outLines.includes(`removed the js-harness program: ${pm} ${words.join(' ')}`), outLines.join('\n'));
+      assert.ok(!outLines.some((line) => line.startsWith('kept ')), `nothing is said to be kept: ${outLines.join('\n')}`);
+      assert.deepEqual(calls.filter((call) => call.cmd === pm), [{ cmd: pm, args: words }]);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test('uninstallMain --global --everything removes nothing more while a gate runs, and keeps the program', async () => {
+  const home = await livedInHome();
+  const { spawn, calls } = recordingSpawn();
+  const lock = await takeGateLock({ home, cwd: 'C:\\work\\one', command: 'check', pid: 4321, beatMs: 0 });
+  try {
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath: PNPM_COPY }));
+    assert.equal(code, 1);
+    assert.ok(errLines.some((line) => line.startsWith(`kept the rest of ${path.join(home, '.js-harness')} and the js-harness program:`)), errLines.join('\n'));
+    assert.equal(fs.existsSync(path.join(home, '.js-harness', 'relief', 'D--proj.md')), true, 'the relief file is still there');
+    assert.deepEqual(calls, [], 'no package manager ran');
+  } finally {
+    lock.release();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --global --everything says how to remove the program by hand when its manager fails', async () => {
+  const home = await livedInHome();
+  const { spawn } = recordingSpawn(1);
+  try {
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath: PNPM_COPY }));
+    assert.equal(code, 1);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'the folder is gone all the same');
+    assert.ok(errLines.includes('could not remove the js-harness program: pnpm exited 1 (ERR_PNPM_SOMETHING); run pnpm remove -g js-harness'), errLines.join('\n'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstallMain --global --everything removes no program when the copy that runs is a checkout, not an installed package', async () => {
+  const home = await livedInHome();
+  const { spawn, calls } = recordingSpawn();
+  const checkout = path.join('D:', 'js-harness-worktrees', 'release-095', 'bin', 'install.mjs');
+  try {
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath: checkout }));
+    assert.deepEqual([code, errLines], [0, []]);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+    assert.ok(outLines.includes(`kept the js-harness program: this one runs from ${path.join('D:', 'js-harness-worktrees', 'release-095')}, which no package manager installed`), outLines.join('\n'));
+    assert.deepEqual(calls, [], 'no package manager ran: a global uninstall would remove another copy');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('--everything goes with --global only, exit 2', async () => {
+  for (const argv of [['--everything'], ['--everything', '--cwd', os.tmpdir()]]) {
+    const { code, errLines } = await captureConsole(() => uninstallMain(argv));
+    assert.equal(code, 2, argv.join(' '));
+    assert.ok(errLines[0].startsWith('--everything removes everything js-harness keeps on the machine and the program: it goes with --global\n\nUsage: js-harness uninstall'), errLines.join('\n'));
+  }
+});
+
 test('--full goes with --global only, exit 2, and stays an unknown flag of sync', async () => {
   const words = '--full removes the memory snapshots of the machine: it goes with --global';
   for (const argv of [['--full'], ['--full', '--cwd', os.tmpdir()]]) {

@@ -158,11 +158,28 @@ try {
   await step('Uninstall, answered no', { section: M, label: 'Uninstall', answer: KEY.no });
   await step('Uninstall', { section: M, label: 'Uninstall', answer: KEY.yes, expect: /remov|uninstall/i });
   await step('Status after uninstall', { section: M, label: 'Status', expect: /not installed|no manifest|nothing installed/i });
-  child.stdin.write(KEY.quit);
-  const exit = await Promise.race([exited, sleep(30_000).then(() => 'still running')]);
-  const quitOk = exit === 0;
-  results.push({ name: 'Quit', ok: quitOk, faults: quitOk ? [] : [`exit ${exit}`], said: '' });
-  console.log(`${quitOk ? 'PASS' : 'FAIL'}  Quit${quitOk ? '' : `: exit ${exit}`}`);
+  // What the normal uninstall keeps, as a lead's notes would be: Uninstall everything removes it with the folder (S5).
+  const kept = path.join(dirs.home, '.js-harness', 'relief');
+  fs.mkdirSync(kept, { recursive: true });
+  fs.writeFileSync(path.join(kept, 'walk.md'), 'a note the normal uninstall keeps\n');
+  await step('Uninstall everything, answered no', { section: M, label: 'Uninstall everything', answer: KEY.no });
+  {
+    // Its yes removes the folder and, since this menu runs from a checkout, keeps the program; then the menu ends
+    // by itself, with nothing left to offer.
+    const start = out.length;
+    await select(M, 'Uninstall everything');
+    await press(KEY.enter);
+    child.stdin.write(KEY.yes);
+    const exit = await Promise.race([exited, sleep(60_000).then(() => 'still running')]);
+    const said = out.slice(start);
+    const faults = [];
+    if (exit !== 0) faults.push(`exit ${exit}`);
+    if (fs.existsSync(path.join(dirs.home, '.js-harness'))) faults.push('the .js-harness folder is still there');
+    if (!/^removed .*\.js-harness: .*relief/m.test(said)) faults.push('does not say it removed the folder and what it held');
+    if (!/^kept the js-harness program: this one runs from /m.test(said)) faults.push('does not say it kept the program');
+    results.push({ name: 'Uninstall everything, then the menu ends', ok: faults.length === 0, faults, said });
+    console.log(`${faults.length === 0 ? 'PASS' : 'FAIL'}  Uninstall everything, then the menu ends${faults.length ? `: ${faults.join('; ')}` : ''}`);
+  }
   code = results.every((r) => r.ok) ? 0 : 1;
 } catch (err) {
   console.log(`FAIL  ${err.message}`);

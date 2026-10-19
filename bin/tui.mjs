@@ -18,7 +18,7 @@ import { remoteMain } from './remote.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
-export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
+export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'uninstall-everything', 'quit'];
 /** The remote-control server of the repository, last in the project section. */
 const REMOTE_ITEMS = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
 const MENU_LABELS = {
@@ -28,6 +28,7 @@ const MENU_LABELS = {
   update: 'Update',
   upgrade: 'Upgrade',
   uninstall: 'Uninstall',
+  'uninstall-everything': 'Uninstall everything',
   quit: 'Quit',
   'project-init': 'Init',
   'project-sync': 'Sync',
@@ -46,6 +47,8 @@ const CONFIRM_PROMPTS = {
   'project-remote-stop': 'Stop the remote server of this project? The sessions opened through it end. (y/N)',
   // Asked after the yes to Uninstall, only while the home holds memory snapshots (D7.8 of odd/tasks/memory-hygiene.md).
   'uninstall-full': 'Remove the memory snapshots too, the only copy of what a pass changed? (y/N)',
+  // One question, snapshots or not: it already names them (release-095 S5, Pregunta 17).
+  'uninstall-everything': 'Remove everything js-harness keeps on this machine: the whole .js-harness folder of this home (the lead\'s notes, the backups, the memory snapshots) and the js-harness program itself? This cannot be undone. (y/N)',
 };
 
 /** Whether the home holds a snapshot of a memory pass, the copy only `uninstall --full` removes. False when the
@@ -329,10 +332,19 @@ export function runTui({
         stdin.pause();
         // Whatever the command or the re-read does, the terminal comes back: a failure is one line on
         // stderr, the previous location stays, and the menu is drawn again below.
+        let code = null;
         try {
-          await commands[effect.command](state.location);
+          code = await commands[effect.command](state.location);
         } catch (err) {
           console.error(`${effect.command} failed: ${oneLine(err)}`);
+        }
+        // Once everything is gone, the program included, there is no menu left to offer: the TUI ends. A failure
+        // keeps the menu, since what it kept is still installed and the uninstall can be run again.
+        if (effect.command === 'uninstall-everything' && code === 0) {
+          stdin.setRawMode?.(false);
+          stdin.removeListener('data', onData);
+          resolve(0);
+          return;
         }
         if (readLocation) {
           try {
@@ -424,6 +436,7 @@ export function buildCommands({
     sync: () => syncMain(['--global', '--home', home]),
     uninstall: () => uninstallMain(['--global', '--home', home]),
     'uninstall-full': () => uninstallMain(['--global', '--full', '--home', home]),
+    'uninstall-everything': () => uninstallMain(['--global', '--everything', '--home', home]),
   };
 }
 

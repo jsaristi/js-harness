@@ -40,7 +40,9 @@ npm rm -g js-harness
 
 `uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
 and names them; `uninstall --global --full` removes them too. Files you modified and the memory
-notes themselves are kept either way.
+notes themselves are kept either way. `uninstall --global --everything` removes all that js-harness
+keeps on the machine and then the program itself, so `npm rm -g` is not needed after it; the TUI
+offers it as "Uninstall everything". Projects' files are kept.
 
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
@@ -293,6 +295,15 @@ Inside a project, removes what `init` wrote; with `--global`, removes what `inst
 `--global --full` also removes the memory snapshots, the only copy of what a pass changed; files
 you modified and the memory notes themselves are kept either way. Neither removes a project's
 memory folder while a pass holds its lock: the line says what releases it.
+
+`--global --everything` is `--full` and then the rest: the whole `.js-harness` folder of the home
+(the lead's notes, the backups, the throughput records and anything else under it), and the
+js-harness program, removed by the package manager that installed the copy running it (pnpm's
+`remove -g`, or npm's `uninstall -g` with that copy's own prefix). A copy run from a checkout was
+installed by no package manager, so the program is kept and the line says where it runs from.
+While a gate runs or anything above it could not be removed, it removes nothing more and says to
+run it again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
+and ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
 
 ```console
 $ js-harness uninstall
