@@ -348,6 +348,41 @@ test('backup init seeds private-terms.txt from the other Engram projects, and ke
   assert.equal(fs.readFileSync(path.join(paths.clone, 'private-terms.txt'), 'utf8'), 'added by hand\n');
 });
 
+/** A repository standing for the public one: a bare remote and a clone with a roadmap and one feature on main. */
+function summarySource(root) {
+  const bare = path.join(root, 'public.git');
+  const work = path.join(root, 'source');
+  const run = (args) => {
+    const result = spawnSync('git', args, { env: GIT_ENV, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  run(['init', '-q', '--bare', '-b', 'main', bare]);
+  run(['clone', '-q', bare, work]);
+  fs.mkdirSync(path.join(work, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(work, 'odd', 'tasks'), { recursive: true });
+  fs.writeFileSync(path.join(work, 'docs', 'ROADMAP.md'), '## Checklist\n### Memory\n- [x] Design\n- [ ] Restore proven\n');
+  fs.writeFileSync(path.join(work, 'odd', 'tasks', 'memory-backup.md'), '# M\n\n## Goal\nIt survives. More.\n\n## Tasks\n- [ ] T5 summary\n');
+  run(['-C', work, 'add', '-A']);
+  run(['-C', work, 'commit', '-q', '-m', 'main']);
+  run(['-C', work, 'push', '-q', 'origin', 'HEAD:main']);
+  run(['-C', work, 'fetch', '-q', 'origin']);
+  return { bare, work };
+}
+
+test('backup summary prints the summary of origin/main without pushing it', async (t) => {
+  const { root, paths, deps } = setup(t);
+  const { bare, work } = summarySource(root);
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], scope: 'all', summaryRepo: work }));
+  fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'clientproject\n');
+
+  assert.equal(await backupMain(['summary'], deps), 0, deps.stderr.text);
+
+  assert.match(deps.stdout.text, /^# js-harness memory summary$/m);
+  assert.match(deps.stdout.text, /^- Memory: 1\/2 \(50%\)$/m);
+  assert.match(deps.stdout.text, /^- memory-backup: It survives\. Next: T5 summary$/m);
+  assert.equal(defaultRun('git', ['--git-dir', bare, 'rev-parse', '--verify', '-q', 'refs/heads/memory-summary']).status, 1, 'nothing pushed');
+});
+
 test('backup status names the last success, the last failure and the commits to push', async (t) => {
   const { deps, state } = setup(t);
   const first = new Date(state.now).toISOString();

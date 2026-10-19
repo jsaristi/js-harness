@@ -18,7 +18,7 @@ import {
   readJson,
   scopeArgs,
 } from './lib/backup.mjs';
-import { seedTerms } from './lib/backup-summary.mjs';
+import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
 
 const USAGE = [
   'Usage: js-harness backup <run | status | init | --hook>',
@@ -276,6 +276,38 @@ function runCommand(args, deps) {
   }
 }
 
+/** The public summary (D4) of `config.summaryRepo`'s `origin/main` and the clone's last export, checked against the
+ * clone's private-terms.txt. Throws when a piece is missing, since a summary is never built from less. */
+function buildPublicSummary(deps, paths, config) {
+  const source = config.summaryRepo;
+  if (!source) throw new Error('no summaryRepo in config.json: the repository whose main the summary reads');
+  const show = (spec) => {
+    const result = git(deps, source, ['show', `origin/main:${spec}`]);
+    if (result.status !== 0) throw new Error(`git show origin/main:${spec} failed in ${source}: ${result.stderr.trim()}`);
+    return result.stdout;
+  };
+  const listed = git(deps, source, ['ls-tree', '--name-only', 'origin/main', 'odd/tasks/']);
+  const features = listed.stdout
+    .split('\n')
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => ({ id: path.basename(name, '.md'), markdown: show(name) }));
+  const termsFile = path.join(paths.clone, 'private-terms.txt');
+  const terms = fs.existsSync(termsFile) ? readTerms(fs.readFileSync(termsFile, 'utf8')) : null;
+  const observations = readJson(path.join(paths.clone, 'engram', 'export.json'))?.observations ?? [];
+  return renderSummary({ roadmap: show('docs/ROADMAP.md'), features, observations, terms });
+}
+
+function summaryCommand(deps) {
+  const paths = backupPaths(deps.home);
+  try {
+    deps.stdout.write(buildPublicSummary(deps, paths, readJson(paths.config) ?? {}).text);
+    return 0;
+  } catch (error) {
+    deps.stderr.write(`backup summary: ${error.message}\n`);
+    return 1;
+  }
+}
+
 function statusCommand(deps) {
   const paths = backupPaths(deps.home);
   const config = readJson(paths.config);
@@ -418,6 +450,7 @@ export async function backupMain(args, deps = defaultDeps()) {
   const [sub, ...rest] = args;
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
+  if (sub === 'summary') return summaryCommand(deps);
   if (sub === 'init') return initCommand(rest, deps);
   if (sub === '--hook') return hookCommand(deps);
   if (sub === '--help' || sub === '-h' || sub === undefined) {
