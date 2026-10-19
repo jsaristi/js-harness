@@ -1289,7 +1289,25 @@ the clone's `private-terms.txt` is dropped and counted; without that file nothin
 it reads `PRIVATE`, clones it, and seeds `private-terms.txt` with the other Engram projects'
 names. The summary reads the checkout `--summary-repo <dir>` names, else this install's own;
 every URL of its origin must be `jsaristi/js-harness` on github.com, or no summary is pushed.
-`backup status` prints the last success, the last failure and the commits to push. `backup --hook` is the Stop hook install registers in both hosts: when a
+`backup status` prints the last success, the last failure and the commits to push, and
+`doctor` shows a `memory-backup` row that goes stale, with the reason, when no backup succeeded in
+a day, so the session-start hook says it stopped.
+
+After a reinstall, the steps are in `RESTORE.md` in the private repository (`init` writes it);
+in short, before any session and before `install`:
+
+```console
+$ node bin/js-harness.mjs backup restore --from https://github.com/<owner>/<name>.git --home %USERPROFILE%
+$ node bin/js-harness.mjs backup verify --from https://github.com/<owner>/<name>.git
+```
+
+`restore` imports Engram (refused when that Engram already holds observations, unless
+`--merge`), puts back the memory folders (`--map <old path>=<new path>` for a project now
+elsewhere) and `~/.js-harness` without its install manifest, never over a live file, and leaves the
+old config files in `~/.js-harness/restored-config` to compare by hand. `verify --from` restores
+into a scratch home and checks the four counts and every file byte for byte; `verify --summary`
+checks the public summary's sections and privacy. The private clone keeps every byte as written
+(`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers in both hosts: when a
 backup is due (30 minutes since the last success, and Engram, a memory folder or the home
 changed since) it starts a run detached and returns; where `init` never ran it does nothing.
 

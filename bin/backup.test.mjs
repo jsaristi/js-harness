@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { backupMain, backupPaths, bundleName, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
+import { backupHealth, backupMain, backupPaths, bundleName, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
@@ -70,6 +70,20 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
     startDetached: (args) => state.started.push(args),
     run: (cmd, args, options) => {
       state.calls.push([cmd, ...args]);
+      // An engram pointed at another data folder, as restore and verify do: its database is one JSON file there.
+      const dataDir = options?.env?.ENGRAM_DATA_DIR;
+      if (cmd === 'engram' && dataDir) {
+        const db = path.join(dataDir, 'db.json');
+        const held = fs.existsSync(db) ? JSON.parse(fs.readFileSync(db, 'utf8')) : { sessions: [], observations: [], prompts: [], relations: [] };
+        if (args[0] === 'import') {
+          const incoming = JSON.parse(fs.readFileSync(args[1], 'utf8'));
+          fs.mkdirSync(dataDir, { recursive: true });
+          fs.writeFileSync(db, JSON.stringify(Object.fromEntries(Object.keys(held).map((k) => [k, [...held[k], ...(incoming[k] ?? [])]]))));
+        }
+        if (args[0] === 'export') fs.writeFileSync(args[1], JSON.stringify(held));
+        const stats = `  Sessions:     ${held.sessions.length}\n  Observations: ${held.observations.length}\n  Prompts:      ${held.prompts.length}\n`;
+        return { status: 0, stdout: args[0] === 'stats' ? stats : args[0] === 'version' ? 'engram 3.4.0\n' : '', stderr: '' };
+      }
       if (cmd === 'engram' && args[0] === 'export') {
         fs.writeFileSync(args[1], JSON.stringify({ ...state.engram, exported_at: new Date(state.now).toISOString() }));
         return { status: 0, stdout: '', stderr: '' };
@@ -93,7 +107,7 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
       if (cmd === 'git' && args.includes('get-url') && args.includes('--push')) {
         return { status: 0, stdout: `${state.pushUrls.join('\n')}\n`, stderr: '' };
       }
-      if (cmd === 'git' && args[0] === 'clone') {
+      if (cmd === 'git' && args[0] === 'clone' && args[2] === `https://github.com/${REPO}.git`) {
         defaultRun('git', ['clone', '-q', bare, args[3]]);
         return { status: 0, stdout: '', stderr: '' };
       }
@@ -339,6 +353,9 @@ test('backup init creates the repository private when it is missing, refuses a p
   assert.ok(state.calls.some((c) => c[0] === 'gh' && c[2] === 'create' && c.includes('--private')));
   assert.ok(fs.existsSync(path.join(paths.clone, '.git')));
   assert.equal(JSON.parse(fs.readFileSync(paths.config, 'utf8')).repo, REPO);
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(`backup restore --from https://github.com/${REPO}.git --home %USERPROFILE%`), 'the steps travel with the backup');
+  assert.ok(restore.indexOf('backup restore') < restore.indexOf('js-harness.mjs install'), 'restore comes before install, so no hook backs up an empty memory');
 
   state.visibility = 'PUBLIC';
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 1);
@@ -498,6 +515,58 @@ test('backup init writes no private-terms.txt when engram cannot list the projec
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
   assert.equal(fs.existsSync(path.join(paths.clone, 'private-terms.txt')), false, 'an empty list would let the summary through unchecked');
   assert.match(deps.stderr.text, /private-terms\.txt.*database locked/);
+});
+
+test('backup verify --from proves a pushed backup, and backup restore puts it into a new home', async (t) => {
+  const { root, bare, deps } = setup(t);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  assert.equal(await backupMain(['verify', '--from', bare], deps), 0, deps.stdout.text + deps.stderr.text);
+  assert.match(deps.stdout.text, /^ok observations: 2 restored, 2 backed up, 2 live$/m);
+  assert.match(deps.stdout.text, /^ok files: \d+ of \d+ byte for byte$/m);
+
+  const home = path.join(root, 'new-home');
+  assert.equal(await backupMain(['restore', '--from', bare, '--home', home, '--map', 'D:\\p=E:\\q'], deps), 0, deps.stderr.text);
+  assert.equal(fs.readFileSync(path.join(home, '.claude', 'projects', 'E--q', 'memory', 'MEMORY.md'), 'utf8'), '- a note\n');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 2);
+  assert.equal(await backupMain(['restore', '--from', bare, '--home', home], deps), 1, 'a second restore would double the memories');
+  assert.match(deps.stderr.text, /already holds 2 observations/);
+  assert.equal(await backupMain(['restore', '--home', home], deps), 2);
+});
+
+test('backup verify --summary reads the memory-summary branch of a repository', async (t) => {
+  const { root, paths, deps, state } = setup(t);
+  const { bare, work } = summarySource(root);
+  state.summaryRepo = work;
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], scope: 'all', summaryRepo: work }));
+  fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'clientproject\n');
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  assert.equal(await backupMain(['verify', '--summary', bare], deps), 0, deps.stdout.text + deps.stderr.text);
+  assert.match(deps.stdout.text, /^ok sections: /m);
+  assert.match(deps.stdout.text, /^ok privacy: 0 lines/m);
+
+  fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'memory\n');
+  assert.equal(await backupMain(['verify', '--summary', bare], deps), 1, 'a line naming a private term fails it');
+});
+
+test('backupHealth: n/a before init, stale with its reason when no success in a day, ok after one', async (t) => {
+  const { home, paths, deps, state } = setup(t);
+  assert.equal(backupHealth(path.join(home, 'nowhere'), state.now).state, 'n/a');
+  const never = backupHealth(home, state.now);
+  assert.equal(never.state, 'stale');
+  assert.match(never.fix[0], /last success never.*js-harness backup status/);
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(backupHealth(home, state.now).state, 'ok');
+  state.visibility = 'PUBLIC';
+  fs.appendFileSync(path.join(home, '.claude', 'projects', 'D--p', 'memory', 'MEMORY.md'), '- more\n');
+  state.now += 25 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 1);
+  const stopped = backupHealth(home, state.now);
+  assert.equal(stopped.state, 'stale');
+  assert.match(stopped.fix[0], /last failure .*PUBLIC/);
+  assert.ok(fs.existsSync(paths.last));
 });
 
 test('backup status names the last success, the last failure and the commits to push', async (t) => {

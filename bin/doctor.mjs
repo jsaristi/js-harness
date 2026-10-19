@@ -24,6 +24,7 @@ import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
+import { backupHealth } from './backup.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -203,7 +204,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withUnseenOnly = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
   const withUnseen = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
-  const withHost = deps.host ? [...withUnseen, hostRow(deps.host, home, now)] : withUnseen;
+  const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
+  const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now)] : withBackup;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   if (!deps.gentleAiSnapshots) return withStack;
   const gentleAi = rows.find((row) => row.id === 'gentle-ai')?.version ?? null;
@@ -258,6 +260,18 @@ async function unseenRow(unseen, cwd) {
   return { ...row, claude: 'stale', fix: { claude: [`unseen: ${toClear.length} to clear: run js-harness unseen`, ...toClear] } };
 }
 
+/** The memory-backup row (odd/tasks/memory-backup.md, D2): a backup is the user's, so its one cell is `claude`;
+ * `stale` with the reason is a gap the hook announces, `n/a` where no backup was set up. Fails open to `unknown`. */
+function backupRow(backup, home, now) {
+  const row = { id: 'memory-backup', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  try {
+    const health = backup(home, Number((now ?? (() => new Date()))()));
+    return { ...row, claude: health.state, fix: health.fix.length ? { claude: health.fix } : {} };
+  } catch {
+    return { ...row, claude: 'unknown' };
+  }
+}
+
 /** The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main holds, clean and idle,
  * that no land removed, a gap with the command that removes them and each one; `unknown` when git cannot say. */
 function worktreesRow(worktrees, project) {
@@ -283,6 +297,7 @@ export function doctorCommand(argv) {
     gentleAiSnapshots: (home) => claudeMdSnapshots(home),
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
+    backup: (home, now) => backupHealth(home, now),
   });
 }
 

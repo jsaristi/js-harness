@@ -21,9 +21,10 @@ import {
   scopeArgs,
 } from './lib/backup.mjs';
 import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
+import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore.mjs';
 
 const USAGE = [
-  'Usage: js-harness backup <run | status | summary | init | --hook>',
+  'Usage: js-harness backup <run | status | summary | init | restore | verify | --hook>',
   '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
   '    js-harness home and reference copies of the config, secrets blanked, into the private clone, then push it. The',
   '    scope is config.json\'s `scope`: "all" for every project, or one project name (js-harness when unset). It',
@@ -37,8 +38,18 @@ const USAGE = [
   "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
   '    private-terms.txt.',
   '  init --repo <owner/name> [--summary-repo <dir>]  Create the repository private when it does not exist, check it',
-  '    reads PRIVATE, clone it, and seed private-terms.txt. The summary repository is the checkout named, else this',
-  "    install's own checkout; either way every URL of its origin must be jsaristi/js-harness on github.com.",
+  '    reads PRIVATE, clone it, write RESTORE.md and seed private-terms.txt. The summary repository is the checkout',
+  "    named, else this install's own checkout; either way every URL of its origin must be jsaristi/js-harness on",
+  '    github.com.',
+  '  restore --from <dir|git url> --home <dir> [--merge] [--map <old path>=<new path>]...  Put a backup into a home:',
+  '    Engram imported (refused when that Engram already holds observations, unless --merge), the memory folders',
+  '    (--map for a project now at another path), ~/.js-harness without its install manifest, the config files in',
+  '    ~/.js-harness/restored-config to compare by hand, the bundles beside them with the line that fetches them. A',
+  '    live file is never written over.',
+  '  verify --from <dir|git url>  Restore into a scratch home, which it then removes, and check the four counts',
+  '    against the backup and the live Engram it recorded, and every file byte for byte.',
+  '  verify --summary <dir|git url>  Check the memory-summary branch: its four sections, and no line the privacy',
+  "    check would drop, with the clone's private-terms.txt when there is one.",
   '  --hook  The Stop hook install registers: when a backup is due it starts `backup run` detached, and returns at once.',
   '  Its state lives in ~/.js-harness/memory-backup; deleting that folder undoes everything here but the repository.',
 ].join('\n');
@@ -206,6 +217,9 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
     }),
   );
   writeJson(path.join(paths.clone, 'manifest.json'), { ...manifest, scope, bundles });
+  // Every byte as written: under core.autocrlf a commit or a checkout would change line endings, and a restore would
+  // no longer match the sha256 the manifest holds.
+  fs.writeFileSync(path.join(paths.clone, '.gitattributes'), '* -text\n');
 
   git(deps, paths.clone, ['add', '-A']);
   const pending = git(deps, paths.clone, ['status', '--porcelain']).stdout.trim();
@@ -384,6 +398,95 @@ function summaryCommand(deps) {
   }
 }
 
+/** A local folder holding `marker`: `from` itself when it does, else a shallow clone of it (a URL, or a bare
+ * repository) in a scratch folder that `done` removes. */
+function localCopy(deps, from, marker, branch) {
+  if (fs.existsSync(path.join(from, marker))) return { dir: from, done: () => {} };
+  const scratch = fs.mkdtempSync(path.join(deps.tmp ?? os.tmpdir(), 'backup-from-'));
+  const dir = path.join(scratch, 'clone');
+  const cloned = deps.run('git', ['clone', '-q', from, dir, '--depth=1', ...(branch ? [`--branch=${branch}`] : [])], {
+    env: { ...deps.env, ...NO_PROMPT },
+    timeout: PUSH_TIMEOUT_MS,
+  });
+  const done = () => fs.rmSync(scratch, { recursive: true, force: true });
+  if (cloned.status !== 0) {
+    done();
+    throw new Error(`git clone ${from} failed: ${(cloned.stderr || 'no answer within the time limit').trim()}`);
+  }
+  return { dir, done };
+}
+
+const valueOf = (args, flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
+
+function restoreCommand(args, deps) {
+  const from = valueOf(args, '--from');
+  const home = valueOf(args, '--home');
+  if (!from || !home) {
+    deps.stderr.write('backup restore: --from <dir|git url> and --home <dir> are required\n');
+    return 2;
+  }
+  // --map <old>=<new>, as often as needed: a project now at another path.
+  const map = Object.fromEntries(
+    args.flatMap((arg, i) => (arg === '--map' && args[i + 1]?.includes('=') ? [args[i + 1].split('=')] : [])),
+  );
+  let source;
+  try {
+    source = localCopy(deps, from, 'manifest.json');
+    restoreBackup({ from: source.dir, home: path.resolve(home), merge: args.includes('--merge'), map, run: deps.run, env: deps.env, stdout: deps.stdout });
+    return 0;
+  } catch (error) {
+    deps.stderr.write(`backup restore: ${error.message}\n`);
+    return 1;
+  } finally {
+    source?.done();
+  }
+}
+
+function verifyCommand(args, deps) {
+  const from = valueOf(args, '--from');
+  const summary = valueOf(args, '--summary');
+  if (!from && !summary) {
+    deps.stderr.write('backup verify: --from <dir|git url> or --summary <dir|git url> is required\n');
+    return 2;
+  }
+  let source;
+  try {
+    let result;
+    if (from) {
+      source = localCopy(deps, from, 'manifest.json');
+      result = verifyBackup({ from: source.dir, run: deps.run, env: deps.env, tmp: deps.tmp });
+    } else {
+      source = localCopy(deps, summary, 'SUMMARY.md', SUMMARY_BRANCH);
+      const termsFile = path.join(backupPaths(deps.home).clone, 'private-terms.txt');
+      const terms = fs.existsSync(termsFile) ? readTerms(fs.readFileSync(termsFile, 'utf8')) : null;
+      result = verifySummary({ text: fs.readFileSync(path.join(source.dir, 'SUMMARY.md'), 'utf8'), terms });
+    }
+    deps.stdout.write(`${result.lines.join('\n')}\n`);
+    return result.ok ? 0 : 1;
+  } catch (error) {
+    deps.stderr.write(`backup verify: ${error.message}\n`);
+    return 1;
+  } finally {
+    source?.done();
+  }
+}
+
+/** How long without a success before `doctor` calls the backup stopped: the hook backs up every 30 minutes of work, so
+ * a day without one is a backup that is not running, not a quiet day. */
+export const BACKUP_STALE_HOURS = 24;
+
+/** The memory-backup row of `doctor` (D2): `n/a` where `init` never ran, `stale` with its reason when no backup
+ * succeeded in a day, else `ok`. Reads two files and runs nothing, so the SessionStart hook pays nothing for it. */
+export function backupHealth(home, now) {
+  const paths = backupPaths(home);
+  if (!readJson(paths.config)) return { state: 'n/a', fix: [] };
+  const last = readJson(paths.last) ?? {};
+  const success = Date.parse(last.lastSuccess?.at ?? '') || 0;
+  if (now - success < BACKUP_STALE_HOURS * 60 * 60_000) return { state: 'ok', fix: [] };
+  const failure = last.lastFailure && Date.parse(last.lastFailure.at) > success ? `; last failure ${last.lastFailure.at}: ${last.lastFailure.error}` : '';
+  return { state: 'stale', fix: [`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}: run js-harness backup status`] };
+}
+
 function statusCommand(deps) {
   const paths = backupPaths(deps.home);
   const config = readJson(paths.config);
@@ -463,6 +566,32 @@ function hookCommand(deps) {
   return 0;
 }
 
+/** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. */
+function restoreSteps(repo) {
+  const url = `https://github.com/${repo}.git`;
+  return [
+    '# Restoring the memory after a reinstall',
+    '',
+    'Run these in order, in a terminal, before any Claude Code or Codex session: a session started first',
+    'would run the backup hook and back up an empty memory.',
+    '',
+    '1. Install Node, git, the GitHub CLI (then `gh auth login`) and engram.',
+    '2. Install Claude Code and Codex.',
+    '3. `git clone https://github.com/jsaristi/js-harness.git D:\\js-harness` (the Claude memory folder is named after',
+    '   that path; if the checkout lives elsewhere, add `--map D:\\js-harness=<new path>` to the next step).',
+    `4. \`cd D:\\js-harness\` and \`node bin/js-harness.mjs backup restore --from ${url} --home %USERPROFILE%\``,
+    '   It imports Engram, puts back the memory folders and ~/.js-harness, and leaves the old config files in',
+    '   ~/.js-harness/restored-config to compare by hand. It prints the line that fetches unpushed commits.',
+    `5. \`node bin/js-harness.mjs backup verify --from ${url}\` restores again into a scratch home and checks it.`,
+    '6. `node bin/js-harness.mjs install`.',
+    `7. \`node bin/js-harness.mjs backup init --repo ${repo}\` and \`node bin/js-harness.mjs backup run --adopt\`: this`,
+    '   machine takes over the backup.',
+    '',
+    'An Engram restore brings back every observation as it is now, not its edit history (observation_versions).',
+    '',
+  ].join('\n');
+}
+
 function initCommand(args, deps) {
   const i = args.indexOf('--repo');
   const repo = i === -1 ? undefined : args[i + 1];
@@ -511,6 +640,7 @@ function initCommand(args, deps) {
     if (!summaryRefusal(deps, deps.packageRoot)) config.summaryRepo = path.resolve(deps.packageRoot);
   }
   writeJson(paths.config, config);
+  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(repo));
   // The terms the public summary must never name (D4), kept in the private clone so a restore brings them back.
   const termsFile = path.join(paths.clone, 'private-terms.txt');
   if (!fs.existsSync(termsFile)) {
@@ -561,6 +691,8 @@ export async function backupMain(args, deps = defaultDeps()) {
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
   if (sub === 'summary') return summaryCommand(deps);
+  if (sub === 'restore') return restoreCommand(rest, deps);
+  if (sub === 'verify') return verifyCommand(rest, deps);
   if (sub === 'init') return initCommand(rest, deps);
   if (sub === '--hook') return hookCommand(deps);
   if (sub === '--help' || sub === '-h' || sub === undefined) {

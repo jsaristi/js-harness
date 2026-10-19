@@ -288,7 +288,7 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
 - [ ] T3 (kind: build) `backup init`: create the private repository, verify its visibility, clone, `RESTORE.md`
 - [ ] T4 (kind: build) `backup --hook`, its manifest entries, throttle, lock; the detached child measured on both hosts
 - [x] T5 (kind: build) `backup summary` and its privacy check; the `memory-summary` branch (c305bc02, 67f30eeb, adb90694, 362ef31e and the next commit; inline)
-- [ ] T6 (kind: build) `backup restore` and `verify`, both copies; `doctor --hook` line
+- [x] T6 (kind: build) `backup restore` and `verify`, both copies; `doctor --hook` line (next commit; inline)
 - [ ] T7 (kind: verify) Restore proven from both copies on a scratch home; the Done-when commands
 - [ ] T8 (kind: docs) Help, README, roadmap lines checked off
 
@@ -372,7 +372,22 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   reading the remote, so a branch deleted or replaced elsewhere stayed so; now "unchanged" also
   needs the remote to hold the last commit (RED seen). 44 backup tests green.
 
+- L12 2026-10-19 09:07Z. Codex fixes committed (f3640a6e). T6 built test first (RED seen for the
+  library, the commands, RESTORE.md, backupHealth and the doctor row): `bin/lib/backup-restore.mjs`
+  (restoreBackup, verifyBackup, verifySummary, slugOf), `backup restore` and `backup verify`
+  (`--from` and `--summary`; a folder holding the marker file is read as it is, anything else is
+  cloned shallow into a scratch folder that is removed), `init` writes RESTORE.md in the clone, and
+  `doctor` has a `memory-backup` row, stale with its reason after a day with no success, n/a before
+  init (the real doctor here prints n/a). Found by the command test, not the design: under
+  core.autocrlf the clone's checkout changed line endings, so a restore no longer matched the
+  manifest; the clone now holds `.gitattributes` `* -text`. A live file is never written over by a
+  restore (kept and listed), config copies go to restored-config. 120 tests green across backup,
+  doctor and doctor-hook.
+
 ## Next step
+State after L12: commit T6; then gentle-ai review of f3640a6e..HEAD and Codex of the same range;
+then T4 (the detached child on a real Stop hook), T3 (init on the real private repository: tell
+the lead first), T7, T8.
 State after L11: the Codex fixes are the next commit; then T6 restore and verify.
 State after L10: next codex-review of 1bdae974..f272876e from a detached worktree, then T6.
 State after L9: T5 done; next the gentle-ai review of 1bdae974..HEAD (escalate item 2), then

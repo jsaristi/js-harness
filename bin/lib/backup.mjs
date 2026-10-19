@@ -54,7 +54,7 @@ export function redactSecrets(text) {
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
 /** Every file under `dir`, as paths relative to it with forward slashes; `skip(relative, isDir)` prunes. */
-function walk(dir, skip = () => false, prefix = '') {
+export function walk(dir, skip = () => false, prefix = '') {
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
