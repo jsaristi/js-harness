@@ -12,8 +12,13 @@ export const REDACTED = '<redacted>';
  * away from public (D1). A pattern's first group, when it has one, is the part kept before the value. Values never
  * hold a quote or a backslash, so a blanked JSON document stays JSON. */
 const SECRETS = [
-  // Its body is base64, dashes and line breaks, raw or escaped in JSON (`\n`), so a key with no end stops at a quote.
-  ['private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[A-Za-z0-9+/=\s-]|\\n)*(?:[A-Z ]*PRIVATE KEY-----)?/g],
+  // Through its END line, never past a quote; a key cut before its END, through its whole base64 lines (line breaks raw
+  // or escaped in JSON) and a cut END's dashes, so the prose after a key is kept either way. The empty first group is
+  // the part kept (nothing); the second is the key's type, so the END matched is its own.
+  [
+    'private key',
+    /()-----BEGIN ([A-Z ]*)PRIVATE KEY-----(?:[^"]*?-----END \2PRIVATE KEY-----|(?:(?:\r?\n|\\(?:r\\)?n)[A-Za-z0-9+/=]+(?=\r?\n|\\(?:r\\)?n|"|$))*(?:(?:\r?\n|\\(?:r\\)?n)-+(?="|$))?)/g,
+  ],
   ['GitHub token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/g],
   // `sk-ant-api03-…`: a run of 20 or more without a hyphen, holding a digit, so `risk-assessment-…` is not one; or a
   // UUID after `sk-`, the shape of the Context7 key found in this machine's backups (round 2 of the readers).
@@ -25,7 +30,8 @@ const SECRETS = [
   // placeholder. Its name may carry a prefix (`CONTEXT7_API_KEY`, `refresh_token`, `accessToken`).
   [
     'credential field',
-    /((?:"[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)"|\b[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization))\s*[:=]\s*"?)[^"\s\\]{20,}/gi,
+    // Its quotes may be escaped (`\"password\":\"…\"`): an Engram export holds a note's JSON inside a JSON string.
+    /((?:\\?"[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)\\?"|\b[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
   ],
 ];
 
@@ -289,22 +295,29 @@ export function buildManifest({ machine, engramVersion, counts, live, files, red
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-/** `owner/name` of a GitHub remote URL (https or ssh), or `null`. */
+/** `owner/name` of a remote URL on github.com itself (https, or ssh as `git@github.com:` or `ssh://`), or `null`: a
+ * host that only contains the name (`notgithub.com`, `github.com.evil.example`) is not GitHub. */
 export function repoOf(url) {
-  return String(url).trim().match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?\/?$/)?.[1] ?? null;
+  const match = String(url)
+    .trim()
+    .match(/^(?:https:\/\/(?:[^@/\s]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
+  return match?.[1] ?? null;
 }
 
 /** The public repository the full backup must never reach (S7). */
 export const PUBLIC_REPO = 'jsaristi/js-harness';
 
-/** Why a push of the full backup must not go, or `null` when it may: the clone's origin must be the configured
- * repository, that repository is never the public one, and its visibility, read just before, must be `PRIVATE`. */
-export function pushRefusal({ origin, repo, visibility }) {
-  const named = repoOf(origin);
-  if (repo.toLowerCase() === PUBLIC_REPO || named?.toLowerCase() === PUBLIC_REPO) {
+/** Why a push of the full backup must not go, or `null` when it may: every URL of the clone's remote, fetch and push
+ * (a `pushurl` or `pushInsteadOf` sends the push elsewhere), must be the configured repository, that repository is
+ * never the public one, and its visibility, read just before, must be `PRIVATE`. */
+export function pushRefusal({ urls, repo, visibility }) {
+  if (!urls?.length) return `refused: the clone has no remote to push to`;
+  const named = urls.map((url) => ({ url, repo: repoOf(url) }));
+  if (repo.toLowerCase() === PUBLIC_REPO || named.some((n) => n.repo?.toLowerCase() === PUBLIC_REPO)) {
     return `refused: ${PUBLIC_REPO} is the public repository, and the full backup never goes there`;
   }
-  if (named?.toLowerCase() !== repo.toLowerCase()) return `refused: the clone's origin is ${named ?? origin}, not ${repo}`;
+  const stray = named.find((n) => n.repo?.toLowerCase() !== repo.toLowerCase());
+  if (stray) return `refused: the clone's remote is ${stray.repo ?? stray.url}, not ${repo}`;
   if (!visibility) return `refused: the visibility of ${repo} could not be read, so it is not known to be private`;
   if (visibility !== 'PRIVATE') return `refused: ${repo} reads ${visibility}, not PRIVATE`;
   return null;

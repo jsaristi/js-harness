@@ -1269,7 +1269,8 @@ takes the new export as it is, and drops from the clone what the narrower scope 
 
 It refuses, keeping the last good backup: an export that lost more than a tenth of any count,
 which is what a wiped Engram looks like (`--allow-shrink` when the drop is meant); a clone whose
-origin is not the configured repository, or is the public `jsaristi/js-harness`; a repository
+fetch or push URL is not the configured repository on github.com, or is the public
+`jsaristi/js-harness`; a repository
 that does not read `PRIVATE` just before the push; and a backup another machine made
 (`--adopt`, the first run after a reinstall). The push never waits for a sign-in prompt and gives
 up after two minutes; the next run pushes what is owed.
