@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { redactSecrets, collectFiles, exportEngram, parseStats, buildManifest, pushRefusal } from './backup.mjs';
+import { redactSecrets, collectFiles, exportEngram, parseStats, buildManifest, pushRefusal, scopeArgs, inScope } from './backup.mjs';
 
 function scratch(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-lib-'));
@@ -100,6 +100,35 @@ test('collectFiles copies a file holding a secret with the value blanked, names 
   assert.ok(fs.existsSync(path.join(dest, 'engram', 'export.json')), 'only the copied trees are mirrored');
 });
 
+test('a project scope keeps only the memory folders of that project and removes the stale copy of another', (t) => {
+  const home = scratch(t);
+  const dest = scratch(t);
+  for (const slug of ['D--proj', 'D--proj--claude-worktrees-x', 'D--other', 'D--proj-lab', 'C--Temp-claude-D--proj-1234-scratchpad']) {
+    write(path.join(home, '.claude', 'projects', slug, 'memory', 'MEMORY.md'), `${slug}\n`);
+  }
+  write(path.join(dest, 'claude', 'projects', 'D--other', 'memory', 'MEMORY.md'), 'copied under the old scope\n');
+
+  const { files } = collectFiles({ home, dest, scope: 'proj' });
+
+  assert.deepEqual(files.map((f) => f.path).sort(), [
+    'claude/projects/D--proj--claude-worktrees-x/memory/MEMORY.md',
+    'claude/projects/D--proj/memory/MEMORY.md',
+  ]);
+  assert.ok(!fs.existsSync(path.join(dest, 'claude', 'projects', 'D--other')), 'nothing of another project stays in the clone');
+  assert.equal(collectFiles({ home, dest: scratch(t), scope: 'all' }).files.length, 5);
+});
+
+test('scopeArgs and inScope read one scope value: "all" or one project name', () => {
+  assert.deepEqual(scopeArgs('all'), ['--all']);
+  assert.deepEqual(scopeArgs('js-harness'), ['--project', 'js-harness']);
+  assert.equal(inScope('D--anything', 'all'), true);
+  assert.equal(inScope('D--js-harness', 'js-harness'), true);
+  assert.equal(inScope('D--js-harness--claude-worktrees-a', 'js-harness'), true);
+  assert.equal(inScope('D--harness', 'js-harness'), false);
+  assert.equal(inScope('D--js-harness-worktrees-a', 'js-harness'), false);
+  assert.throws(() => scopeArgs(''), /scope/);
+});
+
 const EXPORT = {
   version: '1',
   exported_at: '2026-10-19T07:00:00Z',
@@ -142,6 +171,20 @@ test('exportEngram never writes the raw export inside the clone, so a run killed
   assert.equal(path.relative(dest, raw[0]).startsWith('..'), true, `the raw export went to ${raw[0]}, inside the clone`);
   const inClone = fs.existsSync(dest) ? fs.readdirSync(dest, { recursive: true }) : [];
   assert.deepEqual(inClone.filter((name) => !fs.statSync(path.join(dest, name)).isDirectory()), []);
+});
+
+test('exportEngram exports one project under a project scope', (t) => {
+  const dest = scratch(t);
+  const calls = [];
+  const run = (cmd, args) => {
+    calls.push(args);
+    fs.writeFileSync(args[1], JSON.stringify(EXPORT));
+    return { status: 0, stdout: '', stderr: '' };
+  };
+
+  exportEngram({ dest, run, scope: 'js-harness' });
+
+  assert.deepEqual(calls[0].slice(2), ['--project', 'js-harness']);
 });
 
 test('exportEngram keeps the previous export when the new one fails, is not JSON, or lost observations', (t) => {

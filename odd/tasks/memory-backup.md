@@ -266,14 +266,25 @@ Open after round 1, not settled by this session:
 - A-open-1 (his): `engram export --all` holds every project's memories, among them his client
   project (reader B: 490 observations of `abogadaclaudiajimenez`, and a 21 KB Claude memory
   folder). The lead's brief says "every project"; whether a client's matters go to GitHub, even
-  private, is his. Asked of the lead before T2 pushes anything.
+  private, is his. Asked of the lead before T2 pushes anything. The lead, by message: "Until then
+  push nothing that holds another project's memories; keep building, and make the scope one
+  switch so either answer is a one-line change." Built as D7 below.
+
+D7, the scope switch: `scope` in `~/.js-harness/memory-backup/config.json`, `"all"` or one
+project name; unset, it is `DEFAULT_SCOPE` (`bin/backup.mjs`), `js-harness` until he answers.
+Under a project scope, `engram export` and `engram stats` take `--project <name>`, and only the
+Claude memory folders of that checkout and its worktrees (`D--js-harness`,
+`D--js-harness--claude-worktrees-*`) are copied; a folder another scope copied is removed from
+the clone. The first run after the scope changes skips the shrink refusal, since counts of
+another scope say nothing about a wipe, and the manifest records the scope. His answer "all" is
+`DEFAULT_SCOPE = 'all'` or `"scope": "all"` in config.json.
 - Unguaranteed: the allowlist keeps the summary to text already public, but a feature document's
   own words are only as clean as its author kept them; the privacy check is a net, not a proof.
 - Unguaranteed until T4: that a detached child survives a Stop hook on each host.
 
 ## Tasks
 - [x] T1 (kind: design) The design above, past two read-only readers, their findings above
-- [ ] T2 (kind: build) `backup run` and `status`: export, shrink refusal, secrets, trees, bundle, manifest, push guard
+- [x] T2 (kind: build) `backup run` and `status`: export, shrink refusal, secrets, trees, bundle, manifest, push guard (186a7c79, 22bbe6e8, 83df03c2; inline)
 - [ ] T3 (kind: build) `backup init`: create the private repository, verify its visibility, clone, `RESTORE.md`
 - [ ] T4 (kind: build) `backup --hook`, its manifest entries, throttle, lock; the detached child measured on both hosts
 - [ ] T5 (kind: build) `backup summary` and its privacy check; the `memory-summary` branch
@@ -297,9 +308,18 @@ Open after round 1, not settled by this session:
   README section, the SPEC capability. One red left: `scripts/practice-lib.test.mjs`
   `HARNESS_HOOKS` must list the backup Stop entry for both hosts (`scripts/practice-lib.mjs:344`).
   Lead asked (07:13Z) whether other projects' memories go to GitHub; no answer yet; nothing pushed.
+- L5 2026-10-19 07:46Z. Commit 22bbe6e8 holds T2's command, the hooks and the docs. gentle-ai
+  review of 84dd74b5..22bbe6e8 (lineage review-1c2fa0ab4d5b178c, high by --escalate-item 2,
+  lenses risk, resilience, reliability; consent granted unasked per AGENTS.md): risk and
+  resilience found nothing; reliability found one CRITICAL, R3-raw-export-temp-committed (the
+  raw export, secrets unblanked, was written inside the clone and a killed run left it for the
+  next git add -A). Corrected in 83df03c2 (raw export beside the clone, one fixed name; RED
+  seen), validator approved, acknowledged, authority burned. Codex review of 84dd74b5..83df03c2:
+  the first run was discarded because this worktree was edited while it ran (124,228 input
+  tokens spent, nothing recorded); rerun from a clean detached worktree. Scope switch D7 built
+  test first (RED seen on the missing DEFAULT_SCOPE), 27 backup tests green.
 
 ## Next step
-Commit T2+T4 code (HARNESS_HOOKS fixed, 122 green) under `js-harness gate --`, assess `84dd74b5..HEAD` with
-`--escalate-item 2` (secrets) and run the granted review; then T4's measurement (does the
-detached child outlive a real Stop hook), T5 summary, T6 restore/verify, T3 init on GitHub after
-the lead's answer, T7 proofs.
+Commit D7 (scope switch); record the Codex review of 84dd74b5..83df03c2 when it lands. Then T5
+summary, T6 restore/verify, T4's measurement, T3 init on GitHub with the default scope
+(js-harness only) after telling the lead, T7 proofs, T8 docs.

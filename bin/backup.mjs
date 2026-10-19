@@ -15,12 +15,14 @@ import {
   parseStats,
   pushRefusal,
   readJson,
+  scopeArgs,
 } from './lib/backup.mjs';
 
 const USAGE = [
   'Usage: js-harness backup <run | status | init | --hook>',
-  '  run [--allow-shrink] [--adopt]  Back up now: the Engram export of every project, the Claude memory folders, the',
-  '    js-harness home and reference copies of the config, secrets blanked, into the private clone, then push it. It',
+  '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
+  '    js-harness home and reference copies of the config, secrets blanked, into the private clone, then push it. The',
+  '    scope is config.json\'s `scope`: "all" for every project, or one project name (js-harness when unset). It',
   '    refuses an export that lost more than a tenth of any count (a wiped Engram looks like that; --allow-shrink when',
   '    the drop is meant), a clone whose origin is not the configured repository, and a repository that does not read',
   '    PRIVATE just before the push. --adopt takes over a backup another machine made (the first run after a reinstall).',
@@ -36,6 +38,9 @@ export const BACKUP_EVERY_MINUTES = 30;
 export const LOCK_STALE_MINUTES = 10;
 /** The longest a push may take: a sign-in prompt in a process with no window would otherwise wait for ever. */
 export const PUSH_TIMEOUT_MS = 120_000;
+/** What a backup holds when config.json names no `scope`: one Engram project and its Claude memory folders, or `'all'`
+ * for every project. Other projects' memories stay off the remote until Sebastián decides; either answer is this line. */
+export const DEFAULT_SCOPE = 'js-harness';
 
 /** Where the backup keeps its state under a home. */
 export function backupPaths(home) {
@@ -110,11 +115,14 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
     );
   }
 
-  const stats = deps.run('engram', ['stats', '--all']);
+  const scope = config.scope ?? DEFAULT_SCOPE;
+  const stats = deps.run('engram', ['stats', ...scopeArgs(scope)]);
   const live = parseStats(stats.stdout);
   if (!live) throw new Error(`engram stats gave no counts: ${(stats.stderr || stats.stdout).trim()}`);
-  const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink });
-  const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone });
+  // Counts of another scope say nothing about a wipe: the first run after the scope changes takes the export as it is.
+  const rescoped = previous !== null && (previous.scope ?? 'all') !== scope;
+  const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink: allowShrink || rescoped, scope });
+  const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope });
   const bundles = bundleSources(config).map((source) => bundleUnpushed(deps, source, paths.clone));
   const version = deps.run('engram', ['version']).stdout.trim();
   const manifest = JSON.parse(
@@ -127,7 +135,7 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
       redacted: [...redacted, ...(exported.kinds.length ? [{ path: 'engram/export.json', kinds: exported.kinds }] : [])],
     }),
   );
-  writeJson(path.join(paths.clone, 'manifest.json'), { ...manifest, bundles });
+  writeJson(path.join(paths.clone, 'manifest.json'), { ...manifest, scope, bundles });
 
   git(deps, paths.clone, ['add', '-A']);
   const pending = git(deps, paths.clone, ['status', '--porcelain']).stdout.trim();
@@ -214,6 +222,7 @@ function statusCommand(deps) {
   const ahead = git(deps, paths.clone, ['rev-list', '--count', '@{u}..HEAD']);
   const lines = [
     `repository: ${config.repo}`,
+    `scope: ${config.scope ?? DEFAULT_SCOPE}${config.scope ? '' : ' (the default)'}`,
     `last success: ${last.lastSuccess ? `${last.lastSuccess.at}, ${last.lastSuccess.counts.observations} observations` : 'never'}`,
     `last failure: ${last.lastFailure ? `${last.lastFailure.at}, ${last.lastFailure.error}` : 'none'}`,
     `to push: ${ahead.status === 0 ? `${ahead.stdout.trim()} commits` : 'unknown (no upstream yet)'}`,

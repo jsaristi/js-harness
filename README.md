@@ -1255,11 +1255,17 @@ Next rung: open https://www.npmjs.com/package/react in the built-in browser and 
 
 The memory that survives the machine: a PC Manager cleanup or a Windows reinstall that wipes
 Engram, the Claude memory folders or `~/.js-harness` loses nothing that was backed up.
-`backup run` exports Engram (every project), copies the Claude memory folders, the js-harness
+`backup run` exports Engram and copies the Claude memory folders of its scope, then the js-harness
 home and reference copies of the Claude, Codex and Engram config, blanks every secret value it
 finds (a token, a key, a field named like a credential), bundles the commits of `D:/js-harness`
 that are on no remote, and pushes it all to a private GitHub repository through a clone under
 `~/.js-harness/memory-backup`. A run with nothing new commits nothing.
+
+The scope is the `scope` field of `~/.js-harness/memory-backup/config.json`: `"all"` backs up
+every Engram project and every Claude memory folder, a project name only that project and the
+memory folders of its checkout and worktrees. Unset, it is `js-harness`, so another project's
+memories reach GitHub only once someone writes `"all"`. The first run after the scope changes
+takes the new export as it is, and drops from the clone what the narrower scope leaves out.
 
 It refuses, keeping the last good backup: an export that lost more than a tenth of any count,
 which is what a wiped Engram looks like (`--allow-shrink` when the drop is meant); a clone whose

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backupMain, backupPaths, dueReason, BACKUP_EVERY_MINUTES } from './backup.mjs';
+import { backupMain, backupPaths, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
@@ -31,7 +31,7 @@ function sink() {
   return { write: (chunk) => (text += chunk), get text() { return text; } };
 }
 
-function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-1' } = {}) {
+function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-1', scope = 'all' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-cmd-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const home = path.join(root, 'home');
@@ -44,7 +44,7 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
   defaultRun('git', ['clone', '-q', bare, paths.clone]);
   defaultRun('git', ['-C', paths.clone, 'remote', 'set-url', 'origin', `https://github.com/${REPO}.git`]);
   defaultRun('git', ['-C', paths.clone, 'remote', 'set-url', '--push', 'origin', bare]);
-  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [] }));
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], ...(scope ? { scope } : {}) }));
 
   const state = { engram, visibility, calls: [], started: [], now: Date.now() };
   const deps = {
@@ -103,6 +103,41 @@ test('backup run exports, copies, commits and pushes, and records the success', 
   const last = JSON.parse(fs.readFileSync(paths.last, 'utf8'));
   assert.equal(last.lastSuccess.at, new Date(deps.now()).toISOString());
   assert.ok(!fs.existsSync(paths.lock), 'the lock is released');
+});
+
+test('the scope is one switch: unset backs up the default project only, "all" every project', async (t) => {
+  const { bare, home, paths, deps, state } = setup(t, { scope: null });
+  fs.mkdirSync(path.join(home, '.claude', 'projects', 'D--js-harness', 'memory'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'projects', 'D--js-harness', 'memory', 'MEMORY.md'), '- harness note\n');
+
+  assert.equal(DEFAULT_SCOPE, 'js-harness');
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  const engramCalls = state.calls.filter(([cmd, verb]) => cmd === 'engram' && (verb === 'export' || verb === 'stats'));
+  assert.deepEqual(engramCalls.map((call) => call.slice(-2)), [['--project', 'js-harness'], ['--project', 'js-harness']]);
+  let manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
+  assert.equal(manifest.scope, 'js-harness');
+  assert.deepEqual(manifest.files.map((f) => f.path), ['claude/projects/D--js-harness/memory/MEMORY.md']);
+
+  // Widening the scope is the one change: the next run takes every project, and its bigger export is no shrink.
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], scope: 'all' }));
+  state.now += 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
+  assert.equal(manifest.scope, 'all');
+  assert.deepEqual(manifest.files.map((f) => f.path), [
+    'claude/projects/D--js-harness/memory/MEMORY.md',
+    'claude/projects/D--p/memory/MEMORY.md',
+  ]);
+
+  // Narrowing it again drops the other project from the clone, and the smaller export is taken, not refused as a wipe.
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], scope: 'js-harness' }));
+  state.engram = { ...EXPORT, observations: [{ id: 1, title: 'a' }], sessions: [{ id: 's1' }] };
+  state.now += 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
+  assert.deepEqual(manifest.files.map((f) => f.path), ['claude/projects/D--js-harness/memory/MEMORY.md']);
+  assert.equal(remoteFile(bare, 'claude/projects/D--p/memory/MEMORY.md').status, 128, 'the other project is gone from the head');
 });
 
 test('a second run with nothing new commits and pushes nothing', async (t) => {

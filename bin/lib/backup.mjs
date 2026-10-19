@@ -62,13 +62,25 @@ function walk(dir, skip = () => false, prefix = '') {
   });
 }
 
+/** The engram flags of a scope: `'all'` backs up every project, any other value the one project of that name. */
+export function scopeArgs(scope) {
+  if (typeof scope !== 'string' || scope === '') throw new Error('the backup scope is "all" or a project name');
+  return scope === 'all' ? ['--all'] : ['--project', scope];
+}
+
+/** Whether a Claude project folder belongs to the scope: under a project scope, the folder of a checkout whose last
+ * path part is the project (`D--js-harness`) or of a worktree inside it (`D--js-harness--claude-worktrees-x`). */
+export function inScope(slug, scope) {
+  return scope === 'all' || slug.endsWith(`--${scope}`) || slug.includes(`--${scope}--`);
+}
+
 /** The trees one backup mirrors: where each comes from under the home, where it goes in the clone, and what it skips. */
-function trees(home) {
+function trees(home, scope) {
   const projects = path.join(home, '.claude', 'projects');
   const memoryTrees = walk(projects, (relative, isDir) => isDir && relative.split('/').length === 2 && !relative.endsWith('/memory'))
     .filter((relative) => relative.split('/')[1] === 'memory')
     .map((relative) => relative.split('/')[0]);
-  const slugs = [...new Set(memoryTrees)].sort();
+  const slugs = [...new Set(memoryTrees)].filter((slug) => inScope(slug, scope)).sort();
   return [
     ...slugs.map((slug) => ({
       from: path.join(projects, slug, 'memory'),
@@ -110,17 +122,35 @@ function treeFiles(tree) {
   return stat.isFile() ? [''] : walk(tree.from, tree.skip);
 }
 
+/** Removes every folder under `dir` left with no file in it, so a project the scope dropped leaves no trace. */
+function removeEmptyFolders(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const sub = path.join(dir, entry.name);
+    removeEmptyFolders(sub);
+    if (fs.readdirSync(sub).length === 0) fs.rmdirSync(sub);
+  }
+}
+
 /** The clone's folders `collectFiles` owns: a file in them the home no longer has is removed. */
 const MIRRORED = ['claude', 'js-harness-home', 'config'];
 
 /** Mirrors the Claude memory folders, the js-harness home and the config files into `dest`: each file copied with its sha256, a secret
  * value blanked and the file named with its kinds, and a file the clone holds under `claude/` or `js-harness-home/`
- * that the home no longer has removed, so the clone is the home as it is now. The home is only read. */
-export function collectFiles({ home, dest }) {
+ * that the home no longer has removed, so the clone is the home as it is now. Under a project scope only that
+ * project's memory folders are copied, and another project's copy left from a wider scope is removed. The home is
+ * only read. */
+export function collectFiles({ home, dest, scope = 'all' }) {
   const files = [];
   const redacted = [];
   const kept = new Set();
-  for (const tree of trees(home)) {
+  for (const tree of trees(home, scope)) {
     for (const relative of treeFiles(tree)) {
       const target = relative ? `${tree.to}/${relative}` : tree.to;
       let buffer = fs.readFileSync(relative ? path.join(tree.from, relative) : tree.from);
@@ -141,6 +171,7 @@ export function collectFiles({ home, dest }) {
       const target = `${root}/${relative}`;
       if (!kept.has(target)) fs.rmSync(path.join(dest, target));
     }
+    removeEmptyFolders(path.join(dest, root));
   }
   return { files, redacted };
 }
@@ -174,11 +205,12 @@ function withoutTime(data) {
   return JSON.stringify(rest);
 }
 
-/** Runs `engram export --all` into a temporary file beside the clone, reads it back, blanks its secrets, and only then
- * puts it in place as the clone's `engram/export.json`. Throws, leaving the previous export as it was, when the export
- * fails, is not JSON, or holds fewer of any count than the last one by more than `SHRINK_LIMIT` (unless `allowShrink`).
- * When the new export differs from the last only in `exported_at`, the file is left untouched (`changed: false`). */
-export function exportEngram({ dest, run = defaultRun, allowShrink = false }) {
+/** Runs `engram export` for the scope (every project, or one) into a temporary file beside the clone, reads it back,
+ * blanks its secrets, and only then puts it in place as the clone's `engram/export.json`. Throws, leaving the previous
+ * export as it was, when the export fails, is not JSON, or holds fewer of any count than the last one by more than
+ * `SHRINK_LIMIT` (unless `allowShrink`). When the new export differs from the last only in `exported_at`, the file is
+ * left untouched (`changed: false`). */
+export function exportEngram({ dest, run = defaultRun, allowShrink = false, scope = 'all' }) {
   const dir = path.join(dest, 'engram');
   const target = path.join(dir, 'export.json');
   // The raw export holds every secret: it lives outside the clone, so a run killed before its cleanup leaves nothing a
@@ -186,7 +218,7 @@ export function exportEngram({ dest, run = defaultRun, allowShrink = false }) {
   const temp = `${dest}.export.tmp`;
   fs.mkdirSync(dir, { recursive: true });
   try {
-    const result = run('engram', ['export', temp, '--all']);
+    const result = run('engram', ['export', temp, ...scopeArgs(scope)]);
     if (result.status !== 0) throw new Error(`engram export failed: ${(result.stderr || result.stdout).trim()}`);
     const scan = redactSecrets(readText(temp));
     let data;
