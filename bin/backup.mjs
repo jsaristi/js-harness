@@ -41,7 +41,7 @@ const USAGE = [
   '    reads PRIVATE, clone it, write RESTORE.md and seed private-terms.txt. The summary repository is the checkout',
   '    named, and only then, since a public push cannot be taken back; every URL of its origin must be',
   '    jsaristi/js-harness on github.com.',
-  '  restore --from <dir|git url> --home <dir> [--merge] [--map <old path>=<new path>]...  Put a backup into a home:',
+  '  restore --from <dir|git url> [--home <dir>] [--merge] [--map <old path>=<new path>]...  Put a backup into a home:',
   '    Engram imported (refused when that Engram already holds observations, unless --merge), the memory folders',
   '    (--map for a project now at another path), ~/.js-harness without its install manifest, the config files in',
   '    ~/.js-harness/restored-config to compare by hand, the bundles beside them with the line that fetches them. A',
@@ -422,9 +422,15 @@ const valueOf = (args, flag) => (args.includes(flag) ? args[args.indexOf(flag) +
 
 function restoreCommand(args, deps) {
   const from = valueOf(args, '--from');
-  const home = valueOf(args, '--home');
+  // The home defaults to this user's: a documented `--home %USERPROFILE%` reaches PowerShell
+  // unexpanded and would restore into a folder named after the literal text.
+  const home = valueOf(args, '--home') ?? deps.home;
   if (!from || !home) {
-    deps.stderr.write('backup restore: --from <dir|git url> and --home <dir> are required\n');
+    deps.stderr.write('backup restore: --from <dir|git url> is required (--home <dir> defaults to this user\'s home)\n');
+    return 2;
+  }
+  if (/%[^%\s]+%|^\$/.test(home)) {
+    deps.stderr.write(`backup restore: --home ${home} was not expanded by the shell; leave --home out to restore into this user's home\n`);
     return 2;
   }
   // --map <old>=<new>, as often as needed: a project now at another path.
@@ -581,8 +587,9 @@ function restoreSteps(repo) {
     '2. Install Claude Code and Codex.',
     '3. `git clone https://github.com/jsaristi/js-harness.git D:\\js-harness` (the Claude memory folder is named after',
     '   that path; if the checkout lives elsewhere, add `--map D:\\js-harness=<new path>` to the next step).',
-    `4. \`cd D:\\js-harness\` and \`node bin/js-harness.mjs backup restore --from ${url} --home %USERPROFILE%\``,
-    '   It imports Engram, puts back the memory folders and ~/.js-harness, and leaves the old config files in',
+    `4. \`cd D:\\js-harness\` and \`node bin/js-harness.mjs backup restore --from ${url}\``,
+    '   It restores into this user\'s home (`--home <dir>` names another): it imports Engram, puts back the',
+    '   memory folders and ~/.js-harness, and leaves the old config files in',
     '   ~/.js-harness/restored-config to compare by hand. It prints the line that fetches unpushed commits.',
     `5. \`node bin/js-harness.mjs backup verify --from ${url}\` restores again into a scratch home and checks it.`,
     '6. `node bin/js-harness.mjs install`.',

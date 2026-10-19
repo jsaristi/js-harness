@@ -354,7 +354,8 @@ test('backup init creates the repository private when it is missing, refuses a p
   assert.ok(fs.existsSync(path.join(paths.clone, '.git')));
   assert.equal(JSON.parse(fs.readFileSync(paths.config, 'utf8')).repo, REPO);
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
-  assert.ok(restore.includes(`backup restore --from https://github.com/${REPO}.git --home %USERPROFILE%`), 'the steps travel with the backup');
+  assert.ok(restore.includes(`backup restore --from https://github.com/${REPO}.git\``), 'the steps travel with the backup');
+  assert.ok(!restore.includes('%USERPROFILE%'), 'PowerShell does not expand %VAR%, so the steps name no home');
   assert.ok(restore.indexOf('backup restore') < restore.indexOf('js-harness.mjs install'), 'restore comes before install, so no hook backs up an empty memory');
 
   state.visibility = 'PUBLIC';
@@ -533,6 +534,14 @@ test('backup verify --from proves a pushed backup, and backup restore puts it in
   assert.equal(await backupMain(['restore', '--from', bare, '--home', home], deps), 1, 'a second restore would double the memories');
   assert.match(deps.stderr.text, /already holds 2 observations/);
   assert.equal(await backupMain(['restore', '--home', home], deps), 2);
+
+  assert.equal(await backupMain(['restore', '--from', bare, '--home', '%USERPROFILE%'], deps), 2, 'an unexpanded variable is no home');
+  assert.match(deps.stderr.text, /--home %USERPROFILE% was not expanded by the shell/);
+  assert.ok(!fs.existsSync(path.resolve('%USERPROFILE%')), 'nothing is written under a literal %USERPROFILE%');
+
+  const fresh = path.join(root, 'fresh-home');
+  assert.equal(await backupMain(['restore', '--from', bare], { ...deps, home: fresh }), 0, deps.stderr.text);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(fresh, '.engram', 'db.json'), 'utf8')).observations.length, 2, 'with no --home the restore goes into this user\'s home');
 });
 
 test('backup verify --summary reads the memory-summary branch of a repository', async (t) => {

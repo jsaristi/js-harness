@@ -1298,7 +1298,7 @@ After a reinstall, the steps are in `RESTORE.md` in the private repository (`ini
 in short, before any session and before `install`:
 
 ```console
-$ node bin/js-harness.mjs backup restore --from https://github.com/<owner>/<name>.git --home %USERPROFILE%
+$ node bin/js-harness.mjs backup restore --from https://github.com/<owner>/<name>.git
 $ node bin/js-harness.mjs backup verify --from https://github.com/<owner>/<name>.git
 ```
 
