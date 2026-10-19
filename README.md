@@ -205,6 +205,27 @@ pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code
 map is off prints `codegraph init skipped: the code map is off` and gets no `.codegraph/`.
 
+### js-harness onboard
+
+The pre-plan and the roadmap of a project after `init`, written by the session the owner talks to;
+the command calls no model. `check` names what is still missing and the stage it sends the work
+back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file.
+
+```console
+$ js-harness onboard template feature --write
+wrote odd/tasks/onboarding.md
+$ js-harness onboard check
+FAIL  odd/tasks/onboarding.md: topic 1 is not answered yet (back to stage 2, Interview)
+FAIL  docs/origin.md: missing: js-harness onboard template origin --write starts it (back to stage 3, Pre-plan)
+FAIL  AGENTS.md: has no line "The plan is docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/." (back to stage 7, Close)
+$ js-harness onboard hash
+interview sha256:d4b3c1a78dbe
+origin    missing
+roadmap   missing
+```
+
+The example is cut to three of its findings. The design is `odd/tasks/onboarding.md`.
+
 ### js-harness install
 
 Writes the skills and the session hooks for Claude Code and Codex under the home, and records a
