@@ -97,9 +97,12 @@ function trees(home, scope) {
     {
       from: path.join(home, '.js-harness'),
       to: 'js-harness-home',
-      // The backup's own folder holds the clone itself; logs are rewritten on every run and restore nothing.
+      // The backup's own folder holds the clone itself; logs are rewritten on every run and restore nothing. What a
+      // restore left (reference copies, bundles, its progress mark) is already in the backup it came from, and backed
+      // up again it would nest a copy of the last machine's config in every generation.
       skip: (relative, isDir) =>
-        (isDir && (relative === 'memory-backup' || relative === 'gate-log')) || (!isDir && relative.endsWith('.log')),
+        (isDir && ['memory-backup', 'gate-log', 'restored-config', 'restored-bundles'].includes(relative)) ||
+        (!isDir && (relative.endsWith('.log') || relative === 'restore-progress.json')),
     },
     // Reference copies (D1): a restore puts them beside the live files, never over them. Login files never come.
     ...CONFIG_FILES.map(([from, to]) => ({ from: path.join(home, ...from), to: `config/${to}`, skip: () => false })),

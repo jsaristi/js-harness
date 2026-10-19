@@ -7,13 +7,14 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { defaultRun, exportCounts, parseStats, readJson, walk } from './backup.mjs';
 import { privacyCheck } from './backup-summary.mjs';
+import { projectSlug } from './sessions.mjs';
 
 const COUNTED = ['sessions', 'observations', 'prompts', 'relations'];
 const SECTIONS = ['## State', '## Open work', '## Features in flight', '## Decisions'];
 
 /** The name Claude gives a checkout's memory folder: `D:\js-harness` is `D--js-harness`. A slug stays as it is. */
 export function slugOf(place) {
-  return place.replace(/[:\\/.]/g, '-');
+  return projectSlug(place);
 }
 
 function slugMap(map) {
@@ -65,20 +66,44 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
   if (manifest.engramVersion && installed !== manifest.engramVersion) {
     say(`warning: the backup was made with ${manifest.engramVersion}, this machine has ${installed || 'no engram'}`);
   }
-  const held = parseStats(run('engram', ['stats', '--all'], { env: engramEnv }).stdout);
-  if (held?.observations > 0 && !merge) {
-    throw new Error(
-      `the Engram in ${dataDir} already holds ${held.observations} observations: refused, so a restore never doubles them ` +
-        '(--merge adds the backup to them)',
-    );
-  }
+  // The import is the one step a re-run must not repeat, so it is marked done: a restore stopped by a later copy runs
+  // again without doubling the observations.
+  const progressFile = path.join(home, '.js-harness', 'restore-progress.json');
+  const backupId = sha256(path.join(from, 'manifest.json'));
+  const progress = readJson(progressFile);
   const exportFile = path.join(from, 'engram', 'export.json');
-  const imported = run('engram', ['import', exportFile], { env: engramEnv });
-  if (imported.status !== 0) throw new Error(`engram import failed: ${(imported.stderr || imported.stdout).trim()}`);
-  say(`engram: ${exportCounts(readJson(exportFile)).observations} observations imported into ${dataDir}`);
+  if (progress?.manifest === backupId && progress.dataDir === dataDir) {
+    say(`engram: this backup was already imported into ${dataDir} at ${progress.importedAt}`);
+  } else {
+    if (!merge) {
+      const stats = run('engram', ['stats', '--all'], { env: engramEnv });
+      const held = stats.status === 0 ? parseStats(stats.stdout) : null;
+      if (!held) {
+        throw new Error(
+          `could not read how many observations the Engram in ${dataDir} holds (${(stats.stderr || stats.stdout).trim() || 'no counts'}): ` +
+            'refused, so a restore never doubles them (--merge adds the backup to them)',
+        );
+      }
+      if (held.observations > 0) {
+        throw new Error(
+          `the Engram in ${dataDir} already holds ${held.observations} observations: refused, so a restore never doubles them ` +
+            '(--merge adds the backup to them)',
+        );
+      }
+    }
+    const imported = run('engram', ['import', exportFile], { env: engramEnv });
+    if (imported.status !== 0) throw new Error(`engram import failed: ${(imported.stderr || imported.stdout).trim()}`);
+    fs.mkdirSync(path.dirname(progressFile), { recursive: true });
+    fs.writeFileSync(progressFile, `${JSON.stringify({ manifest: backupId, dataDir, importedAt: new Date().toISOString() })}\n`);
+    say(`engram: ${exportCounts(readJson(exportFile)).observations} observations imported into ${dataDir}`);
+  }
 
   const slugs = slugMap(map);
-  for (const slug of fs.existsSync(path.join(from, 'claude', 'projects')) ? fs.readdirSync(path.join(from, 'claude', 'projects')) : []) {
+  const backedUp = fs.existsSync(path.join(from, 'claude', 'projects')) ? fs.readdirSync(path.join(from, 'claude', 'projects')) : [];
+  for (const [old, now] of Object.entries(map)) {
+    if (!backedUp.includes(slugOf(old))) say(`warning: --map ${old}=${now} matched no project of the backup (${slugOf(old)})`);
+  }
+  for (const slug of backedUp) {
     say(`memory: ${slug} -> ${path.join(home, '.claude', 'projects', slugs[slug] ?? slug, 'memory')}`);
   }
   const kept = [...place(from, 'claude', home, slugs), ...place(from, 'js-harness-home', home, slugs)];
@@ -91,7 +116,7 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
     fs.mkdirSync(bundles, { recursive: true });
     const target = path.join(bundles, name);
     fs.copyFileSync(path.join(from, 'git', name), target);
-    say(`commits on no remote: in the checkout they came from, git fetch ${target} '+refs/heads/*:refs/remotes/restored/*'`);
+    say(`commits on no remote: in the checkout they came from, git fetch ${target} '+refs/*:refs/restored/*'`);
   }
   return { manifest, kept, slugs };
 }

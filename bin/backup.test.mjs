@@ -531,9 +531,17 @@ test('backup verify --from proves a pushed backup, and backup restore puts it in
   assert.equal(await backupMain(['restore', '--from', bare, '--home', home, '--map', 'D:\\p=E:\\q'], deps), 0, deps.stderr.text);
   assert.equal(fs.readFileSync(path.join(home, '.claude', 'projects', 'E--q', 'memory', 'MEMORY.md'), 'utf8'), '- a note\n');
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 2);
-  assert.equal(await backupMain(['restore', '--from', bare, '--home', home], deps), 1, 'a second restore would double the memories');
-  assert.match(deps.stderr.text, /already holds 2 observations/);
+  assert.equal(await backupMain(['restore', '--from', bare, '--home', home], deps), 0, 'running the same restore again is safe');
+  assert.match(deps.stdout.text, /this backup was already imported/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 2, 'and does not double the memories');
   assert.equal(await backupMain(['restore', '--home', home], deps), 2);
+
+  assert.equal(await backupMain(['restore', '--from', bare, '--home', home, '--map', 'D:\\p'], deps), 2, 'a --map with no = is refused, not dropped');
+  assert.match(deps.stderr.text, /--map needs <old path>=<new path>/);
+
+  assert.equal(await backupMain(['restore', '--from', bare, '--home', '--merge'], deps), 2, 'a flag is no value');
+  assert.match(deps.stderr.text, /--home needs a value/);
+  assert.ok(!fs.existsSync(path.resolve('--merge')), 'nothing is written under a folder named --merge');
 
   assert.equal(await backupMain(['restore', '--from', bare, '--home', '%USERPROFILE%'], deps), 2, 'an unexpanded variable is no home');
   assert.match(deps.stderr.text, /--home %USERPROFILE% was not expanded by the shell/);
@@ -577,6 +585,27 @@ test('backupHealth: n/a before init, stale with its reason when no success in a 
   assert.equal(stopped.state, 'stale');
   assert.match(stopped.fix[0], /last failure .*PUBLIC/);
   assert.ok(fs.existsSync(paths.last));
+});
+
+test('backupHealth is stale when a failure came after the last success, or the clone is gone, within the day', async (t) => {
+  const { home, paths, deps, state } = setup(t);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  state.visibility = 'PUBLIC';
+  fs.appendFileSync(path.join(home, '.claude', 'projects', 'D--p', 'memory', 'MEMORY.md'), '- more\n');
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 1);
+  const failing = backupHealth(home, state.now);
+  assert.equal(failing.state, 'stale', 'an hour-old success does not hide a newer failure');
+  assert.match(failing.fix[0], /last failure .*PUBLIC/);
+
+  const last = JSON.parse(fs.readFileSync(paths.last, 'utf8'));
+  delete last.lastFailure;
+  fs.writeFileSync(paths.last, JSON.stringify(last));
+  assert.equal(backupHealth(home, state.now).state, 'ok');
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const gone = backupHealth(home, state.now);
+  assert.equal(gone.state, 'stale');
+  assert.match(gone.fix[0], /clone .* is gone/);
 });
 
 test('backup status names the last success, the last failure and the commits to push', async (t) => {

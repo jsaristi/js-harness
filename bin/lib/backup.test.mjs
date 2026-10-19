@@ -80,7 +80,7 @@ test('redactSecrets keeps a JSON document parseable', () => {
   assert.equal(JSON.parse(text).observations[0].content, 'used <redacted> to push');
 });
 
-test('collectFiles copies the Claude memory folders and the js-harness home, leaving out its backup and logs', (t) => {
+test('collectFiles copies the Claude memory folders and the js-harness home, leaving out its backup, logs and what a restore left', (t) => {
   const home = scratch(t);
   const dest = scratch(t);
   write(path.join(home, '.claude', 'projects', 'D--a', 'memory', 'MEMORY.md'), '- [x](x.md)\n');
@@ -91,6 +91,9 @@ test('collectFiles copies the Claude memory folders and the js-harness home, lea
   write(path.join(home, '.js-harness', 'lead', 'notes.md'), 'lead notes\n');
   write(path.join(home, '.js-harness', 'remote', 'server.log'), 'log line\n');
   write(path.join(home, '.js-harness', 'memory-backup', 'repo', 'big.json'), '{}\n');
+  write(path.join(home, '.js-harness', 'restored-config', 'claude', 'settings.json'), '{}\n');
+  write(path.join(home, '.js-harness', 'restored-bundles', 'p-1.bundle'), 'bundle\n');
+  write(path.join(home, '.js-harness', 'restore-progress.json'), '{}\n');
 
   const { files, redacted } = collectFiles({ home, dest });
 

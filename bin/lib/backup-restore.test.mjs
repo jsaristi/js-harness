@@ -85,6 +85,54 @@ test('slugOf names a checkout the way Claude names its memory folder', () => {
   assert.equal(slugOf('D:\\js-harness'), 'D--js-harness');
   assert.equal(slugOf('D:/js-harness/.claude/worktrees/x'), 'D--js-harness--claude-worktrees-x');
   assert.equal(slugOf('D--js-harness'), 'D--js-harness', 'a slug stays as it is');
+  assert.equal(slugOf('D:\\my_project'), 'D--my-project', 'as projectSlug: every character but a letter or digit is a dash');
+  assert.equal(slugOf('E:\\a b'), 'E--a-b');
+});
+
+test('restore refuses when it cannot read how much the Engram holds, unless --merge', async (t) => {
+  const root = scratch(t);
+  const from = backupDir(root);
+  const home = path.join(root, 'home');
+  const engram = fakeEngram();
+  const run = (cmd, args, options) => (args[0] === 'stats' ? { status: 1, stdout: '', stderr: 'database is locked' } : engram.run(cmd, args, options));
+
+  assert.throws(() => restoreBackup({ from, home, run, env: {}, stdout: sink() }), /could not read how many observations.*database is locked/);
+  assert.equal(engram.calls.some((c) => c.args[0] === 'import'), false, 'nothing is imported when the occupancy is unknown');
+  restoreBackup({ from, home, merge: true, run, env: {}, stdout: sink() });
+  assert.ok(engram.calls.some((c) => c.args[0] === 'import'), '--merge does not need the count');
+});
+
+test('restore prints a fetch line that brings back tags and stashes, not only branches', async (t) => {
+  const root = scratch(t);
+  const stdout = sink();
+  restoreBackup({ from: backupDir(root), home: path.join(root, 'home'), run: fakeEngram().run, env: {}, stdout });
+  assert.ok(stdout.text.includes("'+refs/*:refs/restored/*'"), stdout.text);
+});
+
+test('a restore that stopped after the import runs again without importing twice', async (t) => {
+  const root = scratch(t);
+  const from = backupDir(root);
+  const home = path.join(root, 'home');
+  const engram = fakeEngram();
+  // A file in the way of the memory folder: the copy fails after Engram took the import.
+  fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'projects'), 'not a folder');
+  assert.throws(() => restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() }));
+  fs.rmSync(path.join(home, '.claude', 'projects'));
+
+  const stdout = sink();
+  restoreBackup({ from, home, run: engram.run, env: {}, stdout });
+  assert.equal(engram.calls.filter((c) => c.args[0] === 'import').length, 1, 'the second run skips the import it already did');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 3);
+  assert.match(stdout.text, /engram: this backup was already imported into .* at /);
+  assert.ok(fs.existsSync(path.join(home, '.claude', 'projects', 'C--old-place', 'memory', 'MEMORY.md')), 'the rest is put back');
+});
+
+test('restore says when a --map names no project of the backup', async (t) => {
+  const root = scratch(t);
+  const stdout = sink();
+  restoreBackup({ from: backupDir(root), home: path.join(root, 'home'), map: { 'C:\\no\\such': 'D:\\x' }, run: fakeEngram().run, env: {}, stdout });
+  assert.match(stdout.text, /warning: --map C:\\no\\such=D:\\x matched no project of the backup \(C--no-such\)/);
 });
 
 test('restore imports Engram into the home, places every copy, and never writes over a live file', async (t) => {
@@ -119,11 +167,14 @@ test('restore refuses a home whose Engram already holds observations, unless --m
   const from = backupDir(root);
   const home = path.join(root, 'home');
   const engram = fakeEngram();
-  restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() });
+  fs.mkdirSync(path.join(home, '.engram'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.engram', 'db.json'), JSON.stringify({ sessions: [], observations: [{ id: 'x' }, { id: 'y' }], prompts: [], relations: [] }));
 
-  assert.throws(() => restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() }), /already holds 3 observations.*--merge/);
+  assert.throws(() => restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() }), /already holds 2 observations.*--merge/);
   restoreBackup({ from, home, merge: true, run: engram.run, env: {}, stdout: sink() });
-  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 6);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 5);
+  restoreBackup({ from, home, merge: true, run: engram.run, env: {}, stdout: sink() });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 5, 'the same backup is never imported twice, --merge or not');
 });
 
 test('restore refuses a folder that holds no backup', async (t) => {

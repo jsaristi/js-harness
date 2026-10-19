@@ -45,7 +45,8 @@ const USAGE = [
   '    Engram imported (refused when that Engram already holds observations, unless --merge), the memory folders',
   '    (--map for a project now at another path), ~/.js-harness without its install manifest, the config files in',
   '    ~/.js-harness/restored-config to compare by hand, the bundles beside them with the line that fetches them. A',
-  '    live file is never written over.',
+  '    live file is never written over, and a restore run again skips the import it already did. The home is this',
+  "    user's unless --home names another.",
   '  verify --from <dir|git url>  Restore into a scratch home, which it then removes, and check the four counts',
   '    against the backup and the live Engram it recorded, and every file byte for byte.',
   '  verify --summary <dir|git url>  Check the memory-summary branch: its four sections, and no line the privacy',
@@ -390,6 +391,7 @@ function buildPublicSummary(deps, paths, config) {
 function summaryCommand(args, deps) {
   const paths = backupPaths(deps.home);
   const config = readJson(paths.config) ?? {};
+  if (refuseBareFlag(args, ['--summary-repo'], 'summary', deps)) return 2;
   const named = valueOf(args, '--summary-repo');
   try {
     deps.stdout.write(buildPublicSummary(deps, paths, named ? { ...config, summaryRepo: path.resolve(named) } : config).text);
@@ -418,9 +420,22 @@ function localCopy(deps, from, marker, branch) {
   return { dir, done };
 }
 
-const valueOf = (args, flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
+// A flag's value: undefined when the flag is absent, null when nothing or another flag follows it, so
+// `--home --merge` is refused instead of restoring into a folder named --merge.
+function valueOf(args, flag) {
+  if (!args.includes(flag)) return undefined;
+  const value = args[args.indexOf(flag) + 1];
+  return value === undefined || value.startsWith('--') ? null : value;
+}
+
+function refuseBareFlag(args, flags, command, deps) {
+  const bare = flags.find((flag) => valueOf(args, flag) === null);
+  if (bare) deps.stderr.write(`backup ${command}: ${bare} needs a value\n`);
+  return Boolean(bare);
+}
 
 function restoreCommand(args, deps) {
+  if (refuseBareFlag(args, ['--from', '--home'], 'restore', deps)) return 2;
   const from = valueOf(args, '--from');
   // The home defaults to this user's: a documented `--home %USERPROFILE%` reaches PowerShell
   // unexpanded and would restore into a folder named after the literal text.
@@ -434,9 +449,13 @@ function restoreCommand(args, deps) {
     return 2;
   }
   // --map <old>=<new>, as often as needed: a project now at another path.
-  const map = Object.fromEntries(
-    args.flatMap((arg, i) => (arg === '--map' && args[i + 1]?.includes('=') ? [args[i + 1].split('=')] : [])),
-  );
+  const maps = args.flatMap((arg, i) => (arg === '--map' ? [args[i + 1] ?? ''] : []));
+  const malformed = maps.find((value) => value.indexOf('=') < 1);
+  if (malformed !== undefined) {
+    deps.stderr.write(`backup restore: --map needs <old path>=<new path>, got "${malformed}"\n`);
+    return 2;
+  }
+  const map = Object.fromEntries(maps.map((value) => [value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1)]));
   let source;
   try {
     source = localCopy(deps, from, 'manifest.json');
@@ -451,6 +470,7 @@ function restoreCommand(args, deps) {
 }
 
 function verifyCommand(args, deps) {
+  if (refuseBareFlag(args, ['--from', '--summary'], 'verify', deps)) return 2;
   const from = valueOf(args, '--from');
   const summary = valueOf(args, '--summary');
   if (!from && !summary) {
@@ -490,9 +510,12 @@ export function backupHealth(home, now) {
   if (!readJson(paths.config)) return { state: 'n/a', fix: [] };
   const last = readJson(paths.last) ?? {};
   const success = Date.parse(last.lastSuccess?.at ?? '') || 0;
-  if (now - success < BACKUP_STALE_HOURS * 60 * 60_000) return { state: 'ok', fix: [] };
-  const failure = last.lastFailure && Date.parse(last.lastFailure.at) > success ? `; last failure ${last.lastFailure.at}: ${last.lastFailure.error}` : '';
-  return { state: 'stale', fix: [`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}: run js-harness backup status`] };
+  const failedSince = last.lastFailure && Date.parse(last.lastFailure.at) > success;
+  const cloneGone = !fs.existsSync(path.join(paths.clone, '.git'));
+  if (now - success < BACKUP_STALE_HOURS * 60 * 60_000 && !failedSince && !cloneGone) return { state: 'ok', fix: [] };
+  const failure = failedSince ? `; last failure ${last.lastFailure.at}: ${last.lastFailure.error}` : '';
+  const gone = cloneGone ? `; the clone ${paths.clone} is gone` : '';
+  return { state: 'stale', fix: [`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}${gone}: run js-harness backup status`] };
 }
 
 function statusCommand(deps) {
