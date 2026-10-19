@@ -111,7 +111,11 @@ const AGENTS = [
 ].join('\n');
 
 /** An onboarding document at the end of the interview, approvals recorded against `origin` and `roadmap`. */
-function onboardingDoc({ origin = ORIGIN, roadmap = ROADMAP, topics = null, o3 = null, o5 = null, o6 = ' ', reviews = null } = {}) {
+function onboardingDoc({ origin = ORIGIN, roadmap = ROADMAP, topics = null, o1 = 'x', o2 = null, o3 = null, o4 = 'x', o5 = null, o6 = ' ', reviews = null } = {}) {
+  if (o2 === null) {
+    const interview = hashes({ onboarding: onboardingDoc({ origin, roadmap, topics, o2: '' }), origin: null, roadmap: null }).interview;
+    o2 = `- [x] O2 Pre-plan written (interview sha256:${interview})`;
+  }
   const topicLines = topics ?? TOPICS.map((title, i) => `- [x] ${i + 1} ${title} — answered (L${i + 2})`);
   return [
     '# Onboarding',
@@ -126,10 +130,10 @@ function onboardingDoc({ origin = ORIGIN, roadmap = ROADMAP, topics = null, o3 =
     ...topicLines,
     '',
     '## Tasks',
-    '- [x] O1 Repository read',
-    '- [x] O2 Pre-plan written',
+    `- [${o1}] O1 Repository read`,
+    o2,
     o3 ?? `- [x] O3 Pre-plan approved (origin sha256:${shortHash(origin)}; L12)`,
-    '- [x] O4 Roadmap written',
+    `- [${o4}] O4 Roadmap written`,
     o5 ?? `- [x] O5 Roadmap approved (roadmap sha256:${shortHash(roadmap)}, origin sha256:${shortHash(origin)}; L14)`,
     `- [${o6}] O6 Closed`,
     '',
@@ -138,6 +142,8 @@ function onboardingDoc({ origin = ORIGIN, roadmap = ROADMAP, topics = null, o3 =
     '',
     '## Log',
     '- L1 2026-10-19 The owner\'s request, verbatim: "Quiero vender pan en línea".',
+    '- L12 2026-10-19 The owner on the pre-plan, verbatim: "sí".',
+    '- L14 2026-10-19 The owner on the roadmap, verbatim: "sí".',
     '',
   ].join('\n');
 }
@@ -193,6 +199,36 @@ test('an approval must be checked, name its Log line, and hold the hash of the f
   ]);
   assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o3: '- [x] O3 Pre-plan approved (L12)' }) })), [
     'odd/tasks/onboarding.md (stage 4): O3 records no origin sha256: js-harness onboard hash prints it',
+  ]);
+});
+
+test('an approval names a Log line that is under ## Log', () => {
+  const o3 = `- [x] O3 Pre-plan approved (origin sha256:${shortHash(ORIGIN)}; L99)`;
+  assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o3 }) })), [
+    'odd/tasks/onboarding.md (stage 4): O3 names L99, which is not under ## Log',
+  ]);
+});
+
+test('an approval may run over the continuation lines of its item', () => {
+  const o5 = `- [x] O5 Roadmap approved (roadmap sha256:${shortHash(ROADMAP)},
+  origin sha256:${shortHash(ORIGIN)}; L14)`;
+  assert.deepEqual(check({ onboarding: onboardingDoc({ o5 }) }), []);
+});
+
+test('O2 records the interview it was written from; a changed interview sends the work back to stage 3', () => {
+  const recorded = hashes({ onboarding: onboardingDoc(), origin: null, roadmap: null }).interview;
+  const topics = TOPICS.map((title, i) => `- [x] ${i + 1} ${title} — answered (L${i + 2})`);
+  topics[3] = `- [x] 4 ${TOPICS[3]} — answered (L5, changed in L20)`;
+  const changed = onboardingDoc({ topics, o2: `- [x] O2 Pre-plan written (interview sha256:${recorded})` });
+  const now = hashes({ onboarding: changed, origin: null, roadmap: null }).interview;
+  assert.deepEqual(messages(check({ onboarding: changed })), [
+    `odd/tasks/onboarding.md (stage 3): O2 records interview sha256:${recorded}, but ## Interview is sha256:${now}: it changed since its approval`,
+  ]);
+  assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o2: '- [x] O2 Pre-plan written' }) })), [
+    'odd/tasks/onboarding.md (stage 3): O2 records no interview sha256: js-harness onboard hash prints it',
+  ]);
+  assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o2: '- [ ] O2 Pre-plan written' }) })), [
+    'odd/tasks/onboarding.md (stage 3): O2 is not checked: the pre-plan is not written from the interview yet',
   ]);
 });
 

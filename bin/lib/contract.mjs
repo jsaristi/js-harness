@@ -113,8 +113,9 @@ export function doneWhen(markdown) {
 }
 
 // A code span right before `exits 0`: the done-when form where it is not a list item of its own, as in a
-// roadmap's table cell (odd/tasks/onboarding.md, D6).
-const SPAN_EXITS_ZERO_PATTERN = /(`+)(.+?)\1(?!`)\s*exits 0\b/gi;
+// roadmap's table cell (odd/tasks/onboarding.md, D6). A span's text never holds its own delimiter, so a match cannot
+// run over one span's closing backticks into a later span's `exits 0`.
+const SPAN_EXITS_ZERO_PATTERN = /(`+)((?:(?!\1).)+?)\1(?!`)\s*exits 0\b/gi;
 
 /** The commands `text` names in the done-when form, a code span right before `exits 0`, in order; an empty span
  * and a template placeholder (`<command>`) are none. */

@@ -64,6 +64,19 @@ test('template prints each skeleton, and --write creates it once and never write
   assert.equal(fs.readFileSync(path.join(root, 'odd/tasks/onboarding.md'), 'utf8'), 'the owner\'s answers');
 });
 
+test('template --write refuses a directory on its way that is a link, and writes nothing outside the project', async (t) => {
+  const root = project(t);
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-onboard-outside-'));
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+  fs.symlinkSync(outside, path.join(root, 'docs'), 'junction');
+  assert.deepEqual(await onboard(root, 'template', 'origin', '--write'), {
+    code: 1,
+    out: '',
+    err: 'docs is a link: onboard writes only inside the project, so move it aside or write docs/origin.md by hand',
+  });
+  assert.deepEqual(fs.readdirSync(outside), []);
+});
+
 test('hash prints each file\'s short sha256, and missing for a file that is not there', async (t) => {
   const root = project(t, { 'docs/origin.md': 'the pre-plan\n' });
   assert.deepEqual(await onboard(root, 'hash'), {

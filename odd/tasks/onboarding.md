@@ -60,8 +60,8 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
-- [ ] T2 (kind: build) Slice 1: `onboard` stages and resume (D2, D7, D8), `onboard template`, with tests
-- [ ] T3 (kind: build) Slice 2: `onboard check` (D6), the two exported helpers, `init`'s closing line, help, README, SPEC
+- [ ] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
+- [ ] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests
 - [ ] T4 (kind: verify) The one real onboarding of the done-when
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
 
@@ -273,8 +273,14 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   `bin/lib/progress.mjs`, the dispatcher's help, README); slice 2 is bare `onboard` (stages, resume), `init`'s closing
   line and SPEC. Lib tests RED observed (module missing), then 16/16 GREEN; command 6/6 GREEN. Topic 7 reads "What the
   owner decides alone".
-- Next step: commit slice 1, run `npm run check`, assess and review it (gentle-ai, then `js-harness codex-review
-  --base a4d43ed0`), push, open the PR, tell the lead (local_bd0ae465) its number; then slice 2.
+- L6 (2026-10-19) Slice 1 committed (51e4c07e). gentle-ai approved it (readability, reliability; lineage
+  review-ef039b34d177cda4, acknowledged), with advisories: the feature template promises a bare `onboard` that slice 2
+  brings; O2's interview hash was never compared; the done-when span pattern could run across spans. Codex (4 parts,
+  recorded) found four P2: that same pattern, a Log reference that resolves to no entry, approval metadata on a
+  continuation line, and `template --write` through a linked directory. All but the first advisory are fixed in one
+  commit with a RED test each (5 RED observed, then 68/68 GREEN).
+- Next step: gate and review the fix commit (Codex `--base 51e4c07e`), push, open the PR, tell the lead
+  (local_bd0ae465) its number; then slice 2 (T3).
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.

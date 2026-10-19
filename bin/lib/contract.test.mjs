@@ -356,4 +356,8 @@ test('commandsIn finds each code span right before "exits 0" in a sentence or a 
   assert.deepEqual(commandsIn('`npm test` passes'), []);
   assert.deepEqual(commandsIn('`<command>` exits 0'), []);
   assert.deepEqual(commandsIn('`` exits 0'), []);
+  // A span never runs over its closing delimiter into a later one.
+  assert.deepEqual(commandsIn('`npm run build` then `npm test` exits 0'), ['npm test']);
+  assert.deepEqual(commandsIn('`catalog` works; `<command>` exits 0'), []);
+  assert.deepEqual(commandsIn('``a ` b`` exits 0'), ['a ` b']);
 });

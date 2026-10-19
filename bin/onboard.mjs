@@ -108,11 +108,33 @@ function hash(root, { stdout }) {
   return 0;
 }
 
+/** The first directory of `file`'s path under `root` that is a symlink or a junction, or `null`. A file written
+ * through one would land outside the project, where neither git nor uninstall can undo it; `wx` guards only the
+ * file itself. */
+function linkOnTheWay(root, file) {
+  const parts = file.split('/').slice(0, -1);
+  for (let i = 1; i <= parts.length; i += 1) {
+    const relative = parts.slice(0, i).join('/');
+    try {
+      if (fs.lstatSync(path.join(root, relative)).isSymbolicLink()) return relative;
+    } catch (err) {
+      if (err.code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+  return null;
+}
+
 function template(root, name, write, { stdout, stderr }) {
   const { file, text } = TEMPLATES[name];
   if (!write) {
     stdout(text(root));
     return 0;
+  }
+  const link = linkOnTheWay(root, file);
+  if (link) {
+    stderr(`${link} is a link: onboard writes only inside the project, so move it aside or write ${file} by hand`);
+    return 1;
   }
   const target = path.join(root, file);
   fs.mkdirSync(path.dirname(target), { recursive: true });

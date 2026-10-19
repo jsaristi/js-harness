@@ -73,7 +73,7 @@ The two approvals: the pre-plan and the roadmap.
 ${TOPICS.map((title, i) => `- [ ] ${i + 1} ${title}`).join('\n')}
 
 ## Tasks
-<!-- An approval records the hashes \`js-harness onboard hash\` prints and the Log line of the owner's yes. -->
+<!-- O2 records the interview's hash; O3 and O5, the files' hashes and the Log line of the owner's yes: "(origin sha256:<12 hex>; L<n>)", as \`js-harness onboard hash\` prints them. -->
 - [ ] O1 Repository read
 - [ ] O2 Pre-plan written
 - [ ] O3 Pre-plan approved
@@ -194,7 +194,9 @@ const PLACEHOLDER = /<[^<>!][^<>]*>/;
 const TOPIC_LINE = /^\s*[-*+]\s+\[([ xX])\]\s+(\d+)\b(.*)$/;
 const UNKNOWN = /\bunknown \(OD\d+\)/i;
 const RECORDED_HASH = /\b(interview|origin|roadmap) sha256:([0-9a-f]{12})\b/g;
-const LOG_LINE = /\bL\d+\b/;
+const LOG_REFERENCE = /\bL\d+\b/g;
+// A Log entry: its ID at the start of a list item.
+const LOG_ITEM = /^\s*[-*+]\s+(L\d+)\b/;
 // An open decision's ID at the start of a list item.
 const DECISION_ITEM = /^\s*[-*+]\s+(OD\d+)\b(.*)$/;
 
@@ -263,21 +265,46 @@ function interviewFindings(onboarding) {
   return findings.map((message) => ({ file: ONBOARDING_PATH, stage: 2, message }));
 }
 
-/** One approval's findings: checked, its Log line, and each hash it must record matching the file as it is now. */
-function approvalFindings(task, { id, what, stage, files, current, compare }) {
+/** Where each recorded hash is taken from, as a finding names it. */
+const HASHED = { interview: '## Interview', origin: ORIGIN_PATH, roadmap: ROADMAP_PATH };
+
+/** One recorded task's findings: checked, and each hash it must record matching the text as it is now; for an
+ * approval (`logged`, the IDs under `## Log`), also the Log line of the owner's yes. `task.text` is the whole item. */
+function recordFindings(task, { id, unchecked, stage, files, current, compare, logged = null }) {
   const at = (message) => ({ file: ONBOARDING_PATH, stage, message });
-  if (!task?.done) return [at(`${id} is not checked: the ${what} has no approval yet`)];
+  if (!task?.done) return [at(`${id} is not checked: ${unchecked}`)];
   const findings = [];
-  const recorded = new Map([...task.line.matchAll(RECORDED_HASH)].map((m) => [m[1], m[2]]));
+  const recorded = new Map([...task.text.matchAll(RECORDED_HASH)].map((m) => [m[1], m[2]]));
   for (const name of files) {
     if (!recorded.has(name)) findings.push(at(`${id} records no ${name} sha256: js-harness onboard hash prints it`));
     else if (compare && current[name] !== null && recorded.get(name) !== current[name]) {
-      const file = name === 'origin' ? ORIGIN_PATH : ROADMAP_PATH;
-      findings.push(at(`${id} records ${name} sha256:${recorded.get(name)}, but ${file} is sha256:${current[name]}: it changed since its approval`));
+      findings.push(at(`${id} records ${name} sha256:${recorded.get(name)}, but ${HASHED[name]} is sha256:${current[name]}: it changed since its approval`));
     }
   }
-  if (!LOG_LINE.test(task.line)) findings.push(at(`${id} names no Log line (L<n>) with the owner's yes`));
+  if (logged !== null) {
+    const references = [...task.text.matchAll(LOG_REFERENCE)].map((m) => m[0]);
+    if (references.length === 0) findings.push(at(`${id} names no Log line (L<n>) with the owner's yes`));
+    for (const reference of references.filter((ref) => !logged.has(ref))) {
+      findings.push(at(`${id} names ${reference}, which is not under ## Log`));
+    }
+  }
   return findings;
+}
+
+/** The onboarding's tasks by ID, each with `text`, its whole item, continuation lines included. */
+export function onboardingTasks(onboarding) {
+  const lines = onboarding.replace(/\r\n/g, '\n').split('\n');
+  return new Map(tasksOf(onboarding).map((task) => [task.id, { ...task, text: lines.slice(task.start - 1, task.end).join('\n') }]));
+}
+
+/** The IDs of the entries under `## Log`. */
+function logIds(onboarding) {
+  const ids = new Set();
+  for (const line of (parseContract(onboarding).get('Log') ?? '').split('\n')) {
+    const item = line.match(LOG_ITEM);
+    if (item) ids.add(item[1]);
+  }
+  return ids;
 }
 
 /** The roadmap's findings (stage 5): its phases, steps, rows and done-when commands, and its ties to the pre-plan. */
@@ -336,12 +363,13 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agent
   if (onboarding === null) findings.push(missing(ONBOARDING_PATH, 1, 'feature'));
   else {
     findings.push(...interviewFindings(onboarding));
-    const lines = onboarding.replace(/\r\n/g, '\n').split('\n');
-    const tasks = new Map(tasksOf(onboarding).map((task) => [task.id, { ...task, line: lines[task.start - 1] }]));
+    const tasks = onboardingTasks(onboarding);
     const compare = !tasks.get('O6')?.done;
-    const current = { origin: origin === null ? null : shortHash(origin), roadmap: roadmap === null ? null : shortHash(roadmap) };
-    findings.push(...approvalFindings(tasks.get('O3'), { id: 'O3', what: 'pre-plan', stage: 4, files: ['origin'], current, compare }));
-    findings.push(...approvalFindings(tasks.get('O5'), { id: 'O5', what: 'roadmap', stage: 6, files: ['roadmap', 'origin'], current, compare }));
+    const current = hashes({ onboarding, origin, roadmap });
+    const logged = logIds(onboarding);
+    findings.push(...recordFindings(tasks.get('O2'), { id: 'O2', unchecked: 'the pre-plan is not written from the interview yet', stage: 3, files: ['interview'], current, compare }));
+    findings.push(...recordFindings(tasks.get('O3'), { id: 'O3', unchecked: 'the pre-plan has no approval yet', stage: 4, files: ['origin'], current, compare, logged }));
+    findings.push(...recordFindings(tasks.get('O5'), { id: 'O5', unchecked: 'the roadmap has no approval yet', stage: 6, files: ['roadmap', 'origin'], current, compare, logged }));
     const reviews = (parseContract(onboarding).get('Reviews') ?? '').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, ''));
     for (const [round, stage, what] of [['Pre-plan', 4, 'the pre-plan'], ['Roadmap', 6, 'the roadmap']]) {
       if (!reviews.some((line) => line.toLowerCase().startsWith(round.toLowerCase()))) {
