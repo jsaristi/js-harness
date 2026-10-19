@@ -1,0 +1,109 @@
+// The public memory summary (D4 of odd/tasks/memory-backup.md): what a clone reads to catch up when the full
+// memory is lost. It is built from an allowlist only, never filtered from everything, and every line then passes a
+// privacy check, because it is pushed to a public repository. Pure functions: the command reads the inputs.
+import { parseFeature, parseRoadmap } from './progress.mjs';
+import { redactSecrets } from './backup.mjs';
+
+/** How many decisions the summary lists, newest first. */
+export const DECISION_LIMIT = 30;
+
+const percent = (done, total) => (total === 0 ? '—' : `${Math.round((done / total) * 100)}%`);
+
+/** The first sentence of a feature document's `## Goal` section, or `null`. */
+function goalOf(markdown) {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((line) => /^##\s+Goal\s*$/.test(line));
+  if (start === -1) return null;
+  const end = lines.findIndex((line, i) => i > start && /^#{1,6}\s/.test(line));
+  const text = lines.slice(start + 1, end === -1 ? undefined : end).join(' ').replace(/\s+/g, ' ').trim();
+  return text.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? (text || null);
+}
+
+/** The summary's lines before the privacy check: the share of each roadmap phase, the roadmap's open items, each
+ * feature with an open task (its goal's first sentence and its next task), and the titles of the newest observations
+ * of `project` that mirror a feature document (`odd/<feature>/…`), whose text that document already makes public. */
+export function buildSummary({ roadmap, features, observations, project = 'js-harness', limit = DECISION_LIMIT }) {
+  const lines = [];
+  const { phases, done, total } = parseRoadmap(roadmap ?? '');
+  lines.push('## State', '');
+  for (const phase of phases) lines.push(`- ${phase.title}: ${phase.done}/${phase.total} (${percent(phase.done, phase.total)})`);
+  lines.push(`- Total: ${done}/${total} (${percent(done, total)})`, '');
+
+  lines.push('## Open work', '');
+  for (const phase of phases) for (const step of phase.steps.filter((s) => !s.done)) lines.push(`- ${phase.title}: ${step.text}`);
+  lines.push('');
+
+  lines.push('## Features in flight', '');
+  for (const { id, markdown } of features) {
+    const next = parseFeature(markdown, id).steps.find((step) => !step.done);
+    if (!next) continue;
+    const goal = goalOf(markdown);
+    lines.push(`- ${id}: ${goal ? `${goal} ` : ''}Next: ${next.text}`);
+  }
+  lines.push('');
+
+  lines.push('## Decisions', '');
+  // Only features whose document is in `features`, the ones on main: a mirror of a branch never merged, or of a
+  // feature kept private, is not public yet, and no privacy check can tell its plain words apart.
+  const published = new Set(features.map((f) => f.id));
+  const mirrors = observations
+    .filter((o) => o.project === project && typeof o.topic_key === 'string' && published.has(/^odd\/([^/]+)\//.exec(o.topic_key)?.[1]))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, limit);
+  for (const o of mirrors) lines.push(`- ${String(o.created_at).slice(0, 10)} ${o.topic_key.split('/')[1]}: ${o.title}`);
+  return lines;
+}
+
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/;
+const HOME_PATH = /\b[A-Za-z]:[\\/]+Users[\\/]|(?:^|[\s(`'"])\/(?:home|Users)\//i;
+
+/** `lines` without any line that holds an email address, a secret, a path under a user's home, or a whole word of
+ * `terms` (case ignored), and how many were dropped. */
+export function privacyCheck(lines, terms) {
+  const escaped = terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  // Terms are project slugs: one preceded by '-' is the end of another slug (`harness` in `js-harness`), while one
+  // followed by '-' may start a private one (`harness-lab`), so only the leading side treats '-' as a letter. '_' is a
+  // break on both sides, since Markdown emphasis (`_name_`) must not hide a term.
+  const term = escaped.length ? new RegExp(`(?<![A-Za-z0-9-])(?:${escaped.join('|')})(?![A-Za-z0-9])`, 'i') : null;
+  const kept = [];
+  let dropped = 0;
+  for (const line of lines) {
+    const leaks = EMAIL.test(line) || HOME_PATH.test(line) || redactSecrets(line).kinds.length > 0 || term?.test(line);
+    if (leaks) dropped += 1;
+    else kept.push(line);
+  }
+  return { kept, dropped };
+}
+
+/** The summary as it is pushed: a title, the four sections after the privacy check, and the count of dropped lines.
+ * Throws without a terms list, because a summary checked against no private names is not known to hold none. */
+export function renderSummary({ roadmap, features, observations, terms }) {
+  if (!Array.isArray(terms)) throw new Error('no private-terms.txt: the summary is not built without its terms list');
+  const { kept, dropped } = privacyCheck(buildSummary({ roadmap, features, observations }), terms);
+  const text = [
+    '# js-harness memory summary',
+    '',
+    'Regenerated by `js-harness backup run` from the roadmap and feature documents on main and the titles of the',
+    'Engram observations that mirror them. The full memory is in a private repository.',
+    '',
+    ...kept,
+    '',
+    `Lines left out by the privacy check: ${dropped}.`,
+    '',
+  ].join('\n');
+  return { text, dropped };
+}
+
+/** The private terms of a `private-terms.txt`: one per line, `#` starts a comment, three letters or more, lower case. */
+export function readTerms(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 3 && !line.startsWith('#'))
+    .map((line) => line.toLowerCase());
+}
+
+/** The terms `init` seeds: the Engram project names other than `own`, longer than three letters. */
+export function seedTerms(projects, own = 'js-harness') {
+  return [...new Set(projects.filter((name) => name !== own && name.length > 3).map((name) => name.toLowerCase()))].sort();
+}

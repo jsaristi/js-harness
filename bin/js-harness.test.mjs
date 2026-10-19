@@ -274,8 +274,9 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
       // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
-      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'host-update', 'stack-update', 'gentle-ai-sync'],
+      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, and
+      // `memory-backup` (odd/tasks/memory-backup.md) follows it.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'memory-backup', 'host-update', 'stack-update', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
@@ -286,6 +287,8 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     assert.equal(rows.find((r) => r.id === 'js-harness').upToDate, 'n/a');
     // A folder outside git has no origin/main to hold a branch: the worktrees row cannot tell.
     assert.equal(rows.find((r) => r.id === 'worktrees').project, 'unknown');
+    // A temp home was never set up for a backup: no gap.
+    assert.equal(rows.find((r) => r.id === 'memory-backup').claude, 'n/a');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(cwd, { recursive: true, force: true });

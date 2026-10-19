@@ -329,6 +329,9 @@ const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
 /** The command of the reply check, as `bin/lib/manifest.mjs` spells it (`REPLY_HOOK_COMMAND`); the same test holds the two together. */
 const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
 
+/** The command of the memory backup's hook, as `bin/lib/manifest.mjs` spells it (`BACKUP_HOOK_COMMAND`); the same test holds the two together. */
+const BACKUP_HOOK_COMMAND = 'js-harness backup --hook || exit 0';
+
 /** The command of the rules' turn-start hook, as `bin/lib/manifest.mjs` spells it (`RULES_HOOK_COMMAND`); the same test holds the two together. */
 const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
 
@@ -356,6 +359,7 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|resume', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'Stop', command: BACKUP_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
 ]);
 
 /** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
