@@ -165,6 +165,12 @@ test('bare onboard: a fresh project is at stage 1, and an uncommitted document i
   const started = (await onboard(root)).out.split('\n');
   assert.equal(started[0], 'Stage 1 of 7, Read: O1 is not checked yet.');
   assert.equal(started.at(-1), 'Not committed: odd/tasks/onboarding.md. Commit them on this branch, so the next session finds them.');
+  // Committed, then edited again: git status starts the line with a space, which is no part of the path.
+  git(root, 'add', '-A');
+  git(root, 'commit', '-q', '-m', 'onboarding');
+  assert.equal((await onboard(root)).out.split('\n').at(-1), 'Then: commit, and run js-harness onboard again.');
+  fs.appendFileSync(path.join(root, ONBOARDING_PATH), '- L2 2026-10-19 An answer.\n');
+  assert.equal((await onboard(root)).out.split('\n').at(-1), 'Not committed: odd/tasks/onboarding.md. Commit them on this branch, so the next session finds them.');
 });
 
 test('bare onboard: an onboarding on another branch is named, with its worktree or the switch that resumes it', async (t) => {

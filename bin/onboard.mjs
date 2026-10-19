@@ -98,10 +98,12 @@ function readFiles(root) {
   };
 }
 
-/** git's trimmed output in `root`, or `null` when it fails. */
+/** git's output in `root` without its trailing newline, or `null` when it fails. Only the end is trimmed: the first
+ * `git status --porcelain` line starts with a space when a file is modified and not staged, and the path is read
+ * from a fixed column. */
 function git(root, ...args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
-  return result.status === 0 ? result.stdout.trim() : null;
+  return result.status === 0 ? result.stdout.trimEnd() : null;
 }
 
 /** The branch a merge lands on: origin's HEAD, else a local `main` or `master`, else git's configured default. */
