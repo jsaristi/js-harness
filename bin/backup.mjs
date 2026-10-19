@@ -14,23 +14,31 @@ import {
   defaultRun,
   exportEngram,
   parseStats,
+  PUBLIC_REPO,
   pushRefusal,
   readJson,
+  repoOf,
   scopeArgs,
 } from './lib/backup.mjs';
 import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
 
 const USAGE = [
-  'Usage: js-harness backup <run | status | init | --hook>',
+  'Usage: js-harness backup <run | status | summary | init | --hook>',
   '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
   '    js-harness home and reference copies of the config, secrets blanked, into the private clone, then push it. The',
   '    scope is config.json\'s `scope`: "all" for every project, or one project name (js-harness when unset). It',
   '    refuses an export that lost more than a tenth of any count (a wiped Engram looks like that; --allow-shrink when',
   '    the drop is meant), a clone whose fetch or push URL is not the configured repository on github.com, and a',
   '    repository that does not read PRIVATE just before the push. --adopt takes over a backup another machine made',
-  '    (the first run after a reinstall).',
+  '    (the first run after a reinstall). Once a day it also pushes the public summary to the memory-summary branch;',
+  '    a summary that cannot be pushed is recorded and never fails the backup.',
   '  status  The last run, the last success, the last failure and why, and the commits still to push.',
-  '  init --repo <owner/name>  Create the repository private when it does not exist, check it reads PRIVATE, clone it.',
+  '  summary  Print the public summary as the next run would push it: the roadmap and feature documents on the',
+  "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
+  '    private-terms.txt.',
+  '  init --repo <owner/name> [--summary-repo <dir>]  Create the repository private when it does not exist, check it',
+  '    reads PRIVATE, clone it, and seed private-terms.txt. The summary repository is the checkout named, else this',
+  "    install's own checkout; either way every URL of its origin must be jsaristi/js-harness on github.com.",
   '  --hook  The Stop hook install registers: when a backup is due it starts `backup run` detached, and returns at once.',
   '  Its state lives in ~/.js-harness/memory-backup; deleting that folder undoes everything here but the repository.',
 ].join('\n');
@@ -44,6 +52,10 @@ export const PUSH_TIMEOUT_MS = 120_000;
 /** What a backup holds when config.json names no `scope`: one Engram project and its Claude memory folders, or `'all'`
  * for every project. Other projects' memories stay off the remote until Sebastián decides; either answer is this line. */
 export const DEFAULT_SCOPE = 'js-harness';
+/** How often `backup run` tries the public summary (D4), pushed or not. */
+export const SUMMARY_EVERY_HOURS = 24;
+/** The public repository's branch that holds the summary, one file in one commit. */
+export const SUMMARY_BRANCH = 'memory-summary';
 
 /** Where the backup keeps its state under a home. */
 export function backupPaths(home) {
@@ -207,7 +219,72 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   }
   const pushed = pushClone(deps, paths.clone, config.repo);
   const unreadable = bundles.filter((b) => b.unreadable);
-  return { counts: exported.counts, live, committed, pushed, redacted: manifest.redacted.length, unreadable };
+  const summary = pushSummary(deps, paths, config);
+  return { counts: exported.counts, live, committed, pushed, redacted: manifest.redacted.length, unreadable, summary };
+}
+
+/** Every fetch and push URL of a clone's origin: `get-url --push` applies a pushurl and pushInsteadOf, so it names where
+ * a push goes. */
+function originUrls(deps, clone) {
+  return [['remote', 'get-url', '--all', 'origin'], ['remote', 'get-url', '--push', '--all', 'origin']].flatMap((args) =>
+    git(deps, clone, args).stdout.split('\n').map((line) => line.trim()).filter(Boolean),
+  );
+}
+
+/** Why a checkout cannot carry the summary, or null: every fetch and push URL of its origin must be the public
+ * repository on github.com, so a summary never lands anywhere else. */
+function summaryRefusal(deps, dir) {
+  const urls = originUrls(deps, dir);
+  const stray = urls.filter((url) => repoOf(url)?.toLowerCase() !== PUBLIC_REPO);
+  if (urls.length && !stray.length) return null;
+  return `refused: the summary goes only to ${PUBLIC_REPO} on github.com, and ${dir}'s origin names ${stray.join(', ') || 'no URL'}`;
+}
+
+function noteSummary(paths, entry) {
+  writeJson(paths.last, { ...(readJson(paths.last) ?? {}), ...entry });
+}
+
+/** Refreshes the `memory-summary` branch of the public repository (D4) at most once a day: fetches main, builds the
+ * summary, and pushes it as one orphan commit in place of the last. Never throws, since the summary is not the backup: a
+ * summary that cannot be built or pushed is recorded in last.json as `summaryError`. Returns a word for the run's line. */
+function pushSummary(deps, paths, config) {
+  const source = config.summaryRepo;
+  if (!source) return 'off';
+  const last = readJson(paths.last) ?? {};
+  const tried = Math.max(Date.parse(last.lastSummary?.at ?? '') || 0, Date.parse(last.summaryError?.at ?? '') || 0);
+  const now = deps.now();
+  if (now - tried < SUMMARY_EVERY_HOURS * 60 * 60_000) return 'not due';
+  const at = new Date(now).toISOString();
+  const must = (result, what) => {
+    if (result.status !== 0) throw new Error(`${what} failed in ${source}: ${(result.stderr || 'no answer within the time limit').trim()}`);
+    return result.stdout.trim();
+  };
+  try {
+    if (!fs.existsSync(path.join(paths.clone, 'private-terms.txt'))) {
+      throw new Error(`no private-terms.txt in ${paths.clone}: the summary is never pushed without it`);
+    }
+    const refusal = summaryRefusal(deps, source);
+    if (refusal) throw new Error(refusal);
+    must(git(deps, source, ['fetch', '-q', 'origin', 'main'], { timeout: PUSH_TIMEOUT_MS }), 'git fetch origin main');
+    const { text } = buildPublicSummary(deps, paths, config);
+    const hash = createHash('sha256').update(text).digest('hex');
+    if (hash === last.lastSummary?.hash) {
+      noteSummary(paths, { lastSummary: { ...last.lastSummary, at } });
+      return 'unchanged';
+    }
+    const blob = must(git(deps, source, ['hash-object', '-w', '--stdin'], { input: text }), 'git hash-object');
+    const tree = must(git(deps, source, ['mktree'], { input: `100644 blob ${blob}\tSUMMARY.md\n` }), 'git mktree');
+    const commit = must(git(deps, source, ['commit-tree', tree, '-m', `memory summary ${at.slice(0, 10)}`]), 'git commit-tree');
+    const ref = `refs/heads/${SUMMARY_BRANCH}`;
+    // The lease is what the remote holds now, empty when the branch is new: a push made elsewhere since is not overwritten.
+    const lease = must(git(deps, source, ['ls-remote', 'origin', ref], { timeout: PUSH_TIMEOUT_MS }), 'git ls-remote').split(/\s/)[0];
+    must(git(deps, source, ['push', '-q', `--force-with-lease=${ref}:${lease}`, 'origin', `${commit}:${ref}`], { timeout: PUSH_TIMEOUT_MS }), 'git push');
+    noteSummary(paths, { lastSummary: { at, pushedAt: at, commit, hash } });
+    return 'pushed';
+  } catch (error) {
+    noteSummary(paths, { summaryError: { at, error: error.message } });
+    return `not pushed: ${error.message}`;
+  }
 }
 
 /** Pushes the clone when it holds commits its remote does not, after the guard: origin and visibility (D2). A push the
@@ -217,10 +294,7 @@ function pushClone(deps, clone, repo) {
   // A clone of an empty repository has no upstream yet: everything it holds is to push.
   const owed = ahead.status === 0 ? Number(ahead.stdout.trim()) : Number(git(deps, clone, ['rev-list', '--count', 'HEAD']).stdout.trim());
   if (!owed) return 0;
-  // Fetch and push URLs both: `get-url --push` applies a pushurl and pushInsteadOf, so it names where the push goes.
-  const urls = [['remote', 'get-url', '--all', 'origin'], ['remote', 'get-url', '--push', '--all', 'origin']].flatMap(
-    (args) => git(deps, clone, args).stdout.split('\n').map((line) => line.trim()).filter(Boolean),
-  );
+  const urls = originUrls(deps, clone);
   const visibility = deps.run('gh', ['repo', 'view', repo, '--json', 'visibility', '-q', '.visibility']);
   const refusal = pushRefusal({ urls, repo, visibility: visibility.status === 0 ? visibility.stdout.trim() : null });
   if (refusal) throw new Error(refusal);
@@ -263,6 +337,7 @@ function runCommand(args, deps) {
       `backup: ${c.observations} observations, ${c.sessions} sessions, ${c.prompts} prompts, ${c.relations} relations; ` +
         `${outcome.committed ? 'committed' : 'nothing new'}, ${outcome.pushed} pushed, ${outcome.redacted} files with secrets blanked\n`,
     );
+    if (outcome.summary !== 'off' && outcome.summary !== 'not due') deps.stdout.write(`backup: summary ${outcome.summary}\n`);
     for (const b of outcome.unreadable) {
       deps.stdout.write(`backup: ${b.source} could not be read (${b.unreadable}); its last bundle is kept\n`);
     }
@@ -324,6 +399,11 @@ function statusCommand(deps) {
     `last failure: ${last.lastFailure ? `${last.lastFailure.at}, ${last.lastFailure.error}` : 'none'}`,
     `to push: ${ahead.status === 0 ? `${ahead.stdout.trim()} commits` : 'unknown (no upstream yet)'}`,
   ];
+  if (config.summaryRepo) {
+    const pushed = last.lastSummary?.pushedAt ? `last pushed ${last.lastSummary.pushedAt}, ${last.lastSummary.commit.slice(0, 8)}` : 'never pushed';
+    const refused = last.summaryError ? `; last refused ${last.summaryError.at}, ${last.summaryError.error}` : '';
+    lines.push(`summary: ${pushed}${refused}`);
+  }
   deps.stdout.write(`${lines.join('\n')}\n`);
   return 0;
 }
@@ -413,6 +493,20 @@ function initCommand(args, deps) {
   }
   const config = { ...(readJson(paths.config) ?? {}), repo };
   if (!Array.isArray(config.bundles)) config.bundles = deps.bundles ?? [];
+  // The checkout whose main the public summary reads (D4): the one named, else js-harness's own when it is a checkout
+  // of the public repository; an installed package is none, and then no summary is pushed.
+  const s = args.indexOf('--summary-repo');
+  if (s !== -1) {
+    const named = path.resolve(args[s + 1] ?? '');
+    const refused = summaryRefusal(deps, named);
+    if (refused) {
+      deps.stderr.write(`backup init: ${refused}\n`);
+      return 1;
+    }
+    config.summaryRepo = named;
+  } else if (!config.summaryRepo && deps.packageRoot && fs.existsSync(path.join(deps.packageRoot, '.git'))) {
+    if (!summaryRefusal(deps, deps.packageRoot)) config.summaryRepo = path.resolve(deps.packageRoot);
+  }
   writeJson(paths.config, config);
   // The terms the public summary must never name (D4), kept in the private clone so a restore brings them back.
   const termsFile = path.join(paths.clone, 'private-terms.txt');
@@ -437,6 +531,13 @@ function defaultDeps() {
     stdout: process.stdout,
     stderr: process.stderr,
     bundles: ['D:/js-harness'].filter((dir) => fs.existsSync(path.join(dir, '.git'))),
+    // The main checkout this install runs from, never a session's worktree, which goes when the session does; read only
+    // by `init`, so a hook spawns no git for it.
+    get packageRoot() {
+      const here = fileURLToPath(new URL('..', import.meta.url));
+      const common = defaultRun('git', ['-C', here, 'rev-parse', '--path-format=absolute', '--git-common-dir']);
+      return common.status === 0 ? path.dirname(common.stdout.trim()) : undefined;
+    },
     // Node itself on this install's own entry point: no `.cmd` shim, no shell between the hook and the run.
     startDetached: (args) => {
       const entry = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));

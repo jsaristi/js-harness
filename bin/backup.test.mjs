@@ -49,7 +49,16 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
 
   // What `git remote get-url --push` reports: the github URL a real clone has, while the push itself goes to the bare
   // repository; a test that sets another one sees what the guard does with it.
-  const state = { engram, visibility, calls: [], started: [], now: Date.now(), pushUrls: [`https://github.com/${REPO}.git`] };
+  const state = {
+    engram,
+    visibility,
+    calls: [],
+    started: [],
+    now: Date.now(),
+    pushUrls: [`https://github.com/${REPO}.git`],
+    summaryRepo: null,
+    summaryUrls: ['https://github.com/jsaristi/js-harness.git'],
+  };
   const deps = {
     home,
     env: GIT_ENV,
@@ -76,6 +85,10 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
       if (cmd === 'gh' && args[1] === 'create') {
         state.visibility = 'PRIVATE';
         return { status: 0, stdout: '', stderr: '' };
+      }
+      // The summary repository answers with its own URLs, the public one on github.com unless a test says otherwise.
+      if (cmd === 'git' && args.includes('get-url') && state.summaryRepo && args[1] === state.summaryRepo) {
+        return { status: 0, stdout: `${state.summaryUrls.join('\n')}\n`, stderr: '' };
       }
       if (cmd === 'git' && args.includes('get-url') && args.includes('--push')) {
         return { status: 0, stdout: `${state.pushUrls.join('\n')}\n`, stderr: '' };
@@ -349,6 +362,29 @@ test('backup init seeds private-terms.txt from the other Engram projects, and ke
 });
 
 /** A repository standing for the public one: a bare remote and a clone with a roadmap and one feature on main. */
+test('backup init names the summary repository: --summary-repo, else its own checkout of the public repository', async (t) => {
+  const { root, paths, deps, state } = setup(t);
+  const { work } = summarySource(root);
+  state.summaryRepo = work;
+  const summaryRepo = () => JSON.parse(fs.readFileSync(paths.config, 'utf8')).summaryRepo;
+
+  deps.packageRoot = work;
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+  assert.equal(summaryRepo(), path.resolve(work), 'its own checkout, whose origin is the public repository');
+
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [] }));
+  state.summaryUrls = ['https://github.com/someone/fork.git'];
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+  assert.equal(summaryRepo(), undefined, 'a checkout of another repository is not taken');
+  assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo', work], deps), 1);
+  assert.match(deps.stderr.text, /someone\/fork/);
+
+  state.summaryUrls = ['https://github.com/jsaristi/js-harness.git'];
+  deps.packageRoot = undefined;
+  assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo', work], deps), 0, deps.stderr.text);
+  assert.equal(summaryRepo(), path.resolve(work));
+});
+
 function summarySource(root) {
   const bare = path.join(root, 'public.git');
   const work = path.join(root, 'source');
@@ -381,6 +417,61 @@ test('backup summary prints the summary of origin/main without pushing it', asyn
   assert.match(deps.stdout.text, /^- Memory: 1\/2 \(50%\)$/m);
   assert.match(deps.stdout.text, /^- memory-backup: It survives\. Next: T5 summary$/m);
   assert.equal(defaultRun('git', ['--git-dir', bare, 'rev-parse', '--verify', '-q', 'refs/heads/memory-summary']).status, 1, 'nothing pushed');
+});
+
+test('backup run pushes the summary to memory-summary at most daily, one orphan commit, guarded, never failing the run', async (t) => {
+  const { root, paths, deps, state } = setup(t);
+  const { bare, work } = summarySource(root);
+  state.summaryRepo = work;
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], scope: 'all', summaryRepo: work }));
+  fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'clientproject\n');
+  const branch = () => defaultRun('git', ['--git-dir', bare, 'rev-parse', '-q', '--verify', 'refs/heads/memory-summary']).stdout.trim();
+  const last = () => JSON.parse(fs.readFileSync(paths.last, 'utf8'));
+  const changeMain = (line) => {
+    fs.appendFileSync(path.join(work, 'docs', 'ROADMAP.md'), `${line}\n`);
+    for (const args of [['add', '-A'], ['commit', '-q', '-m', line], ['push', '-q', 'origin', 'HEAD:main']]) {
+      assert.equal(spawnSync('git', ['-C', work, ...args], { env: GIT_ENV }).status, 0);
+    }
+  };
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const first = branch();
+  assert.ok(first, 'the branch was pushed');
+  assert.match(defaultRun('git', ['--git-dir', bare, 'show', 'memory-summary:SUMMARY.md']).stdout, /^# js-harness memory summary$/m);
+  assert.equal(defaultRun('git', ['--git-dir', bare, 'rev-list', '--count', 'memory-summary']).stdout.trim(), '1', 'an orphan commit');
+  assert.equal(last().lastSummary.commit, first);
+
+  changeMain('- [ ] Next day');
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(branch(), first, 'less than a day later nothing is pushed');
+
+  state.now += 24 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const second = branch();
+  assert.notEqual(second, first, 'a day later main fetched anew and the summary replaced');
+  assert.match(defaultRun('git', ['--git-dir', bare, 'show', 'memory-summary:SUMMARY.md']).stdout, /^- Memory: 1\/3 \(33%\)$/m);
+  assert.equal(defaultRun('git', ['--git-dir', bare, 'rev-list', '--count', 'memory-summary']).stdout.trim(), '1');
+
+  state.now += 25 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(branch(), second, 'an unchanged summary is not pushed again');
+
+  changeMain('- [ ] Elsewhere');
+  state.summaryUrls = ['https://github.com/jsaristi/js-harness.git', 'https://github.com/someone/fork.git'];
+  state.now += 25 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, 'a refused summary never fails the backup');
+  assert.equal(branch(), second);
+  assert.match(last().summaryError.error, /someone\/fork/);
+
+  state.summaryUrls = ['https://github.com/jsaristi/js-harness.git'];
+  fs.rmSync(path.join(paths.clone, 'private-terms.txt'));
+  state.now += 25 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0);
+  assert.equal(branch(), second, 'no terms list, no summary');
+  assert.match(last().summaryError.error, /private-terms\.txt/);
+  assert.equal(await backupMain(['status'], deps), 0);
+  assert.match(deps.stdout.text, new RegExp(`^summary: last pushed ${last().lastSummary.pushedAt}, ${second.slice(0, 8)}; last refused .*private-terms\\.txt`, 'm'));
 });
 
 test('backup status names the last success, the last failure and the commits to push', async (t) => {

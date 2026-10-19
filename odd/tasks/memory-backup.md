@@ -287,7 +287,7 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
 - [x] T2 (kind: build) `backup run` and `status`: export, shrink refusal, secrets, trees, bundle, manifest, push guard (186a7c79, 22bbe6e8, 83df03c2; inline)
 - [ ] T3 (kind: build) `backup init`: create the private repository, verify its visibility, clone, `RESTORE.md`
 - [ ] T4 (kind: build) `backup --hook`, its manifest entries, throttle, lock; the detached child measured on both hosts
-- [ ] T5 (kind: build) `backup summary` and its privacy check; the `memory-summary` branch
+- [x] T5 (kind: build) `backup summary` and its privacy check; the `memory-summary` branch (c305bc02, 67f30eeb, adb90694, 362ef31e and the next commit; inline)
 - [ ] T6 (kind: build) `backup restore` and `verify`, both copies; `doctor --hook` line
 - [ ] T7 (kind: verify) Restore proven from both copies on a scratch home; the Done-when commands
 - [ ] T8 (kind: docs) Help, README, roadmap lines checked off
@@ -339,7 +339,19 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   `engram stats --all` (other projects, longer than three letters) and keeps one already there;
   test written first but the code was written before it ran, so no RED was observed. 15 green.
 
+- L9 2026-10-19 08:35Z. The host compacted the session by itself (second time); resumed from this
+  document. T5 closed, each part test first with RED seen: `backup summary` prints (362ef31e);
+  `backup run` pushes the summary at most daily as one orphan commit on `memory-summary`
+  (hash-object, mktree, commit-tree, `--force-with-lease` on what ls-remote reads), only when
+  every origin URL of the summary checkout is jsaristi/js-harness on github.com and the clone
+  holds private-terms.txt; an unchanged summary is not pushed; a refusal lands in last.json as
+  `summaryError` and in `status`, never failing the run. `init` names the summary checkout:
+  `--summary-repo`, else the install's main checkout (`--git-common-dir`, never a session
+  worktree) when its origin passes the same guard. 18 backup command tests green.
+
 ## Next step
+State after L9: T5 done; next the gentle-ai review of 1bdae974..HEAD (escalate item 2), then
+codex-review from a detached worktree (base 1bdae974), then T6. Earlier state, for the record:
 State after L8: T5 part 2 is next (`backup summary` prints; pushSummary in runBackup). Commits on feat/memory-backup:
 186a7c79, 22bbe6e8, 83df03c2 (slice 1, gentle-ai review-1c2fa0ab4d5b178c approved, Codex record
 84dd74b5..83df03c2 with 9 findings), 766dfa29 scope switch D7, 95288eb0 the 9 Codex fixes,

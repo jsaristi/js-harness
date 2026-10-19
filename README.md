@@ -1275,9 +1275,21 @@ that does not read `PRIVATE` just before the push; and a backup another machine 
 (`--adopt`, the first run after a reinstall). The push never waits for a sign-in prompt and gives
 up after two minutes; the next run pushes what is owed.
 
+Once a day a run also refreshes a short public summary on the `memory-summary` branch of
+`jsaristi/js-harness`, one file in one commit replaced each time; any clone reads it with
+`git fetch origin memory-summary` and `git show FETCH_HEAD:SUMMARY.md`. It is built from an
+allowlist, never filtered from everything: each roadmap phase's share, its open items, the
+feature documents on main with their goal and next task, and the titles and dates of the last 30
+decisions mirrored from those documents. A line with an email, a secret, a home path or a word of
+the clone's `private-terms.txt` is dropped and counted; without that file nothing is pushed.
+`backup summary` prints it without pushing. A summary that cannot be pushed is recorded in
+`status` and never fails the backup.
+
 `backup init --repo <owner/name>` creates the repository private when it does not exist, checks
-it reads `PRIVATE` and clones it. `backup status` prints the last success, the last failure and
-the commits to push. `backup --hook` is the Stop hook install registers in both hosts: when a
+it reads `PRIVATE`, clones it, and seeds `private-terms.txt` with the other Engram projects'
+names. The summary reads the checkout `--summary-repo <dir>` names, else this install's own;
+every URL of its origin must be `jsaristi/js-harness` on github.com, or no summary is pushed.
+`backup status` prints the last success, the last failure and the commits to push. `backup --hook` is the Stop hook install registers in both hosts: when a
 backup is due (30 minutes since the last success, and Engram, a memory folder or the home
 changed since) it starts a run detached and returns; where `init` never ran it does nothing.
 
