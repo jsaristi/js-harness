@@ -215,6 +215,9 @@ test('currentStage: the first stage whose record is missing or no longer holds',
   assert.deepEqual(stage({ origin, onboarding: onboardingDoc({ o5 }) }), { stage: 4, changed: true });
 
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o4: ' ' }) }), { stage: 5 });
+  // A checked task whose file is gone is not done: the stage that writes the file is current again.
+  assert.deepEqual(stage({ origin: null }), { stage: 3, changed: false });
+  assert.deepEqual(stage({ roadmap: null }), { stage: 5 });
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o5: '- [ ] O5 Roadmap approved' }) }), { stage: 6, changed: false });
   assert.deepEqual(stage({ roadmap: ROADMAP.replace('Bread on a page', 'Bread and cakes on a page') }), { stage: 6, changed: true });
 

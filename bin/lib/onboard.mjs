@@ -27,6 +27,8 @@ export const TOPICS = [
 ];
 /** The topics a plan cannot be made without, so they cannot be left unknown (D3). */
 const REQUIRED_TOPICS = [1, 2, 7];
+/** REQUIRED_TOPICS as the output names them: "1, 2 and 7". */
+const REQUIRED_LIST = `${REQUIRED_TOPICS.slice(0, -1).join(', ')} and ${REQUIRED_TOPICS.at(-1)}`;
 
 /** The stages a finding sends the work back to, by number (D2). */
 export const STAGES = {
@@ -275,7 +277,7 @@ function interviewFindings(onboarding) {
   }
   for (const n of REQUIRED_TOPICS) {
     const topic = topics.get(n);
-    if (topic?.done && UNKNOWN.test(topic.rest)) findings.push(`topic ${n} is marked unknown: topics 1, 2 and 7 need an answer`);
+    if (topic?.done && UNKNOWN.test(topic.rest)) findings.push(`topic ${n} is marked unknown: topics ${REQUIRED_LIST} need an answer`);
   }
   return findings.map((message) => ({ file: ONBOARDING_PATH, stage: 2, message }));
 }
@@ -458,8 +460,10 @@ export function currentStage(files, { agentsTemplate = '' } = {}) {
   const compare = !tasks.get('O6')?.done;
   const current = hashes(files);
   for (const { id, stage, files: names } of RECORDS) {
-    if (id === 'O5' && !tasks.get('O4')?.done) return { stage: 5 };
+    // O4 records no hash, only that the roadmap is written; a checked task whose file is gone is not done.
+    if (id === 'O5' && (!tasks.get('O4')?.done || files.roadmap === null)) return { stage: 5 };
     const task = tasks.get(id);
+    if (id === 'O2' && files.origin === null) return { stage, changed: false };
     const changed = Boolean(task?.done) && compare && changedSince(task, names, current).length > 0;
     if (!task?.done || changed) return { stage, changed };
   }
@@ -488,7 +492,7 @@ function stageLines(at, files, git) {
     case 2:
       return [
         heading(`topic ${at.topic} of ${TOPICS.length}, "${TOPICS[at.topic - 1]}" (${at.answered} of ${TOPICS.length} answered).`),
-        'Do: ask the owner about this topic only, one question, and wait for the answer. Log it verbatim with its date as the next L<n>, and check the topic "— answered (L<n>)", or "— unknown (OD<n>)" with the open decision in the Log. Topics 1, 2 and 7 cannot be unknown.',
+        `Do: ask the owner about this topic only, one question, and wait for the answer. Log it verbatim with its date as the next L<n>, and check the topic "— answered (L<n>)", or "— unknown (OD<n>)" with the open decision in the Log. Topics ${REQUIRED_LIST} cannot be unknown.`,
         'Then: commit every three answers, and run js-harness onboard again.',
       ];
     case 3:
