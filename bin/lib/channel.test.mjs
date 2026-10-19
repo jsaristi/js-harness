@@ -720,6 +720,9 @@ test('nextSessionNumber is one past the highest number of the code the project d
   channel.appendNotice(home, SLUG, note({ to: '32' }));
   assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 33 });
   assert.deepEqual(channel.nextSessionNumber(home, 'C--other', { code: 'JH' }), { code: 'JH', number: 1 });
+  // A caller that names no code would get a number counted from the notices alone: it is refused (gentle-ai, R3).
+  assert.throws(() => channel.nextSessionNumber(home, SLUG), /needs the project's code/);
+  assert.throws(() => channel.nextSessionNumber(home, SLUG, { code: '' }), /needs the project's code/);
 
   // A line from another version with a number that is not whole counts for nothing and breaks nothing; it is not a
   // notice of this version, so the record is said to hold a line it could not read.

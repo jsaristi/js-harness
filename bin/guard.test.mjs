@@ -134,6 +134,11 @@ test('a session started with a free title is denied where the rule session-title
     // A project that declares no code is told to declare it, whatever the title.
     fs.writeFileSync(path.join(project, 'harness.json'), JSON.stringify({ reply: true }), 'utf8');
     assert.match(denied(await start({ ...brief, title: 'JH 32 · x' })).permissionDecisionReason, /declares no code.*Add "code" to harness\.json/s);
+    // One whose harness.json, or its code, cannot be read refuses every title too, through the real reader (gentle-ai, R3).
+    for (const text of ['{ not json', JSON.stringify({ code: 'J H' })]) {
+      fs.writeFileSync(path.join(project, 'harness.json'), text, 'utf8');
+      assert.match(denied(await start({ ...brief, title: 'JH 32 · x' })).permissionDecisionReason, /the code of this project could not be read \(.*harness\.json/s, text);
+    }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

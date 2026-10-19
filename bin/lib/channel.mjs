@@ -588,6 +588,8 @@ function storedOpenings(dir, names, readFile) {
  * A source that could not be read is named in `unavailable`, so the number is not taken as known. Reads only:
  * nothing is written. */
 export function nextSessionNumber(home, slug, { code, readdir = (dir) => fs.readdirSync(dir), readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+  // Without a code only the notices would count, a number that looks known and is not.
+  if (typeof code !== 'string' || code === '') throw new TypeError('nextSessionNumber needs the project\'s code');
   const unavailable = [];
   const record = readNotices(home, slug, { readFile });
   if (record.unavailable) unavailable.push(`record ${record.path} (${record.unavailable})`);
