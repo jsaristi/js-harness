@@ -63,7 +63,7 @@ review.
   The check lives in `bin/lib/session-title-guard.mjs`, not `bin/lib/guard.mjs`: it reads the title shape from
   `bin/lib/sessions.mjs`, which costs 34 ms to load, and `bin/lib/guard.mjs` loads on every Bash call.
 - [x] T2 (kind: verify): gate, gentle-ai review, Codex review, pull request, ready notice to the orchestrator.
-- [ ] T3 (S5, kind: build): `projectCode` (bin/lib/sessions.mjs), `nextSessionNumber` by a given code, the guard's
+- [x] T3 (S5, kind: build): `projectCode` (bin/lib/sessions.mjs), `nextSessionNumber` by a given code, the guard's
   three refusals (no code, unreadable code, another code), `sessions --next-number` exit 1 without a code and 2 when
   it cannot be read, `codeOfName` in `init`, this repository's harness.json "code", help, README, SPEC and skill.
   Route: inline. RED: channel 56/57, session-title-guard 1/4 (the old API). GREEN: channel 57/57,
@@ -124,3 +124,15 @@ review.
   one word other than ORQ, and a code that cannot be read refuses every title rather than passing one. `init`
   offers the initials of the folder's name (four at most; the first two letters of a one-word name). Left for a
   follow-up: onboarding asking for the code (`bin/lib/onboard.mjs` is JH 30's).
+- L11 (2026-10-19): T3 committed as 80737211 (gate passed on CI after a Linux fix in the test's fake reader:
+  `D:/project` is relative there). The gate said medium, not due; it changes the guard's refusals, so it was raised
+  through item 2. gentle-ai 80737211 high through item 2, lenses risk, resilience and reliability, reviewed alone in a
+  detached worktree at that commit, consent granted as pre-granted; approved and acknowledged (lineage
+  review-a5b452117b863509), five non-blocking findings.
+  Codex cd58112..8073721 correct, 0.9. Then the merge of the rule branch, d74bebc7, with docs/RULES.md as the rule
+  branch holds it except its "Read by" line, and the docs, 7814f9ef (gentle-ai d74bebc7 and 7814f9ef medium, not
+  due, under_budget). Findings taken in e7f0b7cd (gentle-ai e7f0b7cd medium, not due, under_budget; Codex
+  d74bebc..e7f0b7c correct, 0.96): a code is capitals and digits that `roleOfTitle` reads back, `nextSessionNumber`
+  refuses a call with no code, and the guard's real reader is tested on a broken harness.json. Not taken: "the CLI
+  reads root, the guard the main checkout": `bin/sessions.mjs:572` resolves `root` to the main checkout too.
+  Next step: tell the orchestrator both pull requests are pushed, so it lands PR 470, then PR 469.
