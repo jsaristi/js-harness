@@ -75,3 +75,7 @@ None in this session: the merge of jsaristi/js-harness#471 is Sebastián's.
   --home), R2-overloaded-kinds (TUI constants renamed), R3-kind-flag-coverage (tests for --cwd on machine and
   snapshots, and for a scope flag given as a value). Left as they are: R3-usage-text-changed (the usage now names the
   kinds, which S3 asks for; exit codes unchanged) and R3-dash-token-as-kind (`uninstall -h` still exits 2).
+- L4 (2026-10-19): gentle-ai evidence per code commit, for the merge queue.
+  - gentle-ai: b4b2a6aa reviewed in lineage review-893c2a3ae738162f (lenses risk, readability, reliability), approved and acknowledged.
+  - gentle-ai: fec3b12c reviewed in the same lineage review-893c2a3ae738162f, approved and acknowledged.
+  - gentle-ai: e480c878 assessed medium, review_due false, reason under_budget (74 lines, executable_change bin/install.mjs); it applies that review's advisories (L3).
