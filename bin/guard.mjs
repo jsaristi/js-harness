@@ -39,7 +39,8 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a start_session that names no effort or one above the rule session-effort (where\n'
   + '  the rules declare it), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
-  + '  with backticks inside double quotes, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
+  + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
+  + '  does, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
   + '  file that stamps today with an hour ahead of the clock; lets a git commit or merge wrapped in js-harness gate --\n'
   + '  run with a hint beside its result, since a plain one waits for its turn by itself; always exits 0\n'
@@ -80,7 +81,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, SESSION_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
+  if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command);
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));

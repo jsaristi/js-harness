@@ -238,6 +238,23 @@ export function backtickRefusal(command) {
     + 'or write $(...) where a command is meant.';
 }
 
+/** The desktop app's tool that types a command into the user's Terminal panel. */
+export const TERMINAL_TOOL = 'mcp__terminal__run_in_terminal';
+
+// The note that ends a command for his terminal: PowerShell's Write-Host, or echo in an SSH host's shell, printing
+// 'NOTE: ' and at least four words. Single quotes, because the tool refuses anything a shell would compute.
+const TERMINAL_NOTE = /;\s*(?:write-host|echo)\s+'NOTE: [^']*\S+\s+\S+\s+\S+\s+\S+[^']*'\s*$/i;
+
+/** Why the command `command`, typed into the user's terminal, is refused, or null: it does not end with a note that
+ * says what it does. His request of 2026-10-19 (odd/tasks/terminal-note.md, S1): he reads the note beside the command,
+ * where it runs, and learns what it does. A comment cannot carry it: the tool refuses one. */
+export function terminalNoteRefusal(command) {
+  if (TERMINAL_NOTE.test(String(command ?? ''))) return null;
+  return 'js-harness guard: a command for the user\'s terminal ends with a note that says what it does, in everyday words: '
+    + '<command>; Write-Host \'NOTE: <what it does>\' (echo instead of Write-Host in an SSH host\'s shell), four words '
+    + 'or more, in single quotes and printable ASCII, so the user reads it beside the command where it runs.';
+}
+
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
  * as it is: a Windows path is written with them. `words.operators` holds the indexes of the words that are operators,

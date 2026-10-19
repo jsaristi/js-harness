@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, sessionEffortRefusal, stampedHour } from './guard.mjs';
-import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal } from './guard.mjs';
+import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -215,6 +215,31 @@ test('a heredoc body is left out, quoted or not, and the command after it is rea
   assert.equal(backtickRefusal(unquoted), null);
   const after = 'cat > f <<\'EOF\'\n"`a`"\nEOF\ngit commit -m "the `b` row"';
   assert.deepEqual(backticksInDoubleQuotes(after), ['b']);
+});
+
+// His request of 2026-10-19: a command typed into his Terminal panel ends with a note that says what it does, so he
+// reads it beside the command and learns from it (odd/tasks/terminal-note.md, S1).
+test('a command for his terminal with no note at its end is refused, and the refusal shows the shape of one', () => {
+  for (const command of [
+    'npm test',
+    "npm test; Write-Host 'NOTE: x'",
+    "Write-Host 'NOTE: runs the tests of this repository'; npm test",
+    "npm test # NOTE: runs the tests of this repository",
+  ]) {
+    assert.match(
+      terminalNoteRefusal(command),
+      /^js-harness guard: a command for the user's terminal ends with a note that says what it does, in everyday words: <command>; Write-Host 'NOTE: <what it does>'/,
+      command,
+    );
+  }
+});
+
+test('a command for his terminal that ends with its note passes, in PowerShell and in a POSIX shell', () => {
+  for (const command of [
+    "npm test; Write-Host 'NOTE: runs the tests of this repository and prints how many pass'",
+    "git status;   write-host   'NOTE: shows which files changed and are not committed yet'  ",
+    "ls -la; echo 'NOTE: lists the files of this folder with their sizes'",
+  ]) assert.equal(terminalNoteRefusal(command), null, command);
 });
 
 test('a heredoc inside a $(...) of a double-quoted string is left out too (Codex, 2026-10-14)', () => {

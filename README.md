@@ -217,7 +217,7 @@ registered hook entry in ~\.claude\settings.json: js-harness resume --hook (Sess
 registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
-registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session)$)
+registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)
 registered hook entry in ~\.claude\settings.json: js-harness permit --hook || exit 0 (PermissionRequest)
 registered hook entry in ~\.claude\settings.json: js-harness guard --stop || exit 0 (Stop)
 registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
@@ -379,7 +379,9 @@ Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bun
 tab, read from the app's folder under the home (`--home`), never from the environment. The first
 reading is recorded as reviewed in the doctor cache. After an update, the row stays `stale` until
 the review is done, listing the old and new versions and the review steps: the two changelogs,
-the harness hooks, Remote Control, and a report to the user. A restart of the app turns Remote
+the harness hooks, Remote Control, and a full report to the user: what improved, what changed
+and what was fixed, how each helps or hurts the harness and the way the user works, and what the
+harness should change; a version the changelog has no entry for is reported as having none. A restart of the app turns Remote
 Control off, and the step is to turn it back on in each work session without asking, his
 standing yes of 2026-10-15; a session that has run no turn since the restart refuses it, so it
 is sent a message first. `js-harness doctor --host-reviewed`
@@ -1122,12 +1124,16 @@ Find there the document of the feature this session was working on, read its "Ne
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
 session, on `Bash`, on `Write` and `Edit`, and on the scheduled-task and cloud tools that open a session
-(`create`, `update` and `run` of a scheduled task, and `RemoteTrigger`). `guard --hook` reads the call on
+(`create`, `update` and `run` of a scheduled task, and `RemoteTrigger`), and on the desktop app's
+`run_in_terminal`. `guard --hook` reads the call on
 standard input and refuses these things: a sub-agent launched on a model the project's rules do not give;
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or an effort above the
-rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a shell command with backticks
+rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
+end with a note saying what it does, `<command>; Write-Host 'NOTE: <what it does>'` (`echo` in an
+SSH host's shell), four words or more, so the user reads it beside the command where it runs and
+learns from it (his request of 2026-10-19); a shell command with backticks
 inside double quotes, which bash runs as commands; a recursive `rm` or an `rmdir` of a drive's root or a
 folder at its top, which the host holds for the user even in bypass mode, with where to put such a folder
 instead (below the project's worktrees folder, or the session's scratchpad); a gentle-ai review
