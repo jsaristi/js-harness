@@ -24,7 +24,14 @@ import {
 import { DEFAULT_REPO, INSTALL_NEWEST, tagSpec } from './lib/version.mjs';
 
 const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
-const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full | --everything]]';
+const UNINSTALL_USAGE = [
+  'Usage: js-harness uninstall project [--cwd <path>] [--home <path>]',
+  '       js-harness uninstall machine | snapshots | everything [--home <path>]',
+  '       js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full | --everything]]',
+].join('\n');
+/** The kinds of uninstall (odd/tasks/uninstall-kinds.md, S3), each the flags it stands for. A kind never acts by
+ * location: `project` never reaches the machine, and the others never reach a project. */
+const UNINSTALL_KINDS = { project: [], machine: ['--global'], snapshots: ['--global', '--full'], everything: ['--global', '--everything'] };
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
 class ScopeArgError extends Error {}
@@ -441,8 +448,33 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * running it and discarding the result — `--cwd` (project-only) is a usage error alongside it, so
  * there is nothing project-scoped left to even attempt. `deps` reaches both engines: `spawn`/`rm` for
  * `uninstallProject`, `removeFile` and `schtasks` (or `spawnSync`, what the real `schtasks.exe` is run through)
- * for the machine one — each ignores what it does not use. */
+ * for the machine one — each ignores what it does not use. A first word that is not a flag names a kind of
+ * uninstall (`uninstallKind`). */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
+  const [first, ...rest] = argv;
+  if (first !== undefined && !first.startsWith('--')) return uninstallKind(first, rest, env, deps);
+  return uninstallByFlags(argv, env, deps);
+}
+
+/** `uninstall <kind>`: the flags the kind stands for, with `--home` (and `--cwd` for `project`). A flag that names a
+ * scope is the kind's to say, so one given beside it is a usage error, as is `--cwd` beside a machine kind. */
+function uninstallKind(kind, rest, env, deps) {
+  const usage = (message) => {
+    console.error(`${message}\n\n${UNINSTALL_USAGE}`);
+    return 2;
+  };
+  if (!Object.hasOwn(UNINSTALL_KINDS, kind)) return usage(`unknown kind: ${kind}; one of ${Object.keys(UNINSTALL_KINDS).join(', ')}`);
+  // A word right after `--cwd` or `--home` is its value: `parseScopeArgs` refuses it there when it starts with `--`.
+  const isFlag = (token, i) => rest[i - 1] !== '--cwd' && rest[i - 1] !== '--home' && token.startsWith('--');
+  const scope = rest.find((token, i) => isFlag(token, i) && ['--global', '--full', '--everything'].includes(token));
+  if (scope) return usage(`${kind} names its own scope: drop ${scope}`);
+  if (kind !== 'project' && rest.some((token, i) => isFlag(token, i) && token === '--cwd')) return usage(`--cwd goes with project: ${kind} acts on the machine`);
+  return uninstallByFlags([...UNINSTALL_KINDS[kind], ...rest], env, deps, { projectOnly: kind === 'project' });
+}
+
+/** Bare `uninstall` and its flags, as before the kinds; `projectOnly` (the kind `project`) never falls through to
+ * the machine. */
+async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // `--full` is uninstall's alone (D7.3 of odd/tasks/memory-hygiene.md): taken out before the flags `sync` shares.
   // One right after `--cwd` or `--home` stays, so that flag still refuses it as a value that starts with `--`.
   const isFlag = (flag) => (token, i) => token === flag && argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
@@ -479,9 +511,9 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     // An explicit --cwd names a project, and so does a git repository around the cwd: when it is not
     // an initialized one, say so rather than falling through, or a second `uninstall` in the same
     // repository would remove the machine install (Sebastián, roadmap Decided: "Command scope").
-    if (parsed.cwdExplicit || projectResult.notInitialized) {
+    if (parsed.cwdExplicit || projectResult.notInitialized || projectOnly) {
       console.error(
-        `not an initialized project: ${parsed.cwd}; js-harness uninstall --global removes the machine install`,
+        `not an initialized project: ${parsed.cwd}; js-harness uninstall ${projectOnly ? 'machine' : '--global'} removes the machine install`,
       );
       return 1;
     }

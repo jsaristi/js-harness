@@ -339,6 +339,19 @@ folder or anything above it could not be removed, it removes nothing more and sa
 again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
 and ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
 
+Each kind also has a name, and a named kind never acts by location:
+
+| Kind | Same as | Removes | Keeps |
+|---|---|---|---|
+| `uninstall project [--cwd <path>]` | `uninstall` inside a project | what `init` recorded in this clone | files you edited, the machine install |
+| `uninstall machine` | `uninstall --global` | what `install` recorded, and the folders js-harness keeps in the home | files you edited, the memory snapshots, the throughput records, the program |
+| `uninstall snapshots` | `uninstall --global --full` | the same, and the memory snapshots | the throughput records, the program |
+| `uninstall everything` | `uninstall --global --everything` | the same, the whole `.js-harness` folder and the program | projects' files |
+
+`uninstall project` outside an initialized project exits 1 and removes nothing; it never falls
+through to the machine. A kind given `--global`, `--full` or `--everything`, or a machine kind
+given `--cwd`, is a usage error.
+
 ```console
 $ js-harness uninstall
 removed harness.json
