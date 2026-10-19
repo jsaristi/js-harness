@@ -31,7 +31,7 @@ breaks the rule that every write outside the repo can be undone exactly (`AGENTS
   undo in `uninstall` (`bin/lib/manifest.mjs`, `bin/install.mjs`); one TUI item (`bin/tui.mjs`); the dispatcher's help
   (`bin/js-harness.mjs`); `scripts/stack-scratch.mjs` and the test of its pure parts; README, `docs/SPEC.md`, the
   ROADMAP line.
-- Out: gentle-ai's own installer (`gentle-ai install`) and its undo, unless his answer to F1 brings them in (D3). The
+- Out: gentle-ai's own installer (`gentle-ai install`) and its undo: his answer to F1 (L4) keeps them his step (D3). The
   project's codegraph index: `init` and `sync` make it from the codeMap switch and record it in the project manifest.
   Logins (`claude auth login`, `codex login`, `gh auth login`): they take his credentials. The Claude CLI, `git`, `gh`,
   `node` and `go`: prerequisites the module checks and names, never installs (D1). `package.json`: the orchestrator
@@ -63,7 +63,7 @@ of the one scratch trial (package downloads).
   onboarding v3, which "may call it as a stage".
 - S3. Done, as the task states it: "the module installs every missing mandatory tool on a scratch home; `doctor` then
   reports no install gap for those tools; `uninstall` undoes what the module wrote; every check in the feature
-  document's contract exits 0." Under F1's recommended answer, gentle-ai and engram are installed by gentle-ai's own
+  document's contract exits 0." Under his answer to F1 (option 1, L4), gentle-ai and engram are installed by gentle-ai's own
   installer, which the module names as his step (D3); S3 then holds for every other mandatory tool.
 
 ## Tasks
@@ -107,7 +107,7 @@ of the one scratch trial (package downloads).
 - **Undo commands** (help read 2026-10-19): `claude mcp remove [-s scope] <name>`, `codex mcp remove <name>`; the
   package manager's own remove.
 
-### F1. The fork for him: gentle-ai's installer
+### F1. The fork for him: gentle-ai's installer — answered: option 1 (L4)
 gentle-ai and engram are mandatory, and both come from gentle-ai's installer, whose undo is not exact (above). Three
 ways:
 1. **Recommended: his step, named, not run.** The module checks gentle-ai and engram, and when one is missing prints
@@ -148,11 +148,11 @@ row is probed again after each command, so a gap an earlier command closed is no
 | 3 | codegraph · claude | `claude mcp add -s user codegraph -- codegraph serve --mcp` | `claude mcp remove -s user codegraph` | the registration is still there |
 | 4 | codegraph · codex | `codex mcp add codegraph -- codegraph serve --mcp` | `codex mcp remove codegraph` | as row 3 |
 
-Under F1's option 2, gentle-ai's rows join the table before row 3. A row whose tool's switch is off is never run; a
+With F1 answered as option 1, gentle-ai has no row. A row whose tool's switch is off is never run; a
 gap with no row is printed with `doctor`'s fix as manual.
 
 ### D3. What it never runs
-- gentle-ai's installer, under F1's option 1: printed as his step, with its undo.
+- gentle-ai's installer, F1 answered (option 1): printed as his step, with its undo.
 - Logins and the prerequisites of D1; the project's codegraph index (it says to run `js-harness sync` in the project).
 - `upToDate` fixes, `codegraph upgrade` (a user rule), and any command not in D2's table.
 
@@ -271,3 +271,7 @@ onboarding's files; a note in the shared notes folder hands that session this co
 - L3 (2026-10-19) Version 2 committed (e5505407). F1 sent to the orchestrator as question 23 (recommended: option 1).
   Round 2 on the blockers in `## Reviews`; version 3 written from it. Next: his answer to question 23, then the
   question of his yes to the design.
+- L4 (2026-10-19) His answer to question 23, relayed by the orchestrator (answer 23 on the channel), verbatim: "Paso
+  tuyo, nombrado (Recomendado)". So F1 is option 1: the module detects gentle-ai and engram, prints their command and
+  their undo, and neither runs nor records them; it installs, and undoes exactly, only the Codex CLI, codegraph and
+  their MCP registrations. Next: the question of his yes to the design.
