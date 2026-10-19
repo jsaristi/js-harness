@@ -32,6 +32,8 @@ const UNINSTALL_USAGE = [
 /** The kinds of uninstall (odd/tasks/uninstall-kinds.md, S3), each the flags it stands for. A kind never acts by
  * location: `project` never reaches the machine, and the others never reach a project. */
 const UNINSTALL_KINDS = { project: [], machine: ['--global'], snapshots: ['--global', '--full'], everything: ['--global', '--everything'] };
+/** Whether the word at `i` of `argv` stands as a flag of its own, not as the value of the `--cwd` or `--home` before it. */
+const isFlagAt = (argv, i) => argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
 class ScopeArgError extends Error {}
@@ -465,7 +467,7 @@ function uninstallKind(kind, rest, env, deps) {
   };
   if (!Object.hasOwn(UNINSTALL_KINDS, kind)) return usage(`unknown kind: ${kind}; one of ${Object.keys(UNINSTALL_KINDS).join(', ')}`);
   // A word right after `--cwd` or `--home` is its value: `parseScopeArgs` refuses it there when it starts with `--`.
-  const isFlag = (token, i) => rest[i - 1] !== '--cwd' && rest[i - 1] !== '--home' && token.startsWith('--');
+  const isFlag = (token, i) => token.startsWith('--') && isFlagAt(rest, i);
   const scope = rest.find((token, i) => isFlag(token, i) && ['--global', '--full', '--everything'].includes(token));
   if (scope) return usage(`${kind} names its own scope: drop ${scope}`);
   if (kind !== 'project' && rest.some((token, i) => isFlag(token, i) && token === '--cwd')) return usage(`--cwd goes with project: ${kind} acts on the machine`);
@@ -477,7 +479,7 @@ function uninstallKind(kind, rest, env, deps) {
 async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // `--full` is uninstall's alone (D7.3 of odd/tasks/memory-hygiene.md): taken out before the flags `sync` shares.
   // One right after `--cwd` or `--home` stays, so that flag still refuses it as a value that starts with `--`.
-  const isFlag = (flag) => (token, i) => token === flag && argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
+  const isFlag = (flag) => (token, i) => token === flag && isFlagAt(argv, i);
   const isFull = isFlag('--full');
   // `--everything` (release-095 S5): `--full`, then the whole `.js-harness` folder, then the program itself.
   const isEverything = isFlag('--everything');

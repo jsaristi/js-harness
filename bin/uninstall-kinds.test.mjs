@@ -227,6 +227,11 @@ test('an unknown kind, or a kind given a scope flag, is a usage error that remov
       [['snapshots', '--everything', '--home', home], 'snapshots names its own scope: drop --everything'],
       [['project', '--global', '--home', home], 'project names its own scope: drop --global'],
       [['everything', '--cwd', home, '--home', home], '--cwd goes with project: everything acts on the machine'],
+      [['machine', '--cwd', home, '--home', home], '--cwd goes with project: machine acts on the machine'],
+      [['snapshots', '--cwd', home, '--home', home], '--cwd goes with project: snapshots acts on the machine'],
+      // A scope flag given as the value of --home is that flag's error, not the kind's.
+      [['machine', '--home', '--global'], '--home requires a value'],
+      [['project', '--cwd', '--full'], '--cwd requires a value'],
     ]) {
       const { code, outLines, errLines } = await captureConsole(() => uninstallMain(argv));
       assert.equal(code, 2, argv.join(' '));

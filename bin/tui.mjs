@@ -18,9 +18,9 @@ import { remoteMain } from './remote.mjs';
 export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
 /** The kinds of uninstall in the submenu Uninstall opens (odd/tasks/uninstall-kinds.md, S2), each run by the kind of
  * `js-harness uninstall` of the same name; `uninstall-project` is there only inside a project init touched. */
-const UNINSTALL_KINDS = ['uninstall-machine', 'uninstall-snapshots', 'uninstall-everything'];
+const MACHINE_UNINSTALL_ITEMS = ['uninstall-machine', 'uninstall-snapshots', 'uninstall-everything'];
 /** Where there is a project to undo: the project section offers Sync and Status, and the submenu Project. */
-const PROJECT_KINDS = ['initialized', 'noPin', 'staleManifest', 'invalidHarnessJson'];
+const UNDOABLE_LOCATIONS = ['initialized', 'noPin', 'staleManifest', 'invalidHarnessJson'];
 /** The remote-control server of the repository, last in the project section. */
 const REMOTE_ITEMS = ['project-remote-status', 'project-remote-start', 'project-remote-stop'];
 const MENU_LABELS = {
@@ -71,14 +71,14 @@ export function buildMenu(location = { kind: 'notGit' }) {
   const machine = MENU_ITEMS.map(item);
   const section = (...ids) => [header('project'), ...[...ids, ...REMOTE_ITEMS].map(item), header('machine'), ...machine];
   if (location.kind === 'notInitialized') return section('project-init');
-  if (PROJECT_KINDS.includes(location.kind)) return section('project-sync', 'project-status');
+  if (UNDOABLE_LOCATIONS.includes(location.kind)) return section('project-sync', 'project-status');
   return machine;
 }
 
 /** The submenu Uninstall opens: an `uninstall` header, the kinds (Project first, where there is a project to undo),
  * and Back. */
 export function buildUninstallMenu(location = { kind: 'notGit' }) {
-  const kinds = PROJECT_KINDS.includes(location.kind) ? ['uninstall-project', ...UNINSTALL_KINDS] : UNINSTALL_KINDS;
+  const kinds = UNDOABLE_LOCATIONS.includes(location.kind) ? ['uninstall-project', ...MACHINE_UNINSTALL_ITEMS] : MACHINE_UNINSTALL_ITEMS;
   return [header('uninstall'), ...[...kinds, 'back'].map(item)];
 }
 

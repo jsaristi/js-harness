@@ -57,7 +57,13 @@ Nothing left: the product choice was asked and answered (L2).
   (142 in all). The second question of Uninstall (D7.8 of memory-hygiene) is gone: Machine + memory snapshots is its
   own item, so `hasMemorySnapshots` and `readSnapshots` went with it. After a project uninstall the selection stays
   on Uninstall, which survives, instead of jumping to Init.
-- [ ] T3 (kind: verify) Gate, gentle-ai review per slice, Codex review per code slice, pull request.
+- [ ] T3 (kind: verify) Gate, gentle-ai review per slice, Codex review per code slice, pull request. gentle-ai
+  review of origin/main..fec3b12c (lineage review-893c2a3ae738162f, lenses risk, readability, reliability): approved
+  and acknowledged, authority burned, five advisory findings (L3).
+
+## Next step
+Commit the advisory cleanup (L3), then `js-harness codex-review --base 21aa1b3c` over the whole branch, then push
+`feat/uninstall-kinds` and open the pull request to `main`; report the PR to JH 30 (local_bdf1411c).
 
 ## Log
 - L1 (2026-10-19, his words, verbatim): "el uninstall debería tener submenus con los diferentes tipos de
@@ -65,3 +71,7 @@ Nothing left: the product choice was asked and answered (L2).
 - L2 (2026-10-19): inventory of today's kinds in the shared notes (`uninstall-kinds-inventory.md`); options 1-4 sent
   to JH 30, Sebastián chose 1 (S2-S5). Route: inline for both slices — two dependent units, each about 150-300
   lines, no Writer trigger.
+- L3 (2026-10-19): gentle-ai advisories. Taken: R2-dup-isflag (one helper tells a flag from the value of --cwd or
+  --home), R2-overloaded-kinds (TUI constants renamed), R3-kind-flag-coverage (tests for --cwd on machine and
+  snapshots, and for a scope flag given as a value). Left as they are: R3-usage-text-changed (the usage now names the
+  kinds, which S3 asks for; exit codes unchanged) and R3-dash-token-as-kind (`uninstall -h` still exits 2).
