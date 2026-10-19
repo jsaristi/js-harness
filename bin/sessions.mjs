@@ -730,6 +730,21 @@ export async function sessionsMain(
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
 
+  // The number the next work session is titled with (odd/tasks/session-title.md, S2): the one the guard names when it
+  // refuses a start_session of another title. It reads the channel's record and the openings, and writes nothing.
+  // Exit 1 is a project whose channel and openings, all read, hold no titled session to give the code; a source that
+  // could not be read is exit 2 either way, so "could not look" is never read as "none".
+  if (parsed.nextNumber) {
+    const next = nextSessionNumber(harnessHome, slug, { readdir, readFile });
+    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
+    if (next.code === null) {
+      stderr(`js-harness sessions: no titled session is in the channel or the openings of ${root} to give the code: the next is <code> ${next.number}`);
+      return next.unavailable ? 2 : 1;
+    }
+    stdout(`${next.code} ${next.number}`);
+    return next.unavailable ? 2 : 0;
+  }
+
   // The opening of a session, read by the session it is for (odd/tasks/session-channel.md, points 4 and
   // 6): the text `notify --opening` stored under a title, found by that title or by the code and the role
   // it starts with. Exit 0 prints one opening, 1 says there is none, and 2 is "no clean answer", as for
@@ -742,19 +757,6 @@ export async function sessionsMain(
   // from there. With no session named there is nothing to record, and nothing is said of it: the text is
   // what was asked for; and none is recorded for the session that wrote the opening. A reading that
   // cannot be written is said, and the opening is printed all the same.
-  // The number the next work session is titled with (odd/tasks/session-title.md, S2): the one the guard names when it
-  // refuses a start_session of another title. It reads the channel's record and the openings, and writes nothing.
-  if (parsed.nextNumber) {
-    const next = nextSessionNumber(harnessHome, slug, { readdir, readFile });
-    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
-    if (next.code === null) {
-      stderr(`js-harness sessions: no numbered session is in the channel or the openings of ${root}: the first is <code> ${next.number}`);
-      return 1;
-    }
-    stdout(`${next.code} ${next.number}`);
-    return next.unavailable ? 2 : 0;
-  }
-
   if (parsed.opening !== undefined) {
     const wanted = JSON.stringify(parsed.opening);
     const found = findOpenings(harnessHome, slug, parsed.opening, { readdir, readFile });

@@ -17,7 +17,7 @@ test('in this repository a session started with a title not of the shape <code> 
     + '"Install module for required third-party tools", not <code> <n> · <purpose> (rule session-title). Title it '
     + '"JH 33 · <purpose>": 33 is one past the highest number in this project\'s channel and openings '
     + '(js-harness sessions --next-number).');
-  for (const title of ['JH 7', 'JH ORQ · js-harness', 'JH 32 ·', 'JH 32 - x', 'JH x · y', '']) {
+  for (const title of ['JH 7', 'JH ORQ', 'JH ORQ nueva · x', 'JH 32 ·', 'JH 32 - x', 'JH x · y', '']) {
     assert.match(sessionTitleRefusal({ ...BRIEF, title }, HERE, NEXT) ?? '', /rule session-title/, title);
   }
   // An offer is a title alone, and it becomes the session's title when he starts it.
@@ -26,7 +26,7 @@ test('in this repository a session started with a title not of the shape <code> 
 
 test('a refused title says when the next number is not known, and what it could not read', () => {
   const none = sessionTitleRefusal({ ...BRIEF, title: 'T9' }, HERE, () => ({ code: null, number: 1 }));
-  assert.match(none, /Title it "<code> 1 · <purpose>": no numbered session is in this project's channel or openings/);
+  assert.match(none, /Title it "<code> 1 · <purpose>": no titled session is in this project's channel or openings to give its code/);
   const blind = sessionTitleRefusal({ ...BRIEF, title: 'T9' }, HERE, () => ({ code: 'JH', number: 6, unavailable: ['record x (EACCES)'] }));
   assert.match(blind, /"JH 6 · <purpose>".*could not read record x \(EACCES\), so check it with js-harness sessions --next-number/s);
 });
@@ -37,7 +37,8 @@ test('a session titled <code> <n> · <purpose> passes, and so do a proposal, and
     read += 1;
     return NEXT();
   };
-  for (const title of ['JH 32 · x', 'JH 33 · onboarding build', 'XY 1 · otro']) assert.equal(sessionTitleRefusal({ ...BRIEF, title }, HERE, counted), null, title);
+  // A new lead: the orchestrator skill rotates the lead with start_session, titled with the role it takes.
+  for (const title of ['JH 32 · x', 'JH 33 · onboarding build', 'XY 1 · otro', 'JH ORQ · js-harness']) assert.equal(sessionTitleRefusal({ ...BRIEF, title }, HERE, counted), null, title);
   assert.equal(sessionTitleRefusal({ proposal_id: 'task_ab12cd34' }, HERE, counted), null, 'a proposal starts as it was proposed');
   assert.equal(read, 0, 'a title that passes reads no record');
   assert.equal(sessionTitleRefusal({ ...BRIEF, title: 'Install module for required third-party tools' }, null, NEXT), null);

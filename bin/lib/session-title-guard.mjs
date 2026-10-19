@@ -9,19 +9,22 @@ import { ruleHere } from './rules.mjs';
 
 /** Why the `start_session` call whose input is `toolInput` is refused, or null. Where the rule `session-title` is
  * declared (`projectData`, the text of the project's rules file), a call that carries a `title` is refused when that
- * title is not a work session's `<code> <n> · <purpose>`; an offer is refused too, since the title it shows becomes the
- * session's. A call with no title (a proposal started as proposed) passes. `next` gives the project's next free number
- * (`nextSessionNumber` of ./channel.mjs) and is called only to word a refusal, so a good title reads no record. */
+ * title is not of the agreed shape (`roleOfTitle`): a work session's `<code> <n> · <purpose>`, or `<code> ORQ ·
+ * <purpose>` for a new lead, which the orchestrator skill starts with this tool when it rotates the lead. An offer is
+ * refused too, since the title it shows becomes the session's. A call with no title (a proposal started as proposed)
+ * passes. Only the shape is held: whether the number is free is said in the refusal, not checked. `next` gives the
+ * project's next free number (`nextSessionNumber` of ./channel.mjs) and is called only to word a refusal, so a good
+ * title reads no record. */
 export function sessionTitleRefusal(toolInput, projectData, next) {
   if (!Object.hasOwn(toolInput ?? {}, 'title')) return null;
   const rule = ruleHere('session-title', undefined, projectData);
   if (!Object.hasOwn(rule, 'value')) return null;
   const title = toolInput.title;
-  if (roleOfTitle(title)?.role === 'work') return null;
+  if (roleOfTitle(title) !== null) return null;
   const { code, number, unavailable = [] } = next();
   const shown = typeof title === 'string' ? JSON.stringify(title) : 'with no text';
   const why = code === null
-    ? 'no numbered session is in this project\'s channel or openings'
+    ? 'no titled session is in this project\'s channel or openings to give its code'
     : `${number} is one past the highest number in this project's channel and openings`;
   const blind = unavailable.length > 0 ? `; it could not read ${unavailable.join(' and ')}, so check it with js-harness sessions --next-number` : '';
   return `js-harness guard: start_session titles the session ${shown}, not ${rule.value} (rule session-title). `

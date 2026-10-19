@@ -1668,11 +1668,19 @@ test('--next-number prints the next free work number of the project from the cha
   assert.deepEqual([next.code, next.stdout, next.stderr], [0, 'JH 30', '']);
   assert.deepEqual(fake.calls.map((made) => made.args[0]), ['rev-parse'], 'only where the project is');
   assert.equal(fs.existsSync(recordOf(machine).path), false, 'it writes nothing');
-  // A project with no numbered session has no code to give: exit 1, saying where it looked.
+  // A project with no titled session has no code to give: exit 1, saying where it looked.
   fs.rmSync(path.join(machine.userHome, '.js-harness'), { recursive: true, force: true });
   const none = await runSessions(machine, ['--next-number']);
   assert.equal(none.code, 1);
-  assert.match(none.stderr, /no numbered session .*<code> 1/);
+  assert.match(none.stderr, /no titled session .*<code> 1/);
+  // One that could not be read may hold them: exit 2, never the "none" of exit 1.
+  const blind = await runSessions(machine, ['--next-number'], {
+    readdir: () => {
+      throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+    },
+  });
+  assert.equal(blind.code, 2);
+  assert.match(blind.stderr, /could not read openings .*EPERM/);
 }));
 
 test('--opening records in the channel which session read which title: the clock, the session id, the title', withMachine(async (machine) => {

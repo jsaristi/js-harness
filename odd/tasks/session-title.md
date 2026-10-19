@@ -67,3 +67,11 @@ review.
   naming JH 32 and passed a `proposal_id` call. Known limit: a session that never wrote a notice, read an opening or
   was addressed is not in the channel, so its number is not seen; the title the app shows is not read, since that
   needs the transcripts, which the guard does not read on a `start_session`.
+- L3 (2026-10-19): T1 committed as 50460499 (gate passed; gentle-ai 24110236..50460499 high through item 2, the
+  guard, so due). Independent verifier (opus, read-only, risk item 2): S1-S4 met, the `findOpenings` refactor
+  byte-identical on 8 lookups, `bin/lib/guard.mjs` loads no `sessions.mjs`. One blocker, taken: the orchestrator
+  skill rotates the lead with `start_session` (`bin/lib/manifest.mjs:170`), and the guard refused `JH ORQ · lead`,
+  pointing it at a work number. Fixed: any title of the agreed shape passes (`roleOfTitle`), ORQ included, and the
+  skill, README, SPEC and the rule's subject say so. Advisories taken: `--next-number` exits 2, not 1, when a source
+  could not be read and no code is known; the rule says it holds the shape only; a help typo; its block above the
+  `--opening` comment. Left: ties between codes, a stray notice to a large number, titles with a non-breaking space.
