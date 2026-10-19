@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { backupMain, backupPaths, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
+import { backupMain, backupPaths, bundleName, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
@@ -303,6 +303,12 @@ test('bundles: two sources of one name kept apart, a new tag rebundles, and an u
   }
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   assert.match(bundleHeads(named('work')), /refs\/tags\/kept/);
+
+  assert.notEqual(bundleName('D:/work/a-b/app'), bundleName('D:/work/a/b/app'), 'a path is never folded into another');
+  // A bundle no manifest entry names (an older layout's, or one put there by hand) is never removed by a run.
+  fs.writeFileSync(path.join(paths.clone, 'git', 'legacy.bundle'), 'kept');
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.ok(fs.existsSync(path.join(paths.clone, 'git', 'legacy.bundle')));
 
   const before = fs.readFileSync(named('personal'));
   fs.rmSync(second, { recursive: true, force: true });

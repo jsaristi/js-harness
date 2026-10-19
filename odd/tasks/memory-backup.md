@@ -330,8 +330,13 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   never made a backup due). All nine fixed test first (RED seen for each), 34 backup tests green.
   The redaction over the real export and home copy gives the same result before and after.
 
+- L7 2026-10-19 08:15Z. Codex recheck of 83df03c2..1bdae974 (--part-lines 800, one part, 137,397
+  input tokens) recorded: 7 of 9 fixed; open P2 #3 (the mirror could delete a bundle no manifest
+  names) and #5 (`a-b/app` and `a/b/app` shared a bundle name). Both fixed test first in the
+  next commit; it is the follow-up the recheck asks for, reviewed with the T5 slice.
+
 ## Next step
-State at 08:2xZ (read the hour from git log of this commit). Commits on feat/memory-backup:
+State after L7. Commits on feat/memory-backup:
 186a7c79, 22bbe6e8, 83df03c2 (slice 1, gentle-ai review-1c2fa0ab4d5b178c approved, Codex record
 84dd74b5..83df03c2 with 9 findings), 766dfa29 scope switch D7, 95288eb0 the 9 Codex fixes,
 1bdae974 key-body fix (slice 2, gentle-ai review-c35f7b854150c92e approved and burned). Codex

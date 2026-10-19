@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   buildManifest,
@@ -115,7 +116,10 @@ function bundleSources(config) {
 /** The bundle file of a source, named from its whole path as Claude names a project folder (`D--js-harness`), so two
  * repositories of one name never share a bundle. */
 export function bundleName(source) {
-  return `${path.resolve(source).replace(/[^A-Za-z0-9]/g, '-')}.bundle`;
+  const full = path.resolve(source);
+  // The slug folds `a-b` and `a/b` together; the hash of the whole path keeps them apart.
+  const hash = createHash('sha256').update(full.toLowerCase()).digest('hex').slice(0, 8);
+  return `${full.replace(/[^A-Za-z0-9]/g, '-')}-${hash}.bundle`;
 }
 
 /** Writes the bundle of every commit of `source` that is on no remote, or removes it when there is none. Returns the
@@ -171,11 +175,11 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink: allowShrink || rescoped, scope });
   const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope });
   const bundles = bundleSources(config).map((source) => bundleUnpushed(deps, source, paths.clone));
-  // A bundle no configured source names any more is left over (a source removed from config.json): it goes.
-  const named = new Set(bundleSources(config).map(bundleName));
-  const bundleDir = path.join(paths.clone, 'git');
-  for (const file of fs.existsSync(bundleDir) ? fs.readdirSync(bundleDir) : []) {
-    if (!named.has(file)) fs.rmSync(path.join(bundleDir, file), { force: true });
+  // The bundle of a source the last manifest named and config.json no longer does goes; any other file stays, since
+  // a bundle no manifest names may be the only copy of its commits.
+  const configured = new Set(bundleSources(config).map((source) => path.resolve(source)));
+  for (const gone of (previous?.bundles ?? []).filter((b) => !configured.has(b.source))) {
+    fs.rmSync(path.join(paths.clone, 'git', bundleName(gone.source)), { force: true });
   }
   const version = deps.run('engram', ['version']).stdout.trim();
   const manifest = JSON.parse(
