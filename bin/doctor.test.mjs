@@ -2256,6 +2256,28 @@ test("in the harness's checkout the hook tells a copy behind main once, and agai
   }
 });
 
+// The memory-backup row (odd/tasks/memory-backup.md, D2): a backup that stopped is a gap, so the hook says so at the
+// next session start; one never set up is no gap.
+test('doctorMain shows the memory-backup row stale with its reason, and n/a where no backup was set up', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const stale = () => ({ state: 'stale', fix: ['memory backup: last success never; last failure 2026-10-19T08:00:00.000Z: git push failed: run js-harness backup status'] });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, backup: stale });
+    assert.match(output, /^memory-backup\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(output.includes('git push failed: run js-harness backup status'), output);
+
+    const off = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, backup: () => ({ state: 'n/a', fix: [] }) });
+    assert.match(off.output, /^memory-backup\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
 // and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
 // so the hook, run at every session start, does not ask.

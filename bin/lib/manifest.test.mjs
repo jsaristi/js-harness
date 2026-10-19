@@ -1374,6 +1374,21 @@ test('entryComponents declare the reply check for both hosts: a Stop entry with 
   }
 });
 
+// --- The memory backup: a `Stop` entry in the hooks file of each host (odd/tasks/memory-backup.md, D2) ---
+
+test('entryComponents declare the memory backup hook for both hosts: a Stop entry with no matcher, guarded to exit 0', () => {
+  const claudeBackupHook = hookById('claude-backup-hook');
+  const codexBackupHook = hookById('codex-backup-hook');
+  assert.ok(claudeBackupHook, 'the claude-backup-hook component is declared');
+  assert.ok(codexBackupHook, 'the codex-backup-hook component is declared');
+  assert.deepEqual([claudeBackupHook.pointer, codexBackupHook.pointer], [['hooks', 'Stop'], ['hooks', 'Stop']]);
+  assert.deepEqual(claudeBackupHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  assert.deepEqual(codexBackupHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
+  for (const hook of [claudeBackupHook, codexBackupHook]) {
+    assert.deepEqual(hook.entry(), { hooks: [{ type: 'command', command: 'js-harness backup --hook || exit 0', timeout: 5 }] });
+  }
+});
+
 // What the Claude Code settings file holds of ours after an install: the two SessionStart entries, the pause hook's
 // PostToolUse one, the web failure hook's PostToolUseFailure one, the guard's PreToolUse one, and the share check's
 // and the reply check's Stop ones. Codex's hooks file holds the two SessionStart entries and the reply check's Stop one.
