@@ -404,10 +404,29 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   6 of 6 fixed. gentle-ai review of 58dbba61 (lineage review-4e148c74ac861f8b) approved and
   burned; its advisory that a progress mark outlives an emptied Engram is fixed test first in the
   next commit (the mark is trusted only while that Engram holds observations).
+- L15 2026-10-19 10:07Z. 6be0196f: Codex correct (0.9), recorded. Real step 1: `backup init
+  --repo jsaristi/js-harness-memory` created it, `gh` reads PRIVATE, scope js-harness (the
+  default), no summaryRepo. Real step 2: the first `backup run` failed with a bare EBUSY: a Codex
+  review was running, and ~/.js-harness/codex-review-homes holds its open lock files and a hard
+  link to Codex's auth.json. The partial clone held a copy with its three tokens blanked by the
+  filter; nothing was committed or pushed. Fixed in b3f8770d (the folder is skipped; an unreadable
+  file names its path). The second run pushed 7488cc9: 2323 observations, 92 sessions, 0 prompts,
+  721 relations, 584 files, 4 with secrets blanked (config/codex/config.toml, engram/export.json,
+  two files under js-harness-home/backups); no auth.json or codex-review-homes path in it.
+  T7, private side, `backup verify --from https://github.com/jsaristi/js-harness-memory.git`:
+  `ok sessions: 92 restored, 92 backed up, 92 live` / `ok observations: 2323 restored, 2323
+  backed up, 2323 live` / `ok prompts: 0 restored, 0 backed up, 0 live` / `ok relations: 721
+  restored, 721 backed up, not counted live` / `ok files: 584 of 584 byte for byte`.
+  Summary preview: the first one failed verifySummary on its own title, because the term
+  `harness` (the D:\harness project) matched inside `js-harness`; the term boundary now treats a
+  leading '-' or '_' as part of the slug (test first, RED seen). The preview, 82 lines, is in the
+  lead's notes folder as memory-summary-preview.md and verifies: `ok sections`, `ok privacy: 0
+  lines the check would drop`. Three lines are still left out, all by `harness` as a plain word.
 
 ## Next step
-State after L14: Codex review of the stale-mark commit (base 58dbba61), then the real init and
-private run, the summary preview for the lead, then T7, T4, T8.
+State after L15: gentle-ai review of 6be0196f..HEAD (escalate item 2: what reaches a repository)
+and Codex of the same range; then T4 (the detached child on a real Stop hook), T8, the PR. The
+public push waits for Sebastián's read of the preview, through the lead.
 State after L13 (context pause at 86%): commit the opt-in change; gentle-ai review of
 f3640a6e..HEAD (escalate item 1: restore writes Engram and a home) and Codex of the same range
 from a detached worktree; then for real `backup init --repo jsaristi/js-harness-memory` (no
