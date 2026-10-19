@@ -25,6 +25,9 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     now: () => now,
     projectRoot: () => 'D:/project',
     readFile: (file) => {
+      // A start_session reads the project's code (odd/tasks/session-title.md, S5), from the main checkout of the
+      // project: on Linux `D:/project` is a relative path, which that lookup walks up from to this very checkout.
+      if (/[\\/]harness\.json$/.test(file)) return JSON.stringify({ code: 'JH' });
       assert.equal(file.replace(/\\/g, '/'), 'D:/project/bin/lib/rules-data.mjs');
       if (rulesText === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
       return rulesText;
@@ -102,6 +105,8 @@ test('a session started with a free title is denied where the rule session-title
   try {
     const project = path.join(home, 'project');
     fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+    // S5: the code is the project's own, declared in harness.json; titles of another code in its channel count for none.
+    fs.writeFileSync(path.join(project, 'harness.json'), JSON.stringify({ code: 'JH' }), 'utf8');
     const slug = project.replace(/[^A-Za-z0-9]/g, '-');
     const record = path.join(home, '.js-harness', 'channel', `${slug}.jsonl`);
     fs.mkdirSync(path.dirname(record), { recursive: true });
@@ -124,7 +129,11 @@ test('a session started with a free title is denied where the rule session-title
     assert.equal(denied(refused).permissionDecision, 'deny');
     assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: start_session titles the session "Install module for required third-party tools".*rule session-title.*"JH 32 · <purpose>"/s);
     assert.deepEqual(await start({ ...brief, title: 'JH 32 · x' }), { code: 0, out: '' });
+    assert.match(denied(await start({ ...brief, title: 'XY 1 · x' })).permissionDecisionReason, /which is JH here/);
     assert.deepEqual(await start({ proposal_id: 'task_ab12cd34' }), { code: 0, out: '' });
+    // A project that declares no code is told to declare it, whatever the title.
+    fs.writeFileSync(path.join(project, 'harness.json'), JSON.stringify({ reply: true }), 'utf8');
+    assert.match(denied(await start({ ...brief, title: 'JH 32 · x' })).permissionDecisionReason, /declares no code.*Add "code" to harness\.json/s);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

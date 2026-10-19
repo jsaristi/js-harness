@@ -48,6 +48,12 @@ review.
 - S3. A call with only `proposal_id` passes, since it carries no title.
 - S4. The help, README, `docs/SPEC.md`'s guard requirement and the orchestrator skill's lines on opening sessions say
   it.
+- S5. His answer to question 24 (2026-10-19, verbatim): "Osea en este caso se llama JH de JS Harnes pero la idea es
+  que tenga el udentificador del proyecto". The orchestrator's design from it: the project declares its code,
+  harness.json "code" (this repository: "JH"); `init` writes it, offering the initials of the project's name. The
+  guard and `sessions --next-number` read the code from there and count numbers within that code only. A project
+  without a code gets a refusal that says to declare it. The rule's text in PR 470 is reworded to match, through
+  `rules change`, quoting both his phrases.
 
 ## Tasks
 - [x] T1 (S1-S4, kind: build): the rule, `sessionTitleRefusal`, `nextSessionNumber`, `sessions --next-number`, help,
@@ -57,6 +63,11 @@ review.
   The check lives in `bin/lib/session-title-guard.mjs`, not `bin/lib/guard.mjs`: it reads the title shape from
   `bin/lib/sessions.mjs`, which costs 34 ms to load, and `bin/lib/guard.mjs` loads on every Bash call.
 - [x] T2 (kind: verify): gate, gentle-ai review, Codex review, pull request, ready notice to the orchestrator.
+- [ ] T3 (S5, kind: build): `projectCode` (bin/lib/sessions.mjs), `nextSessionNumber` by a given code, the guard's
+  three refusals (no code, unreadable code, another code), `sessions --next-number` exit 1 without a code and 2 when
+  it cannot be read, `codeOfName` in `init`, this repository's harness.json "code", help, README, SPEC and skill.
+  Route: inline. RED: channel 56/57, session-title-guard 1/4 (the old API). GREEN: channel 57/57,
+  session-title-guard 4/4, guard 29/29, sessions 244/244, project 157/157.
 
 ## Log
 - L1 (2026-10-19, his words, verbatim): see S1. The brief of the orchestrator (JH ORQ) named what failed: the three
@@ -106,3 +117,10 @@ review.
   under_budget; Codex ec8b073..2074cfa correct, 0.99, the P2 fixed). The merge queue reads the review evidence by
   the commits' new names, so L3-L6 name them after the rebase: 50460499 is 8f43aebb, 144d03ea is 55177c5e,
   74511510 is b97cfdf7 and 1d020ae8 is fede4d1a; the reviews ran on the old ones, with the same changes.
+- L10 (2026-10-19): his answer to question 24, see S5; the orchestrator kept PR 470 a draft until this is pushed. The
+  rule is reworded on `rule/session-title` (57a6aebd, after merging origin/main there; Codex 64d7644..57a6aeb correct,
+  0.94). T3 is committed before that branch is merged here, since its tests read the rule's value, not its words.
+  Choices: the code is read from the main checkout's harness.json, as the channel is the main checkout's; a code is
+  one word other than ORQ, and a code that cannot be read refuses every title rather than passing one. `init`
+  offers the initials of the folder's name (four at most; the first two letters of a one-word name). Left for a
+  follow-up: onboarding asking for the code (`bin/lib/onboard.mjs` is JH 30's).

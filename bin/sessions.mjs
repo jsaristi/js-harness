@@ -63,7 +63,7 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -83,8 +83,9 @@ const USAGE = [
   '         recorded; --peek reads an opening and records nothing;',
   '         a lone -- before a title that begins with -- (--opening -- "--a title")',
   '       js-harness sessions --next-number [--cwd <path>]',
-  '         prints <code> <n>, the title number of the next work session: one past the highest in the channel and the',
-  '         openings; exit 1 when no numbered session is there, 2 when a source could not be read; it writes nothing',
+  '         prints <code> <n>, the title number of the next work session: <code> is the project\'s, from harness.json',
+  '         "code", and <n> one past the highest of that code in the channel and the openings; exit 1 when the',
+  '         project declares no code, 2 when the code or a source could not be read; it writes nothing',
   '       js-harness sessions --quote <transcript file or session id> <line> [--cwd <path>] [--claude-home <path>]',
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
@@ -730,17 +731,24 @@ export async function sessionsMain(
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
 
-  // The number the next work session is titled with (odd/tasks/session-title.md, S2): the one the guard names when it
-  // refuses a start_session of another title. It reads the channel's record and the openings, and writes nothing.
-  // Exit 1 is a project whose channel and openings, all read, hold no titled session to give the code; a source that
-  // could not be read is exit 2 either way, so "could not look" is never read as "none".
+  // The number the next work session is titled with (odd/tasks/session-title.md, S2, S5): the one the guard names when
+  // it refuses a start_session of another title. It reads the project's code from its harness.json, then the channel's
+  // record and the openings, and writes nothing. Exit 1 is a project that declares no code; a code or a source that
+  // could not be read is exit 2, so "could not look" is never read as "none".
   if (parsed.nextNumber) {
-    const next = nextSessionNumber(harnessHome, slug, { readdir, readFile });
-    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
-    if (next.code === null) {
-      stderr(`js-harness sessions: no titled session is in the channel or the openings of ${root} to give the code: the next is <code> ${next.number}`);
-      return next.unavailable ? 2 : 1;
+    let code;
+    try {
+      ({ code } = projectCode(root, readFile));
+    } catch (err) {
+      stderr(`js-harness sessions: could not read the project's code: ${err.message}`);
+      return 2;
     }
+    if (code === null) {
+      stderr(`js-harness sessions: ${path.join(root, 'harness.json')} declares no "code", the project's identifier a session's title starts with (such as "JH"): add it to give the next number`);
+      return 1;
+    }
+    const next = nextSessionNumber(harnessHome, slug, { code, readdir, readFile });
+    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
     stdout(`${next.code} ${next.number}`);
     return next.unavailable ? 2 : 0;
   }

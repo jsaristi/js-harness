@@ -92,7 +92,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (tool === SESSION_TOOL) {
     const root = rootOf();
     const rules = rulesTextOf(root, readFile);
-    return sessionEffortRefusal(input, rules) ?? (await sessionTitleOf(input, rules, root, env.JS_HARNESS_HOME || homedir()));
+    return sessionEffortRefusal(input, rules) ?? (await sessionTitleOf(input, rules, root, env.JS_HARNESS_HOME || homedir(), readFile));
   }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
@@ -109,24 +109,26 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
 }
 
 /** Why the `start_session` call whose input is `input` is refused for its title, or null (lib/session-title-guard.mjs). The
- * next free number is read from the channel of the project's main checkout under the harness home `home`, as `notify`
- * writes it, and only to word a refusal. */
-async function sessionTitleOf(input, rules, root, home) {
+ * project's code is read from the `harness.json` of its main checkout, and the next free number from that checkout's
+ * channel under the harness home `home`, as `notify` writes it, and only to word a refusal. */
+async function sessionTitleOf(input, rules, root, home, readFile) {
   const { sessionTitleRefusal } = await import('./lib/session-title-guard.mjs');
-  // Loaded before the check, since the check is synchronous, and called only by a refusal: the record is read for a bad
-  // title alone. A reader that fails to load or to read leaves the refusal standing, without its number.
-  let next;
+  // Loaded before the check, since the check is synchronous; the record is read for a bad title alone. A reader that
+  // fails to load leaves the refusal standing: without the code, every title is refused and told why.
+  let project;
   try {
-    const [{ nextSessionNumber }, { mainCheckoutByFiles }, { projectSlug }] = await Promise.all([
+    const [{ nextSessionNumber }, { mainCheckoutByFiles }, { projectCode, projectSlug }] = await Promise.all([
       import('./lib/channel.mjs'), import('./lib/inbox.mjs'), import('./lib/sessions.mjs'),
     ]);
-    next = () => nextSessionNumber(home, projectSlug(mainCheckoutByFiles(root) ?? root));
+    const main = mainCheckoutByFiles(root) ?? root;
+    project = { codeOf: () => projectCode(main, readFile), next: (code) => nextSessionNumber(home, projectSlug(main), { code }) };
   } catch (err) {
-    next = () => {
+    const fail = () => {
       throw err;
     };
+    project = { codeOf: fail, next: fail };
   }
-  return sessionTitleRefusal(input, rules, next);
+  return sessionTitleRefusal(input, rules, project);
 }
 
 /** The hint for the Bash call of `payload` that wraps a commit in `js-harness gate --`, or null (lib/wrapped-commit.mjs).

@@ -1228,6 +1228,37 @@ export function roleOfTitle(title) {
   return Number.isSafeInteger(number) ? { code, role: 'work', number, purpose: purpose.trim() } : null;
 }
 
+/** A project's code: one word that is no role, since it is the `<code>` of a title of the agreed shape. */
+const CODE_SHAPE = /^[^\s·]+$/;
+
+/** The code of the project at `root`, the identifier its sessions' titles start with (odd/tasks/session-title.md,
+ * S5): `{ code }`, read from `harness.json` "code" by `readFile`, `code` being `null` where there is no
+ * `harness.json` or it declares none. Throws, naming the file, when it cannot be read, is not a JSON object, or its
+ * "code" is not one word other than ORQ: a code that cannot be read is never taken for none. */
+export function projectCode(root, readFile) {
+  const file = path.join(root, 'harness.json');
+  let text;
+  try {
+    text = readFile(file);
+  } catch (err) {
+    if (err?.code === 'ENOENT') return { code: null };
+    throw new Error(`${file} could not be read (${err?.code ?? err?.message})`);
+  }
+  let harness;
+  try {
+    harness = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`${file} is not JSON (${err.message})`);
+  }
+  if (!isObject(harness)) throw new Error(`${file} is not a JSON object`);
+  if (!Object.hasOwn(harness, 'code')) return { code: null };
+  const { code } = harness;
+  if (typeof code !== 'string' || !CODE_SHAPE.test(code) || code === 'ORQ') {
+    throw new Error(`${file} "code" must be one word, the project's identifier such as "JH", and not ORQ`);
+  }
+  return { code };
+}
+
 /** The role `text` names, as `sessions --address` takes it: `orchestrator`, or `ORQ` as the titles spell
  * it, in any case, and the number of a work session in plain digits. `{ role, number }`, or `null`. */
 export function roleNamed(text) {

@@ -1657,9 +1657,13 @@ test('--opening prints the text of the opening stored for a title, found by the 
   assert.equal(fs.existsSync(recordOf(machine).path), false);
 }));
 
-test('--next-number prints the next free work number of the project from the channel and the openings, and reads nothing else', withMachine(async (machine) => {
+test('--next-number prints the next free work number of the code the project declares, from the channel and the openings, and reads nothing else', withMachine(async (machine) => {
   storeOpening(machine);
   storeOpening(machine, 'JH 29 · memory');
+  storeOpening(machine, 'XY 70 · another code');
+  // odd/tasks/session-title.md, S5: the code is the project's own identifier, in harness.json "code".
+  fs.mkdirSync(machine.root, { recursive: true });
+  fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ code: 'JH' }), 'utf8');
   const fake = fakeRun(machine);
   const mustNot = () => {
     throw new Error('--next-number must not list the processes');
@@ -1668,11 +1672,23 @@ test('--next-number prints the next free work number of the project from the cha
   assert.deepEqual([next.code, next.stdout, next.stderr], [0, 'JH 30', '']);
   assert.deepEqual(fake.calls.map((made) => made.args[0]), ['rev-parse'], 'only where the project is');
   assert.equal(fs.existsSync(recordOf(machine).path), false, 'it writes nothing');
-  // A project with no titled session has no code to give: exit 1, saying where it looked.
+  // A project with no titled session of its code starts at 1.
   fs.rmSync(path.join(machine.userHome, '.js-harness'), { recursive: true, force: true });
+  const first = await runSessions(machine, ['--next-number']);
+  assert.deepEqual([first.code, first.stdout, first.stderr], [0, 'JH 1', '']);
+  // A project that declares no code has no number to give: exit 1, saying how to declare it.
+  fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ reply: true }), 'utf8');
   const none = await runSessions(machine, ['--next-number']);
-  assert.equal(none.code, 1);
-  assert.match(none.stderr, /no titled session .*<code> 1/);
+  assert.deepEqual([none.code, none.stdout], [1, '']);
+  assert.match(none.stderr, /harness\.json declares no "code"/);
+  // A code that is no single word, or a harness.json that is not JSON, is exit 2: it cannot be read.
+  for (const text of [JSON.stringify({ code: 'J H' }), JSON.stringify({ code: 'ORQ' }), '{ not json']) {
+    fs.writeFileSync(path.join(machine.root, 'harness.json'), text, 'utf8');
+    const broken = await runSessions(machine, ['--next-number']);
+    assert.deepEqual([broken.code, broken.stdout], [2, ''], text);
+    assert.match(broken.stderr, /could not read the project's code/, text);
+  }
+  fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ code: 'JH' }), 'utf8');
   // One that could not be read may hold them: exit 2, never the "none" of exit 1.
   const blind = await runSessions(machine, ['--next-number'], {
     readdir: () => {

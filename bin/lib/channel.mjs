@@ -581,14 +581,13 @@ function storedOpenings(dir, names, readFile) {
 }
 
 /** The number the next work session of the project `slug` under `home` is titled with
- * (odd/tasks/session-title.md, S2): `{ code, number }`, `number` one past the highest work number of the
- * project's code. The numbers are read from every title of the record (a sender's, a reading's), from
- * every opening's title, and from every notice addressed to a work number, since the session it names may
- * not have written yet. The code is the one most titles carry, so a title of another project's code that
- * reached this record numbers nothing; a tie goes to the code that sorts first. With no titled session
- * the code is `null`, and the number 1 unless a notice was addressed to one. A source that could not be read is named in `unavailable`, so the
- * number is not taken as known. Reads only: nothing is written. */
-export function nextSessionNumber(home, slug, { readdir = (dir) => fs.readdirSync(dir), readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+ * (odd/tasks/session-title.md, S2, S5): `{ code, number }`, `number` one past the highest work number of `code`, the
+ * project's own identifier (`projectCode` of ./sessions.mjs). The numbers are read from every title of that code in
+ * the record (a sender's, a reading's) and in the openings, and from every notice addressed to a work number, since
+ * the session it names may not have written yet. A title of another code numbers nothing. With none the number is 1.
+ * A source that could not be read is named in `unavailable`, so the number is not taken as known. Reads only:
+ * nothing is written. */
+export function nextSessionNumber(home, slug, { code, readdir = (dir) => fs.readdirSync(dir), readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   const unavailable = [];
   const record = readNotices(home, slug, { readFile });
   if (record.unavailable) unavailable.push(`record ${record.path} (${record.unavailable})`);
@@ -609,9 +608,6 @@ export function nextSessionNumber(home, slug, { readdir = (dir) => fs.readdirSyn
     ...record.readings.map((reading) => reading.title),
     ...openings.map((opening) => opening.title),
   ].map((title) => roleOfTitle(title)).filter(Boolean);
-  const counts = new Map();
-  for (const { code } of titles) counts.set(code, (counts.get(code) ?? 0) + 1);
-  const [code = null] = [...counts].sort(([one, many], [other, more]) => more - many || (one < other ? -1 : one > other ? 1 : 0)).map(([name]) => name);
   const numbers = [
     ...titles.filter((title) => title.code === code && title.role === 'work').map((title) => title.number),
     ...record.notices.filter((notice) => notice.to?.role === 'work').map((notice) => notice.to.number),

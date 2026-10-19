@@ -699,29 +699,32 @@ test('findOpenings counts a file it cannot read as an opening and goes on, and s
 
 // --- the next free number of a work session (odd/tasks/session-title.md, S2) ---
 
-test('nextSessionNumber is one past the highest number of the project code, in the record and in the openings', withHome((home) => {
+test('nextSessionNumber is one past the highest number of the code the project declares, in the record and in the openings', withHome((home) => {
   const from = (title) => ({ ...FROM, title });
   channel.appendNotice(home, SLUG, note({ from: from('JH ORQ · js-harness') }));
   channel.appendNotice(home, SLUG, note({ from: from('JH 21 · reserva de la noche') }));
   channel.appendNotice(home, SLUG, note({ from: from('JH 7 · registro de fallas') }));
   channel.appendNotice(home, SLUG, note({ from: from('js-harness wake') }));
   channel.appendNotice(home, SLUG, note({ from: from(null) }));
-  // Another code is another project's numbering, and loses to the code most titles carry.
+  // Another code is another numbering: only the code asked for counts, however many titles carry another.
   channel.appendNotice(home, SLUG, note({ from: from('XY 90 · otro') }));
+  channel.appendNotice(home, SLUG, note({ from: from('XY 91 · otro') }));
+  channel.appendNotice(home, SLUG, note({ from: from('XY 92 · otro') }));
   channel.appendReading(home, SLUG, channel.newReading({ at: AT, reader: { id: 'bbbbbbbb-2222' }, title: 'JH 24 · gate más rápido' }));
   channel.writeOpening(home, SLUG, { title: 'JH 29 · memory', text: 'opening', at: AT, from: FROM });
   channel.writeOpening(home, SLUG, { title: 'Install module for required third-party tools', text: 'opening', at: AT, from: FROM });
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 30 });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 30 });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'XY' }), { code: 'XY', number: 93 });
 
   // A notice addressed to a work number holds that number too: the session it names may not have written yet.
   channel.appendNotice(home, SLUG, note({ to: '32' }));
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33 });
-  assert.deepEqual(channel.nextSessionNumber(home, 'C--other'), { code: null, number: 1 });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 33 });
+  assert.deepEqual(channel.nextSessionNumber(home, 'C--other', { code: 'JH' }), { code: 'JH', number: 1 });
 
   // A line from another version with a number that is not whole counts for nothing and breaks nothing; it is not a
   // notice of this version, so the record is said to hold a line it could not read.
   fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ ...note(), to: { role: 'work', number: 'x' } })}\n`, 'utf8');
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 33, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
 }));
 
 test('nextSessionNumber says which source it could not read, so a guess is not taken for the number', withHome((home) => {
@@ -729,16 +732,16 @@ test('nextSessionNumber says which source it could not read, so a guess is not t
   const readdir = () => {
     throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
   };
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { readdir }), { code: 'JH', number: 6, unavailable: [`openings ${channel.openingsDir(home, SLUG)} (EPERM)`] });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH', readdir }), { code: 'JH', number: 6, unavailable: [`openings ${channel.openingsDir(home, SLUG)} (EPERM)`] });
   // An opening that is listed and cannot be read may hold the highest number: it is said, not dropped (Codex, P2).
   const dir = channel.openingsDir(home, SLUG);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'torn-000000000000.json'), '{"schema":"js-harness.channel-opening/v1","title":"JH 32 · t', 'utf8');
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 6, unavailable: [`openings ${dir} (1 file not readable as an opening)`] });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 6, unavailable: [`openings ${dir} (1 file not readable as an opening)`] });
   fs.rmSync(path.join(dir, 'torn-000000000000.json'));
   // A torn line of the record may hold the highest number too: it is said, not dropped (Codex, P2).
   fs.appendFileSync(channel.recordPath(home, SLUG), '{"schema":"js-harness.channel-notice/v1","from":{"title":"JH 32 · t\n', 'utf8');
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 6, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 6, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
 }));
 
 // --- where a notice is run from ---
