@@ -312,6 +312,18 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => replyHookEntry(),
   },
+  {
+    id: 'claude-backup-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'Stop'],
+    entry: () => backupHookEntry(),
+  },
+  {
+    id: 'codex-backup-hook',
+    target: (home) => path.join(home, '.codex', 'hooks.json'),
+    pointer: ['hooks', 'Stop'],
+    entry: () => backupHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -435,6 +447,21 @@ export const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
 function replyHookEntry() {
   return {
     hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the memory backup's hook, guarded to exit 0 like the reply check's: an older js-harness that has no
+ * `backup` answers 2, and a `Stop` hook that exits 2 turns the stop back. */
+export const BACKUP_HOOK_COMMAND = 'js-harness backup --hook || exit 0';
+
+/** `backup --hook` (bin/backup.mjs) registered as a `Stop` hook in both hosts: when a backup is due (the clone exists,
+ * the last success is 30 minutes old and something it copies changed since) it starts `backup run` detached and
+ * returns, so the memory reaches the private repository as sessions work (odd/tasks/memory-backup.md, D2). With no
+ * clone it does nothing, on every machine where `backup init` was never run. Five seconds, as the other Stop entries:
+ * it reads two small files and the times of the folders it copies. */
+function backupHookEntry() {
+  return {
+    hooks: [{ type: 'command', command: BACKUP_HOOK_COMMAND, timeout: 5 }],
   };
 }
 

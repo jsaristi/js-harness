@@ -1250,3 +1250,31 @@ $ js-harness fetch https://www.npmjs.com/package/react
 js-harness fetch: blocked at r.jina.ai: the site answered it HTTP 403.
 Next rung: open https://www.npmjs.com/package/react in the built-in browser and read it with get_page_text; if the text comes back empty, wait a few seconds and read it again.
 ```
+
+### js-harness backup
+
+The memory that survives the machine: a PC Manager cleanup or a Windows reinstall that wipes
+Engram, the Claude memory folders or `~/.js-harness` loses nothing that was backed up.
+`backup run` exports Engram (every project), copies the Claude memory folders, the js-harness
+home and reference copies of the Claude, Codex and Engram config, blanks every secret value it
+finds (a token, a key, a field named like a credential), bundles the commits of `D:/js-harness`
+that are on no remote, and pushes it all to a private GitHub repository through a clone under
+`~/.js-harness/memory-backup`. A run with nothing new commits nothing.
+
+It refuses, keeping the last good backup: an export that lost more than a tenth of any count,
+which is what a wiped Engram looks like (`--allow-shrink` when the drop is meant); a clone whose
+origin is not the configured repository, or is the public `jsaristi/js-harness`; a repository
+that does not read `PRIVATE` just before the push; and a backup another machine made
+(`--adopt`, the first run after a reinstall). The push never waits for a sign-in prompt and gives
+up after two minutes; the next run pushes what is owed.
+
+`backup init --repo <owner/name>` creates the repository private when it does not exist, checks
+it reads `PRIVATE` and clones it. `backup status` prints the last success, the last failure and
+the commits to push. `backup --hook` is the Stop hook install registers in both hosts: when a
+backup is due (30 minutes since the last success, and Engram, a memory folder or the home
+changed since) it starts a run detached and returns; where `init` never ran it does nothing.
+
+```console
+$ js-harness backup status
+backup: not initialised (js-harness backup init --repo <owner/name>)
+```

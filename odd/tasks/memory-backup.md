@@ -289,3 +289,17 @@ Open after round 1, not settled by this session:
   `bin/lib/backup.mjs` (`redactSecrets`, `collectFiles`, `exportEngram`), 6 tests green.
 - L3 2026-10-19 07:16Z, round 2 of the readers recorded; library at 13 tests green (`parseStats`,
   `buildManifest`, `pushRefusal`, four-count shrink refusal, UUID-shaped key).
+- L4 2026-10-19 07:27Z, state for a compaction. Commit 186a7c79 holds the design and the library
+  (gentle-ai assess: medium, under_budget, pending in the slice). Uncommitted, all green:
+  `bin/backup.mjs` (run, status, init, --hook; written before its test, then 9 tests in
+  `bin/backup.test.mjs`, so no RED was observed for it), `claude-backup-hook` and
+  `codex-backup-hook` in `bin/lib/manifest.mjs` (RED seen, 180 green), the dispatcher line, the
+  README section, the SPEC capability. One red left: `scripts/practice-lib.test.mjs`
+  `HARNESS_HOOKS` must list the backup Stop entry for both hosts (`scripts/practice-lib.mjs:344`).
+  Lead asked (07:13Z) whether other projects' memories go to GitHub; no answer yet; nothing pushed.
+
+## Next step
+Commit T2+T4 code (HARNESS_HOOKS fixed, 122 green) under `js-harness gate --`, assess `84dd74b5..HEAD` with
+`--escalate-item 2` (secrets) and run the granted review; then T4's measurement (does the
+detached child outlive a real Stop hook), T5 summary, T6 restore/verify, T3 init on GitHub after
+the lead's answer, T7 proofs.

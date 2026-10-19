@@ -156,10 +156,11 @@ export function exportCounts(data) {
  * reinstalled Engram looks like, and writing it over the good copy is the loss this feature exists to stop (D2). */
 export const SHRINK_LIMIT = 0.1;
 
+/** Runs a program with no shell, so an argument with spaces (a commit message) stays one argument; `engram`, `git` and
+ * `gh` are executables on every host (`where` on this machine names three `.exe`). */
 export function defaultRun(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, {
     encoding: 'utf8',
-    shell: process.platform === 'win32',
     windowsHide: true,
     maxBuffer: 64 * 1024 * 1024,
     ...options,
