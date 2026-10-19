@@ -697,9 +697,39 @@ test('findOpenings counts a file it cannot read as an opening and goes on, and s
   assert.deepEqual(channel.findOpenings(home, SLUG, 'JH 5', { readdir }), { dir, openings: [], unreadable: 0, unavailable: 'EPERM' });
 }));
 
+// --- the next free number of a work session (odd/tasks/session-title.md, S2) ---
+
+test('nextSessionNumber is one past the highest number of the project code, in the record and in the openings', withHome((home) => {
+  const from = (title) => ({ ...FROM, title });
+  channel.appendNotice(home, SLUG, note({ from: from('JH ORQ · js-harness') }));
+  channel.appendNotice(home, SLUG, note({ from: from('JH 21 · reserva de la noche') }));
+  channel.appendNotice(home, SLUG, note({ from: from('JH 7 · registro de fallas') }));
+  channel.appendNotice(home, SLUG, note({ from: from('js-harness wake') }));
+  channel.appendNotice(home, SLUG, note({ from: from(null) }));
+  // Another code is another project's numbering, and loses to the code most titles carry.
+  channel.appendNotice(home, SLUG, note({ from: from('XY 90 · otro') }));
+  channel.appendReading(home, SLUG, channel.newReading({ at: AT, reader: { id: 'bbbbbbbb-2222' }, title: 'JH 24 · gate más rápido' }));
+  channel.writeOpening(home, SLUG, { title: 'JH 29 · memory', text: 'opening', at: AT, from: FROM });
+  channel.writeOpening(home, SLUG, { title: 'Install module for required third-party tools', text: 'opening', at: AT, from: FROM });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 30 });
+
+  // A notice addressed to a work number holds that number too: the session it names may not have written yet.
+  channel.appendNotice(home, SLUG, note({ to: '32' }));
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33 });
+  assert.deepEqual(channel.nextSessionNumber(home, 'C--other'), { code: null, number: 1 });
+}));
+
+test('nextSessionNumber says which source it could not read, so a guess is not taken for the number', withHome((home) => {
+  channel.appendNotice(home, SLUG, note());
+  const readdir = () => {
+    throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+  };
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { readdir }), { code: 'JH', number: 6, unavailable: [`openings ${channel.openingsDir(home, SLUG)} (EPERM)`] });
+}));
+
 // --- where a notice is run from ---
 
-const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
+const ok =(stdout) => ({ status: 0, stdout, stderr: '' });
 const notARepository = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' });
 
 test('placeOf reads the worktree and the branch of the folder from git, in two calls', () => {

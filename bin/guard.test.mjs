@@ -36,6 +36,7 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     claudeConfigDir: configDir,
     baseContains,
     env: {},
+    homedir: () => path.join(os.tmpdir(), 'js-harness-guard-test-no-home'),
     exists,
     readIndex: () => {
       if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
@@ -84,7 +85,7 @@ test('a scheduled-task or cloud tool that opens a session is denied in the proje
 
 // odd/tasks/harness-review.md, T6c: a session started with no effort ran at the max of the session that started it.
 test('a session started with no effort, or above the rule session-effort, is denied where the rule is declared', async () => {
-  const brief = { initiation: 'own_initiative', title: 'T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
+  const brief = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
   for (const tool_input of [brief, { ...brief, effort: 'max' }, { ...brief, context: 'fork' }]) {
     const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input });
     assert.equal(denied(refused).permissionDecision, 'deny', JSON.stringify(tool_input));
@@ -93,6 +94,40 @@ test('a session started with no effort, or above the rule session-effort, is den
   const passes = { code: 0, out: '', err: '' };
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, effort: 'high' } }), passes);
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: brief }, { rulesText: null }), passes, 'no rules');
+});
+
+// odd/tasks/session-title.md, S1-S3: the orchestrator started three sessions with free titles, and one took a used number.
+test('a session started with a free title is denied where the rule session-title is declared, naming the project\'s next number', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-guard-title-'));
+  try {
+    const project = path.join(home, 'project');
+    fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+    const slug = project.replace(/[^A-Za-z0-9]/g, '-');
+    const record = path.join(home, '.js-harness', 'channel', `${slug}.jsonl`);
+    fs.mkdirSync(path.dirname(record), { recursive: true });
+    const from = { host: 'claude-code', id: 'aaaaaaaa-1111', source: 'environment', title: 'JH 31 · install module' };
+    fs.writeFileSync(record, `${JSON.stringify({ schema: 'js-harness.channel-notice/v1', at: '2026-10-19T10:00:00.000Z', from, to: { role: 'orchestrator', number: null }, kind: 'note', text: 'x', cwd: null, worktree: null, branch: null })}\n`, 'utf8');
+    const start = async (tool_input) => {
+      const out = [];
+      const code = await guardMain(['--hook'], {
+        readStdin: () => JSON.stringify({ tool_name: 'mcp__ccd_session__start_session', cwd: project, tool_input }),
+        projectRoot: () => project,
+        readFile: (file) => (file.endsWith('rules-data.mjs') ? writeRules(RULES) : fs.readFileSync(file, 'utf8')),
+        stdout: (text) => out.push(text),
+        env: { JS_HARNESS_HOME: home },
+      });
+      return { code, out: out.join('') };
+    };
+    const brief = { initiation: 'own_initiative', prompt: 'Install the tools.', effort: 'high', context: 'fresh' };
+    const refused = await start({ ...brief, title: 'Install module for required third-party tools' });
+    assert.equal(refused.code, 0);
+    assert.equal(denied(refused).permissionDecision, 'deny');
+    assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: start_session titles the session "Install module for required third-party tools".*rule session-title.*"JH 32 · <purpose>"/s);
+    assert.deepEqual(await start({ ...brief, title: 'JH 32 · x' }), { code: 0, out: '' });
+    assert.deepEqual(await start({ proposal_id: 'task_ab12cd34' }), { code: 0, out: '' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // Section 17, "The try": the lead's real try, as a hand reproduction makes it, through the public command in this

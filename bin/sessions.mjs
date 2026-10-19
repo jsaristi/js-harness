@@ -55,7 +55,7 @@ import { boardMemory } from './lib/memory-hygiene.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { readTickets } from './lib/gate-first.mjs';
-import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
+import { appendReading, findOpenings, newReading, nextSessionNumber, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -82,6 +82,9 @@ const USAGE = [
   '         a session keeps the title of the first opening it reads, so one of another title is printed and not',
   '         recorded; --peek reads an opening and records nothing;',
   '         a lone -- before a title that begins with -- (--opening -- "--a title")',
+  '       js-harness sessions --next-number [--cwd <path>]',
+  '         prints <code> <n>, the title number of the next work session: one past the highest in the channel and the',
+  '         openings; exit 1 when no numbered session is there, 2 when a source could not be read; it writes nothing',
   '       js-harness sessions --quote <transcript file or session id> <line> [--cwd <path>] [--claude-home <path>]',
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
@@ -153,6 +156,10 @@ function parseArgs(argv) {
   const waits = new Map([['--interval', 'interval'], ['--timeout', 'timeout']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
+    if (token === '--next-number') {
+      parsed.nextNumber = true;
+      continue;
+    }
     if (token === '--json' || token === '--watch' || token === '--measures') {
       parsed[token.slice(2)] = true;
       continue;
@@ -220,7 +227,7 @@ function parseArgs(argv) {
   // same holds for an opening and for a quote, and each of the three is asked alone. The measures of the
   // compactions are asked alone too, and are data like the board, so `--json` gives them; but they are
   // judged once from what the transcripts hold, and a watch would have nothing in them to wait for.
-  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript'], ['--measures', parsed.measures || undefined, 'the measures of the compactions']].filter(([, asked]) => asked !== undefined);
+  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript'], ['--measures', parsed.measures || undefined, 'the measures of the compactions'], ['--next-number', parsed.nextNumber || undefined, 'a title\'s number']].filter(([, asked]) => asked !== undefined);
   if (answers.length > 1) throw new SessionsArgError(`${answers.map(([flag]) => flag).join(' and ')} are asked one at a time`);
   if (parsed.peek && parsed.opening === undefined) throw new SessionsArgError('--peek goes only with --opening: it reads an opening and records nothing');
   for (const [flag, , what] of answers) {
@@ -735,6 +742,19 @@ export async function sessionsMain(
   // from there. With no session named there is nothing to record, and nothing is said of it: the text is
   // what was asked for; and none is recorded for the session that wrote the opening. A reading that
   // cannot be written is said, and the opening is printed all the same.
+  // The number the next work session is titled with (odd/tasks/session-title.md, S2): the one the guard names when it
+  // refuses a start_session of another title. It reads the channel's record and the openings, and writes nothing.
+  if (parsed.nextNumber) {
+    const next = nextSessionNumber(harnessHome, slug, { readdir, readFile });
+    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
+    if (next.code === null) {
+      stderr(`js-harness sessions: no numbered session is in the channel or the openings of ${root}: the first is <code> ${next.number}`);
+      return 1;
+    }
+    stdout(`${next.code} ${next.number}`);
+    return next.unavailable ? 2 : 0;
+  }
+
   if (parsed.opening !== undefined) {
     const wanted = JSON.stringify(parsed.opening);
     const found = findOpenings(harnessHome, slug, parsed.opening, { readdir, readFile });

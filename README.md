@@ -1177,7 +1177,10 @@ standard input and refuses these things: a sub-agent launched on a model the pro
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or an effort above the
-rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
+rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a `start_session`
+whose title is not `<code> <n> · <purpose>`, where the rule `session-title` is declared, the reason naming the
+project's next free number, one past the highest in its channel and openings, which `js-harness sessions
+--next-number` also prints (a proposal started by its `proposal_id` carries no title and passes); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
 end with a note saying what it does, `<command>; Write-Host 'NOTE: <what it does>'` (`echo` in an
 SSH host's shell), four words or more, so the user reads it beside the command where it runs and
 learns from it (his request of 2026-10-19); a shell command with backticks

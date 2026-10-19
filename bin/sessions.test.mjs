@@ -184,6 +184,8 @@ const USAGE_ERRORS = [
   // watch, and it is not an address, an opening or a quote either.
   ['--measures', '--watch'], ['--watch', '--measures'], ['--measures', '--address', '5'], ['--address', 'ORQ', '--measures'], ['--measures', '--opening', 'JH 5'],
   ['--quote', 'aaaaaaaa', '5', '--measures'],
+  // odd/tasks/session-title.md, S2: --next-number is one line, asked alone.
+  ['--next-number', '--json'], ['--next-number', '--watch'], ['--next-number', '--address', '5'], ['--opening', 'JH 5', '--next-number'], ['--next-number', '--measures'],
 ];
 
 /** A usage case as the name of its test says it: its arguments, a long run of digits as its length, so
@@ -1653,6 +1655,24 @@ test('--opening prints the text of the opening stored for a title, found by the 
   assert.deepEqual([short.code, short.stdout, short.stderr], [0, OPENING_TEXT.trimEnd(), '']);
   // Nobody the host names read it: the text is printed all the same, and nothing is recorded, silently.
   assert.equal(fs.existsSync(recordOf(machine).path), false);
+}));
+
+test('--next-number prints the next free work number of the project from the channel and the openings, and reads nothing else', withMachine(async (machine) => {
+  storeOpening(machine);
+  storeOpening(machine, 'JH 29 · memory');
+  const fake = fakeRun(machine);
+  const mustNot = () => {
+    throw new Error('--next-number must not list the processes');
+  };
+  const next = await runSessions(machine, ['--next-number'], { run: fake.run, listProcesses: mustNot });
+  assert.deepEqual([next.code, next.stdout, next.stderr], [0, 'JH 30', '']);
+  assert.deepEqual(fake.calls.map((made) => made.args[0]), ['rev-parse'], 'only where the project is');
+  assert.equal(fs.existsSync(recordOf(machine).path), false, 'it writes nothing');
+  // A project with no numbered session has no code to give: exit 1, saying where it looked.
+  fs.rmSync(path.join(machine.userHome, '.js-harness'), { recursive: true, force: true });
+  const none = await runSessions(machine, ['--next-number']);
+  assert.equal(none.code, 1);
+  assert.match(none.stderr, /no numbered session .*<code> 1/);
 }));
 
 test('--opening records in the channel which session read which title: the clock, the session id, the title', withMachine(async (machine) => {

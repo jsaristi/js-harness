@@ -123,7 +123,7 @@ test('the tools that do not open a session pass in this repository, whatever the
 
 // A session started with no effort runs at the effort of the session that started it: on 2026-10-16 two work
 // sessions opened so ran at max for two days while the rule says high (odd/tasks/harness-review.md, T6c).
-const BRIEF = { initiation: 'own_initiative', title: 'T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
+const BRIEF = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
 
 test('in this repository a session started with no effort, or above the rule\'s, is refused, and the reason names the rule', () => {
   const noEffort = sessionEffortRefusal(BRIEF, HERE);
