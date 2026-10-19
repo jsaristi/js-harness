@@ -169,7 +169,7 @@ export function collectFiles({ home, dest, scope = 'all' }) {
       try {
         buffer = fs.readFileSync(source);
       } catch (error) {
-        throw new Error(`could not read ${source}: ${error.message}`);
+        throw new Error(`could not read ${source}: ${error.message}`, { cause: error });
       }
       const scan = redactSecrets(buffer.toString('utf8'));
       if (scan.kinds.length > 0) {

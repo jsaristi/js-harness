@@ -61,9 +61,10 @@ const HOME_PATH = /\b[A-Za-z]:[\\/]+Users[\\/]|(?:^|[\s(`'"])\/(?:home|Users)\//
  * `terms` (case ignored), and how many were dropped. */
 export function privacyCheck(lines, terms) {
   const escaped = terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  // Terms are project slugs: one preceded by '-' or '_' is the end of another slug (`harness` in `js-harness`), while
-  // one followed by '-' may start a private one (`harness-lab`), so only the leading side treats '-' as a letter.
-  const term = escaped.length ? new RegExp(`(?<![A-Za-z0-9_-])(?:${escaped.join('|')})(?![A-Za-z0-9_])`, 'i') : null;
+  // Terms are project slugs: one preceded by '-' is the end of another slug (`harness` in `js-harness`), while one
+  // followed by '-' may start a private one (`harness-lab`), so only the leading side treats '-' as a letter. '_' is a
+  // break on both sides, since Markdown emphasis (`_name_`) must not hide a term.
+  const term = escaped.length ? new RegExp(`(?<![A-Za-z0-9-])(?:${escaped.join('|')})(?![A-Za-z0-9])`, 'i') : null;
   const kept = [];
   let dropped = 0;
   for (const line of lines) {

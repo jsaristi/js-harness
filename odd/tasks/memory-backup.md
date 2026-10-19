@@ -285,11 +285,11 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
 ## Tasks
 - [x] T1 (kind: design) The design above, past two read-only readers, their findings above
 - [x] T2 (kind: build) `backup run` and `status`: export, shrink refusal, secrets, trees, bundle, manifest, push guard (186a7c79, 22bbe6e8, 83df03c2; inline)
-- [ ] T3 (kind: build) `backup init`: create the private repository, verify its visibility, clone, `RESTORE.md`
+- [x] T3 (kind: build) `backup init`: create the private repository, verify its visibility, clone, `RESTORE.md` (built with T2; run for real in L15: jsaristi/js-harness-memory, PRIVATE)
 - [ ] T4 (kind: build) `backup --hook`, its manifest entries, throttle, lock; the detached child measured on both hosts
 - [x] T5 (kind: build) `backup summary` and its privacy check; the `memory-summary` branch (c305bc02, 67f30eeb, adb90694, 362ef31e and the next commit; inline)
 - [x] T6 (kind: build) `backup restore` and `verify`, both copies; `doctor --hook` line (next commit; inline)
-- [ ] T7 (kind: verify) Restore proven from both copies on a scratch home; the Done-when commands
+- [x] T7 (kind: verify) Restore proven from both copies on a scratch home; the Done-when commands (L15: private side from GitHub, all ok; the summary from the preview file, as the lead set while the public push waits)
 - [ ] T8 (kind: docs) Help, README, roadmap lines checked off
 
 ## Log
@@ -422,11 +422,19 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   leading '-' or '_' as part of the slug (test first, RED seen). The preview, 82 lines, is in the
   lead's notes folder as memory-summary-preview.md and verifies: `ok sections`, `ok privacy: 0
   lines the check would drop`. Three lines are still left out, all by `harness` as a plain word.
+- L16 2026-10-19 10:13Z. Review of 6be0196f..f8518ae6. Codex: one P2, the boundary also took '_'
+  as a letter, so Markdown emphasis (`_clientname_`) would have kept a private term; gentle-ai
+  (lineage review-77262cce2103442b, risk and reliability) approved and burned, with the same
+  point as an advisory, plus two suggestions (keep the error's cause; assert the auth.json
+  exclusion directly). All fixed in the next commit, test first (RED seen for the emphasis
+  case): only a leading '-' is part of a slug now. Accepted trade-off: a private term at the
+  end of a hyphenated slug (`prefix-client`) is kept, which is the slug case itself. The
+  preview regenerated after the fix is identical and still verifies. The lead has its path.
 
 ## Next step
-State after L15: gentle-ai review of 6be0196f..HEAD (escalate item 2: what reaches a repository)
-and Codex of the same range; then T4 (the detached child on a real Stop hook), T8, the PR. The
-public push waits for Sebastián's read of the preview, through the lead.
+State after L16: Codex recheck of the emphasis fix (base f8518ae6); then T4 (the detached child
+on a real Stop hook, both hosts), T8, the PR. The public push waits for Sebastián's read of the
+preview, through the lead.
 State after L13 (context pause at 86%): commit the opt-in change; gentle-ai review of
 f3640a6e..HEAD (escalate item 1: restore writes Engram and a home) and Codex of the same range
 from a detached worktree; then for real `backup init --repo jsaristi/js-harness-memory` (no

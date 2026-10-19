@@ -110,6 +110,8 @@ test('collectFiles copies the Claude memory folders and the js-harness home, lea
   assert.equal(files.find((f) => f.path.endsWith('x.md')).sha256, sha('fact\n'));
   assert.ok(!fs.existsSync(path.join(dest, 'js-harness-home', 'remote', 'server.log')));
   assert.ok(!fs.existsSync(path.join(dest, 'js-harness-home', 'memory-backup')));
+  assert.ok(!files.some((f) => /codex-review-homes|auth\.json/.test(f.path)), "Codex's login link never reaches the backup");
+  assert.ok(!fs.existsSync(path.join(dest, 'js-harness-home', 'codex-review-homes')));
 });
 
 test('collectFiles copies a file holding a secret with the value blanked, names it, and removes a stale copy', (t) => {

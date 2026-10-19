@@ -74,8 +74,9 @@ test('privacyCheck drops a line with an email, a secret, a home path or a privat
   assert.deepEqual(kept, ['- kept: the gate runs on CI']);
   assert.equal(dropped, 6);
   assert.deepEqual(privacyCheck(['- a template here'], ['temp']).kept, ['- a template here'], 'a term is a whole word');
-  // Project names are slugs: the term `harness` (another project) is not inside `js-harness` or `harness_x`.
-  assert.deepEqual(privacyCheck(['- js-harness gate', '- harness_x'], ['harness']).kept, ['- js-harness gate', '- harness_x']);
+  // Project names are slugs: the term `harness` (another project) is not inside `js-harness`.
+  assert.deepEqual(privacyCheck(['- js-harness gate'], ['harness']).kept, ['- js-harness gate']);
+  assert.equal(privacyCheck(['- a _clientname_ plan', '- a __clientname__ plan'], ['clientname']).dropped, 2, 'Markdown emphasis does not hide a term');
   assert.equal(privacyCheck(['- the harness repo', '- in harness-lab'], ['harness']).dropped, 2, 'the term alone, or as the first part of a longer slug, is still dropped');
 });
 
