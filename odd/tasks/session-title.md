@@ -97,3 +97,8 @@ review.
   whole report, checked by the command. Question 24 asks him to accept the rule as his. This branch is rebased onto
   it, so PR 469 changes `bin/lib/rules-data.mjs` and `docs/rule-sources.json` no more and `docs/RULES.md` only in its
   "Read by" line. Next step: the orchestrator lands PR 470, then PR 469.
+- L8 (2026-10-19): the rebase gave the commits new names, so Codex reviewed the slice again, 73f7804..ec8b073:
+  incorrect (0.97), one P2, taken: a torn line of the record was counted in `skipped` and dropped, so
+  `--next-number` could print a taken number with exit 0. Fixed test first (RED on the torn line): such lines are
+  named in `unavailable`. The real record has none (`skipped 0` over 813 notices), so the command still prints
+  `JH 33` with exit 0 there.

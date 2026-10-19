@@ -718,9 +718,10 @@ test('nextSessionNumber is one past the highest number of the project code, in t
   assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33 });
   assert.deepEqual(channel.nextSessionNumber(home, 'C--other'), { code: null, number: 1 });
 
-  // A line from another version with a number that is not whole counts for nothing, and breaks nothing.
+  // A line from another version with a number that is not whole counts for nothing and breaks nothing; it is not a
+  // notice of this version, so the record is said to hold a line it could not read.
   fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ ...note(), to: { role: 'work', number: 'x' } })}\n`, 'utf8');
-  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33 });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
 }));
 
 test('nextSessionNumber says which source it could not read, so a guess is not taken for the number', withHome((home) => {
@@ -734,6 +735,10 @@ test('nextSessionNumber says which source it could not read, so a guess is not t
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'torn-000000000000.json'), '{"schema":"js-harness.channel-opening/v1","title":"JH 32 · t', 'utf8');
   assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 6, unavailable: [`openings ${dir} (1 file not readable as an opening)`] });
+  fs.rmSync(path.join(dir, 'torn-000000000000.json'));
+  // A torn line of the record may hold the highest number too: it is said, not dropped (Codex, P2).
+  fs.appendFileSync(channel.recordPath(home, SLUG), '{"schema":"js-harness.channel-notice/v1","from":{"title":"JH 32 · t\n', 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 6, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
 }));
 
 // --- where a notice is run from ---

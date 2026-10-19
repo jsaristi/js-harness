@@ -592,6 +592,8 @@ export function nextSessionNumber(home, slug, { readdir = (dir) => fs.readdirSyn
   const unavailable = [];
   const record = readNotices(home, slug, { readFile });
   if (record.unavailable) unavailable.push(`record ${record.path} (${record.unavailable})`);
+  // A torn line, or one of another schema, may be the one with the highest number.
+  else if (record.skipped > 0) unavailable.push(`record ${record.path} (${record.skipped} line${record.skipped === 1 ? '' : 's'} not readable as a notice or a reading)`);
   const dir = openingsDir(home, slug);
   let openings = [];
   try {
