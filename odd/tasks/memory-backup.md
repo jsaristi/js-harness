@@ -445,6 +445,12 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   the same trust there (README says so). A harness-wide follow-up, not this feature's.
   main merged in (c829d703, no conflict) to check off the roadmap: the design and the private
   repository lines; the public summary and "Restore proven from both" wait on the public push.
+- L18 2026-10-19. gentle-ai evidence per code commit, for the merge door (one line each):
+  - gentle-ai: 766dfa29 and 95288eb0 in slice 2, lineage review-c35f7b854150c92e, approved and burned.
+  - gentle-ai: 6aafd6d7 is the bounded correction of lineage review-92144fded18626e8, validator approved, burned.
+  - gentle-ai: 6be0196f assessed medium at its own head (base 58dbba61), not due: under_budget.
+  - gentle-ai: b3f8770d and f8518ae6 in lineage review-77262cce2103442b (risk, reliability), approved, burned.
+  - gentle-ai: 4fb74595 assessed medium at its own head (base f8518ae6), not due: under_budget.
 
 ## Next step
 State after L17: the contract's lines run except `verify --summary` against the public repo,
