@@ -282,6 +282,23 @@
     "kind": "design",
     "path": "odd/tasks/stalled-sessions.md"
   },
+  "session-title": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Hay un error en las sesiones de trabajo y es que no le estas colocando el JH + numero no entiendo por que antes si y ahora no si esta explicito en el harness? que esta fallando y como se debe solucionar?",
+        "date": "2026-10-19",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 4992
+      }
+    ],
+    "reading": "His report that the work sessions the orchestrator started with start_session carried no \"JH <n>\": every session is titled <code> <n> · <purpose>, as the opening flow titled the ones he opened, with the number js-harness sessions --next-number prints; a new lead started with start_session takes ORQ. The guard holds the shape only, where the rule is declared, as session-effort.",
+    "accepted": "Not put to him as a reading: the shape is the one the opening flow and the board already use, and his to correct.",
+    "checked": {
+      "date": "2026-10-19",
+      "by": "command"
+    }
+  },
   "sessions-open-in-sidebar": {
     "kind": "words",
     "quotes": [
