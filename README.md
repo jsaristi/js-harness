@@ -40,7 +40,9 @@ npm rm -g js-harness
 
 `uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
 and names them; `uninstall --global --full` removes them too. Files you modified and the memory
-notes themselves are kept either way.
+notes themselves are kept either way. `uninstall --global --everything` removes all that js-harness
+keeps on the machine and then the program itself, so `npm rm -g` is not needed after it; the TUI
+offers it as "Uninstall everything". Projects' files are kept.
 
 `uninstall` removes from the project what `init` wrote, and `uninstall --global` removes from
 the home what `install` wrote. Each one reads the manifest the install recorded, so it removes
@@ -294,6 +296,17 @@ Inside a project, removes what `init` wrote; with `--global`, removes what `inst
 you modified and the memory notes themselves are kept either way. Neither removes a project's
 memory folder while a pass holds its lock: the line says what releases it.
 
+`--global --everything` is `--full` and then the rest: the whole `.js-harness` folder of the home
+(the lead's notes, the backups, the throughput records and anything else under it), and the
+js-harness program, removed by the package manager that installed the copy running it (pnpm's
+`remove -g`, or npm's `uninstall -g` with that copy's own prefix). A copy run from a checkout was
+installed by no package manager, and one in a project's `node_modules` (or npx's cache) is that
+project's dependency, so the program is kept and the line says why. The program counts as
+removed only once its folder is gone, whatever the manager's exit code. While a gate runs, or the
+folder or anything above it could not be removed, it removes nothing more and says to run it
+again. It cannot be undone; the TUI's "Uninstall everything" asks once, naming all of it,
+and ends once it succeeds. Projects' files are kept: `uninstall` inside each project undoes `init`.
+
 ```console
 $ js-harness uninstall
 removed harness.json
@@ -344,8 +357,10 @@ folder>` names another repository), or the newest tarball of `--source <dir>`, a
 tarballs, which wins when named and needs no credential. With no release tagged it installs nothing and exits 1; no package registry is ever
 asked.
 
-The package manager is `npm` unless `--pm <command>` or `JS_HARNESS_PM` names another, such as
-`pnpm`. npm gets `--allow-git=all` for a tag, since npm 12 fetches nothing from git without it
+The package manager is `--pm <command>`, else `JS_HARNESS_PM`, else the one that installed the copy
+running now: `pnpm` for a copy in pnpm's global folder, `npm` otherwise. The menu's Upgrade passes
+no `--pm`, so it upgrades a pnpm copy with pnpm; after it the menu's header says the new version is
+installed and to open the menu again, since the one open keeps the old code. npm gets `--allow-git=all` for a tag, since npm 12 fetches nothing from git without it
 (`all` and not `root`, which npm 11.12 refuses for a global install);
 pnpm gets `add -g`. The install is judged by the installed copy's own `--version`, not by the
 package manager's exit code: pnpm can exit 1 after a good install when its cleanup finds a file

@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import {
@@ -22,7 +24,7 @@ import {
 import { DEFAULT_REPO, INSTALL_NEWEST, tagSpec } from './lib/version.mjs';
 
 const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
-const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full]]';
+const UNINSTALL_USAGE = 'Usage: js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full | --everything]]';
 const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
 class ScopeArgError extends Error {}
@@ -443,17 +445,25 @@ export async function syncMain(argv, env = process.env, deps = {}) {
 export async function uninstallMain(argv, env = process.env, deps = {}) {
   // `--full` is uninstall's alone (D7.3 of odd/tasks/memory-hygiene.md): taken out before the flags `sync` shares.
   // One right after `--cwd` or `--home` stays, so that flag still refuses it as a value that starts with `--`.
-  const isFull = (token, i) => token === '--full' && argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
+  const isFlag = (flag) => (token, i) => token === flag && argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
+  const isFull = isFlag('--full');
+  // `--everything` (release-095 S5): `--full`, then the whole `.js-harness` folder, then the program itself.
+  const isEverything = isFlag('--everything');
   const full = argv.some(isFull);
+  const everything = argv.some(isEverything);
   let parsed;
   try {
-    parsed = parseScopeArgs(argv.filter((token, i) => !isFull(token, i)), env);
+    parsed = parseScopeArgs(argv.filter((token, i) => !isFull(token, i) && !isEverything(token, i)), env);
   } catch (err) {
     console.error(`${err.message}\n\n${UNINSTALL_USAGE}`);
     return 2;
   }
   // It deletes the only copy of what a memory pass changed, so it is asked for in full words, even outside a
   // repository where `uninstall` alone is the machine's.
+  if (everything && !parsed.global) {
+    console.error(`--everything removes everything js-harness keeps on the machine and the program: it goes with --global\n\n${UNINSTALL_USAGE}`);
+    return 2;
+  }
   if (full && !parsed.global) {
     console.error(`--full removes the memory snapshots of the machine: it goes with --global\n\n${UNINSTALL_USAGE}`);
     return 2;
@@ -481,7 +491,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   const home = parsed.home;
   // A recorded scheduled task is looked for and deleted through `schtasks.exe`, found from the environment this
   // command was given and nowhere else (`runSchtasks`); it is run only when the manifest records a task.
-  const result = uninstall(home, { ...deps, full, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  const result = uninstall(home, { ...deps, full: full || everything, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
@@ -588,7 +598,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     }
   }
   const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
-  if (result.throughputKept) {
+  if (result.throughputKept && !everything) {
     const { path: folder, days, reviewStarts } = result.throughputKept;
     const starts = reviewStarts === null ? ', and any gentle-ai review starts recorded there' : reviewStarts > 0 ? `, and the gentle-ai review starts of ${reviewStarts} project${reviewStarts === 1 ? '' : 's'}, the only record of when those reviews began` : '';
     console.log(`kept ${folder}: ${days === null ? 'the' : days} day snapshot${days === 1 ? '' : 's'} of the throughput review, the only copy of the gates of days the gate log has rotated away${starts}; remove the folder by hand to drop them`);
@@ -609,5 +619,70 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  return notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  if (!everything) return code;
+  // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
+  const dir = path.join(home, '.js-harness');
+  if (code !== 0 || result.gateKept.length > 0) {
+    console.error(`kept the rest of ${dir} and the js-harness program: what is said above is still in use or could not be removed; once it is not, run js-harness uninstall --global --everything again`);
+    return 1;
+  }
+  return removeEverything(dir, deps);
+}
+
+/** The end of `uninstall --everything`, once the normal uninstall left nothing in use: the folder `dir` with all it
+ * still holds (the lead's files, backups, throughput), then the program, by the package manager that installed the
+ * copy running now. A copy no manager installed (a checkout) is no package to remove: a global uninstall would remove
+ * another copy. Returns the exit code. */
+function removeEverything(dir, deps) {
+  const existsSync = deps.existsSync ?? fs.existsSync;
+  try {
+    const names = fs.readdirSync(dir).sort();
+    (deps.rmSync ?? fs.rmSync)(dir, { recursive: true, force: true });
+    console.log(`removed ${dir}${names.length > 0 ? `: ${names.join(', ')}` : ''}`);
+  } catch (err) {
+    // Nothing more is removed, so the same command finishes the job once the folder is free.
+    if (err.code !== 'ENOENT') {
+      console.error(`could not remove ${dir} (${err.code ?? err.message}): kept the js-harness program; once nothing holds the folder, run js-harness uninstall --global --everything again`);
+      return 1;
+    }
+  }
+  const copyPath = deps.copyPath ?? fileURLToPath(import.meta.url);
+  const root = installedPackageRoot(copyPath);
+  if (root === null) {
+    console.log(`kept the js-harness program: this one runs from ${checkoutOf(copyPath)}, which no package manager installed`);
+    return 0;
+  }
+  const pm = copyPackageManager(copyPath);
+  // A project's own copy, or npx's, is no global install: npm -g --prefix there would remove that project's file.
+  const project = pm === 'npm' ? dependentProjectOf(copyPath, existsSync) : null;
+  if (project !== null) {
+    console.log(`kept the js-harness program: this one is a dependency of ${project}, not a global install`);
+    return 0;
+  }
+  const platform = deps.platform ?? process.platform;
+  const prefix = pm === 'npm' ? npmPrefixOf(root) : null;
+  const args = pm === 'pnpm' ? ['remove', '-g', 'js-harness'] : ['uninstall', '-g', '--prefix', prefix, 'js-harness'];
+  const byHand = `${pm} ${args.map((word) => shownWord(word, platform)).join(' ')}`;
+  // Quotes keep neither %NAME% nor a " from cmd.exe, so such a folder is refused before anything runs, as upgrade does.
+  if (platform === 'win32' && prefix !== null && /[%"]/.test(prefix)) {
+    console.error(`could not remove the js-harness program: its folder ${prefix} holds a % or a " that cmd.exe would read; remove it with ${byHand}`);
+    return 1;
+  }
+  // pnpm acts on its configured global folder; the copy that runs may lie in another one.
+  const env = pm === 'pnpm' ? { ...process.env, pnpm_config_global_dir: pnpmGlobalDirOf(copyPath) } : undefined;
+  const ran = runPm(deps.spawn ?? spawnSync, [pm], args, env, platform);
+  // A manager can exit 0 having removed nothing (npm, for a prefix that holds no such package): the folder says.
+  if (ran.status === 0 && existsSync(root)) {
+    console.error(`could not remove the js-harness program: ${pm} exited 0 and ${root} is still there; run ${byHand}`);
+    return 1;
+  }
+  if (ran.status === 0) {
+    console.log(`removed the js-harness program: ${pm} ${args.join(' ')}`);
+    return 0;
+  }
+  const said = String(ran.stderr ?? '').trim().split(/\r?\n/).at(-1);
+  const how = ran.error ? `could not be started (${ran.error.code ?? ran.error.message})` : `exited ${ran.status}`;
+  console.error(`could not remove the js-harness program: ${pm} ${how}${said ? ` (${said})` : ''}; run ${byHand}`);
+  return 1;
 }

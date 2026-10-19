@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { copyPackageManager, quoteForShell, runPm } from './lib/package-manager.mjs';
 import { currentVersion } from './install.mjs';
 import { installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
@@ -30,8 +32,11 @@ function parseArgs(argv, env) {
   };
 }
 
-function resolvePm(pm, env) {
-  return pm ?? env.JS_HARNESS_PM ?? 'npm';
+
+/** The package manager of an upgrade: `--pm`, else `JS_HARNESS_PM`, else the one that installed the copy running now,
+ * read from where it lies: the TUI's Upgrade passes no `--pm`, and npm over a copy pnpm installed fails (release-095 S3). */
+function resolvePm(pm, env, copyPath = fileURLToPath(import.meta.url)) {
+  return pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
 }
 
 /** What the commands say where the repository holds no release tag (the first is v0.9.0, docs/ROADMAP.md, "Versioning"),
@@ -119,32 +124,8 @@ function pnpmCopy(prefix, version) {
   return root ? path.join(root, 'bin', 'js-harness.mjs') : null;
 }
 
-/** Quotes a value for a shell command line built by joining tokens with spaces (see `shell: true`
- * in `child_process.spawn`, which does not escape array elements on its own). Simple, not
- * bulletproof: assumes the value has no embedded quote of its own platform's kind. */
-function quoteForShell(value, platform) {
-  return platform === 'win32' ? `"${value}"` : `'${value.replace(/'/g, "'\\''")}'`;
-}
 
-/** A word for a cmd.exe line: as it is when it holds nothing cmd.exe reads, else quoted. A `.cmd` file found on the
- * path and named in quotes gets a wrong `%~dp0`, the folder pnpm's own shim starts from ("El sistema no puede
- * encontrar la ruta especificada", T2), so a plain command name is never quoted. Quotes do not keep cmd.exe from
- * expanding `%NAME%`, and a `"` ends them, so `upgradeMain` refuses a word holding either before it runs. */
-function cmdWord(word) {
-  return /^[\w@+=:,./\\-]+$/.test(word) ? word : quoteForShell(word, 'win32');
-}
 
-/** Starts the package manager. On Windows `npm` and `pnpm` are often `.cmd` files, which Node starts only through a
- * shell, so there it runs as one line, with no argument array beside `shell: true` (Node's DEP0190). `env` is
- * passed only when the install needs its own (pnpm's isolated home); otherwise the child inherits. */
-function runPm(spawn, words, args, env, platform) {
-  const opts = env ? { encoding: 'utf8', env } : { encoding: 'utf8' };
-  if (platform === 'win32') {
-    return spawn([...words, ...args].map(cmdWord).join(' '), [], { ...opts, shell: true });
-  }
-  const [cmd, ...head] = words;
-  return spawn(cmd, [...head, ...args], opts);
-}
 
 /** pnpm's lock on its global bin folder: a folder it takes while it links commands, and leaves behind when its
  * cleanup fails (os error 32 on Windows), after which the next install waits five minutes on it and times out
@@ -474,7 +455,7 @@ const PNPM_LOCK_NOTE =
   'and never while a pnpm runs';
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep } = {}) {
+export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep, copyPath } = {}) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
   // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
   const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source', '--prefix', '--pm'] });
@@ -501,7 +482,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
 
   // What is installed: the tarball of the folder the caller named, or the repository at its release tag; never a
   // name on a registry. The install and its verdict are `installCopy`'s, which `merge-queue --refresh-copy` shares.
-  const words = splitCommand(resolvePm(opts.pm, env));
+  const words = splitCommand(resolvePm(opts.pm, env, copyPath));
   // A failed install is tried again, as the land's refresh does (bin/lib/refresh-copy.mjs): on Windows pnpm can fail
   // with os error 32 while a file it just wrote is held, and the same install works a little later (harness-review L58).
   let copy;
