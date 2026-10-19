@@ -192,6 +192,23 @@ test('bare onboard: an onboarding on another branch is named, with its worktree 
   assert.equal((await onboard(root)).out, `Onboarding in progress on branch onboarding, checked out in ${listed}: open a session there and run js-harness onboard.`);
 });
 
+test('bare onboard: a remote branch holding the onboarding is named even when a local one of its name does not hold it', async (t) => {
+  const root = committed(t);
+  git(root, 'branch', 'onboarding');
+  git(root, 'switch', '-q', '-c', 'fetched');
+  write(root, { [ONBOARDING_PATH]: featureTemplate() });
+  git(root, 'add', '-A');
+  git(root, 'commit', '-q', '-m', 'onboarding');
+  git(root, 'update-ref', 'refs/remotes/origin/onboarding', 'fetched');
+  git(root, 'switch', '-q', 'main');
+  git(root, 'branch', '-D', 'fetched');
+  assert.deepEqual(await onboard(root), {
+    code: 0,
+    out: 'Onboarding in progress on branch origin/onboarding: git switch onboarding, then git merge origin/onboarding, resumes it here.',
+    err: '',
+  });
+});
+
 test('bare onboard: a closed onboarding waits for its merge, and once merged points at the roadmap', async (t) => {
   const root = committed(t);
   git(root, 'switch', '-q', '-c', 'onboarding');

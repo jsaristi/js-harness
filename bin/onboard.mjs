@@ -132,13 +132,21 @@ function elsewhere(root, branch) {
   }
   const refs = (git(root, 'for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes') ?? '').split('\n').filter(Boolean);
   const locals = new Set(refs.filter((ref) => ref.startsWith('refs/heads/')).map((ref) => ref.slice('refs/heads/'.length)));
+  const holding = refs.filter((ref) => !ref.endsWith('/HEAD') && holds(root, ref, ONBOARDING_PATH));
+  const heldLocally = new Set(holding.filter((ref) => ref.startsWith('refs/heads/')).map((ref) => ref.slice('refs/heads/'.length)));
   const found = [];
-  for (const ref of refs) {
-    const local = ref.startsWith('refs/heads/');
-    const name = local ? ref.slice('refs/heads/'.length) : ref.slice('refs/remotes/'.length);
-    if (name === branch || name.endsWith('/HEAD')) continue;
-    if (!local && locals.has(name.slice(name.indexOf('/') + 1))) continue;
-    if (holds(root, ref, ONBOARDING_PATH)) found.push({ branch: name, worktree: local ? worktrees.get(name) ?? null : null, remote: !local });
+  for (const ref of holding) {
+    if (ref.startsWith('refs/heads/')) {
+      const name = ref.slice('refs/heads/'.length);
+      if (name !== branch) found.push({ branch: name, worktree: worktrees.get(name) ?? null, remote: false });
+      continue;
+    }
+    // A remote branch is the local one of its name only when that one holds the document too; a local one that
+    // does not is where the remote's work is merged.
+    const name = ref.slice('refs/remotes/'.length);
+    const localName = name.slice(name.indexOf('/') + 1);
+    if (heldLocally.has(localName)) continue;
+    found.push({ branch: name, worktree: null, remote: true, local: locals.has(localName) ? localName : null });
   }
   return found;
 }

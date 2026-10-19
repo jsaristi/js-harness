@@ -540,17 +540,18 @@ function stageLines(at, files, git) {
 }
 
 /** Where an onboarding on another branch is, and how to resume it (D7). */
-function elsewhereLine({ branch, worktree, remote = false }, git) {
+function elsewhereLine({ branch, worktree, remote = false, local = null }, git) {
   if (branch === git.defaultBranch || (remote && branch.endsWith(`/${git.defaultBranch}`))) {
     return `The onboarding is on ${branch}: merge ${branch} into this branch, or switch to it.`;
   }
   if (worktree) return `Onboarding in progress on branch ${branch}, checked out in ${worktree}: open a session there and run js-harness onboard.`;
+  if (local) return `Onboarding in progress on branch ${branch}: git switch ${local}, then git merge ${branch}, resumes it here.`;
   return `Onboarding in progress on branch ${branch}: git switch ${remote ? '--track ' : ''}${branch} resumes it here.`;
 }
 
 /** What bare `onboard` prints, and its exit code: `{ code, lines }`. `git` says where the session is: `branch` (or
  * `null` when detached), `defaultBranch`, `defaultHasRoadmap`, `elsewhere` (other branches holding an onboarding
- * document: `{ branch, worktree, remote }`) and `uncommitted` (the onboarding's files git has not committed). */
+ * document: `{ branch, worktree, remote, local }`, `local` naming a local branch of a remote's name that lacks it) and `uncommitted` (the onboarding's files git has not committed). */
 export function stageReport(files, { agentsTemplate = '', git }) {
   if (files.onboarding === null) {
     if (git.elsewhere.length > 0) return { code: 0, lines: git.elsewhere.map((place) => elsewhereLine(place, git)) };
