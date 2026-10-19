@@ -52,7 +52,8 @@ Nothing: both rules are his words; spend is one gate, one gentle-ai review and o
   No RED of its own: the step is one constant the tests assert verbatim, changed in the same edit. GREEN:
   host-update and doctor tests 94/94.
 - [ ] T3 (kind: verify): gate, gentle-ai review, Codex review, pull request, land, `sync --global`, the installed guard
-  denies a bare command.
+  denies a bare command. Gates, the verifier and both Codex reviews done (L4, L5); the land and the installed check
+  are left.
 
 ## Log
 - L1 (2026-10-19, his words, verbatim): see S1 and S2.
@@ -69,3 +70,5 @@ Nothing: both rules are his words; spend is one gate, one gentle-ai review and o
   one P2, taken: a word of the note could reach past its closing quote, so `npm test; Write-Host 'NOTE: runs tests';
   echo 'done'` passed. Fixed test first (RED 32/33): a word holds no quote, and `NOTE:` is matched in capitals; the
   lowercase advisory is pinned by the same test.
+- L5 (2026-10-19): the fix committed as 84b829bd (gate passed). gentle-ai 4ed1cc5d..84b829bd medium, not due
+  (under_budget). Codex 4ed1cc5..84b829b: correct (0.99), the P2 fixed.
