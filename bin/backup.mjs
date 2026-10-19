@@ -268,16 +268,17 @@ function pushSummary(deps, paths, config) {
     must(git(deps, source, ['fetch', '-q', 'origin', 'main'], { timeout: PUSH_TIMEOUT_MS }), 'git fetch origin main');
     const { text } = buildPublicSummary(deps, paths, config);
     const hash = createHash('sha256').update(text).digest('hex');
-    if (hash === last.lastSummary?.hash) {
+    const ref = `refs/heads/${SUMMARY_BRANCH}`;
+    // What the remote holds now, empty when the branch is gone: it is the lease of the push, so a push made elsewhere
+    // since is not overwritten, and it decides "unchanged", since a summary replaced or deleted there is not unchanged.
+    const lease = must(git(deps, source, ['ls-remote', 'origin', ref], { timeout: PUSH_TIMEOUT_MS }), 'git ls-remote').split(/\s/)[0];
+    if (hash === last.lastSummary?.hash && lease === last.lastSummary.commit) {
       noteSummary(paths, { lastSummary: { ...last.lastSummary, at } });
       return 'unchanged';
     }
     const blob = must(git(deps, source, ['hash-object', '-w', '--stdin'], { input: text }), 'git hash-object');
     const tree = must(git(deps, source, ['mktree'], { input: `100644 blob ${blob}\tSUMMARY.md\n` }), 'git mktree');
     const commit = must(git(deps, source, ['commit-tree', tree, '-m', `memory summary ${at.slice(0, 10)}`]), 'git commit-tree');
-    const ref = `refs/heads/${SUMMARY_BRANCH}`;
-    // The lease is what the remote holds now, empty when the branch is new: a push made elsewhere since is not overwritten.
-    const lease = must(git(deps, source, ['ls-remote', 'origin', ref], { timeout: PUSH_TIMEOUT_MS }), 'git ls-remote').split(/\s/)[0];
     must(git(deps, source, ['push', '-q', `--force-with-lease=${ref}:${lease}`, 'origin', `${commit}:${ref}`], { timeout: PUSH_TIMEOUT_MS }), 'git push');
     noteSummary(paths, { lastSummary: { at, pushedAt: at, commit, hash } });
     return 'pushed';

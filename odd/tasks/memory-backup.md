@@ -361,7 +361,19 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   day (it is a summary; a refusal retried every 30 minutes would fetch every run); the lease path
   untested (needs a push racing between ls-remote and push).
 
+- L11 2026-10-19 08:51Z. Codex. Any range based at 1bdae974 is refused as a second recheck of the
+  83df03c findings (fixed in 67f30eeb). I first recorded c305bc0 as a skip; the lead (JH ORQ,
+  by message) asked for a real review, since it is the library that decides what reaches the
+  public repository. Reviewed as 95288eb..c305bc0 with --again (one part, 134,131 input
+  tokens): one P1, decision titles of a feature with no document on main (unmerged or private)
+  reached the public summary; now only features on origin/main are listed (RED seen). The skip
+  record stays beside the review. c305bc0..f272876 (one part, 365,748 input tokens): two P2,
+  the empty terms seed (already fixed in ece913b9) and an unchanged summary skipped without
+  reading the remote, so a branch deleted or replaced elsewhere stayed so; now "unchanged" also
+  needs the remote to hold the last commit (RED seen). 44 backup tests green.
+
 ## Next step
+State after L11: the Codex fixes are the next commit; then T6 restore and verify.
 State after L10: next codex-review of 1bdae974..f272876e from a detached worktree, then T6.
 State after L9: T5 done; next the gentle-ai review of 1bdae974..HEAD (escalate item 2), then
 codex-review from a detached worktree (base 1bdae974), then T6. Earlier state, for the record:

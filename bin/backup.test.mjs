@@ -457,26 +457,32 @@ test('backup run pushes the summary to memory-summary at most daily, one orphan 
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   assert.equal(branch(), second, 'an unchanged summary is not pushed again');
 
+  defaultRun('git', ['--git-dir', bare, 'update-ref', '-d', 'refs/heads/memory-summary']);
+  state.now += 25 * 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const third = branch();
+  assert.ok(third, 'unchanged here, but gone from the remote: pushed again');
+
   changeMain('- [ ] Elsewhere');
   state.summaryUrls = ['https://github.com/jsaristi/js-harness.git', 'https://github.com/someone/fork.git'];
   state.now += 25 * 60 * 60_000;
   assert.equal(await backupMain(['run'], deps), 0, 'a refused summary never fails the backup');
-  assert.equal(branch(), second);
+  assert.equal(branch(), third);
   assert.match(last().summaryError.error, /someone\/fork/);
 
   state.summaryUrls = ['https://github.com/jsaristi/js-harness.git'];
   fs.rmSync(path.join(paths.clone, 'private-terms.txt'));
   state.now += 25 * 60 * 60_000;
   assert.equal(await backupMain(['run'], deps), 0);
-  assert.equal(branch(), second, 'no terms list, no summary');
+  assert.equal(branch(), third, 'no terms list, no summary');
   assert.match(last().summaryError.error, /private-terms\.txt/);
   assert.equal(await backupMain(['status'], deps), 0);
-  assert.match(deps.stdout.text, new RegExp(`^summary: last pushed ${last().lastSummary.pushedAt}, ${second.slice(0, 8)}; last refused .*private-terms\\.txt`, 'm'));
+  assert.match(deps.stdout.text, new RegExp(`^summary: last pushed ${last().lastSummary.pushedAt}, ${third.slice(0, 8)}; last refused .*private-terms\\.txt`, 'm'));
 
   fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'clientproject\n');
   state.now += 25 * 60 * 60_000;
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
-  assert.notEqual(branch(), second);
+  assert.notEqual(branch(), third);
   deps.stdout = sink();
   assert.equal(await backupMain(['status'], deps), 0);
   assert.match(deps.stdout.text, /^summary: last pushed [^;]*$/m, 'a refusal older than the last push is not shown');

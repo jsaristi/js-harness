@@ -43,8 +43,11 @@ export function buildSummary({ roadmap, features, observations, project = 'js-ha
   lines.push('');
 
   lines.push('## Decisions', '');
+  // Only features whose document is in `features`, the ones on main: a mirror of a branch never merged, or of a
+  // feature kept private, is not public yet, and no privacy check can tell its plain words apart.
+  const published = new Set(features.map((f) => f.id));
   const mirrors = observations
-    .filter((o) => o.project === project && typeof o.topic_key === 'string' && /^odd\/[^/]+\//.test(o.topic_key))
+    .filter((o) => o.project === project && typeof o.topic_key === 'string' && published.has(/^odd\/([^/]+)\//.exec(o.topic_key)?.[1]))
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     .slice(0, limit);
   for (const o of mirrors) lines.push(`- ${String(o.created_at).slice(0, 10)} ${o.topic_key.split('/')[1]}: ${o.title}`);

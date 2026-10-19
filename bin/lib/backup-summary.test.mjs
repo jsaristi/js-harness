@@ -26,7 +26,8 @@ const OBSERVATIONS = [
   observation(1, 'Backup design v2 after the readers', 'odd/memory-backup/tasks', '2026-10-19 07:12:00'),
   observation(2, 'A note with no feature topic', 'some/other', '2026-10-19 08:00:00'),
   observation(3, 'Another project decision', 'odd/client/tasks', '2026-10-19 09:00:00', 'client-project'),
-  observation(4, 'Gate lock decided', 'odd/gate-lock/tasks', '2026-10-18 10:00:00'),
+  observation(4, 'Gate lock decided', 'odd/done-feature/tasks', '2026-10-18 10:00:00'),
+  observation(6, 'Unpublished feature plan', 'odd/unmerged-feature/tasks', '2026-10-19 11:00:00'),
   { id: 5, title: 'no topic at all', created_at: '2026-10-19 10:00:00', project: 'js-harness' },
 ];
 
@@ -44,16 +45,17 @@ test('buildSummary holds the four sections, from the allowlist only', () => {
   assert.doesNotMatch(text, /Built the gate|not a step of the checklist/);
   assert.match(text, /^## Features in flight$/m);
   assert.match(text, /^- memory-backup: Everything survives a cleanup\. Next: T2 build the run$/m);
-  assert.doesNotMatch(text, /done-feature|A second sentence/);
+  assert.doesNotMatch(text, /^- done-feature:|A second sentence/m, 'a finished feature is not in flight');
   assert.match(text, /^## Decisions$/m);
   const decisions = lines.slice(lines.indexOf('## Decisions') + 1).filter((line) => line.startsWith('- '));
-  assert.deepEqual(decisions, ['- 2026-10-19 memory-backup: Backup design v2 after the readers', '- 2026-10-18 gate-lock: Gate lock decided']);
+  assert.deepEqual(decisions, ['- 2026-10-19 memory-backup: Backup design v2 after the readers', '- 2026-10-18 done-feature: Gate lock decided']);
   assert.doesNotMatch(text, /never shown|no feature topic|Another project|no topic at all/);
+  assert.doesNotMatch(text, /Unpublished|unmerged-feature/, 'a feature with no document on main is not public yet');
 });
 
 test('buildSummary keeps the newest decisions up to its limit', () => {
   const many = Array.from({ length: 40 }, (_, i) => observation(i, `Decision ${i}`, 'odd/f/tasks', `2026-10-${String(1 + (i % 28)).padStart(2, '0')} 00:00:${String(i).padStart(2, '0')}`));
-  const decisions = buildSummary({ roadmap: ROADMAP, features: [], observations: many }).filter((line) => / f: Decision /.test(line));
+  const decisions = buildSummary({ roadmap: ROADMAP, features: [{ id: 'f', markdown: '# F\n' }], observations: many }).filter((line) => / f: Decision /.test(line));
   assert.equal(decisions.length, 30);
   assert.equal(decisions[0], '- 2026-10-28 f: Decision 27');
 });
