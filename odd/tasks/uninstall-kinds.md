@@ -57,13 +57,13 @@ Nothing left: the product choice was asked and answered (L2).
   (142 in all). The second question of Uninstall (D7.8 of memory-hygiene) is gone: Machine + memory snapshots is its
   own item, so `hasMemorySnapshots` and `readSnapshots` went with it. After a project uninstall the selection stays
   on Uninstall, which survives, instead of jumping to Init.
-- [ ] T3 (kind: verify) Gate, gentle-ai review per slice, Codex review per code slice, pull request. gentle-ai
+- [x] T3 (kind: verify) Gate, gentle-ai review per slice, Codex review per code slice, pull request. gentle-ai
   review of origin/main..fec3b12c (lineage review-893c2a3ae738162f, lenses risk, readability, reliability): approved
-  and acknowledged, authority burned, five advisory findings (L3).
+  and acknowledged, authority burned, five advisory findings (L3). Codex review of 21aa1b3..e480c87: no defects,
+  recorded. Gate passed on every commit. Pull request: jsaristi/js-harness#471.
 
 ## Next step
-Commit the advisory cleanup (L3), then `js-harness codex-review --base 21aa1b3c` over the whole branch, then push
-`feat/uninstall-kinds` and open the pull request to `main`; report the PR to JH 30 (local_bdf1411c).
+None in this session: the merge of jsaristi/js-harness#471 is Sebastián's.
 
 ## Log
 - L1 (2026-10-19, his words, verbatim): "el uninstall debería tener submenus con los diferentes tipos de
