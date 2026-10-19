@@ -290,10 +290,16 @@
         "date": "2026-10-19",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 4992
+      },
+      {
+        "quote": "Osea en este caso se llama JH de JS Harnes pero la idea es que tenga el udentificador del proyecto",
+        "date": "2026-10-19",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 6036
       }
     ],
-    "reading": "His report that the work sessions the orchestrator started with start_session carried no \"JH <n>\": every session is titled <code> <n> · <purpose>, as the opening flow titled the ones he opened, with the number js-harness sessions --next-number prints; a new lead started with start_session takes ORQ. The guard holds the shape only, where the rule is declared, as session-effort.",
-    "accepted": "Not put to him as a reading: the shape is the one the opening flow and the board already use, and his to correct.",
+    "reading": "His report that the work sessions the orchestrator started with start_session carried no \"JH <n>\", and his answer to question 24 that JH is this project's identifier: every session is titled <code> <n> · <purpose>, where <code> is the project's own identifier, declared in harness.json \"code\" (JH here), and <n> the next free number of that code; a new lead started with start_session takes ORQ. The guard holds the shape only, where the rule is declared, as session-effort.",
+    "accepted": "His answer to question 24 corrects the first reading, which took the code from the titles already in the channel.",
     "checked": {
       "date": "2026-10-19",
       "by": "command"

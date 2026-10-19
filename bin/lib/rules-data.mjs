@@ -341,11 +341,11 @@ export const RULES = [
   },
   {
     "id": "session-title",
-    "subject": "the shape of the title of a session started with start_session, its number taken from js-harness sessions --next-number (a new lead takes ORQ for the number)",
+    "subject": "the shape of the title of a session started with start_session: <code> is the project's own identifier, declared in harness.json \"code\", and the number is the next free one of that code, as js-harness sessions --next-number prints it (a new lead takes ORQ for the number)",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-19",
-    "value": "<code> <n> · <purpose>"
+    "value": "<code> <n> · <purpose>, <code> from harness.json \"code\""
   },
   {
     "id": "sessions-open-in-sidebar",
