@@ -258,6 +258,9 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
+  - gentle-ai: `2fede5c1..12aa07ce` approved after one bounded correction (readability, reliability; lineage review-bf067ebd0c1e7217, acknowledged): R3-uncommitted-trim fixed in `12aa07ce`. Codex over 6e99eda..ef60d12: one P2.
+  - gentle-ai: `ef60d123` assessed `medium`, review not due (`under_budget`, 13 lines), from that review's advisories; Codex in 6e99eda..ef60d12.
+  - gentle-ai: `04163529` assessed `medium`, review not due (`under_budget`, 44 lines): Codex's P2 on a remote branch hidden behind a local one, fixed with its RED test.
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -288,8 +291,19 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   default branch, other branches and their worktrees, and what is uncommitted), and `init`'s closing line. The
   fixtures moved to `bin/lib/onboard.testkit.mjs`. RED was observed for the missing export, the four command tests
   and init's line; then 136/136 GREEN across the touched suites.
-- Next step: commit slice 2, gate, gentle-ai review of the commit (base 5bc31869), Codex `--base 5bc31869`, PR on
-  top of 466, tell the lead; then T4.
+- L8 (2026-10-19) The merge queue left PR 466 out for want of a gentle-ai line naming 5bc31869. 6e99edaf adds one
+  line per code commit under `## Reviews`, and the lead was told. Slice 2, on `feat/onboarding-stages` in this
+  worktree, has these commits:
+  - 2fede5c1, the stages;
+  - 12aa07ce and ef60d123, fixes from gentle-ai's review;
+  - 04163529, Codex's P2.
+  Each has its line under `## Reviews`.
+- Next step (session JH 30, worktree compassionate-allen-842d94, branch feat/onboarding-stages):
+  1. Run `js-harness codex-review --base ef60d123` (it covers 04163529).
+  2. Push, and open the PR of slice 2 on main. It holds 466's commits until 466 lands. Its body needs a gentle-ai
+     line.
+  3. SendMessage the lead (local_bd0ae465), signed JH 30, with the PR number.
+  4. Then T4: one real onboarding in a scratch project.
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.
