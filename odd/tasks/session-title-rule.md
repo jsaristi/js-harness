@@ -33,3 +33,7 @@ Whether the rule is his as worded: question 24.
   rule/ branch, in its own PR. If the rule's owner is sebastian, record the question for me with --kind question."
 - L2 (2026-10-19): declared as 73f78044 (gate passed on CI; gentle-ai 73f78044 medium, not due, under_budget, 33
   lines; Codex correct, 0.92, no findings). Owner sebastian, his words checked by the command; question 24 recorded.
+- L3 (2026-10-19): his answer to question 24 (transcript 908805db, line 6036), verbatim: "Osea en este caso se llama
+  JH de JS Harnes pero la idea es que tenga el udentificador del proyecto". The orchestrator asked to reword the rule
+  to match: `<code>` is the project's own identifier, declared in harness.json "code". Reworded by `rules change
+  session-title`, quoting both his phrases (checked by the command), after merging origin/main into this branch.
