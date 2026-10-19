@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { backupMain, backupPaths, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
 
@@ -46,7 +47,9 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
   defaultRun('git', ['-C', paths.clone, 'remote', 'set-url', '--push', 'origin', bare]);
   fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [], ...(scope ? { scope } : {}) }));
 
-  const state = { engram, visibility, calls: [], started: [], now: Date.now() };
+  // What `git remote get-url --push` reports: the github URL a real clone has, while the push itself goes to the bare
+  // repository; a test that sets another one sees what the guard does with it.
+  const state = { engram, visibility, calls: [], started: [], now: Date.now(), pushUrls: [`https://github.com/${REPO}.git`] };
   const deps = {
     home,
     env: GIT_ENV,
@@ -73,6 +76,9 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
       if (cmd === 'gh' && args[1] === 'create') {
         state.visibility = 'PRIVATE';
         return { status: 0, stdout: '', stderr: '' };
+      }
+      if (cmd === 'git' && args.includes('get-url') && args.includes('--push')) {
+        return { status: 0, stdout: `${state.pushUrls.join('\n')}\n`, stderr: '' };
       }
       if (cmd === 'git' && args[0] === 'clone') {
         defaultRun('git', ['clone', '-q', bare, args[3]]);
@@ -224,6 +230,86 @@ test('the hook starts a detached run only when one is due', async (t) => {
 
   fs.rmSync(paths.clone, { recursive: true, force: true });
   assert.equal(dueReason(home, state.now), 'not initialised');
+});
+
+test('a memory folder deleted whole makes a backup due, so the clone stops holding it', async (t) => {
+  const { home, deps, state } = setup(t);
+  await backupMain(['run'], deps);
+  state.now += 60 * 60_000;
+  const old = new Date(state.now - 2 * 60 * 60_000);
+  for (const file of [path.join(home, '.claude', 'projects', 'D--p', 'memory', 'MEMORY.md'), path.join(home, '.claude', 'projects', 'D--p', 'memory')]) {
+    fs.utimesSync(file, old, old);
+  }
+  assert.equal(dueReason(home, state.now), 'nothing changed since the last backup');
+
+  fs.rmSync(path.join(home, '.claude', 'projects', 'D--p'), { recursive: true });
+
+  assert.equal(dueReason(home, state.now), null);
+});
+
+test('every push URL is checked: a pushurl elsewhere sends nothing', async (t) => {
+  const { bare, paths, deps, state } = setup(t);
+  state.pushUrls = ['https://github.com/jsaristi/js-harness.git'];
+
+  assert.equal(await backupMain(['run'], deps), 1);
+
+  assert.equal(remoteCommits(bare), 0);
+  assert.match(JSON.parse(fs.readFileSync(paths.last, 'utf8')).lastFailure.error, /public repository/);
+});
+
+test('a run never removes a lock it does not hold, and a lock still being written counts as held', async (t) => {
+  const { paths, deps, state } = setup(t);
+  const run = deps.run;
+  deps.run = (cmd, args, options) => {
+    // Another run took the lock over while this one worked (its own was taken for stale).
+    if (cmd === 'engram' && args[0] === 'export') fs.writeFileSync(paths.lock, JSON.stringify({ pid: 999, at: new Date(state.now).toISOString() }));
+    return run(cmd, args, options);
+  };
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(JSON.parse(fs.readFileSync(paths.lock, 'utf8')).pid, 999);
+
+  fs.writeFileSync(paths.lock, '');
+  deps.run = run;
+  assert.equal(await backupMain(['run'], deps), 1);
+  assert.match(deps.stderr.text, /already running/);
+});
+
+function sourceRepo(dir, file = 'a.txt') {
+  fs.mkdirSync(dir, { recursive: true });
+  for (const args of [['init', '-q', '-b', 'main', dir], ['-C', dir, 'commit', '-q', '--allow-empty', '-m', 'one']]) {
+    const result = spawnSync('git', args, { env: GIT_ENV, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  return dir;
+}
+
+const bundleHeads = (file) => defaultRun('git', ['bundle', 'list-heads', file]).stdout;
+
+test('bundles: two sources of one name kept apart, a new tag rebundles, and an unreadable source keeps its bundle', async (t) => {
+  const { root, paths, deps } = setup(t);
+  const first = sourceRepo(path.join(root, 'work', 'app'));
+  const second = sourceRepo(path.join(root, 'personal', 'app'));
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [first, second], scope: 'all' }));
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const bundles = fs.readdirSync(path.join(paths.clone, 'git')).sort();
+  assert.equal(bundles.length, 2, `two bundles, not one overwriting the other: ${bundles}`);
+  const named = (source) => path.join(paths.clone, 'git', bundles.find((name) => name.includes(source)));
+  assert.match(bundleHeads(named('work')), /refs\/heads\/main/);
+
+  // A tag on a commit no branch reaches: the refs of the branches are the same, the bundle must not be.
+  for (const args of [['checkout', '-q', '--detach'], ['commit', '-q', '--allow-empty', '-m', 'tagged'], ['tag', 'kept'], ['checkout', '-q', 'main']]) {
+    spawnSync('git', ['-C', first, ...args], { env: GIT_ENV });
+  }
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.match(bundleHeads(named('work')), /refs\/tags\/kept/);
+
+  const before = fs.readFileSync(named('personal'));
+  fs.rmSync(second, { recursive: true, force: true });
+  deps.stdout = sink();
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.deepEqual(fs.readFileSync(named('personal')), before, 'the last good bundle stays');
+  assert.match(deps.stdout.text, /could not be read/);
 });
 
 test('backup init creates the repository private when it is missing, refuses a public one, and clones', async (t) => {

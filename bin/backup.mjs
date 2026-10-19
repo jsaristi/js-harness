@@ -24,8 +24,9 @@ const USAGE = [
   '    js-harness home and reference copies of the config, secrets blanked, into the private clone, then push it. The',
   '    scope is config.json\'s `scope`: "all" for every project, or one project name (js-harness when unset). It',
   '    refuses an export that lost more than a tenth of any count (a wiped Engram looks like that; --allow-shrink when',
-  '    the drop is meant), a clone whose origin is not the configured repository, and a repository that does not read',
-  '    PRIVATE just before the push. --adopt takes over a backup another machine made (the first run after a reinstall).',
+  '    the drop is meant), a clone whose fetch or push URL is not the configured repository on github.com, and a',
+  '    repository that does not read PRIVATE just before the push. --adopt takes over a backup another machine made',
+  '    (the first run after a reinstall).',
   '  status  The last run, the last success, the last failure and why, and the commits still to push.',
   '  init --repo <owner/name>  Create the repository private when it does not exist, check it reads PRIVATE, clone it.',
   '  --hook  The Stop hook install registers: when a backup is due it starts `backup run` detached, and returns at once.',
@@ -65,12 +66,45 @@ function writeJson(file, data) {
   fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-/** Takes the lock, or returns why not: a live run holds it. A lock older than `LOCK_STALE_MINUTES` is taken over. */
+/** When a lock was taken: the time it records, or, while its writer has not written it yet, the file's own time. */
+function lockTime(file) {
+  const held = readJson(file);
+  if (held?.at) return { at: Date.parse(held.at), pid: held.pid };
+  try {
+    return { at: fs.statSync(file).mtimeMs, pid: 'unknown' };
+  } catch {
+    return null;
+  }
+}
+
+/** Takes the lock by creating its file exclusively, so two hooks at once cannot both hold it; returns what it wrote,
+ * the proof of holding it, or why not: a live run holds it. A lock older than `LOCK_STALE_MINUTES` is taken over. */
 function takeLock(paths, now) {
-  const held = readJson(paths.lock);
-  if (held && now - Date.parse(held.at) < LOCK_STALE_MINUTES * 60_000) return `a backup is already running (pid ${held.pid})`;
-  writeJson(paths.lock, { pid: process.pid, at: new Date(now).toISOString() });
-  return null;
+  const mine = `${JSON.stringify({ pid: process.pid, at: new Date(now).toISOString() })}\n`;
+  fs.mkdirSync(paths.dir, { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      fs.writeFileSync(paths.lock, mine, { flag: 'wx' });
+      return { mine };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    const held = lockTime(paths.lock);
+    if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return { refusal: `a backup is already running (pid ${held.pid})` };
+    fs.rmSync(paths.lock, { force: true });
+  }
+  return { refusal: 'a backup is already running (it took the stale lock first)' };
+}
+
+/** Removes the lock only while it is still the one this run wrote: a run that outlived its lock leaves the new one. */
+function releaseLock(paths, mine) {
+  let held;
+  try {
+    held = fs.readFileSync(paths.lock, 'utf8');
+  } catch {
+    return;
+  }
+  if (held === mine) fs.rmSync(paths.lock, { force: true });
 }
 
 /** The git repositories whose unpushed commits are bundled (D1): the configured ones, `D:/js-harness` by default. */
@@ -78,26 +112,39 @@ function bundleSources(config) {
   return Array.isArray(config.bundles) ? config.bundles : [];
 }
 
-/** Writes `git/<name>.bundle` of every commit of `source` that is on no remote, or removes it when there is none.
- * Returns the refs it holds, so the manifest changes only when they do. */
+/** The bundle file of a source, named from its whole path as Claude names a project folder (`D--js-harness`), so two
+ * repositories of one name never share a bundle. */
+export function bundleName(source) {
+  return `${path.resolve(source).replace(/[^A-Za-z0-9]/g, '-')}.bundle`;
+}
+
+/** Writes the bundle of every commit of `source` that is on no remote, or removes it when there is none. Returns the
+ * refs it holds, every ref and not only the branches, so the bundle is made again whenever what it would hold changes
+ * and the manifest changes only when it does. A source git cannot read keeps its last bundle and says why. */
 function bundleUnpushed(deps, source, clone) {
-  const name = path.basename(source);
-  const out = path.join(clone, 'git', `${name}.bundle`);
-  const refs = git(deps, source, ['for-each-ref', '--format=%(objectname) %(refname)', 'refs/heads', 'refs/stash']);
+  const key = path.resolve(source);
+  const out = path.join(clone, 'git', bundleName(source));
+  const previous = readJson(path.join(clone, 'manifest.json'))?.bundles?.find((b) => b.source === key);
+  const refs = git(deps, source, ['for-each-ref', '--format=%(objectname) %(refname)']);
   const unpushed = git(deps, source, ['rev-list', '--count', '--all', '--not', '--remotes']);
+  if (refs.status !== 0 || unpushed.status !== 0) {
+    // Its commits may be the very ones still to protect: the last bundle stays until git can read the source again.
+    const reason = `${refs.stderr || unpushed.stderr || ''}`.trim().split('\n')[0] || 'git failed';
+    const { unreadable, ...last } = previous ?? { source: key, commits: 0, refs: [] };
+    return { ...last, unreadable: reason };
+  }
   const count = Number(unpushed.stdout.trim()) || 0;
   if (count === 0) {
     fs.rmSync(out, { force: true });
-    return { source: name, commits: 0, refs: [] };
+    return { source: key, commits: 0, refs: [] };
   }
   const listed = refs.stdout.split('\n').filter(Boolean).sort();
-  const previous = readJson(path.join(clone, 'manifest.json'))?.bundles?.find((b) => b.source === name);
-  if (!(previous && JSON.stringify(previous.refs) === JSON.stringify(listed) && fs.existsSync(out))) {
+  if (!(previous && !previous.unreadable && JSON.stringify(previous.refs) === JSON.stringify(listed) && fs.existsSync(out))) {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     const made = git(deps, source, ['bundle', 'create', out, '--all', '--not', '--remotes']);
     if (made.status !== 0) throw new Error(`git bundle of ${source} failed: ${made.stderr.trim()}`);
   }
-  return { source: name, commits: count, refs: listed };
+  return { source: key, commits: count, refs: listed };
 }
 
 /** `backup run`: one backup, start to push. Returns the outcome recorded in last.json. */
@@ -124,6 +171,12 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink: allowShrink || rescoped, scope });
   const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope });
   const bundles = bundleSources(config).map((source) => bundleUnpushed(deps, source, paths.clone));
+  // A bundle no configured source names any more is left over (a source removed from config.json): it goes.
+  const named = new Set(bundleSources(config).map(bundleName));
+  const bundleDir = path.join(paths.clone, 'git');
+  for (const file of fs.existsSync(bundleDir) ? fs.readdirSync(bundleDir) : []) {
+    if (!named.has(file)) fs.rmSync(path.join(bundleDir, file), { force: true });
+  }
   const version = deps.run('engram', ['version']).stdout.trim();
   const manifest = JSON.parse(
     buildManifest({
@@ -148,7 +201,8 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
     committed = true;
   }
   const pushed = pushClone(deps, paths.clone, config.repo);
-  return { counts: exported.counts, live, committed, pushed, redacted: manifest.redacted.length };
+  const unreadable = bundles.filter((b) => b.unreadable);
+  return { counts: exported.counts, live, committed, pushed, redacted: manifest.redacted.length, unreadable };
 }
 
 /** Pushes the clone when it holds commits its remote does not, after the guard: origin and visibility (D2). A push the
@@ -158,9 +212,12 @@ function pushClone(deps, clone, repo) {
   // A clone of an empty repository has no upstream yet: everything it holds is to push.
   const owed = ahead.status === 0 ? Number(ahead.stdout.trim()) : Number(git(deps, clone, ['rev-list', '--count', 'HEAD']).stdout.trim());
   if (!owed) return 0;
-  const origin = git(deps, clone, ['remote', 'get-url', 'origin']).stdout.trim();
+  // Fetch and push URLs both: `get-url --push` applies a pushurl and pushInsteadOf, so it names where the push goes.
+  const urls = [['remote', 'get-url', '--all', 'origin'], ['remote', 'get-url', '--push', '--all', 'origin']].flatMap(
+    (args) => git(deps, clone, args).stdout.split('\n').map((line) => line.trim()).filter(Boolean),
+  );
   const visibility = deps.run('gh', ['repo', 'view', repo, '--json', 'visibility', '-q', '.visibility']);
-  const refusal = pushRefusal({ origin, repo, visibility: visibility.status === 0 ? visibility.stdout.trim() : null });
+  const refusal = pushRefusal({ urls, repo, visibility: visibility.status === 0 ? visibility.stdout.trim() : null });
   if (refusal) throw new Error(refusal);
   const push = () => git(deps, clone, ['push', '-q', '-u', 'origin', 'HEAD'], { timeout: PUSH_TIMEOUT_MS });
   let result = push();
@@ -188,7 +245,7 @@ function record(paths, now, outcome) {
 
 function runCommand(args, deps) {
   const paths = backupPaths(deps.home);
-  const refusal = takeLock(paths, deps.now());
+  const { mine, refusal } = takeLock(paths, deps.now());
   if (refusal) {
     deps.stderr.write(`backup: ${refusal}\n`);
     return 1;
@@ -201,13 +258,16 @@ function runCommand(args, deps) {
       `backup: ${c.observations} observations, ${c.sessions} sessions, ${c.prompts} prompts, ${c.relations} relations; ` +
         `${outcome.committed ? 'committed' : 'nothing new'}, ${outcome.pushed} pushed, ${outcome.redacted} files with secrets blanked\n`,
     );
+    for (const b of outcome.unreadable) {
+      deps.stdout.write(`backup: ${b.source} could not be read (${b.unreadable}); its last bundle is kept\n`);
+    }
     return 0;
   } catch (error) {
     record(paths, deps.now(), { error: error.message });
     deps.stderr.write(`backup: ${error.message}\n`);
     return 1;
   } finally {
-    fs.rmSync(paths.lock, { force: true });
+    releaseLock(paths, mine);
   }
 }
 
@@ -259,12 +319,19 @@ export function newestChange(home) {
 export function dueReason(home, now) {
   const paths = backupPaths(home);
   if (!fs.existsSync(path.join(paths.clone, '.git'))) return 'not initialised';
-  const held = readJson(paths.lock);
-  if (held && now - Date.parse(held.at) < LOCK_STALE_MINUTES * 60_000) return 'a run holds the lock';
+  const held = lockTime(paths.lock);
+  if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return 'a run holds the lock';
   const success = Date.parse(readJson(paths.last)?.lastSuccess?.at ?? '') || 0;
   if (now - success < BACKUP_EVERY_MINUTES * 60_000) return 'backed up less than 30 minutes ago';
-  if (success && newestChange(home) <= success) return 'nothing changed since the last backup';
+  if (success && newestChange(home) <= success && !memoryFolderGone(home, paths.clone)) return 'nothing changed since the last backup';
   return null;
+}
+
+/** Whether a memory folder the clone holds is gone from the home: a folder deleted whole leaves no time to compare. */
+function memoryFolderGone(home, clone) {
+  const held = path.join(clone, 'claude', 'projects');
+  const slugs = fs.existsSync(held) ? fs.readdirSync(held) : [];
+  return slugs.some((slug) => !fs.existsSync(path.join(home, '.claude', 'projects', slug, 'memory')));
 }
 
 function hookCommand(deps) {
@@ -294,7 +361,7 @@ function initCommand(args, deps) {
     }
     visibility = view();
   }
-  const refusal = pushRefusal({ origin: `https://github.com/${repo}.git`, repo, visibility: visibility.stdout.trim() || null });
+  const refusal = pushRefusal({ urls: [`https://github.com/${repo}.git`], repo, visibility: visibility.stdout.trim() || null });
   if (refusal) {
     deps.stderr.write(`backup init: ${refusal}\n`);
     return 1;

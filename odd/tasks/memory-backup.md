@@ -319,6 +319,17 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   tokens spent, nothing recorded); rerun from a clean detached worktree. Scope switch D7 built
   test first (RED seen on the missing DEFAULT_SCOPE), 27 backup tests green.
 
+- L6 2026-10-19 07:58Z. Scope switch committed (766dfa29). Codex review of 84dd74b5..83df03c2
+  recorded (510,554 input tokens, 357,376 cached; 4 parts; 2 parts with findings): three P1
+  (the guard read only the fetch URL while a pushurl sends the push elsewhere; repoOf accepted
+  any host containing github.com; a credential field inside a JSON string, as an export holds a
+  note's JSON, escaped the redaction) and six P2 (the lock was read then written, not taken
+  exclusively, and removed even when another run held it; two bundle sources of one basename
+  shared a file; an unreadable source dropped its bundle; the bundle's reuse key held only
+  branches and stash; a private key ate the prose after its END; a memory folder deleted whole
+  never made a backup due). All nine fixed test first (RED seen for each), 34 backup tests green.
+  The redaction over the real export and home copy gives the same result before and after.
+
 ## Next step
 Commit D7 (scope switch); record the Codex review of 84dd74b5..83df03c2 when it lands. Then T5
 summary, T6 restore/verify, T4's measurement, T3 init on GitHub with the default scope

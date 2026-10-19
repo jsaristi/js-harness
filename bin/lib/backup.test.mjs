@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { redactSecrets, collectFiles, exportEngram, parseStats, buildManifest, pushRefusal, scopeArgs, inScope } from './backup.mjs';
+import { redactSecrets, collectFiles, exportEngram, parseStats, buildManifest, pushRefusal, repoOf, scopeArgs, inScope } from './backup.mjs';
 
 function scratch(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-lib-'));
@@ -45,6 +45,24 @@ test('redactSecrets blanks each secret value in place, names its kind, and leave
   assert.deepEqual(redactSecrets(key), { text: '<redacted>', kinds: ['private key'] });
   const inJson = JSON.stringify({ a: key.slice(0, 50), b: 'kept' });
   assert.deepEqual(JSON.parse(redactSecrets(inJson).text), { a: '<redacted>', b: 'kept' }, 'a key with no end stops at its quote');
+});
+
+test('redactSecrets blanks a credential field inside a JSON string, the shape an Engram export gives it', () => {
+  const doc = JSON.stringify({ observations: [{ content: '{"password":"' + 'z'.repeat(32) + '"} and api_key="' + 'y'.repeat(24) + '"' }] });
+  const { text, kinds } = redactSecrets(doc);
+  assert.deepEqual(kinds, ['credential field']);
+  assert.equal(JSON.parse(text).observations[0].content, '{"password":"<redacted>"} and api_key="<redacted>"');
+});
+
+test('redactSecrets blanks a private key up to its end line and keeps the prose after it', () => {
+  const body = 'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ';
+  const key = `-----BEGIN OPENSSH PRIVATE KEY-----\n${body}\n${body}\n-----END OPENSSH PRIVATE KEY-----`;
+  assert.equal(redactSecrets(`${key}\nImportant memory about the project.`).text, '<redacted>\nImportant memory about the project.');
+  const inJson = JSON.stringify({ note: `${key}\nkept words`, next: 'kept' });
+  assert.deepEqual(JSON.parse(redactSecrets(inJson).text), { note: '<redacted>\nkept words', next: 'kept' });
+  // A key cut before its end line is blanked through its base64 lines, and the line after them stays.
+  const cut = `-----BEGIN RSA PRIVATE KEY-----\n${body}\n${body}\nImportant memory about the project.`;
+  assert.equal(redactSecrets(cut).text, '<redacted>\nImportant memory about the project.');
 });
 
 test('redactSecrets keeps a JSON document parseable', () => {
@@ -289,11 +307,25 @@ test('buildManifest holds no time, so the same content gives the same bytes', ()
 });
 
 test('pushRefusal allows only the configured repository, and only while it reads private', () => {
-  const ok = { origin: 'https://github.com/jsaristi/js-harness-memory.git', repo: 'jsaristi/js-harness-memory', visibility: 'PRIVATE' };
+  const ok = { urls: ['https://github.com/jsaristi/js-harness-memory.git'], repo: 'jsaristi/js-harness-memory', visibility: 'PRIVATE' };
   assert.equal(pushRefusal(ok), null);
   assert.match(pushRefusal({ ...ok, visibility: 'PUBLIC' }), /reads PUBLIC, not PRIVATE/);
   assert.match(pushRefusal({ ...ok, visibility: null }), /could not be read/);
-  assert.match(pushRefusal({ ...ok, origin: 'https://github.com/jsaristi/other.git' }), /origin is jsaristi\/other, not jsaristi\/js-harness-memory/);
-  assert.match(pushRefusal({ ...ok, origin: 'https://github.com/jsaristi/js-harness.git' }), /public repository/);
-  assert.match(pushRefusal({ ...ok, repo: 'jsaristi/js-harness', origin: 'git@github.com:jsaristi/js-harness.git' }), /public repository/);
+  assert.match(pushRefusal({ ...ok, urls: ['https://github.com/jsaristi/other.git'] }), /remote is jsaristi\/other, not jsaristi\/js-harness-memory/);
+  assert.match(pushRefusal({ ...ok, urls: ['https://github.com/jsaristi/js-harness.git'] }), /public repository/);
+  assert.match(pushRefusal({ ...ok, repo: 'jsaristi/js-harness', urls: ['git@github.com:jsaristi/js-harness.git'] }), /public repository/);
+  // Every URL a push may use is checked: a push URL beside a good fetch URL is where the backup would go.
+  assert.match(pushRefusal({ ...ok, urls: [...ok.urls, 'https://github.com/jsaristi/js-harness.git'] }), /public repository/);
+  assert.match(pushRefusal({ ...ok, urls: [...ok.urls, 'D:/elsewhere.git'] }), /remote is D:\/elsewhere.git, not/);
+  assert.match(pushRefusal({ ...ok, urls: [] }), /no remote/);
+});
+
+test('repoOf reads only github.com itself, over https or ssh', () => {
+  assert.equal(repoOf('https://github.com/o/n.git'), 'o/n');
+  assert.equal(repoOf('https://user@github.com/o/n'), 'o/n');
+  assert.equal(repoOf('git@github.com:o/n.git'), 'o/n');
+  assert.equal(repoOf('ssh://git@github.com/o/n.git'), 'o/n');
+  for (const url of ['https://notgithub.com/o/n.git', 'https://github.com.evil.example/o/n.git', 'https://evil.example/github.com/o/n.git', 'http://github.com/o/n.git', 'D:/github.com/o/n.git']) {
+    assert.equal(repoOf(url), null, url);
+  }
 });
