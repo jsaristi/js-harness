@@ -611,7 +611,8 @@ export function nextSessionNumber(home, slug, { readdir = (dir) => fs.readdirSyn
     ...titles.filter((title) => title.code === code && title.role === 'work').map((title) => title.number),
     ...record.notices.filter((notice) => notice.to?.role === 'work').map((notice) => notice.to.number),
   ];
-  const next = { code, number: Math.max(0, ...numbers) + 1 };
+  // A line of a record from another version could hold a number of another kind: only whole numbers count.
+  const next = { code, number: numbers.filter(Number.isSafeInteger).reduce((highest, one) => Math.max(highest, one), 0) + 1 };
   return unavailable.length > 0 ? { ...next, unavailable } : next;
 }
 

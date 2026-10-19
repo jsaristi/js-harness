@@ -113,11 +113,20 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
  * writes it, and only to word a refusal. */
 async function sessionTitleOf(input, rules, root, home) {
   const { sessionTitleRefusal } = await import('./lib/session-title-guard.mjs');
-  // Loaded before the check and called only by a refusal: a start_session is rare, so the modules cost little here.
-  const [{ nextSessionNumber }, { mainCheckoutByFiles }, { projectSlug }] = await Promise.all([
-    import('./lib/channel.mjs'), import('./lib/inbox.mjs'), import('./lib/sessions.mjs'),
-  ]);
-  return sessionTitleRefusal(input, rules, () => nextSessionNumber(home, projectSlug(mainCheckoutByFiles(root) ?? root)));
+  // Loaded before the check, since the check is synchronous, and called only by a refusal: the record is read for a bad
+  // title alone. A reader that fails to load or to read leaves the refusal standing, without its number.
+  let next;
+  try {
+    const [{ nextSessionNumber }, { mainCheckoutByFiles }, { projectSlug }] = await Promise.all([
+      import('./lib/channel.mjs'), import('./lib/inbox.mjs'), import('./lib/sessions.mjs'),
+    ]);
+    next = () => nextSessionNumber(home, projectSlug(mainCheckoutByFiles(root) ?? root));
+  } catch (err) {
+    next = () => {
+      throw err;
+    };
+  }
+  return sessionTitleRefusal(input, rules, next);
 }
 
 /** The hint for the Bash call of `payload` that wraps a commit in `js-harness gate --`, or null (lib/wrapped-commit.mjs).

@@ -21,12 +21,19 @@ export function sessionTitleRefusal(toolInput, projectData, next) {
   if (!Object.hasOwn(rule, 'value')) return null;
   const title = toolInput.title;
   if (roleOfTitle(title) !== null) return null;
-  const { code, number, unavailable = [] } = next();
   const shown = typeof title === 'string' ? JSON.stringify(title) : 'with no text';
+  const refused = `js-harness guard: start_session titles the session ${shown}, not ${rule.value} (rule session-title; a new lead is <code> ORQ · <purpose>). `;
+  let found;
+  try {
+    found = next();
+  } catch (err) {
+    // The title is refused whatever the number: a reader that fails only takes the number out of the reason.
+    return `${refused}Title it "<code> <n> · <purpose>": the next number could not be read (${err.message}), so take it from js-harness sessions --next-number.`;
+  }
+  const { code, number, unavailable = [] } = found;
   const why = code === null
     ? 'no titled session is in this project\'s channel or openings to give its code'
     : `${number} is one past the highest number in this project's channel and openings`;
   const blind = unavailable.length > 0 ? `; it could not read ${unavailable.join(' and ')}, so check it with js-harness sessions --next-number` : '';
-  return `js-harness guard: start_session titles the session ${shown}, not ${rule.value} (rule session-title). `
-    + `Title it "${code ?? '<code>'} ${number} · <purpose>": ${why}${blind === '' ? ' (js-harness sessions --next-number).' : `${blind}.`}`;
+  return `${refused}Title it "${code ?? '<code>'} ${number} · <purpose>": ${why}${blind === '' ? ' (js-harness sessions --next-number).' : `${blind}.`}`;
 }

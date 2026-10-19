@@ -14,12 +14,12 @@ orchestrator started with `start_session` got free titles, one later called itse
 and nothing in the code checked the title. A check holds it, so no session has to remember it.
 
 ## Done when
-- `node --test bin/lib/guard.test.mjs bin/guard.test.mjs bin/lib/channel.test.mjs bin/sessions.test.mjs bin/lib/manifest.test.mjs` exits 0
+- `node --test bin/lib/session-title-guard.test.mjs bin/guard.test.mjs bin/lib/channel.test.mjs bin/sessions.test.mjs bin/lib/manifest.test.mjs` exits 0
 - `npm run check` exits 0
 - A guard test refuses "Install module for required third-party tools" and passes "JH 32 · x".
 
 ## In scope / Out of scope
-- In: `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/channel.mjs`, `bin/sessions.mjs`, `bin/lib/rules-data.mjs`,
+- In: `bin/lib/session-title-guard.mjs`, `bin/guard.mjs`, `bin/lib/channel.mjs`, `bin/sessions.mjs`, `bin/lib/rules-data.mjs`,
   `docs/rule-sources.json`, `docs/RULES.md`, their tests, the help, README, `docs/SPEC.md`, the orchestrator skill
   (`bin/lib/manifest.mjs`), this document.
 - Out: `package.json` (the orchestrator's), the onboarding and install-module work of JH 30 and JH 31, renaming
@@ -28,8 +28,9 @@ and nothing in the code checked the title. A check holds it, so no session has t
 ## Constraints
 - Only where the rule `session-title` is declared — because a project that installs the harness may title its
   sessions its own way, as `session-effort` and `sessions-open-in-sidebar` are read only where declared.
-- The guard reads the record and the openings only to word a refusal — because it runs before every
-  `start_session` and a call with a good title must cost nothing more than today.
+- The guard reads the record and the openings only to word a refusal (its modules load on every start_session,
+  a few tens of milliseconds) — because it runs before every
+  `start_session` and a call with a good title must read nothing more than today.
 
 ## Ask me before
 Nothing: the brief of the orchestrator carries his report; spend is one gate, one gentle-ai review and one Codex
@@ -75,3 +76,10 @@ review.
   skill, README, SPEC and the rule's subject say so. Advisories taken: `--next-number` exits 2, not 1, when a source
   could not be read and no code is known; the rule says it holds the shape only; a help typo; its block above the
   `--opening` comment. Left: ties between codes, a stray notice to a large number, titles with a non-breaking space.
+- L4 (2026-10-19): the fix committed as 144d03ea (gate passed). gentle-ai: 24110236..144d03ea, high through item
+  2, lenses risk, readability and reliability, consent granted as pre-granted; approved and acknowledged (lineage
+  review-0955e6a5595ae4c8, authority burned), nine non-blocking findings. Taken in the next commit: the guard no
+  longer fails open when the next number cannot be read (the refusal stands without its number); the refusal names
+  `<code> ORQ · <purpose>` for a new lead; a number that is not whole counts for nothing; a stray space lost in
+  `bin/lib/channel.test.mjs`; this document's Done when, scope and cost constraint. Left: the modules load on every
+  `start_session` (the check is synchronous; the record is still read for a bad title alone).

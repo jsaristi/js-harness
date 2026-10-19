@@ -717,6 +717,10 @@ test('nextSessionNumber is one past the highest number of the project code, in t
   channel.appendNotice(home, SLUG, note({ to: '32' }));
   assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33 });
   assert.deepEqual(channel.nextSessionNumber(home, 'C--other'), { code: null, number: 1 });
+
+  // A line from another version with a number that is not whole counts for nothing, and breaks nothing.
+  fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ ...note(), to: { role: 'work', number: 'x' } })}\n`, 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 33 });
 }));
 
 test('nextSessionNumber says which source it could not read, so a guess is not taken for the number', withHome((home) => {
@@ -729,7 +733,7 @@ test('nextSessionNumber says which source it could not read, so a guess is not t
 
 // --- where a notice is run from ---
 
-const ok =(stdout) => ({ status: 0, stdout, stderr: '' });
+const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
 const notARepository = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' });
 
 test('placeOf reads the worktree and the branch of the folder from git, in two calls', () => {
