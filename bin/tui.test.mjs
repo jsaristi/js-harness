@@ -381,14 +381,22 @@ test('tuiMain with no source asks no package manager for a release and shows no 
     return { status: 0, stdout: '99.0.0', stderr: '' };
   };
 
-  const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir], {}, spawn, { stdin, stdout });
-  await flush();
-  stdin.emit('data', 'q');
-  const code = await done;
+  // A repository with no tags, as JS_HARNESS_REPO names it for update and status: the header never asks the
+  // network, so the test holds whatever the real repository has tagged.
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-no-tags-'));
+  try {
+    assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0);
+    const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir], { JS_HARNESS_REPO: repo }, spawn, { stdin, stdout });
+    await flush();
+    stdin.emit('data', 'q');
+    const code = await done;
 
-  assert.equal(code, 0);
-  assert.deepEqual(calls.filter((call) => call.includes('view')), []);
-  assert.ok(!stdout.chunks.join('').includes('update available'));
+    assert.equal(code, 0);
+    assert.deepEqual(calls.filter((call) => call.includes('view')), []);
+    assert.ok(!stdout.chunks.join('').includes('update available'));
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
 });
 
 test('tuiMain opens the menu when the home\'s manifest cannot be read, as it did before it read the manifest', async () => {
