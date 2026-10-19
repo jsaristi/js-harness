@@ -729,6 +729,11 @@ test('nextSessionNumber says which source it could not read, so a guess is not t
     throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
   };
   assert.deepEqual(channel.nextSessionNumber(home, SLUG, { readdir }), { code: 'JH', number: 6, unavailable: [`openings ${channel.openingsDir(home, SLUG)} (EPERM)`] });
+  // An opening that is listed and cannot be read may hold the highest number: it is said, not dropped (Codex, P2).
+  const dir = channel.openingsDir(home, SLUG);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'torn-000000000000.json'), '{"schema":"js-harness.channel-opening/v1","title":"JH 32 · t', 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG), { code: 'JH', number: 6, unavailable: [`openings ${dir} (1 file not readable as an opening)`] });
 }));
 
 // --- where a notice is run from ---

@@ -83,3 +83,7 @@ review.
   `<code> ORQ · <purpose>` for a new lead; a number that is not whole counts for nothing; a stray space lost in
   `bin/lib/channel.test.mjs`; this document's Done when, scope and cost constraint. Left: the modules load on every
   `start_session` (the check is synchronous; the record is still read for a bad title alone).
+- L5 (2026-10-19): the hardening committed as 74511510 (gate passed; gentle-ai 144d03ea..74511510 medium, not due,
+  under_budget). Codex 2411023..7451151: incorrect (confidence 0.98), one P2, taken: an opening file listed and not
+  readable was counted and dropped, so `--next-number` could print a taken number with exit 0. Fixed test first
+  (RED 56/57): such a file is named in `unavailable`, so the command exits 2 and the refusal warns.

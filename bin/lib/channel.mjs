@@ -595,7 +595,10 @@ export function nextSessionNumber(home, slug, { readdir = (dir) => fs.readdirSyn
   const dir = openingsDir(home, slug);
   let openings = [];
   try {
-    openings = storedOpenings(dir, readdir(dir), readFile).stored;
+    const { stored, unreadable } = storedOpenings(dir, readdir(dir), readFile);
+    openings = stored;
+    // A file that is there and not readable as an opening may be the one with the highest number.
+    if (unreadable > 0) unavailable.push(`openings ${dir} (${unreadable} file${unreadable === 1 ? '' : 's'} not readable as an opening)`);
   } catch (err) {
     if (err.code !== 'ENOENT') unavailable.push(`openings ${dir} (${err.code ?? err.message})`);
   }
