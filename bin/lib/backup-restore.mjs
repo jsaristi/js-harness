@@ -72,12 +72,13 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
   const backupId = sha256(path.join(from, 'manifest.json'));
   const progress = readJson(progressFile);
   const exportFile = path.join(from, 'engram', 'export.json');
-  if (progress?.manifest === backupId && progress.dataDir === dataDir) {
+  const stats = run('engram', ['stats', '--all'], { env: engramEnv });
+  const held = stats.status === 0 ? parseStats(stats.stdout) : null;
+  // The mark is trusted only while that Engram still holds observations: one emptied since gets the import again.
+  if (progress?.manifest === backupId && progress.dataDir === dataDir && held?.observations > 0) {
     say(`engram: this backup was already imported into ${dataDir} at ${progress.importedAt}`);
   } else {
     if (!merge) {
-      const stats = run('engram', ['stats', '--all'], { env: engramEnv });
-      const held = stats.status === 0 ? parseStats(stats.stdout) : null;
       if (!held) {
         throw new Error(
           `could not read how many observations the Engram in ${dataDir} holds (${(stats.stderr || stats.stdout).trim() || 'no counts'}): ` +

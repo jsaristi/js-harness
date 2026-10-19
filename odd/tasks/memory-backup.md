@@ -390,8 +390,24 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   push, waits for Sebastián to read its content first. So the summary is opt-in in code: init sets
   summaryRepo only with --summary-repo, and `backup summary --summary-repo <dir>` previews it
   (test first, RED seen).
+- L14 2026-10-19 09:51Z. The host compacted the session at 04:31 local. Codex recheck of
+  f272876..f3640a6: 2 of 2 fixed. gentle-ai review of f3640a6e..a56613fa (lineage
+  review-92144fded18626e8) opened one correction: RESTORE.md's `--home %USERPROFILE%` is not
+  expanded by PowerShell and restored into a literal folder (a RED run reproduced it in the
+  checkout). Fixed in 6aafd6d7 (--home defaults to the user's home; an unexpanded variable is
+  refused); validator approved, acknowledged and burned, with six advisory findings. Codex review
+  of f3640a6..a56613f: six P2. All six plus three advisory (stats failing open, --map ignored,
+  restored folders backed up again, restore not retry-safe) fixed test first in 58dbba61. The
+  same backup restored twice now skips the import (a progress mark), so --merge only adds a
+  different Engram. Real engram on an empty data dir: `stats --all` exits 0 with 0 observations,
+  so the strict occupancy check does not block a fresh machine. Codex recheck of a56613f..58dbba6:
+  6 of 6 fixed. gentle-ai review of 58dbba61 (lineage review-4e148c74ac861f8b) approved and
+  burned; its advisory that a progress mark outlives an emptied Engram is fixed test first in the
+  next commit (the mark is trusted only while that Engram holds observations).
 
 ## Next step
+State after L14: Codex review of the stale-mark commit (base 58dbba61), then the real init and
+private run, the summary preview for the lead, then T7, T4, T8.
 State after L13 (context pause at 86%): commit the opt-in change; gentle-ai review of
 f3640a6e..HEAD (escalate item 1: restore writes Engram and a home) and Codex of the same range
 from a detached worktree; then for real `backup init --repo jsaristi/js-harness-memory` (no

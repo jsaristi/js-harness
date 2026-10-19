@@ -126,6 +126,10 @@ test('a restore that stopped after the import runs again without importing twice
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 3);
   assert.match(stdout.text, /engram: this backup was already imported into .* at /);
   assert.ok(fs.existsSync(path.join(home, '.claude', 'projects', 'C--old-place', 'memory', 'MEMORY.md')), 'the rest is put back');
+
+  fs.rmSync(path.join(home, '.engram'), { recursive: true });
+  restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 3, 'a mark whose Engram was emptied since is not trusted');
 });
 
 test('restore says when a --map names no project of the backup', async (t) => {
