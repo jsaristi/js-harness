@@ -30,15 +30,23 @@ export function runPm(spawn, words, args, env, platform) {
   return spawn(cmd, [...head, ...args], opts);
 }
 
-/** A copy in pnpm's global folder, `<pnpm home>/global/v<n>/...` (`global/<n>/...` before pnpm 11), as Node resolves
- * it with links followed: through `node_modules/.pnpm/js-harness@<source>/node_modules/js-harness` for one installed
- * from GitHub. */
-const PNPM_GLOBAL_COPY = /[\\/]global[\\/]v?\d+[\\/](?:.*[\\/])?node_modules[\\/]js-harness[\\/]/i;
+/** A copy in pnpm's global folder, `<pnpm home>/global/v<n>/...` (`<pnpm home>/global/<n>/...` before pnpm 11, where
+ * the home is a folder named pnpm, so another `global/2024` folder is no such copy), as Node resolves it with links
+ * followed: through `node_modules/.pnpm/js-harness@<source>/node_modules/js-harness` for one installed from GitHub. */
+const PNPM_GLOBAL_COPY = /[\\/](?:global[\\/]v\d+|pnpm[\\/]global[\\/]\d+)[\\/](?:.*[\\/])?node_modules[\\/]js-harness[\\/]/i;
 
 /** The package manager that installed the copy whose file is `copyPath`: pnpm for one in pnpm's global folder, else
  * npm (release-095 S3). */
 export function copyPackageManager(copyPath) {
   return PNPM_GLOBAL_COPY.test(copyPath) ? 'pnpm' : 'npm';
+}
+
+/** pnpm's global folder (`.../global`) that holds the copy whose file is `copyPath`, or `null` for a copy pnpm's global
+ * folder does not hold. `pnpm remove -g` acts on its configured one unless told this one. */
+export function pnpmGlobalDirOf(copyPath) {
+  const found = PNPM_GLOBAL_COPY.exec(copyPath);
+  if (!found) return null;
+  return copyPath.slice(0, found.index) + found[0].match(/^[\\/](?:pnpm[\\/])?global/i)[0];
 }
 
 /** The package folder of the installed copy whose file is `copyPath` (`.../node_modules/js-harness`), or `null` for a
@@ -59,11 +67,15 @@ export function npmPrefixOf(root) {
   return path.basename(above) === 'lib' ? path.dirname(above) : above;
 }
 
-/** The project whose dependency the npm-layout copy at `root` is, or `null` for a global install: a project, and npx's
- * cache, keep a package.json above their `node_modules`; a global prefix keeps none. */
-export function dependentProjectOf(root, existsSync) {
-  const above = path.dirname(path.dirname(root));
-  return existsSync(path.join(above, 'package.json')) ? above : null;
+/** The project whose dependency the copy whose file is `copyPath` is, or `null` for a global install; asked of a copy
+ * outside pnpm's global folder. The project is the folder above its first `node_modules`: a pnpm project's copy lies
+ * in `node_modules/.pnpm/...`, and a project, or npx's cache, keeps a package.json there; a global prefix keeps none. */
+export function dependentProjectOf(copyPath, existsSync) {
+  const parts = path.normalize(copyPath).split(path.sep);
+  const first = parts.indexOf('node_modules');
+  if (first <= 0) return null;
+  const above = parts.slice(0, first).join(path.sep);
+  return parts[first + 1] === '.pnpm' || existsSync(path.join(above, 'package.json')) ? above : null;
 }
 
 /** A word as it is when a shell reads nothing in it, else quoted for `platform`: how a command is shown to be run by

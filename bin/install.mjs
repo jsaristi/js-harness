@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, runPm, shownWord } from './lib/package-manager.mjs';
+import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import {
@@ -655,7 +655,7 @@ function removeEverything(dir, deps) {
   }
   const pm = copyPackageManager(copyPath);
   // A project's own copy, or npx's, is no global install: npm -g --prefix there would remove that project's file.
-  const project = pm === 'npm' ? dependentProjectOf(root, existsSync) : null;
+  const project = pm === 'npm' ? dependentProjectOf(copyPath, existsSync) : null;
   if (project !== null) {
     console.log(`kept the js-harness program: this one is a dependency of ${project}, not a global install`);
     return 0;
@@ -669,7 +669,9 @@ function removeEverything(dir, deps) {
     console.error(`could not remove the js-harness program: its folder ${prefix} holds a % or a " that cmd.exe would read; remove it with ${byHand}`);
     return 1;
   }
-  const ran = runPm(deps.spawn ?? spawnSync, [pm], args, undefined, platform);
+  // pnpm acts on its configured global folder; the copy that runs may lie in another one.
+  const env = pm === 'pnpm' ? { ...process.env, pnpm_config_global_dir: pnpmGlobalDirOf(copyPath) } : undefined;
+  const ran = runPm(deps.spawn ?? spawnSync, [pm], args, env, platform);
   // A manager can exit 0 having removed nothing (npm, for a prefix that holds no such package): the folder says.
   if (ran.status === 0 && existsSync(root)) {
     console.error(`could not remove the js-harness program: ${pm} exited 0 and ${root} is still there; run ${byHand}`);

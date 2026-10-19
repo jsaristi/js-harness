@@ -21,6 +21,15 @@ const root = mkTmp('js-harness-tui-walk-');
 const dirs = Object.fromEntries(['home', 'prefix', 'source', 'repo', 'staging'].map((name) => [name, path.join(root, name)]));
 for (const dir of Object.values(dirs)) fs.mkdirSync(dir, { recursive: true });
 const npmCli = resolveNpmCli();
+// JS_HARNESS_PM is split on whitespace, so node and npm's own path, which may hold a space (C:\Program Files), are
+// named inside a script in the throwaway folder, whose own path must hold none.
+const npmWrapper = path.join(root, process.platform === 'win32' ? 'npm-walk.cmd' : 'npm-walk');
+if (/\s/.test(npmWrapper)) throw new Error(`the walk's throwaway folder holds a space, which JS_HARNESS_PM cannot carry: ${root}`);
+fs.writeFileSync(
+  npmWrapper,
+  process.platform === 'win32' ? `@"${process.execPath}" "${npmCli}" %*\r\n` : `#!/bin/sh\nexec "${process.execPath}" "${npmCli}" "$@"\n`,
+  { mode: 0o755 },
+);
 
 function must(result, what) {
   if (result.status !== 0) throw new Error(`${what} exited ${result.status}: ${String(result.stderr ?? '').trim().slice(-400)}`);
@@ -42,7 +51,7 @@ const env = {
   JS_HARNESS_SOURCE: dirs.source,
   JS_HARNESS_PREFIX: dirs.prefix,
   // The real npm, never a PATH `npm` that may be another manager's shim.
-  JS_HARNESS_PM: `${process.execPath} ${npmCli}`,
+  JS_HARNESS_PM: npmWrapper,
 };
 const tuiUrl = pathToFileURL(path.join(REPO_ROOT, 'bin', 'tui.mjs')).href;
 const child = spawn(process.execPath, ['--input-type=module', '-e', `import(${JSON.stringify(tuiUrl)}).then((m) => m.tuiMain([], process.env)).then((code) => process.exit(code ?? 0))`], {
@@ -142,10 +151,11 @@ try {
   await step('Init', { section: P, label: 'Init', menu: /project\/Sync, project\/Status, project\/Uninstall/ });
   await step('Project sync', { section: P, label: 'Sync', expect: /\S/ });
   await step('Project status', { section: P, label: 'Status', expect: /\S/ });
-  await step('Remote status', { section: P, label: 'Remote status', expect: /\S/ });
-  await step('Remote start', { section: P, label: 'Remote start', expect: /\S/ });
-  await step('Remote status while started', { section: P, label: 'Remote status', expect: /running|started|pid/i });
-  await step('Remote stop', { section: P, label: 'Remote stop', answer: KEY.yes, expect: /stop/i });
+  // Each remote step needs the line its command prints on success, never just some output.
+  await step('Remote status', { section: P, label: 'Remote status', expect: /^remote: (not running|unknown)/m });
+  await step('Remote start', { section: P, label: 'Remote start', expect: /^remote: started "/m });
+  await step('Remote status while started', { section: P, label: 'Remote status', expect: /^remote: running \(supervisor pid \d+/m });
+  await step('Remote stop', { section: P, label: 'Remote stop', answer: KEY.yes, expect: /^remote: stopped for /m });
   await step('Project uninstall', { section: P, label: 'Uninstall', answer: KEY.yes, menu: /project\/Init/ });
   await step('Upgrade', { section: M, label: 'Upgrade', expect: new RegExp(`upgraded to ${newer.replace(/\./g, '\\.')}`) });
   {
