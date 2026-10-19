@@ -23,7 +23,7 @@ breaks the rule that every write outside the repo can be undone exactly (`AGENTS
 - `node bin/js-harness.mjs contract check odd/tasks/stack-install.md` exits 0
 - The trial of D9, run by hand once slice 2 is built, is in the Log with its output: on a scratch home every row of
   D2 that was a gap is run, `doctor` (with the scratch's PATH) then reads `installed: ok` and every registration it
-  ran `ok`, and `uninstall --global` leaves none of them behind; and every hash of D9's list of his real files is the
+  ran `ok`, and `uninstall machine` leaves none of them behind; and every hash of D9's list of his real files is the
   same before and after
 
 ## In scope / Out of scope
@@ -104,6 +104,8 @@ of the one scratch trial (package downloads).
   (`internal/components/uninstall/service.go:1010-1016`, `:1033-1037`), strips the engram registration whoever wrote
   it (`:1179`; `cleaners.go:136-139`), removes no binary and never takes the PATH entries back (`RemoveFromUserPath` is
   called only from `internal/opencode/background.go:324-325`). `gentle-ai restore <id>` puts a config backup back.
+- **The kinds of uninstall** (PR 471, merged 2026-10-19, `bin/install.mjs:27-34`): `uninstall machine` is `--global`,
+  `snapshots` adds `--full`, `everything` adds `--everything`; `project` never reaches the machine.
 - **Undo commands** (help read 2026-10-19): `claude mcp remove [-s scope] <name>`, `codex mcp remove <name>`; the
   package manager's own remove.
 
@@ -202,10 +204,10 @@ plan, asks him (through the lead where there is one), then runs one tool per cal
   **before** the command starts, so a run killed halfway leaves something `uninstall` can try.
 - After the command, the row is probed: still a gap after a failure, and the record is dropped, since nothing of it
   stayed and a later install of his own must not be undone; `ok`, and it stays with the version read.
-- `uninstall --global` undoes the records in reverse order, printing each undo before running it. Before each, it
+- `uninstall machine` undoes the records in reverse order, printing each undo before running it. Before each, it
   probes: a tool already gone loses its record; one whose `applies` no longer holds (he upgraded codex, or registered
   codegraph again by hand with another entry) is kept and named, its record dropped; otherwise the undo runs, and one that fails keeps its
-  record, alone, so a second `uninstall --global` finishes it, as scheduled tasks are kept. Why `--global` and not
+  record, alone, so a second `uninstall machine` finishes it, as scheduled tasks are kept. Why `machine` (`--global`) and not
   `--everything`: `AGENTS.md` names `uninstall` as the undo of what the harness writes, and these are the harness's
   writes; a tool he wants to keep he installs himself, and then nothing records it.
 - A tool that was already there is never recorded, so it is never undone.
@@ -229,7 +231,7 @@ onboarding's files; a note in the shared notes folder hands that session this co
   (`reg query HKCU\Environment /v Path`); any difference fails the trial.
 - It runs `stack --json` (expects exit 1 and D2's four rows), `stack install --yes` with each `--tool`, `doctor --json`
   under the scratch PATH and home (expects `installed: ok` for codex and codegraph and `ok` for both registrations; an
-  `unknown` fails it), then `uninstall --global` (expects the four records undone and the manifest removed, and the
+  `unknown` fails it), then `uninstall machine` (expects the four records undone and the manifest removed, and the
   scratch prefix to hold neither package), and removes the scratch folder. A `--cwd` with a program file makes codeMap
   and codexReview resolve on. codegraph's own files under the scratch home go with it, and `DO_NOT_TRACK=1` is set.
 
