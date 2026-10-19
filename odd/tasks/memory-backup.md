@@ -459,8 +459,19 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   never a direct push to main; I land it with merge-queue", and not to touch package.json. The
   summary is an orphan commit on `memory-summary`, never main, so a PR into main would replace the
   repository; asked the lead whether the branch push stands. The private run went first.
+- L20 2026-10-19. The lead: "Yes, push the orphan memory-summary branch directly; no PR is
+  needed", on three conditions: only SUMMARY.md, the preview's privacy scan, and a lease naming
+  only refs/heads/memory-summary. Before the push, `backup summary` on the all-projects export
+  differed from the preview only in js-harness lines (roadmap counts, two memory titles), 0 lines
+  dropped. `backup init --summary-repo D:/js-harness` then `backup run`: 5096 observations,
+  "summary pushed". refs/heads/memory-summary is ad10fa75, no parent, one blob SUMMARY.md.
+  `backup verify --summary https://github.com/jsaristi/js-harness.git` exit 0 (0 lines dropped);
+  `backup verify --from` the private repo exit 0 (5096 observations, 591 of 591 files byte for
+  byte). Roadmap: the summary and "Restore proven from both" lines checked.
 
 ## Next step
+State after L20: the feature is done; PR 462 waits for the lead's merge-queue. Delete scratchpad
+exp/ and collect/ (private data).
 State after L18 (lead, by message): Sebastián answered Pregunta 20 "Todos los proyectos
 (Recommended)" (scope all, secrets blanked) and Pregunta 22 "Publicarlo (Recommended)" (init
 --summary-repo D:/js-harness, run, verify --summary). The lead asked for the summary through a

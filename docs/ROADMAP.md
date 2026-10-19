@@ -223,9 +223,9 @@ borrar las memorias o me toca que reinstalar el sistema operativo voy a perder t
 ways; Pregunta 19 chose "Los dos (Recommended)". A first copy was made by hand on 2026-10-19 in
 `D:\js-harness-backup\2026-10-19` (5,074 observations, read back).
 - [x] Design, past its two readers: what the backup holds, when it runs, how restore is proven
-- [ ] A living summary in the public repository, regenerated each cycle, project matters only (decisions, conventions, state, open work; nothing personal), that a session reads to catch up
+- [x] A living summary in the public repository, regenerated each cycle, project matters only (decisions, conventions, state, open work; nothing personal), that a session reads to catch up
 - [x] The full Engram export in a private repository of its own, pushed at each session's close
-- [ ] Restore proven from both on a scratch home
+- [x] Restore proven from both on a scratch home
 
 ### Onboarding
 Sebastián, 2026-10-19: "una funcionalidad de onboarding para que cuando instalemos el harnes en un proyecto
