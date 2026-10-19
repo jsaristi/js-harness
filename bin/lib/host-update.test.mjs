@@ -104,7 +104,7 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
     'read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
     'check that the harness hooks in ~/.claude/settings.json still run',
     'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
-    'report the benefits, the behavior changes and the breaking changes to the user',
+    'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
     'then record the review: js-harness doctor --host-reviewed',
   ]);
 });

@@ -47,6 +47,15 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
 
 const denied = (result) => JSON.parse(result.out).hookSpecificOutput;
 
+test('a command typed into his terminal is denied without its note at the end, and passes with one', async () => {
+  const bare = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: { command: 'npm test' } });
+  assert.equal(bare.code, 0);
+  assert.equal(denied(bare).permissionDecision, 'deny');
+  assert.match(denied(bare).permissionDecisionReason, /ends with a note that says what it does/);
+  const noted = { command: "npm test; Write-Host 'NOTE: runs the tests of this repository and prints how many pass'" };
+  assert.deepEqual(await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: noted }), { code: 0, out: '', err: '' });
+});
+
 test('an Agent call on a model no rule gives is denied in this repository, and one on an alias passes', async () => {
   const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet' } });
   assert.equal(refused.code, 0);
