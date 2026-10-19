@@ -90,3 +90,10 @@ review.
 - L6 (2026-10-19): the fix committed as 1d020ae8 (gate passed on CI; gentle-ai 74511510..1d020ae8 medium, not due,
   under_budget). Codex 7451151..1d020ae: correct (0.99), the P2 fixed. Next step: push feat/session-title, open the
   pull request, `js-harness notify --to orchestrator --kind ready --pr <n>`; the orchestrator lands it.
+- L7 (2026-10-19): the merge door left PR 469 out ("this pull request changes bin/lib/rules-data.mjs and is not from
+  a rule/ branch: a rule changes only by js-harness rules change"), and the orchestrator asked to split it. The rule
+  is declared by `js-harness rules change session-title` on `rule/session-title` (73f78044, gate passed on CI;
+  gentle-ai medium, not due, under_budget; Codex 21aa1b3..73f7804 correct, 0.92), PR 470; its source now quotes his
+  whole report, checked by the command. Question 24 asks him to accept the rule as his. This branch is rebased onto
+  it, so PR 469 changes `bin/lib/rules-data.mjs` and `docs/rule-sources.json` no more and `docs/RULES.md` only in its
+  "Read by" line. Next step: the orchestrator lands PR 470, then PR 469.
