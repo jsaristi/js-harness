@@ -79,7 +79,7 @@ Forecast: ~200 authored lines. Under the ~400 budget: one PR against `main`. Str
 - [x] T1 (kind: build) S4 — engram lookup ignores `pi-v*` (inline; RED 3 failing in latest.test.mjs, GREEN 24/24)
 - [x] T2 (kind: build) S1–S3, S5 — `engram-plugin` row and its latest source (inline; RED 4 + 5 + 1, GREEN)
 - [x] T3 (kind: docs) S5 — help, README, SPEC, GUIDE (inline)
-- [ ] T4 (kind: verify) — `npm run check`, gentle-ai and Codex reviews, PR (inline; `a6f525e4` gentle-ai approved, L5)
+- [x] T4 (kind: verify) — `npm run check`, gentle-ai and Codex reviews, PR (inline; `a6f525e4` gentle-ai approved, L5; Codex L6, L7)
 
 ## Log
 - L1 2026-10-20 request (from the lead session): "In js-harness (D:\js-harness), make `js-harness
@@ -115,3 +115,5 @@ Forecast: ~200 authored lines. Under the ~400 budget: one PR against `main`. Str
   not help (their timeouts ran out while their responses could not be read). Now git runs through
   `execFile`, `readLocalLatestVersions` is async and runs beside the network lookups, and a test that
   deadlocks unless both run at once pins it.
+- L7 2026-10-20 Codex review of `e234e5d..86b8fa3`, recorded: correct (0.98), the P2 rechecked as fixed.
+  Follow-up slice `a6f525e4..86b8fa3` assessed medium, 255 lines, `under_budget`: no gentle-ai review due.
