@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
+import { undoStack } from './lib/stack-run.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -525,7 +526,10 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   const home = parsed.home;
   // A recorded scheduled task is looked for and deleted through `schtasks.exe`, found from the environment this
   // command was given and nowhere else (`runSchtasks`); it is run only when the manifest records a task.
-  const result = uninstall(home, { ...deps, full: full || everything, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  // What `stack install` ran is undone with the probes and the runner of bin/lib/stack-run.mjs, each undo printed
+  // before it runs; `deps.stackSpawn` is the runner's seam (odd/tasks/stack-install.md, D7).
+  const undoTheStack = deps.undoStack ?? ((records) => undoStack(records, { home, env: { ...process.env, ...env }, spawn: deps.stackSpawn, log: (line) => console.log(line) }));
+  const result = uninstall(home, { ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
@@ -550,6 +554,16 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
   // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.
+  // A row `stack install` ran: undone (its undo was printed as it ran); already gone, or changed since and so his; or
+  // its undo failed, could not be judged or waits on another, which keeps its record for a run again and goes to stderr.
+  for (const { tool, dimension } of result.stackUndone ?? []) console.log(`undid ${tool} ${dimension}`);
+  const stackNotUndone = (result.stackKept ?? []).filter((row) => row.reason !== 'gone' && row.reason !== 'changed');
+  for (const row of result.stackKept ?? []) {
+    const name = `${row.tool} ${row.dimension}`;
+    if (row.reason === 'gone') console.log(`${name} is already gone: its record is dropped`);
+    else if (row.reason === 'changed') console.log(`kept ${name} (changed since stack install ran it): it is yours now and no longer recorded`);
+    else console.error(`could not undo ${name} (${row.why ?? row.reason}): it is still recorded; run js-harness uninstall machine again`);
+  }
   for (const name of result.tasksRemoved) console.log(`removed scheduled task ${name}`);
   const tasksNotUndone = result.tasksKept.filter((task) => task.reason !== 'edited');
   for (const task of result.tasksKept) {
@@ -644,6 +658,8 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     result.entriesKept.length === 0 &&
     result.tasksRemoved.length === 0 &&
     result.tasksKept.length === 0 &&
+    (result.stackUndone ?? []).length === 0 &&
+    (result.stackKept ?? []).length === 0 &&
     result.gateKept.length === 0 &&
     result.channelKept.length === 0 &&
     result.remoteKept.length === 0 &&
@@ -653,7 +669,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

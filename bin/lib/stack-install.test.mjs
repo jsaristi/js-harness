@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RUNNABLE, planStack, packageWords } from './stack-install.mjs';
+import { RUNNABLE, planStack, packageWords, prefixBinOf } from './stack-install.mjs';
+import path from 'node:path';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
 const PNPM = { words: ['pnpm'], kind: 'pnpm' };
@@ -29,10 +30,10 @@ test('a stack with no gap plans nothing', () => {
 test('every missing runnable row is planned in D2 order, each with its command and its exact undo', () => {
   const p = plan({ codex: { installed: 'missing', codex: 'n/a' }, codegraph: { installed: 'missing', claude: 'missing', codex: 'missing' } });
   assert.deepEqual(p.mandatory, [
-    { tool: 'codex', dimension: 'installed', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'] },
-    { tool: 'codegraph', dimension: 'installed', run: ['pnpm', 'add', '-g', '@colbymchenry/codegraph'], undo: ['pnpm', 'remove', '-g', '@colbymchenry/codegraph'] },
-    { tool: 'codegraph', dimension: 'claude', run: ['claude', 'mcp', 'add', '-s', 'user', 'codegraph', '--', 'codegraph', 'serve', '--mcp'], undo: ['claude', 'mcp', 'remove', '-s', 'user', 'codegraph'] },
-    { tool: 'codegraph', dimension: 'codex', run: ['codex', 'mcp', 'add', 'codegraph', '--', 'codegraph', 'serve', '--mcp'], undo: ['codex', 'mcp', 'remove', 'codegraph'] },
+    { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'], env: {} },
+    { tool: 'codegraph', dimension: 'installed', kind: 'package', bin: 'codegraph', run: ['pnpm', 'add', '-g', '@colbymchenry/codegraph'], undo: ['pnpm', 'remove', '-g', '@colbymchenry/codegraph'], env: {} },
+    { tool: 'codegraph', dimension: 'claude', kind: 'registration', env: {}, run: ['claude', 'mcp', 'add', '-s', 'user', 'codegraph', '--', 'codegraph', 'serve', '--mcp'], undo: ['claude', 'mcp', 'remove', '-s', 'user', 'codegraph'] },
+    { tool: 'codegraph', dimension: 'codex', kind: 'registration', env: {}, run: ['codex', 'mcp', 'add', 'codegraph', '--', 'codegraph', 'serve', '--mcp'], undo: ['codex', 'mcp', 'remove', 'codegraph'] },
   ]);
   assert.deepEqual(p.manual, []);
 });
@@ -44,8 +45,22 @@ test('npm gets its own verbs for the install and the undo', () => {
 });
 
 test('packageWords gives the install and the remove of a spec for either manager', () => {
-  assert.deepEqual(packageWords(PNPM, 'x', 'linux'), { run: ['pnpm', 'add', '-g', 'x'], undo: ['pnpm', 'remove', '-g', 'x'] });
-  assert.deepEqual(packageWords(NPM, 'x', 'linux'), { run: ['npm', 'install', '-g', 'x'], undo: ['npm', 'uninstall', '-g', 'x'] });
+  assert.deepEqual(packageWords(PNPM, 'x', 'linux'), { run: ['pnpm', 'add', '-g', 'x'], undo: ['pnpm', 'remove', '-g', 'x'], env: {} });
+  assert.deepEqual(packageWords(NPM, 'x', 'linux'), { run: ['npm', 'install', '-g', 'x'], undo: ['npm', 'uninstall', '-g', 'x'], env: {} });
+});
+
+test('with a prefix, npm installs and removes there, and pnpm gets that folder as its home, for the run and the undo alike', () => {
+  assert.deepEqual(packageWords(NPM, 'x', 'linux', '/p'), { run: ['npm', 'install', '-g', 'x', '--prefix', '/p'], undo: ['npm', 'uninstall', '-g', 'x', '--prefix', '/p'], env: { PATH: path.join('/p', 'bin') } });
+  // npm puts a global binary in the prefix itself on Windows, in its `bin` elsewhere (Codex on b9722fc..e57f2d0).
+  assert.deepEqual(packageWords(NPM, 'x', 'win32', 'C:/p').env, { PATH: 'C:/p' });
+  assert.equal(prefixBinOf('npm', '/p', 'linux'), path.join('/p', 'bin'));
+  assert.equal(prefixBinOf('pnpm', 'C:/p', 'win32'), path.join('C:/p', 'bin'));
+  const pnpm = packageWords(PNPM, 'x', 'linux', '/p');
+  assert.deepEqual(pnpm.run, ['pnpm', 'add', '-g', 'x']);
+  assert.deepEqual(pnpm.undo, ['pnpm', 'remove', '-g', 'x']);
+  assert.equal(pnpm.env.PNPM_HOME, '/p');
+  assert.equal(pnpm.env.PATH, path.join('/p', 'bin'));
+  assert.deepEqual(plan({ codex: { installed: 'missing', codex: 'n/a' } }, { prefix: '/p' }).mandatory[0].env, pnpm.env);
 });
 
 test('codexReview off leaves out the Codex CLI and every registration in Codex', () => {

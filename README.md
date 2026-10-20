@@ -350,6 +350,11 @@ Each kind also has a name, and a named kind never acts by location:
 | `uninstall snapshots` | `uninstall --global --full` | the same, and the memory snapshots | the throughput records, the program |
 | `uninstall everything` | `uninstall --global --everything` | the same, the whole `.js-harness` folder and the program | projects' files |
 
+The machine kinds also undo what `stack install` ran, the last first, printing each undo before
+it runs it: a tool already gone loses its record, one that changed since (you upgraded it, or
+registered it again with another entry) is yours and is kept, named, and one whose undo fails
+stays recorded, so running the uninstall again finishes it, and the exit code is 1.
+
 `uninstall project` outside an initialized project exits 1 and removes nothing; it never falls
 through to the machine. A kind given `--global`, `--full` or `--everything`, or a machine kind
 given `--cwd`, is a usage error.
@@ -504,6 +509,18 @@ login, and the prerequisites `git` and `gh`. context7 and typescript-lsp are lis
 optional. The package manager is `--pm`, else `JS_HARNESS_PM`, else the one that installed
 this copy. `--json` prints `{ mandatory, manual, optional }`. It exits 0 when nothing
 required is missing, 1 when something is.
+
+`js-harness stack install [--prefix <dir>] [--tool <id>]... [--yes]` runs those installs in
+that order. Each is printed with its undo and asked `Run it? [y/N]` in a terminal; without one it
+runs nothing unless given `--yes`, and then only the tools `--tool` names. Each is recorded in the
+machine manifest before it starts, so `uninstall machine` undoes it; a failure that left nothing
+behind loses its record, and one the probe cannot read afterwards keeps it, as does a timeout
+(under `--yes` only: in a terminal nothing is timed out). Under `--prefix` the
+prefix's binaries come first on the PATH of every probe and command. With a `CODEX_HOME` of your
+own elsewhere than `~/.codex`, the registration in Codex is printed for you to run, never run. It
+exits 0 when nothing it set out to install is missing or unverified, 1 when something is
+(declined, failed, timed out or left to you). In the TUI, Install the stack sits after Doctor
+while a required tool is missing, and runs `stack install`, each y/N answered by one key.
 
 ```console
 $ js-harness stack

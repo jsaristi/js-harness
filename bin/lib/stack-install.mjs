@@ -2,6 +2,7 @@
 // runs (each with its exact undo), which are the person's own steps, and which are optional. Pure: it reads the rows
 // `probeStack` already probed and the switches `functionsOf` resolved, and spawns nothing. See
 // odd/tasks/stack-install.md (D1-D3).
+import path from 'node:path';
 import { GAP_STATES } from './digest.mjs';
 import { installPlan } from './version.mjs';
 
@@ -15,8 +16,8 @@ const codeMapWanted = (functions) => !offIn(functions, 'codeMap');
 /** The rows the module runs, in the order it runs them (D2): the Codex CLI first, so a registration in Codex has a
  * Codex to register in. A row is runnable only while `wanted` holds for the project's switches. */
 export const RUNNABLE = [
-  { tool: 'codex', dimension: 'installed', kind: 'package', spec: '@openai/codex', wanted: codexWanted },
-  { tool: 'codegraph', dimension: 'installed', kind: 'package', spec: '@colbymchenry/codegraph', wanted: codeMapWanted },
+  { tool: 'codex', dimension: 'installed', kind: 'package', spec: '@openai/codex', bin: 'codex', wanted: codexWanted },
+  { tool: 'codegraph', dimension: 'installed', kind: 'package', spec: '@colbymchenry/codegraph', bin: 'codegraph', wanted: codeMapWanted },
   {
     tool: 'codegraph',
     dimension: 'claude',
@@ -35,12 +36,21 @@ export const RUNNABLE = [
   },
 ];
 
-/** The global install of `spec` and its remove, as words, for the package manager `pm` (`{ words, kind }`). The
- * install's arguments are `installPlan`'s, so the module installs as `upgrade` does. */
-export function packageWords(pm, spec, platform) {
-  const { args } = installPlan(pm.kind, spec, null, {}, platform);
-  const remove = pm.kind === 'pnpm' ? ['remove', '-g', spec] : ['uninstall', '-g', spec];
-  return { run: [...pm.words, ...args], undo: [...pm.words, ...remove] };
+/** The folder a global install under `prefix` puts its binaries in: the prefix itself for npm on Windows, its `bin`
+ * for npm elsewhere and for pnpm, whose `installPlan` names it so. */
+export function prefixBinOf(kind, prefix, platform) {
+  return kind !== 'pnpm' && platform === 'win32' ? prefix : path.join(prefix, 'bin');
+}
+
+/** The global install of `spec` and its remove, as words, for the package manager `pm` (`{ words, kind }`), with
+ * `env`, the variables both are given over the environment. The install's arguments are `installPlan`'s, so the
+ * module installs as `upgrade` does; under a `prefix` npm takes `--prefix` and pnpm gets the prefix as its home,
+ * its own folders inside it, and either finds its binaries first on the PATH (a `PATH` here goes before the one
+ * there), so its probes find them; the remove is given the same (D6). */
+export function packageWords(pm, spec, platform, prefix = null) {
+  const { args, env } = installPlan(pm.kind, spec, prefix, {}, platform);
+  const remove = pm.kind === 'pnpm' ? ['remove', '-g', spec] : ['uninstall', '-g', spec, ...(prefix ? ['--prefix', prefix] : [])];
+  return { run: [...pm.words, ...args], undo: [...pm.words, ...remove], env: prefix && pm.kind !== 'pnpm' ? { ...env, PATH: prefixBinOf(pm.kind, prefix, platform) } : env };
 }
 
 const GENTLE_AI_AGENTS = { claude: 'claude-code', codex: 'codex' };
@@ -70,14 +80,15 @@ function gapsOf(row, functions) {
 const fixesOf = (row, dimensions) => [...new Set(dimensions.flatMap((dimension) => [row.fix?.[dimension] ?? []].flat()))];
 
 /** The plan, as `{ mandatory, manual, optional }`:
- *  - `mandatory`: the runnable rows that are `missing`, in run order, each `{ tool, dimension, run, undo }` (words);
+ *  - `mandatory`: the runnable rows that are `missing`, in run order, each `{ tool, dimension, kind, run, undo, env }`
+ *    (words, and the variables both are given), a package's with its `bin`;
  *  - `manual`: what he does himself, each `{ tool, dimensions, why, steps, undo }`: gentle-ai's installer (F1),
  *    engram (which it brings), a runnable row in another gap state, a login, a missing prerequisite;
  *  - `optional`: context7 and typescript-lsp gaps with `doctor`'s fix, never run.
  * `rows` are `probeStack`'s (a row its switch hides is absent), `functions` the resolved switches, `prerequisites`
- * `[{ id, state }]`, `pm` the resolved package manager `{ words, kind }`. A state that is no gap (`unknown`, `n/a`)
- * plans nothing. */
-export function planStack({ rows, functions, prerequisites = [], pm, platform = process.platform }) {
+ * `[{ id, state }]`, `pm` the resolved package manager `{ words, kind }`, `prefix` the folder packages go to (`null`:
+ * the manager's own). A state that is no gap (`unknown`, `n/a`) plans nothing. */
+export function planStack({ rows, functions, prerequisites = [], pm, prefix = null, platform = process.platform }) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const mandatory = [];
   const manual = [];
@@ -88,8 +99,10 @@ export function planStack({ rows, functions, prerequisites = [], pm, platform = 
     if (!r || !runnable.wanted(functions)) continue;
     const state = r[runnable.dimension];
     if (state === 'missing') {
-      const words = runnable.kind === 'package' ? packageWords(pm, runnable.spec, platform) : { run: runnable.run, undo: runnable.undo };
-      mandatory.push({ tool: runnable.tool, dimension: runnable.dimension, ...words });
+      const { tool, dimension, kind } = runnable;
+      mandatory.push(kind === 'package'
+        ? { tool, dimension, kind, bin: runnable.bin, ...packageWords(pm, runnable.spec, platform, prefix) }
+        : { tool, dimension, kind, run: runnable.run, undo: runnable.undo, env: {} });
     }
   }
 

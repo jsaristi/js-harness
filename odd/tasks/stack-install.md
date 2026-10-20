@@ -5,10 +5,9 @@ Locator: `odd/tasks/stack-install.md` · Engram mirror: `odd/stack-install/tasks
 Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` after his yes. Design version 3: version 1
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
-Next step (2026-10-19, kept current): slice 1 is code commit `866f197b` on feat/stack-install (T2 done, not pushed).
-Its gentle-ai review is approved and acknowledged (L7). Next: `js-harness codex-review --base origin/main`, push, PR,
-ready notice to the orchestrator (`js-harness notify --to orchestrator --kind ready --pr <n>`).
-Then T3 (slice 2) on branch feat/stack-install-run, stacked on it.
+Next step (2026-10-20, kept current): T1 to T5 are done. Slice 1 merged via PR 472; slice 2 is PR 473 (retargeted
+to main after 472 merged), reviewed, with the T4 fixes and the trial's pass (L13) on it, all reviewed; the ready notice is sent and the
+orchestrator lands it. T6 and T7 are follow-ups out of this feature. No open question.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -23,7 +22,7 @@ registered in Codex; gentle-ai's own install brings engram and context7), and no
 breaks the rule that every write outside the repo can be undone exactly (`AGENTS.md`, "What good looks like").
 
 ## Done when
-- `node --test bin/stack.test.mjs bin/lib/stack-install.test.mjs bin/lib/manifest-stack.test.mjs bin/install.test.mjs bin/tui.test.mjs scripts/stack-scratch.test.mjs` exits 0
+- `node --test bin/stack.test.mjs bin/stack-install.test.mjs bin/lib/stack-install.test.mjs bin/lib/stack-run.test.mjs bin/lib/manifest-stack.test.mjs bin/install.test.mjs bin/tui.test.mjs scripts/stack-scratch.test.mjs` exits 0
 - `npm run check` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/stack-install.md` exits 0
 - The trial of D9, run by hand once slice 2 is built, is in the Log with its output: on a scratch home every row of
@@ -74,10 +73,11 @@ of the one scratch trial (package downloads).
 ## Tasks
 - [x] T1 (kind: design) This design, past its two readers, F1 answered, and his yes (L4, L5)
 - [x] T2 (kind: build) Slice 1: `bin/lib/stack-install.mjs` (D1-D3 as data, the plan, D7's record shape), `js-harness stack` read-only with `--json` (D5, D8), help, README, SPEC, with tests
-- [ ] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
-- [ ] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
-- [ ] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
+- [x] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
+- [x] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
+- [x] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [ ] T6 (kind: build) A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
+- [ ] T7 (kind: build) A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11). Also: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
 
 ## Design
 
@@ -302,3 +302,49 @@ onboarding's files; a note in the shared notes folder hands that session this co
   shared `splitCommand` is T6.
   - gentle-ai: 6a2b0ad1 assessed medium, review_due false, reason under_budget (55 lines); it applies Codex's findings.
   - gentle-ai: 2c5753ef assessed medium, review_due false, reason under_budget (17 lines); it applies Codex's recheck.
+- L9 (2026-10-19) T3 built test-first on feat/stack-install-run, RED observed per file (the runner's file only as a
+  missing module): unit A record and undo (manifest-stack 7, stack-run 13, install 2 new), B `stack install` (11),
+  C the TUI item (3), D the scratch script's pure parts (6). The gate passed at each commit.
+  - gentle-ai: dba54d18 assessed medium, review_due false, reason under_budget.
+  - gentle-ai: cea616b9 assessed medium, review_due false, reason under_budget.
+  - gentle-ai: b9553aba assessed medium, review_due false, reason under_budget.
+  - gentle-ai: e57f2d0c assessed medium, review_due false, reason under_budget (302 lines).
+- L10 (2026-10-20) Codex on b9722fc..e57f2d0 (4 parts) gave nine P2 findings, all taken, fixed test-first:
+  6bf07353 keeps a stack record the undo cannot judge (`unreadable`) or still needs (the Codex CLI while an undo of
+  a registration in Codex failed, `needed`), in install order, with exit 1 (RED 2 in stack-run, 1 in install, then
+  GREEN); 5a6ca247 puts a prefix's `bin` first on the PATH of every probe and command and in npm's record, leaves a
+  registration in Codex to him when his `CODEX_HOME` is elsewhere than `<home>/.codex`, and calls a row done only
+  on an `ok` probe (RED 3 in stack-install, 1 in lib/stack-install, then GREEN); the next commit shims the programs
+  pnpm's POSIX launchers call and reads both registrations back after `uninstall machine` in the trial (its RED was
+  first a syntax error of the test file, then not run again before GREEN: observed GREEN only).
+  - gentle-ai: 6bf07353 assessed medium, review_due false, reason under_budget (86 lines).
+  - gentle-ai: 5a6ca247 assessed medium, review_due false, reason under_budget (126 lines).
+  - gentle-ai: c0e862bd assessed medium, review_due false, reason under_budget (66 lines).
+- L11 (2026-10-20) gentle-ai reviewed slice 2 (b9722fc5..c0e862bd, 1521 lines; its assess said under_budget, run
+  because the orchestrator asked for a review per slice): lineage review-296d60b1e90da71e, lenses risk and
+  resilience, approved and acknowledged (authority burned), three advisory warnings. Two are taken in the next
+  commit, test-first (RED 2, then GREEN): a timeout kills the shell and not always the install it started, so it now
+  keeps its record instead of dropping it (R4-timeout-orphan-drops-record), and in a terminal nothing is timed out
+  (R4-timeout-applies-in-terminal). The third, R1-001, is T7.
+  - gentle-ai: cbb5201e assessed medium, review_due false, reason under_budget (45 lines).
+- L12 (2026-10-20) Codex's recheck of a735214..cbb5201 (1 part, 294 lines): the patch is correct (0.93), all nine
+  findings fixed, none new. Recorded in codex-reviews.jsonl.
+- L13 (2026-10-20) T4, the trial of D9 on a scratch home (`node scripts/stack-scratch.mjs`, Windows, pnpm), three
+  runs. Run 1: `codegraph codex` failed with "CODEX_HOME points to "<scratch>\home\.codex", but that path does
+  not exist": Codex refuses a missing `CODEX_HOME`, and a fresh home has no `.codex`. Run 2, after a first fix that
+  made the folder only when `homeEnv` set `CODEX_HOME`, failed the same way (the trial's process already runs in the
+  scratch home, so `homeEnv` set nothing), and flagged his `~/.claude.json` as changed: his own `codegraph` entry was
+  still there, which a `claude mcp remove -s user codegraph` against his home would have deleted, and the native
+  Claude binary reads the scratch `USERPROFILE` (measured 2026-10-19); the file was rewritten at 22:51:41 local, in
+  the trial's window, by the Claude sessions running, which rewrite it constantly. So `stack install` now makes
+  `<home>/.codex` before any registration in Codex (RED 2, then GREEN), and the trial hashes only the MCP servers of
+  his `.claude.json`, global and per project (RED, then GREEN). Run 3 passed: `stack --json` exit 1 planning
+  codex.installed, codegraph.installed, codegraph.claude, codegraph.codex; both `stack install --yes --tool` runs
+  exit 0, each row "done"; `doctor --offline` read codegraph installed, claude and codex `ok` and codex installed
+  `ok`; `uninstall machine` exit 0, "undid" all four, the last first; no manifest, no package in the prefix, no
+  registration left, none of his files changed (verdict pass, no failures).
+- L14 (2026-10-20) T5: the ROADMAP's "Stack visibility" decision now names this exception, with his request, and a
+  "Stack install" row is added; the note on the `stack --json` contract (new `kind`, `bin`, `env` fields) is in the
+  shared notes folder as jh31-stack-json-contract.md; the reviews are L7 to L12.
+  - gentle-ai: 80a5fa3b assessed medium, review_due false, reason under_budget (96 lines).
+  - Codex on f96ebc8..80a5fa3 (1 part, 63 lines): the patch is correct (0.93), no findings. Recorded.

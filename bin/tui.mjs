@@ -12,6 +12,10 @@ import { installedVersion as manifestVersion } from './lib/manifest.mjs';
 import { doctorMain, buildReport } from './doctor.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { remoteMain } from './remote.mjs';
+import { resolveStackPm, stackInstallMain } from './stack.mjs';
+import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
+import { planStack } from './lib/stack-install.mjs';
+import { resolveProjectRoot } from './lib/stack.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
@@ -26,6 +30,7 @@ const REMOTE_ITEMS = ['project-remote-status', 'project-remote-start', 'project-
 const MENU_LABELS = {
   status: 'Status',
   doctor: 'Doctor',
+  'stack-install': 'Install the stack',
   install: 'Install',
   update: 'Update',
   upgrade: 'Upgrade',
@@ -66,9 +71,12 @@ const header = (label) => ({ header: true, label });
  * Project kind of the Uninstall submenu clears it), then a non-selectable `machine` header with the machine items.
  * In every one of those the project section ends with Remote status, start and stop: `js-harness remote`
  * acts on any git repository, initialized or not. The login launcher (`--at-login`) is not offered here.
- * Entries are `{ id, label }`, or `{ header: true, label }` for a section header. */
-export function buildMenu(location = { kind: 'notGit' }) {
-  const machine = MENU_ITEMS.map(item);
+ * Entries are `{ id, label }`, or `{ header: true, label }` for a section header. While `stackGap` (a tool the
+ * harness requires is missing, as `js-harness stack` reads it) the machine items hold Install the stack after Doctor
+ * (odd/tasks/stack-install.md, D5). */
+export function buildMenu(location = { kind: 'notGit' }, { stackGap = false } = {}) {
+  const ids = stackGap ? MENU_ITEMS.flatMap((id) => (id === 'doctor' ? [id, 'stack-install'] : [id])) : MENU_ITEMS;
+  const machine = ids.map(item);
   const section = (...ids) => [header('project'), ...[...ids, ...REMOTE_ITEMS].map(item), header('machine'), ...machine];
   if (location.kind === 'notInitialized') return section('project-init');
   if (UNDOABLE_LOCATIONS.includes(location.kind)) return section('project-sync', 'project-status');
@@ -101,7 +109,7 @@ function stepSelection(menu, from, dir) {
  * on the top of the project section when the item was a project one, else on the nearest selectable index
  * in range. */
 export function withLocation(state, location) {
-  const menu = buildMenu(location);
+  const menu = buildMenu(location, { stackGap: state.stackGap });
   const previous = state.menu?.[state.selected];
   let selected = previous?.id === undefined ? -1 : menu.findIndex((entry) => entry.id === previous.id);
   if (selected === -1) {
@@ -160,12 +168,22 @@ export function summarizeStackRow(row) {
  * the network. Any probe failure (a thrown error, a broken home, ...) must never stop the TUI from
  * opening: it falls back to the literal string `'unknown'`, which `render` shows as a single
  * `stack: unknown` line instead of the block. */
-export async function computeStackState({ home, cwd, spawn, platform, fetch: fetchImpl, now, env }) {
+export async function computeStackState(options) {
+  return (await computeStackView(options)).stack;
+}
+
+/** `computeStackState`'s block with `stackGap` beside it: whether a tool the harness requires is missing, as
+ * `js-harness stack` plans it (`planStack` over the same rows, with the project's switches), which shows Install the
+ * stack in the menu. A probe that fails gives `'unknown'` and no gap. */
+export async function computeStackView({ home, cwd, spawn, platform, fetch: fetchImpl, now, env }) {
   try {
     const rows = await buildReport({ home, cwd, offline: true, env }, { spawn, platform, fetch: fetchImpl, now });
-    return rows.map(summarizeStackRow);
+    const project = resolveProjectRoot(cwd, spawn ?? spawnSync);
+    const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn ?? spawnSync)));
+    const plan = planStack({ rows, functions, pm: resolveStackPm(undefined, env ?? process.env), platform });
+    return { stack: rows.map(summarizeStackRow), stackGap: plan.mandatory.length > 0 };
   } catch {
-    return 'unknown';
+    return { stack: 'unknown', stackGap: false };
   }
 }
 
@@ -173,8 +191,8 @@ export async function computeStackState({ home, cwd, spawn, platform, fetch: fet
  * result of `computeStackState` (an array of compact rows, or `'unknown'`); omitted entirely, the
  * stack block simply does not render (see `render` below), so older callers keep working. `location` is
  * a `projectLocation` result; omitted, the TUI is outside any repository and shows the machine menu. */
-export function initialState({ installedVersion, updateAvailable, stack, location = { kind: 'notGit' }, installedCopy = null }) {
-  const menu = buildMenu(location);
+export function initialState({ installedVersion, updateAvailable, stack, stackGap = false, location = { kind: 'notGit' }, installedCopy = null }) {
+  const menu = buildMenu(location, { stackGap });
   return {
     mode: 'menu',
     selected: firstSelectable(menu),
@@ -182,6 +200,7 @@ export function initialState({ installedVersion, updateAvailable, stack, locatio
     updateAvailable,
     installedCopy,
     stack,
+    stackGap,
     location,
     menu,
   };
@@ -286,21 +305,39 @@ function screenText(state) {
  * `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every command,
  * since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStack`
  * (sync or async) does the same for the stack block above the menu: `init` creating `.codegraph/` changes
- * codegraph's project state, and `uninstall` the reverse. */
+ * codegraph's project state, and `uninstall` the reverse. `readStackView` reads the block and `stackGap` together,
+ * where the caller has both (`computeStackView`), and is used in place of `readStack`.
+ *
+ * A command is called with the location and `{ ask }`: `ask(question)` writes the question and resolves to whether the
+ * next key is `y`. That key goes to the command and never to the menu, which still listens while a command runs
+ * (Install the stack asks before each install it runs, odd/tasks/stack-install.md, D4-D5). */
 export function runTui({
   installedVersion,
   updateAvailable,
   installedCopy = null,
   stack,
+  stackGap = false,
   location,
   readLocation,
   readStack,
+  readStackView,
   readUpdate,
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack, location, installedCopy });
+  let state = initialState({ installedVersion, updateAvailable, stack, stackGap, location, installedCopy });
+  // The answer a command's `ask` waits for: the next key is its, not the menu's.
+  let waiting = null;
+  const ask = (question) => new Promise((resolve) => {
+    stdout.write(question);
+    waiting = (key) => {
+      stdout.write(key === 'y' ? 'y\n' : 'n\n');
+      stdin.pause();
+      resolve(key === 'y');
+    };
+    stdin.resume();
+  });
   // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
   // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
   let drawn = 0;
@@ -318,6 +355,12 @@ export function runTui({
   return new Promise((resolve) => {
     async function onData(chunk) {
       const key = normalizeKey(chunk);
+      if (waiting) {
+        const answer = waiting;
+        waiting = null;
+        answer(key);
+        return;
+      }
       const { state: next, effect } = handleKey(state, key);
       state = next;
 
@@ -327,7 +370,7 @@ export function runTui({
         // stderr, the previous location stays, and the menu is drawn again below.
         let code = null;
         try {
-          code = await commands[effect.command](state.location);
+          code = await commands[effect.command](state.location, { ask });
         } catch (err) {
           console.error(`${effect.command} failed: ${oneLine(err)}`);
         }
@@ -346,7 +389,14 @@ export function runTui({
             console.error(`reading the project failed: ${oneLine(err)}`);
           }
         }
-        if (readStack) {
+        if (readStackView) {
+          try {
+            const view = await readStackView();
+            state = withLocation({ ...state, stack: view.stack, stackGap: view.stackGap }, state.location);
+          } catch (err) {
+            console.error(`refreshing the stack failed: ${oneLine(err)}`);
+          }
+        } else if (readStack) {
           try {
             state = { ...state, stack: await readStack() };
           } catch (err) {
@@ -417,6 +467,8 @@ export function buildCommands({
     'project-remote-stop': async (location) => remote(['stop', ...argsAt(location)], env),
     status: () => statusMain(['--global', '--home', home, ...fromSource], env, spawn),
     doctor: () => doctorMain(['--home', home, '--cwd', cwd], env, { spawn, fetch: fetchImpl, now }),
+    // Each install it runs is shown, then asked through the menu's `ask`: the TUI is the terminal that consents (D5).
+    'stack-install': (location, io = {}) => stackInstallMain(['--home', home, '--cwd', cwd], env, { ask: io.ask, interactive: true }),
     install: () => installMain(['--home', home]),
     update: () => updateMain(['--home', home, ...fromSource], env, spawn),
     upgrade: () => upgradeMain(['--home', home, ...fromSource], env, spawn),
@@ -467,7 +519,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
 
   // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
   const location = projectLocation(cwd);
-  const stack = await computeStackState({ home, cwd, spawn, fetch: fetchImpl, now });
+  const { stack, stackGap } = await computeStackView({ home, cwd, spawn, fetch: fetchImpl, now });
 
   const commands = buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now, source });
 
@@ -477,11 +529,12 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     installedCopy,
     readUpdate,
     stack,
+    stackGap,
     location,
     readLocation: () => projectLocation(cwd),
-    // The same offline probes as at start, never the network: `computeStackState` always calls
+    // The same offline probes as at start, never the network: `computeStackView` always calls
     // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
-    readStack: () => computeStackState({ home, cwd, spawn, fetch: fetchImpl, now }),
+    readStackView: () => computeStackView({ home, cwd, spawn, fetch: fetchImpl, now }),
     commands,
     ...io,
   });

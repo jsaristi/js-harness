@@ -102,7 +102,7 @@ function hasCodexMcpServer(home, name) {
  * R3-004 (accepted T1 review follow-up): Claude Code can also register an MCP server scoped to one
  * project, under `projects[<project root>].mcpServers`, instead of (or as well as) globally — so a
  * project-scoped registration for the resolved project root counts as configured too. */
-function claudeJsonMcpServer(home, name, projectRoot) {
+export function claudeJsonMcpServer(home, name, projectRoot) {
   const { found, data } = readJsonFile(path.join(home, '.claude.json'));
   if (!found) return { state: 'missing', entry: undefined };
   if (data === undefined) return { state: 'unknown', entry: undefined };
