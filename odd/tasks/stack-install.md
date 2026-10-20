@@ -8,9 +8,17 @@ after its two readers, and version 3 after the second round on their blockers (s
 Next step (2026-10-19, kept current): slice 1 is code commit `866f197b` on feat/stack-install (T2 done, not pushed).
 Slice 1 is PR 472 (ready notice sent). Slice 2 (T3) is on branch feat/stack-install-run in the same worktree:
 units A `dba54d18`, B `cea616b9`, C `b9553aba` and D (scratch script, with this line) are committed, each with a
-gentle-ai line in L9. Next: `js-harness codex-review --base b9722fc5` for the slice (fix its findings test-first);
-push feat/stack-install-run, PR based on feat/stack-install, ready notice; T4 trial (`node scripts/stack-scratch.mjs`,
-output to the Log), T5.
+gentle-ai line in L9 (e57f2d0c still needs its line). Codex on b9722fc..e57f2d0 (recorded; full text in the
+session scratchpad `codex3.txt`) gave 9 P2, all to fix test-first, then one recheck `codex-review --base e57f2d0c`:
+(1) npm `--prefix` env lacks the prefix's bin on PATH (`bin/lib/stack-install.mjs:44`); (2) undoStack drops a record
+when the version probe is `unknown`: keep it (`bin/lib/stack-run.mjs:119`); (3) undo codex's package only after the
+codegraph·codex registration undo succeeded, else keep codex (`stack-run.mjs:127`); (4) failedRecords must keep
+install order, not reverse (`stack-run.mjs:129`); (5) the probes and registrations in `stack install` must see the
+prefix bin (`bin/stack.mjs:187`); (6) a registration writes to the config the record reads (CODEX_HOME / home) —
+align them (`stack.mjs:217`); (7) a failed command is "done" only on an `ok` probe, not `unknown` (`stack.mjs:222`);
+(8) the scratch PATH lacks `sh`/coreutils pnpm's POSIX launchers need (`scripts/stack-scratch.mjs:54`); (9) the
+trial must check both MCP registrations are gone after uninstall (`stack-scratch.mjs:175`). Then push
+feat/stack-install-run, PR based on feat/stack-install, ready notice; T4 trial (`node scripts/stack-scratch.mjs`), T5.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
