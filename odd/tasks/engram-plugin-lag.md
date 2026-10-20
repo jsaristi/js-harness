@@ -79,7 +79,7 @@ Forecast: ~200 authored lines. Under the ~400 budget: one PR against `main`. Str
 - [x] T1 (kind: build) S4 — engram lookup ignores `pi-v*` (inline; RED 3 failing in latest.test.mjs, GREEN 24/24)
 - [x] T2 (kind: build) S1–S3, S5 — `engram-plugin` row and its latest source (inline; RED 4 + 5 + 1, GREEN)
 - [x] T3 (kind: docs) S5 — help, README, SPEC, GUIDE (inline)
-- [ ] T4 (kind: verify) — `npm run check`, gentle-ai and Codex reviews, PR (inline)
+- [ ] T4 (kind: verify) — `npm run check`, gentle-ai and Codex reviews, PR (inline; `a6f525e4` gentle-ai approved, L5)
 
 ## Log
 - L1 2026-10-20 request (from the lead session): "In js-harness (D:\js-harness), make `js-harness
@@ -100,3 +100,12 @@ Forecast: ~200 authored lines. Under the ~400 budget: one PR against `main`. Str
   `claude plugin marketplace update engram`, `claude plugin update engram@engram`. The plugin was not updated.
   The run also joined `engram-plugin 0.1.12` to the stack-update record in the doctor cache, as any new tool joins.
 - L4 2026-10-20 two doctor fixtures mocked engram's `releases/latest` body; they now mock the releases list.
+- L5 2026-10-20 gentle-ai review, lineage `review-bc11b71ae8b02ac4`, lenses resilience, readability and
+  reliability over `a6f525e4`: approved, acknowledged (`authority: burned`), seven non-blocking findings.
+  Taken in the follow-up commit: R3-git-fixture-config (the fixture runs git with no global or system
+  config), R3-git-parent-discovery (a marketplace folder with no `.git` of its own is never handed to
+  git), R2-duplicated-semver-pattern (one plain-semver rule), R2-per-page-constant and
+  R4-releases-window-30 (a named page size and its limit stated), R4-sync-git-serializes-lookups (the
+  network lookups start before the git read, with a test of the order), R3-prose-in-fix-array (a
+  `--json` test pins the fix's shape; a first prose line in a fix list has precedent in the `unseen`
+  and `worktrees` rows).

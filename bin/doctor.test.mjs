@@ -171,7 +171,7 @@ function seedEngramPluginLag(home, { gitShow }) {
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
     plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }], 'engram@engram': [{ version: '0.1.12' }] },
   });
-  fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
   const base = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 3.5.1' } });
   const shown = [];
   const spawn = (cmd, args, opts) => {
@@ -1228,6 +1228,58 @@ test('--offline never refetches for a network row the cache predates: it stays u
 // cache. It is read on every run, online or --offline, and overlays whatever the cache holds. It
 // is not written to the cache either (the simpler of the two options: nothing is stored that a
 // later run must remember not to read), and it never counts as an attempted lookup. ---
+
+// The engram plugin's local read is a git process that blocks up to its 5s timeout: the network lookups start first,
+// so a slow git and a slow network are waited on together, not one after the other (review R4, lineage review-bc11b71ae8b02ac4).
+test('resolveLatestVersions starts the network lookups before the git read of the engram plugin', async () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
+    const order = [];
+    const fetchImpl = async (url) => {
+      order.push(`fetch ${url.includes('engram') ? 'engram' : 'other'}`);
+      return { ok: false };
+    };
+    const spawn = (cmd) => {
+      order.push(cmd);
+      return { status: 128, stdout: '', stderr: '' };
+    };
+    const rows = [
+      { id: 'engram', installed: 'ok', version: '3.5.1' },
+      { id: 'engram-plugin', installed: 'ok', version: '0.1.12' },
+    ];
+    await resolveLatestVersions(rows, { home, offline: false, fetch: fetchImpl, now: () => new Date(), spawn });
+    assert.deepEqual(order, ['fetch engram', 'git']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain --json gives an outdated engram plugin its fix as the line that names the versions, then the two commands', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const manifest = JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.14' }] });
+    const { spawn } = seedEngramPluginLag(home, { gitShow: () => ({ status: 0, stdout: manifest, stderr: '' }) });
+
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--offline', '--json'], {}, { spawn, fetch: noopFetch });
+
+    const row = JSON.parse(output).find((r) => r.id === 'engram-plugin');
+    assert.deepEqual(row.gaps, [{
+      dimension: 'upToDate',
+      state: 'outdated',
+      fix: [
+        'plugin 0.1.12 is behind 0.1.14, the plugin engram v3.5.1 ships; update it, then restart Claude Code:',
+        'claude plugin marketplace update engram',
+        'claude plugin update engram@engram',
+      ],
+    }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
 
 test('a plugin installed after a run cached null for it is compared at once, online and --offline', async () => {
   const home = makeTmpHome();

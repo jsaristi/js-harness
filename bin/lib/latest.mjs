@@ -24,14 +24,21 @@ async function fetchGithubReleaseVersion(owner, repo, fetchImpl) {
   }
 }
 
-const RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+)$/;
+// An engram release is a plain `v<semver>` tag: the releases lookup accepts only those, and the plugin read asks git
+// for exactly that tag, so both read the same rule here.
+const PLAIN_SEMVER = String.raw`\d+\.\d+\.\d+`;
+const RELEASE_TAG_RE = new RegExp(`^v(${PLAIN_SEMVER})$`);
+const PLAIN_SEMVER_RE = new RegExp(`^${PLAIN_SEMVER}$`);
+// One page of the newest releases across every stream. The newest `v<semver>` release must be among them: past 30
+// newer `pi-v*` releases, drafts or prereleases the answer is `null`, shown as `unknown`, never a wrong version.
+const RELEASES_PAGE = 30;
 
 /** The highest `v<semver>` release of a repository that publishes more than one release stream, where
  * `releases/latest` is whichever stream published last: engram's `pi-v*` releases share its repository
  * (odd/tasks/engram-plugin-lag.md, D4). Drafts, prereleases and every other tag are skipped. */
 async function fetchGithubStreamVersion(owner, repo, fetchImpl) {
   try {
-    const res = await fetchImpl(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=30`, {
+    const res = await fetchImpl(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=${RELEASES_PAGE}`, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return null;
@@ -90,12 +97,12 @@ function pluginVersionIn(text, pluginName) {
  * engram marketplace at `v<binary version>`, never from the clone's working tree, which can sit behind the refs
  * Claude Code fetched (odd/tasks/engram-plugin-lag.md, D2). `rows` holds the engram row. No engram version, no
  * clone, no git, no such tag or a manifest with no engram entry is `null`; git runs without a shell and is bounded
- * by the same 5s as a request. */
+ * by the same 5s as a request. A folder with no `.git` of its own is no clone: git would read a repository above it. */
 function readEngramPluginAtTag({ home, spawn = spawnSync }, _row, rows = []) {
   const binary = rows.find((row) => row.id === 'engram')?.version;
-  if (typeof binary !== 'string' || !/^\d+\.\d+\.\d+$/.test(binary)) return null;
+  if (typeof binary !== 'string' || !PLAIN_SEMVER_RE.test(binary)) return null;
   const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
-  if (!fs.existsSync(clone)) return null;
+  if (!fs.existsSync(path.join(clone, '.git'))) return null;
   const result = spawn('git', ['-C', clone, 'show', `v${binary}:.claude-plugin/marketplace.json`], { encoding: 'utf8', timeout: TIMEOUT_MS });
   if (!result || result.error || result.signal || result.status !== 0) return null;
   return pluginVersionIn(result.stdout ?? '', 'engram');

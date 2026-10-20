@@ -391,8 +391,10 @@ test('readLocalLatestVersions returns one entry per local-source row only, null 
 function makeEngramClone(home, { tag, atTag, inTree }) {
   const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
   const file = path.join(clone, '.claude-plugin', 'marketplace.json');
+  // No global or system config: a signing rule or a hooks path of the machine's must not decide the fixture.
   const git = (...args) => {
-    const result = spawnSync('git', ['-C', clone, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' });
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(home, 'no-gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
+    const result = spawnSync('git', ['-C', clone, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', env });
     assert.equal(result.status, 0, result.stderr);
   };
   fs.mkdirSync(clone, { recursive: true });
@@ -442,7 +444,7 @@ test('engram-plugin reads null when the clone lacks the binary\'s tag, when ther
 test('engram-plugin reads null, never throws, when git fails, times out or prints a manifest with no engram entry', () => {
   const home = makeTmpHome();
   try {
-    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram'), { recursive: true });
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
     const answers = [
       { status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' },
       { status: null, signal: 'SIGTERM', stdout: '', stderr: '' },
@@ -458,6 +460,22 @@ test('engram-plugin reads null, never throws, when git fails, times out or print
       assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, spawn }), { 'engram-plugin': null });
       assert.match(calls[0], /^git -C .+ show v3\.5\.1:\.claude-plugin\/marketplace\.json$/);
     }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('engram-plugin never asks git about a marketplace folder that is not a repository itself, so a repository above it is never read', () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram'), { recursive: true });
+    const calls = [];
+    const spawn = (cmd, args) => {
+      calls.push([cmd, ...args].join(' '));
+      return { status: 0, stdout: JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.14' }] }), stderr: '' };
+    };
+    assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, spawn }), { 'engram-plugin': null });
+    assert.deepEqual(calls, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

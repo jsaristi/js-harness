@@ -112,10 +112,11 @@ export async function resolveLatestVersions(rows, deps) {
   // cache — it is read on every run, online or `--offline`, and overlaid on the cached or fetched
   // network versions. It is not written to the cache either, and (see `isLookupAttempted`) it never
   // counts as an attempted lookup below, so a local answer can neither hide an outage nor be stale.
-  // `spawn` is for the engram plugin's, read with git from the engram marketplace clone.
+  // The network lookups start first: the engram plugin's local read is a git process (`spawn`) that blocks until it
+  // ends or times out, and requests already sent keep their own clock meanwhile.
+  const network = resolveNetworkVersions(rows.filter((row) => !isLocalSource(row)), deps);
   const local = readLocalLatestVersions(rows, { home: deps.home, spawn: deps.spawn });
-  const networkRows = rows.filter((row) => !isLocalSource(row));
-  return { ...(await resolveNetworkVersions(networkRows, deps)), ...local };
+  return { ...(await network), ...local };
 }
 
 /** The cache-backed half of `resolveLatestVersions`: every row here is a network lookup (or has no
