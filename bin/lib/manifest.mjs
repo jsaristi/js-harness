@@ -865,7 +865,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks', 'settings'];
+const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -1052,6 +1052,24 @@ export function forgetScheduledTask(home, name, deps = {}) {
   return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name), deps.listDir);
 }
 
+const sameStackRow = (a, b) => a.tool === b.tool && a.dimension === b.dimension;
+
+/** Keeps the record of one row `stack install` runs (odd/tasks/stack-install.md, D7), `{ tool, dimension, run, undo,
+ * applies, env, at }`, in place of the record of the same tool and dimension: `run` and `undo` are the words of the
+ * command and of its exact undo, `applies` what the undo still applies to (the version installed, or the registration
+ * written, read back; `null` before the command has run), `env` the variables the command was given over the
+ * environment, which its undo is given too. Like a scheduled task, no component declares one: `install` and `sync`
+ * carry the array as it is, and `uninstall` hands it to `deps.undoStack`. */
+export function recordStackRow(home, record) {
+  return keepRecord(home, 'stack', record, (entry) => sameStackRow(entry, record));
+}
+
+/** Forgets the record of `row`'s tool and dimension, running nothing; `false` when there was none. What is left of the
+ * manifest is what `forgetOptionalFile` leaves. */
+export function forgetStackRow(home, row, deps = {}) {
+  return forgetRecord(home, 'stack', (entry) => sameStackRow(entry, row), deps.listDir);
+}
+
 /** Puts one record back as it was, for a command that takes back what it did: `record` (what the manifest held
  * for it before) is written again in place of what is there now, or, when there was none, what is there now is
  * forgotten. Only that one record is touched, in the manifest as it is at this moment: whatever another command
@@ -1079,7 +1097,7 @@ export function windowsSystem32(env) {
 
 /** Whether this process is a test: a file run by `node --test` (which sets `NODE_TEST_CONTEXT` for it), or a
  * test file run directly. */
-const underTest = () => process.env.NODE_TEST_CONTEXT !== undefined || /\.test\.[cm]?js$/.test(process.argv[1] ?? '');
+export const underTest = () => process.env.NODE_TEST_CONTEXT !== undefined || /\.test\.[cm]?js$/.test(process.argv[1] ?? '');
 
 /** What `schtasks.exe` printed, as text: UTF-16 when it starts with that mark or reads as it, else one character
  * a byte. Only ASCII is ever compared, and that is the same either way. */
@@ -1480,6 +1498,14 @@ function uninstallInstalled(home, deps) {
     }
   }
 
+  // What `stack install` ran is undone by `deps.undoStack`, which `uninstall machine` hands in: the probes that judge a
+  // record live in bin/lib/stack.mjs, which imports this file. It returns `{ undone, kept, failedRecords }`, and only
+  // the failed records stay, for a second run. Without it nothing is run and every record stays as it is.
+  const stackRecords = manifest.stack ?? [];
+  const stack = stackRecords.length === 0
+    ? { undone: [], kept: [], failedRecords: [] }
+    : deps.undoStack?.(stackRecords) ?? { undone: [], kept: stackRecords.map(({ tool, dimension }) => ({ tool, dimension, reason: 'not-judged' })), failedRecords: stackRecords };
+
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
@@ -1495,10 +1521,14 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0) {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0) {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const keptSettings = settings.failedRecords.map((record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) }));
-    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded, ...(keptSettings.length > 0 && { settings: keptSettings }) });
+    writeManifest(home, {
+      version: null, files: [], entries: [], tasks: stillRecorded,
+      ...(keptSettings.length > 0 && { settings: keptSettings }),
+      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }),
+    });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
@@ -1507,7 +1537,9 @@ function uninstallInstalled(home, deps) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
+  const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, ...stackResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

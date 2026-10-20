@@ -198,11 +198,11 @@ proofs and by those tasks.
 ### The stack install
 
 **Problem:** The doctor named a fix for each gap and nothing ran it, in an order that matters and with no record of what it wrote, so a new machine was set up by hand and nothing could undo it (`odd/tasks/stack-install.md`).
-**Requirement:** `stack` lists, read-only, the tools the harness requires that are missing for this project, in run order, each with its command and its exact undo: the Codex CLI while codexReview is not off, codegraph while codeMap is not off, and codegraph's registrations in both hosts. A tool whose undo is not exact (gentle-ai's own installer, and engram, which it brings), a login and a prerequisite are named as the person's steps and never run; context7 and typescript-lsp are optional. The package manager is named, or read from the copy, never from the word `npm`.
+**Requirement:** `stack` lists, read-only, the tools the harness requires that are missing for this project, in run order, each with its command and its exact undo: the Codex CLI while codexReview is not off, codegraph while codeMap is not off, and codegraph's registrations in both hosts. A tool whose undo is not exact (gentle-ai's own installer, and engram, which it brings), a login and a prerequisite are named as the person's steps and never run; context7 and typescript-lsp are optional. The package manager is named, or read from the copy, never from the word `npm`. Each row run is recorded in the machine manifest before it starts, with its undo, the environment it was given and, read back after it, what that undo applies to; `uninstall machine` undoes the records the last first, drops the record of a tool already gone, keeps and names one that changed since, and keeps the record of an undo that failed for a run again. No test runs a real command.
 **Reason:** Every write outside the repository must be undoable exactly; gentle-ai's uninstall removes whole settings keys and leaves binaries and PATH entries behind, so the harness does not run it (his answer to F1, 2026-10-19).
-**Proof:** `node --test bin/lib/stack-install.test.mjs`, `node --test bin/stack.test.mjs`
+**Proof:** `node --test bin/lib/stack-install.test.mjs`, `node --test bin/stack.test.mjs`, `node --test bin/lib/stack-run.test.mjs`, `node --test bin/lib/manifest-stack.test.mjs`
 **Discarded:** A flag on `install`: install writes the harness's own files and is safe to run unasked. Running gentle-ai's installer with only its own uninstall as the undo.
-**Today:** `bin/stack.mjs`, `bin/lib/stack-install.mjs`, `js-harness stack`
+**Today:** `bin/stack.mjs`, `bin/lib/stack-install.mjs`, `bin/lib/stack-run.mjs`, `js-harness stack`
 
 ### Progress
 

@@ -349,6 +349,11 @@ Each kind also has a name, and a named kind never acts by location:
 | `uninstall snapshots` | `uninstall --global --full` | the same, and the memory snapshots | the throughput records, the program |
 | `uninstall everything` | `uninstall --global --everything` | the same, the whole `.js-harness` folder and the program | projects' files |
 
+The machine kinds also undo what `stack install` ran, the last first, printing each undo before
+it runs it: a tool already gone loses its record, one that changed since (you upgraded it, or
+registered it again with another entry) is yours and is kept, named, and one whose undo fails
+stays recorded, so running the uninstall again finishes it, and the exit code is 1.
+
 `uninstall project` outside an initialized project exits 1 and removes nothing; it never falls
 through to the machine. A kind given `--global`, `--full` or `--everything`, or a machine kind
 given `--cwd`, is a usage error.

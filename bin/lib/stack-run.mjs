@@ -1,0 +1,133 @@
+// How `stack install` runs a row and `uninstall machine` undoes it (odd/tasks/stack-install.md, D6 and D7): the
+// environment a child is given, the runner, what an undo still applies to, and the undo of the records. Every command
+// goes through `runWords`, whose default spawn refuses in a test, so no test installs anything.
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { underTest } from './manifest.mjs';
+import { cmdWord, shownWord } from './package-manager.mjs';
+import { claudeJsonMcpServer, probeVersionCommand } from './stack.mjs';
+
+/** How long a command may run when nobody watches it (D6): a package install downloads, a registration writes one entry. */
+export const TIMEOUTS = { package: 120_000, registration: 30_000 };
+
+/** The spawn of the real commands: refused in a test process, before anything runs, as `runSchtasks` is. */
+export function realSpawn(file, args, options) {
+  if (underTest()) throw new Error('a stack command is never run from a test: this one has to hand in a fake spawn');
+  return spawnSync(file, args, options);
+}
+
+/** The variables that point a child at the home `home` when it is not the real one (D6): Claude and Codex read their
+ * configuration from these, so a scratch home keeps every write out of the real one. `{}` for the real home. */
+export function homeEnv(home, realHome, platform) {
+  if (path.resolve(home) === path.resolve(realHome)) return {};
+  const vars = { HOME: home, USERPROFILE: home, CODEX_HOME: path.join(home, '.codex') };
+  if (platform === 'win32') Object.assign(vars, { APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local') });
+  return vars;
+}
+
+/** `base` with `delta` over it, where a `PATH` in `delta` goes before the one `base` has (under the key `base` names it
+ * by: Windows calls it `Path`) instead of replacing it. */
+export function withEnv(base, delta, platform) {
+  const { PATH: before, ...rest } = delta ?? {};
+  const env = { ...base, ...rest };
+  if (before) {
+    const key = Object.keys(base).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH';
+    env[key] = base[key] ? `${before}${platform === 'win32' ? ';' : ':'}${base[key]}` : before;
+  }
+  return env;
+}
+
+/** The first word cmd.exe would read inside quotes (`%NAME%`, or a `"` that ends them), or `null`; only on Windows,
+ * where every command goes through cmd.exe. `upgradeMain` refuses the same words. */
+export function refusedWord(words, platform) {
+  if (platform !== 'win32') return null;
+  return words.find((word) => /[%"]/.test(word)) ?? null;
+}
+
+/** A command as a person reads it, each word quoted where the shell would split or read it. */
+export const shownCommand = (words, platform) => words.map((word) => shownWord(word, platform)).join(' ');
+
+/** Runs `words` once, as `{ ok, status, why }`: `why` says what failed (its exit code and the last line it printed,
+ * a timeout, the error that kept it from starting, or a refused word), `null` when it exited 0. On Windows it goes
+ * as one cmd.exe line, each word through `cmdWord` (a `.cmd` shim starts only through a shell); elsewhere as an argv.
+ * In a terminal (`interactive`) the child shares it; else its stdin is closed, so nothing waits on an answer. */
+export function runWords(words, { spawn = realSpawn, env, timeout, interactive = false, platform = process.platform }) {
+  const refused = refusedWord(words, platform);
+  if (refused !== null) return { ok: false, status: null, why: `refused the word ${refused}: cmd.exe would read it` };
+  const options = { encoding: 'utf8', env, timeout, stdio: interactive ? 'inherit' : ['ignore', 'pipe', 'pipe'] };
+  const result = platform === 'win32'
+    ? spawn(words.map(cmdWord).join(' '), [], { ...options, shell: true })
+    : spawn(words[0], words.slice(1), options);
+  if (result.error?.code === 'ETIMEDOUT' || (result.status === null && result.signal)) return { ok: false, status: null, why: `timed out after ${timeout} ms` };
+  if (result.error) return { ok: false, status: null, why: result.error.message };
+  if (result.status === 0) return { ok: true, status: 0, why: null };
+  const last = String(result.stderr || result.stdout || '').trim().split(/\r?\n/).pop();
+  return { ok: false, status: result.status, why: last ? `exit ${result.status}: ${last}` : `exit ${result.status}` };
+}
+
+/** The `[mcp_servers.<name>]` table of `<home>/.codex/config.toml`, with its own subtables (`[mcp_servers.<name>.env]`),
+ * as its text trimmed, or `null` when there is none: what `codex mcp add` wrote, so an undo can tell the entry it made
+ * from one written since. */
+export function codexMcpSection(home, name) {
+  let text;
+  try {
+    text = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
+  } catch {
+    return null;
+  }
+  const lines = text.split(/\r?\n/);
+  const own = (line) => line.trim() === `[mcp_servers.${name}]` || line.trim().startsWith(`[mcp_servers.${name}.`);
+  const start = lines.findIndex((line) => line.trim() === `[mcp_servers.${name}]`);
+  if (start === -1) return null;
+  let end = start + 1;
+  while (end < lines.length && !(/^\s*\[/.test(lines[end]) && !own(lines[end]))) end += 1;
+  return lines.slice(start, end).join('\n').trim();
+}
+
+/** What the undo of `row` applies to now (D7), as `{ present, value }`: for a package, whether its binary answers and
+ * the version it gives; for a registration, the entry in Claude's `~/.claude.json` or the table in Codex's config. */
+export function appliesOf(row, { home, spawn, platform, env }) {
+  if (row.kind === 'package') {
+    const { state, version } = probeVersionCommand(row.bin, ['--version'], { spawn, platform, env });
+    return state === 'missing' ? { present: false, value: null } : { present: true, value: version };
+  }
+  const value = row.dimension === 'claude' ? claudeJsonMcpServer(home, row.tool).entry ?? null : codexMcpSection(home, row.tool);
+  return { present: value !== null, value };
+}
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Undoes the records of `stack install`, the last run first (D7), as `{ undone, kept, failedRecords }`. Each is
+ * probed first: a tool already gone loses its record (`gone`); one whose undo no longer applies (he upgraded it, or
+ * registered it again with another entry) is his, kept and named, and loses its record (`changed`); else its undo is
+ * printed, then run with the record's environment, and one that fails keeps its record, so a second run can finish
+ * it (`failed`). A record whose command never got as far as reading back (`applies` is `null`) is undone while its tool
+ * is there. */
+export function undoStack(records, { home, spawn = realSpawn, platform = process.platform, env = process.env, log = () => {} }) {
+  const undone = [];
+  const kept = [];
+  const failedRecords = [];
+  for (const record of [...records].reverse()) {
+    const key = { tool: record.tool, dimension: record.dimension };
+    const childEnv = withEnv(env, record.env, platform);
+    const now = appliesOf(record, { home, spawn, platform, env: childEnv });
+    if (!now.present) {
+      kept.push({ ...key, reason: 'gone' });
+      continue;
+    }
+    if (record.applies !== null && !same(now.value, record.applies)) {
+      kept.push({ ...key, reason: 'changed' });
+      continue;
+    }
+    log(`undo ${record.tool} ${record.dimension}: ${shownCommand(record.undo, platform)}`);
+    const result = runWords(record.undo, { spawn, env: childEnv, timeout: TIMEOUTS[record.kind], platform });
+    if (result.ok) {
+      undone.push(key);
+    } else {
+      kept.push({ ...key, reason: 'failed', why: result.why });
+      failedRecords.push(record);
+    }
+  }
+  return { undone, kept, failedRecords };
+}
