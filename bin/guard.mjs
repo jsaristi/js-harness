@@ -7,7 +7,9 @@
 //     rule `sessions-open-in-sidebar` is declared, and the reason names `start_session` (`openingRefusal`;
 //     odd/tasks/session-channel.md, layer 3).
 //   - `mcp__ccd_session__start_session`: a session started with no effort, or above the rule `session-effort`, where
-//     that rule is declared (`sessionEffortRefusal`; odd/tasks/harness-review.md, T6c).
+//     that rule is declared (`sessionEffortRefusal`; odd/tasks/harness-review.md, T6c); then one titled otherwise than
+//     `<code> <n> · <purpose>`, where the rule `session-title` is declared, with the project's next free number
+//     (bin/lib/session-title-guard.mjs, imported only for this tool; odd/tasks/session-title.md).
 //   - `SendMessage` and `mcp__ccd_session_mgmt__send_message`: the hour a message stamps as its time of sending
 //     against the clock (`hourRefusal`).
 //   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a recursive `rm` or
@@ -38,7 +40,8 @@ const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a start_session that names no effort or one above the rule session-effort (where\n'
-  + '  the rules declare it), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
+  + '  the rules declare it), a start_session titled otherwise than <code> <n> · <purpose>, naming the next free\n'
+  + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
   + '  does, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
@@ -73,7 +76,7 @@ function rulesTextOf(root, readFile) {
 }
 
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env = {}, homedir = os.homedir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
   if (FILE_TOOLS.has(tool)) {
@@ -86,7 +89,11 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
-  if (tool === SESSION_TOOL) return sessionEffortRefusal(input, rulesTextOf(rootOf(), readFile));
+  if (tool === SESSION_TOOL) {
+    const root = rootOf();
+    const rules = rulesTextOf(root, readFile);
+    return sessionEffortRefusal(input, rules) ?? (await sessionTitleOf(input, rules, root, env.JS_HARNESS_HOME || homedir(), readFile));
+  }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
   const backticks = backtickRefusal(input.command);
@@ -99,6 +106,29 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   const run = testRun ?? (await import('./lib/test-run-warning.mjs')).testRunWarning;
   // The folder the command runs in names its test file as the gate log does (first-version T6a).
   return run(String(input.command ?? ''), { ...(typeof payload.cwd === 'string' && payload.cwd !== '' && { cwd: payload.cwd }) });
+}
+
+/** Why the `start_session` call whose input is `input` is refused for its title, or null (lib/session-title-guard.mjs). The
+ * project's code is read from the `harness.json` of its main checkout, and the next free number from that checkout's
+ * channel under the harness home `home`, as `notify` writes it, and only to word a refusal. */
+async function sessionTitleOf(input, rules, root, home, readFile) {
+  const { sessionTitleRefusal } = await import('./lib/session-title-guard.mjs');
+  // Loaded before the check, since the check is synchronous; the record is read for a bad title alone. A reader that
+  // fails to load leaves the refusal standing: without the code, every title is refused and told why.
+  let project;
+  try {
+    const [{ nextSessionNumber }, { mainCheckoutByFiles }, { projectCode, projectSlug }] = await Promise.all([
+      import('./lib/channel.mjs'), import('./lib/inbox.mjs'), import('./lib/sessions.mjs'),
+    ]);
+    const main = mainCheckoutByFiles(root) ?? root;
+    project = { codeOf: () => projectCode(main, readFile), next: (code) => nextSessionNumber(home, projectSlug(main), { code }) };
+  } catch (err) {
+    const fail = () => {
+      throw err;
+    };
+    project = { codeOf: fail, next: fail };
+  }
+  return sessionTitleRefusal(input, rules, project);
 }
 
 /** The hint for the Bash call of `payload` that wraps a commit in `js-harness gate --`, or null (lib/wrapped-commit.mjs).
@@ -165,7 +195,7 @@ export async function guardMain(argv, {
   let hint = null;
   try {
     const payload = JSON.parse(readStdin());
-    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains });
+    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env, homedir });
     // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
     if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists });
   } catch {

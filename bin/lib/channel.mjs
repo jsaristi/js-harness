@@ -549,26 +549,74 @@ export function findOpenings(home, slug, wanted, { readdir = (dir) => fs.readdir
     // `ORQ` as the titles spell it, not `orchestrator`: this is the start of a title, not a role by name.
     return Boolean(said) && said.code === prefix[1] && said.role === role.role && said.number === role.number && (role.role === 'work' || prefix[2] === 'ORQ');
   };
-  const openings = [];
+  const { stored, unreadable } = storedOpenings(dir, names, readFile);
+  const openings = stored.filter(named);
+  const recency = (opening) => opening.at ?? '';
+  openings.sort((one, other) => (recency(one) < recency(other) ? 1 : recency(one) > recency(other) ? -1 : 0));
+  return { dir, openings, unreadable };
+}
+
+/** The openings among the files `names` of the folder `dir`: `{ stored, unreadable }`, each opening as
+ * `{ path, title, at, from, text }`, and the count of the `.json` files that are not one (torn, or another
+ * schema). Files of another extension are neither. */
+function storedOpenings(dir, names, readFile) {
+  const stored = [];
   let unreadable = 0;
   for (const name of names) {
     if (!name.endsWith('.json')) continue;
     const file = path.join(dir, name);
-    let stored;
+    let opening;
     try {
-      stored = JSON.parse(readFile(file));
+      opening = JSON.parse(readFile(file));
     } catch {
-      stored = null;
+      opening = null;
     }
-    if (!isObject(stored) || stored.schema !== OPENING_SCHEMA || typeof stored.title !== 'string' || typeof stored.text !== 'string') {
+    if (!isObject(opening) || opening.schema !== OPENING_SCHEMA || typeof opening.title !== 'string' || typeof opening.text !== 'string') {
       unreadable += 1;
       continue;
     }
-    if (named(stored)) openings.push({ path: file, title: stored.title, at: stored.at ?? null, from: stored.from ?? null, text: stored.text });
+    stored.push({ path: file, title: opening.title, at: opening.at ?? null, from: opening.from ?? null, text: opening.text });
   }
-  const recency = (opening) => opening.at ?? '';
-  openings.sort((one, other) => (recency(one) < recency(other) ? 1 : recency(one) > recency(other) ? -1 : 0));
-  return { dir, openings, unreadable };
+  return { stored, unreadable };
+}
+
+/** The number the next work session of the project `slug` under `home` is titled with
+ * (odd/tasks/session-title.md, S2, S5): `{ code, number }`, `number` one past the highest work number of `code`, the
+ * project's own identifier (`projectCode` of ./sessions.mjs). The numbers are read from every title of that code in
+ * the record (a sender's, a reading's) and in the openings, and from every notice addressed to a work number, since
+ * the session it names may not have written yet. A title of another code numbers nothing. With none the number is 1.
+ * A source that could not be read is named in `unavailable`, so the number is not taken as known. Reads only:
+ * nothing is written. */
+export function nextSessionNumber(home, slug, { code, readdir = (dir) => fs.readdirSync(dir), readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+  // Without a code only the notices would count, a number that looks known and is not.
+  if (typeof code !== 'string' || code === '') throw new TypeError('nextSessionNumber needs the project\'s code');
+  const unavailable = [];
+  const record = readNotices(home, slug, { readFile });
+  if (record.unavailable) unavailable.push(`record ${record.path} (${record.unavailable})`);
+  // A torn line, or one of another schema, may be the one with the highest number.
+  else if (record.skipped > 0) unavailable.push(`record ${record.path} (${record.skipped} line${record.skipped === 1 ? '' : 's'} not readable as a notice or a reading)`);
+  const dir = openingsDir(home, slug);
+  let openings = [];
+  try {
+    const { stored, unreadable } = storedOpenings(dir, readdir(dir), readFile);
+    openings = stored;
+    // A file that is there and not readable as an opening may be the one with the highest number.
+    if (unreadable > 0) unavailable.push(`openings ${dir} (${unreadable} file${unreadable === 1 ? '' : 's'} not readable as an opening)`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') unavailable.push(`openings ${dir} (${err.code ?? err.message})`);
+  }
+  const titles = [
+    ...record.notices.map((notice) => notice.from?.title),
+    ...record.readings.map((reading) => reading.title),
+    ...openings.map((opening) => opening.title),
+  ].map((title) => roleOfTitle(title)).filter(Boolean);
+  const numbers = [
+    ...titles.filter((title) => title.code === code && title.role === 'work').map((title) => title.number),
+    ...record.notices.filter((notice) => notice.to?.role === 'work').map((notice) => notice.to.number),
+  ];
+  // A line of a record from another version could hold a number of another kind: only whole numbers count.
+  const next = { code, number: numbers.filter(Number.isSafeInteger).reduce((highest, one) => Math.max(highest, one), 0) + 1 };
+  return unavailable.length > 0 ? { ...next, unavailable } : next;
 }
 
 // ---- where a notice is run from, and who sends it ------------------------------------------------------

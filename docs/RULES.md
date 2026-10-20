@@ -72,7 +72,7 @@ The model a session runs on: claude-opus-5-5.
 ### session-title
 The shape of the title of a session started with start_session: <code> is the project's own identifier, declared in harness.json "code", and the number is the next free one of that code, as js-harness sessions --next-number prints it (a new lead takes ORQ for the number): <code> <n> · <purpose>, <code> from harness.json "code".
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
+- Read by: `bin/lib/session-title-guard.mjs`.
 - Since 2026-10-19. Row: reports. Source: his words of 2026-10-19, 2026-10-19, checked by the command on 2026-10-19.
 
 ### sessions-open-in-sidebar

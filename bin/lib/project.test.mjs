@@ -17,6 +17,7 @@ import {
   templateBlock,
   runCodegraphInit,
   InitWriteError,
+  codeOfName,
 } from './project.mjs';
 import { sha256 } from './manifest.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
@@ -127,6 +128,19 @@ test('initProject outside a git repository writes nothing and reports notGitRepo
   }
 });
 
+// odd/tasks/session-title.md, S5: the code a session's title starts with is the project's own identifier.
+test('codeOfName offers the initials of a project\'s name as its code', () => {
+  assert.equal(codeOfName('js-harness'), 'JH');
+  assert.equal(codeOfName('my_big.web app'), 'MBWA');
+  assert.equal(codeOfName('one-two-three-four-five'), 'OTTF');
+  assert.equal(codeOfName('billing'), 'BI');
+  assert.equal(codeOfName('x'), 'X');
+  assert.equal(codeOfName('añejo 2'), 'AE2', 'a letter outside ASCII splits the name, and is no initial');
+  assert.equal(codeOfName('órale'), 'RA');
+  assert.equal(codeOfName('…'), null);
+  assert.equal(codeOfName('or-ra-qu'), null, 'ORQ is a lead\'s role, never a code');
+});
+
 // --- fresh repo: all four actions ---
 
 test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit hook, and runs codegraph init', () => {
@@ -143,8 +157,11 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     assert.ok(fs.existsSync(harnessJsonPath));
     const harnessJsonContent = fs.readFileSync(harnessJsonPath, 'utf8');
     // The reply check is on in a new project: his answer 11, "Prendido por defecto" (odd/tasks/rule-hierarchy.md, T9).
-    assert.deepEqual(JSON.parse(harnessJsonContent), { version: '0.1.0', reply: true });
-    assert.equal(harnessJsonContent, JSON.stringify({ version: '0.1.0', reply: true }, null, 2) + '\n');
+    // The project's code is offered from its name (odd/tasks/session-title.md, S5): a session's title carries it.
+    const code = codeOfName(path.basename(root));
+    assert.match(code, /^[A-Z0-9]+$/);
+    assert.deepEqual(JSON.parse(harnessJsonContent), { version: '0.1.0', code, reply: true });
+    assert.equal(harnessJsonContent, JSON.stringify({ version: '0.1.0', code, reply: true }, null, 2) + '\n');
 
     const agentsPath = path.join(root, 'AGENTS.md');
     assert.ok(fs.existsSync(agentsPath));

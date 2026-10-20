@@ -23,7 +23,8 @@ js-harness init
    with `--allow-git`, and npm 11.12 refuses this one under `root`, so `all`. With pnpm: `pnpm add -g github:jsaristi/js-harness`.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json` (the pin, and `"reply": true`,
+3. `js-harness init`, in a git repository, writes `harness.json` (the pin, `"code"`, the project's
+   identifier its sessions' titles start with, offered from the initials of its name, and `"reply": true`,
    which turns the reply check on), `AGENTS.md`, an empty failures register (`docs/FAILURES.md`)
    and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
@@ -1196,7 +1197,12 @@ standard input and refuses these things: a sub-agent launched on a model the pro
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or an effort above the
-rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
+rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a `start_session`
+whose title is not `<code> <n> · <purpose>` (or `<code> ORQ · <purpose>` for a new lead) with the project's own code,
+harness.json `"code"` (`init` offers the initials of the project's name; this repository's is `JH`), where the rule
+`session-title` is declared, the reason naming the project's next free number, one past the highest of that code in
+its channel and openings, which `js-harness sessions --next-number` also prints, or saying to declare the code where
+the project declares none (a proposal started by its `proposal_id` carries no title and passes); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
 end with a note saying what it does, `<command>; Write-Host 'NOTE: <what it does>'` (`echo` in an
 SSH host's shell), four words or more, so the user reads it beside the command where it runs and
 learns from it (his request of 2026-10-19); a shell command with backticks
