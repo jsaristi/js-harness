@@ -80,12 +80,18 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - S5. His words (2026-10-20, transcript 908805db line 6769), verbatim: "por ejemplo una web estatica se hace con Astro
   y ademas deber ser rapida osea necesito que de una vez coloques ejemplo reales para que el harnes los pueda seguir y
   aportar mas". The lead's draft of those examples is `## Reference profiles` below; T6 makes them the advisor's data.
+- S6. His answer to Pregunta 28 (2026-10-20, transcript 908805db line 7009). The question was how much advice goes
+  into the first onboarding: "Lo necesario ya, el resto por fase" or "Todo en el onboarding". Verbatim: "Todo el
+  onboarding pero preguntale al usuario si el proyecot lo quiere grande o pequeño para entonces hacerle uno que sea lo
+  necesario"
+- S7. His answer to Pregunta 29 (2026-10-20, transcript 908805db line 7043). The question was whether teaching
+  continues in the sessions that build, after onboarding. Verbatim: "En el onboarding y en la sesion orquestadora"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
-- [ ] T6 (kind: design) Design v4 from S3-S5 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
+- [ ] T6 (kind: design) Design v4 from S3-S7, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
 - [ ] T4 (kind: verify) The one real onboarding of the done-when, after T6 (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
 
@@ -538,3 +544,13 @@ ceiling.
     - Resume can lose the mode unless it is written the moment it is said.
     - A research done-when invites fake commands; prescribe a check script in the first phase instead.
     - D8 refuses the existing plan an advanced owner often brings: named as a known gap.
+- L13 (2026-10-20) The lead's reading of S6 and S7 for T6, not his words:
+  - S6:
+    - All the advice happens in the onboarding. The lead's proposal in L10 and L12 to defer areas to phases is
+      withdrawn.
+    - An early question asks whether the project is big or small, and the profile's areas and bar are scaled to that
+      size.
+    - A small project gets only the areas it needs, each still advised in full.
+  - S7:
+    - After onboarding, teaching continues in the orchestrator session only, not in every build session.
+    - The advice-mode line belongs where the orchestrator reads it, never in every session's per-turn load.
