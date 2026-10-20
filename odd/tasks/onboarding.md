@@ -894,6 +894,38 @@ ceiling.
 - Slice 3a, Codex (2026-10-20): the same range in 4 parts, recorded. One P2, taken: `B:seo-basics` named only
   Lighthouse, which does not check duplicate titles, canonicals or the sitemap across pages; its command now adds a
   check over the built pages.
+- Profiles round, slice 3b (2026-10-20, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+  over the uncommitted data-analysis, research and pre-project kinds: one on claims and gaps with the sources
+  fetched, one on gaps only, running the command for three imagined users. Blockers taken:
+  - `pre-project,platform` mixed a build's whole bar into the plan; a kind may now carry `joins`, and pre-project
+    joins only research or data-analysis (`parseKind` refuses the rest, exit 2);
+  - research promised market and user research with neither area; market, users, competitors and their two
+    targets are now non-core there;
+  - a small pre-project interviewed people with no consent step; ethics and `B:consent-recorded` are core there;
+  - `B:uncertainty` and `B:decision-recorded` needed a report or an ADR from the end of the work; both are now lab
+    checks on the plan, the criteria committed before the first finding;
+  - `B:clean-rerun` could not run in CI on private or large data; it reruns where the data can reach it, with the
+    log committed and CI rerunning a committed sample.
+  Advisories taken: per-kind defaults for the common areas (legal, cost, maintenance, analytics, i18n); `ci-gate`'s
+  text for projects with no code; the question first in the advice order and the pipeline before CI and the report;
+  raw data fetched with its checksum; a review's method and risk of bias; a no-participants line for consent;
+  `B:data-cards` cites Gebru et al. (datasheets) and Pushkarna et al. (data cards, arXiv 2204.01075), which are two
+  frameworks; the plan's commit before the first data commit, PRISMA-P beside OSF; OSF for confirmatory studies;
+  the search log takes sources found by other means; holdout split before any preprocessing; checkable commands for
+  traceable numbers, cited claims and user evidence; the brief holds one section per onboarding topic; a
+  `feasibility` area and `B:riskiest-assumptions` for the pre-project, with regulation core and method and validity
+  threats added; TAM, SAM and SOM taught to a newcomer; leading questions moved to the middle level. Not taken: a
+  per-kind override of teaching and pitfalls (the shape has none; global teaching stays generic). Recorded for D12:
+  OpenAI announced it would acquire Astral (uv) on 2026-03-19, and dbt Labs and Fivetran merged on 2026-06-01, both
+  keeping their tools open source. Unguaranteed: the fixes were not read again (no third round).
+- Slice 3b, gentle-ai (2026-10-20): `dfae6be0..364ada0c` (eadb813f and the pause line), assessed `medium` and
+  `under_budget`, started through the preflight status as each slice is; lenses readability and reliability,
+  approved and acknowledged (lineage review-b2c7fd9b754587c5). Informational, left for later: the refusal's text when
+  a kind's `joins` is empty (`bin/lib/profiles.mjs:43`); the kind IDs rebuilt per kind in `shapeFindings`
+  (`bin/lib/profiles.mjs:280-281`); no test that the real data refuses `pre-project,platform`
+  (`bin/lib/profiles-data.test.mjs:12-13`); a kind that lists itself in `joins` is not named.
+- Slice 3b, Codex (2026-10-20): `dfae6be..364ada0` in 2 parts, recorded; correct (0.86 on the data, 0.96 on the
+  join rule), no findings.
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
@@ -1098,3 +1130,19 @@ ceiling.
   step is its measure wired before launch, so the first build phase can close (the readers' B1); D5 is unchanged.
   The profiles round is under `## Reviews`. Next: gentle-ai review of the slice from 65f81a30, Codex review, push,
   PR, then slice 3b (data-analysis, research, pre-project).
+- L24 (2026-10-20) Slice 3a is PR 481, main merged in (5f507d36 took main's help and T3 lines first; Codex read the
+  merge's resolution alone, from a temporary worktree at the commit). T7 slice 3b written: data-analysis, research
+  and pre-project, 14 areas and 16 targets, past their readers (`## Reviews`), route inline (one unit, no Writer
+  trigger). One addition to D9's grammar: a kind's optional `joins`, the kinds it may be joined with, so a plan kind
+  never takes a build kind's bar; `shapeFindings` names a `joins` entry that is no kind. Next: gentle-ai and Codex
+  on the slice, its PR, then slice 3c (cli-library, api-service, ai-app, tui-app).
+- L25 (2026-10-20) Paused at a safe point for his restart, on the orchestrator's word. Slice 3b is eadb813f, committed
+  in `D:\js-harness-worktrees\onboarding-v4` (detached HEAD) and not pushed: the pre-push hook refuses a code commit
+  with no Codex record, and the pause allows no review. origin/feat/onboarding-plan-advisor is at dfae6be0 (PR 481).
+  On resume, in order: gentle-ai on `dfae6be0..HEAD` (`--base-ref dfae6be0 --committed-only`, lenses readability and
+  reliability, the `granted` invocation pre-granted); `js-harness codex-review --base dfae6be0`; push with
+  `git push origin HEAD:feat/onboarding-plan-advisor`; the 3b lines in PR 481's body or a PR of its own; the ready
+  notice; then slice 3c.
+- L26 (2026-10-20) Resumed after the restart: PR 481 is in main (11ff331). Slice 3b passed gentle-ai and Codex
+  (`## Reviews`) and is pushed for its own pull request. The orchestrator's resume message names T8 next; slice 3c
+  (cli-library, api-service, ai-app, tui-app) stays open in T7.

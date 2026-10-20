@@ -9,8 +9,8 @@ test('the profiles hold their shape: unique IDs, ordered areas, common areas eve
   assert.deepEqual(shapeFindings({ AREAS, KINDS, TARGETS }), []);
 });
 
-test('the first build ships the kinds of slice 3a, other included', () => {
-  for (const id of ['static-site', 'platform', 'multiplatform-app', 'other']) {
+test('the build ships the kinds of slices 3a and 3b, other included', () => {
+  for (const id of ['static-site', 'platform', 'multiplatform-app', 'data-analysis', 'research', 'pre-project', 'other']) {
     assert.ok(KINDS.some((kind) => kind.id === id), `missing kind ${id}`);
   }
 });

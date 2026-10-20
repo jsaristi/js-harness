@@ -51,6 +51,17 @@ test('parseKind reads every Kind form of D6, with or without its Log line', () =
   assert.deepEqual(parseKind('other (nearest: other)', DATA), { error: 'other cannot be its own nearest kind: name a kind with a profile, or none' });
 });
 
+test('parseKind refuses a kind joined with one its joins list leaves out, in either order', () => {
+  const pre = { id: 'pre', title: 'Pre', default: 'a plan', why: 'evidence first', elseWhen: 'decided', joins: ['site'], areas: [], bar: [{ id: 'gate', core: true }] };
+  const data = { ...DATA, KINDS: [...DATA.KINDS, pre] };
+  assert.deepEqual(parseKind('pre, site', data), { kinds: ['pre', 'site'], label: 'pre, site' });
+  assert.deepEqual(parseKind('pre, app', data), { error: 'pre and app cannot be joined: pre joins only site' });
+  assert.deepEqual(parseKind('app, pre', data), { error: 'pre and app cannot be joined: pre joins only site' });
+  assert.deepEqual(parseKind('pre', data), { kinds: ['pre'], label: 'pre' });
+  assert.deepEqual(parseKind('other (nearest: pre)', data), { kinds: ['pre'], label: 'other (nearest: pre)' });
+  assert.deepEqual(shapeFindings({ ...data, KINDS: [...DATA.KINDS, { ...pre, joins: ['shop'] }] }), ['kind pre joins shop, which is no kind']);
+});
+
 test('parseSize reads small or large, with or without its Log line', () => {
   assert.equal(parseSize('small (L5)'), 'small');
   assert.equal(parseSize('large'), 'large');
