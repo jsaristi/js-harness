@@ -7,9 +7,9 @@
 import { spawnSync } from 'node:child_process';
 import { homedir as osHomedir } from 'node:os';
 import path from 'node:path';
-import { appendReport, newReport, readNotices } from './lib/channel.mjs';
+import { appendReport as appendReportLine, newReport, readNotices } from './lib/channel.mjs';
 import { PACE_REF_ARGS, paceRef } from './lib/progress-pace.mjs';
-import { REPORT_WINDOW_HOURS, cutOf, landedOf, mapOf, mergeCommitsArgs, mergeLogArgs, parseMergeLog, questionsOf, reportLines, sessionsOf } from './lib/report.mjs';
+import { REPORT_WINDOW_HOURS, cutOf, landedOf, mapOf, mergeCommitsArgs, mergeLogArgs, parseMergeLog, questionsOf, reportLines, sessionsOf, stamp } from './lib/report.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 export const USAGE = [
@@ -18,7 +18,9 @@ export const USAGE = [
   "  (origin/HEAD, else main, else HEAD) with their commits, each session's last notice, the questions answered",
   '  and still open, and the roadmap phase by phase with what is left.',
   `  The cut is --since (an ISO 8601 time), else the last report recorded, else the last ${REPORT_WINDOW_HOURS} hours.`,
-  '  --mark  record this report as the last one, in the channel record under the home; nothing else is written.',
+  '  --mark  record this report as the last one, with the commit of the default branch it read, in the channel record',
+  '          under the home; the next report lists what that branch gained since that commit. Nothing else is written,',
+  '          and nothing at all when a section could not be read.',
 ].join('\n');
 
 const GIT_TIMEOUT_MS = 30_000;
@@ -55,26 +57,35 @@ function gitRead(run, cwd, args) {
 }
 
 /** What landed on `ref` after `cut`, or `{ error }`. */
+/** What landed on `ref` after the cut, or `{ error }`. After a recorded report that names the commit it read, it is
+ * what `ref` gained since that commit, whatever the merges' times: a pull request merged before that report and
+ * fetched after it has an older time than the report, and a cut by time would never show it. A commit this clone
+ * no longer holds falls back to the time. */
 function readLanded(run, cwd, ref, cut) {
-  const log = gitRead(run, cwd, mergeLogArgs({ ref, since: new Date(cut).toISOString() }));
+  const head = cut.head !== null && !gitRead(run, cwd, ['cat-file', '-e', `${cut.head}^{commit}`]).error ? cut.head : null;
+  const log = gitRead(run, cwd, mergeLogArgs({ ref, since: new Date(cut.at).toISOString(), head }));
   if (log.error) return { error: log.error };
+  const after = head === null ? cut.at : -Infinity;
   const merges = [];
-  for (const merge of parseMergeLog(log.stdout).filter((one) => one.at > cut)) {
+  for (const merge of parseMergeLog(log.stdout).filter((one) => one.at > after)) {
     const commits = gitRead(run, cwd, mergeCommitsArgs(merge.hash));
     if (commits.error) return { error: commits.error };
     merges.push({ ...merge, commits: commits.stdout.split('\n').filter((line) => line.trim() !== '') });
   }
-  return landedOf(merges, cut);
+  return landedOf(merges, after);
 }
 
-/** The roadmap as `ref` holds it, `{ absent: true }` when it holds none, or `{ error }`. */
+/** The roadmap as `ref` holds it, `{ absent: true }` when it holds none, or `{ error }`. Whether it holds one is read
+ * from the tree's listing, which is empty for a path it lacks, and not from git's message, which is translated. */
 function readMap(run, cwd, ref) {
+  const listed = gitRead(run, cwd, ['ls-tree', '--name-only', ref, '--', 'docs/ROADMAP.md']);
+  if (listed.error) return { error: listed.error };
+  if (listed.stdout.trim() === '') return { absent: true };
   const shown = gitRead(run, cwd, ['show', `${ref}:docs/ROADMAP.md`]);
-  if (shown.error) return /does not exist|exists on disk, but not in/.test(shown.error) ? { absent: true } : { error: shown.error };
-  return mapOf(shown.stdout);
+  return shown.error ? { error: shown.error } : mapOf(shown.stdout);
 }
 
-export async function reportMain(argv, { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir } = {}) {
+export async function reportMain(argv, { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir, appendReport = appendReportLine } = {}) {
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -97,24 +108,30 @@ export async function reportMain(argv, { cwd: defaultCwd = process.cwd(), stdout
 
   const named = gitRead(run, cwd, PACE_REF_ARGS);
   const { ref, name } = named.error ? { ref: null, name: 'the default branch' } : paceRef(named.stdout);
-  const landed = named.error ? { error: named.error } : readLanded(run, cwd, ref, cut.at);
+  // The commit of the default branch this report reads, which `--mark` records so the next report starts there.
+  const seen = named.error ? null : gitRead(run, cwd, ['rev-parse', '--verify', `${ref}^{commit}`]);
+  const landed = named.error ? { error: named.error } : readLanded(run, cwd, ref, cut);
   const map = named.error ? { error: named.error } : readMap(run, cwd, ref);
   const sessions = recordError ?? sessionsOf(record.notices, cut.at);
   const questions = recordError ?? questionsOf(record, cut.at);
 
   for (const line of reportLines({ cut, branch: name, landed, sessions, questions, map })) stdout(line);
-  let failed = [landed, map, sessions, questions].some((section) => section.error !== undefined);
+  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined);
+  if (!parsed.mark) return failed ? 1 : 0;
 
-  if (parsed.mark) {
-    const given = new Date(at).toISOString();
-    try {
-      appendReport(home, slug, newReport({ at: given, by: env.CLAUDE_CODE_SESSION_ID }));
-      stdout('');
-      stdout(`Recorded this report at ${given.slice(0, 16).replace('T', ' ')}Z`);
-    } catch (err) {
-      stderr(`js-harness report: the report was not recorded: ${err.code ?? err.message}`);
-      failed = true;
-    }
+  // A report a section of which could not be read is not recorded: the next one would start after facts this one
+  // never showed.
+  if (failed) {
+    stderr('js-harness report: not recorded: a section could not be read, so the next report starts where this one did');
+    return 1;
   }
-  return failed ? 1 : 0;
+  try {
+    appendReport(home, slug, newReport({ at: new Date(at).toISOString(), by: env.CLAUDE_CODE_SESSION_ID, head: seen?.stdout?.trim() }));
+  } catch (err) {
+    stderr(`js-harness report: the report was not recorded: ${err.code ?? err.message}`);
+    return 1;
+  }
+  stdout('');
+  stdout(`Recorded this report at ${stamp(at)}`);
+  return 0;
 }

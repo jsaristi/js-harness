@@ -13,10 +13,10 @@ const notice = (fields) => newNotice({ at: '2026-10-20T10:00:00.000Z', from: FRO
 // --- S3: the cut ---
 
 test('the cut is --since when given, else the last recorded report, else 24 hours before now', () => {
-  const reports = [{ at: '2026-10-19T08:00:00.000Z' }, { at: '2026-10-20T07:30:00.000Z' }];
-  assert.deepEqual(cutOf({ since: '2026-10-18T00:00:00Z', reports, now: NOW }), { at: at('2026-10-18T00:00:00Z'), source: 'since' });
-  assert.deepEqual(cutOf({ reports, now: NOW }), { at: at('2026-10-20T07:30:00.000Z'), source: 'last-report' });
-  assert.deepEqual(cutOf({ reports: [], now: NOW }), { at: at('2026-10-19T12:00:00Z'), source: 'window' });
+  const reports = [{ at: '2026-10-19T08:00:00.000Z', head: 'aaa' }, { at: '2026-10-20T07:30:00.000Z', head: 'bbb' }];
+  assert.deepEqual(cutOf({ since: '2026-10-18T00:00:00Z', reports, now: NOW }), { at: at('2026-10-18T00:00:00Z'), source: 'since', head: null });
+  assert.deepEqual(cutOf({ reports, now: NOW }), { at: at('2026-10-20T07:30:00.000Z'), source: 'last-report', head: 'bbb' });
+  assert.deepEqual(cutOf({ reports: [], now: NOW }), { at: at('2026-10-19T12:00:00Z'), source: 'window', head: null });
 });
 
 test('the last report is the latest by time, not the last line written', () => {
@@ -56,10 +56,19 @@ test('sessionsOf groups the notices after the cut by session, with the last one 
   ];
   const sessions = sessionsOf(notices, at('2026-10-19T12:00:00Z'));
   assert.deepEqual(sessions.map((one) => [one.name, one.count, one.last.kind, one.last.text]), [
-    ['an unknown session', 1, 'waiting', 'on review'],
+    ['unknown senders', 1, 'waiting', 'on review'],
     ['bbbbbbbb-2222-4222-8222-222222222222', 1, 'ready', 'PR ready'],
     ['JH 35 · notify reads title', 2, 'closed', 'delivered the fix'],
   ]);
+});
+
+// gentle-ai review R2-004: a title is not unique, a session id is.
+test('two sessions that share a title are two lines, each by its title', () => {
+  const notices = [
+    notice({ at: '2026-10-20T09:00:00.000Z', from: FROM('JH 9 · reserve', 'aaaaaaaa-1111-4111-8111-111111111111'), text: 'first' }),
+    notice({ at: '2026-10-20T09:30:00.000Z', from: FROM('JH 9 · reserve', 'bbbbbbbb-2222-4222-8222-222222222222'), text: 'second' }),
+  ];
+  assert.deepEqual(sessionsOf(notices, at('2026-10-20T00:00:00Z')).map((one) => [one.name, one.count, one.last.text]), [['JH 9 · reserve', 1, 'first'], ['JH 9 · reserve', 1, 'second']]);
 });
 
 // --- S2: questions ---

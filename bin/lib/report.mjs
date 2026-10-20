@@ -8,10 +8,12 @@ import { parseRoadmap } from './progress.mjs';
 /** The window a report covers when none was ever recorded, in hours. */
 export const REPORT_WINDOW_HOURS = 24;
 
-/** The arguments of the git process that lists the merges of the first-parent line of `ref` since `since` (ISO),
- * newest first, one a line: the hash, the commit time and the subject, split by the unit separator. */
-export function mergeLogArgs({ ref, since }) {
-  return ['log', '--first-parent', '--merges', `--since=${since}`, '--format=%H%x1f%cI%x1f%s', ref, '--'];
+/** The arguments of the git process that lists the merges of the first-parent line of `ref`, newest first, one a
+ * line: the hash, the commit time and the subject, split by the unit separator. With `head`, those `ref` gained
+ * since that commit; otherwise those since the time `since` (ISO). */
+export function mergeLogArgs({ ref, since, head = null }) {
+  const range = head === null ? [`--since=${since}`, ref] : [`${head}..${ref}`];
+  return ['log', '--first-parent', '--merges', '--format=%H%x1f%cI%x1f%s', ...range, '--'];
 }
 
 /** The arguments of the git process that lists the subjects of the commits a merge brought, oldest first, without
@@ -31,13 +33,14 @@ export function parseMergeLog(stdout) {
     });
 }
 
-/** The cut a report starts from, `{ at, source }`: `since` (ISO) when given, else the latest of the recorded
- * `reports`, else `REPORT_WINDOW_HOURS` before `now` (milliseconds). */
+/** The cut a report starts from, `{ at, source, head }`: `since` (ISO) when given, else the latest of the recorded
+ * `reports`, with the commit of the default branch it read as `head`, else `REPORT_WINDOW_HOURS` before `now`
+ * (milliseconds). `head` is `null` but for a recorded report that names one. */
 export function cutOf({ since, reports = [], now }) {
-  if (since !== undefined) return { at: Date.parse(since), source: 'since' };
-  const times = reports.map((one) => Date.parse(one.at)).filter(Number.isFinite);
-  if (times.length > 0) return { at: Math.max(...times), source: 'last-report' };
-  return { at: now - REPORT_WINDOW_HOURS * 3600_000, source: 'window' };
+  if (since !== undefined) return { at: Date.parse(since), source: 'since', head: null };
+  const latest = reports.filter((one) => Number.isFinite(Date.parse(one.at))).reduce((best, one) => (best === null || Date.parse(one.at) > Date.parse(best.at) ? one : best), null);
+  if (latest !== null) return { at: Date.parse(latest.at), source: 'last-report', head: typeof latest.head === 'string' && latest.head !== '' ? latest.head : null };
+  return { at: now - REPORT_WINDOW_HOURS * 3600_000, source: 'window', head: null };
 }
 
 const PULL_REQUEST = /^Merge pull request #(\d+) from (\S+)/;
@@ -66,26 +69,24 @@ export function landedOf(merges, cut) {
   return landed;
 }
 
-/** How a notice's sender is named: its title, else its session id, else as unknown. */
-function senderName(from) {
-  if (typeof from?.title === 'string' && from.title !== '') return from.title;
-  if (typeof from?.id === 'string' && from.id !== '') return from.id;
-  return 'an unknown session';
-}
+const present = (value) => typeof value === 'string' && value !== '';
 
 /** The sessions that wrote a notice after `cut`, `[{ name, count, last }]`: how many they wrote and the last one,
- * ordered by that last notice, the latest last. */
+ * ordered by that last notice, the latest last. A session is its id, since two may share a title, and is named by
+ * its title, else its id; the senders no session id names (a Codex session today) are one line, `unknown senders`. */
 export function sessionsOf(notices, cut) {
-  const byName = new Map();
+  const byKey = new Map();
   for (const notice of notices) {
     if (!(Date.parse(notice.at) > cut)) continue;
-    const name = senderName(notice.from);
-    const known = byName.get(name) ?? { name, count: 0, last: null };
+    const from = notice.from ?? {};
+    const key = present(from.id) ? `id:${from.id}` : 'unknown';
+    const known = byKey.get(key) ?? { name: 'unknown senders', count: 0, last: null };
+    if (present(from.id)) known.name = present(from.title) ? from.title : from.id;
     known.count += 1;
     if (known.last === null || Date.parse(notice.at) >= Date.parse(known.last.at)) known.last = notice;
-    byName.set(name, known);
+    byKey.set(key, known);
   }
-  return [...byName.values()].sort((a, b) => Date.parse(a.last.at) - Date.parse(b.last.at));
+  return [...byKey.values()].sort((a, b) => Date.parse(a.last.at) - Date.parse(b.last.at));
 }
 
 /** The words of an answer notice: what its copy of his answer holds, else its own text. */
@@ -114,7 +115,7 @@ export function mapOf(markdown) {
 }
 
 /** `ms` as `YYYY-MM-DD HH:MMZ`, in UTC. */
-function stamp(ms) {
+export function stamp(ms) {
   return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')}Z`;
 }
 
@@ -137,7 +138,9 @@ export function reportLines({ cut, branch, landed, sessions, questions, map }) {
   if (landed.error) lines.push(`Landed on ${branch}: could not read: ${landed.error}`);
   else if (landed.length === 0) lines.push(`Landed on ${branch}: nothing since the cut`);
   else {
-    lines.push(`Landed on ${branch}: ${plural(landed.length, 'pull request')}`);
+    const others = landed.filter((one) => one.number === null).length;
+    const pullRequests = plural(landed.length - others, 'pull request');
+    lines.push(`Landed on ${branch}: ${others === 0 ? pullRequests : `${pullRequests} and ${plural(others, 'other merge')}`}`);
     for (const one of landed) {
       lines.push(one.number === null ? `  ${one.subject}  merged ${stamp(one.at)}` : `  #${one.number} ${one.branch}  merged ${stamp(one.at)}`);
       for (const commit of one.commits) lines.push(`      - ${commit}`);

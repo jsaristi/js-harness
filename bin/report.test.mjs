@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendNotice, newNotice, readNotices } from './lib/channel.mjs';
+import { appendNotice, newNotice, readNotices, recordPath } from './lib/channel.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { reportMain, USAGE } from './report.mjs';
 
@@ -63,10 +63,10 @@ function withProject(body) {
   };
 }
 
-async function report(argv, { repo, home }, env = {}) {
+async function report(argv, { repo, home }, env = {}, now = NOW) {
   const out = [];
   const err = [];
-  const code = await reportMain([...argv, '--cwd', repo, '--home', home], { stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => NOW, env });
+  const code = await reportMain([...argv, '--cwd', repo, '--home', home], { stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => now, env });
   return { code, out: out.join('\n'), err: err.join('\n') };
 }
 
@@ -97,12 +97,67 @@ test('reading writes nothing; --mark records the report, and the next report sta
   assert.equal(marked.code, 0);
   assert.match(marked.out, /^Recorded this report at 2026-10-20 12:00Z$/m);
   const { reports, notices, skipped } = readNotices(project.home, project.slug);
-  assert.deepEqual(reports.map((one) => [one.at, one.by]), [['2026-10-20T12:00:00.000Z', 'cccccccc-3333-4333-8333-333333333333']]);
+  const head = git(project.repo, ['rev-parse', 'main']).trim();
+  assert.deepEqual(reports.map((one) => [one.at, one.by, one.head]), [['2026-10-20T12:00:00.000Z', 'cccccccc-3333-4333-8333-333333333333', head]]);
   assert.deepEqual(notices, []);
   assert.equal(skipped, 0);
   const next = await report([], project);
   assert.match(next.out, /^Since 2026-10-20 12:00Z, the last report$/m);
   assert.match(next.out, /^Landed on main: nothing since the cut$/m);
+}));
+
+// gentle-ai review R3-stale-origin-cut: a pull request merged before a report but fetched after it carries a merge time
+// earlier than the report's, so a cut by time alone would never show it.
+test('after a report, what landed is what the default branch gained since the commit that report saw, whatever its time', withProject(async (project) => {
+  await report(['--mark'], project);
+  mergePullRequest(project.repo, 480, 'fix/late', 'fix: merged before the report, fetched after', '2026-10-20T11:00:00Z');
+  const next = await report([], project, {}, Date.parse('2026-10-20T13:00:00Z'));
+  assert.equal(next.code, 0, next.err);
+  assert.match(next.out, /^Landed on main: 1 pull request$/m);
+  assert.match(next.out, /^ {2}#480 fix\/late {2}merged 2026-10-20 11:00Z$/m);
+  assert.doesNotMatch(next.out, /#478/);
+}));
+
+test('a merge that names no pull request is counted apart from the pull requests', withProject(async (project) => {
+  git(project.repo, ['switch', '-q', '-c', 'docs/hotfix', 'main'], '2026-10-20T11:00:00Z');
+  fs.writeFileSync(path.join(project.repo, 'hotfix.txt'), 'x');
+  git(project.repo, ['add', '.'], '2026-10-20T11:00:00Z');
+  git(project.repo, ['commit', '-q', '-m', 'docs: a hotfix'], '2026-10-20T11:00:00Z');
+  git(project.repo, ['switch', '-q', 'main'], '2026-10-20T11:00:00Z');
+  git(project.repo, ['merge', '-q', '--no-ff', '-m', 'Merge branch docs/hotfix', 'docs/hotfix'], '2026-10-20T11:00:00Z');
+  const { out } = await report([], project);
+  assert.match(out, /^Landed on main: 1 pull request and 1 other merge$/m);
+}));
+
+test('a default branch with no roadmap says so, and that is no error', withProject(async (project) => {
+  git(project.repo, ['rm', '-q', 'docs/ROADMAP.md'], '2026-10-20T11:30:00Z');
+  git(project.repo, ['commit', '-q', '-m', 'docs: drop the roadmap'], '2026-10-20T11:30:00Z');
+  const { code, out } = await report([], project);
+  assert.equal(code, 0);
+  assert.match(out, /^Map: no docs\/ROADMAP.md on main$/m);
+}));
+
+// gentle-ai review R3-mark-after-failed-section and R3-untested-mark-failure.
+test('a record that cannot be read is said in Sessions and Questions, exits 1, and --mark then records nothing', withProject(async (project) => {
+  fs.mkdirSync(recordPath(project.home, project.slug), { recursive: true });
+  const { code, out, err } = await report(['--mark'], project);
+  assert.equal(code, 1);
+  assert.match(out, /^Sessions: could not read: the record .+: EISDIR$/m);
+  assert.match(out, /^Questions: could not read: the record .+: EISDIR$/m);
+  assert.doesNotMatch(out, /Recorded this report/);
+  assert.match(err, /^js-harness report: not recorded: a section could not be read, so the next report starts where this one did$/m);
+}));
+
+test('a report line that cannot be written exits 1 and says why', withProject(async (project) => {
+  const out = [];
+  const err = [];
+  const appendReport = () => {
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+  };
+  const code = await reportMain(['--mark', '--cwd', project.repo, '--home', project.home], { stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => NOW, env: {}, appendReport });
+  assert.equal(code, 1);
+  assert.doesNotMatch(out.join('\n'), /Recorded this report/);
+  assert.deepEqual(err, ['js-harness report: the report was not recorded: EACCES']);
 }));
 
 test('--since sets the cut, and takes in what the default window leaves out', withProject(async (project) => {

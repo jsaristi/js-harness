@@ -325,10 +325,12 @@ export function appendReading(home, slug, reading) {
   return file;
 }
 
-/** A report line as the record keeps it: `{ schema, at, by }`, `at` the time the report was given (ISO) and `by`
- * the id of the session that gave it, `null` when the host names none. */
-export function newReport({ at, by = null }) {
-  return { schema: REPORT_SCHEMA, at, by: typeof by === 'string' && by !== '' ? by : null };
+/** A report line as the record keeps it: `{ schema, at, by, head }`, `at` the time the report was given (ISO), `by`
+ * the id of the session that gave it and `head` the commit of the default branch the report read, each `null` when
+ * not known. The next report lists what the branch gained since `head`, so a merge fetched late is not lost. */
+export function newReport({ at, by = null, head = null }) {
+  const known = (value) => (typeof value === 'string' && value !== '' ? value : null);
+  return { schema: REPORT_SCHEMA, at, by: known(by), head: known(head) };
 }
 
 /** Appends `report` (`newReport`) to the record of the project `slug` under `home`, and returns the record's path. */

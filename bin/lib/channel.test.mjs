@@ -361,12 +361,12 @@ test('a project with no record yet has no notices, and that is not an error', wi
 test('appendReport writes a report line beside the notices, and readNotices gives it back as a report, never skipped', withHome((home) => {
   const notice = note();
   channel.appendNotice(home, SLUG, notice);
-  const report = channel.newReport({ at: AT, by: 'cccccccc-3333-4333-8333-333333333333' });
-  assert.deepEqual(report, { schema: channel.REPORT_SCHEMA, at: AT, by: 'cccccccc-3333-4333-8333-333333333333' });
+  const report = channel.newReport({ at: AT, by: 'cccccccc-3333-4333-8333-333333333333', head: 'ddd4058ebe441f8f3a51e74c081149dd858e87c6' });
+  assert.deepEqual(report, { schema: channel.REPORT_SCHEMA, at: AT, by: 'cccccccc-3333-4333-8333-333333333333', head: 'ddd4058ebe441f8f3a51e74c081149dd858e87c6' });
   assert.equal(channel.appendReport(home, SLUG, report), channel.recordPath(home, SLUG));
   fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ schema: channel.REPORT_SCHEMA, at: 'later' })}\n`);
   assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [notice], readings: [], reports: [report], questions: [], skipped: 1 });
-  assert.equal(channel.newReport({ at: AT }).by, null);
+  assert.deepEqual(channel.newReport({ at: AT }), { schema: channel.REPORT_SCHEMA, at: AT, by: null, head: null });
 }));
 
 test('readNotices counts and skips a torn line and a line that is not a notice, and keeps the rest', withHome((home) => {

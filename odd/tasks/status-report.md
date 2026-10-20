@@ -64,7 +64,10 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
 - S3 The cut is `--since <time>` (an ISO 8601 time) when given; else the time of the last recorded
   report; else 24 hours before now. The first line says the cut and which of the three it is.
 - S4 `--mark` prints the report and records its time as the last report, as a line of its own in the
-  project's channel record (not a notice: it wakes nobody). Without `--mark` nothing is written.
+  project's channel record (not a notice: it wakes nobody), with the commit of the default branch it
+  read; after it, `Landed` lists the merges the branch gained since that commit, whatever their
+  times. Without `--mark` nothing is written, and with it nothing is written when a section could
+  not be read.
 - S5 The default branch is origin's HEAD, else `main`, else `HEAD`, as `progress --pace` reads it.
   A section whose source cannot be read says why in its place; the others still print, and the
   command exits 1. An unknown argument or a bad time prints the usage and exits 2.
@@ -81,6 +84,7 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
 | T2 | S2-S5 | inline | done | RED then GREEN (124 tests): tests first, then `bin/report.mjs`, `bin/lib/report.mjs`, the report line in `bin/lib/channel.mjs` |
 | T3 | S6 | inline | done | RED then GREEN (manifest 181 tests): the orchestrator skill, the command list of the js-harness skill, README, GUIDE, ROADMAP |
 | T4 | S2-S6 | inline | open | `npm run check`, gentle-ai review, Codex review, pull request |
+| T5 | S2-S5 | inline | done | the gentle-ai advisories of L3, tests first (8 RED, then 81 GREEN) |
 
 ## Log
 - L1 (2026-10-20, the lead's brief, from S1): put a status-report protocol into the harness, so the
@@ -90,3 +94,14 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
 - L2 (2026-10-20): designed as a new command `report` rather than `progress --since`: `progress`
   counts checkboxes and runs no git without `--pace`; the report reads git, the channel and the
   roadmap of the default branch, and writes one line. Keeping it apart leaves `progress` untouched.
+- L3 (2026-10-20): commits fde1b6c6 (the command) and f1a11c68 (the skill protocol), each through the
+  gate (tests on GitHub's machines). gentle-ai: ddd4058e..f1a11c68 assessed high through item 3
+  (readNotices, shared by the board and notify, gains a `reports` field), lenses risk, readability
+  and reliability, lineage review-1d50db51e4e7c3db approved and acknowledged (authority burned),
+  no blocker. Its eight advisories were taken as T5: --mark recorded a report whose sections failed
+  (fixed: nothing is recorded then); a cut by time lost a merge fetched after a report (fixed: the
+  report line keeps the commit it read, and the next lists what the branch gained since it); the
+  Landed count called a plain merge a pull request (fixed: "N pull requests and M other merges");
+  the absent roadmap was told from git's translated message (fixed: `git ls-tree`); sessions were
+  grouped by title (fixed: by session id); the mark's time had its own formatter (fixed: `stamp`);
+  the failures of the record and of the append had no test (fixed: two tests).

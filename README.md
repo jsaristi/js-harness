@@ -603,7 +603,11 @@ The cut is `--since <time>` (an ISO 8601 time), else the last report recorded, e
 hours; the first line says which. Reading writes nothing. `--mark` records this report as the
 last one: one line in the project's channel record under the home
 (`.js-harness/channel/<project>.jsonl`), which `uninstall` removes with the rest of the channel.
-A section whose source cannot be read says why in its place, and the command exits 1.
+The line keeps the commit of the default branch the report read, and the next report lists the
+merges that branch gained since that commit, so a pull request fetched after a report is still
+shown. A section whose source cannot be read says why in its place, the command exits 1, and
+`--mark` then records nothing, since the next report would start after facts this one never
+showed.
 
 ```console
 $ js-harness report
