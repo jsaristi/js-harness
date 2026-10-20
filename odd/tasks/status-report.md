@@ -105,3 +105,9 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
   the absent roadmap was told from git's translated message (fixed: `git ls-tree`); sessions were
   grouped by title (fixed: by session id); the mark's time had its own formatter (fixed: `stamp`);
   the failures of the record and of the append had no test (fixed: two tests).
+- L4 (2026-10-20): the fixes committed as 483d528f (gate passed on GitHub's machines). gentle-ai:
+  f1a11c68..483d528f assessed medium, review_due false, reason under_budget (237 lines,
+  executable_change bin/lib/channel.mjs); the slice ddd4058e..f1a11c68 was reviewed (L3).
+  Next step: `js-harness codex-review --base fde1b6c6^` over the three commits, fix its findings,
+  push `feat/status-report`, open the pull request with a gentle-ai line, then
+  `js-harness notify --to orchestrator --kind ready --pr <n>`.
