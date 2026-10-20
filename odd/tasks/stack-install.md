@@ -77,6 +77,7 @@ of the one scratch trial (package downloads).
 - [ ] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
 - [ ] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
 - [ ] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
+- [ ] T6 (kind: build) A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
 
 ## Design
 
@@ -293,3 +294,11 @@ onboarding's files; a note in the shared notes folder hands that session this co
 - L7 (2026-10-19) gentle-ai evidence per code commit, for the merge queue.
   - gentle-ai: 866f197b reviewed, lineage review-b72c1389cbb96396, lenses readability and reliability, 0 findings,
     approved and acknowledged (authority burned).
+- L8 (2026-10-19) Codex on 553900a..12e46c4 (2 parts): three P2 findings, all taken: a stale gentle-ai got the
+  installer instead of doctor's fix; `--pm` given as a command line stayed one word; shown commands were not quoted.
+  Fixed test-first in 6a2b0ad1 (RED 4, then GREEN). Its recheck (12e46c4..6a2b0ad): 1 and 2 fixed, 3 open for a path
+  with a space, which `splitCommand` splits; fixed in 2c5753ef, where a line that names a file stays one word (RED,
+  then GREEN). A second recheck is refused by `codex-review`, so 6a2b0ad..2c5753ef is recorded as a skip, and the
+  shared `splitCommand` is T6.
+  - gentle-ai: 6a2b0ad1 assessed medium, review_due false, reason under_budget (55 lines); it applies Codex's findings.
+  - gentle-ai: 2c5753ef assessed medium, review_due false, reason under_budget (17 lines); it applies Codex's recheck.
