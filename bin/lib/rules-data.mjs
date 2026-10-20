@@ -340,6 +340,14 @@ export const RULES = [
     "flag": "--stall"
   },
   {
+    "id": "session-title",
+    "subject": "the shape of the title of a session started with start_session: <code> is the project's own identifier, declared in harness.json \"code\", and the number is the next free one of that code, as js-harness sessions --next-number prints it (a new lead takes ORQ for the number)",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-19",
+    "value": "<code> <n> · <purpose>, <code> from harness.json \"code\""
+  },
+  {
     "id": "sessions-open-in-sidebar",
     "subject": "the one way a session opens another in this repository, so that it is a row in his sidebar: the tools that open one in the app's Routines or in the cloud are refused",
     "owner": "sebastian",
