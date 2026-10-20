@@ -106,13 +106,16 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
   --quote`). The question was which real project the onboarding is tried on after the build: "Un proyecto mío
   (Recommended)" or "Un pre-proyecto de sector". Typed, verbatim: "Vamos a hacer uno de una pagina web estatica en
   astro y un pre proyecto de plataforma que nos va a hacer todos los documentos para una plataforma completa"
+- S10. His answer to Pregunta 32, OD-R (2026-10-20, transcript 908805db line 9024, read with `js-harness sessions
+  --quote`). The question was when the two readers run, given that each area is a question with a recommendation.
+  Tapped, verbatim: "Una vez por perfil (Recommended)"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
 - [ ] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
-- [ ] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; with OD-R's proposal, the data passes two readers
+- [ ] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10)
 - [ ] T8 (kind: build) Slice 4: the v4 interview, `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
 - [ ] T4 (kind: verify) The two real onboardings of the done-when (S9), after T9: the Astro static site, then the platform pre-project (its scratch-project interview was stopped by S3)
@@ -456,8 +459,9 @@ docs and release notes of what it will recommend, logs the question as D7 says, 
 - **Its options**: the recommendation first, one or two real alternatives, and where the owner already uses
   something else, that one.
 - **The reviewed text it rests on**: the question names its profile area (`bin/lib/profiles-data.mjs`, `A:<id>`)
-  as the reviewed text behind it; a recommendation that departs from the profile says so. Whether that is enough for
-  `rule:double-review` is his to say (OD-R).
+  as the reviewed text behind it; a recommendation that departs from the profile says so. That meets
+  `rule:double-review` (S10): each profile passes the two readers once, when slice 3 writes it, and every ADR passes
+  the stage-4 readers before his approval of the pre-plan makes the decisions binding.
 - **An area the owner already decided** (topic 6) is kept as his decision and deepened, not replaced (S3: "sabe que
   tecnologico escoger por ejemplo el stack mern entonces lo guia super avanzado"): its ADR records how to do it well,
   and the session asks only when a sourced risk makes the choice worth reopening.
@@ -587,7 +591,7 @@ Asked one at a time through the lead, after the readers; each is recorded here w
   proposal: the profile data passes the two readers when slice 3 writes it, each area question names its profile area
   as the reviewed text, and every ADR is read by the stage-4 readers before the approval that makes the decisions
   binding. The alternative is two readers before each area question, which multiplies the onboarding's reader cost
-  by the number of areas.
+  by the number of areas. **Answered (S10, 2026-10-20)**: once per profile, as proposed.
 - **OD-F** Whether fast mode ("solo quiere hacerlo facil y rapido sin importar tanto la calidad", S4) still runs the
   two reader rounds and both approvals. v4 keeps them: the approvals are the owner's only checkpoint on the plan, and
   the readers cost two rounds. The alternative drops the readers in fast mode and keeps the two approvals.
@@ -959,3 +963,6 @@ ceiling.
   orchestrator runs that research roadmap, and the platform's own onboarding from the brief writes the complete
   platform documents S9 asks for: origin, ADRs and roadmap. T4's done-when is the pre-project's onboarding; the
   platform's onboarding is the last phase of that pre-project's roadmap. Next: OD-R as Pregunta 32.
+- L18 (2026-10-20) His answer to Pregunta 32 (OD-R) is S10, the recommended option, read at its line. Folded into
+  v4: D10 says how the area questions meet `rule:double-review`, and T7 gives each profile its two readers. Next:
+  OD-F as Pregunta 33, the last of the four.
