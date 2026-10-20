@@ -88,6 +88,24 @@ test('gentle-ai configured for one host only names that host', () => {
   assert.deepEqual(step.undo, ['gentle-ai uninstall --agents claude-code --yes', 'gentle-ai restore <the backup id gentle-ai install printed>']);
 });
 
+test('gentle-ai in a gap state other than missing keeps doctor\'s fix, not the installer (Codex on 553900a..12e46c4)', () => {
+  const fix = { installed: 'fix gentle-ai', claude: 'remove the stale hook from settings.json', codex: 'codex fix gentle-ai' };
+  const [step] = plan({ 'gentle-ai': { claude: 'stale', fix } }).manual;
+  assert.equal(step.tool, 'gentle-ai');
+  assert.deepEqual(step.dimensions, ['claude']);
+  assert.match(step.why, /^stale/);
+  assert.deepEqual(step.steps, ['remove the stale hook from settings.json']);
+  assert.deepEqual(step.undo, []);
+});
+
+test('gentle-ai missing in one host and stale in another names both, each with its own step', () => {
+  const fix = { installed: 'fix gentle-ai', claude: 'claude fix gentle-ai', codex: 'remove the stale hook' };
+  const steps = plan({ 'gentle-ai': { claude: 'missing', codex: 'stale', fix } }).manual.filter((s) => s.tool === 'gentle-ai');
+  assert.deepEqual(steps.map((s) => s.dimensions), [['claude'], ['codex']]);
+  assert.deepEqual(steps[0].steps, ['gentle-ai install --agents claude-code']);
+  assert.deepEqual(steps[1].steps, ['remove the stale hook']);
+});
+
 test('engram is named as brought by gentle-ai\'s installer, with doctor\'s fix per dimension', () => {
   const [step] = plan({ engram: { installed: 'missing', codex: 'missing' } }).manual;
   assert.equal(step.tool, 'engram');

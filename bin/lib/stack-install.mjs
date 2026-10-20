@@ -104,9 +104,16 @@ export function planStack({ rows, functions, prerequisites = [], pm, platform = 
     }
   }
 
+  // gentle-ai's installer is the step only for what is missing; a stale hook or an old version keeps doctor's own fix
+  // (Codex on 553900a..12e46c4).
   const gentleAi = byId.get('gentle-ai');
   const gentleAiGaps = gentleAi ? gapsOf(gentleAi, functions) : [];
-  if (gentleAiGaps.length > 0) manual.push({ tool: 'gentle-ai', dimensions: gentleAiGaps, ...gentleAiStep(gentleAiGaps, functions) });
+  const gentleAiMissing = gentleAiGaps.filter((dimension) => gentleAi[dimension] === 'missing');
+  const gentleAiOthers = gentleAiGaps.filter((dimension) => gentleAi[dimension] !== 'missing');
+  if (gentleAiMissing.length > 0) manual.push({ tool: 'gentle-ai', dimensions: gentleAiMissing, ...gentleAiStep(gentleAiMissing, functions) });
+  if (gentleAiOthers.length > 0) {
+    manual.push({ tool: 'gentle-ai', dimensions: gentleAiOthers, why: `${gentleAiOthers.map((d) => gentleAi[d]).join(', ')}: doctor's fix`, steps: fixesOf(gentleAi, gentleAiOthers), undo: [] });
+  }
 
   const engram = byId.get('engram');
   const engramGaps = engram ? gapsOf(engram, functions) : [];

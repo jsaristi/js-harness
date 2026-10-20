@@ -72,6 +72,18 @@ test('resolveStackPm: --pm, else JS_HARNESS_PM, else the manager of the running 
   assert.equal(resolveStackPm(undefined, {}, '/usr/lib/node_modules/js-harness/bin/stack.mjs').kind, 'npm');
 });
 
+test('a package manager given as a command line is split into its words (Codex on 553900a..12e46c4)', async () => {
+  assert.deepEqual(resolveStackPm('node /tools/pnpm.cjs', {}, '/x'), { words: ['node', '/tools/pnpm.cjs'], kind: 'pnpm' });
+  const { out } = await run(['--json'], { read: stack({ codex: { installed: 'missing', codex: 'n/a' } }) }, { JS_HARNESS_PM: 'node /tools/pnpm.cjs' });
+  assert.deepEqual(JSON.parse(out).mandatory[0].run, ['node', '/tools/pnpm.cjs', 'add', '-g', '@openai/codex']);
+});
+
+test('a shown command quotes a word the shell would read, so it runs as printed (Codex on 553900a..12e46c4)', async () => {
+  const { out } = await run([], { read: stack({ codex: { installed: 'missing', codex: 'n/a' } }) }, { JS_HARNESS_PM: 'node /tools/$pm.cjs' });
+  assert.match(out, /run: {2}node '\/tools\/\$pm\.cjs' install -g @openai\/codex/);
+  assert.match(out, /undo: node '\/tools\/\$pm\.cjs' uninstall -g @openai\/codex/);
+});
+
 test('an unknown argument, or a missing value, is a usage error that reads nothing', async () => {
   let read = 0;
   const deps = { read: () => { read += 1; return stack()(); } };

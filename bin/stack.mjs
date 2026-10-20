@@ -6,11 +6,11 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { unknownArgument } from './lib/args.mjs';
-import { copyPackageManager } from './lib/package-manager.mjs';
+import { copyPackageManager, shownWord } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack } from './lib/stack-install.mjs';
 import { probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
-import { pmKind } from './lib/version.mjs';
+import { pmKind, splitCommand } from './lib/version.mjs';
 
 const USAGE = 'Usage: js-harness stack [--home <path>] [--cwd <path>] [--pm <command>] [--json]';
 const KNOWN = { valued: ['--home', '--cwd', '--pm'], bare: ['--json'] };
@@ -40,7 +40,8 @@ function parseArgs(argv, env) {
  * that installed the running copy. Never read from the word `npm` on the path, which may run pnpm (odd/tasks/stack-install.md, D6). */
 export function resolveStackPm(pm, env, copyPath = fileURLToPath(import.meta.url)) {
   const command = pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
-  return { words: [command], kind: pmKind([command]) };
+  const words = splitCommand(command);
+  return { words, kind: pmKind(words) };
 }
 
 /** What the plan reads: the tool rows `probeStack` probes (its checks left out), the project's switches as `doctor`
@@ -54,10 +55,11 @@ export function readStack({ home, cwd, spawn = spawnSync, platform = process.pla
   return { rows, functions, prerequisites };
 }
 
-const words = (list) => list.join(' ');
+/** A command as a person runs it: each word quoted where the shell would split or read it (Codex on 553900a..12e46c4). */
+const shown = (list, platform) => list.map((word) => shownWord(word, platform)).join(' ');
 
 /** The plan as the lines a person reads. */
-function render(plan) {
+function render(plan, platform) {
   const lines = [];
   const mandatoryLeft = plan.mandatory.length + plan.manual.length;
   lines.push(mandatoryLeft === 0
@@ -66,7 +68,7 @@ function render(plan) {
   if (plan.mandatory.length > 0) {
     lines.push('', 'Installs (stack install runs each one after you say yes, in this order):');
     plan.mandatory.forEach((item, i) => {
-      lines.push(`  ${i + 1}. ${item.tool} ${item.dimension}`, `     run:  ${words(item.run)}`, `     undo: ${words(item.undo)}`);
+      lines.push(`  ${i + 1}. ${item.tool} ${item.dimension}`, `     run:  ${shown(item.run, platform)}`, `     undo: ${shown(item.undo, platform)}`);
     });
   }
   if (plan.manual.length > 0) {
@@ -102,6 +104,6 @@ export async function stackMain(argv, env = process.env, deps = {}) {
   const { rows, functions, prerequisites } = read({ home: args.home, cwd: args.cwd, spawn: deps.spawn, platform, env });
   const plan = planStack({ rows, functions, prerequisites, pm: resolveStackPm(args.pm, env), platform });
   if (args.json) log(JSON.stringify(plan, null, 2));
-  else for (const line of render(plan)) log(line);
+  else for (const line of render(plan, platform)) log(line);
   return plan.mandatory.length + plan.manual.length === 0 ? 0 : 1;
 }
