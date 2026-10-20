@@ -37,7 +37,8 @@ makes that path the default for every project and checks its result.
   a plan of another shape that a project already has (D8). Scripting the interview in `scripts/practice.mjs`, whose
   host runs only one-shot `claude -p` calls (`scripts/practice.mjs:261`, `:349-355`). The TUI entry, later.
   Teaching in a work session's own chat: after onboarding, a work session writes the why only into the questions it
-  sends through the lead (S7, D13). Kinds beyond those OD-K settles.
+  sends through the lead (S7, D13). Kinds past S8's eleven: `other` advises them until they get a profile of their
+  own.
 
 ## Constraints
 - Zero dependencies and no model call from the CLI — because every command here runs in any host with no install
@@ -95,13 +96,19 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
   necesario"
 - S7. His answer to Pregunta 29 (2026-10-20, transcript 908805db line 7043). The question was whether teaching
   continues in the sessions that build, after onboarding. Verbatim: "En el onboarding y en la sesion orquestadora"
+- S8. His answer to Pregunta 30, OD-K (2026-10-20, transcript 908805db line 8699, read with `js-harness sessions
+  --quote`). The question was which kinds the advisor brings in the first build: "Los cinco + otro (Recommended)" or
+  "Sumar CLI, API y app IA". Typed, verbatim: "todos estos y agregale TUI, mejor dicho nos sirve para todo inclulso si
+  no quiero hacer proyecto de una sino una investigacion o analisis de mercado por ejemplo para armar un pre proyecto
+  de una aplicacion complete especifica para un sector de negocio y desde ahi armar todo el roadmap completo a partir
+  de investigacion y analisis y ademas de discusion y criterio"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
-- [ ] T6 (kind: design) Design v4 from S3-S7, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
-- [ ] T7 (kind: build) Slice 3: `bin/lib/profiles-data.mjs`, `onboard profile`, the shape test (D9), after his yes to v4; with OD-R's proposal, the data passes two readers
+- [ ] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
+- [ ] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; with OD-R's proposal, the data passes two readers
 - [ ] T8 (kind: build) Slice 4: the v4 interview, `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
 - [ ] T4 (kind: verify) The one real onboarding of the done-when, after T9 (its scratch-project interview was stopped by S3)
@@ -408,8 +415,10 @@ through the command's output, one piece at a time, never as a skill or a per-tur
 - **Areas are global**, one definition per ID (`A:frontend`, `A:architecture`): title, what it decides, what to
   teach at each level (D11) as an outline the session turns into the lesson, its pitfalls, and `after` (the areas it
   depends on, so they are advised in order: hosting after the stack, CI after the tests).
-- **Each kind**: `id` (`static-site`, `platform`, `multiplatform-app`, `data-analysis`, `research`, and the ones OD-K
-  adds), its title, the default, why, when something else, and its list of areas, each with `core` (true when a
+- **Each kind**, the eleven of S8: `static-site`, `platform`, `multiplatform-app`, `data-analysis`, `research` (S3's
+  five), `cli-library`, `api-service`, `ai-app` (the three of the second option he took too), `tui-app` (S8:
+  "agregale TUI"), `pre-project` (D14), and `other` (S8: "nos sirve para todo": any kind without a profile, advised
+  through the common areas and its nearest kind). Each has its `id`, its title, the default, why, when something else, and its list of areas, each with `core` (true when a
   small project needs it too) and the kind's own default and alternatives for that area. Two joined kinds take the
   union of their areas by ID, core when either says so; where both give a default for the same area, `--area` prints
   both and the session's ADR says which it took and why.
@@ -516,12 +525,36 @@ docs and release notes of what it will recommend, logs the question as D7 says, 
   every project on the machine. It is high-risk item 3 (a contract others consume), worded so that a project with no
   `## Advice mode` sees no change; slice 5 carries that Risk line and gets an independent verifier.
 
+### D14. The pre-project kind: research that ends in an application's roadmap
+S8: "si no quiero hacer proyecto de una sino una investigacion o analisis de mercado por ejemplo para armar un pre
+proyecto de una aplicacion complete especifica para un sector de negocio y desde ahi armar todo el roadmap completo a
+partir de investigacion y analisis y ademas de discusion y criterio".
+- **What it is**: a project whose product is the decision and the plan of an application, not the application. It
+  takes the research kind's method (a plan before any search, sources judged, the evidence against reported) and
+  aims it at one business sector.
+- **Its areas**: the sector and its market (size shown with its assumptions), the users and their problem (interviews
+  or other evidence, not opinion), competitors and substitutes, the business model and its numbers, the sector's
+  regulation, the application's concept, and the decision criteria; plus the common areas.
+- **Its roadmap**: phases of research and analysis, then a phase of discussion where each finding is weighed against
+  the criteria (S8: "discusion y criterio") and the owner decides whether to go ahead, change course or stop, recorded
+  as an ADR with its evidence. The last phase writes `docs/brief.md`: the findings, the decision, and the
+  application's kind, scope and constraints.
+- **The application's roadmap**: built by onboarding the application with that brief as its input. The application
+  lives in its own repository, so D8 never meets the pre-project's own plan: its stage 1 reads the brief, and its
+  interview only confirms what the brief answers (D3, "read before asking"), so most topics and many areas arrive
+  answered and sourced. A pre-project's onboarding therefore plans the research; the research then feeds a second,
+  short onboarding that writes the complete roadmap S8 asks for.
+- **Its bar**: every claim in the brief carries its source, market figures show their assumptions, user claims come
+  from recorded evidence, and the go or stop decision names the criteria it was judged by; the first phase's check
+  script tests that.
+
 ### Cost
 Built (slices 1-2): 836 lines of code and 726 of tests (`wc -l`, 2026-10-20). v4 to build:
-- Slice 3 is mostly data, likely more than one slice: global areas with three-level teaching outlines, five kinds, and
-  a sourced bar target each, which needs web reading while it is written. It is forecast from the first kind
-  (static site) before the rest are written, and split into 3a (shape, command, common areas, static site, platform)
-  and 3b (the other three) if the forecast passes about 500 lines.
+- Slice 3 is mostly data and more than one slice: global areas with three-level teaching outlines, eleven kinds (S8),
+  and sourced bar targets, which needs web reading while it is written. The six profiles beyond the drafted five
+  are written to the same depth (L11) in slice 3 itself. It is forecast from the first kind (static site) before the
+  rest are written and split by kinds, about three slices: 3a (shape, command, common areas, static site, platform,
+  multiplatform app), 3b (data analysis, research, pre-project), 3c (CLI or library, API service, AI app, TUI app).
 - Slices 4 and 5: about 400-500 authored lines each with tests.
 - One gate per commit, one gentle-ai and one Codex review per slice, an independent verifier for slice 5, then T4's
   real onboarding.
@@ -531,7 +564,8 @@ Using it in a project: one session of about 18 to 30 questions, the docs read fo
 ### What v4 leaves out, and why
 - A worked example origin and roadmap per kind (L12, item 10): T4's real onboarding produces the first; one per kind
   would be five more onboardings, so they are a later roadmap step.
-- Kinds past OD-K's answer, and adopting an existing plan (D8): later versions.
+- Profiles of their own for kinds past S8's eleven (e-commerce, internal tool, browser extension, desktop app, game,
+  ML training): `other` advises them until then. Adopting an existing plan (D8): a later version.
 
 ### Product decisions left for him
 Asked one at a time through the lead, after the readers; each is recorded here with his answer.
@@ -539,7 +573,8 @@ Asked one at a time through the lead, after the readers; each is recorded here w
   common areas and borrows the nearest kind's; the kinds L12 found missing (CLI tool or library, API service, AI or
   LLM app, e-commerce, internal tool, browser extension, desktop app, game, ML training) go on the roadmap as
   later profiles. The alternative is adding the three most common of them (CLI or library, API service, AI app) now,
-  at about one more slice.
+  at about one more slice. **Answered (S8, 2026-10-20)**: both, plus a TUI app and a pre-project kind (D14), and
+  `other` for everything else: eleven kinds in all (D9).
 - **OD-T4** Which project the real onboarding of the done-when runs on, now that S3 rules out a test project.
 - **OD-R** `rule:double-review` is his rule: a plan or design put to him first passes two readers, unless the
   question names its reviewed text by path. Each area question (6 to 16 of them) puts a choice to the owner. v4's
@@ -907,3 +942,8 @@ ceiling.
 - L15 (2026-10-20) v4 past both reader rounds (062cd4d2 and the commit after it; see `## Reviews`). Product
   decisions sent to the lead one at a time, in this order: OD-K, OD-T4, OD-R, OD-F; each answer is recorded under
   `### Product decisions left for him` and here. Next: his yes to v4, then T7 (slice 3) from its first kind.
+- L16 (2026-10-20) His answer to Pregunta 30 (OD-K) is S8, relayed by the lead and read at its line. Folded into v4:
+  eleven kinds in D9, the pre-project kind as D14 (it plans the research, and its brief feeds a second onboarding of
+  the application in its own repository), slice 3 split into 3a-3c by kinds. The lead's reading of S8 matched the
+  words. Not read by the readers again: D14 is new; its readers are T7's data readers (OD-R) and his yes to v4.
+  Next: OD-T4 as Pregunta 31.
