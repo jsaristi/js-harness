@@ -30,11 +30,62 @@ function findTool(id) {
   return tool;
 }
 
-test('tools carries exactly the six stack tools, in Design-table order, the last one the Codex CLI', () => {
+test('tools carries exactly the seven stack tools, in Design-table order, engram\'s plugin after engram, the last one the Codex CLI', () => {
   assert.deepEqual(
     tools.map((t) => t.id),
-    ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex'],
+    ['gentle-ai', 'engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'],
   );
+});
+
+// --- engram-plugin (odd/tasks/engram-plugin-lag.md): engram's Claude Code plugin, shown only while installed and
+// enabled, so a machine without it sees no row and no gap ---
+
+function seedEngramPlugin(home, { version = '0.1.12', enabled = true } = {}) {
+  writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), { version: 2, plugins: { 'engram@engram': [{ version }] } });
+  writeJson(path.join(home, '.claude', 'settings.json'), { enabledPlugins: { 'engram@engram': enabled } });
+}
+
+test('engram-plugin is shown only while engram@engram is installed and enabled in Claude Code', () => {
+  const tool = findTool('engram-plugin');
+  const home = makeTmpHome();
+  try {
+    assert.equal(tool.when({ home }), false, 'no installed_plugins.json');
+    seedEngramPlugin(home, { enabled: false });
+    assert.equal(tool.when({ home }), false, 'installed but disabled: its hooks do not run');
+    seedEngramPlugin(home);
+    assert.equal(tool.when({ home }), true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('engram-plugin reads its version from installed_plugins.json, claude ok, codex and project n/a', () => {
+  const home = makeTmpHome();
+  try {
+    seedEngramPlugin(home);
+    const row = probeTool(findTool('engram-plugin'), { home });
+    assert.deepEqual(
+      { version: row.version, installed: row.installed, claude: row.claude, codex: row.codex, project: row.project },
+      { version: '0.1.12', installed: 'ok', claude: 'ok', codex: 'n/a', project: 'n/a' },
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('engram-plugin upToDate fix refreshes the engram catalog, then updates the plugin (verified by --help 2026-10-20)', () => {
+  assert.deepEqual(findTool('engram-plugin').fix({}).upToDate, ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
+});
+
+test('engram-plugin upToDate fix names the installed version, the one the engram binary\'s tag ships, and the restart', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.5.1' }];
+  assert.deepEqual(upToDateFix('0.1.12', '0.1.14', rows), [
+    'plugin 0.1.12 is behind 0.1.14, the plugin engram v3.5.1 ships; update it, then restart Claude Code:',
+    'claude plugin marketplace update engram',
+    'claude plugin update engram@engram',
+  ]);
+  assert.deepEqual(upToDateFix('0.1.12', null, rows), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
 });
 
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {

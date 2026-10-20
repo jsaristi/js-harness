@@ -67,7 +67,8 @@ Once per machine:
 1. **`js-harness install`** writes the skills and the session hooks for Claude Code and Codex under your home,
    and records each in a manifest, so `uninstall` removes exactly them.
 2. **`js-harness doctor`** lists each tool of the stack (gentle-ai, engram, codegraph, Codex and the optional
-   ones) with what is missing and the command that fixes it.
+   ones) with what is missing and the command that fixes it. Where engram's Claude Code plugin is installed, it
+   also says when the plugin is older than the one the engram binary's release ships.
 3. **`js-harness stack install`** runs the installs js-harness can undo exactly, in order, asking y/N for each
    and recording it before it starts. What it never runs is printed as your own step: gentle-ai's installer
    (which brings engram), logins, and `git` and `gh`. `js-harness stack` alone lists the same, read-only.

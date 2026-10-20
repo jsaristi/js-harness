@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './latest.mjs';
+import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-latest-home-'));
@@ -23,7 +25,7 @@ const ROWS = [
   { id: 'codex', version: null },
 ];
 
-test('gentle-ai and engram fetch their GitHub releases/latest tag_name, stripped of a leading v', async () => {
+test('gentle-ai fetches its GitHub releases/latest tag_name and engram its releases list, each stripped of a leading v', async () => {
   const calls = [];
   const fetchImpl = async (url) => {
     calls.push(url);
@@ -31,7 +33,7 @@ test('gentle-ai and engram fetch their GitHub releases/latest tag_name, stripped
       return { ok: true, json: async () => ({ tag_name: 'v3.8.0' }) };
     }
     if (url.includes('Gentleman-Programming/engram')) {
-      return { ok: true, json: async () => ({ tag_name: 'v2.3.0' }) };
+      return { ok: true, json: async () => [{ tag_name: 'v2.3.0', draft: false, prerelease: false }] };
     }
     return { ok: false };
   };
@@ -41,10 +43,32 @@ test('gentle-ai and engram fetch their GitHub releases/latest tag_name, stripped
     assert.equal(versions['gentle-ai'], '3.8.0');
     assert.equal(versions.engram, '2.3.0');
     assert.ok(calls.some((u) => u === 'https://api.github.com/repos/Gentleman-Programming/gentle-ai/releases/latest'));
-    assert.ok(calls.some((u) => u === 'https://api.github.com/repos/Gentleman-Programming/engram/releases/latest'));
+    assert.ok(calls.some((u) => u === 'https://api.github.com/repos/Gentleman-Programming/engram/releases?per_page=30'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// engram publishes a second release stream, `pi-v*`, in the same repository: `releases/latest` returned
+// `pi-v0.5.0` while it was the newest release (odd/tasks/engram-plugin-lag.md, S4).
+test('engram\'s latest version is the highest v<semver> release, never a pi-v* one, a draft or a prerelease', async () => {
+  const releases = [
+    { tag_name: 'pi-v0.5.0', draft: false, prerelease: false },
+    { tag_name: 'v3.6.0', draft: true, prerelease: false },
+    { tag_name: 'v3.6.0-rc.1', draft: false, prerelease: true },
+    { tag_name: 'v3.4.0', draft: false, prerelease: false },
+    { tag_name: 'v3.5.1', draft: false, prerelease: false },
+  ];
+  const fetchImpl = async () => ({ ok: true, json: async () => releases });
+  const versions = await fetchLatestVersions([{ id: 'engram', version: '3.4.0' }], { fetch: fetchImpl });
+  assert.equal(versions.engram, '3.5.1');
+});
+
+test('engram\'s latest version is null when its releases list holds only pi-v* releases or is not a list', async () => {
+  const only = async () => ({ ok: true, json: async () => [{ tag_name: 'pi-v0.5.0', draft: false, prerelease: false }] });
+  assert.equal((await fetchLatestVersions([{ id: 'engram', version: '3.4.0' }], { fetch: only })).engram, null);
+  const notList = async () => ({ ok: true, json: async () => ({ tag_name: 'v3.5.1' }) });
+  assert.equal((await fetchLatestVersions([{ id: 'engram', version: '3.4.0' }], { fetch: notList })).engram, null);
 });
 
 test('codegraph fetches its latest version from the npm registry', async () => {
@@ -100,7 +124,7 @@ test('context7 never fetches when it is hosted', async () => {
   }
 });
 
-test('typescript-lsp reads its latest version from the local plugin marketplace file', () => {
+test('typescript-lsp reads its latest version from the local plugin marketplace file', async () => {
   const home = makeTmpHome();
   try {
     writeJson(
@@ -108,25 +132,25 @@ test('typescript-lsp reads its latest version from the local plugin marketplace 
       { plugins: [{ name: 'typescript-lsp', version: '1.1.0' }, { name: 'other-plugin', version: '9.9.9' }] },
     );
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], '1.1.0');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('typescript-lsp reads null when the marketplace file does not exist', () => {
+test('typescript-lsp reads null when the marketplace file does not exist', async () => {
   const home = makeTmpHome();
   try {
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('typescript-lsp reads null when the marketplace file is malformed', () => {
+test('typescript-lsp reads null when the marketplace file is malformed', async () => {
   const home = makeTmpHome();
   try {
     fs.mkdirSync(
@@ -139,7 +163,7 @@ test('typescript-lsp reads null when the marketplace file is malformed', () => {
       'utf8',
     );
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -150,7 +174,7 @@ function marketplaceFile(home, marketplace) {
   return path.join(home, '.claude', 'plugins', 'marketplaces', marketplace, '.claude-plugin', 'marketplace.json');
 }
 
-test('typescript-lsp reads its latest version offline from the claude-plugins-official marketplace', () => {
+test('typescript-lsp reads its latest version offline from the claude-plugins-official marketplace', async () => {
   const home = makeTmpHome();
   try {
     writeJson(marketplaceFile(home, 'claude-plugins-official'), {
@@ -159,22 +183,22 @@ test('typescript-lsp reads its latest version offline from the claude-plugins-of
     // A same-named plugin in the other marketplace must never leak in: the marketplace name matters.
     writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'typescript-lsp', version: '8.8.8' }] });
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], '1.0.1');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('typescript-lsp reads null when its marketplace file does not exist or lacks the plugin', () => {
+test('typescript-lsp reads null when its marketplace file does not exist or lacks the plugin', async () => {
   const home = makeTmpHome();
   try {
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const missing = readLocalLatestVersions(rows, { home });
+    const missing = await readLocalLatestVersions(rows, { home });
     assert.equal(missing['typescript-lsp'], null);
 
     writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'other-plugin', version: '1.0.0' }] });
-    const absent = readLocalLatestVersions(rows, { home });
+    const absent = await readLocalLatestVersions(rows, { home });
     assert.equal(absent['typescript-lsp'], null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -200,11 +224,11 @@ test('codex fetches its latest version from the npm registry, as @openai/codex',
   }
 });
 
-test('codex has no local marketplace source: its latest version is never read from a plugin file', () => {
+test('codex has no local marketplace source: its latest version is never read from a plugin file', async () => {
   const home = makeTmpHome();
   try {
     writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'codex', version: '1.0.7' }] });
-    assert.deepEqual(readLocalLatestVersions([{ id: 'codex', version: '0.130.0' }], { home }), {});
+    assert.deepEqual(await readLocalLatestVersions([{ id: 'codex', version: '0.130.0' }], { home }), {});
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -302,7 +326,7 @@ test('every tool lookup runs concurrently, not one at a time', async () => {
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual([...started].sort(), ['codegraph', 'engram', 'gentle-ai']);
     resolvers['gentle-ai']({ ok: true, json: async () => ({ tag_name: 'v1.0.0' }) });
-    resolvers.engram({ ok: true, json: async () => ({ tag_name: 'v1.0.0' }) });
+    resolvers.engram({ ok: true, json: async () => [{ tag_name: 'v1.0.0' }] });
     resolvers.codegraph({ ok: true, json: async () => ({ version: '1.0.0' }) });
     await promise;
   } finally {
@@ -343,7 +367,7 @@ test('fetchLatestVersions never resolves a local-source row: that is readLocalLa
   }
 });
 
-test('readLocalLatestVersions returns one entry per local-source row only, null where the file has no answer', () => {
+test('readLocalLatestVersions returns one entry per local-source row only, null where the file has no answer', async () => {
   const home = makeTmpHome();
   try {
     writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'typescript-lsp', version: '1.0.1' }] });
@@ -352,7 +376,106 @@ test('readLocalLatestVersions returns one entry per local-source row only, null 
       { id: 'typescript-lsp', version: '1.0.0' },
       { id: 'codex', version: '0.130.0' },
     ];
-    assert.deepEqual(readLocalLatestVersions(rows, { home }), { 'typescript-lsp': '1.0.1' });
+    assert.deepEqual(await readLocalLatestVersions(rows, { home }), { 'typescript-lsp': '1.0.1' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- engram's Claude Code plugin (odd/tasks/engram-plugin-lag.md): its latest version is the one the engram
+// binary's own release tag ships, read with git from Claude Code's clone of the engram marketplace at
+// `v<binary version>`, never from the clone's working tree, which can sit behind the refs Claude Code fetched. ---
+
+/** A fixture of `~/.claude/plugins/marketplaces/engram`: one commit tagged `tag` whose marketplace file names
+ * plugin `atTag`, then the working tree's file left at `inTree`, uncommitted. Real git, no network. */
+function makeEngramClone(home, { tag, atTag, inTree }) {
+  const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+  const file = path.join(clone, '.claude-plugin', 'marketplace.json');
+  // No global or system config: a signing rule or a hooks path of the machine's must not decide the fixture.
+  const git = (...args) => {
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(home, 'no-gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
+    const result = spawnSync('git', ['-C', clone, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', env });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  fs.mkdirSync(clone, { recursive: true });
+  withoutAutoMaintenance(() => {
+    git('init', '-q');
+    writeJson(file, { name: 'engram', plugins: [{ name: 'engram', version: atTag }] });
+    git('add', '.');
+    git('commit', '-q', '-m', 'release');
+    git('tag', tag);
+  });
+  writeJson(file, { name: 'engram', plugins: [{ name: 'engram', version: inTree }] });
+}
+
+const ENGRAM_ROWS = (binary) => [
+  { id: 'engram', installed: 'ok', version: binary },
+  { id: 'engram-plugin', installed: 'ok', version: '0.1.12' },
+];
+
+test('engram-plugin is a local source: never fetched, read on every run', () => {
+  assert.equal(isLocalSource({ id: 'engram-plugin', version: '0.1.12' }), true);
+  assert.equal(isLookupAttempted({ id: 'engram-plugin', version: '0.1.12' }), false);
+});
+
+test('engram-plugin reads the plugin version at the engram binary\'s tag in the marketplace clone, not its working tree', async () => {
+  const home = makeTmpHome();
+  try {
+    makeEngramClone(home, { tag: 'v3.5.1', atTag: '0.1.14', inTree: '0.1.12' });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home }), { 'engram-plugin': '0.1.14' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('engram-plugin reads null when the clone lacks the binary\'s tag, when there is no clone, or no engram version', async () => {
+  const home = makeTmpHome();
+  try {
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home }), { 'engram-plugin': null });
+    makeEngramClone(home, { tag: 'v3.5.1', atTag: '0.1.14', inTree: '0.1.12' });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS(null), { home }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions([{ id: 'engram-plugin', version: '0.1.12' }], { home }), { 'engram-plugin': null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('engram-plugin reads null, never throws, when git fails, times out or prints a manifest with no engram entry', async () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
+    const answers = [
+      { status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' },
+      { status: null, signal: 'SIGTERM', stdout: '', stderr: '' },
+      { status: 0, stdout: 'not json', stderr: '' },
+      { status: 0, stdout: JSON.stringify({ plugins: [{ name: 'other', version: '9.9.9' }] }), stderr: '' },
+    ];
+    for (const answer of answers) {
+      const calls = [];
+      const git = async (args) => {
+        calls.push(['git', ...args].join(' '));
+        return answer;
+      };
+      assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, git }), { 'engram-plugin': null });
+      assert.match(calls[0], /^git -C .+ show v3\.5\.1:\.claude-plugin\/marketplace\.json$/);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('engram-plugin never asks git about a marketplace folder that is not a repository itself, so a repository above it is never read', async () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram'), { recursive: true });
+    const calls = [];
+    const git = async (args) => {
+      calls.push(['git', ...args].join(' '));
+      return { status: 0, stdout: JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.14' }] }), stderr: '' };
+    };
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, git }), { 'engram-plugin': null });
+    assert.deepEqual(calls, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
