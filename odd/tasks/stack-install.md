@@ -5,20 +5,12 @@ Locator: `odd/tasks/stack-install.md` · Engram mirror: `odd/stack-install/tasks
 Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` after his yes. Design version 3: version 1
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
-Next step (2026-10-19, kept current): slice 1 is code commit `866f197b` on feat/stack-install (T2 done, not pushed).
-Slice 1 is PR 472 (ready notice sent). Slice 2 (T3) is on branch feat/stack-install-run in the same worktree:
-units A `dba54d18`, B `cea616b9`, C `b9553aba` and D (scratch script, with this line) are committed, each with a
-gentle-ai line in L9 (e57f2d0c still needs its line). Codex on b9722fc..e57f2d0 (recorded; full text in the
-session scratchpad `codex3.txt`) gave 9 P2, all to fix test-first, then one recheck `codex-review --base e57f2d0c`:
-(1) npm `--prefix` env lacks the prefix's bin on PATH (`bin/lib/stack-install.mjs:44`); (2) undoStack drops a record
-when the version probe is `unknown`: keep it (`bin/lib/stack-run.mjs:119`); (3) undo codex's package only after the
-codegraph·codex registration undo succeeded, else keep codex (`stack-run.mjs:127`); (4) failedRecords must keep
-install order, not reverse (`stack-run.mjs:129`); (5) the probes and registrations in `stack install` must see the
-prefix bin (`bin/stack.mjs:187`); (6) a registration writes to the config the record reads (CODEX_HOME / home) —
-align them (`stack.mjs:217`); (7) a failed command is "done" only on an `ok` probe, not `unknown` (`stack.mjs:222`);
-(8) the scratch PATH lacks `sh`/coreutils pnpm's POSIX launchers need (`scripts/stack-scratch.mjs:54`); (9) the
-trial must check both MCP registrations are gone after uninstall (`stack-scratch.mjs:175`). Then push
-feat/stack-install-run, PR based on feat/stack-install, ready notice; T4 trial (`node scripts/stack-scratch.mjs`), T5.
+Next step (2026-10-20, kept current): slice 1 is PR 472 (feat/stack-install, ready notice sent). Slice 2 (T3)
+is feat/stack-install-run, stacked on it: units A-D, the nine Codex fixes (L10) and two gentle-ai fixes (L11), all
+reviewed (gentle-ai review-296d60b1e90da71e approved; Codex recheck a735214..cbb5201 correct, L12). Next: push it,
+open its PR based on feat/stack-install, send the ready notice; then T4, the trial on a scratch home
+(`node scripts/stack-scratch.mjs`, its output in the Log), and T5 (the ROADMAP line; the note to onboarding is
+written in the shared notes folder as jh31-stack-json-contract.md). T6 and T7 are follow-ups. No open question.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -84,7 +76,7 @@ of the one scratch trial (package downloads).
 ## Tasks
 - [x] T1 (kind: design) This design, past its two readers, F1 answered, and his yes (L4, L5)
 - [x] T2 (kind: build) Slice 1: `bin/lib/stack-install.mjs` (D1-D3 as data, the plan, D7's record shape), `js-harness stack` read-only with `--json` (D5, D8), help, README, SPEC, with tests
-- [ ] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
+- [x] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
 - [ ] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
 - [ ] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [ ] T6 (kind: build) A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
@@ -337,3 +329,6 @@ onboarding's files; a note in the shared notes folder hands that session this co
   commit, test-first (RED 2, then GREEN): a timeout kills the shell and not always the install it started, so it now
   keeps its record instead of dropping it (R4-timeout-orphan-drops-record), and in a terminal nothing is timed out
   (R4-timeout-applies-in-terminal). The third, R1-001, is T7.
+  - gentle-ai: cbb5201e assessed medium, review_due false, reason under_budget (45 lines).
+- L12 (2026-10-20) Codex's recheck of a735214..cbb5201 (1 part, 294 lines): the patch is correct (0.93), all nine
+  findings fixed, none new. Recorded in codex-reviews.jsonl.
