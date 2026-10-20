@@ -4,7 +4,7 @@
 // fills it, commits and pushes it, and closes with `notify --kind closed --summary <file>`. Zero dependencies.
 import { summaryPath, summaryTemplate } from './lib/summary.mjs';
 
-const USAGE = 'Usage: js-harness summary template --title "<session title>" | path --title "<session title>"';
+export const USAGE = 'Usage: js-harness summary template --title "<session title>" | path --title "<session title>"';
 
 const SUBCOMMANDS = {
   template: (title, at) => summaryTemplate(title, at).replace(/\n$/, ''),

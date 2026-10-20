@@ -13,7 +13,7 @@ import { DEFAULT_CONTEXT_WINDOW } from './lib/sessions.mjs';
 import { dayOf } from './lib/subagent-count.mjs';
 import { recordFolders } from './subagents.mjs';
 
-const USAGE = 'Usage: js-harness audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
+export const USAGE = 'Usage: js-harness audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 // A day of this project's records is about 231 MB, every line of it read: a week is the most one run reads.
 const MAX_DAYS = 7;
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

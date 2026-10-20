@@ -42,7 +42,7 @@ export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
 // `--wait` is not a bound on the whole of a wait.
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness gate [--wait <minutes> | --no-wait] [--max <minutes>] [--ready <command>] [--home <path>] [--cwd <path>] -- <command> [args...]',
   '       js-harness gate log [--last <n>] [--home <path>]',
   '       js-harness gate first [--session <id> --reason <why> [--tree <path>] [--minutes <n>] | --cancel <id>] [--home <path>]',

@@ -8,7 +8,7 @@ import { currentVersion } from './install.mjs';
 import { ROADMAP_PATH } from './lib/onboard.mjs';
 import { initProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
 
-const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
+export const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
 
 class InitArgError extends Error {}
 

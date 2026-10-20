@@ -166,16 +166,16 @@ proofs and by those tasks.
 **Reason:** Anything written outside the repository must come out exactly, or removing the harness costs a purge script.
 **Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/install-session-messages.test.mjs`, `node --test bin/uninstall-kinds.test.mjs`, `node --test bin/tui.test.mjs`
 **Discarded:** Assuming npm: on this machine `npm` is a pnpm shim. Owning a host's settings file whole instead of one entry.
-**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
+**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `bin/tui.mjs` (the menu and its Uninstall submenu), `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
 
 ### Releases
 
 **Problem:** Update and upgrade asked the npm registry for a name nobody holds and installed what it printed with no comparison (`odd/tasks/install-update.md`, T5); until a release source existed no command could update a machine (`odd/tasks/first-version.md`).
-**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in; a pushed `vX.Y.Z` tag is refused by `check --push` when `package.json` at the tagged commit names another version than the tag without its `v`; `scripts/release-proof.mjs` installs a tag with real npm or pnpm into throwaway folders, upgrades to a second tag, moves a project's pin and uninstalls, and the home must be as it started.
+**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in; a pushed `vX.Y.Z` tag is refused by `check --push` when `package.json` at the tagged commit names another version than the tag without its `v`; `scripts/release-proof.mjs` installs a tag with real npm or pnpm into throwaway folders, upgrades to a second tag, moves a project's pin and uninstalls, and the home must be as it started; `js-harness --version`, `-v` and `version` print the running copy's version alone on one line, which upgrade asks of the copy on the path before it lets that copy sync.
 **Reason:** The machine's git already holds what the repository needs to be read, and no registry holds the package; tagging starts at v0.9.0, a rehearsal release, and v1.0.0 is the first definitive one (`docs/ROADMAP.md`, "Versioning").
-**Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`, `node --test bin/check.test.mjs`, `node --test scripts/release-proof-lib.test.mjs`
+**Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`, `node --test bin/check.test.mjs`, `node --test scripts/release-proof-lib.test.mjs`, `node --test bin/js-harness.test.mjs`
 **Discarded:** The npm registry as the source. An npm publish, planned for a public repository and left without a date.
-**Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `bin/check.mjs`, `.githooks/pre-push`, `scripts/release-proof.mjs`, `scripts/release-proof-lib.mjs`, `js-harness update`, `js-harness upgrade`
+**Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `bin/check.mjs`, `.githooks/pre-push`, `scripts/release-proof.mjs`, `scripts/release-proof-lib.mjs`, `bin/js-harness.mjs`, `js-harness update`, `js-harness upgrade`
 
 ### Project init
 
@@ -522,11 +522,11 @@ proofs and by those tasks.
 ### The README held to the dispatcher
 
 **Problem:** No incident. The owner's answer "Una página y cada comando" (lead's transcript `65318fd5`, line 10979), with the order that a test hold the README's commands to the dispatcher's, so it cannot go stale silently.
-**Requirement:** Under "Commands", exactly one section per command of the help, in the same order and no other, each with a fenced example from a real run; "Install", then "Remove", then "Commands". Headings inside fences are not headings of the page.
+**Requirement:** Under "Commands", exactly one section per command of the help, in the same order and no other, each with a fenced example from a real run; "Install", then "Remove", then "Commands". Headings inside fences are not headings of the page. Every command answers `--help` (or `-h`), given alone, with its usage line and exit 0, and runs nothing. A user guide, `docs/GUIDE.md`, linked from the top of the README, takes a new user from the install to a working project.
 **Reason:** A command added, renamed or removed without its section fails a test instead of going stale.
-**Proof:** `node --test bin/readme.test.mjs`
+**Proof:** `node --test bin/readme.test.mjs`, `node --test bin/js-harness.test.mjs`
 **Discarded:** None recorded.
-**Today:** `README.md`, `bin/readme.test.mjs`, `bin/js-harness.mjs`
+**Today:** `README.md`, `docs/GUIDE.md`, `bin/readme.test.mjs`, `bin/js-harness.mjs`
 
 ### A process is named by the image it runs
 

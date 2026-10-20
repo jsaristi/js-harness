@@ -35,7 +35,7 @@ import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule } from './lib/rules-change-run.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
+export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.

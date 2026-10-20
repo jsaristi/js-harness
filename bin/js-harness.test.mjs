@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -661,4 +661,50 @@ test('resume --pause loads the loader of resume and runs it with its arguments, 
 
 test('the merge-queue help says a land asks gate first for its gate and exits 5 when its gate ran nothing (odd/tasks/land-unattended.md)', () => {
   assert.match(run(['--help']).stdout, /merge-queue .*A land asks js-harness gate first to put its gate first in the line, and a gate that ran nothing exits 5 with main not pushed and nothing bisected\./);
+});
+
+// odd/tasks/user-guide.md S2, S5: every command answers `--help` with its usage and exit 0, and runs nothing.
+// Asked the way a person asks it, a process each, since some commands write their help to stdout directly; six at a time.
+test('every command of the dispatcher answers --help with its usage line and exits 0', async () => {
+  const names = Object.keys(harness.COMMANDS);
+  const ask = (name) => new Promise((resolve) => {
+    execFile(process.execPath, [dispatcher, name, '--help'], { encoding: 'utf8', env: { ...process.env, JS_HARNESS_CHECK_INNER: '1' } },
+      (error, stdout, stderr) => resolve({ name, code: error ? error.code : 0, stdout, stderr }));
+  });
+  const answers = [];
+  for (let i = 0; i < names.length; i += 6) answers.push(...await Promise.all(names.slice(i, i + 6).map(ask)));
+  for (const { name, code, stdout, stderr } of answers) {
+    assert.equal(code, 0, `${name} --help exits 0; it printed ${stderr}`);
+    assert.match(stdout, new RegExp(`^Usage: js-harness ${name}\\b`, 'm'), `${name} --help prints its usage line`);
+  }
+});
+
+test('--help as the only argument runs no command of the dispatcher\'s help, and --help after others reaches the command', async (t) => {
+  const loaded = [];
+  const ran = [];
+  t.mock.method(console, 'log', () => {});
+  assert.equal(await dispatch(['init', '--help'], { commands: spyTable(loaded, ran) }), 0);
+  assert.equal(await dispatch(['update', '-h'], { commands: spyTable(loaded, ran) }), 0);
+  assert.deepEqual(ran, []);
+  assert.equal(await dispatch(['gate', '--', 'node', '--help'], { commands: spyTable(loaded, ran) }), 0);
+  assert.deepEqual(ran, [['gate', ['--', 'node', '--help']]]);
+});
+
+test('the help of one command is its usage and its line of the main help', async (t) => {
+  const printed = [];
+  t.mock.method(console, 'log', (text) => printed.push(String(text)));
+  assert.equal(await dispatch(['init', '--help']), 0);
+  const text = printed.join('\n');
+  assert.match(text, /^Usage: js-harness init \[--cwd <path>\] \[--home <path>\]/);
+  assert.match(text, /Enable js-harness in this project/);
+});
+
+test('the main help says install writes hooks, and names backup\'s verbs and guard\'s orchestrator title', async (t) => {
+  const printed = [];
+  t.mock.method(console, 'log', (text) => printed.push(String(text)));
+  assert.equal(await dispatch(['--help']), 0);
+  const line = (name) => printed.join('\n').split('\n').find((l) => l.startsWith(`  ${name} `));
+  assert.match(line('install'), /hooks/);
+  for (const verb of ['summary', 'restore', 'verify']) assert.match(line('backup'), new RegExp(`\\b${verb}\\b`));
+  assert.match(line('guard'), /<code> ORQ · <purpose>/);
 });

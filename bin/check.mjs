@@ -2540,7 +2540,7 @@ export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Dat
   }
 }
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--ref <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
   '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',

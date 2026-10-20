@@ -10,7 +10,7 @@ import path from 'node:path';
 import { parseRoadmap, parseFeature } from './lib/progress.mjs';
 import { PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, windowStart } from './lib/progress-pace.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness progress [--cwd <path>] [--json] [--pace [--days <n>]]',
   `  --pace  the tasks closed, reopened, added and removed on each of the last ${PACE_DAYS} days (or --days), read`,
   '          from the first-parent line of the default branch: origin/HEAD, else main, else HEAD. A task is',

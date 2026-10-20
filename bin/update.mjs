@@ -16,7 +16,8 @@ import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, spl
 import { unknownArgument } from './lib/args.mjs';
 
 const PKG_NAME = 'js-harness';
-const UPGRADE_USAGE = 'Usage: js-harness upgrade [--home <path>] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
+export const UPDATE_USAGE = 'Usage: js-harness update [--home <path>] [--repo <url or folder>] [--source <dir>]';
+export const UPGRADE_USAGE = 'Usage: js-harness upgrade [--home <path>] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
 
 function parseArgs(argv, env) {
   const get = (flag) => {
@@ -190,7 +191,7 @@ function clearPnpmLock(binDir, since, isPnpmRunning) {
   return `removed pnpm's bin lock ${lock}, ${own ? 'left by this install' : `taken at ${new Date(taken).toISOString()}`}`;
 }
 
-const STATUS_USAGE =
+export const STATUS_USAGE =
   'Usage: js-harness status [--cwd <path>] [--home <path>] [--global] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
 
 class StatusArgError extends Error {}
@@ -351,6 +352,12 @@ async function machineStatus(opts, env, spawn) {
 }
 
 export async function updateMain(argv, env = process.env, spawn = spawnSync) {
+  // A flag it does not know is refused before anything is looked up: `update --help` ran a real lookup (user-guide S3).
+  const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source'] });
+  if (unknown !== null) {
+    console.error(`unknown argument: ${unknown}\n\n${UPDATE_USAGE}`);
+    return 2;
+  }
   const opts = parseArgs(argv, env);
   const installed = currentVersion();
   const { latest, problem } = latestFor(opts);

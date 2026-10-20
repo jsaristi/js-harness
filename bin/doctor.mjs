@@ -29,7 +29,7 @@ import { backupHealth } from './backup.mjs';
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
-const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--gentle-ai-reviewed] [--stack-reviewed]';
+export const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--gentle-ai-reviewed] [--stack-reviewed]';
 
 // R3-003 (accepted T1 review follow-up): a flag with no value (end of argv, or immediately
 // followed by another `--flag`) is a usage error, not a silently-swallowed token.

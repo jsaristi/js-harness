@@ -116,3 +116,17 @@ test('readStack keeps only the tool rows, resolves the switches and probes git a
   assert.ok(functions.codeMap, 'the switches are resolved');
   assert.deepEqual(prerequisites, [{ id: 'git', state: 'ok' }, { id: 'gh', state: 'ok' }]);
 });
+
+// odd/tasks/user-guide.md S4: the help of stack names install and the ids --tool takes, and reads nothing.
+test('stack --help and stack install --help print the usage of both, with the --tool ids, and read nothing', async () => {
+  let read = 0;
+  const deps = { read: () => { read += 1; return stack()(); } };
+  for (const argv of [['--help'], ['-h'], ['install', '--help'], ['install', '-h']]) {
+    const { code, out } = await run(argv, deps);
+    assert.equal(code, 0, argv.join(' '));
+    assert.match(out, /^Usage: js-harness stack \[/m);
+    assert.match(out, /^Usage: js-harness stack install /m);
+    assert.match(out, /--tool: codex, codegraph/);
+  }
+  assert.equal(read, 0);
+});

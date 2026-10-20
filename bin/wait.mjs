@@ -19,7 +19,7 @@ import { renewOwnLease } from './permit.mjs';
 export const WAIT_EVERY_SECONDS = ruleValue('wait-every', 'seconds');
 export const WAIT_FOR_MINUTES = ruleValue('wait-for', 'minutes');
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)',
   '                       [--every <seconds>] [--for <minutes>] [--cwd <path>] [--home <path>]',
   '  Ends when its one condition holds, and prints one line that says so (exit 0). It first prints what it waits',

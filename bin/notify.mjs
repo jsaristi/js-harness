@@ -23,7 +23,7 @@ import { closeProblems } from './lib/summary.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
   '       js-harness notify --to orchestrator --kind question   (the fields of the question as JSON on standard input)',
   '       js-harness notify --relief "<one line>"',

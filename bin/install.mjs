@@ -24,8 +24,8 @@ import {
 } from './lib/project.mjs';
 import { DEFAULT_REPO, INSTALL_NEWEST, tagSpec } from './lib/version.mjs';
 
-const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
-const UNINSTALL_USAGE = [
+export const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
+export const UNINSTALL_USAGE = [
   'Usage: js-harness uninstall project [--cwd <path>] [--home <path>]',
   '       js-harness uninstall machine | snapshots | everything [--home <path>]',
   '       js-harness uninstall [--cwd <path>] [--home <path>] [--global [--full | --everything]]',
@@ -35,7 +35,7 @@ const UNINSTALL_USAGE = [
 const UNINSTALL_KINDS = { project: [], machine: ['--global'], snapshots: ['--global', '--full'], everything: ['--global', '--everything'] };
 /** Whether the word at `i` of `argv` stands as a flag of its own, not as the value of the `--cwd` or `--home` before it. */
 const isFlagAt = (argv, i) => argv[i - 1] !== '--cwd' && argv[i - 1] !== '--home';
-const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
+export const SYNC_USAGE = 'Usage: js-harness sync [--cwd <path>] [--home <path>] [--global]';
 
 class ScopeArgError extends Error {}
 
