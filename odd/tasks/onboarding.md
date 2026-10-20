@@ -1128,3 +1128,10 @@ ceiling.
   trigger). One addition to D9's grammar: a kind's optional `joins`, the kinds it may be joined with, so a plan kind
   never takes a build kind's bar; `shapeFindings` names a `joins` entry that is no kind. Next: gentle-ai and Codex
   on the slice, its PR, then slice 3c (cli-library, api-service, ai-app, tui-app).
+- L25 (2026-10-20) Paused at a safe point for his restart, on the orchestrator's word. Slice 3b is eadb813f, committed
+  in `D:\js-harness-worktrees\onboarding-v4` (detached HEAD) and not pushed: the pre-push hook refuses a code commit
+  with no Codex record, and the pause allows no review. origin/feat/onboarding-plan-advisor is at dfae6be0 (PR 481).
+  On resume, in order: gentle-ai on `dfae6be0..HEAD` (`--base-ref dfae6be0 --committed-only`, lenses readability and
+  reliability, the `granted` invocation pre-granted); `js-harness codex-review --base dfae6be0`; push with
+  `git push origin HEAD:feat/onboarding-plan-advisor`; the 3b lines in PR 481's body or a PR of its own; the ready
+  notice; then slice 3c.
