@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, npm, run, mkTmp, copyRepoToStaging, nextVersion, bumpVersion } from './lib.mjs';
 
-const KEY = { down: 'j', up: 'k', enter: '\r', yes: 'y', no: 'n', quit: 'q' };
+const KEY = { down: 'j', up: 'k', enter: '\r', yes: 'y', no: 'n', quit: 'q', escape: '\u001b' };
 const STEP_MS = 10 * 60_000; // an upgrade with the real npm can take minutes
 const keep = process.argv.includes('--keep');
 
@@ -82,7 +82,12 @@ async function press(key) {
 
 /** The last menu drawn: its lines from the version header on. */
 function lastScreen() {
-  const at = out.lastIndexOf('\njs-harness ', out.length) + 1;
+  // A draw below a command's output starts on a new line; a draw in place (a key that only moved or opened a
+  // submenu) starts with the sequence that erases the last draw, so the header follows it on the same line.
+  const erase = '\u001b[0J';
+  const fresh = out.lastIndexOf('\njs-harness ') + 1;
+  const inPlace = out.lastIndexOf(`${erase}js-harness `);
+  const at = inPlace >= 0 && inPlace + erase.length > fresh ? inPlace + erase.length : fresh;
   return out.slice(at).split('\n');
 }
 
@@ -94,7 +99,7 @@ function menuNow() {
   // The menu starts after the first blank line: above it are the version header and the stack rows.
   const screen = lastScreen();
   for (const line of screen.slice(screen.indexOf('') + 1)) {
-    if (line === 'project' || line === 'machine') section = line;
+    if (line === 'project' || line === 'machine' || line === 'uninstall') section = line;
     const item = /^([> ]) (\S.*)$/.exec(line);
     if (!item) continue;
     if (item[1] === '>') selected = items.length;
@@ -129,6 +134,15 @@ async function step(name, { section, label, answer, expect, menu }) {
   console.log(`${faults.length === 0 ? 'PASS' : 'FAIL'}  ${name}${faults.length ? `: ${faults.join('; ')}` : ''}`);
 }
 
+/** Uninstall opens a submenu of its kinds (odd/tasks/uninstall-kinds.md, S2): open it, then step through the kind.
+ * A yes runs the kind and returns to the main menu; a no keeps the submenu, so Escape leaves it. */
+async function uninstallKind(name, kind, { answer, expect, menu } = {}) {
+  await select('machine', 'Uninstall');
+  await press(KEY.enter);
+  await step(name, { section: 'uninstall', label: kind, answer, expect, menu });
+  if (answer === KEY.no) await press(KEY.escape);
+}
+
 let code = 1;
 try {
   const until = Date.now() + 60_000;
@@ -148,7 +162,7 @@ try {
   await step('Status after install', { section: M, label: 'Status', expect: new RegExp(current.replace(/\./g, '\\.')) });
   await step('Doctor', { section: M, label: 'Doctor', expect: /\S/ });
   await step('Update', { section: M, label: 'Update', expect: new RegExp(newer.replace(/\./g, '\\.')) });
-  await step('Init', { section: P, label: 'Init', menu: /project\/Sync, project\/Status, project\/Uninstall/ });
+  await step('Init', { section: P, label: 'Init', menu: /project\/Sync, project\/Status, project\/Remote status/ });
   await step('Project sync', { section: P, label: 'Sync', expect: /\S/ });
   await step('Project status', { section: P, label: 'Status', expect: /\S/ });
   // Each remote step needs the line its command prints on success, never just some output.
@@ -156,7 +170,7 @@ try {
   await step('Remote start', { section: P, label: 'Remote start', expect: /^remote: started "/m });
   await step('Remote status while started', { section: P, label: 'Remote status', expect: /^remote: running \(supervisor pid \d+/m });
   await step('Remote stop', { section: P, label: 'Remote stop', answer: KEY.yes, expect: /^remote: stopped for /m });
-  await step('Project uninstall', { section: P, label: 'Uninstall', answer: KEY.yes, menu: /project\/Init/ });
+  await uninstallKind('Project uninstall', 'Project', { answer: KEY.yes, menu: /project\/Init/ });
   await step('Upgrade', { section: M, label: 'Upgrade', expect: new RegExp(`upgraded to ${newer.replace(/\./g, '\\.')}`) });
   {
     // The menu keeps running the old code: its header says so instead of offering the update again (F1).
@@ -165,19 +179,21 @@ try {
     results.push({ name: 'header after Upgrade', ok: header === want, faults: header === want ? [] : [`header is ${JSON.stringify(header)}`], said: header });
     console.log(`${header === want ? 'PASS' : 'FAIL'}  header after Upgrade${header === want ? '' : `: ${header}`}`);
   }
-  await step('Uninstall, answered no', { section: M, label: 'Uninstall', answer: KEY.no });
-  await step('Uninstall', { section: M, label: 'Uninstall', answer: KEY.yes, expect: /remov|uninstall/i });
+  await uninstallKind('Uninstall, answered no', 'Machine', { answer: KEY.no });
+  await uninstallKind('Uninstall', 'Machine', { answer: KEY.yes, expect: /remov|uninstall/i });
   await step('Status after uninstall', { section: M, label: 'Status', expect: /not installed|no manifest|nothing installed/i });
   // What the normal uninstall keeps, as a lead's notes would be: Uninstall everything removes it with the folder (S5).
   const kept = path.join(dirs.home, '.js-harness', 'relief');
   fs.mkdirSync(kept, { recursive: true });
   fs.writeFileSync(path.join(kept, 'walk.md'), 'a note the normal uninstall keeps\n');
-  await step('Uninstall everything, answered no', { section: M, label: 'Uninstall everything', answer: KEY.no });
+  await uninstallKind('Uninstall everything, answered no', 'Everything', { answer: KEY.no });
   {
     // Its yes removes the folder and, since this menu runs from a checkout, keeps the program; then the menu ends
     // by itself, with nothing left to offer.
     const start = out.length;
-    await select(M, 'Uninstall everything');
+    await select(M, 'Uninstall');
+    await press(KEY.enter);
+    await select('uninstall', 'Everything');
     await press(KEY.enter);
     child.stdin.write(KEY.yes);
     const exit = await Promise.race([exited, sleep(60_000).then(() => 'still running')]);

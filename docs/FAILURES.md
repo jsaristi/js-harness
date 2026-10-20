@@ -873,6 +873,15 @@ makes the next try wait five minutes and fail.
 - Control: check — bin/doctor.test.mjs — "the pnpm-lock row stale for a global bin lock left over in
   the given PNPM_HOME" — since 2026-10-16
 
+### ports-test-free-port-race
+On GitHub's machines a port that `allocatePort` had just found free was held by something else when
+the test asked again, so a gate failed on a commit that touched no port code.
+- Class: tool
+- Seen: 2026-10-20 — run 39403454493 of the gate on GitHub's machines — `evals/ports.test.mjs:80`
+  "real allocations are distinct, bindable once released, and none is the real engram port" said
+  "nothing holds it", actual true; 1 failure of 6692 tests, on the commit of the walk fix
+  (`scripts/tui-walk.mjs`, `odd/tasks/release-095.md`)
+
 ### probe-end-hook-flake
 A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the
 failure did not come back on the next run.
