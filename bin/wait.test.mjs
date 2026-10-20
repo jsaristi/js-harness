@@ -251,7 +251,7 @@ test("every wait also ends on a notice to the waiting session's own number, with
   });
   assert.equal(await waitMain(args('--pr', '284', '--for', '60'), SELF_ENV, deps), 3);
   assert.equal(state.out[0], watching('the merge of pull request 284', 26, 60));
-  assert.deepEqual(state.calls, ['gh pr view 284 --json state -q .state', 'gh pr view 284 --json state -q .state'], 'the notice is looked for before the pull request, which is not asked again');
+  assert.deepEqual(state.calls, ['git worktree list --porcelain', 'gh pr view 284 --json state -q .state', 'gh pr view 284 --json state -q .state'], 'the notice is looked for before the pull request, which is not asked again');
   assert.match(state.out[1], /^js-harness wait: a notice to 26 came before the merge of pull request 284 held \(\d\d:\d\d\); the wait ends$/);
   assert.equal(state.out[2], 'note from JH ORQ · js-harness: Lead: next for JH 26');
   assert.equal(state.out[3], `js-harness wait: to wait again, run: js-harness wait --cwd ${shown(CWD)} --home ${shown(HOME)} --pr 284 --for 60`);

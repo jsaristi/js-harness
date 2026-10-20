@@ -822,6 +822,22 @@ test('a sender with no transcript to read keeps its id and has no title; a start
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...unreadable }), { host: 'claude-code', id: SESSION, source: 'environment', ...none });
 });
 
+test('the sender\'s transcript is read from whichever of the project\'s sessions folders holds it, a worktree\'s included', () => {
+  // A session opened in a worktree is filed under that worktree's folder, not the main checkout's.
+  const main = 'C:\\claude\\projects\\C--proj';
+  const worktree = 'C:\\claude\\projects\\C--proj--claude-worktrees-x';
+  const files = { [path.join(worktree, `${SESSION}.jsonl`)]: titled('JH 30 · onboarding', 'auto'), [path.join(main, `${OTHER}.jsonl`)]: titled('JH ORQ · js-harness') };
+  const readdir = (dir) => {
+    const names = Object.keys(files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file));
+    if (names.length === 0) throw Object.assign(new Error(`ENOENT: ${dir}`), { code: 'ENOENT' });
+    return names;
+  };
+  const readFile = (file) => files[file];
+  const where = { projectDirs: [main, worktree, 'C:\\claude\\projects\\C--gone'], readdir, readFile };
+  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...where }), { host: 'claude-code', id: SESSION, source: 'environment', title: 'JH 30 · onboarding', permissionMode: 'auto', context: null });
+  assert.deepEqual(channel.senderOf({ self: 'aaaaaaaa', env: {}, ...where }).title, null, 'a start that names a transcript in each of two folders names neither');
+});
+
 test('only a title the session was given is one: the start of its first prompt names nobody', () => {
   const untitled = transcript({ type: 'user', timestamp: AT, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content: 'build the channel' } });
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...folder({ [`${SESSION}.jsonl`]: untitled }) }), { host: 'claude-code', id: SESSION, source: 'environment', title: null, permissionMode: 'auto', context: null });

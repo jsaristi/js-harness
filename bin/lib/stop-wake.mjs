@@ -20,7 +20,7 @@
 // than the hook's timeout allows.
 
 import { readNotices } from './channel.mjs';
-import { isSelf, mainCheckout, projectSlug, roleOfTitle, titleRead } from './sessions.mjs';
+import { isSelf, mainCheckout, projectSlug, roleOfTitle, sameSession, titleRead } from './sessions.mjs';
 import { handedNumber, readOpenings, workNumber } from './stall.mjs';
 
 /** The words only this warning has, by which an earlier one is found in the transcript. */
@@ -82,8 +82,9 @@ export function transcriptMarks(text) {
 
 /** The newest work handed to the work session `number` at or after `sinceMs` and not given back since:
  * `{ at, what: 'notice' | 'opening', kind }`, or `null`. An opening is stored before its session starts, so one whose
- * title is in `readTitles` (the openings this session read) is its work whenever it was stored. */
-export function heldWork({ notices = [], openings = [], number, sinceMs = -Infinity, readTitles = [] }) {
+ * title is in `readTitles` (the openings this session read) is its work whenever it was stored. `sessionId` is the id of
+ * the session asking, whose own close gives the work back whatever title it carries. */
+export function heldWork({ notices = [], openings = [], number, sinceMs = -Infinity, readTitles = [], sessionId = null }) {
   let handed = null;
   const consider = (at, what, kind, ours = false) => {
     if (at !== null && (ours || at >= sinceMs) && (handed === null || at > handed.at)) handed = { at, what, kind };
@@ -91,7 +92,11 @@ export function heldWork({ notices = [], openings = [], number, sinceMs = -Infin
   for (const notice of notices) if (handedNumber(notice) === number) consider(timeOf(notice.at), 'notice', notice.kind ?? null);
   for (const opening of openings) if (workNumber(opening.title) === number) consider(timeOf(opening.at), 'opening', null, readTitles.includes(opening.title));
   if (handed === null) return null;
-  const back = notices.some((notice) => workNumber(notice.from?.title) === number && GIVEN_BACK.has(notice.kind) && timeOf(notice.at) >= handed.at);
+  // A notice gives the work back when its sender's title names the number, or when its sender is this very session
+  // (`sessionId`): notify writes a null title when it cannot find the sender's transcript, and JH 30's close carried
+  // one (2026-10-20). The id is the host's, not words a session writes, so it is read, never the text's `JH 30:`.
+  const ours = (notice) => workNumber(notice.from?.title) === number || sameSession(sessionId, notice.from?.id);
+  const back = notices.some((notice) => ours(notice) && GIVEN_BACK.has(notice.kind) && timeOf(notice.at) >= handed.at);
   return back ? null : handed;
 }
 
@@ -117,7 +122,7 @@ export function wakeWarning(payload, state, io) {
   if (role?.role !== 'work') return null;
   const { openings, unavailable } = readOpenings(home, slug, { readdirSync: io.readdir, readFileSync: (file) => io.readFile(file) });
   if (unavailable) throw new Error(unavailable);
-  const held = heldWork({ notices: record.notices, openings, number: role.number, sinceMs: marks.firstAt ?? -Infinity,
+  const held = heldWork({ notices: record.notices, openings, number: role.number, sinceMs: marks.firstAt ?? -Infinity, sessionId: payload.session_id ?? null,
     readTitles: record.readings.filter((reading) => isSelf(payload.session_id, reading.reader?.id)).map((reading) => reading.title) });
   if (held === null) return null;
   const warnedSince = marks.warnedAt !== null && marks.warnedAt >= held.at;

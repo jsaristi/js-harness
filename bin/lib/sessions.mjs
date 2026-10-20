@@ -808,6 +808,26 @@ export function mainCheckout(run, cwd) {
   return top !== undefined && path.relative(path.resolve(cwd, gitDir), commonDir) === '' ? path.resolve(top) : commonDir;
 }
 
+/** The sessions folders of the project at `root` under `claudeHome`: the main checkout's first, then each worktree's
+ * that git lists. Claude Code files a session under the folder it was opened in, so a session opened in a worktree
+ * (the app's `.claude/worktrees/<name>`) is not under the main checkout's: JH 30's closed notice carried a null title
+ * for want of that folder (2026-10-20). A git that cannot list the worktrees, or throws, leaves the main folder alone. */
+export function projectDirsOf(run, root, claudeHome) {
+  const dirs = [path.join(claudeHome, 'projects', projectSlug(root))];
+  let listed;
+  try {
+    listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
+  } catch {
+    return dirs;
+  }
+  if (listed.error || listed.status !== 0) return dirs;
+  for (const tree of parseWorktreeList(String(listed.stdout))) {
+    const dir = path.join(claudeHome, 'projects', projectSlug(path.resolve(tree.path)));
+    if (!tree.bare && !dirs.includes(dir)) dirs.push(dir);
+  }
+  return dirs;
+}
+
 const failed = (result) => Boolean(result.error) || result.status !== 0;
 
 /** Why a command failed, in one line: what the system said when it could not be started, the first line

@@ -20,8 +20,8 @@ import { sessionsMain } from './sessions.mjs';
 import { stampOff } from './lib/guard.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { closeProblems } from './lib/summary.mjs';
-import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, writeOpening } from './lib/channel.mjs';
-import { askingRule, mainCheckout, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
+import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, transcriptOf, writeOpening } from './lib/channel.mjs';
+import { askingRule, mainCheckout, projectDirsOf, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
@@ -306,7 +306,8 @@ export async function notifyMain(
   // are one per project. The harness home is JS_HARNESS_HOME or the user's home, as for `install` and the
   // board, and an empty JS_HARNESS_HOME is no home.
   const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
-  const slug = projectSlug(mainCheckout(run, cwd));
+  const root = mainCheckout(run, cwd);
+  const slug = projectSlug(root);
   const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
   const at = new Date(now()).toISOString();
 
@@ -357,7 +358,9 @@ export async function notifyMain(
   // Who sends, from the transcript the host's id names: read where the board reads the sessions.
   const claudeHome = path.resolve(defaultCwd, parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
   const projectDir = path.join(claudeHome, 'projects', slug);
-  const from = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile });
+  // A session opened in a worktree is filed under that worktree's sessions folder, not the main checkout's.
+  const projectDirs = projectDirsOf(run, root, claudeHome);
+  const from = senderOf({ self: parsed.self ?? null, env, projectDirs, readdir, readFile });
   // A session opened from the phone has no title in its transcript: its title is the one of the opening
   // it read, which `sessions --opening` wrote in the record. A title in the transcript wins.
   // A record that cannot be read gives no title and stops nothing: the notice is written without one,
@@ -499,9 +502,10 @@ export async function notifyMain(
   // When he last wrote in the sender's own transcript: the rule for asking him reads it. A transcript that cannot be
   // read gives no time, and the rule says so rather than guess where he is.
   const personAtOf = () => {
-    if (from.id === null) return null;
+    const found = from.id === null ? null : transcriptOf(from.id, projectDirs, readdir);
+    if (found === null) return null;
     try {
-      return sessionFacts(readFile(path.join(projectDir, `${from.id}.jsonl`)), { tail: 0 }).personAt;
+      return sessionFacts(readFile(found.file), { tail: 0 }).personAt;
     } catch {
       return null;
     }
