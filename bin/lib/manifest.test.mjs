@@ -2756,7 +2756,7 @@ test('the orchestrator skill says how the lead pauses everything before it tells
   for (const line of [
     'When the user must restart or update (a Claude Desktop update `js-harness doctor` reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), pause everything at a safe point first, and only then tell them.',
     'it commits what is ready, pushes only when its check already passes, writes its state to its feature document and starts nothing new',
-    'Keep your watch until the board shows no session `working` and no gate running.',
+    'Keep your watch until the board shows no other session `working` (yours always reads so) and no gate running.',
     'write the paused sessions and the resume steps to your relief file',
     'tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!',
     'what not to touch, and the line to send this session when they are back',
