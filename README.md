@@ -514,7 +514,8 @@ that order. Each is printed with its undo and asked `Run it? [y/N]` in a termina
 runs nothing unless given `--yes`, and then only the tools `--tool` names. Each is recorded in the
 machine manifest before it starts, so `uninstall machine` undoes it; a failure that left nothing
 behind loses its record. It exits 0 when nothing it set out to install is missing, 1 when
-something is (declined, failed or timed out).
+something is (declined, failed or timed out). In the TUI, Install the stack sits after Doctor
+while a required tool is missing, and runs `stack install`, each y/N answered by one key.
 
 ```console
 $ js-harness stack

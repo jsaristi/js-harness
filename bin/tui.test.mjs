@@ -1570,3 +1570,53 @@ test('tuiMain probes the stack again after a command, offline', async () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// --- the stack install item (odd/tasks/stack-install.md, D5) ---
+
+test('Install the stack is a machine item only while a tool the harness requires is missing, right after Doctor', () => {
+  assert.equal(buildMenu({ kind: 'notGit' }).some((entry) => entry.id === 'stack-install'), false);
+  const machine = buildMenu({ kind: 'notGit' }, { stackGap: true });
+  const at = machine.findIndex((entry) => entry.id === 'stack-install');
+  assert.equal(machine[at].label, 'Install the stack');
+  assert.equal(machine[at - 1].id, 'doctor');
+  const project = buildMenu({ kind: 'initialized', root: '/r' }, { stackGap: true });
+  assert.ok(project.findIndex((entry) => entry.id === 'stack-install') > project.findIndex((entry) => entry.header && entry.label === 'machine'));
+});
+
+test('buildCommands binds stack-install to the home and the folder', () => {
+  assert.equal(typeof buildCommands({ home: '/h', cwd: '/c' })['stack-install'], 'function');
+});
+
+test('runTui hands a command an ask whose key goes to it, never to the menu, then drops the item once nothing is missing', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const calls = [];
+  const answers = [];
+  const commands = {
+    'stack-install': async (location, io) => {
+      calls.push('stack-install');
+      answers.push(await io.ask('Run it? [y/N] '));
+      answers.push(await io.ask('Run it? [y/N] '));
+    },
+    doctor: async () => calls.push('doctor'),
+  };
+  const done = runTui({
+    installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout, stackGap: true,
+    readStackView: async () => ({ stack: [], stackGap: false }),
+  });
+  stdin.emit('data', 'j');
+  stdin.emit('data', 'j'); // Status, Doctor, Install the stack
+  stdin.emit('data', '\r');
+  await flush();
+  stdin.emit('data', 'y');
+  await flush();
+  stdin.emit('data', '\r'); // not y: no
+  await flush();
+  await flush();
+  assert.deepEqual(answers, [true, false]);
+  assert.deepEqual(calls, ['stack-install']);
+  assert.ok(stdout.chunks.join('').includes('Run it? [y/N] '));
+  assert.ok(!stdout.chunks.at(-1).includes('Install the stack'), 'the item is gone once nothing is missing');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
