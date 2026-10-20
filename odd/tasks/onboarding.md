@@ -109,6 +109,9 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - S10. His answer to Pregunta 32, OD-R (2026-10-20, transcript 908805db line 9024, read with `js-harness sessions
   --quote`). The question was when the two readers run, given that each area is a question with a recommendation.
   Tapped, verbatim: "Una vez por perfil (Recommended)"
+- S11. His words on the interview's feel (2026-10-20, transcript 908805db line 9112, typed to the lead while
+  Pregunta 33 was pending, not an answer to it), verbatim: "Pero esta bien las 33 preguntas, pero me gusta mas que sea
+  hablado y como guiado"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
@@ -206,7 +209,14 @@ command's output, tested like any other output.
 ### D3. The interview
 - **Read before asking.** Nothing the repository already answers is asked; the session states what it read and asks
   only to confirm what it inferred, as one question.
-- **One question at a time**, through the question tool where the host has one (Claude Code), with a recommended
+- **A guided conversation, not a form** (S11: "me gusta mas que sea hablado y como guiado"). The plan orchestrator
+  talks the owner through the onboarding: before each topic or area it says, in a short message in the chat, where
+  they are in the plan, what this step is about and why it matters for the project, and, for an area, what it
+  recommends and why, at his level. Only then does it ask. The question is the decision point at the end of that talk,
+  not the talk itself. He can answer in his own words instead of tapping, ask back ("¿y por qué no X?"), or think out
+  loud; the session answers, keeps guiding, and asks again only when a decision is still open. After each answer it
+  says in a line what it understood and what comes next, so he always knows where the conversation is going.
+- **One decision at a time**, through the question tool where the host has one (Claude Code), with a recommended
   option first, so he can answer from his phone with a tap; plain text in Codex. A short answer that fits two
   readings is asked about, not guessed. In a new project no build lead runs yet, so the plan orchestrator asks the
   owner directly; where a lead already holds the project, the question goes through it (`js-harness-orchestrator`,
@@ -249,7 +259,7 @@ command's output, tested like any other output.
 - **How long**: 11 topics plus one question per area, about 18 to 30 questions in all; the number of areas per kind
   is fixed by slice 3's data, and T4 measures the real count. What keeps it bounded: nothing the repository answers
   is asked, an area the owner already decided is deepened in its ADR without a question unless a sourced risk needs
-  one, the lesson rides inside the question rather than in extra turns, and "fácil y rápido" is open at every turn.
+  one, the lesson rides in the one message before each question, follow-ups come only when he asks, and "fácil y rápido" is open at every turn.
 - Answers are logged in the owner's words and language, with the date; everything else follows topic 6's artifact
   language. The conversation, lessons included, is in the owner's language.
 
@@ -452,10 +462,13 @@ through the command's output, one piece at a time, never as a skill or a per-tur
 ### D10. The advice, one area at a time
 For each area under `## Advice`, in `after` order, the session runs `onboard profile --area <id>`, reads the current
 docs and release notes of what it will recommend, logs the question as D7 says, and asks one question:
-- **Its text**: what this area decides, the recommendation and its why, at the depth of the developer's level in it
-  (D11), the sources it read, what is given up with each alternative, and the area's bar targets, one line each. The
-  question tool shows it on a phone, so the lesson in it stays short (about 120 words); the full reasoning goes into
-  the ADR.
+- **The talk before it** (S11): a message in the chat that explains what this area decides, the recommendation and
+  its why, at the depth of the developer's level in it (D11), the sources it read, what is given up with each
+  alternative, and the area's bar targets. It is as long as the level needs, written to be read on a phone in short
+  paragraphs; the full reasoning also goes into the ADR. With teaching off, it is two or three lines.
+- **Its text**: the decision alone, in a sentence or two that point back to the talk, so the question tool stays short
+  on a phone. Where a lead relays the question (D3), the talk travels inside the question's text, since the owner
+  sees only the lead's chat.
 - **Its options**: the recommendation first, one or two real alternatives, and where the owner already uses
   something else, that one.
 - **The reviewed text it rests on**: the question names its profile area (`bin/lib/profiles-data.mjs`, `A:<id>`)
@@ -966,3 +979,7 @@ ceiling.
 - L18 (2026-10-20) His answer to Pregunta 32 (OD-R) is S10, the recommended option, read at its line. Folded into
   v4: D10 says how the area questions meet `rule:double-review`, and T7 gives each profile its two readers. Next:
   OD-F as Pregunta 33, the last of the four.
+- L19 (2026-10-20) His words S11, relayed by the lead and read at their line: the number of questions is fine (S6's
+  scale stands), and he wants the onboarding talked and guided. Folded into v4: D3 opens with the guided
+  conversation (a short explanation before every question, free answers and questions back, a recap line after each
+  answer), and D10 moves the lesson from the question's text into the message before it. Pregunta 33 is still open.
