@@ -6,10 +6,9 @@ Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` aft
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
 Next step (2026-10-19, kept current): slice 1 is code commit `866f197b` on feat/stack-install (T2 done, not pushed).
-Next: the gentle-ai review of slice 1 (`gentle-ai review start --cwd <worktree> --base-ref origin/main --committed-only`;
-consent pre-granted, run `granted`), then `js-harness codex-review --base origin/main`, then a gentle-ai line in the Log
-naming `866f197b`, push, PR, ready notice to the orchestrator (`js-harness notify --to orchestrator --kind ready --pr <n>`).
-Then T3 (slice 2) on a branch stacked on it.
+Its gentle-ai review is approved and acknowledged (L7). Next: `js-harness codex-review --base origin/main`, push, PR,
+ready notice to the orchestrator (`js-harness notify --to orchestrator --kind ready --pr <n>`).
+Then T3 (slice 2) on branch feat/stack-install-run, stacked on it.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -291,3 +290,6 @@ onboarding's files; a note in the shared notes folder hands that session this co
   against an empty scratch home (`stack --home <empty>`) showed a fix named twice (engram's two `gentle-ai sync`),
   pinned by a RED test, then fixed. `bin/stack.test.mjs` 9 tests. `npm run check` PASS (tests in WSL2, spec 59). On
   this machine `js-harness stack` reads "nothing the harness requires is missing" and exits 0.
+- L7 (2026-10-19) gentle-ai evidence per code commit, for the merge queue.
+  - gentle-ai: 866f197b reviewed, lineage review-b72c1389cbb96396, lenses readability and reliability, 0 findings,
+    approved and acknowledged (authority burned).
