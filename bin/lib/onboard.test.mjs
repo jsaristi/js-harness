@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_LINE, ROADMAP_PATH, TOPICS,
+  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_LINE, ROADMAP_PATH, SUMMARY_LINE, TOPICS,
   checkOnboarding, currentStage, featureTemplate, hashes, originTemplate, roadmapTemplate, shortHash, stageReport,
 } from './onboard.mjs';
 import { validateContract } from './contract.mjs';
 import { parseRoadmap } from './progress.mjs';
-import { AGENTS_TEMPLATE, ORIGIN, ROADMAP, onboardingDoc, files } from './onboard.testkit.mjs';
+import { ADVICE, AGENTS_TEMPLATE, ORIGIN, PROFILES, ROADMAP, SETUP, answered, onboardingDoc, files } from './onboard.testkit.mjs';
 
-const check = (over = {}, options = {}) => checkOnboarding(files(over), { agentsTemplate: AGENTS_TEMPLATE, ...options });
+const check = (over = {}, options = {}) => checkOnboarding(files(over), { agentsTemplate: AGENTS_TEMPLATE, profiles: PROFILES, ...options });
 const messages = (findings) => findings.map((f) => `${f.file} (stage ${f.stage}): ${f.message}`);
 
 test('a complete onboarding has no finding', () => {
@@ -17,7 +17,7 @@ test('a complete onboarding has no finding', () => {
 
 test('the paths are the ones the design names', () => {
   assert.deepEqual([ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, AGENTS_PATH], ['odd/tasks/onboarding.md', 'docs/origin.md', 'docs/ROADMAP.md', 'AGENTS.md']);
-  assert.equal(TOPICS.length, 9);
+  assert.equal(TOPICS.length, 11);
 });
 
 test('a missing file is one finding that names the stage that writes it', () => {
@@ -29,16 +29,92 @@ test('a missing file is one finding that names the stage that writes it', () => 
   ]);
 });
 
-test('the interview: nine topics, each checked, and topics 1, 2 and 7 answered, not unknown', () => {
-  const topics = TOPICS.map((title, i) => `- [x] ${i + 1} ${title} — answered`);
+const atTwo = (...lines) => lines.map((line) => `odd/tasks/onboarding.md (stage 2): ${line}`);
+const checkTwo = (doc) => messages(check({ onboarding: onboardingDoc(doc) })).filter((line) => line.includes('(stage 2)'));
+
+test('the interview: eleven topics, each settled, and topics 1, 2, 3, 4 and 9 said or confirmed by the owner', () => {
+  const topics = answered();
   topics[1] = `- [x] 2 ${TOPICS[1]} — unknown (OD3)`;
+  topics[2] = `- [x] 3 ${TOPICS[2]} — deduced (L5)`;
+  topics[3] = `- [ ] 4 ${TOPICS[3]} — deduced (L6)`;
   topics[4] = `- [ ] 5 ${TOPICS[4]}`;
-  topics.pop();
-  assert.deepEqual(messages(check({ onboarding: onboardingDoc({ topics }) })), [
-    'odd/tasks/onboarding.md (stage 2): the interview has no topic 9',
-    'odd/tasks/onboarding.md (stage 2): topic 5 is not answered yet',
-    'odd/tasks/onboarding.md (stage 2): topic 2 is marked unknown: topics 1, 2 and 7 need an answer',
-  ]);
+  topics[5] = `- [x] 6 ${TOPICS[5]} — deduced (L7)`;
+  topics[6] = `- [x] 7 ${TOPICS[6]}`;
+  topics[8] = `- [x] 9 ${TOPICS[8]} — confirmed (L16)`;
+  topics.splice(10, 1);
+  assert.deepEqual(checkTwo({ topics }), atTwo(
+    'the interview has no topic 11',
+    'topic 2 is marked unknown: topics 1, 2, 3, 4 and 9 need an answer',
+    'topic 3 is checked as deduced: topics 1, 2, 3, 4 and 9 are checked once the owner says or confirms them',
+    'topic 4 is deduced and waits for the owner\'s confirmation',
+    'topic 5 is not covered yet',
+    'topic 7 is checked with no "— answered (L<n>)", "— deduced (L<n>)", "— confirmed (L<n>)" or "— unknown (OD<n>)"',
+  ));
+});
+
+test('the summary line closes the interview: present, then checked with the Log line of the last answer', () => {
+  const topics = answered();
+  assert.deepEqual(checkTwo({ topics: topics.slice(0, -1) }), atTwo(`the interview has no summary line "${SUMMARY_LINE}"`));
+  topics[11] = SUMMARY_LINE;
+  assert.deepEqual(checkTwo({ topics }), atTwo('the summary is not given yet: S is checked once its deepening questions are answered'));
+  topics[11] = SUMMARY_LINE.replace('[ ]', '[x]');
+  assert.deepEqual(checkTwo({ topics }), atTwo('S names no Log line (L<n>) of the last answer'));
+});
+
+test('## Setup: its five lines, each in its format', () => {
+  assert.deepEqual(checkTwo({ setup: [] }), atTwo(
+    '## Setup has no Kind line yet',
+    '## Setup has no Size line yet',
+    '## Setup has no Level line yet',
+    'Teaching is not set: log the opening as a (session) Log line, then write - Teaching: on (L<n>)',
+    '## Setup has no Mode line: write - Mode: full',
+  ));
+  assert.deepEqual(checkTwo({ setup: ['- Kind: cafe', '- Size: big (L3)', '- Level: stack experienced (L4)', '- Teaching: maybe', '- Mode: fast'] }), atTwo(
+    'Kind: cafe is not a kind of the profiles; js-harness onboard profile lists them',
+    'Size is "big (L3)": write small (L<n>) or large (L<n>)',
+    'Level is "stack experienced (L4)": write A:<id> new|some|experienced, one per area of ## Advice, then (L<n>)',
+    'Teaching is "maybe": write on (L<n>) or off (L<n>)',
+    'Mode is "fast": write full, or fast (L<n>)',
+  ));
+  // The template's bare "on" is no setting yet: the opening is still to be logged.
+  assert.deepEqual(checkTwo({ setup: SETUP.map((line) => line.replace('on (L2)', 'on')) }), atTwo(
+    'Teaching is not set: log the opening as a (session) Log line, then write - Teaching: on (L<n>)',
+  ));
+  for (const setup of [
+    SETUP.map((line) => line.replace('Teaching: on (L2)', 'Teaching: off (L9)').replace('Mode: full', 'Mode: fast (L11)')),
+    SETUP.map((line) => line.replace('Kind: shop', 'Kind: shop, blog (L3)')),
+  ]) assert.deepEqual(checkTwo({ setup }), [], setup.join('\n'));
+});
+
+test('## Advice: the areas --checklist advice prints for Kind and Size, each settled in one of its forms', () => {
+  assert.deepEqual(checkTwo({ advice: [] }), atTwo('## Advice is empty: paste what js-harness onboard profile --checklist advice prints'));
+  const small = SETUP.map((line) => line.replace('large (L3)', 'small (L3)'));
+  assert.deepEqual(checkTwo({ setup: small }), atTwo(
+    '## Advice lists A:hosting, which js-harness onboard profile --checklist advice does not print for this Kind and Size',
+    '## Advice lists A:legal, which js-harness onboard profile --checklist advice does not print for this Kind and Size',
+  ));
+  assert.deepEqual(checkTwo({ advice: ADVICE.slice(0, 2) }), atTwo(
+    '## Advice lacks A:legal, which js-harness onboard profile --checklist advice prints for this Kind and Size',
+    'Level names A:legal, which is not under ## Advice',
+  ));
+  assert.deepEqual(checkTwo({ advice: [
+    '- [ ] A:stack Stack',
+    '- [x] A:hosting Hosting — a VPS',
+    '- [x] A:legal Legal — default, fast, ADR-0003 (L20)',
+  ] }), atTwo(
+    'A:stack is not settled yet',
+    'A:hosting is checked with "a VPS": write proposed, asked or the owner\'s, ADR-<nnnn> (L<n>), or open (OD<n>)',
+    'A:legal is settled default, fast, but Mode is not fast',
+  ));
+  const fast = SETUP.map((line) => line.replace('Mode: full', 'Mode: fast (L11)'));
+  assert.deepEqual(checkTwo({ setup: fast, advice: [ADVICE[0], '- [x] A:hosting Hosting — asked, ADR-0002 (L18)', '- [x] A:legal Legal — default, fast, ADR-0003 (L20)'] }), []);
+  const level = SETUP.map((line) => line.replace(', A:legal some', ''));
+  assert.deepEqual(checkTwo({ setup: level }), atTwo('Level has no level for A:legal'));
+});
+
+test('once the onboarding is closed (O6), Kind and the areas are no longer compared with the profiles', () => {
+  const setup = SETUP.map((line) => line.replace('Kind: shop', 'Kind: bakery').replace('A:legal some', 'A:legal some, A:payments new'));
+  assert.deepEqual(check({ onboarding: onboardingDoc({ setup, advice: [...ADVICE, '- [x] A:payments Payments — open (OD2)'], o6: 'x' }) }), []);
 });
 
 test('an approval must be checked, name its Log line, and hold the hash of the file as it is now', () => {
@@ -71,20 +147,27 @@ test('an approval may run over the continuation lines of its item', () => {
   assert.deepEqual(check({ onboarding: onboardingDoc({ o5 }) }), []);
 });
 
-test('O2 records the interview it was written from; a changed interview sends the work back to stage 3', () => {
-  const recorded = hashes({ onboarding: onboardingDoc(), origin: null, roadmap: null }).interview;
-  const topics = TOPICS.map((title, i) => `- [x] ${i + 1} ${title} — answered (L${i + 2})`);
+test('O2 records the answers it was written from; changed answers send the work back to stage 3', () => {
+  const recorded = hashes({ onboarding: onboardingDoc(), origin: null, roadmap: null }).answers;
+  const o2 = `- [x] O2 Pre-plan written (answers sha256:${recorded})`;
+  const topics = answered();
   topics[3] = `- [x] 4 ${TOPICS[3]} — answered (L5, changed in L20)`;
-  const changed = onboardingDoc({ topics, o2: `- [x] O2 Pre-plan written (interview sha256:${recorded})` });
-  const now = hashes({ onboarding: changed, origin: null, roadmap: null }).interview;
-  assert.deepEqual(messages(check({ onboarding: changed })), [
-    `odd/tasks/onboarding.md (stage 3): O2 records interview sha256:${recorded}, but ## Interview is sha256:${now}: it changed since its approval`,
-  ]);
+  const advice = [ADVICE[0], '- [x] A:hosting Hosting — the owner\'s, ADR-0002 (L21)', ADVICE[2]];
+  const size = SETUP.map((line) => line.replace('large (L3)', 'large (L22)'));
+  for (const changed of [onboardingDoc({ topics, o2 }), onboardingDoc({ advice, o2 }), onboardingDoc({ setup: size, o2 })]) {
+    const now = hashes({ onboarding: changed, origin: null, roadmap: null }).answers;
+    assert.deepEqual(messages(check({ onboarding: changed })), [
+      `odd/tasks/onboarding.md (stage 3): O2 records answers sha256:${recorded}, but the conversation (## Interview, ## Advice, Kind and Size) is sha256:${now}: it changed since its approval`,
+    ]);
+  }
+  // Teaching, Mode and Level are left out of the hash: turning teaching off reopens nothing (D2).
+  const teaching = SETUP.map((line) => line.replace('on (L2)', 'off (L30)').replace('A:stack experienced', 'A:stack some'));
+  assert.deepEqual(check({ onboarding: onboardingDoc({ setup: teaching, o2 }) }), []);
   assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o2: '- [x] O2 Pre-plan written' }) })), [
-    'odd/tasks/onboarding.md (stage 3): O2 records no interview sha256: js-harness onboard hash prints it',
+    'odd/tasks/onboarding.md (stage 3): O2 records no answers sha256: js-harness onboard hash prints it',
   ]);
   assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o2: '- [ ] O2 Pre-plan written' }) })), [
-    'odd/tasks/onboarding.md (stage 3): O2 is not checked: the pre-plan is not written from the interview yet',
+    'odd/tasks/onboarding.md (stage 3): O2 is not checked: the pre-plan is not written from the conversation yet',
   ]);
 });
 
@@ -156,20 +239,24 @@ test('--plan checks only the roadmap and its ties to the pre-plan', () => {
   ]);
 });
 
-test('hashes: each file\'s short sha256, and the interview\'s, or null where a file is missing', () => {
+test('hashes: each file\'s short sha256, and the answers\', or null where a file is missing', () => {
   const doc = onboardingDoc();
-  const interview = doc.slice(doc.indexOf('## Interview'), doc.indexOf('## Tasks'));
+  const body = (title, next) => doc.slice(doc.indexOf(`## ${title}\n`) + `## ${title}\n`.length, doc.indexOf(`## ${next}\n`)).trim();
   assert.deepEqual(hashes({ onboarding: doc, origin: ORIGIN, roadmap: null }), {
-    interview: shortHash(interview.replace(/^## Interview\n/, '').trim()),
+    answers: shortHash(['## Interview', body('Interview', 'Advice'), '## Advice', body('Advice', 'Tasks'), 'Kind: shop', 'Size: large (L3)'].join('\n')),
     origin: shortHash(ORIGIN),
     roadmap: null,
   });
+  assert.deepEqual(hashes({ onboarding: null, origin: null, roadmap: null }), { answers: null, origin: null, roadmap: null });
 });
 
-test('the templates: the feature is a valid contract with nine topics, and the others start with what check asks for', () => {
+test('the templates: the feature is a valid contract with its setup, eleven topics and the summary line, and the others start with what check asks for', () => {
   const feature = featureTemplate();
   assert.deepEqual(validateContract(feature), { ok: true, errors: [] });
   for (const [i, title] of TOPICS.entries()) assert.ok(feature.includes(`- [ ] ${i + 1} ${title}`), title);
+  assert.ok(feature.includes(`\n${SUMMARY_LINE}\n`), feature);
+  assert.match(feature, /\n## Setup\n(?:<!--.*-->\n)?- Teaching: on\n- Mode: full\n/);
+  assert.match(feature, /\n## Advice\n<!--.*--checklist advice.*-->\n/);
   for (const id of ['O1', 'O2', 'O3', 'O4', 'O5', 'O6']) assert.match(feature, new RegExp(`- \\[ \\] ${id} `));
   const origin = originTemplate('shop');
   for (const section of ['Status', 'Goal', 'Why', 'What exists', 'Decisions already made', 'Principles', 'Phases', 'Not built', 'Risks', 'Open decisions', 'Sources']) {
@@ -186,28 +273,58 @@ test('a template written as it is fails the check on its own template lines, nev
   assert.ok(findings.some((f) => f.file === ROADMAP_PATH && f.message.startsWith('still holds the template line')), messages(findings).join('\n'));
 });
 
-const stage = (over = {}) => currentStage(files(over), { agentsTemplate: AGENTS_TEMPLATE });
-const answered = () => TOPICS.map((title, i) => `- [x] ${i + 1} ${title} — answered (L${i + 2})`);
+const stage = (over = {}) => currentStage(files(over), { agentsTemplate: AGENTS_TEMPLATE, profiles: PROFILES });
+const stageTwo = (doc) => {
+  const { stage: at, step, covered, open, waiting, wrong } = stage({ onboarding: onboardingDoc(doc) });
+  return { at, step, covered, open, waiting, wrong };
+};
+const recordedAnswers = () => hashes({ onboarding: onboardingDoc(), origin: null, roadmap: null }).answers;
+
+test('currentStage, stage 2: the next step of the conversation, what it covered, and what is still open', () => {
+  const blank = ['- Teaching: on', '- Mode: full'];
+  assert.deepEqual(stageTwo({ setup: blank, advice: [], topics: TOPICS.map((title, i) => `- [ ] ${i + 1} ${title}`).concat(SUMMARY_LINE) }), {
+    at: 2, step: 'opening', covered: { topics: 0, areas: 0, total: null }, open: { topics: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], areas: [] }, waiting: [], wrong: [],
+  });
+  const opened = ['- Teaching: on (L2)', '- Mode: full'];
+  const early = answered().map((line, i) => (i < 11 ? `- [ ] ${i + 1} ${TOPICS[i]}` : SUMMARY_LINE));
+  early[0] = `- [ ] 1 ${TOPICS[0]} — deduced (L3)`;
+  early[4] = `- [x] 5 ${TOPICS[4]} — deduced (L4)`;
+  assert.deepEqual(stageTwo({ setup: opened, advice: [], topics: early }), {
+    at: 2, step: 'kind', covered: { topics: 1, areas: 0, total: null }, open: { topics: [2, 3, 4, 6, 7, 8, 9, 10, 11], areas: [] }, waiting: [1], wrong: [],
+  });
+  const kindSize = ['- Kind: shop (L3)', '- Size: large (L3)', ...opened];
+  assert.deepEqual(stageTwo({ setup: kindSize, advice: [], topics: early }).step, 'advice');
+  // A pasted set the profiles no longer print is pasted again.
+  assert.deepEqual(stageTwo({ setup: kindSize, advice: ADVICE.slice(0, 1), topics: early }).step, 'advice');
+  const pasted = ['- [ ] A:stack Stack', '- [x] A:hosting Hosting — proposed, ADR-0002 (L13)', '- [ ] A:legal Legal'];
+  assert.deepEqual(stageTwo({ advice: pasted, topics: early }), {
+    at: 2, step: 'converse', covered: { topics: 1, areas: 1, total: 3 }, open: { topics: [2, 3, 4, 6, 7, 8, 9, 10, 11], areas: ['A:stack', 'A:legal'] }, waiting: [1], wrong: [],
+  });
+  const summary = answered();
+  summary[2] = `- [ ] 3 ${TOPICS[2]} — deduced (L5)`;
+  summary[11] = SUMMARY_LINE;
+  assert.deepEqual(stageTwo({ topics: summary }), {
+    at: 2, step: 'summary', covered: { topics: 10, areas: 3, total: 3 }, open: { topics: [], areas: [] }, waiting: [3], wrong: [],
+  });
+  // What is wrong is named, and the conversation goes on around it.
+  const mode = SETUP.map((line) => line.replace('Mode: full', 'Mode: quick'));
+  assert.deepEqual(stageTwo({ setup: mode }), {
+    at: 2, step: 'fix', covered: { topics: 11, areas: 3, total: 3 }, open: { topics: [], areas: [] }, waiting: [], wrong: ['Mode is "quick": write full, or fast (L<n>)'],
+  });
+});
 
 test('currentStage: the first stage whose record is missing or no longer holds', () => {
   assert.deepEqual(stage({ onboarding: null }), { stage: 1 });
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o1: ' ' }) }), { stage: 1 });
-
-  const topics = answered();
-  topics[3] = `- [ ] 4 ${TOPICS[3]}`;
-  topics[6] = `- [ ] 7 ${TOPICS[6]}`;
-  assert.deepEqual(stage({ onboarding: onboardingDoc({ topics }) }), { stage: 2, topic: 4, answered: 7 });
-  assert.deepEqual(stage({ onboarding: onboardingDoc({ topics: answered().slice(0, 3) }) }), { stage: 2, topic: 4, answered: 3 });
-  const unknown = answered();
-  unknown[1] = `- [x] 2 ${TOPICS[1]} — unknown (OD1)`;
-  unknown[4] = `- [x] 5 ${TOPICS[4]} — unknown (OD2)`;
-  assert.deepEqual(stage({ onboarding: onboardingDoc({ topics: unknown }) }), { stage: 2, topic: 2, answered: 8 });
+  const unsummed = answered();
+  unsummed[11] = SUMMARY_LINE;
+  // Stage 3 waits for the summary line.
+  assert.equal(stage({ onboarding: onboardingDoc({ topics: unsummed, o2: '- [ ] O2 Pre-plan written' }) }).stage, 2);
 
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o2: '- [ ] O2 Pre-plan written' }) }), { stage: 3, changed: false });
-  const recorded = hashes({ onboarding: onboardingDoc(), origin: null, roadmap: null }).interview;
   const revised = answered();
   revised[0] += ', revised in L20';
-  assert.deepEqual(stage({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (interview sha256:${recorded})` }) }), { stage: 3, changed: true });
+  assert.deepEqual(stage({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (answers sha256:${recordedAnswers()})` }) }), { stage: 3, changed: true });
 
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) }), { stage: 4, changed: false });
   const origin = ORIGIN.replace('bread online', 'bread and cakes online');
@@ -229,7 +346,7 @@ test('currentStage: the first stage whose record is missing or no longer holds',
 });
 
 const GIT = { branch: 'onboarding', defaultBranch: 'main', defaultHasRoadmap: false, elsewhere: [], uncommitted: [] };
-const report = (over = {}, git = {}) => stageReport(files(over), { agentsTemplate: AGENTS_TEMPLATE, git: { ...GIT, ...git } });
+const report = (over = {}, git = {}) => stageReport(files(over), { agentsTemplate: AGENTS_TEMPLATE, profiles: PROFILES, git: { ...GIT, ...git } });
 const has = (lines, text) => assert.ok(lines.some((line) => line.includes(text)), `no line holds "${text}":\n${lines.join('\n')}`);
 const nothing = { onboarding: null, origin: null, roadmap: null };
 
@@ -244,26 +361,49 @@ test('stageReport: stage 1 starts the document, on the onboarding branch', () =>
   assert.equal(report({ onboarding: onboardingDoc({ o1: ' ' }) }).lines[0], 'Stage 1 of 7, Read: O1 is not checked yet.');
 });
 
-test('stageReport: the interview names the next topic and how far it is', () => {
+test('stageReport, stage 2: Conversation and advice prints what it covered, what is open and waiting, and one next step', () => {
   const topics = answered();
-  topics[3] = `- [ ] 4 ${TOPICS[3]}`;
-  const { code, lines } = report({ onboarding: onboardingDoc({ topics }) });
+  topics[3] = `- [ ] 4 ${TOPICS[3]} — deduced (L6)`;
+  topics[7] = `- [ ] 8 ${TOPICS[7]}`;
+  const advice = ['- [ ] A:stack Stack', ADVICE[1], ADVICE[2]];
+  const { code, lines } = report({ onboarding: onboardingDoc({ topics, advice, setup: SETUP.map((line) => line.replace('Mode: full', 'Mode: quick')) }) });
   assert.equal(code, 0);
-  assert.equal(lines[0], `Stage 2 of 7, Interview: topic 4 of 9, "${TOPICS[3]}" (8 of 9 answered).`);
-  has(lines, 'one question');
-  has(lines, 'Topics 1, 2 and 7 cannot be unknown');
+  assert.deepEqual(lines, [
+    'Stage 2 of 7, Conversation and advice: covered: 9 of 11 topics, 2 of 3 areas.',
+    'FAIL  odd/tasks/onboarding.md: Mode is "quick": write full, or fast (L<n>) (back to stage 2, Conversation and advice)',
+    'Open: topic 8; area A:stack.',
+    'Deduced, waiting for the owner\'s confirmation: topic 4.',
+    lines[4],
+    'Then: commit every three settled items, and at the summary, and run js-harness onboard again.',
+  ]);
+  assert.match(lines[4], /^Do: guide the conversation toward what is still open/);
+  has(lines, 'js-harness onboard profile --area <id>');
+  has(lines, 'Topics 1, 2, 3, 4 and 9 are checked only once the owner says or confirms them');
+
+  const doOf = (doc) => report({ onboarding: onboardingDoc(doc) }).lines.find((line) => line.startsWith('Do: '));
+  const opening = doOf({ setup: ['- Teaching: on', '- Mode: full'], advice: [] });
+  assert.match(opening, /^Do: open the conversation: say who you are in this project \(the plan orchestrator/);
+  assert.match(opening, /- Teaching: on \(L<n>\), and commit at once\.$/);
+  assert.match(doOf({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }), /^Do: follow the owner's thread; from it, write - Kind: .* and - Size: /);
+  assert.match(doOf({ setup: ['- Kind: shop', '- Size: large (L3)', '- Teaching: on (L2)', '- Mode: full'], advice: [] }), /^Do: run js-harness onboard profile --checklist advice and paste what it prints under ## Advice/);
+  const summary = answered();
+  summary[11] = SUMMARY_LINE;
+  const summing = report({ onboarding: onboardingDoc({ topics: summary }) }).lines;
+  assert.equal(summing[0], 'Stage 2 of 7, Conversation and advice: covered: 11 of 11 topics, 3 of 3 areas.');
+  assert.match(summing.find((line) => line.startsWith('Do: ')), /^Do: log the summary as a \(session\) Log line and give it.*through the question tool.*Check S with the Log line of the last answer\.$/);
+  assert.equal(report({ onboarding: onboardingDoc({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }) }).lines[0],
+    'Stage 2 of 7, Conversation and advice: covered: 11 of 11 topics; areas not listed yet.');
 });
 
 test('stageReport: each later stage says what it waits on and what records it', () => {
   const pre = report({ origin: null, onboarding: onboardingDoc({ o2: '- [ ] O2 Pre-plan written', o3: '- [ ] O3 Pre-plan approved' }) }).lines;
-  assert.equal(pre[0], 'Stage 3 of 7, Pre-plan: the interview is complete.');
+  assert.equal(pre[0], 'Stage 3 of 7, Pre-plan: the conversation is complete.');
   has(pre, 'js-harness onboard template origin --write');
-  has(pre, 'interview sha256:');
-  const recorded = hashes({ onboarding: onboardingDoc(), origin: null, roadmap: null }).interview;
+  has(pre, `answers sha256:${recordedAnswers()}`);
   const revised = answered();
   revised[0] += ', revised in L20';
-  const again = report({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (interview sha256:${recorded})` }) }).lines;
-  assert.equal(again[0], 'Stage 3 of 7, Pre-plan: ## Interview changed since O2 recorded it.');
+  const again = report({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (answers sha256:${recordedAnswers()})` }) }).lines;
+  assert.equal(again[0], 'Stage 3 of 7, Pre-plan: the conversation changed since O2 recorded it.');
   assert.ok(!again.some((line) => line.includes('template origin')), again.join('\n'));
 
   const review = report({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) }).lines;
@@ -283,6 +423,7 @@ test('stageReport: each later stage says what it waits on and what records it', 
   const close = report({ agents: '# shop\n' }).lines;
   assert.equal(close[0], 'Stage 7 of 7, Close: 1 finding left.');
   has(close, `FAIL  AGENTS.md: has no line "${ROADMAP_LINE}" (back to stage 7, Close)`);
+  has(close, '"What this project is" from topic 1, and "Constraints" from topics 6, 7 and 9');
   assert.equal(report().lines[0], 'Stage 7 of 7, Close: js-harness onboard check passes; O6 is not checked yet.');
 });
 

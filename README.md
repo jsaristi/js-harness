@@ -228,7 +228,7 @@ map is off prints `codegraph init skipped: the code map is off` and gets no `.co
 
 The pre-plan and the roadmap of a project after `init`, written by the session the owner talks to;
 the command calls no model. With no verb it reads the files and git, prints the stage the
-onboarding is in (Read, Interview, Pre-plan, its review, Plan, its review, Close, then awaiting
+onboarding is in (Read, Conversation and advice, Pre-plan, its review, Plan, its review, Close, then awaiting
 merge and onboarded) and what the session does next, so a new session, a compaction or the other
 host resumes by running it again; an onboarding on another branch is named with its worktree or
 the switch that resumes it. `check` names what is still missing and the stage it sends the work
@@ -243,11 +243,11 @@ Then: commit, and run js-harness onboard again.
 $ js-harness onboard template feature --write
 wrote odd/tasks/onboarding.md
 $ js-harness onboard check
-FAIL  odd/tasks/onboarding.md: topic 1 is not answered yet (back to stage 2, Interview)
+FAIL  odd/tasks/onboarding.md: ## Setup has no Kind line yet (back to stage 2, Conversation and advice)
 FAIL  docs/origin.md: missing: js-harness onboard template origin --write starts it (back to stage 3, Pre-plan)
 FAIL  AGENTS.md: has no line "The plan is docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/." (back to stage 7, Close)
 $ js-harness onboard hash
-interview sha256:d4b3c1a78dbe
+answers   sha256:91f9c265f5ad
 origin    missing
 roadmap   missing
 ```

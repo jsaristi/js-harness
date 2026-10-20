@@ -1146,3 +1146,11 @@ ceiling.
 - L26 (2026-10-20) Resumed after the restart: PR 481 is in main (11ff331). Slice 3b passed gentle-ai and Codex
   (`## Reviews`) and is pushed for its own pull request. The orchestrator's resume message names T8 next; slice 3c
   (cli-library, api-service, ai-app, tui-app) stays open in T7.
+- L27 (2026-10-20) T8 slice 4a, the conversation in files (D3, D6, D15), tests first: eleven topics, topics 1, 2, 3, 4
+  and 9 checked only `answered` or `confirmed`; the summary line `S`; `## Setup`'s five lines in their formats, Kind
+  through `parseKind`; `## Advice` held to `--checklist advice` for Kind and Size until O6, each area in one of its
+  five forms, every area with a Level; the `answers` hash in place of `interview` (O2); stage 2 renamed "Conversation
+  and advice", with its covered line, what is open and waiting, and one next step (opening, kind, advice, converse,
+  summary, fix); the Close text on topics 1, 6, 7 and 9. The lib takes the profiles as `profiles`, a fixture in its
+  tests. On the branch `feat/onboarding-conversation`, stacked on PR 484. Next: 4b, the ADRs (`template adr`, their
+  checks, the `adrs` hash on O3 and O5) and fast mode's given-up line; then 4c, the pre-plan and roadmap additions.
