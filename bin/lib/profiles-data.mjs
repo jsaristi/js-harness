@@ -452,7 +452,7 @@ export const TARGETS = [
     area: 'seo',
     target: 'each page has a unique title and meta description and a canonical URL; links are descriptive; a site of many pages has a sitemap',
     measured: 'lab',
-    command: 'Lighthouse SEO audits on every pull request',
+    command: 'Lighthouse SEO audits on every pull request, and a check over the built pages for duplicate titles and descriptions, a canonical on each page and the sitemap, which Lighthouse does not audit across pages',
     source: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide',
   },
   {

@@ -887,6 +887,13 @@ ceiling.
   a platform `seo` area; three more shape checks (ID form, an area or target listed twice, a common core area made
   non-core). Each new fact was fetched from its source first. Not taken: `team` as a dependency of the stack beyond
   `architecture`. Unguaranteed: the fixes were not read again (no third round).
+- Slice 3a, gentle-ai (2026-10-20): 65f81a30..3a9f6601, lenses readability and reliability, approved and
+  acknowledged (lineage review-801c2647597627d9). Informational, left for later: a dead branch in `typed`
+  (`bin/lib/profiles.mjs:144`), `WHERE`'s values unused since `barStep` stopped printing them
+  (`bin/lib/profiles.mjs:11`), and two notes on `bin/onboard.mjs:257` and `bin/onboard.test.mjs:267-281`.
+- Slice 3a, Codex (2026-10-20): the same range in 4 parts, recorded. One P2, taken: `B:seo-basics` named only
+  Lighthouse, which does not check duplicate titles, canonicals or the sitemap across pages; its command now adds a
+  check over the built pages.
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
