@@ -78,6 +78,13 @@ test('a package manager given as a command line is split into its words (Codex o
   assert.deepEqual(JSON.parse(out).mandatory[0].run, ['node', '/tools/pnpm.cjs', 'add', '-g', '@openai/codex']);
 });
 
+test('a package manager whose whole line is a file, a path with a space, stays one word (Codex on 12e46c4..6a2b0ad)', () => {
+  const file = 'C:\\Program Files\\nodejs\\npm.cmd';
+  const exists = (p) => p === file;
+  assert.deepEqual(resolveStackPm(file, {}, '/x', exists), { words: [file], kind: 'npm' });
+  assert.deepEqual(resolveStackPm('node /tools/pnpm.cjs', {}, '/x', exists).words, ['node', '/tools/pnpm.cjs']);
+});
+
 test('a shown command quotes a word the shell would read, so it runs as printed (Codex on 553900a..12e46c4)', async () => {
   const { out } = await run([], { read: stack({ codex: { installed: 'missing', codex: 'n/a' } }) }, { JS_HARNESS_PM: 'node /tools/$pm.cjs' });
   assert.match(out, /run: {2}node '\/tools\/\$pm\.cjs' install -g @openai\/codex/);

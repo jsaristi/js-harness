@@ -2,6 +2,7 @@
 // order `stack install` runs them, each with its command and its exact undo; the person's own steps (gentle-ai's
 // installer, logins, prerequisites) and the optional tools are named and never run. Read-only. See
 // odd/tasks/stack-install.md (D5, D8).
+import fs from 'node:fs';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -37,10 +38,13 @@ function parseArgs(argv, env) {
 }
 
 /** The package manager of the installs, resolved as `upgrade` resolves it: `--pm`, else `JS_HARNESS_PM`, else the one
- * that installed the running copy. Never read from the word `npm` on the path, which may run pnpm (odd/tasks/stack-install.md, D6). */
-export function resolveStackPm(pm, env, copyPath = fileURLToPath(import.meta.url)) {
+ * that installed the running copy. Never read from the word `npm` on the path, which may run pnpm (odd/tasks/stack-install.md, D6).
+ * A command line is split into its words, unless the whole line names a file: a path with a space in it stays one word
+ * (Codex on 12e46c4..6a2b0ad). `exists` is the seam that looks. */
+export function resolveStackPm(pm, env, copyPath = fileURLToPath(import.meta.url), exists = fs.existsSync) {
   const command = pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
-  const words = splitCommand(command);
+  const line = command.trim();
+  const words = /\s/.test(line) && exists(line) ? [line] : splitCommand(line);
   return { words, kind: pmKind(words) };
 }
 
