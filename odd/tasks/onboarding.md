@@ -20,6 +20,7 @@ makes that path the default for every project and checks its result.
 
 ## Done when
 - `node --test bin/onboard.test.mjs bin/lib/onboard.test.mjs bin/init.test.mjs bin/lib/contract.test.mjs` exits 0
+- `node --test bin/lib/profiles-data.test.mjs bin/lib/manifest.test.mjs` exits 0 (v4, slices 3 and 5)
 - `npm run check` exits 0
 - One real onboarding (T4) of the project his answer to OD-T4 names, not a test project (S3): one question at a
   time, both readers' rounds recorded, both approvals, then `js-harness onboard check` exits 0 there and
@@ -103,7 +104,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [ ] T8 (kind: build) Slice 4: the v4 interview, `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines (D2-D6, D10-D12)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
 - [ ] T4 (kind: verify) The one real onboarding of the done-when, after T9 (its scratch-project interview was stopped by S3)
-- [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
+- [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (`docs/ROADMAP.md:231-237`, on `main` now) and record the reviews
 
 ## Design
 
@@ -122,8 +123,8 @@ change is what the session does inside the stages:
   by `onboard profile` (D9), with the corrections L12 found applied to `## Reference profiles` below.
 - **Decisions as ADRs with sources** (L12): `docs/adr/`, each citing the docs read for it, with their date (D12);
   the profile's bar becomes roadmap steps and done-when commands (D5).
-- **Teaching outlives the onboarding in the orchestrator only** (S7): the roadmap carries `## Advice mode`, which the
-  orchestrator skill reads; no work session teaches and nothing goes in `AGENTS.md` (D13).
+- **Teaching outlives the onboarding in the orchestrator's chat only** (S7): the roadmap carries `## Advice mode`;
+  the questions that reach the owner through the lead carry the why, and nothing goes in `AGENTS.md` (D13).
 - Stage numbers stay: advice runs inside stage 2, renamed "Interview and advice", so no finding's "back to stage N"
   changes meaning.
 
@@ -163,26 +164,29 @@ needs the owner in the loop, and spend from a hidden child is spend he does not 
 
 ### D2. Stages, read from files; instructions printed one stage at a time
 `onboard` with no flag reads the project's files and git, prints the current stage, what it must produce, how much is
-left (for the interview, "topic 4 of 9") and the next step, in English, and exits 0. Nothing about the stage lives in
-the conversation, so a new session, a compaction or the other host resumes by running `onboard` again; stopping
-between any two answers is safe. The onboarding document (D7) carries fixed IDs that the stages key on:
+left (for the interview, "topic 4 of 11" or "area 3 of 8 (A:frontend)") and the next step, in English, and exits 0.
+Nothing about the stage lives in the conversation, so a new session, a compaction or the other host resumes by running
+`onboard` again; stopping between any two answers is safe. The onboarding document (D7) carries fixed IDs that the
+stages key on:
 
 | # | Stage | Current when | What the session does |
 |---|-------|--------------|-----------------------|
 | 1 | Read | no `odd/tasks/onboarding.md` on this branch and none on another (D7) | Reads the repository (README, manifests, `git log`, docs, codegraph where there is code); runs `onboard template feature --write`; fills L1 with the owner's request and `## What exists` with what it found, each with its evidence |
-| 2 | Interview and advice | a `## Setup` value is missing, or a topic under `## Interview` or an area under `## Advice` is unchecked, or the topics or areas differ from the expected set (D3, D10) | Asks the next item, one question, waits; logs the answer verbatim with its date and checks the item: a topic as `answered` or `unknown (OD<n>)`, an area as D10 says. Prints "topic 4 of 11" or "area 3 of 8 (A:frontend)" |
-| 3 | Pre-plan | every topic and area checked, and `O2` unchecked or its recorded hash of the answers (`## Setup`, `## Interview`, `## Advice`) differs | `onboard template origin --write` the first time, then fills or revises the file from the interview, checks `O2` with the hash of `## Interview` |
-| 4 | Pre-plan review | `O2` checked, `O3` unchecked, or `O3`'s recorded hash differs from `docs/origin.md` | Two readers, findings under `## Reviews`; one question to the owner. A yes checks `O3` with the file's sha256 and the Log line. A no is logged verbatim, the file revised, a second round reads only the blockers, and he is asked again |
-| 5 | Plan | `O3` holds, `O4` unchecked | `onboard template roadmap --write`, fills it from the approved pre-plan, runs `onboard check --plan` until it exits 0, checks `O4` |
-| 6 | Plan review | `O4` checked, and `O5` unchecked or one of its two recorded hashes (`docs/ROADMAP.md`, and the `docs/origin.md` it was derived from) differs | As stage 4, for the roadmap, revising it first from the changed pre-plan |
+| 2 | Interview and advice | a `## Setup` value is missing or malformed, a topic under `## Interview` or an area under `## Advice` is unchecked, or the topics or areas differ from the expected set (D3, D10) | Asks the next item, one question, waits; logs the answer verbatim with its date and checks the item: a topic as `answered` or `unknown (OD<n>)`, an area as D10 says. Once topics 1-3 are answered and `## Advice` is still empty, the output's next step is to run `onboard profile --checklist advice` and paste what it prints under `## Advice` |
+| 3 | Pre-plan | every topic and area checked, and `O2` unchecked or its recorded `answers` hash (D6) differs | `onboard template origin --write` the first time, then fills or revises the file from the answers and the ADRs, checks `O2` with the `answers` hash `onboard hash` prints |
+| 4 | Pre-plan review | `O2` checked, and `O3` unchecked or one of its two recorded hashes (`origin`, `adrs`) differs | Two readers read the pre-plan and every ADR, findings under `## Reviews`; one question to the owner, whose text is a summary of at most ten lines that a phone shows whole, naming the files. A yes checks `O3` with both hashes and the Log line. A no is logged verbatim, the files revised, a second round reads only the blockers, and he is asked again |
+| 5 | Plan | `O3` holds, `O4` unchecked | `onboard template roadmap --write`, fills it from the approved pre-plan and ADRs, pastes `onboard profile --checklist bar` into its first build phase, runs `onboard check --plan` until it exits 0, checks `O4` |
+| 6 | Plan review | `O4` checked, and `O5` unchecked or one of its three recorded hashes (`roadmap`, `origin`, `adrs`) differs | As stage 4, for the roadmap, revising it first from the changed pre-plan or ADRs |
 | 7 | Close | `O5` holds, `onboard check` fails | Fills `AGENTS.md` (D7); each failing finding names the stage it sends back to; commits |
 | 8 | Awaiting merge | `onboard check` exits 0 on a branch that is not the default one, and the default one has no `docs/ROADMAP.md` | Prints that merging is the owner's decision under the repository's policy, and the pull request command |
-| — | Onboarded | `onboard check` exits 0 and the default branch has `docs/ROADMAP.md`, whatever branch the session is on | Prints that the plan orchestrator's work is done and the build orchestrator takes over (D13), the roadmap's `## Next` step and the text that starts its session |
+| — | Onboarded | `onboard check` exits 0 and the default branch has `docs/ROADMAP.md`, whatever branch the session is on | Prints the handoff of D13: the plan orchestrator's work is done, the roadmap's `## Next` step, and the lead's opening prompt |
 
-A change of an answer after an approval goes through the file: the session edits `docs/origin.md` (or the roadmap),
-the hash no longer matches, and the review stage is current again. The hashes are checked only until the onboarding
-closes; after that the roadmap is the living plan and changes like any other. Each stage's instructions are a few
-lines of the command's output, tested like any other output.
+A change of an answer after an approval goes through the files: the session edits the answer, `docs/origin.md`, an ADR
+or the roadmap, a recorded hash no longer matches, and the stage it belongs to is current again. Only what the plan is
+made of is hashed (D6): turning teaching off, raising a level or switching to the fast plan after an approval reopens
+nothing (S4 asks for teaching to be easy to turn off). The hashes are checked only until the onboarding closes; after
+that the roadmap is the living plan and changes like any other. Each stage's instructions are a few lines of the
+command's output, tested like any other output.
 
 ### D3. The interview
 - **Read before asking.** Nothing the repository already answers is asked; the session states what it read and asks
@@ -193,17 +197,22 @@ lines of the command's output, tested like any other output.
   owner directly; where a lead already holds the project, the question goes through it (`js-harness-orchestrator`,
   "Questions to the user"). One session holds the onboarding.
 - **Before the first question**, one line tells the owner that teaching is on, and that "sin enseñanza" turns it off
-  and "fácil y rápido" asks for the fast plan (S4); `## Setup` records `Teaching: on (told L<n>)` at once (D11).
-- **`## Setup`**, five lines, each written in the same commit as the answer that sets it, so a resume reads them back:
-  `Kind`, `Size`, `Level`, `Teaching`, `Mode` (D11). Stage 2 is current while one is missing.
+  and "fácil y rápido" asks for the fast plan (S4). The session logs that it said so, as a Log line marked
+  `(session)`, and `## Setup` records `Teaching: on (L<n>)`.
+- **`## Setup`** (formats in D6): `Kind`, `Size`, `Level`, `Teaching`, `Mode`. `Mode: full` and `Teaching: on` are
+  written with the template, as the defaults. A change to `## Setup` is committed at once, apart from the
+  every-three-answers rhythm of D7, because a lost teaching or mode choice would be asked again (L12); it is rare.
 - **The eleven topics**, in order, each a checkbox under `## Interview`; the areas of `## Advice` (D10) come between
   topics 7 and 8, because scope, order and risks depend on what was decided:
-  1. What the project is, for whom, and its kind: one or more of the profiles' kinds (D9), or `other`. The session
-     proposes the kind it reads from topic 1's answer and the repository; sets `Kind`.
+  1. What the project is, for whom, and its kind: one or more of the profiles' kinds (D9), or `other` with the nearest
+     kind. The session proposes the kind it reads from the answer and the repository; sets `Kind`.
   2. Its size: small (only what is needed) or large (S6). Sets `Size`, which chooses the areas and the bar.
-  3. The developer's level in each area of the kind, proposed from the repository and the answers so far and
-     confirmed in one question (S3: "si el desarrollador del proyecto sabe que hacer" or "es un programador muy
-     junior"). Sets `Level`; "ya sé esto" during the advice raises one area's level at once (D11).
+  3. The developer's level in the kind's areas, grouped by layer (for a platform: back end, front end, data, delivery),
+     proposed from the repository and the answers so far and confirmed in one question whose recommended option is
+     the reading itself. Sets `Level`. This departs from L10 ("read, never asked"): S3 makes the level decide how
+     deep every lesson goes ("si el desarrollador del proyecto sabe que hacer" or "es un programador muy junior"), so
+     a wrong guess would be paid in every area; one tap confirms it. "ya sé esto" during the advice raises one area's
+     level at once (D11).
   4. The outcome that makes it worth doing: how the owner will know it worked.
   5. What exists today: code, data, users, deadlines (confirming `## What exists`); with code, each area of the kind
      is marked keep, migrate or contain, and the advice of D10 starts from that.
@@ -215,12 +224,13 @@ lines of the command's output, tested like any other output.
      (accounts, domain, store fees, payment providers), each with its cost as read at that moment.
   10. Order: what must come first, and what can wait.
   11. Risks and unknowns; each unknown becomes an open decision or a research item with a named question.
-- **It ends when** every topic is answered or marked unknown and every area is settled (D10). Topics 1, 2, 4 and 9
-  cannot be unknown: without them there is no plan to make. A topic whose answer opens a real fork gets one follow-up
-  question; anything else is decided by the session and written down with its reason.
-- **How long**: about 11 topics plus one question per area, 6 to 8 areas small and 12 to 16 large, so roughly 18
-  questions for a small project and 28 for a large one. What keeps it bounded: nothing the repository answers is
-  asked, an area the owner already decided is deepened in its ADR without a question unless a sourced risk needs
+- **It ends when** every topic is answered or marked unknown and every area is settled (D10). Topics 1, 2, 3, 4 and 9
+  cannot be unknown: without them there is no plan to make, or no depth to advise at. A topic whose answer opens a
+  real fork gets one follow-up question; anything else is decided by the session and written down with its reason.
+  An answer to topics 8-11 that reopens a settled area unchecks that area (D10).
+- **How long**: 11 topics plus one question per area, about 18 to 30 questions in all; the number of areas per kind
+  is fixed by slice 3's data, and T4 measures the real count. What keeps it bounded: nothing the repository answers
+  is asked, an area the owner already decided is deepened in its ADR without a question unless a sourced risk needs
   one, the lesson rides inside the question rather than in extra turns, and "fácil y rápido" is open at every turn.
 - Answers are logged in the owner's words and language, with the date; everything else follows topic 6's artifact
   language. The conversation, lessons included, is in the owner's language.
@@ -229,11 +239,13 @@ lines of the command's output, tested like any other output.
 The sections of js-harness's own origin, with three added at the top: a status note (frozen once onboarding closes;
 later changes go to the roadmap), Goal, Why, What exists (with the read stage's evidence), Decisions already made (a
 table, each with the owner's words and date), **Stack and architecture** (v4: a table `Area | Decision | ADR`, one row
-per decided area of `## Advice`, then a short sketch of the architecture: its modules or parts and the boundaries
-between them), **Owner steps** (v4: topic 9's steps and their costs), Principles of this project, Phases (Goal, Done
-when), Not built (what the installed stack already does), Risks, Open decisions (`OD<n>`, asked one at a time),
-Sources (the interview's dated answers, research links). Research for a named unknown may run here, with its sources;
-none runs without a named question. The ADRs themselves live in `docs/adr/` (D12), never in this frozen file (L12).
+per decided area of `## Advice`, then the architecture as `A:architecture`'s ADR decided it: its modules or parts and
+the boundaries between them; for a small project, one line naming the non-core areas left out and why, so nothing is
+dropped silently), **Owner steps** (v4: topic 9's steps and their costs), Principles of this project, Phases (Goal, Done
+when), Not built (what the installed stack already does), Risks (v4: each ADR whose docs could not be read, D12),
+Open decisions (`OD<n>`, asked one at a time), Sources (the interview's dated answers, research links). Research for a
+named unknown may run here, with its sources; none runs without a named question. The ADRs themselves live in
+`docs/adr/` (D12), never in this frozen file (L12).
 
 ### D5. What the plan holds (`docs/ROADMAP.md`)
 Its `## Checklist` is what `progress` parses, unchanged. Around it, a stricter shape than js-harness's own roadmap,
@@ -241,16 +253,18 @@ which grew before this check existed and is not held to it:
 - A header naming the three documents (this file is the plan, `origin.md` where it came from, `odd/tasks/` one
   feature each); what comes next is read under `## Next`.
 - `## Principles` and `## Decided`, carried from the pre-plan; v4: `## Decided` is `Area | Decision | ADR`, one row per
-  ADR of an area, so the living list of decisions is here and the reasons in `docs/adr/`.
-- `## Advice mode` (v4, D13): one line, `Teaching: on · Mode: full · Level: <area> <level>, ...`, copied from the
-  onboarding's `## Setup`; the orchestrator reads it after the onboarding, and changes it when the owner asks.
-- **The bar** (v4): the profile's bar targets for the project's size become steps of the first build phase, each
-  tagged with its ID, `- [ ] B:<id> <what is measured, and where>` (for example `B:web-vitals-lab` "Lighthouse CI on
-  every pull request holds LCP, CLS and TBT under their budget"); the phases after it name the project's check
-  command in their Done when, which from then on runs those measures. For research and data analysis, where no
-  build tool exists, that first phase writes a check script (`scripts/check` or the project's own) that tests the
-  plan's own bar (the research plan's sections, the search log, a data card per source, a clean rerun), so the Done
-  when commands test something real and are never invented (L12).
+  accepted ADR of an area, so the living list of decisions is here and the reasons in `docs/adr/`.
+- `## Advice mode` (v4, D13): one line in the format of D6, copied from the onboarding's `## Setup` when the roadmap is
+  written; after that the roadmap's line is the one that counts, and it changes when the owner asks (D13).
+- **The bar** (v4): the profile's bar targets for the project's size become steps of the first build phase, as
+  `onboard profile --checklist bar` prints them, each tagged with its ID: `- [ ] B:<id> <what is measured, where, and
+  the command or tool that measures it>` (for example `- [ ] B:web-vitals-lab Lighthouse CI on every pull request
+  holds LCP, CLS and TBT under their budget`). The phases after it name the project's check command in their Done
+  when, which from then on runs those measures. For research and data analysis, where no build tool exists, that
+  first phase writes a check script (`scripts/check` or the project's own) that tests the plan's own bar (the research
+  plan's sections, the search log, a data card per source, a clean rerun), so the Done when commands test something
+  real and are never invented (L12). A target of an area left `open (OD<n>)` goes under `## Open decisions` with
+  that OD instead of the Checklist.
 - `## Phases`: a table `Phase | Goal | Done when | State`, one row per pre-plan phase. Every **Done when** holds at
   least one command in the contract's form (a code span followed by `exits 0`) and may add one observable behavior.
   Where code already exists, the first phase is `What exists`, its steps checked with their evidence, so `progress`
@@ -262,26 +276,61 @@ which grew before this check existed and is not held to it:
   next session's work, one feature per session.
 - `## Open decisions` (every `OD<n>` of the pre-plan still open, by its ID) and `## Risks`.
 
-### D6. `onboard check`
+### D6. `onboard check`, and the formats it reads
 A static check; it never runs a command. Each finding is one line naming the file, what is wrong and the stage it
-sends the work back to; it exits 0 with none, 1 otherwise. `--plan` runs only the roadmap's own rules (stage 5).
-- **The onboarding document**: nine topics checked, topics 1, 2 and 7 answered; `O3` and `O5` checked, each with a
-  sha256 matching its file and a Log line; `## Reviews` holds a round for each of the two reviews.
-- **The pre-plan**: its required headings.
+sends the work back to; it exits 0 with none, 1 otherwise. The lib stays free of the file system: `checkOnboarding`
+and `currentStage` take the ADRs as `adrs` (a `Map` of path to text) and the profiles as `profiles` (the data by
+default, a fixture in tests), so a change to the data never breaks the lib's tests.
+
+**Formats**, each a literal line; `<...>` is filled, everything else is fixed:
+- `## Setup`, one bullet each, `^- (Kind|Size|Level|Teaching|Mode): (.+)$`:
+  - `- Kind: platform` · `- Kind: platform, multiplatform-app` · `- Kind: other (nearest: platform)` · `- Kind: other
+    (nearest: none)`
+  - `- Size: small (L5)` or `- Size: large (L5)`
+  - `- Level: A:backend experienced, A:frontend new, A:data some (L6)`: every area of `## Advice`, each `new`, `some`
+    or `experienced`
+  - `- Teaching: on (L2)` or `- Teaching: off (L9)`
+  - `- Mode: full` or `- Mode: fast (L11)`; `fast` must name a Log line
+- `## Advice`, one checkbox per area, `^- \[( |x)\] (A:[a-z0-9-]+) (.+?)(?: — (.+))?$`, as `--checklist advice` prints
+  it, `- [ ] A:frontend Front end and UX`. Once settled, ` — ` and one of:
+  - `decided, ADR-0004 (L14)`: he took a recommendation
+  - `the owner's, ADR-0002 (L7)`: his own decision, deepened
+  - `open (OD3)`: he decides later
+  - `default, fast, ADR-0009 (L20)`: fast mode only
+  - an area reopened before O6 is unchecked again and loses its suffix
+- **Fast mode's given-up line**, under `## Advice`, after the areas: `- Given up (fast, L20): <the bar IDs and the
+  depth left out>`.
+- **`## Advice mode`** in the roadmap: `Teaching: on · Mode: full · Level: A:backend experienced, A:frontend new`.
+- **Hashes**, as `onboard hash` prints them and the tasks record them, `(<name> sha256:<12 hex>)`:
+  - `answers`, over `## Interview`, `## Advice` and the `Kind` and `Size` lines of `## Setup`. It replaces v3's
+    `interview`, which reads only `## Interview`: no project was onboarded with v3, and a v3 document simply finds
+    stage 3 current again.
+  - `adrs`, over every `docs/adr/*.md`, sorted by path, each path and text.
+  - `Teaching`, `Mode` and `Level` are left out of every hash on purpose (D2).
+- `O2` records `answers`; `O3` records `origin` and `adrs`; `O5` records `roadmap`, `origin` and `adrs`.
+
+**What it checks**:
+- **The onboarding document**: the eleven topics checked, topics 1, 2, 3, 4 and 9 answered; `O3` and `O5` checked,
+  each with its hashes matching and a Log line; `## Reviews` holds a round for each of the two reviews.
+- **The setup and the advice** (v4): `## Setup` holds its five lines in the formats above, `Kind` naming kinds of the
+  profiles or `other`, every `Level` area listed. Until `O6` closes, the areas under `## Advice` are exactly the set
+  `--checklist advice` prints for that `Kind` and `Size`; after it, the set is no longer compared, so a later release
+  that changes the profiles never turns a finished onboarding red. Every checked area carries one of the four
+  suffixes, `default, fast` only with `Mode: fast`.
+- **The ADRs** (v4): each ADR an area names exists and names that area; each has at least one source line in a form
+  of D12; each ADR under `docs/adr/` belongs to a listed area or is marked superseded or withdrawn; a `not read`
+  source has its ADR named under the pre-plan's `## Risks`.
+- **The pre-plan**: its required headings, `## Stack and architecture` with one row per decided area, and
+  `## Owner steps`.
 - **The roadmap**: `parseRoadmap` finds at least one phase, each with at least one step; every Checklist phase has a
   `## Phases` row of the same name, and the other way round; every pre-plan phase is a roadmap phase; every Done when
   cell holds a command in the contract's form; `## Next` exists; every `OD<n>` still open in the pre-plan appears in
-  the roadmap's Open decisions.
+  the roadmap's Open decisions. v4: `## Decided` names every accepted ADR of an area; `## Advice mode` is in the
+  format above (its values are not compared, D2); every `B:` ID `--checklist bar` prints for the `Kind` and `Size` is
+  on a Checklist step, under `## Open decisions` with its area's OD, or named in the given-up line.
+- **`--plan`** (stage 5) runs the roadmap's rules, the v4 ones included, reading the onboarding document for `Kind`,
+  `Size` and the given-up line, so a missing `B:` step is found before the readers, not at Close.
 - **`AGENTS.md`**: the roadmap line, and none of `agentsTemplate`'s placeholder lines left.
-- **v4, the setup and the advice**: `## Setup` holds its five values, `Kind` naming kinds of `profiles-data.mjs` or
-  `other`, and `Mode: fast` only with a Log line in which the owner asked for it; topics 1, 2, 4 and 9 answered; the
-  areas under `## Advice` are exactly the set `onboard profile <kinds> --size <size> --checklist` prints (for `other`,
-  at least its common core areas), each checked as D10 says; every ADR an area names exists, names that area, and has
-  a source with a URL and a read date (D12).
-- **v4, the pre-plan and the plan**: the pre-plan has `## Stack and architecture` with one row per decided area and
-  `## Owner steps`; the roadmap's `## Decided` names every ADR of an area; `## Advice mode` matches `## Setup` (until
-  `O6` closes); every bar ID for the kind and size is on a Checklist step, unless the area it belongs to was left to
-  the fast plan, where the onboarding names it as given up.
 
 It proves structure and ties, as v3's does: that an area was advised and sourced, never that the advice is good. The
 readers and his two approvals stand for that.
@@ -293,121 +342,186 @@ once a project has used it.
 ### D7. Where it is stored, and how a later session resumes
 - **The onboarding itself**: `odd/tasks/onboarding.md` in the new project, written from `onboard template feature`:
   the contract head (Goal: an approved `docs/ROADMAP.md`; Done when: `` `js-harness onboard check` exits 0``),
-  `## What exists`, `## Setup` (v4), `## Interview` (eleven topics), `## Advice` (v4), Tasks `O1`-`O6` (read, pre-plan written, pre-plan approved, plan
-  written, plan approved, closed), `## Reviews` and a Log with each answer and each yes or no verbatim. ODD's engram
+  `## What exists`, `## Setup` (v4), `## Interview` (eleven topics), `## Advice` (v4, empty until stage 2 fills it),
+  Tasks `O1`-`O6` (read, pre-plan written, pre-plan approved, plan written, plan approved, closed), `## Reviews` and
+  a Log with each answer and each yes or no verbatim, plus the session's own lines marked `(session)`. ODD's engram
   mirror holds a copy; `progress` counts it as a feature.
-- **Committed after every stage, and every three answers in the interview**, on the branch `onboarding`: desktop
-  sessions each run in their own worktree, and only what is committed reaches the next one. Each commit runs the
-  project's gate, so a commit per answer would make him wait on every tap; a cut loses at most two answers, and
-  `onboard` names the uncommitted ones. When `onboard` finds no document on this branch, it looks for one on any local
-  or remote branch (`git log --all -- odd/tasks/onboarding.md`) and prints "onboarding in progress on branch X" with
-  the way to resume: where `git worktree list` shows the branch checked out in another worktree, it names that
-  folder; otherwise it prints the command that creates a branch from it here.
+- **What would live only in the chat** is logged: when an area's question is asked, a `(session)` Log line records
+  the recommendation, its options and the sources read, so a compaction before the answer asks the same question
+  again, not a new one.
+- **Committed after every stage, every three answers in the interview, and at once for `## Setup`**, on the branch
+  `onboarding`: desktop sessions each run in their own worktree, and only what is committed reaches the next one.
+  Each commit runs the project's gate, so a commit per answer would make him wait on every tap; a cut loses at most
+  two answers, and `onboard` names the uncommitted ones. When `onboard` finds no document on this branch, it looks
+  for one on any local or remote branch (`git log --all -- odd/tasks/onboarding.md`) and prints "onboarding in
+  progress on branch X" with the way to resume: where `git worktree list` shows the branch checked out in another
+  worktree, it names that folder; otherwise it prints the command that creates a branch from it here.
 - **The result**: `docs/origin.md` (frozen once closed), `docs/adr/` (living: a later decision supersedes an ADR with a
-  new one) and `docs/ROADMAP.md` (living), merged by the owner (stage 8).
-- **Every session after**: Close fills `AGENTS.md` outside the harness block: "What this project is" and
-  "Constraints" from topics 1, 4, 5 and 7, the checking command in "How it works", and one line, `The plan is
+  new one) and `docs/ROADMAP.md` (living), merged by the owner (stage 8). The pull request touches `AGENTS.md`, so it
+  is not documentation-only: it merges under the project's own rule, and where the project has no CI run yet, by the
+  skill's rule for that case (`bin/lib/manifest.mjs:122`).
+- **Every session after**: Close fills `AGENTS.md` outside the harness block: "What this project is" from topic 1,
+  "Constraints" from topics 6, 7 and 9, the checking command in "How it works", and one line, `The plan is
   docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/.` `init`'s template stays
-  unchanged, so no other project's block hash moves.
+  unchanged, so no other project's block hash moves. The Close stage's output (`bin/lib/onboard.mjs:535`) is renumbered
+  to match.
 - **Undo**: everything is a file in the repository, undone by git; nothing goes in the project manifest, so
   `uninstall` never deletes the plan.
 
 ### D8. Edges
 - A project with a plan of its own (`docs/ROADMAP.md` or `docs/origin.md`, and no onboarding document anywhere):
   onboard writes nothing and runs no check; it prints which file is there and that adopting a plan of another shape
-  is not supported yet, so the owner moves the file aside to onboard, or keeps his plan.
+  is not supported yet, so the owner moves the file aside to onboard, or keeps his plan. An advanced owner often
+  arrives with one (L12): adopting it is a known gap, left for a later version.
 - `init` ends with one more line when the project has no `docs/ROADMAP.md`: `next: in a Claude Code or Codex
   session, run js-harness onboard`. `init` never starts the interview itself.
 - `onboard` outside an initialized project refuses, like the other project commands, and names `init`.
 - `onboard template <feature|origin|roadmap>` prints a skeleton; with `--write` it creates the file and refuses one
-  that exists.
-- In Codex, which has no sub-agents here, the readers are another session, as the protocol says.
+  that exists. v4 adds `adr <slug>` (D12).
+- In Codex, which has no sub-agents here, the readers are another session, as the protocol says. Where its sandbox
+  cannot read the web, the ADR sources are `not read` lines (D12), named to the owner at the approval.
+- A change of `Kind` or `Size` before O6 changes the expected set: the areas that leave the set are removed from
+  `## Advice` and their ADRs marked withdrawn; new ones are advised as any other.
 - Tests (T2, T3): a fixture project per stage; the back-transition of a changed approved file; a no at each review;
-  the half-plan of D8; an `## Interview` with fewer than nine topics; a renamed task line keyed by its ID; a Close
+  the half-plan of D8; an `## Interview` with fewer than the topics; a renamed task line keyed by its ID; a Close
   whose check fails on the roadmap, sending it back to stage 6; resume from another branch; the awaiting-merge state.
-
-- An advanced owner who arrives with a plan of his own is still refused by D8 (L12): adopting it is a known gap,
-  left for a later version.
+- Tests (T7-T9), each RED first: `--checklist advice` and `bar` per size, for two joined kinds and for `other` with
+  and without a nearest kind; each `## Setup` line missing or malformed, and `Mode: fast` with no Log line; each of
+  the four area suffixes, and `default, fast` outside fast mode; an ADR missing, of another area, without a source,
+  with a `not read` source not named under Risks, and orphaned; the `answers` hash ignoring a teaching, level or mode
+  change; an ADR edit reopening stage 4; `## Advice mode` malformed; a `B:` step missing, then excused by an open OD
+  and by the given-up line; the order of stage 2 (topics 1-7, the areas, topics 8-11) and its "area n of m" line; a
+  changed `Kind` recomputing the set; the set no longer compared after O6; `template adr`'s numbering, its exclusive
+  create, and a slug refused; the new argument errors; the skill's paragraph (`bin/lib/manifest.test.mjs`); the
+  Onboarded handoff text. The testkit's complete fixtures gain `## Setup` and `## Advice` from a fixture profile.
 
 ### D9. The profiles as data (`bin/lib/profiles-data.mjs`)
 The profiles live in `bin/` because only `bin/` ships, as data like `bin/lib/rules-data.mjs`, and reach the session
 through the command's output, one piece at a time, never as a skill or a per-turn load.
+- **Areas are global**, one definition per ID (`A:frontend`, `A:architecture`): title, what it decides, what to
+  teach at each level (D11) as an outline the session turns into the lesson, its pitfalls, and `after` (the areas it
+  depends on, so they are advised in order: hosting after the stack, CI after the tests).
 - **Each kind**: `id` (`static-site`, `platform`, `multiplatform-app`, `data-analysis`, `research`, and the ones OD-K
-  adds), its title, the default, why, when something else, and its areas and bar.
-- **Each area**: `id` (`A:frontend`), title, `core` (true when a small project needs it too), `after` (the areas it
-  depends on, so they are advised in order: hosting after the stack, CI after the tests), what it decides, the
-  default and its alternatives, what to teach at each level (D11), and its pitfalls.
-- **Common areas**, added to every kind and `other`: cost and budget, legal (privacy law, consent, license, terms),
-  CI and tests, maintenance after launch, product analytics, i18n; each with its own `core` flag.
+  adds), its title, the default, why, when something else, and its list of areas, each with `core` (true when a
+  small project needs it too) and the kind's own default and alternatives for that area. Two joined kinds take the
+  union of their areas by ID, core when either says so; where both give a default for the same area, `--area` prints
+  both and the session's ADR says which it took and why.
+- **Common areas**, in every kind and in `other`: architecture (S4: "de arquitectura"), cost and budget, legal
+  (privacy law, consent, license, terms), CI and tests (S4: "de ci and cd"), maintenance after launch, product
+  analytics, team and timeline, i18n; architecture, cost, legal and CI core. `other (nearest: <kind>)` takes that
+  kind's areas; `other (nearest: none)` takes the common areas only.
 - **Each bar target**: `id` (`B:web-vitals-lab`), its area, the target, `core`, how it is measured (lab in CI or field
-  in production, said apart: Core Web Vitals at p75 are field data, CI measures lab proxies, L12), and its source: a
-  URL, or "a starting target agreed with the owner" where no standard exists, never a bare number.
-- **`onboard profile`** lists the kinds; `onboard profile <kind>` prints one kind (default, why, something else when,
-  its areas and bar for both sizes); `--area <id>` prints one area; `--size <small|large> --checklist` prints the
-  `## Advice` lines and the `B:` steps for the kinds named (`platform,multiplatform-app` joins two). Tool names in
-  the data are starting points the session checks against current docs (D12), never the advice itself.
-- **A shape test** holds every kind to the same parts as the static site's (L11): unique IDs, `after` naming existing
-  areas without a cycle, at least one core area and one core bar target per kind, a source on every target.
+  in production, said apart: Core Web Vitals at p75 are field data, CI measures lab proxies, L12), the command or tool
+  that measures it, and its source: a URL, or "a starting target agreed with the owner" where no standard exists,
+  never a bare number. The targets are agreed in their area's question, one line each, and an adjusted target is
+  recorded in the ADR.
+- **`onboard profile`**: with no argument, the kinds; `onboard profile <kind>[,<kind>]` prints those kinds (default,
+  why, something else when, the areas and bar of both sizes); `--area <id>` prints one area, for the kinds named;
+  `--checklist advice|bar` prints the `## Advice` lines or the `B:` steps. With no kind given, `--area` and
+  `--checklist` read `Kind` and `Size` from the onboarding document, so the session never retypes them. Tool names
+  in the data are starting points the session checks against current docs (D12), never the advice itself.
+- **A shape test** holds every kind to the same parts as the static site's (L11): global IDs unique, `after` naming
+  existing areas without a cycle, every common area in every kind, at least one core bar target per kind, a source
+  and a measuring command on every target.
 
 ### D10. The advice, one area at a time
-For each area under `## Advice`, in `after` order, the session runs `onboard profile <kind> --area <id>`, reads the
-current docs and release notes of what it will recommend, and asks one question:
+For each area under `## Advice`, in `after` order, the session runs `onboard profile --area <id>`, reads the current
+docs and release notes of what it will recommend, logs the question as D7 says, and asks one question:
 - **Its text**: what this area decides, the recommendation and its why, at the depth of the developer's level in it
-  (D11), the sources it read, and what is given up with each alternative. The question tool shows it on a phone, so
-  the lesson in it stays short (about 120 words); the full reasoning goes into the ADR.
+  (D11), the sources it read, what is given up with each alternative, and the area's bar targets, one line each. The
+  question tool shows it on a phone, so the lesson in it stays short (about 120 words); the full reasoning goes into
+  the ADR.
 - **Its options**: the recommendation first, one or two real alternatives, and where the owner already uses
   something else, that one.
+- **The reviewed text it rests on**: the question names its profile area (`bin/lib/profiles-data.mjs`, `A:<id>`)
+  as the reviewed text behind it; a recommendation that departs from the profile says so. Whether that is enough for
+  `rule:double-review` is his to say (OD-R).
 - **An area the owner already decided** (topic 6) is kept as his decision and deepened, not replaced (S3: "sabe que
   tecnologico escoger por ejemplo el stack mern entonces lo guia super avanzado"): its ADR records how to do it well,
   and the session asks only when a sourced risk makes the choice worth reopening.
 - **An existing repository** starts from topic 5's keep, migrate or contain for the area.
-- **Settling an area** checks its line with one of: `decided, ADR-<n> (L<n>)`; `the owner's, ADR-<n> (L<n>)`;
-  `open (OD<n>)` when he wants to decide later; or, in fast mode only, `default, fast (L<n>)` with its ADR written
-  briefly. Every area is advised whatever the developer knows: a backend developer still gets the front end, the
-  architecture and the CI advised (S4).
+- **Settling an area** writes its ADR (D12) and checks its line with one of D6's four suffixes. Every area is
+  advised whatever the developer knows: a backend developer still gets the front end, the architecture and the CI
+  advised (S4).
+- **Reopening an area** before O6: its line is unchecked, a new ADR supersedes the old one, and the question is asked
+  again.
 - **Size** (S6) chooses the areas: small lists only the core ones, each still advised in full; large lists them all.
 
 ### D11. Level, teaching and the fast plan
-- **Level**: per area, `new`, `some` or `experienced`, recorded in `## Setup` as `Level: backend experienced,
-  frontend new, ...`. It sets depth and tone, never coverage (L10). `new`: the concept first, what it is and why it
-  matters, then the recommendation (S3: "lo vas a guiar a enseñar y darle el criterio de acompañamiento de por que
-  hacerlo"). `some`: the why and the alternatives. `experienced`: tradeoffs, pitfalls at scale, and his own choice
-  challenged with sources (S3: "lo guia super avanzado"). "ya sé esto" raises that area at once, logged.
+- **Level**: per area, `new`, `some` or `experienced`, in `## Setup`'s `Level` line. It sets depth and tone, never
+  coverage (L10). `new`: the concept first, what it is and why it matters, then the recommendation (S3: "lo vas a
+  guiar a enseñar y darle el criterio de acompañamiento de por que hacerlo"). `some`: the why and the alternatives.
+  `experienced`: tradeoffs, pitfalls at scale, and his own choice challenged with sources (S3: "lo guia super
+  avanzado"). "ya sé esto" raises that area at once, logged.
 - **Teaching** is on by default and is announced before the first question (S4: "siempre enseñes y des la opcion al
-  usuario a desactivar la enseñanza"). "sin enseñanza" turns it off at any turn and is recorded in `## Setup` in that
-  same commit; then each question gives the recommendation and its why in one line, the alternatives in one line
-  each. It can be turned back on the same way.
+  usuario a desactivar la enseñanza"). "sin enseñanza" turns it off at any turn, takes effect at once, and is
+  committed in `## Setup` right away; then each question gives the recommendation and its why in one line, the
+  alternatives in one line each. It can be turned back on the same way. Neither reopens an approval (D2).
 - **Fast mode** only when the owner asks for it (S4: "a menos que el usuario te indique lo contario osea de que no
-  quiere aprender y de que solo quiere hacerlo facil y rapido"): one question proposes every remaining area's
-  default at once, names once what is given up (depth, measures, the bar targets left out), and records `Mode: fast`
-  with his words. The pre-plan, the roadmap, the readers and both approvals stay.
+  quiere aprender y de que solo quiere hacerlo facil y rapido"): one question proposes every remaining area's profile
+  default at once, names once what is given up (depth, measures, the bar targets left out), records `Mode: fast` with
+  his words and the given-up line. Its ADRs are brief and may cite the profile itself as their source (D12), so fast
+  mode reads no docs. Areas already settled stay as they are; "completo" returns to full mode for the areas still
+  open. Whether the readers and both approvals still run in fast mode is his to say (OD-F); v4 keeps them until he
+  answers.
 
 ### D12. Decisions as ADRs, with their sources
-- `onboard template adr <slug> --write` creates `docs/adr/<nnnn>-<slug>.md`, the next free number, with exclusive
-  create: Status (accepted, date, the Log line), Area (`A:<id>`), Context, Decision, Alternatives considered (each with
-  why not), Consequences (what is given up included), Sources, and the owner's words where the decision is his.
-- **Sources**, one per line: `- <URL> — <what it says> (version <v> where there is one, read <YYYY-MM-DD>)`. Advice
-  ages through names and maintainers as well as versions (L12: Auth.js is maintained by the Better Auth team since
-  2025-09-22), so each ADR records what was true on the day it was read; the profile only says where to look.
+- `onboard template adr <slug>` prints the skeleton; with `--write` it creates `docs/adr/<nnnn>-<slug>.md`, `<nnnn>`
+  the highest number there plus one, four digits, with exclusive create (two sessions racing for one number: the
+  second is refused and runs it again). The slug must match `^[a-z0-9]+(-[a-z0-9]+)*$`, so no path can leave
+  `docs/adr/`. The skeleton: Status (accepted, date, the Log line; later `superseded by ADR-<n>` or `withdrawn`), Area
+  (`A:<id>`), Context, Decision, Alternatives considered (each with why not), Consequences (what is given up
+  included), Sources, and the owner's words where the decision is his.
+- **Sources**, one per line, in one of three forms:
+  - `- <URL> — <what it says> (version <v> where there is one, read <YYYY-MM-DD>)`
+  - `- profile: <kind> A:<id> (js-harness <version>)`: fast mode only
+  - `- not read: <why> (<YYYY-MM-DD>)`: when the docs could not be read (no network, no docs exist, as for some legal
+    or cost areas); the pre-plan names that ADR under `## Risks`, so the owner sees it at the approval
+- Advice ages through names and maintainers as well as versions (L12: Auth.js is maintained by the Better Auth team
+  since 2025-09-22), so each ADR records what was true on the day it was read; the profile only says where to look.
 - ADRs live on after the onboarding: a later decision writes a new ADR that supersedes the old one, and the roadmap's
   `## Decided` follows.
 
 ### D13. The handoff to the build orchestrator, and teaching after it
 - **Handoff** (S3: "cuando se crea el roadmap y todo el plan completo ahi si entra la sesion orquestadora a
-  construir"): the Onboarded state prints that the plan orchestrator's work is done and the next step is a lead
-  session (`js-harness-orchestrator`) that starts from the roadmap's `## Next`; the build goes on as it does now.
-- **Teaching after it** (S7: "En el onboarding y en la sesion orquestadora"): the orchestrator skill gains one
-  paragraph. Where the roadmap has `## Advice mode` with `Teaching: on`, each decision the lead puts to the owner
-  carries its why at the level recorded there, and a phase that touches a decided area names its ADR. "sin
-  enseñanza" or a change of level is recorded in that line through a small documentation pull request, the way the
-  roadmap already changes. Work sessions do not teach; no line goes in `AGENTS.md` (L13).
+  construir"): the plan orchestrator was the onboarding's work session; the build orchestrator is a new lead session,
+  because the lead owns no feature and starts with a clean context (`bin/lib/manifest.mjs:83`). The Onboarded state
+  prints that the plan orchestrator's work is done, the roadmap's `## Next`, and the lead's opening prompt as the
+  skill already gives it (`bin/lib/manifest.mjs:158-162`), so the two never drift apart. That prompt assumes an
+  orchestrator before it; slice 5 adds the first lead's case to the skill: with none before it, the lead starts from
+  the roadmap and the board.
+- **Teaching after it** (S7: "En el onboarding y en la sesion orquestadora"): the lessons reach the owner in the
+  orchestrator's chat, where every question of the project reaches him. The lead does not write them: it never
+  discusses a design (`bin/lib/manifest.mjs:117`, `:127`), and the questions are written by the work sessions
+  (`notify --kind question`, `:98`). So the skill gains one paragraph under "The lead" and one line under "A work
+  session":
+  - a work session that puts a decision to the owner reads the roadmap's `## Advice mode`; with `Teaching: on` it
+    writes the why into the question's text at the level recorded there, and names the ADR of an area the decision
+    touches; it teaches nowhere else;
+  - the lead shows that text unchanged; when the owner says "sin enseñanza" or "ya sé esto", it takes effect at once:
+    the lead sends a one-line notice to the open work sessions, and the work session that next changes the roadmap
+    writes it into `## Advice mode` (the lead never commits, `:117`);
+  - nothing goes in `AGENTS.md` (L13).
+- **Risk**: the skill is installed per home for both hosts (`bin/lib/manifest.mjs:204-213`), so the paragraph reaches
+  every project on the machine. It is high-risk item 3 (a contract others consume), worded so that a project with no
+  `## Advice mode` sees no change; slice 5 carries that Risk line and gets an independent verifier.
 
 ### Cost
-Built (slices 1-2): 836 lines of code and 726 of tests (`wc -l`, 2026-10-20). v4 to build: three slices, each of about 400-500 authored lines
-with tests (slice 3 is mostly data: five kinds and the common areas), one gate per commit, one gentle-ai and one
-Codex review per slice, then T4's real onboarding. Using it in a project: one session of about 18 questions (small)
-to 28 (large), the docs read for each area, and two readers twice (pre-plan, plan), on the reader model the rules
-give.
+Built (slices 1-2): 836 lines of code and 726 of tests (`wc -l`, 2026-10-20). v4 to build:
+- Slice 3 is mostly data, likely more than one slice: global areas with three-level teaching outlines, five kinds, and
+  a sourced bar target each, which needs web reading while it is written. It is forecast from the first kind
+  (static site) before the rest are written, and split into 3a (shape, command, common areas, static site, platform)
+  and 3b (the other three) if the forecast passes about 500 lines.
+- Slices 4 and 5: about 400-500 authored lines each with tests.
+- One gate per commit, one gentle-ai and one Codex review per slice, an independent verifier for slice 5, then T4's
+  real onboarding.
+Using it in a project: one session of about 18 to 30 questions, the docs read for each area, and two readers twice
+(pre-plan with its ADRs, plan), on the reader model the rules give.
+
+### What v4 leaves out, and why
+- A worked example origin and roadmap per kind (L12, item 10): T4's real onboarding produces the first; one per kind
+  would be five more onboardings, so they are a later roadmap step.
+- Kinds past OD-K's answer, and adopting an existing plan (D8): later versions.
 
 ### Product decisions left for him
 Asked one at a time through the lead, after the readers; each is recorded here with his answer.
@@ -417,6 +531,15 @@ Asked one at a time through the lead, after the readers; each is recorded here w
   later profiles. The alternative is adding the three most common of them (CLI or library, API service, AI app) now,
   at about one more slice.
 - **OD-T4** Which project the real onboarding of the done-when runs on, now that S3 rules out a test project.
+- **OD-R** `rule:double-review` is his rule: a plan or design put to him first passes two readers, unless the
+  question names its reviewed text by path. Each area question (6 to 16 of them) puts a choice to the owner. v4's
+  proposal: the profile data passes the two readers when slice 3 writes it, each area question names its profile area
+  as the reviewed text, and every ADR is read by the stage-4 readers before the approval that makes the decisions
+  binding. The alternative is two readers before each area question, which multiplies the onboarding's reader cost
+  by the number of areas.
+- **OD-F** Whether fast mode ("solo quiere hacerlo facil y rapido sin importar tanto la calidad", S4) still runs the
+  two reader rounds and both approvals. v4 keeps them: the approvals are the owner's only checkpoint on the plan, and
+  the readers cost two rounds. The alternative drops the readers in fast mode and keeps the two approvals.
 
 ## Reference profiles
 Draft by the lead (2026-10-20) for S5, with L12's corrections applied in v4; slice 3 turns it into
@@ -444,8 +567,9 @@ ceiling.
     Open Graph and social cards, internal links, no broken links (checked in CI).
   - AEO (answer engines, featured snippets): content that answers a question in its first paragraph, question-shaped
     headings, schema.org JSON-LD (Organization, WebSite, Article, BreadcrumbList; FAQPage only where the content truly
-    is one, and without promising rich results: Google restricted FAQ rich results and deprecated HowTo ones in
-    2023-08, L12).
+    is one, and without promising rich results: Google limited FAQ and HowTo rich results in 2023-08 and deprecated
+    HowTo on 2023-09-13; secondary sources report FAQ rich results ended for all sites on 2026-05-07, to be checked
+    against Google's FAQPage documentation when slice 3 writes this profile).
   - GEO (generative engines): clear entities and facts with sources, author and date on content, structured data,
     pages an AI crawler can read without JavaScript; llms.txt only as an emerging, optional convention, said as such.
   - Teaches: accessibility (WCAG AA), performance budgets, analytics that respect privacy, CI with preview deploys.
@@ -477,7 +601,11 @@ ceiling.
     for the database user.
   - Observability: structured logs, metrics and traces with OpenTelemetry, error tracking (Sentry or equivalent), all
     from the first deploy.
-  - Teaches: architecture, API design, data modeling and indexes, security, CI/CD, observability, cost control.
+  - Front end and UX (S4: "de fronted"): a component system with design tokens, forms validated with the same schema
+    as the API, loading, empty and error states on every screen, WCAG 2.2 AA (keyboard, focus, contrast, labels),
+    Core Web Vitals on public pages, and usability checked with real users on the main journeys.
+  - Teaches: architecture, API design, data modeling and indexes, front end and UX, accessibility, security, CI/CD,
+    observability, cost control.
 - Multiplatform app (iOS, Android, maybe web):
   - Default: React Native with Expo (Expo Router; EAS for builds, store submission and over-the-air updates) when the
     team knows TypeScript or React; Flutter when it starts fresh and wants one rendering engine everywhere.
@@ -563,6 +691,33 @@ ceiling.
   - Unguaranteed: version 3's fixes were not read again (the protocol allows no third round). That nine topics are enough for every kind of project, and that a model fills the sections well;
     `onboard check` proves the plan's structure and its ties to the interview, not that its judgment is good. The
     readers and his two approvals are what stand for that.
+- v4 round 1 (2026-10-20), two read-only readers on claude-opus-5-5 at high effort over a8cdc48b.
+  - Claims reader: six blockers, fifteen advisories. B1 (a teaching or level change reopened approvals) and B5 (v3
+    remnants: nine topics, required 1, 2 and 7, the O2 hash input, Close's topic numbers): `answers` hash without
+    `Teaching`, `Mode` and `Level`, every reference renumbered. B2 (ADRs neither hashed nor read): `adrs` hash in O3 and
+    O5, the readers read them. B3 (per-area questions under `rule:double-review`): the profile is named as reviewed
+    text, and the rule's application is put to him as OD-R. B4 (the lead cannot write lessons): the work session writes
+    the why into its question text, the lead shows it. B6 (Platform lacked front end and UX): added to the profile, and
+    architecture made a common core area. Advisories taken: team and timeline added; the worked examples left out with
+    a reason; a phone summary at each approval; a command on each bar target; HowTo dated 2023-09-13 and the FAQ claim
+    marked to check; `## Setup` committed at once; topic 3 required; asking the level justified against L10; `other`
+    names its nearest kind; question counts made a range measured in T4; slice 3 forecast from one kind; teaching off
+    takes effect at once; open areas' bar targets go under Open decisions; T5 and D8 stale lines fixed.
+  - Gaps reader: nine blockers, thirteen advisories. G1 (line formats): D6 now gives each literal format and its
+    pattern. G2 (who writes `## Advice`): stage 2's output names `--checklist advice`, and `--checklist bar` is
+    separate. G3 and G4: as B5 and B1. G5 (unreadable docs): `not read` sources, named under Risks. G6 (IDs, joined
+    kinds, `other`): global areas, a union by ID, a nearest kind. G7 (a release turning a closed onboarding red): the
+    set is compared only until O6. G8: as B4, with the roadmap line written by a work session. G9 (CLI grammar, slug):
+    specified, slug pattern, `adrs` and `profiles` passed to the lib. Advisories taken: ADRs reopened and superseded
+    (G11), the pending question logged (G12), architecture advised (G13), bar targets agreed in the area's question
+    (G14), `--plan` reads the onboarding document (G15), the handoff reuses the skill's prompt with a first-lead case
+    and the merge rule is named (G16), the skill change carries Risk item 3 and a verifier (G17), fast mode cites the
+    profile and can be left (G18), migration and fixture parameters (G19), the tests named (G20), the done-when
+    lists the new tests (G21), slice 3's size (G22).
+  - Left to him as product decisions: OD-R and OD-F, besides OD-K and OD-T4. Decided in the design, with the reason
+    beside each: a new lead takes over (D13); teaching and level changes reopen nothing (D2); finished onboardings are
+    not held to newer profiles (D6); unsourced ADRs allowed when named at the approval (D12); a small project names the
+    areas it left out (D4).
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
