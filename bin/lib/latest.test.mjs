@@ -124,7 +124,7 @@ test('context7 never fetches when it is hosted', async () => {
   }
 });
 
-test('typescript-lsp reads its latest version from the local plugin marketplace file', () => {
+test('typescript-lsp reads its latest version from the local plugin marketplace file', async () => {
   const home = makeTmpHome();
   try {
     writeJson(
@@ -132,25 +132,25 @@ test('typescript-lsp reads its latest version from the local plugin marketplace 
       { plugins: [{ name: 'typescript-lsp', version: '1.1.0' }, { name: 'other-plugin', version: '9.9.9' }] },
     );
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], '1.1.0');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('typescript-lsp reads null when the marketplace file does not exist', () => {
+test('typescript-lsp reads null when the marketplace file does not exist', async () => {
   const home = makeTmpHome();
   try {
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('typescript-lsp reads null when the marketplace file is malformed', () => {
+test('typescript-lsp reads null when the marketplace file is malformed', async () => {
   const home = makeTmpHome();
   try {
     fs.mkdirSync(
@@ -163,7 +163,7 @@ test('typescript-lsp reads null when the marketplace file is malformed', () => {
       'utf8',
     );
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -174,7 +174,7 @@ function marketplaceFile(home, marketplace) {
   return path.join(home, '.claude', 'plugins', 'marketplaces', marketplace, '.claude-plugin', 'marketplace.json');
 }
 
-test('typescript-lsp reads its latest version offline from the claude-plugins-official marketplace', () => {
+test('typescript-lsp reads its latest version offline from the claude-plugins-official marketplace', async () => {
   const home = makeTmpHome();
   try {
     writeJson(marketplaceFile(home, 'claude-plugins-official'), {
@@ -183,22 +183,22 @@ test('typescript-lsp reads its latest version offline from the claude-plugins-of
     // A same-named plugin in the other marketplace must never leak in: the marketplace name matters.
     writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'typescript-lsp', version: '8.8.8' }] });
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const versions = readLocalLatestVersions(rows, { home });
+    const versions = await readLocalLatestVersions(rows, { home });
     assert.equal(versions['typescript-lsp'], '1.0.1');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('typescript-lsp reads null when its marketplace file does not exist or lacks the plugin', () => {
+test('typescript-lsp reads null when its marketplace file does not exist or lacks the plugin', async () => {
   const home = makeTmpHome();
   try {
     const rows = [{ id: 'typescript-lsp', version: '1.0.0' }];
-    const missing = readLocalLatestVersions(rows, { home });
+    const missing = await readLocalLatestVersions(rows, { home });
     assert.equal(missing['typescript-lsp'], null);
 
     writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'other-plugin', version: '1.0.0' }] });
-    const absent = readLocalLatestVersions(rows, { home });
+    const absent = await readLocalLatestVersions(rows, { home });
     assert.equal(absent['typescript-lsp'], null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -224,11 +224,11 @@ test('codex fetches its latest version from the npm registry, as @openai/codex',
   }
 });
 
-test('codex has no local marketplace source: its latest version is never read from a plugin file', () => {
+test('codex has no local marketplace source: its latest version is never read from a plugin file', async () => {
   const home = makeTmpHome();
   try {
     writeJson(marketplaceFile(home, 'openai-codex'), { plugins: [{ name: 'codex', version: '1.0.7' }] });
-    assert.deepEqual(readLocalLatestVersions([{ id: 'codex', version: '0.130.0' }], { home }), {});
+    assert.deepEqual(await readLocalLatestVersions([{ id: 'codex', version: '0.130.0' }], { home }), {});
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -367,7 +367,7 @@ test('fetchLatestVersions never resolves a local-source row: that is readLocalLa
   }
 });
 
-test('readLocalLatestVersions returns one entry per local-source row only, null where the file has no answer', () => {
+test('readLocalLatestVersions returns one entry per local-source row only, null where the file has no answer', async () => {
   const home = makeTmpHome();
   try {
     writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'typescript-lsp', version: '1.0.1' }] });
@@ -376,7 +376,7 @@ test('readLocalLatestVersions returns one entry per local-source row only, null 
       { id: 'typescript-lsp', version: '1.0.0' },
       { id: 'codex', version: '0.130.0' },
     ];
-    assert.deepEqual(readLocalLatestVersions(rows, { home }), { 'typescript-lsp': '1.0.1' });
+    assert.deepEqual(await readLocalLatestVersions(rows, { home }), { 'typescript-lsp': '1.0.1' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -418,30 +418,30 @@ test('engram-plugin is a local source: never fetched, read on every run', () => 
   assert.equal(isLookupAttempted({ id: 'engram-plugin', version: '0.1.12' }), false);
 });
 
-test('engram-plugin reads the plugin version at the engram binary\'s tag in the marketplace clone, not its working tree', () => {
+test('engram-plugin reads the plugin version at the engram binary\'s tag in the marketplace clone, not its working tree', async () => {
   const home = makeTmpHome();
   try {
     makeEngramClone(home, { tag: 'v3.5.1', atTag: '0.1.14', inTree: '0.1.12' });
-    assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home }), { 'engram-plugin': '0.1.14' });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home }), { 'engram-plugin': '0.1.14' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('engram-plugin reads null when the clone lacks the binary\'s tag, when there is no clone, or no engram version', () => {
+test('engram-plugin reads null when the clone lacks the binary\'s tag, when there is no clone, or no engram version', async () => {
   const home = makeTmpHome();
   try {
-    assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home }), { 'engram-plugin': null });
     makeEngramClone(home, { tag: 'v3.5.1', atTag: '0.1.14', inTree: '0.1.12' });
-    assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
-    assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS(null), { home }), { 'engram-plugin': null });
-    assert.deepEqual(readLocalLatestVersions([{ id: 'engram-plugin', version: '0.1.12' }], { home }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS(null), { home }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions([{ id: 'engram-plugin', version: '0.1.12' }], { home }), { 'engram-plugin': null });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('engram-plugin reads null, never throws, when git fails, times out or prints a manifest with no engram entry', () => {
+test('engram-plugin reads null, never throws, when git fails, times out or prints a manifest with no engram entry', async () => {
   const home = makeTmpHome();
   try {
     fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
@@ -453,11 +453,11 @@ test('engram-plugin reads null, never throws, when git fails, times out or print
     ];
     for (const answer of answers) {
       const calls = [];
-      const spawn = (cmd, args) => {
-        calls.push([cmd, ...args].join(' '));
+      const git = async (args) => {
+        calls.push(['git', ...args].join(' '));
         return answer;
       };
-      assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, spawn }), { 'engram-plugin': null });
+      assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, git }), { 'engram-plugin': null });
       assert.match(calls[0], /^git -C .+ show v3\.5\.1:\.claude-plugin\/marketplace\.json$/);
     }
   } finally {
@@ -465,16 +465,16 @@ test('engram-plugin reads null, never throws, when git fails, times out or print
   }
 });
 
-test('engram-plugin never asks git about a marketplace folder that is not a repository itself, so a repository above it is never read', () => {
+test('engram-plugin never asks git about a marketplace folder that is not a repository itself, so a repository above it is never read', async () => {
   const home = makeTmpHome();
   try {
     fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram'), { recursive: true });
     const calls = [];
-    const spawn = (cmd, args) => {
-      calls.push([cmd, ...args].join(' '));
+    const git = async (args) => {
+      calls.push(['git', ...args].join(' '));
       return { status: 0, stdout: JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.14' }] }), stderr: '' };
     };
-    assert.deepEqual(readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, spawn }), { 'engram-plugin': null });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.5.1'), { home, git }), { 'engram-plugin': null });
     assert.deepEqual(calls, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

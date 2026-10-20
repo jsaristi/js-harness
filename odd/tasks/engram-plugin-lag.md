@@ -109,3 +109,9 @@ Forecast: ~200 authored lines. Under the ~400 budget: one PR against `main`. Str
   network lookups start before the git read, with a test of the order), R3-prose-in-fix-array (a
   `--json` test pins the fix's shape; a first prose line in a fix list has precedent in the `unseen`
   and `worktrees` rows).
+- L6 2026-10-20 `e234e5d` assessed alone against `a6f525e4`: medium, 111 lines, `review_due: false`
+  (`under_budget`), kept in the slice. Codex review of `37a5709..e234e5d`, 2 parts, recorded: one P2,
+  taken: the git read used `spawnSync`, which blocks the event loop, so starting the requests first did
+  not help (their timeouts ran out while their responses could not be read). Now git runs through
+  `execFile`, `readLocalLatestVersions` is async and runs beside the network lookups, and a test that
+  deadlocks unless both run at once pins it.

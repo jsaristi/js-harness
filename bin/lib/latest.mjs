@@ -6,7 +6,7 @@
 // a malformed body for one tool never blocks the others, and `doctor` is a report, not a gate.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { compareSemver } from './version.mjs';
 
 const TIMEOUT_MS = 5000;
@@ -96,16 +96,28 @@ function pluginVersionIn(text, pluginName) {
 /** The plugin version the engram binary's own release tag ships: read with git from Claude Code's clone of the
  * engram marketplace at `v<binary version>`, never from the clone's working tree, which can sit behind the refs
  * Claude Code fetched (odd/tasks/engram-plugin-lag.md, D2). `rows` holds the engram row. No engram version, no
- * clone, no git, no such tag or a manifest with no engram entry is `null`; git runs without a shell and is bounded
- * by the same 5s as a request. A folder with no `.git` of its own is no clone: git would read a repository above it. */
-function readEngramPluginAtTag({ home, spawn = spawnSync }, _row, rows = []) {
+ * clone, no git, no such tag or a manifest with no engram entry is `null`. A folder with no `.git` of its own is no
+ * clone: git would read a repository above it. `git` is the seam that runs it (`runGit` below). */
+async function readEngramPluginAtTag({ home, git = runGit }, _row, rows = []) {
   const binary = rows.find((row) => row.id === 'engram')?.version;
   if (typeof binary !== 'string' || !PLAIN_SEMVER_RE.test(binary)) return null;
   const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
   if (!fs.existsSync(path.join(clone, '.git'))) return null;
-  const result = spawn('git', ['-C', clone, 'show', `v${binary}:.claude-plugin/marketplace.json`], { encoding: 'utf8', timeout: TIMEOUT_MS });
+  const result = await git(['-C', clone, 'show', `v${binary}:.claude-plugin/marketplace.json`]);
   if (!result || result.error || result.signal || result.status !== 0) return null;
   return pluginVersionIn(result.stdout ?? '', 'engram');
+}
+
+/** Runs git with `args`, no shell, bounded by the same 5s as a request, and resolves to `{ status, stdout }`, or
+ * `{ status, signal, error }` when it fails or is killed. Never rejects. Asynchronous, so the lookups in flight keep
+ * reading their responses while it runs: a blocked event loop lets their timeouts run out unread (Codex P2). */
+function runGit(args) {
+  return new Promise((resolve) => {
+    execFile('git', args, { encoding: 'utf8', timeout: TIMEOUT_MS, windowsHide: true }, (error, stdout) => {
+      if (!error) resolve({ status: 0, stdout });
+      else resolve({ status: typeof error.code === 'number' ? error.code : null, signal: error.signal ?? null, error, stdout });
+    });
+  });
 }
 
 /** Per-tool latest-version source. Each receives the shared deps (`fetch`, `home`) and that tool's
@@ -121,9 +133,9 @@ const SOURCES = {
 };
 
 /** Latest-version sources that are a local file, not a request. Each receives the shared deps
- * (`home`, and `spawn` for git), that tool's row and every row, and returns a version string or `null`,
- * synchronously. They are read on every run, online or `--offline`, and never cached: a plugin installed
- * after a run that found no answer must be compared at once, not up to 6h later (T6d, Codex P2). */
+ * (`home`, and `git` for the engram plugin's), that tool's row and every row, and returns a version string or
+ * `null`, or a promise of one. They are read on every run, online or `--offline`, and never cached: a plugin
+ * installed after a run that found no answer must be compared at once, not up to 6h later (T6d, Codex P2). */
 const LOCAL_SOURCES = {
   'typescript-lsp': ({ home }) => readMarketplacePluginVersion(home, 'claude-plugins-official', 'typescript-lsp'),
   'engram-plugin': readEngramPluginAtTag,
@@ -135,15 +147,17 @@ export function isLocalSource(row) {
 }
 
 /** Reads every local-source row's latest version: a map of tool id to version string or `null`,
- * with an entry only for the rows `isLocalSource` says yes to. Never throws. */
-export function readLocalLatestVersions(rows, deps) {
-  const entries = rows.filter(isLocalSource).map((row) => {
-    try {
-      return [row.id, LOCAL_SOURCES[row.id](deps, row, rows)];
-    } catch {
-      return [row.id, null];
-    }
-  });
+ * with an entry only for the rows `isLocalSource` says yes to, read in parallel. Never rejects. */
+export async function readLocalLatestVersions(rows, deps) {
+  const entries = await Promise.all(
+    rows.filter(isLocalSource).map(async (row) => {
+      try {
+        return [row.id, await LOCAL_SOURCES[row.id](deps, row, rows)];
+      } catch {
+        return [row.id, null];
+      }
+    }),
+  );
   return Object.fromEntries(entries);
 }
 

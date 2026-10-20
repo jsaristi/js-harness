@@ -112,11 +112,12 @@ export async function resolveLatestVersions(rows, deps) {
   // cache — it is read on every run, online or `--offline`, and overlaid on the cached or fetched
   // network versions. It is not written to the cache either, and (see `isLookupAttempted`) it never
   // counts as an attempted lookup below, so a local answer can neither hide an outage nor be stale.
-  // The network lookups start first: the engram plugin's local read is a git process (`spawn`) that blocks until it
-  // ends or times out, and requests already sent keep their own clock meanwhile.
-  const network = resolveNetworkVersions(rows.filter((row) => !isLocalSource(row)), deps);
-  const local = readLocalLatestVersions(rows, { home: deps.home, spawn: deps.spawn });
-  return { ...(await network), ...local };
+  // The engram plugin's local read runs git (`deps.git`, a seam for tests) beside the network lookups, never before.
+  const [network, local] = await Promise.all([
+    resolveNetworkVersions(rows.filter((row) => !isLocalSource(row)), deps),
+    readLocalLatestVersions(rows, { home: deps.home, git: deps.git }),
+  ]);
+  return { ...network, ...local };
 }
 
 /** The cache-backed half of `resolveLatestVersions`: every row here is a network lookup (or has no
@@ -186,7 +187,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request, and
   // that request runs beside the lookups of the latest versions, so a slow network is waited on once, not twice.
   const [latestVersions, rules] = await Promise.all([
-    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now, spawn }),
+    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now, git: deps.git }),
     harnessRulesRow({
       project,
       declared: harness.declared,
