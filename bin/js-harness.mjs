@@ -21,6 +21,7 @@ Commands:
   doctor      Report the stack's tools: installed, configured, up to date, each gap with its fix; whether Claude Code and the desktop app share an account and each recorded remote server runs; whether the installed copy's rules are behind main's; the Claude app's, gentle-ai's and the stack's updates, each stale until its review is recorded (--host-reviewed, --gentle-ai-reviewed, --stack-reviewed); the sessions to clear (unseen); and the worktrees on branches main already holds. --json prints the rows, --offline skips the newer-version lookups, --hook is the session-start hook.
   stack       Read-only: the tools the harness requires that are missing on this machine for this project, in the order stack install runs them, each with its command and its exact undo (the Codex CLI and codegraph while their switches are not off, and codegraph's registrations in Claude Code and Codex); gentle-ai's own installer, logins and the prerequisites git and gh are named as steps of yours and never run, and context7 and typescript-lsp are listed as optional. --pm <command> names the package manager (else JS_HARNESS_PM, else the one that installed this copy); --json prints { mandatory, manual, optional }. Exit 0 when nothing required is missing, 1 when something is, 2 for a usage error. stack install [--prefix <dir>] [--tool <id>]... [--yes] runs those installs in that order, each printed with its undo and asked y/N in a terminal; without one it runs only --yes with --tool; each is recorded before it starts, so uninstall machine undoes it.
   progress    Show roadmap and feature progress from their checkboxes; --pace [--days <n>] gives the tasks closed, reopened, added and removed each day from the default branch's history; --json gives the data; --cwd names another project.
+  report      The facts a status report is written from, since the last report: the pull requests merged into the default branch with their commits, each session's last notice, the questions answered and still open, and the roadmap phase by phase with what is left. --since <time> sets the cut; --mark records this report as the last one in the channel record, the only thing it writes.
   throughput  Table of a window's UTC days of work, every figure naming its source: pull requests merged and how long each waited, the gate lock's busy time and waits, commit gates here and on GitHub, lands, failing tests, Codex reviews, tasks closed and added, conflicts by file. js-harness throughput [--since <day>] [--until <day>] [--against <since>..<until>] [--json], where --against compares the window with an equal one before it, a row each, and judges nothing under the days of the rule throughput-compare-days a side; throughput snapshot [--day <day>] [--gate-log <file>]... keeps a settled day's gates under the home (.js-harness/throughput/<project>), because the gate log rotates in about two days; throughput status names a day with none and the reviews due; throughput reviewed (--day <day> | --shipped <day>) --found nothing|candidates and throughput shipped <item> [--day <day>] record the review's outcomes, which set when the next is due. The table and status write nothing.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition), modes (each task's effort and sub-agent models).
   summary     The summary a work session leaves when it finishes: template --title "<title>" prints it, headed by the title and naming its file docs/sessions/<date>-<title-slug>.md; path --title prints only that file. The session fills it with facts and their evidence, commits and pushes it, and closes with notify --kind closed --summary <file>.
@@ -69,6 +70,7 @@ const COMMANDS = {
   doctor: async () => (await import('./doctor.mjs')).doctorCommand,
   stack: async () => (await import('./stack.mjs')).stackMain,
   progress: async () => (await import('./progress.mjs')).progressMain,
+  report: async () => (await import('./report.mjs')).reportMain,
   throughput: async () => (await import('./throughput.mjs')).throughputMain,
   contract: async () => (await import('./contract.mjs')).contractMain,
   summary: async () => (await import('./summary.mjs')).summaryMain,
@@ -114,6 +116,7 @@ const HELP = {
   upgrade: ['./update.mjs', 'UPGRADE_USAGE'],
   doctor: ['./doctor.mjs', 'USAGE'],
   progress: ['./progress.mjs', 'USAGE'],
+  report: ['./report.mjs', 'USAGE'],
   throughput: ['./throughput.mjs', 'USAGE'],
   contract: ['./contract.mjs', 'USAGE'],
   summary: ['./summary.mjs', 'USAGE'],

@@ -102,7 +102,7 @@ that leads other sessions, and are rarely typed by hand:
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, functions, remote, memory, fetch, backup | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, wait |
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, functions, remote, memory, fetch, backup | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, wait |
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
 `my-project` is the project's folder. A line `…` marks output left out; output that grows with
@@ -589,6 +589,51 @@ Pace of origin/main, its first-parent line, by committer day over the last 2 day
 Total       closed 111  reopened 0  added 89  removed 2
 A day       closed 55.5  reopened 0  added 44.5  removed 1
 ```
+
+### js-harness report
+
+The facts a status report is written from, since the last report: the pull requests merged into
+the default branch (origin/HEAD, else `main`, else `HEAD`) with the subjects of their commits,
+each session that wrote a notice with its last one, the questions answered and those still open,
+and the roadmap as the default branch holds it, phase by phase with what is left. The
+orchestrator skill tells the lead to run it when the user asks how the work is going, and to
+answer from it in six sections.
+
+The cut is `--since <time>` (an ISO 8601 time), else the last report recorded, else the last 24
+hours; the first line says which. Reading writes nothing. `--mark` records this report as the
+last one: one line in the project's channel record under the home
+(`.js-harness/channel/<project>.jsonl`), which `uninstall` removes with the rest of the channel.
+The line keeps the commit of the default branch the report read, and the next report lists the
+merges that branch gained since that commit, so a pull request fetched after a report is still
+shown. A section whose source cannot be read says why in its place, the command exits 1, and
+`--mark` then records nothing, since the next report would start after facts this one never
+showed.
+
+```console
+$ js-harness report
+Since 2026-10-19 19:59Z, the last 24 hours: no report is recorded
+
+Landed on origin/main: 9 pull requests
+…
+  #478 fix/notify-worktree-title  merged 2026-10-20 11:42Z
+      - fix(notify): read the title of a session opened in a worktree
+      - docs(notify): record the reviews of the worktree title fix
+…
+Sessions: 8 wrote notices
+…
+  JH 35 · notify title from worktree sessions  closed 2026-10-20 11:39Z  (2 notices)
+      JH 35: PR 478 ready (notify reads titles of worktree sessions; heldWork takes the session's own close). Follow-up proposed: board and transcriptNamed.
+…
+Questions: 10 answered, 1 open
+…
+Map: docs/ROADMAP.md on origin/main  80/85  94%
+…
+  [ ] Onboarding  1/2  50%
+      - Design, past its two readers: the interview, the pre-plan, the plan and the roadmap it writes
+```
+
+With `--mark`, the same report ends in one more line, `Recorded this report at <time>`, and the
+next report starts at that time.
 
 ### js-harness throughput
 

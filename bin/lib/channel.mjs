@@ -23,6 +23,10 @@ export const OPENING_SCHEMA = 'js-harness.channel-opening/v1';
  * lives in the app only) is known by one: the board and `notify` take the title from the latest reading
  * of that session's id. */
 export const READING_SCHEMA = 'js-harness.channel-reading/v1';
+/** The schema of a report line: `report --mark` appends it when the lead gives the user a status report, so
+ * that "since the last report" is a time read from the record (odd/tasks/status-report.md, S4). Like a reading,
+ * it is not a notice: it tells nobody anything and wakes no wait. */
+export const REPORT_SCHEMA = 'js-harness.channel-report/v1';
 
 /** The kinds of a notice, and no other: each one costs its receiver a turn. `opened` (feature, worktree,
  * branch), `waiting` (on what, and whose it is), `closed` (what was delivered, and that nothing more goes
@@ -321,6 +325,21 @@ export function appendReading(home, slug, reading) {
   return file;
 }
 
+/** A report line as the record keeps it: `{ schema, at, by, head }`, `at` the time the report was given (ISO), `by`
+ * the id of the session that gave it and `head` the commit of the default branch the report read, each `null` when
+ * not known. The next report lists what the branch gained since `head`, so a merge fetched late is not lost. */
+export function newReport({ at, by = null, head = null }) {
+  const known = (value) => (typeof value === 'string' && value !== '' ? value : null);
+  return { schema: REPORT_SCHEMA, at, by: known(by), head: known(head) };
+}
+
+/** Appends `report` (`newReport`) to the record of the project `slug` under `home`, and returns the record's path. */
+export function appendReport(home, slug, report) {
+  const file = recordPath(home, slug);
+  appendLine(file, JSON.stringify(report));
+  return file;
+}
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -338,6 +357,11 @@ function isReading(value) {
     typeof value.reader.id === 'string' &&
     value.reader.id !== ''
   );
+}
+
+/** Whether `value` is a report line of this schema, with a time that parses. */
+function isReport(value) {
+  return isObject(value) && value.schema === REPORT_SCHEMA && typeof value.at === 'string' && Number.isFinite(Date.parse(value.at));
 }
 
 /** Whether `value` is a notice of this schema: enough of one for a board to print it. A question needs its id,
@@ -359,13 +383,14 @@ function isNotice(value) {
   );
 }
 
-/** The record of the project `slug` under `home`: `{ path, notices, readings, questions, skipped }`, the notices
- * and the readings (`newReading`), each in the order written, and `questions`: the valid `question` notices, each
+/** The record of the project `slug` under `home`: `{ path, notices, readings, reports, questions, skipped }`, the
+ * notices, the readings (`newReading`) and the report lines (`newReport`), each in the order written, and
+ * `questions`: the valid `question` notices, each
  * as `{ number, notice }`. A question's number is its ordinal among the lines of the record that are question
  * notices, valid or not, so a broken one still takes a number and the next valid question has the following one:
  * the number is computed here, never stored, so that the record needs no lock. A project with no record yet has
- * none. A line that is torn (a session appends while this reads), that is not JSON or that is neither a notice nor
- * a reading of these schemas is counted in `skipped` and left out, never fatal. A record that is there and cannot
+ * none. A line that is torn (a session appends while this reads), that is not JSON or that is not a notice, a
+ * reading or a report line of these schemas is counted in `skipped` and left out, never fatal. A record that is there and cannot
  * be read is `unavailable` with the reason, so that "could not look" is never read as "no notices". */
 export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   const file = recordPath(home, slug);
@@ -373,11 +398,12 @@ export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(f
   try {
     text = readFile(file);
   } catch (err) {
-    const none = { path: file, notices: [], readings: [], questions: [], skipped: 0 };
-    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], questions: [], skipped: 0 };
+    const none = { path: file, notices: [], readings: [], reports: [], questions: [], skipped: 0 };
+    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], reports: [], questions: [], skipped: 0 };
   }
   const notices = [];
   const readings = [];
+  const reports = [];
   const questions = [];
   let questionLines = 0;
   let skipped = 0;
@@ -394,9 +420,10 @@ export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(f
       notices.push(parsed);
       if (parsed.kind === 'question') questions.push({ number: questionLines, notice: parsed });
     } else if (isReading(parsed)) readings.push(parsed);
+    else if (isReport(parsed)) reports.push(parsed);
     else skipped += 1;
   }
-  return { path: file, notices, readings, questions, skipped };
+  return { path: file, notices, readings, reports, questions, skipped };
 }
 
 /** The questions of a record (`readNotices`), in the order written: `[{ number, notice, closed }]`. `closed` is

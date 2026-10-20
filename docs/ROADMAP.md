@@ -189,6 +189,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `sessions --watch` returns when the board changes and costs nothing while it does not
 - [x] The orchestrator ships as a skill the installer writes and removes through the manifest
 - [x] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
+- [x] The status report: `js-harness report --mark` gives the facts since the last report, and the orchestrator skill answers "how is it going" from them in six sections (`odd/tasks/status-report.md`)
 
 ### F6 Codex parity
 - [x] The eval tasks run on Codex
