@@ -23,7 +23,7 @@ makes that path the default for every project and checks its result.
 - `node --test bin/lib/profiles-data.test.mjs bin/lib/manifest.test.mjs` exits 0 (v4, slices 3 and 5)
 - `npm run check` exits 0
 - Two real onboardings (T4, S9), not test projects (S3): a static website in Astro (`static-site`), and a platform
-  pre-project (`pre-project`, nearest kind `platform`, D14). In each: one question at a time, both readers' rounds
+  pre-project (`pre-project`, nearest kind `platform`, D14). In each: a guided conversation and a few deepening questions, both readers' rounds
   recorded, both approvals, then `js-harness onboard check` exits 0 there and `js-harness progress` lists every phase.
 
 ## In scope / Out of scope
@@ -112,6 +112,12 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - S11. His words on the interview's feel (2026-10-20, transcript 908805db line 9112, typed to the lead while
   Pregunta 33 was pending, not an answer to it), verbatim: "Pero esta bien las 33 preguntas, pero me gusta mas que sea
   hablado y como guiado"
+- S12. His answer to Pregunta 33, OD-F (2026-10-20, transcript 908805db line 9165, read with `js-harness sessions
+  --quote`). The question was whether fast mode keeps the two readers and both approvals: "Sí, las dos (Recommended)"
+  or "Sin lectores". Typed, verbatim: "Si pero no necesariamente tienen que ser 33 preguntas todas seguidas, para que un
+  formulario si tu eres una IA y puedes charlando y con una buena explicacion entender y descifrar lo que quiere el
+  usuario y ahi si por ultimo hace unas pocas preguntas para ahondar mas, osea no hay necesidad de hacer un formulario
+  por que eres una guia y un asesor con el que se puede hablar y ademas tiene muy buen analisis y deduccion"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
@@ -182,7 +188,7 @@ needs the owner in the loop, and spend from a hidden child is spend he does not 
 
 ### D2. Stages, read from files; instructions printed one stage at a time
 `onboard` with no flag reads the project's files and git, prints the current stage, what it must produce, how much is
-left (for the interview, "topic 4 of 11" or "area 3 of 8 (A:frontend)") and the next step, in English, and exits 0.
+left (for the conversation, "covered: 7 of 11 topics, 3 of 8 areas") and the next step, in English, and exits 0.
 Nothing about the stage lives in the conversation, so a new session, a compaction or the other host resumes by running
 `onboard` again; stopping between any two answers is safe. The onboarding document (D7) carries fixed IDs that the
 stages key on:
@@ -190,9 +196,9 @@ stages key on:
 | # | Stage | Current when | What the session does |
 |---|-------|--------------|-----------------------|
 | 1 | Read | no `odd/tasks/onboarding.md` on this branch and none on another (D7) | Reads the repository (README, manifests, `git log`, docs, codegraph where there is code); runs `onboard template feature --write`; fills L1 with the owner's request and `## What exists` with what it found, each with its evidence |
-| 2 | Interview and advice | a `## Setup` value is missing or malformed, a topic under `## Interview` or an area under `## Advice` is unchecked, or the topics or areas differ from the expected set (D3, D10) | Asks the next item, one question, waits; logs the answer verbatim with its date and checks the item: a topic as `answered` or `unknown (OD<n>)`, an area as D10 says. Once topics 1-3 are answered and `## Advice` is still empty, the output's next step is to run `onboard profile --checklist advice` and paste what it prints under `## Advice` |
+| 2 | Conversation and advice | a `## Setup` value is missing or malformed, a topic under `## Interview` or an area under `## Advice` is unchecked, or the topics or areas differ from the expected set (D3, D10) | Guides the conversation toward what is still open (D3), logs what settles each item and checks it: a topic as `answered`, `deduced` or `unknown (OD<n>)`, an area as D10 says; then the summary and the few deepening questions. Once topics 1-3 are answered and `## Advice` is still empty, the output's next step is to run `onboard profile --checklist advice` and paste what it prints under `## Advice` |
 | 3 | Pre-plan | every topic and area checked, and `O2` unchecked or its recorded `answers` hash (D6) differs | `onboard template origin --write` the first time, then fills or revises the file from the answers and the ADRs, checks `O2` with the `answers` hash `onboard hash` prints |
-| 4 | Pre-plan review | `O2` checked, and `O3` unchecked or one of its two recorded hashes (`origin`, `adrs`) differs | Two readers read the pre-plan and every ADR, findings under `## Reviews`; one question to the owner, whose text is a summary of at most ten lines that a phone shows whole, naming the files. A yes checks `O3` with both hashes and the Log line. A no is logged verbatim, the files revised, a second round reads only the blockers, and he is asked again |
+| 4 | Pre-plan review | `O2` checked, and `O3` unchecked or one of its two recorded hashes (`origin`, `adrs`) differs | Two readers read the pre-plan and every ADR, findings under `## Reviews`; one question to the owner, whose text is a summary a phone shows whole: the plan in a few lines and every area in one line with its proposal and ADR, so his yes confirms them (D10). A yes checks `O3` with both hashes and the Log line. A no is logged verbatim, the files revised, a second round reads only the blockers, and he is asked again |
 | 5 | Plan | `O3` holds, `O4` unchecked | `onboard template roadmap --write`, fills it from the approved pre-plan and ADRs, pastes `onboard profile --checklist bar` into its first build phase, runs `onboard check --plan` until it exits 0, checks `O4` |
 | 6 | Plan review | `O4` checked, and `O5` unchecked or one of its three recorded hashes (`roadmap`, `origin`, `adrs`) differs | As stage 4, for the roadmap, revising it first from the changed pre-plan or ADRs |
 | 7 | Close | `O5` holds, `onboard check` fails | Fills `AGENTS.md` (D7); each failing finding names the stage it sends back to; commits |
@@ -206,41 +212,36 @@ nothing (S4 asks for teaching to be easy to turn off). The hashes are checked on
 that the roadmap is the living plan and changes like any other. Each stage's instructions are a few lines of the
 command's output, tested like any other output.
 
-### D3. The interview
-- **Read before asking.** Nothing the repository already answers is asked; the session states what it read and asks
-  only to confirm what it inferred, as one question.
-- **A guided conversation, not a form** (S11: "me gusta mas que sea hablado y como guiado"). The plan orchestrator
-  talks the owner through the onboarding: before each topic or area it says, in a short message in the chat, where
-  they are in the plan, what this step is about and why it matters for the project, and, for an area, what it
-  recommends and why, at his level. Only then does it ask. The question is the decision point at the end of that talk,
-  not the talk itself. He can answer in his own words instead of tapping, ask back ("¿y por qué no X?"), or think out
-  loud; the session answers, keeps guiding, and asks again only when a decision is still open. After each answer it
-  says in a line what it understood and what comes next, so he always knows where the conversation is going.
-- **One decision at a time**, through the question tool where the host has one (Claude Code), with a recommended
-  option first, so he can answer from his phone with a tap; plain text in Codex. A short answer that fits two
-  readings is asked about, not guessed. In a new project no build lead runs yet, so the plan orchestrator asks the
-  owner directly; where a lead already holds the project, the question goes through it (`js-harness-orchestrator`,
-  "Questions to the user"). One session holds the onboarding.
-- **Before the first question**, one line tells the owner that teaching is on, and that "sin enseñanza" turns it off
-  and "fácil y rápido" asks for the fast plan (S4). The session logs that it said so, as a Log line marked
-  `(session)`, and `## Setup` records `Teaching: on (L<n>)`.
-- **`## Setup`** (formats in D6): `Kind`, `Size`, `Level`, `Teaching`, `Mode`. The template writes `- Mode: full`
-  and a bare `- Teaching: on`, which D6's format does not accept, so stage 2 stays current until the announcement is
-  logged and the line reads `Teaching: on (L<n>)`. `Level` is written at topic 3 for the layers, and completed in the
-  same commit that pastes `## Advice`: each area takes the level of the layer it belongs to, and an area of no layer
-  (cost, legal, team and timeline) takes `some` unless the owner said otherwise. A change to `## Setup` is committed at once, apart from the
-  every-three-answers rhythm of D7, because a lost teaching or mode choice would be asked again (L12); it is rare.
-- **The eleven topics**, in order, each a checkbox under `## Interview`; the areas of `## Advice` (D10) come between
-  topics 7 and 8, because scope, order and risks depend on what was decided:
+### D3. The conversation
+S11 and S12 replace the interview of one question after another: "no hay necesidad de hacer un formulario por que eres
+una guia y un asesor con el que se puede hablar y ademas tiene muy buen analisis y deduccion". The plan orchestrator
+talks with the owner, explains, understands and deduces; it asks only a few questions at the end, to go deeper.
+- **Read before talking.** The session opens with what the repository already says, in a few lines, so nothing it
+  shows is asked.
+- **It opens the conversation, it does not interrogate.** Its first message says who it is in this project (the plan
+  orchestrator, who will advise every area and then hand over to the build orchestrator) and what the conversation
+  will produce (the pre-plan, its decisions and the roadmap). It says that teaching is on, that "sin enseñanza" turns
+  it off and "fácil y rápido" asks for the fast plan (S4). Then it invites him to tell the project in his own words:
+  what it is, for whom, why now. The session logs that it said so, as a Log line marked `(session)`, and `## Setup`
+  records `Teaching: on (L<n>)`.
+- **It guides** (S11: "me gusta mas que sea hablado y como guiado"). From what he says, the session follows the
+  thread, asks open questions in plain chat where something is missing ("¿quién lo va a usar primero?"), explains why
+  each thing matters for the plan, and says in a line, every so often, what it has understood and what comes next.
+  He can answer at any length, change his mind, ask back ("¿y por qué no X?") or think out loud; there are no
+  options to tap in this part.
+- **It deduces** (S12: "entender y descifrar lo que quiere el usuario"). It does not wait to be told what it can read
+  from the conversation and the repository: the kind and the size, the developer's level in each layer (from how he
+  talks about it, as L10 first proposed), the outcome, the constraints. Each deduction is written down with the words
+  it came from (D7) and shown to him in the summary below; none is final before he confirms it.
+- **It covers the eleven topics**, each a checkbox under `## Interview`. They are what the conversation must have
+  covered, not questions to read out in order. The areas of `## Advice` (D10) come after topic 7, because scope, order
+  and risks depend on what was decided:
   1. What the project is, for whom, and its kind: one or more of the profiles' kinds (D9), or `other` with the nearest
-     kind. The session proposes the kind it reads from the answer and the repository; sets `Kind`.
+     kind. Sets `Kind`.
   2. Its size: small (only what is needed) or large (S6). Sets `Size`, which chooses the areas and the bar.
-  3. The developer's level in the kind's areas, grouped by layer (for a platform: back end, front end, data, delivery),
-     proposed from the repository and the answers so far and confirmed in one question whose recommended option is
-     the reading itself. Sets `Level`. This departs from L10 ("read, never asked"): S3 makes the level decide how
-     deep every lesson goes ("si el desarrollador del proyecto sabe que hacer" or "es un programador muy junior"), so
-     a wrong guess would be paid in every area; one tap confirms it. "ya sé esto" during the advice raises one area's
-     level at once (D11).
+  3. The developer's level in the kind's areas, grouped by layer (for a platform: back end, front end, data,
+     delivery). Sets `Level` (S3: "si el desarrollador del proyecto sabe que hacer" or "es un programador muy
+     junior"). "ya sé esto" at any moment raises one area's level at once (D11).
   4. The outcome that makes it worth doing: how the owner will know it worked.
   5. What exists today: code, data, users, deadlines (confirming `## What exists`); with code, each area of the kind
      is marked keep, migrate or contain, and the advice of D10 starts from that.
@@ -252,16 +253,36 @@ command's output, tested like any other output.
      (accounts, domain, store fees, payment providers), each with its cost as read at that moment.
   10. Order: what must come first, and what can wait.
   11. Risks and unknowns; each unknown becomes an open decision or a research item with a named question.
-- **It ends when** every topic is answered or marked unknown and every area is settled (D10). Topics 1, 2, 3, 4 and 9
-  cannot be unknown: without them there is no plan to make, or no depth to advise at. A topic whose answer opens a
-  real fork gets one follow-up question; anything else is decided by the session and written down with its reason.
-  An answer to topics 8-11 that reopens a settled area unchecks that area (D10).
-- **How long**: 11 topics plus one question per area, about 18 to 30 questions in all; the number of areas per kind
-  is fixed by slice 3's data, and T4 measures the real count. What keeps it bounded: nothing the repository answers
-  is asked, an area the owner already decided is deepened in its ADR without a question unless a sourced risk needs
-  one, the lesson rides in the one message before each question, follow-ups come only when he asks, and "fácil y rápido" is open at every turn.
-- Answers are logged in the owner's words and language, with the date; everything else follows topic 6's artifact
-  language. The conversation, lessons included, is in the owner's language.
+  A topic is checked `answered (L<n>)` when he said it, `deduced (L<n>)` when the session read it from the
+  conversation (the Log line names what it was deduced from), or `unknown (OD<n>)`.
+- **The summary, then a few deepening questions** (S12: "ahi si por ultimo hace unas pocas preguntas para ahondar
+  mas"). Once every topic and area is covered, the session writes one summary in the chat: what it understood, what it
+  deduced and from what, and its recommendation for each area in a line (D10). Then it asks only the questions that
+  are still worth asking, one at a time through the question tool, with the recommended option first:
+  - the real forks the conversation left open, where the plan would differ by his answer;
+  - the deductions it is least sure of, and any of the five that the plan needs (topics 1, 2, 3, 4 and 9) that he
+    did not say himself;
+  - nothing he already said, nothing the repository answers, and nothing that a recommendation he can change at the
+    pre-plan approval settles well enough.
+  Usually three to seven; never a form. Each answer is logged verbatim and checks or corrects what it covers.
+- **Where the questions go.** In a new project no build lead runs yet, so the plan orchestrator talks with the owner
+  directly. Where a lead already holds the project, the conversation runs in the plan orchestrator's own chat, which
+  the owner opens. Only the deepening questions go through the lead (`js-harness-orchestrator`, "Questions to the
+  user"), each carrying its context in its text. One session holds the onboarding.
+- **`## Setup`** (formats in D6): `Kind`, `Size`, `Level`, `Teaching`, `Mode`. The template writes `- Mode: full` and
+  a bare `- Teaching: on`, which D6's format does not accept, so stage 2 stays current until the opening is logged
+  and the line reads `Teaching: on (L<n>)`. `Level` is written once the conversation has shown it, and completed in
+  the same commit that pastes `## Advice`: each area takes the level of the layer it belongs to, and an area of no
+  layer (cost, legal, team and timeline) takes `some` unless he said otherwise. A change to `## Setup` is committed at
+  once, apart from the rhythm of D7, because a lost teaching or mode choice would be asked again (L12); it is rare.
+- **It ends when** every topic is checked, every area carries its proposal (D10), the summary is given and its
+  deepening questions are answered. Topics 1, 2, 3, 4 and 9 cannot stay unknown, and stay unchecked while only
+  deduced and not confirmed: by his words, or by a deepening question. Something said later that changes a covered
+  topic or area unchecks it, and the conversation takes it up again.
+- **How long**: as long as the conversation he wants. The questions are the few of the end; the advice of the areas
+  is explained, not asked (D10), and confirmed at the pre-plan approval. "fácil y rápido" is open at every turn.
+- His words are logged in his language, with the date: each message that settles something, as an excerpt verbatim;
+  everything else follows topic 6's artifact language. The conversation, lessons included, is in his language.
 
 ### D4. What the pre-plan holds (`docs/origin.md`)
 The sections of js-harness's own origin, with three added at the top: a status note (frozen once onboarding closes;
@@ -321,7 +342,8 @@ default, a fixture in tests), so a change to the data never breaks the lib's tes
   - `- Mode: full` or `- Mode: fast (L11)`; `fast` must name a Log line
 - `## Advice`, one checkbox per area, `^- \[( |x)\] (A:[a-z0-9-]+) (.+?)(?: — (.+))?$`, as `--checklist advice` prints
   it, `- [ ] A:frontend Front end and UX`. Once settled, ` — ` and one of:
-  - `decided, ADR-0004 (L14)`: he took a recommendation
+  - `proposed, ADR-0004 (L14)`: deduced and explained, confirmed at the approval
+  - `asked, ADR-0005 (L18)`: settled by a deepening question
   - `the owner's, ADR-0002 (L7)`: his own decision, deepened
   - `open (OD3)`: he decides later
   - `default, fast, ADR-0009 (L20)`: fast mode only
@@ -346,7 +368,7 @@ default, a fixture in tests), so a change to the data never breaks the lib's tes
 - **The setup and the advice** (v4): `## Setup` holds its five lines in the formats above, `Kind` naming kinds of the
   profiles or `other` (until `O6` closes), every `Level` area listed. Until `O6` closes, the areas under `## Advice` are exactly the set
   `--checklist advice` prints for that `Kind` and `Size`; after it, the set is no longer compared, so a later release
-  that changes the profiles never turns a finished onboarding red. Every checked area carries one of the four
+  that changes the profiles never turns a finished onboarding red. Every checked area carries one of the five
   suffixes, `default, fast` only with `Mode: fast`.
 - **The ADRs** (v4): each ADR an area names exists and names that area; each has at least one source line in a form
   of D12, a `profile:` source only with `Mode: fast`; each ADR under `docs/adr/` belongs to a listed area or is marked superseded or withdrawn; a `not read`
@@ -377,13 +399,13 @@ once a project has used it.
   Tasks `O1`-`O6` (read, pre-plan written, pre-plan approved, plan written, plan approved, closed), `## Reviews` and
   a Log with each answer and each yes or no verbatim, plus the session's own lines marked `(session)`. ODD's engram
   mirror holds a copy; `progress` counts it as a feature.
-- **What would live only in the chat** is logged: when an area's question is asked, a `(session)` Log line records
-  the recommendation, its options and the sources read, so a compaction before the answer asks the same question
-  again, not a new one.
-- **Committed after every stage, every three answers in the interview, and at once for `## Setup`**, on the branch
+- **What would live only in the chat** is logged: each deduction as a `(session)` Log line with the words it came
+  from, and each area's explanation as one with its recommendation and sources, so a compaction resumes the same
+  conversation, not a new one.
+- **Committed after every stage, every three settled items in the conversation, and at once for `## Setup`**, on the branch
   `onboarding`: desktop sessions each run in their own worktree, and only what is committed reaches the next one.
   Each commit runs the project's gate, so a commit per answer would make him wait on every tap; a cut loses at most
-  two answers, and `onboard` names the uncommitted ones. When `onboard` finds no document on this branch, it looks
+  two settled items, and `onboard` names the uncommitted ones. When `onboard` finds no document on this branch, it looks
   for one on any local or remote branch (`git log --all -- odd/tasks/onboarding.md`) and prints "onboarding in
   progress on branch X" with the way to resume: where `git worktree list` shows the branch checked out in another
   worktree, it names that folder; otherwise it prints the command that creates a branch from it here.
@@ -418,7 +440,7 @@ once a project has used it.
   whose check fails on the roadmap, sending it back to stage 6; resume from another branch; the awaiting-merge state.
 - Tests (T7-T9), each RED first: `--checklist advice` and `bar` per size, for two joined kinds and for `other` with
   and without a nearest kind; each `## Setup` line missing or malformed, and `Mode: fast` with no Log line; each of
-  the four area suffixes, and `default, fast` outside fast mode; an ADR missing, of another area, without a source,
+  the five area suffixes, and `default, fast` outside fast mode; an ADR missing, of another area, without a source,
   with a `not read` source not named under Risks, and orphaned; the `answers` and `roadmap` hashes ignoring a teaching, level or mode
   change; an ADR edit reopening stage 4; `## Advice mode` malformed; a `B:` step missing, then excused by an open OD
   and by the given-up line; the order of stage 2 (topics 1-7, the areas, topics 8-11) and its "area n of m" line; a
@@ -459,31 +481,33 @@ through the command's output, one piece at a time, never as a skill or a per-tur
   existing areas without a cycle, every common area in every kind, at least one core bar target per kind, a source
   and a measuring command on every target.
 
-### D10. The advice, one area at a time
-For each area under `## Advice`, in `after` order, the session runs `onboard profile --area <id>`, reads the current
-docs and release notes of what it will recommend, logs the question as D7 says, and asks one question:
-- **The talk before it** (S11): a message in the chat that explains what this area decides, the recommendation and
-  its why, at the depth of the developer's level in it (D11), the sources it read, what is given up with each
-  alternative, and the area's bar targets. It is as long as the level needs, written to be read on a phone in short
-  paragraphs; the full reasoning also goes into the ADR. With teaching off, it is two or three lines.
-- **Its text**: the decision alone, in a sentence or two that point back to the talk, so the question tool stays short
-  on a phone. Where a lead relays the question (D3), the talk travels inside the question's text, since the owner
-  sees only the lead's chat.
-- **Its options**: the recommendation first, one or two real alternatives, and where the owner already uses
-  something else, that one.
-- **The reviewed text it rests on**: the question names its profile area (`bin/lib/profiles-data.mjs`, `A:<id>`)
-  as the reviewed text behind it; a recommendation that departs from the profile says so. That meets
-  `rule:double-review` (S10): each profile passes the two readers once, when slice 3 writes it, and every ADR passes
-  the stage-4 readers before his approval of the pre-plan makes the decisions binding.
+### D10. The advice: explained in the conversation, confirmed at the approval
+S12 moves the advice out of a question per area: the session explains each area and its recommendation in the
+conversation, writes it down as a proposal, and the owner confirms them all, or changes any, when he approves the
+pre-plan. For each area under `## Advice`, in `after` order:
+- **It prepares**: runs `onboard profile --area <id>` and reads the current docs and release notes of what it will
+  recommend.
+- **It explains** (S11), in the conversation, when the thread reaches that area or in the summary: what the area
+  decides, its recommendation and why, at the depth of the developer's level in it (D11), the sources it read, what
+  is given up with each alternative, and the area's bar targets. It is as long as the level needs, written to be read
+  on a phone in short paragraphs. With teaching off, it is two or three lines. He can react in his own words, and a
+  reaction that changes the recommendation is logged.
+- **It writes the proposal**: the area's ADR (D12, status `proposed`) and its line under `## Advice` with one of D6's
+  suffixes: `proposed` (deduced and explained), `asked` (settled by a deepening question), `the owner's` (his own
+  decision), `open` (he decides later) or `default, fast`.
+- **The reviewed text it rests on** (S10): the explanation names its profile area (`bin/lib/profiles-data.mjs`,
+  `A:<id>`), and says so when its recommendation departs from it. Each profile passes the two readers once, when slice
+  3 writes it. Every ADR passes the stage-4 readers before his approval of the pre-plan makes the proposals binding.
+- **The confirmation is the approval** (S12): the stage-4 summary lists every area in one line, its proposal and its
+  ADR, so his yes accepts them all. A no on one area is logged; the session revises that ADR, and he is asked again,
+  as stage 4 already does.
 - **An area the owner already decided** (topic 6) is kept as his decision and deepened, not replaced (S3: "sabe que
-  tecnologico escoger por ejemplo el stack mern entonces lo guia super avanzado"): its ADR records how to do it well,
-  and the session asks only when a sourced risk makes the choice worth reopening.
+  tecnologico escoger por ejemplo el stack mern entonces lo guia super avanzado"). Its ADR records how to do it well,
+  and the session raises it in the conversation only when a sourced risk makes the choice worth reopening.
 - **An existing repository** starts from topic 5's keep, migrate or contain for the area.
-- **Settling an area** writes its ADR (D12) and checks its line with one of D6's four suffixes. Every area is
-  advised whatever the developer knows: a backend developer still gets the front end, the architecture and the CI
-  advised (S4).
-- **Reopening an area** before O6: its line is unchecked, a new ADR supersedes the old one, and the question is asked
-  again.
+- **Every area is advised** whatever the developer knows: a backend developer still gets the front end, the
+  architecture and the CI explained (S4).
+- **Reopening an area** before O6: its line is unchecked, a new ADR supersedes the old one, and it is explained again.
 - **Size** (S6) chooses the areas: small lists only the core ones, each still advised in full; large lists them all.
 
 ### D11. Level, teaching and the fast plan
@@ -492,23 +516,22 @@ docs and release notes of what it will recommend, logs the question as D7 says, 
   guiar a enseñar y darle el criterio de acompañamiento de por que hacerlo"). `some`: the why and the alternatives.
   `experienced`: tradeoffs, pitfalls at scale, and his own choice challenged with sources (S3: "lo guia super
   avanzado"). "ya sé esto" raises that area at once, logged.
-- **Teaching** is on by default and is announced before the first question (S4: "siempre enseñes y des la opcion al
+- **Teaching** is on by default and is announced in the opening (S4: "siempre enseñes y des la opcion al
   usuario a desactivar la enseñanza"). "sin enseñanza" turns it off at any turn, takes effect at once, and is
   committed in `## Setup` right away; then each question gives the recommendation and its why in one line, the
   alternatives in one line each. It can be turned back on the same way. Neither reopens an approval (D2).
 - **Fast mode** only when the owner asks for it (S4: "a menos que el usuario te indique lo contario osea de que no
-  quiere aprender y de que solo quiere hacerlo facil y rapido"): one question proposes every remaining area's profile
-  default at once, names once what is given up (depth, measures, the bar targets left out), records `Mode: fast` with
+  quiere aprender y de que solo quiere hacerlo facil y rapido"): one message proposes every remaining area's profile
+  default at once (confirmed at the approval, as any proposal), names once what is given up (depth, measures, the bar targets left out), records `Mode: fast` with
   his words and the given-up line. Its ADRs are brief and may cite the profile itself as their source (D12), so fast
   mode reads no docs. Areas already settled stay as they are; "completo" returns to full mode for the areas still
-  open. Whether the readers and both approvals still run in fast mode is his to say (OD-F); v4 keeps them until he
-  answers.
+  open. The two readers and both approvals still run in fast mode (S12: "Si").
 
 ### D12. Decisions as ADRs, with their sources
 - `onboard template adr <slug>` prints the skeleton; with `--write` it creates `docs/adr/<nnnn>-<slug>.md`, `<nnnn>`
   the highest number there plus one, four digits, with exclusive create (two sessions racing for one number: the
   second is refused and runs it again). The slug must match `^[a-z0-9]+(-[a-z0-9]+)*$`, so no path can leave
-  `docs/adr/`. The skeleton: Status (accepted, date, the Log line; later `superseded by ADR-<nnnn>` or `withdrawn`), Area
+  `docs/adr/`. The skeleton: Status (`proposed (L<n>); accepted with the pre-plan (O3)`, a fixed text so the approval edits no ADR; later `superseded by ADR-<nnnn>` or `withdrawn`), Area
   (`A:<id>`), Context, Decision, Alternatives considered (each with why not), Consequences (what is given up
   included), Sources, and the owner's words where the decision is his.
 - **Sources**, one per line, in one of three forms:
@@ -579,7 +602,7 @@ Built (slices 1-2): 836 lines of code and 726 of tests (`wc -l`, 2026-10-20). v4
 - Slices 4 and 5: about 400-500 authored lines each with tests.
 - One gate per commit, one gentle-ai and one Codex review per slice, an independent verifier for slice 5, then T4's
   real onboarding.
-Using it in a project: one session of about 18 to 30 questions, the docs read for each area, and two readers twice
+Using it in a project: one session of conversation and a few deepening questions, the docs read for each area, and two readers twice
 (pre-plan with its ADRs, plan), on the reader model the rules give.
 
 ### What v4 leaves out, and why
@@ -605,7 +628,7 @@ Asked one at a time through the lead, after the readers; each is recorded here w
   as the reviewed text, and every ADR is read by the stage-4 readers before the approval that makes the decisions
   binding. The alternative is two readers before each area question, which multiplies the onboarding's reader cost
   by the number of areas. **Answered (S10, 2026-10-20)**: once per profile, as proposed.
-- **OD-F** Whether fast mode ("solo quiere hacerlo facil y rapido sin importar tanto la calidad", S4) still runs the
+- **OD-F** (answered, S12: readers and approvals stay; the rest of S12 reshaped D3 and D10) Whether fast mode ("solo quiere hacerlo facil y rapido sin importar tanto la calidad", S4) still runs the
   two reader rounds and both approvals. v4 keeps them: the approvals are the owner's only checkpoint on the plan, and
   the readers cost two rounds. The alternative drops the readers in fast mode and keeps the two approvals.
 
@@ -983,3 +1006,9 @@ ceiling.
   scale stands), and he wants the onboarding talked and guided. Folded into v4: D3 opens with the guided
   conversation (a short explanation before every question, free answers and questions back, a recap line after each
   answer), and D10 moves the lesson from the question's text into the message before it. Pregunta 33 is still open.
+- L20 (2026-10-20) His answer to Pregunta 33 is S12, read at its line: "Si" to OD-F, and the interview reshaped. With
+  S11 it replaces the one-question-at-a-time interview: D3 is now a guided conversation in which the advisor
+  explains, understands and deduces, then gives a summary and asks a few deepening questions; D10 explains each
+  area's recommendation in the conversation, writes it as a proposed ADR, and his pre-plan approval confirms them all.
+  Next step: two readers on the reworked D2, D3, D6, D7, D10 to D12, their round under `## Reviews`, fixes, then the
+  ready-for-his-yes notice to the lead with a short plain summary. All four product decisions are answered.
