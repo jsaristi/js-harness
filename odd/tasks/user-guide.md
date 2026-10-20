@@ -68,7 +68,8 @@ Nothing: the task was given whole (L1).
   S8, S9). Route: inline.
 - [x] T3 (kind: docs) ROADMAP and `odd/tasks/onboarding.md` ticks (S10). Route: inline. `js-harness progress`:
   Onboarding 1/2, the design item open.
-- [ ] T4 (kind: verify) Gate, gentle-ai review per code commit, Codex review, pull request.
+- [x] T4 (kind: verify) Gate, gentle-ai review per code commit, Codex review, pull request. `npm run check` green
+  on both commits, `node scripts/tui-walk.mjs` 21 PASS and exit 0, Codex on 19ac60f..e1631b5 correct (L6).
 
 ## Log
 - L1 (2026-10-20, the task from the lead session, verbatim in its parts above as S1-S10): "Close the documentation
@@ -92,3 +93,6 @@ Nothing: the task was given whole (L1).
   `--everything`, which cannot be undone.
 - L5 (2026-10-20): gentle-ai evidence per code commit, for the merge queue.
   - gentle-ai: ee2a7289 assessed medium, review_due false, reason under_budget (316 lines, executable_change bin/audit.mjs).
+  - gentle-ai: e1631b51 assessed with the slice 19ac60ff..e1631b51, medium, review_due false, reason under_budget (492 lines).
+- L6 (2026-10-20): Codex reviewed 19ac60f..e1631b5 (230 code lines in 33 files): "the patch is correct", confidence
+  0.91, no findings; 175,469 input tokens in 79 s, recorded in codex-reviews.jsonl.
