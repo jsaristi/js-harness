@@ -2729,6 +2729,25 @@ test('the orchestrator skill says how a lead is rotated: started and detached, n
   assert.ok(text.includes('- Before the user leaves, open the reserve sessions the stretch will need'));
 });
 
+// odd/tasks/status-report.md, S6: on 2026-10-20 he asked how it was going and got two lines; the answer is a
+// report of everything since the last one, from the facts `report --mark` prints, in six sections.
+test('the orchestrator skill says how the lead answers how the work is going: report --mark, then six sections', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## The status report\n'));
+  for (const line of [
+    'When the user asks how the work is going, or how much is done, the answer is a report of everything since the last report, in detail: never a line that all goes well.',
+    '- Run `js-harness report --mark`:',
+    '1. What landed: each pull request said as what it gives the user, not by its branch.',
+    '2. The sessions: each one, what it is for and how far it got.',
+    '3. The user\'s decisions since the last report, and what each changed.',
+    '4. The map: each roadmap phase with its share done and what is left in it, then the total.',
+    '5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.',
+    '6. What you propose next, and why.',
+  ]) assert.ok(text.includes(line), line);
+  const js = components[0].content('0.1.0');
+  assert.ok(js.includes('- `js-harness report [--since <time>] [--mark]` —'), 'the js-harness skill lists the command');
+});
+
 test('the orchestrator skill says what every recap carries and how a block waits while the user is away', () => {
   const text = components[2].content('0.1.0');
   assert.ok(text.includes('\n## The recap\n'));

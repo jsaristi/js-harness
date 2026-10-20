@@ -34,6 +34,7 @@ js-harness commands:
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin). Where \`codexReview\` is off at the pushed commit it asks for none; the first push to a repository that holds no branch passes and says what went unread.
 - \`js-harness functions\` — each function a project can turn off and on (\`harness.json\` "functions": the code map, the TypeScript language server, the Codex review), its value here and why; \`functions apply\` makes the clone what they ask, \`functions set <name> <value>\` writes one.
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired. In the harness's own checkout, \`rules change <id>\` is the one command that changes one of its rules, and the gate's \`rules\` row reports a line a commit adds that restates a rule's value instead of marking it \`rule:<id>\`, and fails it once that rule refuses. Its turn-start hook, \`rules --hook\`, tells a session once when the rules on the default branch changed since its merge base, after a compaction too and to a sub-agent at its start.
+- \`js-harness report [--since <time>] [--mark]\` — the facts a status report is written from, since the last report: the pull requests merged into the default branch with their commits, each session's last notice, the questions answered and still open, and the roadmap phase by phase with what is left; \`--mark\` records this report as the last one, in the channel record under the home.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; a work session's wait also ends on a notice to its own number (exit 3), printing it and the same wait to run again; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
@@ -135,6 +136,19 @@ Interrupt the user only when:
 5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
 6. a session reached the context pause and its state is not written.
 Say for each session concerned whether to send that session's own prompt, wait, or drop it. Otherwise keep the work moving: the next units of the plan are yours to move inside the charter.
+
+## The status report
+
+When the user asks how the work is going, or how much is done, the answer is a report of everything since the last report, in detail: never a line that all goes well.
+- Run \`js-harness report --mark\`: it prints the facts since the last report (the pull requests merged with their commits, each session's last notice, the questions answered and still open, the roadmap phase by phase with what is left) and records this report as the last one, so the next one starts where this one ends. Read the board and your relief file beside it for what the record does not hold.
+- Answer in the user's language, in these sections, each item in plain words; a section with nothing in it says so in one line, and none is left out:
+
+1. What landed: each pull request said as what it gives the user, not by its branch.
+2. The sessions: each one, what it is for and how far it got.
+3. The user's decisions since the last report, and what each changed.
+4. The map: each roadmap phase with its share done and what is left in it, then the total.
+5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.
+6. What you propose next, and why.
 
 ## The recap
 
