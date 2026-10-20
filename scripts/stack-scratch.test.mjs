@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { D2_ROWS, realFilesOf, registrationsLeftIn, scratchEnv, scratchLayout, shimContent, shimNames, trialVerdict } from './stack-scratch.mjs';
+import { claudeJsonMcpPart, D2_ROWS, realFilesOf, registrationsLeftIn, scratchEnv, scratchLayout, shimContent, shimNames, trialVerdict } from './stack-scratch.mjs';
 
 // The pure parts of the trial of odd/tasks/stack-install.md (D9): where it puts things, the environment every command
 // of it gets, the shims, the files of his it hashes, and the verdict. The trial itself downloads, so it is run by hand.
@@ -95,6 +95,17 @@ test('shimNames adds, outside Windows, the programs the shell launchers of pnpm 
   assert.deepEqual(shimNames('win32'), ['pnpm', 'git', 'claude']);
   const posix = shimNames('linux');
   for (const name of ['pnpm', 'git', 'claude', 'sh', 'dirname', 'sed', 'uname']) assert.ok(posix.includes(name), name);
+});
+
+// The trial of T4: every running Claude session rewrites his `.claude.json` (its counters, its project stats), so its
+// whole bytes changed during a trial that never touched it; what the module can write there is its MCP servers.
+test('claudeJsonMcpPart keeps only the MCP servers of a .claude.json, global and per project', () => {
+  const a = JSON.stringify({ numStartups: 1, mcpServers: { engram: { command: 'engram' } }, projects: { 'D:/x': { lastCost: 1, mcpServers: {} } } });
+  const b = JSON.stringify({ numStartups: 2, mcpServers: { engram: { command: 'engram' } }, projects: { 'D:/x': { lastCost: 9, mcpServers: {} } } });
+  assert.equal(claudeJsonMcpPart(a), claudeJsonMcpPart(b));
+  const c = JSON.stringify({ numStartups: 2, mcpServers: { engram: { command: 'engram' }, codegraph: { command: 'codegraph' } }, projects: { 'D:/x': { mcpServers: {} } } });
+  assert.notEqual(claudeJsonMcpPart(a), claudeJsonMcpPart(c));
+  assert.equal(claudeJsonMcpPart('not json'), 'not json', 'a file that does not parse is compared whole');
 });
 
 test('registrationsLeftIn reads back both registrations of codegraph in the scratch home', () => {

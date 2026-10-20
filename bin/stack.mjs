@@ -234,6 +234,9 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     const childEnv = withEnv(env, given, platform);
     const record = { tool, dimension, kind: row.kind, ...(row.bin && { bin: row.bin }), run: row.run, undo: row.undo, applies: null, env: given, at: now() };
     recordStackRow(args.home, record);
+    // Codex refuses a `CODEX_HOME` that does not exist, and a fresh home has no `.codex` until Codex first ran (T4).
+    // `codexElsewhere` is false here, so this is the folder Codex itself would make.
+    if (row.kind === 'registration' && dimension === 'codex') fs.mkdirSync(codexHomeRead, { recursive: true });
     const result = runWords(row.run, { spawn: deps.spawn, env: childEnv, timeout: TIMEOUTS[row.kind], interactive: !args.yes, platform });
     const after = readNow();
     const stillMissing = Boolean(missingIn(planOf(after), `${tool}.${dimension}`));

@@ -36,7 +36,7 @@ function spawnOf(world, home, manifestSeen = []) {
   return (file, args, options) => {
     const line = [file, ...args].join(' ');
     if (args[0] === '--version') return world[file]?.installed === 'ok' ? { status: 0, stdout: `${file} 2.0.0\n` } : { status: 1 };
-    world.lines.push({ line, env: options.env, stdio: options.stdio, timeout: options.timeout });
+    world.lines.push({ line, env: options.env, stdio: options.stdio, timeout: options.timeout, codexHomeExisted: Boolean(options.env?.CODEX_HOME) && fs.existsSync(options.env.CODEX_HOME) });
     manifestSeen.push(readManifest(home)?.stack?.map((r) => `${r.tool}.${r.dimension}`) ?? []);
     if (world.timeout?.has(line)) return { status: null, signal: 'SIGTERM' };
     if (world.fail.has(line)) {
@@ -54,7 +54,7 @@ function spawnOf(world, home, manifestSeen = []) {
   };
 }
 
-async function run(argv, { world, home, answers = [], interactive = false, manifestSeen, env = {} }) {
+async function run(argv, { world, home, answers = [], interactive = false, manifestSeen, env = {}, realHome = home }) {
   const out = [];
   const err = [];
   const asked = [];
@@ -63,7 +63,7 @@ async function run(argv, { world, home, answers = [], interactive = false, manif
     spawn: spawnOf(world, home, manifestSeen),
     platform: 'linux',
     interactive,
-    realHome: home,
+    realHome,
     ask: async (question) => {
       asked.push(question);
       return answers.shift() === 'y';
@@ -253,4 +253,25 @@ test('in a terminal no command is timed out', withHome(async (home) => {
   const world = newWorld();
   await run(['--tool', 'codex'], { world, home, interactive: true, answers: ['y'] });
   assert.deepEqual(world.lines.map(({ line, timeout }) => [line, timeout]), [['pnpm add -g @openai/codex', undefined]]);
+}));
+
+// The trial of D9 (T4): Codex refuses a CODEX_HOME that does not exist, and a scratch home has none until Codex ran.
+test('on a scratch home the Codex home is made before a registration in Codex runs', withHome(async (home) => {
+  const world = newWorld();
+  world.codex.installed = 'ok';
+  const codexHome = path.join(home, '.codex');
+  const { code } = await run(['--yes', '--tool', 'codegraph'], { world, home, realHome: path.join(home, 'elsewhere') });
+  assert.equal(code, 0);
+  const add = world.lines.find(({ line }) => line.startsWith('codex mcp add'));
+  assert.equal(add.env.CODEX_HOME, codexHome);
+  assert.ok(add.codexHomeExisted, 'the folder was there when codex mcp add started');
+}));
+
+test('the Codex home is made too when CODEX_HOME names it and the home is the one the process runs in, as in the trial', withHome(async (home) => {
+  const world = newWorld();
+  world.codex.installed = 'ok';
+  const codexHome = path.join(home, '.codex');
+  const { code } = await run(['--yes', '--tool', 'codegraph'], { world, home, env: { CODEX_HOME: codexHome } });
+  assert.equal(code, 0);
+  assert.ok(world.lines.find(({ line }) => line.startsWith('codex mcp add')).codexHomeExisted);
 }));

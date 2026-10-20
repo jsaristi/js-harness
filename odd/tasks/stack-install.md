@@ -5,12 +5,9 @@ Locator: `odd/tasks/stack-install.md` · Engram mirror: `odd/stack-install/tasks
 Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` after his yes. Design version 3: version 1
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
-Next step (2026-10-20, kept current): slice 1 is PR 472 (feat/stack-install, ready notice sent). Slice 2 (T3)
-is feat/stack-install-run, stacked on it: units A-D, the nine Codex fixes (L10) and two gentle-ai fixes (L11), all
-reviewed (gentle-ai review-296d60b1e90da71e approved; Codex recheck a735214..cbb5201 correct, L12). Next: push it,
-open its PR based on feat/stack-install, send the ready notice; then T4, the trial on a scratch home
-(`node scripts/stack-scratch.mjs`, its output in the Log), and T5 (the ROADMAP line; the note to onboarding is
-written in the shared notes folder as jh31-stack-json-contract.md). T6 and T7 are follow-ups. No open question.
+Next step (2026-10-20, kept current): T1 to T5 are done. Slice 1 merged via PR 472; slice 2 is PR 473 (retargeted
+to main after 472 merged), reviewed, with the T4 fixes and the trial's pass (L13) on it. Next: the gate's reviews of the
+T4 commit, push, the ready notice for PR 473. T6 and T7 are follow-ups out of this feature. No open question.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -77,8 +74,8 @@ of the one scratch trial (package downloads).
 - [x] T1 (kind: design) This design, past its two readers, F1 answered, and his yes (L4, L5)
 - [x] T2 (kind: build) Slice 1: `bin/lib/stack-install.mjs` (D1-D3 as data, the plan, D7's record shape), `js-harness stack` read-only with `--json` (D5, D8), help, README, SPEC, with tests
 - [x] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
-- [ ] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
-- [ ] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
+- [x] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
+- [x] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [ ] T6 (kind: build) A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
 - [ ] T7 (kind: build) A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11). Also: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
 
@@ -332,3 +329,20 @@ onboarding's files; a note in the shared notes folder hands that session this co
   - gentle-ai: cbb5201e assessed medium, review_due false, reason under_budget (45 lines).
 - L12 (2026-10-20) Codex's recheck of a735214..cbb5201 (1 part, 294 lines): the patch is correct (0.93), all nine
   findings fixed, none new. Recorded in codex-reviews.jsonl.
+- L13 (2026-10-20) T4, the trial of D9 on a scratch home (`node scripts/stack-scratch.mjs`, Windows, pnpm), three
+  runs. Run 1: `codegraph codex` failed with "CODEX_HOME points to "<scratch>\home\.codex", but that path does
+  not exist": Codex refuses a missing `CODEX_HOME`, and a fresh home has no `.codex`. Run 2, after a first fix that
+  made the folder only when `homeEnv` set `CODEX_HOME`, failed the same way (the trial's process already runs in the
+  scratch home, so `homeEnv` set nothing), and flagged his `~/.claude.json` as changed: his own `codegraph` entry was
+  still there, which a `claude mcp remove -s user codegraph` against his home would have deleted, and the native
+  Claude binary reads the scratch `USERPROFILE` (measured 2026-10-19); the file was rewritten at 22:51:41 local, in
+  the trial's window, by the Claude sessions running, which rewrite it constantly. So `stack install` now makes
+  `<home>/.codex` before any registration in Codex (RED 2, then GREEN), and the trial hashes only the MCP servers of
+  his `.claude.json`, global and per project (RED, then GREEN). Run 3 passed: `stack --json` exit 1 planning
+  codex.installed, codegraph.installed, codegraph.claude, codegraph.codex; both `stack install --yes --tool` runs
+  exit 0, each row "done"; `doctor --offline` read codegraph installed, claude and codex `ok` and codex installed
+  `ok`; `uninstall machine` exit 0, "undid" all four, the last first; no manifest, no package in the prefix, no
+  registration left, none of his files changed (verdict pass, no failures).
+- L14 (2026-10-20) T5: the ROADMAP's "Stack visibility" decision now names this exception, with his request, and a
+  "Stack install" row is added; the note on the `stack --json` contract (new `kind`, `bin`, `env` fields) is in the
+  shared notes folder as jh31-stack-json-contract.md; the reviews are L7 to L12.

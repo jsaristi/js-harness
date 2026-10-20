@@ -80,6 +80,20 @@ export function registrationsLeftIn(home) {
   ];
 }
 
+/** What the stack install can write in a `.claude.json`: its MCP servers, global and per project, as text to hash.
+ * Every running Claude session rewrites the rest of the file (counters, project stats), so its whole bytes change
+ * during a trial that never touched it. A file that does not parse is compared whole. */
+export function claudeJsonMcpPart(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  const projects = Object.fromEntries(Object.entries(data?.projects ?? {}).map(([root, project]) => [root, project?.mcpServers ?? null]));
+  return JSON.stringify({ mcpServers: data?.mcpServers ?? null, projects });
+}
+
 /** His files the trial must leave as they are. */
 export function realFilesOf(home) {
   return [
@@ -124,7 +138,11 @@ function locate(name, platform) {
 /** The hashes of his files, of his global packages' listing and, on Windows, of his user PATH. */
 function snapshotOfHim(platform) {
   const snapshot = {};
-  for (const file of realFilesOf(os.homedir())) snapshot[file] = fs.existsSync(file) ? contentHash(fs.readFileSync(file)) : null;
+  for (const file of realFilesOf(os.homedir())) {
+    if (!fs.existsSync(file)) snapshot[file] = null;
+    else if (path.basename(file) === '.claude.json') snapshot[file] = contentHash(claudeJsonMcpPart(fs.readFileSync(file, 'utf8')));
+    else snapshot[file] = contentHash(fs.readFileSync(file));
+  }
   const listing = spawnSync('pnpm ls -g', [], { encoding: 'utf8', shell: true });
   snapshot['pnpm ls -g'] = contentHash(`${listing.status}\n${listing.stdout}`);
   if (platform === 'win32') {
