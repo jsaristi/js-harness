@@ -6,9 +6,11 @@ Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` aft
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
 Next step (2026-10-19, kept current): slice 1 is code commit `866f197b` on feat/stack-install (T2 done, not pushed).
-Its gentle-ai review is approved and acknowledged (L7). Next: `js-harness codex-review --base origin/main`, push, PR,
-ready notice to the orchestrator (`js-harness notify --to orchestrator --kind ready --pr <n>`).
-Then T3 (slice 2) on branch feat/stack-install-run, stacked on it.
+Slice 1 is PR 472 (ready notice sent). Slice 2 (T3) is on branch feat/stack-install-run in the same worktree:
+units A `dba54d18`, B `cea616b9`, C `b9553aba` and D (scratch script, with this line) are committed, each with a
+gentle-ai line in L9. Next: `js-harness codex-review --base b9722fc5` for the slice (fix its findings test-first);
+push feat/stack-install-run, PR based on feat/stack-install, ready notice; T4 trial (`node scripts/stack-scratch.mjs`,
+output to the Log), T5.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -23,7 +25,7 @@ registered in Codex; gentle-ai's own install brings engram and context7), and no
 breaks the rule that every write outside the repo can be undone exactly (`AGENTS.md`, "What good looks like").
 
 ## Done when
-- `node --test bin/stack.test.mjs bin/lib/stack-install.test.mjs bin/lib/manifest-stack.test.mjs bin/install.test.mjs bin/tui.test.mjs scripts/stack-scratch.test.mjs` exits 0
+- `node --test bin/stack.test.mjs bin/stack-install.test.mjs bin/lib/stack-install.test.mjs bin/lib/stack-run.test.mjs bin/lib/manifest-stack.test.mjs bin/install.test.mjs bin/tui.test.mjs scripts/stack-scratch.test.mjs` exits 0
 - `npm run check` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/stack-install.md` exits 0
 - The trial of D9, run by hand once slice 2 is built, is in the Log with its output: on a scratch home every row of
@@ -302,3 +304,9 @@ onboarding's files; a note in the shared notes folder hands that session this co
   shared `splitCommand` is T6.
   - gentle-ai: 6a2b0ad1 assessed medium, review_due false, reason under_budget (55 lines); it applies Codex's findings.
   - gentle-ai: 2c5753ef assessed medium, review_due false, reason under_budget (17 lines); it applies Codex's recheck.
+- L9 (2026-10-19) T3 built test-first on feat/stack-install-run, RED observed per file (the runner's file only as a
+  missing module): unit A record and undo (manifest-stack 7, stack-run 13, install 2 new), B `stack install` (11),
+  C the TUI item (3), D the scratch script's pure parts (6). The gate passed at each commit.
+  - gentle-ai: dba54d18 assessed medium, review_due false, reason under_budget.
+  - gentle-ai: cea616b9 assessed medium, review_due false, reason under_budget.
+  - gentle-ai: b9553aba assessed medium, review_due false, reason under_budget.
