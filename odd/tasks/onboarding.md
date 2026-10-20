@@ -22,9 +22,9 @@ makes that path the default for every project and checks its result.
 - `node --test bin/onboard.test.mjs bin/lib/onboard.test.mjs bin/init.test.mjs bin/lib/contract.test.mjs` exits 0
 - `node --test bin/lib/profiles-data.test.mjs bin/lib/manifest.test.mjs` exits 0 (v4, slices 3 and 5)
 - `npm run check` exits 0
-- One real onboarding (T4) of the project his answer to OD-T4 names, not a test project (S3): one question at a
-  time, both readers' rounds recorded, both approvals, then `js-harness onboard check` exits 0 there and
-  `js-harness progress` lists every phase.
+- Two real onboardings (T4, S9), not test projects (S3): a static website in Astro (`static-site`), and a platform
+  pre-project (`pre-project`, nearest kind `platform`, D14). In each: one question at a time, both readers' rounds
+  recorded, both approvals, then `js-harness onboard check` exits 0 there and `js-harness progress` lists every phase.
 
 ## In scope / Out of scope
 - In: `bin/onboard.mjs`, `bin/lib/onboard.mjs` and their tests; one exported helper each from `bin/lib/contract.mjs`
@@ -102,6 +102,10 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
   no quiero hacer proyecto de una sino una investigacion o analisis de mercado por ejemplo para armar un pre proyecto
   de una aplicacion complete especifica para un sector de negocio y desde ahi armar todo el roadmap completo a partir
   de investigacion y analisis y ademas de discusion y criterio"
+- S9. His answer to Pregunta 31, OD-T4 (2026-10-20, transcript 908805db line 8857, read with `js-harness sessions
+  --quote`). The question was which real project the onboarding is tried on after the build: "Un proyecto mío
+  (Recommended)" or "Un pre-proyecto de sector". Typed, verbatim: "Vamos a hacer uno de una pagina web estatica en
+  astro y un pre proyecto de plataforma que nos va a hacer todos los documentos para una plataforma completa"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
@@ -111,7 +115,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [ ] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; with OD-R's proposal, the data passes two readers
 - [ ] T8 (kind: build) Slice 4: the v4 interview, `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
-- [ ] T4 (kind: verify) The one real onboarding of the done-when, after T9 (its scratch-project interview was stopped by S3)
+- [ ] T4 (kind: verify) The two real onboardings of the done-when (S9), after T9: the Astro static site, then the platform pre-project (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (`docs/ROADMAP.md:231-237`, on `main` now) and record the reviews
 
 ## Design
@@ -575,7 +579,9 @@ Asked one at a time through the lead, after the readers; each is recorded here w
   later profiles. The alternative is adding the three most common of them (CLI or library, API service, AI app) now,
   at about one more slice. **Answered (S8, 2026-10-20)**: both, plus a TUI app and a pre-project kind (D14), and
   `other` for everything else: eleven kinds in all (D9).
-- **OD-T4** Which project the real onboarding of the done-when runs on, now that S3 rules out a test project.
+- **OD-T4** Which project the real onboarding of the done-when runs on, now that S3 rules out a test project. **Answered
+  (S9, 2026-10-20)**: two trials, a static website in Astro and a platform pre-project whose documents plan a
+  complete platform (T4).
 - **OD-R** `rule:double-review` is his rule: a plan or design put to him first passes two readers, unless the
   question names its reviewed text by path. Each area question (6 to 16 of them) puts a choice to the owner. v4's
   proposal: the profile data passes the two readers when slice 3 writes it, each area question names its profile area
@@ -947,3 +953,9 @@ ceiling.
   the application in its own repository), slice 3 split into 3a-3c by kinds. The lead's reading of S8 matched the
   words. Not read by the readers again: D14 is new; its readers are T7's data readers (OD-R) and his yes to v4.
   Next: OD-T4 as Pregunta 31.
+- L17 (2026-10-20) His answer to Pregunta 31 (OD-T4) is S9, relayed by the lead and read at its line; the lead's
+  reading (two real trials) matched the words. Folded into v4: the done-when and T4 name both trials. The
+  pre-project trial runs its onboarding (D14): it plans the platform's research and the brief. Then the build
+  orchestrator runs that research roadmap, and the platform's own onboarding from the brief writes the complete
+  platform documents S9 asks for: origin, ADRs and roadmap. T4's done-when is the pre-project's onboarding; the
+  platform's onboarding is the last phase of that pre-project's roadmap. Next: OD-R as Pregunta 32.
