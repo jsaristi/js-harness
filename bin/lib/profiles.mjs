@@ -35,6 +35,13 @@ export function parseKind(value, data = PROFILES) {
     if (seen.has(id)) return { error: `${id} is named twice` };
     seen.add(id);
   }
+  // A kind with a joins list, such as pre-project, plans work that another repository builds: joined with a kind
+  // outside its list, it would mix that build's areas and bar into the plan (readers of slice 3b, B1).
+  for (const id of ids) {
+    const joins = kinds.get(id).joins;
+    const outside = joins && ids.find((other) => other !== id && !joins.includes(other));
+    if (outside) return { error: `${id} and ${outside} cannot be joined: ${id} joins only ${joins.join(' or ') || 'no other kind'}` };
+  }
   return { kinds: ids, label: ids.join(', ') };
 }
 
@@ -269,6 +276,8 @@ export function shapeFindings(data = PROFILES) {
   findings.push(...duplicates(data.KINDS, 'kind'));
   for (const kind of data.KINDS) {
     for (const field of ['title', 'default', 'why', 'elseWhen']) if (blank(kind[field])) findings.push(`kind ${kind.id} misses ${field}`);
+    const kindIds = new Set(data.KINDS.map((other) => other.id));
+    for (const id of kind.joins ?? []) if (!kindIds.has(id)) findings.push(`kind ${kind.id} joins ${id}, which is no kind`);
     const unknownArea = kind.areas.filter((entry) => !areas.has(entry.id));
     for (const entry of unknownArea) findings.push(`kind ${kind.id}: area ${entry.id} is no area`);
     for (const entry of kind.areas) {
