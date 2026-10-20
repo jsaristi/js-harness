@@ -38,6 +38,7 @@ function spawnOf(world, home, manifestSeen = []) {
     if (args[0] === '--version') return world[file]?.installed === 'ok' ? { status: 0, stdout: `${file} 2.0.0\n` } : { status: 1 };
     world.lines.push({ line, env: options.env, stdio: options.stdio, timeout: options.timeout });
     manifestSeen.push(readManifest(home)?.stack?.map((r) => `${r.tool}.${r.dimension}`) ?? []);
+    if (world.timeout?.has(line)) return { status: null, signal: 'SIGTERM' };
     if (world.fail.has(line)) {
       world.onFail?.(line);
       return { status: 1, stderr: 'it broke' };
@@ -235,4 +236,21 @@ test('a failed command whose probe then cannot tell is not done: it stays record
   assert.ok(!out.includes('codex installed: done'), out);
   assert.ok(err.includes('codex installed: the command failed (exit 1: it broke) and the probe cannot tell what it left; it stays recorded, so uninstall machine judges it'), err);
   assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', null]]);
+}));
+
+// gentle-ai review-296d60b1e90da71e (R4): a timeout kills the shell, not always what it started, which may still
+// install; so a timeout keeps its record, and in a terminal, where the person watches, nothing is timed out.
+test('a command that timed out keeps its record, since what it started may still finish', withHome(async (home) => {
+  const world = newWorld();
+  world.timeout = new Set(['pnpm add -g @openai/codex']);
+  const { code, err } = await run(['--yes', '--tool', 'codex'], { world, home });
+  assert.equal(code, 1);
+  assert.ok(err.includes('codex installed: timed out after 120000 ms, and what it started may still be running; it stays recorded, so uninstall machine judges it'), err);
+  assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', null]]);
+}));
+
+test('in a terminal no command is timed out', withHome(async (home) => {
+  const world = newWorld();
+  await run(['--tool', 'codex'], { world, home, interactive: true, answers: ['y'] });
+  assert.deepEqual(world.lines.map(({ line, timeout }) => [line, timeout]), [['pnpm add -g @openai/codex', undefined]]);
 }));

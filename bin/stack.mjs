@@ -238,6 +238,12 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     const after = readNow();
     const stillMissing = Boolean(missingIn(planOf(after), `${tool}.${dimension}`));
     const state = after.rows.find((probed) => probed.id === tool)?.[dimension];
+    if (result.timedOut) {
+      // The shell is killed, not always what it started, which may still install: the record stays.
+      unverified.push(record);
+      error(`${tool} ${dimension}: ${result.why}, and what it started may still be running; it stays recorded, so uninstall machine judges it`);
+      continue;
+    }
     if (stillMissing && !result.ok) {
       // Nothing of it stayed, so nothing is undone: a later install of his own must never be (D7).
       forgetStackRow(args.home, record);

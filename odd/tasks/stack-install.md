@@ -88,6 +88,7 @@ of the one scratch trial (package downloads).
 - [ ] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
 - [ ] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [ ] T6 (kind: build) A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
+- [ ] T7 (kind: build) A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11). Also: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
 
 ## Design
 
@@ -329,3 +330,10 @@ onboarding's files; a note in the shared notes folder hands that session this co
   first a syntax error of the test file, then not run again before GREEN: observed GREEN only).
   - gentle-ai: 6bf07353 assessed medium, review_due false, reason under_budget (86 lines).
   - gentle-ai: 5a6ca247 assessed medium, review_due false, reason under_budget (126 lines).
+  - gentle-ai: c0e862bd assessed medium, review_due false, reason under_budget (66 lines).
+- L11 (2026-10-20) gentle-ai reviewed slice 2 (b9722fc5..c0e862bd, 1521 lines; its assess said under_budget, run
+  because the orchestrator asked for a review per slice): lineage review-296d60b1e90da71e, lenses risk and
+  resilience, approved and acknowledged (authority burned), three advisory warnings. Two are taken in the next
+  commit, test-first (RED 2, then GREEN): a timeout kills the shell and not always the install it started, so it now
+  keeps its record instead of dropping it (R4-timeout-orphan-drops-record), and in a terminal nothing is timed out
+  (R4-timeout-applies-in-terminal). The third, R1-001, is T7.

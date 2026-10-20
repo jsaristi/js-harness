@@ -513,7 +513,8 @@ required is missing, 1 when something is.
 that order. Each is printed with its undo and asked `Run it? [y/N]` in a terminal; without one it
 runs nothing unless given `--yes`, and then only the tools `--tool` names. Each is recorded in the
 machine manifest before it starts, so `uninstall machine` undoes it; a failure that left nothing
-behind loses its record, and one the probe cannot read afterwards keeps it. Under `--prefix` the
+behind loses its record, and one the probe cannot read afterwards keeps it, as does a timeout
+(under `--yes` only: in a terminal nothing is timed out). Under `--prefix` the
 prefix's binaries come first on the PATH of every probe and command. With a `CODEX_HOME` of your
 own elsewhere than `~/.codex`, the registration in Codex is printed for you to run, never run. It
 exits 0 when nothing it set out to install is missing or unverified, 1 when something is

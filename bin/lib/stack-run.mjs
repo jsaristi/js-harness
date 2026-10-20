@@ -49,17 +49,19 @@ export function refusedWord(words, platform) {
 export const shownCommand = (words, platform) => words.map((word) => shownWord(word, platform)).join(' ');
 
 /** Runs `words` once, as `{ ok, status, why }`: `why` says what failed (its exit code and the last line it printed,
- * a timeout, the error that kept it from starting, or a refused word), `null` when it exited 0. On Windows it goes
+ * a timeout, the error that kept it from starting, or a refused word), `null` when it exited 0; a timeout also sets
+ * `timedOut`, since it kills the shell and not always what the shell started. On Windows it goes
  * as one cmd.exe line, each word through `cmdWord` (a `.cmd` shim starts only through a shell); elsewhere as an argv.
- * In a terminal (`interactive`) the child shares it; else its stdin is closed, so nothing waits on an answer. */
+ * In a terminal (`interactive`) the child shares it and is never timed out, since the person watches it; else its stdin
+ * is closed, so nothing waits on an answer, and `timeout` applies. */
 export function runWords(words, { spawn = realSpawn, env, timeout, interactive = false, platform = process.platform }) {
   const refused = refusedWord(words, platform);
   if (refused !== null) return { ok: false, status: null, why: `refused the word ${refused}: cmd.exe would read it` };
-  const options = { encoding: 'utf8', env, timeout, stdio: interactive ? 'inherit' : ['ignore', 'pipe', 'pipe'] };
+  const options = { encoding: 'utf8', env, timeout: interactive ? undefined : timeout, stdio: interactive ? 'inherit' : ['ignore', 'pipe', 'pipe'] };
   const result = platform === 'win32'
     ? spawn(words.map(cmdWord).join(' '), [], { ...options, shell: true })
     : spawn(words[0], words.slice(1), options);
-  if (result.error?.code === 'ETIMEDOUT' || (result.status === null && result.signal)) return { ok: false, status: null, why: `timed out after ${timeout} ms` };
+  if (result.error?.code === 'ETIMEDOUT' || (result.status === null && result.signal)) return { ok: false, status: null, why: `timed out after ${timeout} ms`, timedOut: true };
   if (result.error) return { ok: false, status: null, why: result.error.message };
   if (result.status === 0) return { ok: true, status: 0, why: null };
   const last = String(result.stderr || result.stdout || '').trim().split(/\r?\n/).pop();
