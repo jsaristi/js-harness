@@ -1,7 +1,8 @@
 // `onboard`: the pre-plan and the plan of a new project, made by the session the owner talks to — see
 // odd/tasks/onboarding.md. `check` holds what the session wrote to the shape the design asks for and never runs a
 // command; `hash` prints what an approval records; `template` prints a document's skeleton, and with `--write`
-// creates it, never over a file that exists. The rules are bin/lib/onboard.mjs. Zero dependencies.
+// creates it, never over a file that exists; `profile` prints the advice the session gives from, one piece at a
+// time (bin/lib/profiles.mjs). The rules are bin/lib/onboard.mjs. Zero dependencies.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH,
   checkOnboarding, featureTemplate, findingLine, hashes, originTemplate, roadmapTemplate, stageReport,
 } from './lib/onboard.mjs';
+import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseKind, parseSize, setupValues } from './lib/profiles.mjs';
 import { agentsTemplate, projectLocation } from './lib/project.mjs';
 
 const USAGE = [
@@ -16,12 +18,18 @@ const USAGE = [
   '       js-harness onboard check [--plan] [--cwd <path>]',
   '       js-harness onboard hash [--cwd <path>]',
   '       js-harness onboard template feature|origin|roadmap [--write] [--cwd <path>]',
+  '       js-harness onboard profile [<kind>[,<kind>]] [--area <id> | --checklist advice|bar [--size small|large]] [--cwd <path>]',
   'With no verb: the stage the onboarding is in, read from its files and git, and what the session does next.',
   'check: the onboarding document, docs/origin.md, docs/ROADMAP.md and AGENTS.md against the shape the onboarding',
   'asks for, each finding with the stage it sends the work back to; --plan reads only the roadmap and its ties to the',
   'pre-plan. hash: the sha256 an approval records. template: a skeleton on stdout; --write creates its file instead,',
-  'and refuses one that exists.',
+  'and refuses one that exists. profile: the kinds of project the advice knows; with kinds, their advice, areas and',
+  'bar; --area explains one area; --checklist prints the lines the onboarding pastes. With no kind it reads Kind and',
+  'Size from the onboarding document\'s ## Setup.',
 ].join('\n');
+
+/** The flags that take a value, each `profile`'s. */
+const VALUE_FLAGS = ['--area', '--checklist', '--size'];
 
 /** Where each template is written, and how it is made from the project's root. */
 const TEMPLATES = {
@@ -32,13 +40,18 @@ const TEMPLATES = {
 
 /** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored. */
 function parseArgs(argv, cwd) {
-  const parsed = { cwd, plan: false, write: false, words: [] };
+  const parsed = { cwd, plan: false, write: false, area: null, checklist: null, size: null, words: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--cwd') {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith('--')) return { error: '--cwd requires a value' };
       parsed.cwd = path.resolve(value);
+      index += 1;
+    } else if (VALUE_FLAGS.includes(arg)) {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith('--')) return { error: `${arg} requires a value` };
+      parsed[arg.slice(2)] = value;
       index += 1;
     } else if (arg === '--plan') parsed.plan = true;
     else if (arg === '--write') parsed.write = true;
@@ -48,10 +61,18 @@ function parseArgs(argv, cwd) {
   const [word, ...rest] = parsed.words;
   // No verb is the stage: what the session does next.
   const verb = word ?? 'stage';
-  const flagsOf = { stage: [], check: ['plan'], hash: [], template: ['write'] };
+  const flagsOf = { stage: [], check: ['plan'], hash: [], template: ['write'], profile: ['area', 'checklist', 'size'] };
   if (word === 'stage' || !Object.hasOwn(flagsOf, verb)) return { error: `unknown argument: ${word}` };
-  for (const flag of ['plan', 'write']) {
+  for (const flag of ['plan', 'write', 'area', 'checklist', 'size']) {
     if (parsed[flag] && !flagsOf[verb].includes(flag)) return { error: `--${flag} is not an option of ${word ?? 'onboard with no verb'}` };
+  }
+  if (verb === 'profile') {
+    if (rest.length > 1) return { error: `unknown argument: ${rest[1]}; joined kinds are written with a comma, as platform,multiplatform-app` };
+    if (parsed.area && parsed.checklist) return { error: '--area and --checklist are printed apart: pass one of them' };
+    if (parsed.checklist && !['advice', 'bar'].includes(parsed.checklist)) return { error: '--checklist takes advice or bar' };
+    if (parsed.size && !parsed.checklist) return { error: '--size goes with --checklist' };
+    if (parsed.size && !['small', 'large'].includes(parsed.size)) return { error: '--size takes small or large' };
+    return { ...parsed, verb, kind: rest[0] ?? null };
   }
   if (verb === 'template') {
     if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) return { error: 'template takes one of feature, origin, roadmap' };
@@ -229,6 +250,50 @@ function template(root, name, write, { stdout, stderr }) {
   return 0;
 }
 
+/** What `profile` prints, as `{ lines }`, or `{ error }`: a usage error that names what is missing. With no kind
+ * named, `--area` and `--checklist` read `Kind`, and `--checklist` `Size`, from the onboarding document's
+ * `## Setup`, so the session never retypes them (D9). */
+function profileOutput(root, { kind, area, checklist, size }) {
+  if (!kind && !area && !checklist) return { lines: kindsLines() };
+  const document = readOrNull(root, ONBOARDING_PATH);
+  const setup = document === null ? {} : setupValues(document);
+  let kinds;
+  if (kind) {
+    kinds = parseKind(kind);
+    if (kinds.error) return kinds;
+  } else {
+    if (document === null) return { error: `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform` };
+    if (!setup.Kind) return { error: `${ONBOARDING_PATH} has no - Kind: line under ## Setup: name a kind, or write it there` };
+    kinds = parseKind(setup.Kind);
+    if (kinds.error) return { error: `${ONBOARDING_PATH}, ## Setup: ${kinds.error}` };
+  }
+  const advised = advisedProfile(kinds.kinds);
+  if (area) {
+    const lines = areaLines(advised, area);
+    if (lines) return { lines };
+    const name = area.startsWith('A:') ? area : `A:${area}`;
+    return { error: `${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas` };
+  }
+  if (!checklist) return { lines: kindLines(advised) };
+  let chosen = size;
+  if (!chosen) {
+    if (!setup.Size) return { error: `--checklist needs the size: pass --size small|large, or write - Size: under ## Setup in ${ONBOARDING_PATH}` };
+    chosen = parseSize(setup.Size);
+    if (!chosen) return { error: `${ONBOARDING_PATH}, ## Setup: Size is ${setup.Size}, not small or large` };
+  }
+  return { lines: checklistLines(advised, checklist, chosen) };
+}
+
+function profile(root, args, { stdout, stderr }) {
+  const result = profileOutput(root, args);
+  if (result.error) {
+    stderr(result.error);
+    return 2;
+  }
+  stdout(result.lines.join('\n'));
+  return 0;
+}
+
 /** Exit 0, or 1 when the check finds something, a template's file exists or this is no initialized project, or 2 for
  * an argument it does not take. */
 export async function onboardMain(argv, env = process.env, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
@@ -246,5 +311,6 @@ export async function onboardMain(argv, env = process.env, { cwd = process.cwd()
   if (args.verb === 'stage') return stage(root, io);
   if (args.verb === 'check') return check(root, args.plan, io);
   if (args.verb === 'hash') return hash(root, io);
+  if (args.verb === 'profile') return profile(root, args, io);
   return template(root, args.template, args.write, io);
 }

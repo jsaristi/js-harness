@@ -9,6 +9,7 @@ import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, featureTemplate, originTemplate, roadmapTemplate, shortHash,
 } from './lib/onboard.mjs';
 import { files, onboardingDoc } from './lib/onboard.testkit.mjs';
+import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines } from './lib/profiles.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // A real git runs here: not the host's configuration, nor the repository of a commit's hook (see
@@ -239,6 +240,74 @@ test('bare onboard: a plan of its own is left alone, exit 1', async (t) => {
 test('an argument it does not take is a usage error, exit 2', async (t) => {
   const root = project(t);
   for (const argv of [['check', '--force'], ['template'], ['template', 'plan'], ['hash', 'extra'], ['check', '--cwd'], ['--plan'], ['--write'], ['stage']]) {
+    const { code, err } = await onboard(root, ...argv);
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(err, /Usage: js-harness onboard/, argv.join(' '));
+  }
+});
+
+const SETUP = (...lines) => ['# Onboarding', '', '## Setup', ...lines, '', '## Interview', '- [ ] 1 What it is', ''].join('\n');
+
+test('profile lists the kinds, prints a kind, and explains one area of the kinds named', async (t) => {
+  const root = project(t);
+  assert.deepEqual(await onboard(root, 'profile'), { code: 0, out: kindsLines().join('\n'), err: '' });
+  assert.deepEqual(await onboard(root, 'profile', 'static-site'), { code: 0, out: kindLines(advisedProfile(['static-site'])).join('\n'), err: '' });
+  assert.deepEqual(await onboard(root, 'profile', 'platform,multiplatform-app', '--area', 'A:auth'), {
+    code: 0,
+    out: areaLines(advisedProfile(['platform', 'multiplatform-app']), 'A:auth').join('\n'),
+    err: '',
+  });
+  assert.deepEqual(await onboard(root, 'profile', 'static-site', '--checklist', 'bar', '--size', 'large'), {
+    code: 0,
+    out: checklistLines(advisedProfile(['static-site']), 'bar', 'large').join('\n'),
+    err: '',
+  });
+});
+
+test('profile with no kind reads Kind and Size from the onboarding\'s ## Setup', async (t) => {
+  const root = project(t, { [ONBOARDING_PATH]: SETUP('- Kind: other (nearest: platform)', '- Size: small (L5)') });
+  assert.deepEqual(await onboard(root, 'profile', '--checklist', 'advice'), {
+    code: 0,
+    out: checklistLines(advisedProfile(['platform']), 'advice', 'small').join('\n'),
+    err: '',
+  });
+  assert.deepEqual(await onboard(root, 'profile', '--area', 'data'), { code: 0, out: areaLines(advisedProfile(['platform']), 'data').join('\n'), err: '' });
+  // A kind named on the command line takes the document's Size.
+  assert.deepEqual(await onboard(root, 'profile', 'static-site', '--checklist', 'advice'), {
+    code: 0,
+    out: checklistLines(advisedProfile(['static-site']), 'advice', 'small').join('\n'),
+    err: '',
+  });
+});
+
+test('profile names what is missing when it cannot tell the kind, the size or the area, exit 2', async (t) => {
+  const bare = project(t);
+  const cases = [
+    [bare, ['profile', '--checklist', 'advice'], `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform`],
+    [bare, ['profile', 'platform', '--checklist', 'advice'], `--checklist needs the size: pass --size small|large, or write - Size: under ## Setup in ${ONBOARDING_PATH}`],
+    [bare, ['profile', 'shop'], 'shop is not a kind of the profiles; js-harness onboard profile lists them'],
+    [bare, ['profile', 'static-site', '--area', 'A:auth'], 'A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas'],
+    [project(t, { [ONBOARDING_PATH]: SETUP('- Size: large (L5)') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH} has no - Kind: line under ## Setup: name a kind, or write it there`],
+    [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: shop') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH}, ## Setup: shop is not a kind of the profiles; js-harness onboard profile lists them`],
+    [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: platform', '- Size: medium') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH}, ## Setup: Size is medium, not small or large`],
+  ];
+  for (const [root, argv, err] of cases) {
+    assert.deepEqual(await onboard(root, ...argv), { code: 2, out: '', err }, argv.join(' '));
+  }
+});
+
+test('profile\'s own flags are usage errors elsewhere, and --area and --checklist go apart', async (t) => {
+  const root = project(t);
+  for (const argv of [
+    ['profile', 'platform', '--area', 'A:data', '--checklist', 'advice'],
+    ['profile', 'platform', '--checklist', 'plan'],
+    ['profile', 'platform', '--checklist', 'advice', '--size', 'medium'],
+    ['profile', 'platform', '--size', 'small'],
+    ['profile', 'platform', 'static-site'],
+    ['profile', '--area'],
+    ['check', '--area', 'A:data'],
+    ['hash', '--size', 'small'],
+  ]) {
     const { code, err } = await onboard(root, ...argv);
     assert.equal(code, 2, argv.join(' '));
     assert.match(err, /Usage: js-harness onboard/, argv.join(' '));

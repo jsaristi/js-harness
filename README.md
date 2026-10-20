@@ -238,6 +238,28 @@ roadmap   missing
 The `check` is cut to three of its findings. A project with a plan of its own and no onboarding
 anywhere is left alone, exit 1. The design is `odd/tasks/onboarding.md`.
 
+`profile` prints the advice the session gives from, one piece at a time, so none of it loads on
+every turn: with no argument the kinds of project it knows; with a kind (or two, joined by a
+comma) its default, why, and its areas and bar; `--area <id>` one area, explained for each level
+of experience, with its pitfalls, each kind's advice and its sourced targets; `--checklist
+advice|bar` the lines the onboarding pastes. With no kind it reads `Kind` and `Size` from the
+onboarding document's `## Setup`; a small project keeps the core areas only.
+
+```console
+$ js-harness onboard profile platform --checklist advice --size small
+- [ ] A:architecture Architecture
+- [ ] A:frontend Front end and UX
+- [ ] A:backend Back end and API
+- [ ] A:data Data and storage
+- [ ] A:auth Authentication and accounts
+- [ ] A:hosting Hosting and environments
+- [ ] A:security Security
+- [ ] A:accessibility Accessibility
+- [ ] A:ci CI and tests
+- [ ] A:legal Legal and privacy
+- [ ] A:cost Cost and budget
+```
+
 ### js-harness install
 
 Writes the skills and the session hooks for Claude Code and Codex under the home, and records a
