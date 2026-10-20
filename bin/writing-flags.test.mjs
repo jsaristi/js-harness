@@ -37,6 +37,9 @@ const WRITING = [
   ['throughput', 'snapshot'],
   ['throughput', 'reviewed'],
   ['throughput', 'shipped'],
+  ['clean'],
+  ['clean', '--apply', '--kind', 'temp-scratch'],
+  ['clean', '--measure'],
 ];
 
 function probe(args, flag) {
