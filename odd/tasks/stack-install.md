@@ -5,6 +5,12 @@ Locator: `odd/tasks/stack-install.md` · Engram mirror: `odd/stack-install/tasks
 Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` after his yes. Design version 3: version 1
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
+Next step (2026-10-19, kept current): slice 1 is code commit `866f197b` on feat/stack-install (T2 done, not pushed).
+Next: the gentle-ai review of slice 1 (`gentle-ai review start --cwd <worktree> --base-ref origin/main --committed-only`;
+consent pre-granted, run `granted`), then `js-harness codex-review --base origin/main`, then a gentle-ai line in the Log
+naming `866f197b`, push, PR, ready notice to the orchestrator (`js-harness notify --to orchestrator --kind ready --pr <n>`).
+Then T3 (slice 2) on a branch stacked on it.
+
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
 that installs it, runs those commands one at a time with consent, records each so `uninstall` undoes it exactly, and
