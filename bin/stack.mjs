@@ -5,14 +5,16 @@
 // recorded before it starts so `uninstall machine` can undo it exactly (D4, D6, D7).
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { unknownArgument } from './lib/args.mjs';
 import { forgetStackRow, recordStackRow } from './lib/manifest.mjs';
+import { realCodexHome } from './lib/codex-review-home.mjs';
 import { copyPackageManager } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
-import { planStack, RUNNABLE } from './lib/stack-install.mjs';
+import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
 import { probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { pmKind, splitCommand } from './lib/version.mjs';
@@ -163,8 +165,11 @@ const rowLines = (row, platform, head) => [head, `     run:  ${shownCommand(row.
  * terminal (`Run it? [y/N]`), or run under `--yes` when `--tool` names its tool. Without a terminal and without
  * `--yes` nothing runs. Its record is written before it starts; after it the stack is probed again, so a row an
  * earlier command closed is not run, a failure whose gap is still open loses its record, and one that closed it keeps
- * it with what its undo applies to, read back. Exit 0 when no row it set out to run is left missing, 1 when one is
- * (declined, failed or timed out), 2 on a usage error. `deps`: `read` (the probes), `spawn` (the runner, refused in a
+ * it with what its undo applies to, read back; a row is done only when the probe then reads it `ok`. A prefix's `bin`
+ * is on the PATH of every probe and command, so what it installs is found; a registration in Codex while his
+ * `CODEX_HOME` is elsewhere than `<home>/.codex`, which the probe and the record read, is left to him. Exit 0 when no
+ * row it set out to run is left missing or unverified, 1 when one is (declined, failed, timed out or left to him), 2
+ * on a usage error. `deps`: `read` (the probes), `spawn` (the runner, refused in a
  * test unless given), `ask`, `interactive`, `realHome`, `now`, `log`, `error`, `platform`. */
 export async function stackInstallMain(argv, env = process.env, deps = {}) {
   const log = deps.log ?? ((line) => console.log(line));
@@ -183,14 +188,21 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
   const ask = deps.ask ?? askOnTerminal;
   const now = deps.now ?? (() => new Date().toISOString());
   const pm = resolveStackPm(args.pm, env);
-  // A scratch home reaches every child, the probes included, and the record keeps it for the undo (D6).
-  const scratch = homeEnv(args.home, deps.realHome ?? os.homedir(), platform);
-  const planNow = () => {
-    const { rows, functions, prerequisites } = read({ home: args.home, cwd: args.cwd, spawn: deps.spawn, platform, env: withEnv(env, scratch, platform) });
-    return planStack({ rows, functions, prerequisites, pm, prefix: args.prefix, platform });
-  };
+  // A scratch home and a prefix's `bin` reach every child, the probes included, and the record keeps them for the
+  // undo (D6).
+  const scratch = { ...homeEnv(args.home, deps.realHome ?? os.homedir(), platform), ...(args.prefix && { PATH: prefixBinOf(pm.kind, args.prefix, platform) }) };
+  const readNow = () => read({ home: args.home, cwd: args.cwd, spawn: deps.spawn, platform, env: withEnv(env, scratch, platform) });
+  const planOf = ({ rows, functions, prerequisites }) => planStack({ rows, functions, prerequisites, pm, prefix: args.prefix, platform });
+  const planNow = () => planOf(readNow());
+  // Codex writes its registrations where `CODEX_HOME` says; the probe and the record read `<home>/.codex`.
+  const codexHome = realCodexHome(withEnv(env, scratch, platform), args.home, platform);
+  const codexHomeRead = path.join(args.home, '.codex');
+  const fold = (dir) => (platform === 'win32' ? path.resolve(dir).toLowerCase() : path.resolve(dir));
+  const codexElsewhere = fold(codexHome) !== fold(codexHomeRead);
+  const unverified = [];
   const chosen = (plan) => plan.mandatory.filter((row) => args.tools.length === 0 || args.tools.includes(row.tool));
-  const missing = (key) => chosen(planNow()).find((row) => keyOf(row) === key);
+  const missingIn = (plan, key) => chosen(plan).find((row) => keyOf(row) === key);
+  const missing = (key) => missingIn(planNow(), key);
 
   const first = chosen(planNow());
   if (first.length === 0) {
@@ -209,6 +221,10 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
       log(`${tool} ${dimension}: no longer missing`);
       continue;
     }
+    if (row.kind === 'registration' && dimension === 'codex' && codexElsewhere) {
+      error(`${tool} ${dimension}: your CODEX_HOME is ${codexHome}, and js-harness reads ${codexHomeRead}; register it by hand: ${shownCommand(row.run, platform)}`);
+      continue;
+    }
     for (const line of rowLines(row, platform, `${tool} ${dimension}`)) log(line);
     if (!args.yes && !(await ask('Run it? [y/N] '))) {
       log(`${tool} ${dimension}: skipped`);
@@ -219,17 +235,29 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     const record = { tool, dimension, kind: row.kind, ...(row.bin && { bin: row.bin }), run: row.run, undo: row.undo, applies: null, env: given, at: now() };
     recordStackRow(args.home, record);
     const result = runWords(row.run, { spawn: deps.spawn, env: childEnv, timeout: TIMEOUTS[row.kind], interactive: !args.yes, platform });
-    const stillMissing = Boolean(missing(`${tool}.${dimension}`));
+    const after = readNow();
+    const stillMissing = Boolean(missingIn(planOf(after), `${tool}.${dimension}`));
+    const state = after.rows.find((probed) => probed.id === tool)?.[dimension];
     if (stillMissing && !result.ok) {
       // Nothing of it stayed, so nothing is undone: a later install of his own must never be (D7).
       forgetStackRow(args.home, record);
       error(`${tool} ${dimension} failed: ${result.why}`);
       continue;
     }
+    if (!result.ok && state !== 'ok') {
+      // Something of it may have stayed: the record stays, and uninstall machine keeps it until it can read it.
+      unverified.push(record);
+      error(`${tool} ${dimension}: the command failed (${result.why}) and the probe cannot tell what it left; it stays recorded, so uninstall machine judges it`);
+      continue;
+    }
     recordStackRow(args.home, { ...record, applies: appliesOf(row, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value });
     if (stillMissing) error(`${tool} ${dimension}: the command exited 0 and the probe still finds it missing; it stays recorded, so uninstall machine tries its undo`);
-    else log(`${tool} ${dimension}: done`);
+    else if (state === 'ok') log(`${tool} ${dimension}: done`);
+    else {
+      unverified.push(record);
+      error(`${tool} ${dimension}: the command exited 0 and the probe cannot tell whether it worked; it stays recorded, so uninstall machine judges it`);
+    }
   }
   const left = chosen(planNow()).filter((row) => first.some((was) => keyOf(was) === keyOf(row)));
-  return left.length === 0 ? 0 : 1;
+  return left.length === 0 && unverified.length === 0 ? 0 : 1;
 }

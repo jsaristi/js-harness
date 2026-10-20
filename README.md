@@ -513,8 +513,11 @@ required is missing, 1 when something is.
 that order. Each is printed with its undo and asked `Run it? [y/N]` in a terminal; without one it
 runs nothing unless given `--yes`, and then only the tools `--tool` names. Each is recorded in the
 machine manifest before it starts, so `uninstall machine` undoes it; a failure that left nothing
-behind loses its record. It exits 0 when nothing it set out to install is missing, 1 when
-something is (declined, failed or timed out). In the TUI, Install the stack sits after Doctor
+behind loses its record, and one the probe cannot read afterwards keeps it. Under `--prefix` the
+prefix's binaries come first on the PATH of every probe and command. With a `CODEX_HOME` of your
+own elsewhere than `~/.codex`, the registration in Codex is printed for you to run, never run. It
+exits 0 when nothing it set out to install is missing or unverified, 1 when something is
+(declined, failed, timed out or left to you). In the TUI, Install the stack sits after Doctor
 while a required tool is missing, and runs `stack install`, each y/N answered by one key.
 
 ```console

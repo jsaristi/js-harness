@@ -23,7 +23,7 @@ function newWorld() {
 }
 
 function read(world) {
-  return () => ({
+  return ({ env } = {}) => ((world.reads ??= []).push(env), {
     rows: ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => ({ id, version: '1.0.0', ...OK, fix: {}, ...world[id] })),
     functions: ON,
     prerequisites: [{ id: 'git', state: 'ok' }, { id: 'gh', state: 'ok' }],
@@ -38,7 +38,10 @@ function spawnOf(world, home, manifestSeen = []) {
     if (args[0] === '--version') return world[file]?.installed === 'ok' ? { status: 0, stdout: `${file} 2.0.0\n` } : { status: 1 };
     world.lines.push({ line, env: options.env, stdio: options.stdio, timeout: options.timeout });
     manifestSeen.push(readManifest(home)?.stack?.map((r) => `${r.tool}.${r.dimension}`) ?? []);
-    if (world.fail.has(line)) return { status: 1, stderr: 'it broke' };
+    if (world.fail.has(line)) {
+      world.onFail?.(line);
+      return { status: 1, stderr: 'it broke' };
+    }
     if (line === 'pnpm add -g @openai/codex') world.codex.installed = 'ok';
     if (line === 'pnpm add -g @colbymchenry/codegraph') world.codegraph.installed = 'ok';
     if (line.startsWith('claude mcp add')) {
@@ -50,11 +53,11 @@ function spawnOf(world, home, manifestSeen = []) {
   };
 }
 
-async function run(argv, { world, home, answers = [], interactive = false, manifestSeen }) {
+async function run(argv, { world, home, answers = [], interactive = false, manifestSeen, env = {} }) {
   const out = [];
   const err = [];
   const asked = [];
-  const code = await stackMain(['install', '--home', home, ...argv], { JS_HARNESS_PM: 'pnpm', PATH: '/usr/bin' }, {
+  const code = await stackMain(['install', '--home', home, ...argv], { JS_HARNESS_PM: 'pnpm', PATH: '/usr/bin', ...env }, {
     read: read(world),
     spawn: spawnOf(world, home, manifestSeen),
     platform: 'linux',
@@ -199,4 +202,37 @@ test('with nothing missing, stack install says so, runs nothing and exits 0', wi
   assert.equal(code, 0);
   assert.match(out, /nothing to install/);
   assert.deepEqual(world.lines, []);
+}));
+
+// Codex on b9722fc..e57f2d0: a prefix's binaries reach the probes and the commands after the install, a Codex home of
+// his own elsewhere is never written to behind the record's back, and a failure is never reported done.
+test('under --prefix the probes and every command after the install see the prefix\'s bin first', withHome(async (home) => {
+  const world = newWorld();
+  const { code } = await run(['--yes', '--tool', 'codex', '--tool', 'codegraph', '--prefix', '/p'], { world, home });
+  assert.equal(code, 0);
+  assert.ok(world.reads.every((env) => env.PATH.startsWith(path.join('/p', 'bin'))), world.reads.map((env) => env.PATH).join('\n'));
+  const codexAdd = world.lines.find(({ line }) => line.startsWith('codex mcp add'));
+  assert.ok(codexAdd.env.PATH.startsWith(path.join('/p', 'bin')), codexAdd.env.PATH);
+  assert.ok(readManifest(home).stack.every((row) => row.env.PATH === path.join('/p', 'bin')), 'the undo gets the same PATH');
+}));
+
+test('a Codex home of his own elsewhere keeps the registration in Codex his step: nothing is run or recorded for it', withHome(async (home) => {
+  const world = newWorld();
+  const elsewhere = path.join(home, 'his-codex');
+  const { code, err } = await run(['--yes', '--tool', 'codegraph'], { world, home, env: { CODEX_HOME: elsewhere } });
+  assert.equal(code, 1);
+  assert.ok(!world.lines.some(({ line }) => line.startsWith('codex mcp add')), 'never written where the record does not read');
+  assert.ok(err.includes(`codegraph codex: your CODEX_HOME is ${elsewhere}, and js-harness reads ${path.join(home, '.codex')}; register it by hand: codex mcp add codegraph -- codegraph serve --mcp`), err);
+  assert.deepEqual(readManifest(home).stack.map((row) => `${row.tool}.${row.dimension}`), ['codegraph.installed', 'codegraph.claude']);
+}));
+
+test('a failed command whose probe then cannot tell is not done: it stays recorded and the run exits 1', withHome(async (home) => {
+  const world = newWorld();
+  world.fail.add('pnpm add -g @openai/codex');
+  world.onFail = () => { world.codex.installed = 'unknown'; };
+  const { code, out, err } = await run(['--yes', '--tool', 'codex'], { world, home });
+  assert.equal(code, 1);
+  assert.ok(!out.includes('codex installed: done'), out);
+  assert.ok(err.includes('codex installed: the command failed (exit 1: it broke) and the probe cannot tell what it left; it stays recorded, so uninstall machine judges it'), err);
+  assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', null]]);
 }));

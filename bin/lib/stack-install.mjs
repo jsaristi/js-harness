@@ -2,6 +2,7 @@
 // runs (each with its exact undo), which are the person's own steps, and which are optional. Pure: it reads the rows
 // `probeStack` already probed and the switches `functionsOf` resolved, and spawns nothing. See
 // odd/tasks/stack-install.md (D1-D3).
+import path from 'node:path';
 import { GAP_STATES } from './digest.mjs';
 import { installPlan } from './version.mjs';
 
@@ -35,15 +36,21 @@ export const RUNNABLE = [
   },
 ];
 
+/** The folder a global install under `prefix` puts its binaries in: the prefix itself for npm on Windows, its `bin`
+ * for npm elsewhere and for pnpm, whose `installPlan` names it so. */
+export function prefixBinOf(kind, prefix, platform) {
+  return kind !== 'pnpm' && platform === 'win32' ? prefix : path.join(prefix, 'bin');
+}
+
 /** The global install of `spec` and its remove, as words, for the package manager `pm` (`{ words, kind }`), with
  * `env`, the variables both are given over the environment. The install's arguments are `installPlan`'s, so the
  * module installs as `upgrade` does; under a `prefix` npm takes `--prefix` and pnpm gets the prefix as its home,
- * its own folders inside it and its `bin` first on the PATH (a `PATH` here goes before the one there), and the
- * remove is given the same (D6). */
+ * its own folders inside it, and either finds its binaries first on the PATH (a `PATH` here goes before the one
+ * there), so its probes find them; the remove is given the same (D6). */
 export function packageWords(pm, spec, platform, prefix = null) {
   const { args, env } = installPlan(pm.kind, spec, prefix, {}, platform);
   const remove = pm.kind === 'pnpm' ? ['remove', '-g', spec] : ['uninstall', '-g', spec, ...(prefix ? ['--prefix', prefix] : [])];
-  return { run: [...pm.words, ...args], undo: [...pm.words, ...remove], env };
+  return { run: [...pm.words, ...args], undo: [...pm.words, ...remove], env: prefix && pm.kind !== 'pnpm' ? { ...env, PATH: prefixBinOf(pm.kind, prefix, platform) } : env };
 }
 
 const GENTLE_AI_AGENTS = { claude: 'claude-code', codex: 'codex' };

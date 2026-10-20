@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RUNNABLE, planStack, packageWords } from './stack-install.mjs';
+import { RUNNABLE, planStack, packageWords, prefixBinOf } from './stack-install.mjs';
 import path from 'node:path';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
@@ -50,7 +50,11 @@ test('packageWords gives the install and the remove of a spec for either manager
 });
 
 test('with a prefix, npm installs and removes there, and pnpm gets that folder as its home, for the run and the undo alike', () => {
-  assert.deepEqual(packageWords(NPM, 'x', 'linux', '/p'), { run: ['npm', 'install', '-g', 'x', '--prefix', '/p'], undo: ['npm', 'uninstall', '-g', 'x', '--prefix', '/p'], env: {} });
+  assert.deepEqual(packageWords(NPM, 'x', 'linux', '/p'), { run: ['npm', 'install', '-g', 'x', '--prefix', '/p'], undo: ['npm', 'uninstall', '-g', 'x', '--prefix', '/p'], env: { PATH: path.join('/p', 'bin') } });
+  // npm puts a global binary in the prefix itself on Windows, in its `bin` elsewhere (Codex on b9722fc..e57f2d0).
+  assert.deepEqual(packageWords(NPM, 'x', 'win32', 'C:/p').env, { PATH: 'C:/p' });
+  assert.equal(prefixBinOf('npm', '/p', 'linux'), path.join('/p', 'bin'));
+  assert.equal(prefixBinOf('pnpm', 'C:/p', 'win32'), path.join('C:/p', 'bin'));
   const pnpm = packageWords(PNPM, 'x', 'linux', '/p');
   assert.deepEqual(pnpm.run, ['pnpm', 'add', '-g', 'x']);
   assert.deepEqual(pnpm.undo, ['pnpm', 'remove', '-g', 'x']);
