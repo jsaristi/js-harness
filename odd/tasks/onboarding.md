@@ -57,12 +57,24 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
   the pre-plan and the plan hold, the roadmap's shape (phases, checkable items, a "done when" per phase), where it is
   stored and how a later session resumes it; onboard reuses `init`, the task contract, this repository's roadmap
   shape and what gentle-ai offers, instead of rebuilding them.
+- S3. His words (2026-10-19, answering Pregunta 25, transcript 908805db), verbatim: "La idea no es que sea un
+  proyecto de prueba, la idea es que se hable con la Ia de que se va a tratar el proyecto osea de: investigacion, de
+  analisis, de una pagina web estatica, de una plataforma o una aplicacion multiplataforma, etc. lo que tengo en mente
+  es crear un orquestador planificador que guie y asesore al usuario de que tecnologia debe usar y como es la
+  arquitectura osea es un asesor pero con lo que se piensa hacer en el proyecto, osea adquirir el rol en el
+  orquestador del plan y por ejemplo: si el desarrollador del proyecto sabe que hacer lo guia y lo asesora
+  avanzadamente por ejemplo sabe que esta tecnologico escoger por ejemplo el stack mern entonces lo guia super
+  avanzado para el proyecto y asi para el resto de cosas cuando se crea el roadmap y todo el plan completo ahi si entra
+  la sesion orquestadora a construir como hemos venido trabajando, ahora si la persona no sabe del stack o es un
+  programador muy junior lo vas a guiar a enseñar y darle el criterio de acompañamiento de por que hacerlo como le
+  propones para que su proyecto quede excelente y muy bien"
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
-- [ ] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests
-- [ ] T4 (kind: verify) The one real onboarding of the done-when
+- [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
+- [ ] T6 (kind: design) Design v4 from S3: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
+- [ ] T4 (kind: verify) The one real onboarding of the done-when, after T6 (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
 
 ## Design
@@ -298,12 +310,24 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
   - 12aa07ce and ef60d123, fixes from gentle-ai's review;
   - 04163529, Codex's P2.
   Each has its line under `## Reviews`.
-- Next step (session JH 30, worktree compassionate-allen-842d94, branch feat/onboarding-stages):
-  1. Run `js-harness codex-review --base ef60d123` (it covers 04163529).
-  2. Push, and open the PR of slice 2 on main. It holds 466's commits until 466 lands. Its body needs a gentle-ai
-     line.
-  3. SendMessage the lead (local_bd0ae465), signed JH 30, with the PR number.
-  4. Then T4: one real onboarding in a scratch project.
+- L9 (2026-10-19) PRs 466 and 468 merged, so slices 1 and 2 are on main and T3 is checked. T4 started in a scratch
+  project made with `init` (`%TEMP%\tmp.B03yRgQ1Xy`, its init files committed as c587e05, stage 1). Its first
+  question, the owner's request for L1, went to the lead as Pregunta 25. His answer is S3, verbatim. It stops the
+  scratch-project interview and reframes onboarding itself: the onboarding is a planning conversation with the AI in a
+  plan-orchestrator role, before the build orchestrator takes over. It asks the project's kind (research, analysis,
+  static site, platform, multiplatform app...) and the developer's level. It advises the stack and the architecture:
+  in depth for one who knows, and teaching the why to a junior. It ends with the roadmap and the full plan. The lead
+  asked for design v4 from it, reviewed by two readers, with only the remaining product decisions sent to the lead
+  as questions, one at a time. This is T6.
+- Next step (branch feat/onboarding-plan-advisor, cut from main at bc76bc46):
+  1. T6: read `## Design` (v3) against S3, and write v4. What changes is mostly the interview (the project's kind and
+     the developer's level come first, and they shape the questions and the depth of advice) and the pre-plan, which
+     gains a stack and architecture section with the reasons behind each choice. What stays is the stages, the
+     files, `check` and resume, already built.
+  2. Run two readers over v4 at high effort, and record their round under `## Reviews`.
+  3. Send the lead each remaining product decision with `js-harness notify --to orchestrator --kind question`, one
+     at a time.
+  4. Then T4, the real onboarding, in the new shape.
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.
