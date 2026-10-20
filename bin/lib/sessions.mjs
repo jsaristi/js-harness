@@ -811,17 +811,23 @@ export function mainCheckout(run, cwd) {
 /** The sessions folders of the project at `root` under `claudeHome`: the main checkout's first, then each worktree's
  * that git lists. Claude Code files a session under the folder it was opened in, so a session opened in a worktree
  * (the app's `.claude/worktrees/<name>`) is not under the main checkout's: JH 30's closed notice carried a null title
- * for want of that folder (2026-10-20). A git that cannot list the worktrees, or throws, leaves the main folder alone. */
+ * for want of that folder (2026-10-20). A git that cannot list the worktrees, or throws, leaves the main folder alone.
+ * The list is read apart by NUL (`-z`), so a path is the one git wrote whatever it holds, a line break included. */
 export function projectDirsOf(run, root, claudeHome) {
   const dirs = [path.join(claudeHome, 'projects', projectSlug(root))];
   let listed;
   try {
-    listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
+    listed = run('git', ['worktree', 'list', '--porcelain', '-z'], { cwd: root });
   } catch {
     return dirs;
   }
   if (listed.error || listed.status !== 0) return dirs;
-  for (const tree of parseWorktreeList(String(listed.stdout))) {
+  const trees = [];
+  for (const field of String(listed.stdout).split('\0')) {
+    if (field.startsWith('worktree ')) trees.push({ path: field.slice('worktree '.length), bare: false });
+    else if (field === 'bare' && trees.length > 0) trees.at(-1).bare = true;
+  }
+  for (const tree of trees) {
     const dir = path.join(claudeHome, 'projects', projectSlug(path.resolve(tree.path)));
     if (!tree.bare && !dirs.includes(dir)) dirs.push(dir);
   }

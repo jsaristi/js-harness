@@ -283,7 +283,7 @@ test('a session opened in a .claude/worktrees worktree is read from that worktre
   const appWorktree = path.join(machine.root, '.claude', 'worktrees', 'calm-x');
   writeSession(machine, SENDER, SENDER_TITLE, { projectDir: path.join(machine.claudeHome, 'projects', projectSlug(appWorktree)) });
   const { run } = fakeGit(machine);
-  const listed = `worktree ${slashes(machine.root)}\nHEAD 1111\nbranch refs/heads/main\n\nworktree ${slashes(appWorktree)}\nHEAD 2222\nbranch refs/heads/fix/x\n\n`;
+  const listed = [`worktree ${slashes(machine.root)}`, 'HEAD 1111', 'branch refs/heads/main', '', `worktree ${slashes(appWorktree)}`, 'HEAD 2222', 'branch refs/heads/fix/x', '', ''].join('\0');
   const withWorktrees = (command, args, options) => (args[0] === 'worktree' && args[1] === 'list' ? ok(listed) : run(command, args, options));
   const { code, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'from the app worktree'], { cwd: appWorktree, run: withWorktrees });
   assert.deepEqual([code, err], [0, []]);
