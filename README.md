@@ -491,6 +491,37 @@ Fix:
 …
 ```
 
+### js-harness stack
+
+Read-only. Lists the tools the harness requires that are missing on this machine for this
+project, in the order `stack install` runs them, each with its command and its exact undo:
+the Codex CLI while the project's `codexReview` switch is not off, codegraph while `codeMap`
+is not off, and codegraph's registrations in Claude Code and Codex. What it never runs is
+named as your own step: gentle-ai's installer (its uninstall is not an exact undo, so it
+stays yours, with gentle-ai's own undo beside it), engram, which that installer brings, a
+login, and the prerequisites `git` and `gh`. context7 and typescript-lsp are listed as
+optional. The package manager is `--pm`, else `JS_HARNESS_PM`, else the one that installed
+this copy. `--json` prints `{ mandatory, manual, optional }`. It exits 0 when nothing
+required is missing, 1 when something is.
+
+```console
+$ js-harness stack
+js-harness stack: 2 to install, 1 of your own steps.
+
+Installs (stack install runs each one after you say yes, in this order):
+  1. codegraph claude
+     run:  claude mcp add -s user codegraph -- codegraph serve --mcp
+     undo: claude mcp remove -s user codegraph
+  2. codegraph codex
+     run:  codex mcp add codegraph -- codegraph serve --mcp
+     undo: codex mcp remove codegraph
+
+Your steps (never run):
+  - codex (codex): a login takes your credentials
+      codex login
+    undo: codex logout
+```
+
 ### js-harness progress
 
 Shows the roadmap's phases and the features, counted from the checkboxes of `docs/ROADMAP.md`

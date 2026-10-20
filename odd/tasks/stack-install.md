@@ -67,8 +67,8 @@ of the one scratch trial (package downloads).
   installer, which the module names as his step (D3); S3 then holds for every other mandatory tool.
 
 ## Tasks
-- [ ] T1 (kind: design) This design, past its two readers, F1 answered, and his yes
-- [ ] T2 (kind: build) Slice 1: `bin/lib/stack-install.mjs` (D1-D3 as data, the plan, D7's record shape), `js-harness stack` read-only with `--json` (D5, D8), help, README, SPEC, with tests
+- [x] T1 (kind: design) This design, past its two readers, F1 answered, and his yes (L4, L5)
+- [x] T2 (kind: build) Slice 1: `bin/lib/stack-install.mjs` (D1-D3 as data, the plan, D7's record shape), `js-harness stack` read-only with `--json` (D5, D8), help, README, SPEC, with tests
 - [ ] T3 (kind: build) Slice 2: `stack install` (D4, D6), the manifest's `stack` record and its undo in `uninstall` (D7), the TUI item (D5), `scripts/stack-scratch.mjs` (D9), with tests
 - [ ] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
 - [ ] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
@@ -277,3 +277,11 @@ onboarding's files; a note in the shared notes folder hands that session this co
   tuyo, nombrado (Recomendado)". So F1 is option 1: the module detects gentle-ai and engram, prints their command and
   their undo, and neither runs nor records them; it installs, and undoes exactly, only the Codex CLI, codegraph and
   their MCP registrations. Next: the question of his yes to the design.
+- L5 (2026-10-19) His answer to question 26, relayed by the orchestrator (answer 26 on the channel), verbatim:
+  "Construirlo (Recomendado)". T1 closed; the build starts with slice 1 (T2), test-first. The orchestrator: two
+  slices, each with a gentle-ai review, a Codex review and a gentle-ai line per code commit; the manual proof on a
+  scratch home only; a ready notice per PR; no change to `package.json`.
+- L6 (2026-10-19) T2 built test-first: `bin/lib/stack-install.test.mjs` RED (no module), then GREEN, 16 tests; a run
+  against an empty scratch home (`stack --home <empty>`) showed a fix named twice (engram's two `gentle-ai sync`),
+  pinned by a RED test, then fixed. `bin/stack.test.mjs` 9 tests. `npm run check` PASS (tests in WSL2, spec 59). On
+  this machine `js-harness stack` reads "nothing the harness requires is missing" and exits 0.
