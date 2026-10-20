@@ -36,7 +36,8 @@ makes that path the default for every project and checks its result.
   change for all of them; onboard writes outside the block instead (D7). Calling a model from the CLI (D1). Adopting
   a plan of another shape that a project already has (D8). Scripting the interview in `scripts/practice.mjs`, whose
   host runs only one-shot `claude -p` calls (`scripts/practice.mjs:261`, `:349-355`). The TUI entry, later.
-  Teaching in the work sessions that build (S7 keeps it to the orchestrator). Kinds beyond those OD-K settles.
+  Teaching in a work session's own chat: after onboarding, a work session writes the why only into the questions it
+  sends through the lead (S7, D13). Kinds beyond those OD-K settles.
 
 ## Constraints
 - Zero dependencies and no model call from the CLI — because every command here runs in any host with no install
@@ -100,8 +101,8 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
 - [ ] T6 (kind: design) Design v4 from S3-S7, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
-- [ ] T7 (kind: build) Slice 3: `bin/lib/profiles-data.mjs`, `onboard profile`, the shape test (D9), after his yes to v4
-- [ ] T8 (kind: build) Slice 4: the v4 interview, `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines (D2-D6, D10-D12)
+- [ ] T7 (kind: build) Slice 3: `bin/lib/profiles-data.mjs`, `onboard profile`, the shape test (D9), after his yes to v4; with OD-R's proposal, the data passes two readers
+- [ ] T8 (kind: build) Slice 4: the v4 interview, `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
 - [ ] T4 (kind: verify) The one real onboarding of the done-when, after T9 (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (`docs/ROADMAP.md:231-237`, on `main` now) and record the reviews
@@ -199,8 +200,11 @@ command's output, tested like any other output.
 - **Before the first question**, one line tells the owner that teaching is on, and that "sin enseñanza" turns it off
   and "fácil y rápido" asks for the fast plan (S4). The session logs that it said so, as a Log line marked
   `(session)`, and `## Setup` records `Teaching: on (L<n>)`.
-- **`## Setup`** (formats in D6): `Kind`, `Size`, `Level`, `Teaching`, `Mode`. `Mode: full` and `Teaching: on` are
-  written with the template, as the defaults. A change to `## Setup` is committed at once, apart from the
+- **`## Setup`** (formats in D6): `Kind`, `Size`, `Level`, `Teaching`, `Mode`. The template writes `- Mode: full`
+  and a bare `- Teaching: on`, which D6's format does not accept, so stage 2 stays current until the announcement is
+  logged and the line reads `Teaching: on (L<n>)`. `Level` is written at topic 3 for the layers, and completed in the
+  same commit that pastes `## Advice`: each area takes the level of the layer it belongs to, and an area of no layer
+  (cost, legal, team and timeline) takes `some` unless the owner said otherwise. A change to `## Setup` is committed at once, apart from the
   every-three-answers rhythm of D7, because a lost teaching or mode choice would be asked again (L12); it is rare.
 - **The eleven topics**, in order, each a checkbox under `## Interview`; the areas of `## Advice` (D10) come between
   topics 7 and 8, because scope, order and risks depend on what was decided:
@@ -306,19 +310,22 @@ default, a fixture in tests), so a change to the data never breaks the lib's tes
     `interview`, which reads only `## Interview`: no project was onboarded with v3, and a v3 document simply finds
     stage 3 current again.
   - `adrs`, over every `docs/adr/*.md`, sorted by path, each path and text.
-  - `Teaching`, `Mode` and `Level` are left out of every hash on purpose (D2).
+  - `Teaching`, `Mode`, `Level`, fast mode's given-up line and the roadmap's `## Advice mode` section are left out of
+    every hash on purpose (D2): the `roadmap` hash is taken over the file without that section, so a teaching or
+    level change between O4 and O6 reopens nothing either.
+  - An ADR is named everywhere as `ADR-<nnnn>`, four digits, which is the file `docs/adr/<nnnn>-<slug>.md`.
 - `O2` records `answers`; `O3` records `origin` and `adrs`; `O5` records `roadmap`, `origin` and `adrs`.
 
 **What it checks**:
 - **The onboarding document**: the eleven topics checked, topics 1, 2, 3, 4 and 9 answered; `O3` and `O5` checked,
   each with its hashes matching and a Log line; `## Reviews` holds a round for each of the two reviews.
 - **The setup and the advice** (v4): `## Setup` holds its five lines in the formats above, `Kind` naming kinds of the
-  profiles or `other`, every `Level` area listed. Until `O6` closes, the areas under `## Advice` are exactly the set
+  profiles or `other` (until `O6` closes), every `Level` area listed. Until `O6` closes, the areas under `## Advice` are exactly the set
   `--checklist advice` prints for that `Kind` and `Size`; after it, the set is no longer compared, so a later release
   that changes the profiles never turns a finished onboarding red. Every checked area carries one of the four
   suffixes, `default, fast` only with `Mode: fast`.
 - **The ADRs** (v4): each ADR an area names exists and names that area; each has at least one source line in a form
-  of D12; each ADR under `docs/adr/` belongs to a listed area or is marked superseded or withdrawn; a `not read`
+  of D12, a `profile:` source only with `Mode: fast`; each ADR under `docs/adr/` belongs to a listed area or is marked superseded or withdrawn; a `not read`
   source has its ADR named under the pre-plan's `## Risks`.
 - **The pre-plan**: its required headings, `## Stack and architecture` with one row per decided area, and
   `## Owner steps`.
@@ -326,7 +333,7 @@ default, a fixture in tests), so a change to the data never breaks the lib's tes
   `## Phases` row of the same name, and the other way round; every pre-plan phase is a roadmap phase; every Done when
   cell holds a command in the contract's form; `## Next` exists; every `OD<n>` still open in the pre-plan appears in
   the roadmap's Open decisions. v4: `## Decided` names every accepted ADR of an area; `## Advice mode` is in the
-  format above (its values are not compared, D2); every `B:` ID `--checklist bar` prints for the `Kind` and `Size` is
+  format above (its values are not compared, D2); until `O6` closes, every `B:` ID `--checklist bar` prints for the `Kind` and `Size` is
   on a Checklist step, under `## Open decisions` with its area's OD, or named in the given-up line.
 - **`--plan`** (stage 5) runs the roadmap's rules, the v4 ones included, reading the onboarding document for `Kind`,
   `Size` and the given-up line, so a missing `B:` step is found before the readers, not at Close.
@@ -388,7 +395,7 @@ once a project has used it.
 - Tests (T7-T9), each RED first: `--checklist advice` and `bar` per size, for two joined kinds and for `other` with
   and without a nearest kind; each `## Setup` line missing or malformed, and `Mode: fast` with no Log line; each of
   the four area suffixes, and `default, fast` outside fast mode; an ADR missing, of another area, without a source,
-  with a `not read` source not named under Risks, and orphaned; the `answers` hash ignoring a teaching, level or mode
+  with a `not read` source not named under Risks, and orphaned; the `answers` and `roadmap` hashes ignoring a teaching, level or mode
   change; an ADR edit reopening stage 4; `## Advice mode` malformed; a `B:` step missing, then excused by an open OD
   and by the given-up line; the order of stage 2 (topics 1-7, the areas, topics 8-11) and its "area n of m" line; a
   changed `Kind` recomputing the set; the set no longer compared after O6; `template adr`'s numbering, its exclusive
@@ -417,7 +424,9 @@ through the command's output, one piece at a time, never as a skill or a per-tur
   recorded in the ADR.
 - **`onboard profile`**: with no argument, the kinds; `onboard profile <kind>[,<kind>]` prints those kinds (default,
   why, something else when, the areas and bar of both sizes); `--area <id>` prints one area, for the kinds named;
-  `--checklist advice|bar` prints the `## Advice` lines or the `B:` steps. With no kind given, `--area` and
+  `--checklist advice|bar` prints the `## Advice` lines or the `B:` steps; joined kinds merge bar targets by ID, as
+  areas. `--area` and `--checklist` together, or `--checklist` with no kind where the onboarding document or its
+  `Kind` or `Size` is missing, is a usage error that names what is missing. With no kind given, `--area` and
   `--checklist` read `Kind` and `Size` from the onboarding document, so the session never retypes them. Tool names
   in the data are starting points the session checks against current docs (D12), never the advice itself.
 - **A shape test** holds every kind to the same parts as the static site's (L11): global IDs unique, `after` naming
@@ -469,7 +478,7 @@ docs and release notes of what it will recommend, logs the question as D7 says, 
 - `onboard template adr <slug>` prints the skeleton; with `--write` it creates `docs/adr/<nnnn>-<slug>.md`, `<nnnn>`
   the highest number there plus one, four digits, with exclusive create (two sessions racing for one number: the
   second is refused and runs it again). The slug must match `^[a-z0-9]+(-[a-z0-9]+)*$`, so no path can leave
-  `docs/adr/`. The skeleton: Status (accepted, date, the Log line; later `superseded by ADR-<n>` or `withdrawn`), Area
+  `docs/adr/`. The skeleton: Status (accepted, date, the Log line; later `superseded by ADR-<nnnn>` or `withdrawn`), Area
   (`A:<id>`), Context, Decision, Alternatives considered (each with why not), Consequences (what is given up
   included), Sources, and the owner's words where the decision is his.
 - **Sources**, one per line, in one of three forms:
@@ -499,7 +508,8 @@ docs and release notes of what it will recommend, logs the question as D7 says, 
     writes the why into the question's text at the level recorded there, and names the ADR of an area the decision
     touches; it teaches nowhere else;
   - the lead shows that text unchanged; when the owner says "sin enseñanza" or "ya sé esto", it takes effect at once:
-    the lead sends a one-line notice to the open work sessions, and the work session that next changes the roadmap
+    the lead sends a one-line notice to the open work sessions, carries it in the opening prompt of any work session
+    it opens before the roadmap holds it, and the work session that next changes the roadmap
     writes it into `## Advice mode` (the lead never commits, `:117`);
   - nothing goes in `AGENTS.md` (L13).
 - **Risk**: the skill is installed per home for both hosts (`bin/lib/manifest.mjs:204-213`), so the paragraph reaches
@@ -718,6 +728,19 @@ ceiling.
     beside each: a new lead takes over (D13); teaching and level changes reopen nothing (D2); finished onboardings are
     not held to newer profiles (D6); unsourced ADRs allowed when named at the approval (D12); a small project names the
     areas it left out (D4).
+- v4 round 2 (2026-10-20), both readers over 062cd4d2, each on its own blockers only.
+  - Claims reader: B2-B6 closed (B3 by OD-R). B1 still open: `O5` hashed the whole roadmap, whose `## Advice mode`
+    the owner may change. Advisories: the out-of-scope line on teaching, a notice that misses a session opened later,
+    T7 without OD-R's reading of the data, T8 without D7.
+  - Gaps reader: G1-G3, G5, G6, G8 and G9 closed. G4 open for the same reason as B1. G7 open: the `Kind` and `B:`
+    rules still read the shipped profiles after O6. Advisories: fast mode's given-up line inside the `answers` hash;
+    the `Level` line before `## Advice` exists, and areas of no layer; the bare `Teaching: on` default; how an ADR is
+    named and numbered; `profile:` sources outside fast mode; `profile`'s usage errors and joined kinds' bar targets.
+  - Taken after round 2: the `roadmap` hash leaves out `## Advice mode` and the `answers` hash the given-up line; the
+    profile-reading rules run only until O6; every advisory above.
+  - Unguaranteed: these last fixes were not read again (the protocol allows no third round). That the profile data
+    is good advice is for its readers (OD-R) and his approvals; `onboard check` proves only structure and ties. The
+    question counts and slice 3's size are estimates until T4 and slice 3's first kind measure them.
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
@@ -881,3 +904,6 @@ ceiling.
   S3-S7 and L10-L13 hold every answer since 2026-10-19 (transcript 908805db, lines 6668-7043, as the lead relayed
   them). Next: the two readers at high effort, their round under `## Reviews`, then OD-K and OD-T4 to the lead one
   at a time; nothing is built before his yes to v4.
+- L15 (2026-10-20) v4 past both reader rounds (062cd4d2 and the commit after it; see `## Reviews`). Product
+  decisions sent to the lead one at a time, in this order: OD-K, OD-T4, OD-R, OD-F; each answer is recorded under
+  `### Product decisions left for him` and here. Next: his yes to v4, then T7 (slice 3) from its first kind.
