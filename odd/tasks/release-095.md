@@ -33,12 +33,14 @@ Anything beyond the two tags he approved in Pregunta 16 and v0.96.0 (S6).
 - S5 (L4) "quiero que el uninstall tenga varios osea el normal, que desinstala informacion y el que borra completamente todo"; Pregunta 17 answered "Todo, incluido el programa (Recommended)". `uninstall --global --everything` does `--full`, then removes the whole `.js-harness` folder of the home, then the program by the package manager that installed the running copy (pnpm `remove -g js-harness`; npm `uninstall -g --prefix <that copy's prefix> js-harness`); a copy run from a checkout keeps the program and says so. While a gate runs or anything could not be removed it removes nothing more and exits 1. It needs `--global`. The TUI offers it as "Uninstall everything" after Uninstall, asks once, and ends once it succeeds. Projects' files are kept.
 - S6 (L11) "Entonces no salgamos de una vez con la version 1.0.0 sino pasemos a la 0.96.0"
 - S7 (L15) "vamos a seguir iterando no vamos a pasar directamente a la version 1.0.0 osea vamos a seguir haciendo cosas y cuando digamos que ya es la definitiva ahi si analizamos si pasamos a la 1.0.0"
+- S8 (L18, Pregunta 34, answered "Sí, después de JH 37 (Recommended)") Publish 0.97.0 once JH 37's status-report protocol lands, so his copy gets everything since 0.96.0 in one update.
 
 ## Tasks
 - [x] T1 (kind: build) (S3) Upgrade picks pnpm for a copy pnpm installed. Route: inline.
 - [x] T2 (kind: build) (S1, S4) `scripts/tui-walk.mjs`: every menu item through its keys, in a scratch home and repository; fix what it finds. Route: inline.
 - [x] T3 (kind: verify) (S2) `package.json` 0.95.0 landed; tag v0.95.0 pushed; tag v1.0.0 deleted on GitHub; his copy down to v0.9.0, then up to 0.95.0 by the TUI's Upgrade. Route: inline.
 - [x] T6 (kind: verify) (S6) `package.json` 0.96.0 landed; tag v0.96.0 on that commit; his copy from 0.95.0 to 0.96.0 by the TUI's Upgrade with no `--pm`. Route: inline.
+- [ ] T7 (kind: verify) (S8) `package.json` 0.97.0 landed; tag v0.97.0 on that commit; his copy from 0.96.0 to 0.97.0 by the TUI's Upgrade with no `--pm`. Route: inline.
 - [ ] T4 (kind: verify) (S1, S2, S7; on hold: S7 keeps iterating on 0.9x until he calls a commit definitive, and only then is 1.0.0 analyzed) `package.json` 1.0.0 landed; tag v1.0.0 on that commit; his copy from the last 0.9x to 1.0.0 by the TUI's Upgrade with no `--pm`; his own walk. Route: inline.
 - [x] T5 (kind: build) (S5) `uninstall --global --everything` and the TUI's "Uninstall everything", with the walk step. Route: inline. Risk: item 1 (it deletes stored data and the program): an independent verifier after its checks. Commits: 44b1e3ea, 448a3c1f, be586c2a.
 
@@ -67,3 +69,4 @@ Anything beyond the two tags he approved in Pregunta 16 and v0.96.0 (S6).
   - Codex: correct, confidence 0.94 (`js-harness codex-review --base 211c65e8`).
   - Gate: its first run failed on `evals/ports.test.mjs:80`, recorded as ports-test-free-port-race in docs/FAILURES.md; the second run passed on CI.
   - The full suite on main f91a9a6 ran under the lock: 6692 tests, 6671 pass, 0 fail, 21 skipped.
+- L18 (2026-10-20, T7) Pregunta 34 (transcript 908805db line 9210) answered "Sí, después de JH 37 (Recommended)": S8. 0.97.0 is cut from main b846b9c, which holds since 0.96.0 `js-harness stack` and its install (PRs 472, 473), the user guide and a real `--help` on every command (477), titled notices from worktree sessions (478) and `js-harness report` with the status-report protocol (479). The answer reached the channel as a withdrawn notice, since the lead recorded the question after asking it.
