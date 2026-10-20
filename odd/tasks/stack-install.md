@@ -6,8 +6,8 @@ Runner: `node --test` · Delivery: ask-on-risk, two slices stacked to `main` aft
 after its two readers, and version 3 after the second round on their blockers (see `## Reviews`).
 
 Next step (2026-10-20, kept current): T1 to T5 are done. Slice 1 merged via PR 472; slice 2 is PR 473 (retargeted
-to main after 472 merged), reviewed, with the T4 fixes and the trial's pass (L13) on it. Next: the gate's reviews of the
-T4 commit, push, the ready notice for PR 473. T6 and T7 are follow-ups out of this feature. No open question.
+to main after 472 merged), reviewed, with the T4 fixes and the trial's pass (L13) on it, all reviewed; the ready notice is sent and the
+orchestrator lands it. T6 and T7 are follow-ups out of this feature. No open question.
 
 ## Goal
 On a machine that lacks part of the stack, one command shows each missing tool the project needs with the command
@@ -346,3 +346,5 @@ onboarding's files; a note in the shared notes folder hands that session this co
 - L14 (2026-10-20) T5: the ROADMAP's "Stack visibility" decision now names this exception, with his request, and a
   "Stack install" row is added; the note on the `stack --json` contract (new `kind`, `bin`, `env` fields) is in the
   shared notes folder as jh31-stack-json-contract.md; the reviews are L7 to L12.
+  - gentle-ai: 80a5fa3b assessed medium, review_due false, reason under_budget (96 lines).
+  - Codex on f96ebc8..80a5fa3 (1 part, 63 lines): the patch is correct (0.93), no findings. Recorded.
