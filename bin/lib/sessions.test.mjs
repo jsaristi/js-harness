@@ -971,6 +971,23 @@ test('parseWorktreeList keeps why git calls a worktree prunable', () => {
   assert.equal(lib.parseWorktreeList('worktree D:/x\nHEAD 1\nbranch refs/heads/x\nprunable\n')[0].prunable, 'git gives no reason');
 });
 
+test('projectDirsOf reads the worktrees git lists apart by NUL, so a path is taken as git wrote it, whatever it holds', () => {
+  const home = nodePath.resolve('/claude-home');
+  const listed = ['worktree D:/proj', 'HEAD 1', 'branch refs/heads/main', '', 'worktree D:/odd\nname', 'HEAD 2', 'detached', '', 'worktree D:/proj.git', 'bare', '', ''].join('\0');
+  const calls = [];
+  const run = (command, args) => {
+    calls.push([command, ...args].join(' '));
+    return ok(listed);
+  };
+  const slugged = (dir) => nodePath.join(home, 'projects', lib.projectSlug(nodePath.resolve(dir)));
+  assert.deepEqual(lib.projectDirsOf(run, nodePath.resolve('D:/proj'), home), [slugged('D:/proj'), slugged('D:/odd\nname')]);
+  assert.deepEqual(calls, ['git worktree list --porcelain -z']);
+  const broken = () => {
+    throw new Error('made up');
+  };
+  assert.deepEqual(lib.projectDirsOf(broken, nodePath.resolve('D:/proj'), home), [slugged('D:/proj')], 'a git that throws leaves the main folder alone');
+});
+
 test('readWorktrees runs nothing in a worktree git lists as prunable, and says its folder is gone', () => {
   const run = (command, args, { cwd }) => {
     if (args.includes('worktree')) return ok(GONE);

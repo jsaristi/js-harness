@@ -1280,15 +1280,13 @@ test('status rejects --global with --cwd, an unknown flag and a missing value wi
 });
 
 // `upgrade` refuses a flag it does not know since T1 of odd/tasks/commands-and-doctor.md
-// (`bin/writing-flags.test.mjs`); `update` writes nothing and keeps ignoring one.
-test('updateMain keeps ignoring flags it does not know (parsing unchanged)', async () => {
-  const original = console.log;
-  console.log = () => {};
-  try {
-    assert.equal(await updateMain(['--bogus', '--cwd'], { JS_HARNESS_REPO: taglessRepo }, noProcess), 0);
-  } finally {
-    console.log = original;
-  }
+// (`bin/writing-flags.test.mjs`); `update` writes nothing, yet ignoring one made `update --help` a real lookup, so
+// it refuses one too (odd/tasks/user-guide.md S3), and still takes the flags it reads.
+test('updateMain refuses flags it does not know and still takes --home, --repo and --source', async () => {
+  const { code } = await runCommand(updateMain, ['--bogus', '--cwd']);
+  assert.equal(code, 2);
+  const taken = await runCommand(updateMain, ['--home', os.tmpdir(), '--repo', taglessRepo]);
+  assert.equal(taken.code, 0, taken.err);
 });
 
 test('status never prints the bytes of a malformed harness.json (terminal escapes included)', async () => {
@@ -1304,5 +1302,15 @@ test('status never prints the bytes of a malformed harness.json (terminal escape
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// odd/tasks/user-guide.md S3: `update --help` ran a real release lookup, because the parser skipped a flag it did not know.
+test('updateMain refuses an argument it does not know, --help included, and looks nothing up', async () => {
+  for (const argv of [['--help'], ['--bogus'], ['--repo', 'x', 'extra']]) {
+    const { code, err } = await runCommand(updateMain, argv, { JS_HARNESS_REPO: path.join(os.tmpdir(), 'js-harness-no-such-repo') });
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(err, /unknown argument/);
+    assert.match(err, /Usage: js-harness update/);
   }
 });

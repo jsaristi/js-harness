@@ -55,7 +55,7 @@ import { boardMemory } from './lib/memory-hygiene.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { readTickets } from './lib/gate-first.mjs';
-import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
+import { appendReading, findOpenings, newReading, nextSessionNumber, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -63,9 +63,9 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
   '                           [--context-window <tokens>] [--context-pause <tokens>|<n>%] [--context-compaction <tokens>|<n>%]',
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
@@ -82,6 +82,10 @@ const USAGE = [
   '         a session keeps the title of the first opening it reads, so one of another title is printed and not',
   '         recorded; --peek reads an opening and records nothing;',
   '         a lone -- before a title that begins with -- (--opening -- "--a title")',
+  '       js-harness sessions --next-number [--cwd <path>]',
+  '         prints <code> <n>, the title number of the next work session: <code> is the project\'s, from harness.json',
+  '         "code", and <n> one past the highest of that code in the channel and the openings; exit 1 when the',
+  '         project declares no code, 2 when the code or a source could not be read; it writes nothing',
   '       js-harness sessions --quote <transcript file or session id> <line> [--cwd <path>] [--claude-home <path>]',
   '         prints the entry at that line of the transcript only when the user sent it, with its time:',
   '         exit 1 when it is another session\'s message, a task notification, a meta or assistant entry,',
@@ -153,6 +157,10 @@ function parseArgs(argv) {
   const waits = new Map([['--interval', 'interval'], ['--timeout', 'timeout']]);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
+    if (token === '--next-number') {
+      parsed.nextNumber = true;
+      continue;
+    }
     if (token === '--json' || token === '--watch' || token === '--measures') {
       parsed[token.slice(2)] = true;
       continue;
@@ -220,7 +228,7 @@ function parseArgs(argv) {
   // same holds for an opening and for a quote, and each of the three is asked alone. The measures of the
   // compactions are asked alone too, and are data like the board, so `--json` gives them; but they are
   // judged once from what the transcripts hold, and a watch would have nothing in them to wait for.
-  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript'], ['--measures', parsed.measures || undefined, 'the measures of the compactions']].filter(([, asked]) => asked !== undefined);
+  const answers = [['--address', parsed.address, 'a title'], ['--opening', parsed.opening, 'an opening'], ['--quote', parsed.quote, 'an entry of a transcript'], ['--measures', parsed.measures || undefined, 'the measures of the compactions'], ['--next-number', parsed.nextNumber || undefined, 'a title\'s number']].filter(([, asked]) => asked !== undefined);
   if (answers.length > 1) throw new SessionsArgError(`${answers.map(([flag]) => flag).join(' and ')} are asked one at a time`);
   if (parsed.peek && parsed.opening === undefined) throw new SessionsArgError('--peek goes only with --opening: it reads an opening and records nothing');
   for (const [flag, , what] of answers) {
@@ -723,6 +731,28 @@ export async function sessionsMain(
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
 
+  // The number the next work session is titled with (odd/tasks/session-title.md, S2, S5): the one the guard names when
+  // it refuses a start_session of another title. It reads the project's code from its harness.json, then the channel's
+  // record and the openings, and writes nothing. Exit 1 is a project that declares no code; a code or a source that
+  // could not be read is exit 2, so "could not look" is never read as "none".
+  if (parsed.nextNumber) {
+    let code;
+    try {
+      ({ code } = projectCode(root, readFile));
+    } catch (err) {
+      stderr(`js-harness sessions: could not read the project's code: ${err.message}`);
+      return 2;
+    }
+    if (code === null) {
+      stderr(`js-harness sessions: ${path.join(root, 'harness.json')} declares no "code", the project's identifier a session's title starts with (such as "JH"): add it to give the next number`);
+      return 1;
+    }
+    const next = nextSessionNumber(harnessHome, slug, { code, readdir, readFile });
+    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
+    stdout(`${next.code} ${next.number}`);
+    return next.unavailable ? 2 : 0;
+  }
+
   // The opening of a session, read by the session it is for (odd/tasks/session-channel.md, points 4 and
   // 6): the text `notify --opening` stored under a title, found by that title or by the code and the role
   // it starts with. Exit 0 prints one opening, 1 says there is none, and 2 is "no clean answer", as for
@@ -760,7 +790,9 @@ export async function sessionsMain(
     if (found.unreadable > 0) stderr(`js-harness sessions: ${unreadable} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`);
     // A look at an opening, another session's most often: printed, and nothing is recorded.
     if (parsed.peek) return 0;
-    const reader = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile, readFacts });
+    // The worktrees are listed only when a session is named to look for: an opening read by nobody runs no more git.
+    const someone = Boolean(parsed.self || env.CLAUDE_CODE_SESSION_ID);
+    const reader = senderOf({ self: parsed.self ?? null, env, projectDirs: someone ? projectDirsOf(run, root, claudeHome) : [], readdir, readFile, readFacts });
     // The session that stored the opening reads it back to check it: it is not the session it is for,
     // and a reading of its own would give it that title on the board if its transcript carried none. It
     // is the same session when either id is the start of the other: `notify --opening --self` keeps the

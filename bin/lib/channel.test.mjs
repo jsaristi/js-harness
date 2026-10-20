@@ -350,11 +350,23 @@ test('appendNotice writes one JSON line per notice, creating the folder, and rea
   channel.appendNotice(home, SLUG, second);
   const text = fs.readFileSync(file, 'utf8');
   assert.deepEqual(text.split('\n'), [JSON.stringify(first), JSON.stringify(second), '']);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], reports: [], questions: [], skipped: 0 });
 }));
 
 test('a project with no record yet has no notices, and that is not an error', withHome((home) => {
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], reports: [], questions: [], skipped: 0 });
+}));
+
+// odd/tasks/status-report.md, S4: the time a report was given is a line of its own in the record, not a notice.
+test('appendReport writes a report line beside the notices, and readNotices gives it back as a report, never skipped', withHome((home) => {
+  const notice = note();
+  channel.appendNotice(home, SLUG, notice);
+  const report = channel.newReport({ at: AT, by: 'cccccccc-3333-4333-8333-333333333333', head: 'ddd4058ebe441f8f3a51e74c081149dd858e87c6' });
+  assert.deepEqual(report, { schema: channel.REPORT_SCHEMA, at: AT, by: 'cccccccc-3333-4333-8333-333333333333', head: 'ddd4058ebe441f8f3a51e74c081149dd858e87c6' });
+  assert.equal(channel.appendReport(home, SLUG, report), channel.recordPath(home, SLUG));
+  fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ schema: channel.REPORT_SCHEMA, at: 'later' })}\n`);
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [notice], readings: [], reports: [report], questions: [], skipped: 1 });
+  assert.deepEqual(channel.newReport({ at: AT }), { schema: channel.REPORT_SCHEMA, at: AT, by: null, head: null });
 }));
 
 test('readNotices counts and skips a torn line and a line that is not a notice, and keeps the rest', withHome((home) => {
@@ -385,7 +397,7 @@ test('a record that is there and cannot be read is unavailable with the reason, 
   const readFile = () => {
     throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
   };
-  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], reports: [], questions: [], skipped: 0 });
 }));
 
 test('a question, a withdrawal and an answer with a number are kept only when they hold what makes them one', withHome((home) => {
@@ -473,7 +485,7 @@ test('appendReading adds the reading to the record, and readNotices gives the re
   assert.equal(channel.appendReading(home, SLUG, reading), channel.recordPath(home, SLUG));
   const second = note({ kind: 'closed', text: 'delivered' });
   channel.appendNotice(home, SLUG, second);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], reports: [], questions: [], skipped: 0 });
   // A reading that lost what makes it one is a line the reader does not know, counted as such.
   for (const broken of [{ ...reading, reader: { ...reading.reader, id: 7 } }, { ...reading, title: '' }, { ...reading, at: 'yesterday' }, { ...reading, reader: 'somebody' }]) {
     fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify(broken)}\n`);
@@ -697,6 +709,56 @@ test('findOpenings counts a file it cannot read as an opening and goes on, and s
   assert.deepEqual(channel.findOpenings(home, SLUG, 'JH 5', { readdir }), { dir, openings: [], unreadable: 0, unavailable: 'EPERM' });
 }));
 
+// --- the next free number of a work session (odd/tasks/session-title.md, S2) ---
+
+test('nextSessionNumber is one past the highest number of the code the project declares, in the record and in the openings', withHome((home) => {
+  const from = (title) => ({ ...FROM, title });
+  channel.appendNotice(home, SLUG, note({ from: from('JH ORQ · js-harness') }));
+  channel.appendNotice(home, SLUG, note({ from: from('JH 21 · reserva de la noche') }));
+  channel.appendNotice(home, SLUG, note({ from: from('JH 7 · registro de fallas') }));
+  channel.appendNotice(home, SLUG, note({ from: from('js-harness wake') }));
+  channel.appendNotice(home, SLUG, note({ from: from(null) }));
+  // Another code is another numbering: only the code asked for counts, however many titles carry another.
+  channel.appendNotice(home, SLUG, note({ from: from('XY 90 · otro') }));
+  channel.appendNotice(home, SLUG, note({ from: from('XY 91 · otro') }));
+  channel.appendNotice(home, SLUG, note({ from: from('XY 92 · otro') }));
+  channel.appendReading(home, SLUG, channel.newReading({ at: AT, reader: { id: 'bbbbbbbb-2222' }, title: 'JH 24 · gate más rápido' }));
+  channel.writeOpening(home, SLUG, { title: 'JH 29 · memory', text: 'opening', at: AT, from: FROM });
+  channel.writeOpening(home, SLUG, { title: 'Install module for required third-party tools', text: 'opening', at: AT, from: FROM });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 30 });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'XY' }), { code: 'XY', number: 93 });
+
+  // A notice addressed to a work number holds that number too: the session it names may not have written yet.
+  channel.appendNotice(home, SLUG, note({ to: '32' }));
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 33 });
+  assert.deepEqual(channel.nextSessionNumber(home, 'C--other', { code: 'JH' }), { code: 'JH', number: 1 });
+  // A caller that names no code would get a number counted from the notices alone: it is refused (gentle-ai, R3).
+  assert.throws(() => channel.nextSessionNumber(home, SLUG), /needs the project's code/);
+  assert.throws(() => channel.nextSessionNumber(home, SLUG, { code: '' }), /needs the project's code/);
+
+  // A line from another version with a number that is not whole counts for nothing and breaks nothing; it is not a
+  // notice of this version, so the record is said to hold a line it could not read.
+  fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ ...note(), to: { role: 'work', number: 'x' } })}\n`, 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 33, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
+}));
+
+test('nextSessionNumber says which source it could not read, so a guess is not taken for the number', withHome((home) => {
+  channel.appendNotice(home, SLUG, note());
+  const readdir = () => {
+    throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+  };
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH', readdir }), { code: 'JH', number: 6, unavailable: [`openings ${channel.openingsDir(home, SLUG)} (EPERM)`] });
+  // An opening that is listed and cannot be read may hold the highest number: it is said, not dropped (Codex, P2).
+  const dir = channel.openingsDir(home, SLUG);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'torn-000000000000.json'), '{"schema":"js-harness.channel-opening/v1","title":"JH 32 · t', 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 6, unavailable: [`openings ${dir} (1 file not readable as an opening)`] });
+  fs.rmSync(path.join(dir, 'torn-000000000000.json'));
+  // A torn line of the record may hold the highest number too: it is said, not dropped (Codex, P2).
+  fs.appendFileSync(channel.recordPath(home, SLUG), '{"schema":"js-harness.channel-notice/v1","from":{"title":"JH 32 · t\n', 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 6, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
+}));
+
 // --- where a notice is run from ---
 
 const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
@@ -770,6 +832,22 @@ test('a sender with no transcript to read keeps its id and has no title; a start
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...missing }), { host: 'claude-code', id: SESSION, source: 'environment', ...none });
   const unreadable = { ...folder({ [`${SESSION}.jsonl`]: '' }), readFile: () => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); } };
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...unreadable }), { host: 'claude-code', id: SESSION, source: 'environment', ...none });
+});
+
+test('the sender\'s transcript is read from whichever of the project\'s sessions folders holds it, a worktree\'s included', () => {
+  // A session opened in a worktree is filed under that worktree's folder, not the main checkout's.
+  const main = 'C:\\claude\\projects\\C--proj';
+  const worktree = 'C:\\claude\\projects\\C--proj--claude-worktrees-x';
+  const files = { [path.join(worktree, `${SESSION}.jsonl`)]: titled('JH 30 · onboarding', 'auto'), [path.join(main, `${OTHER}.jsonl`)]: titled('JH ORQ · js-harness') };
+  const readdir = (dir) => {
+    const names = Object.keys(files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file));
+    if (names.length === 0) throw Object.assign(new Error(`ENOENT: ${dir}`), { code: 'ENOENT' });
+    return names;
+  };
+  const readFile = (file) => files[file];
+  const where = { projectDirs: [main, worktree, 'C:\\claude\\projects\\C--gone'], readdir, readFile };
+  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...where }), { host: 'claude-code', id: SESSION, source: 'environment', title: 'JH 30 · onboarding', permissionMode: 'auto', context: null });
+  assert.deepEqual(channel.senderOf({ self: 'aaaaaaaa', env: {}, ...where }).title, null, 'a start that names a transcript in each of two folders names neither');
 });
 
 test('only a title the session was given is one: the start of its first prompt names nobody', () => {

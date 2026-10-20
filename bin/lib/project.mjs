@@ -452,6 +452,18 @@ state is never written: \`js-harness failures\` computes it, and \`js-harness fa
 ## Entries
 `;
 
+/** The code `init` offers a project named `name`, its folder: the initials of its words, four at most, or the first two
+ * letters of a name of one word, in capitals ("js-harness" is JH, "billing" BI); `null` for a name with no letter or
+ * digit of ASCII. `harness.json` "code" holds it, and the project changes it there. */
+export function codeOfName(name) {
+  const words = String(name).split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const code = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 4).map((word) => word[0]).join('');
+  const upper = code.toUpperCase();
+  // ORQ is the role of a lead, never a code.
+  return upper === 'ORQ' ? null : upper;
+}
+
 /** A semver version (semver.org's grammar, without a leading `v`): what `harness.json` may pin. */
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -881,8 +893,11 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     // harness.json: the pin — computed now (its content never depends on anything written after
     // it), but not written until the very end (T2e item 1). The reply check is on in a new project, with the
     // English labels (odd/tasks/rule-hierarchy.md, T9: his answer "Prendido por defecto").
+    // The project's code, the identifier its sessions' titles start with, is offered from its name
+    // (odd/tasks/session-title.md, S5): his answer of 2026-10-19, "la idea es que tenga el udentificador del proyecto".
     const harnessJsonPath = path.join(root, 'harness.json');
-    const harnessJsonContent = JSON.stringify({ version, reply: true }, null, 2) + '\n';
+    const code = codeOfName(path.basename(root));
+    const harnessJsonContent = JSON.stringify({ version, ...(code !== null && { code }), reply: true }, null, 2) + '\n';
     const harnessJsonRel = toRepoRelative(root, harnessJsonPath);
     const harnessJsonHash = sha256(harnessJsonContent);
     if (clone) {

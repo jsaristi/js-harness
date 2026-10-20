@@ -42,7 +42,7 @@ import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
 import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness resume --hook',
   '         a SessionStart hook for the matcher "compact": it reads the hook\'s input from standard input and,',
   '         after a compaction in a project with a harness.json, prints the session\'s title, its opening,',

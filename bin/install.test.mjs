@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord, reportSyncProject } from './install.mjs';
-import { acceptSessionMessages, entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, userSettingsPath } from './lib/manifest.mjs';
+import { acceptSessionMessages, entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, recordStackRow, userSettingsPath } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
@@ -2027,6 +2027,67 @@ test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai r
     const listDir = (dir, ...rest) => (path.resolve(dir).startsWith(path.resolve(folder)) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readdirSync(dir, ...rest));
     const unlisted = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { listDir }));
     assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any gentle-ai review starts recorded there; remove the folder by hand to drop them`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// What `stack install` recorded is undone by `uninstall machine` (odd/tasks/stack-install.md, D7), through a spawn the
+// test hands in: the real one refuses under test.
+test('uninstall machine undoes what stack install recorded, printing each undo, and keeps a failed one recorded', async () => {
+  const home = makeTmpHome();
+  try {
+    const codex = { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'], applies: '2.0.0', env: {}, at: 'then' };
+    const claude = { tool: 'codegraph', dimension: 'claude', kind: 'registration', run: ['claude', 'mcp', 'add'], undo: ['claude', 'mcp', 'remove', '-s', 'user', 'codegraph'], applies: { command: 'codegraph' }, env: {}, at: 'then' };
+    recordStackRow(home, codex);
+    recordStackRow(home, claude);
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { command: 'codegraph' } } }));
+    const ran = [];
+    const stackSpawn = (file, args) => {
+      const line = [file, ...args].join(' ');
+      if (line === 'codex --version') return { status: 0, stdout: 'codex-cli 2.0.0' };
+      ran.push(line);
+      return line.startsWith('pnpm') ? { status: 1, stderr: 'locked' } : { status: 0 };
+    };
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['machine', '--home', home], {}, { stackSpawn }));
+    assert.equal(code, 1);
+    assert.deepEqual(ran, ['claude mcp remove -s user codegraph', 'pnpm remove -g @openai/codex']);
+    assert.ok(outLines.includes('undo codegraph claude: claude mcp remove -s user codegraph'), outLines.join('\n'));
+    assert.ok(outLines.includes('undid codegraph claude'), outLines.join('\n'));
+    assert.ok(errLines.some((line) => /^could not undo codex installed \(exit 1: locked\): it is still recorded; run js-harness uninstall machine again/.test(line)), errLines.join('\n'));
+    assert.deepEqual(readManifest(home).stack, [codex]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall machine drops the record of a tool already gone, and names one that changed as his', async () => {
+  const home = makeTmpHome();
+  try {
+    recordStackRow(home, { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['x'], undo: ['y'], applies: '2.0.0', env: {}, at: 'then' });
+    recordStackRow(home, { tool: 'codegraph', dimension: 'claude', kind: 'registration', run: ['x'], undo: ['y'], applies: { command: 'codegraph' }, env: {}, at: 'then' });
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { command: 'his-own' } } }));
+    const stackSpawn = (file, args) => ([file, ...args].join(' ') === 'codex --version' ? { status: 1 } : assert.fail('ran an undo'));
+    const { code, outLines } = await captureConsole(() => uninstallMain(['machine', '--home', home], {}, { stackSpawn }));
+    assert.equal(code, 0);
+    assert.ok(outLines.includes('kept codegraph claude (changed since stack install ran it): it is yours now and no longer recorded'), outLines.join('\n'));
+    assert.ok(outLines.includes('codex installed is already gone: its record is dropped'), outLines.join('\n'));
+    assert.equal(readManifest(home), null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall machine keeps the record of a tool that answers but cannot be read, and exits 1 (Codex on b9722fc..e57f2d0)', async () => {
+  const home = makeTmpHome();
+  try {
+    const codex = { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['x'], undo: ['y'], applies: '2.0.0', env: {}, at: 'then' };
+    recordStackRow(home, codex);
+    const stackSpawn = (file, args) => ([file, ...args].join(' ') === 'codex --version' ? { status: 0, stdout: 'garbled' } : assert.fail('ran an undo'));
+    const { code, errLines } = await captureConsole(() => uninstallMain(['machine', '--home', home], {}, { stackSpawn }));
+    assert.equal(code, 1);
+    assert.ok(errLines.includes('could not undo codex installed (it answers, but its version cannot be read): it is still recorded; run js-harness uninstall machine again'), errLines.join('\n'));
+    assert.deepEqual(readManifest(home).stack, [codex]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

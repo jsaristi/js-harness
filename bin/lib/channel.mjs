@@ -23,6 +23,10 @@ export const OPENING_SCHEMA = 'js-harness.channel-opening/v1';
  * lives in the app only) is known by one: the board and `notify` take the title from the latest reading
  * of that session's id. */
 export const READING_SCHEMA = 'js-harness.channel-reading/v1';
+/** The schema of a report line: `report --mark` appends it when the lead gives the user a status report, so
+ * that "since the last report" is a time read from the record (odd/tasks/status-report.md, S4). Like a reading,
+ * it is not a notice: it tells nobody anything and wakes no wait. */
+export const REPORT_SCHEMA = 'js-harness.channel-report/v1';
 
 /** The kinds of a notice, and no other: each one costs its receiver a turn. `opened` (feature, worktree,
  * branch), `waiting` (on what, and whose it is), `closed` (what was delivered, and that nothing more goes
@@ -321,6 +325,21 @@ export function appendReading(home, slug, reading) {
   return file;
 }
 
+/** A report line as the record keeps it: `{ schema, at, by, head }`, `at` the time the report was given (ISO), `by`
+ * the id of the session that gave it and `head` the commit of the default branch the report read, each `null` when
+ * not known. The next report lists what the branch gained since `head`, so a merge fetched late is not lost. */
+export function newReport({ at, by = null, head = null }) {
+  const known = (value) => (typeof value === 'string' && value !== '' ? value : null);
+  return { schema: REPORT_SCHEMA, at, by: known(by), head: known(head) };
+}
+
+/** Appends `report` (`newReport`) to the record of the project `slug` under `home`, and returns the record's path. */
+export function appendReport(home, slug, report) {
+  const file = recordPath(home, slug);
+  appendLine(file, JSON.stringify(report));
+  return file;
+}
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -338,6 +357,11 @@ function isReading(value) {
     typeof value.reader.id === 'string' &&
     value.reader.id !== ''
   );
+}
+
+/** Whether `value` is a report line of this schema, with a time that parses. */
+function isReport(value) {
+  return isObject(value) && value.schema === REPORT_SCHEMA && typeof value.at === 'string' && Number.isFinite(Date.parse(value.at));
 }
 
 /** Whether `value` is a notice of this schema: enough of one for a board to print it. A question needs its id,
@@ -359,13 +383,14 @@ function isNotice(value) {
   );
 }
 
-/** The record of the project `slug` under `home`: `{ path, notices, readings, questions, skipped }`, the notices
- * and the readings (`newReading`), each in the order written, and `questions`: the valid `question` notices, each
+/** The record of the project `slug` under `home`: `{ path, notices, readings, reports, questions, skipped }`, the
+ * notices, the readings (`newReading`) and the report lines (`newReport`), each in the order written, and
+ * `questions`: the valid `question` notices, each
  * as `{ number, notice }`. A question's number is its ordinal among the lines of the record that are question
  * notices, valid or not, so a broken one still takes a number and the next valid question has the following one:
  * the number is computed here, never stored, so that the record needs no lock. A project with no record yet has
- * none. A line that is torn (a session appends while this reads), that is not JSON or that is neither a notice nor
- * a reading of these schemas is counted in `skipped` and left out, never fatal. A record that is there and cannot
+ * none. A line that is torn (a session appends while this reads), that is not JSON or that is not a notice, a
+ * reading or a report line of these schemas is counted in `skipped` and left out, never fatal. A record that is there and cannot
  * be read is `unavailable` with the reason, so that "could not look" is never read as "no notices". */
 export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   const file = recordPath(home, slug);
@@ -373,11 +398,12 @@ export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(f
   try {
     text = readFile(file);
   } catch (err) {
-    const none = { path: file, notices: [], readings: [], questions: [], skipped: 0 };
-    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], questions: [], skipped: 0 };
+    const none = { path: file, notices: [], readings: [], reports: [], questions: [], skipped: 0 };
+    return err.code === 'ENOENT' ? none : { path: file, unavailable: err.code ?? err.message, notices: [], readings: [], reports: [], questions: [], skipped: 0 };
   }
   const notices = [];
   const readings = [];
+  const reports = [];
   const questions = [];
   let questionLines = 0;
   let skipped = 0;
@@ -394,9 +420,10 @@ export function readNotices(home, slug, { readFile = (file) => fs.readFileSync(f
       notices.push(parsed);
       if (parsed.kind === 'question') questions.push({ number: questionLines, notice: parsed });
     } else if (isReading(parsed)) readings.push(parsed);
+    else if (isReport(parsed)) reports.push(parsed);
     else skipped += 1;
   }
-  return { path: file, notices, readings, questions, skipped };
+  return { path: file, notices, readings, reports, questions, skipped };
 }
 
 /** The questions of a record (`readNotices`), in the order written: `[{ number, notice, closed }]`. `closed` is
@@ -549,26 +576,74 @@ export function findOpenings(home, slug, wanted, { readdir = (dir) => fs.readdir
     // `ORQ` as the titles spell it, not `orchestrator`: this is the start of a title, not a role by name.
     return Boolean(said) && said.code === prefix[1] && said.role === role.role && said.number === role.number && (role.role === 'work' || prefix[2] === 'ORQ');
   };
-  const openings = [];
+  const { stored, unreadable } = storedOpenings(dir, names, readFile);
+  const openings = stored.filter(named);
+  const recency = (opening) => opening.at ?? '';
+  openings.sort((one, other) => (recency(one) < recency(other) ? 1 : recency(one) > recency(other) ? -1 : 0));
+  return { dir, openings, unreadable };
+}
+
+/** The openings among the files `names` of the folder `dir`: `{ stored, unreadable }`, each opening as
+ * `{ path, title, at, from, text }`, and the count of the `.json` files that are not one (torn, or another
+ * schema). Files of another extension are neither. */
+function storedOpenings(dir, names, readFile) {
+  const stored = [];
   let unreadable = 0;
   for (const name of names) {
     if (!name.endsWith('.json')) continue;
     const file = path.join(dir, name);
-    let stored;
+    let opening;
     try {
-      stored = JSON.parse(readFile(file));
+      opening = JSON.parse(readFile(file));
     } catch {
-      stored = null;
+      opening = null;
     }
-    if (!isObject(stored) || stored.schema !== OPENING_SCHEMA || typeof stored.title !== 'string' || typeof stored.text !== 'string') {
+    if (!isObject(opening) || opening.schema !== OPENING_SCHEMA || typeof opening.title !== 'string' || typeof opening.text !== 'string') {
       unreadable += 1;
       continue;
     }
-    if (named(stored)) openings.push({ path: file, title: stored.title, at: stored.at ?? null, from: stored.from ?? null, text: stored.text });
+    stored.push({ path: file, title: opening.title, at: opening.at ?? null, from: opening.from ?? null, text: opening.text });
   }
-  const recency = (opening) => opening.at ?? '';
-  openings.sort((one, other) => (recency(one) < recency(other) ? 1 : recency(one) > recency(other) ? -1 : 0));
-  return { dir, openings, unreadable };
+  return { stored, unreadable };
+}
+
+/** The number the next work session of the project `slug` under `home` is titled with
+ * (odd/tasks/session-title.md, S2, S5): `{ code, number }`, `number` one past the highest work number of `code`, the
+ * project's own identifier (`projectCode` of ./sessions.mjs). The numbers are read from every title of that code in
+ * the record (a sender's, a reading's) and in the openings, and from every notice addressed to a work number, since
+ * the session it names may not have written yet. A title of another code numbers nothing. With none the number is 1.
+ * A source that could not be read is named in `unavailable`, so the number is not taken as known. Reads only:
+ * nothing is written. */
+export function nextSessionNumber(home, slug, { code, readdir = (dir) => fs.readdirSync(dir), readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+  // Without a code only the notices would count, a number that looks known and is not.
+  if (typeof code !== 'string' || code === '') throw new TypeError('nextSessionNumber needs the project\'s code');
+  const unavailable = [];
+  const record = readNotices(home, slug, { readFile });
+  if (record.unavailable) unavailable.push(`record ${record.path} (${record.unavailable})`);
+  // A torn line, or one of another schema, may be the one with the highest number.
+  else if (record.skipped > 0) unavailable.push(`record ${record.path} (${record.skipped} line${record.skipped === 1 ? '' : 's'} not readable as a notice or a reading)`);
+  const dir = openingsDir(home, slug);
+  let openings = [];
+  try {
+    const { stored, unreadable } = storedOpenings(dir, readdir(dir), readFile);
+    openings = stored;
+    // A file that is there and not readable as an opening may be the one with the highest number.
+    if (unreadable > 0) unavailable.push(`openings ${dir} (${unreadable} file${unreadable === 1 ? '' : 's'} not readable as an opening)`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') unavailable.push(`openings ${dir} (${err.code ?? err.message})`);
+  }
+  const titles = [
+    ...record.notices.map((notice) => notice.from?.title),
+    ...record.readings.map((reading) => reading.title),
+    ...openings.map((opening) => opening.title),
+  ].map((title) => roleOfTitle(title)).filter(Boolean);
+  const numbers = [
+    ...titles.filter((title) => title.code === code && title.role === 'work').map((title) => title.number),
+    ...record.notices.filter((notice) => notice.to?.role === 'work').map((notice) => notice.to.number),
+  ];
+  // A line of a record from another version could hold a number of another kind: only whole numbers count.
+  const next = { code, number: numbers.filter(Number.isSafeInteger).reduce((highest, one) => Math.max(highest, one), 0) + 1 };
+  return unavailable.length > 0 ? { ...next, unavailable } : next;
 }
 
 // ---- where a notice is run from, and who sends it ------------------------------------------------------
@@ -592,6 +667,26 @@ export function placeOf(run, cwd) {
   return { worktree: top === null ? null : path.resolve(top), branch: top === null ? null : firstLine(['branch', '--show-current']) };
 }
 
+/** The one transcript of the session `given` (its id, or the first eight characters of it or more) among the sessions
+ * folders `projectDirs`: `{ id, file }`, or `null` when none or more than one carries it. A folder that cannot be listed
+ * holds none: a worktree that never opened a session has no folder. */
+export function transcriptOf(given, projectDirs, readdir) {
+  const found = [];
+  for (const dir of projectDirs) {
+    let names;
+    try {
+      names = readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const id = name.endsWith('.jsonl') ? name.slice(0, -'.jsonl'.length) : null;
+      if (id !== null && isSelf(id, given)) found.push({ id, file: path.join(dir, name) });
+    }
+  }
+  return found.length === 1 ? found[0] : null;
+}
+
 /** Who sends: `{ host, id, source, title, permissionMode, context }`.
  *
  * The id is the one Claude Code gives every command a session runs (`CLAUDE_CODE_SESSION_ID`, `source:
@@ -606,23 +701,23 @@ export function placeOf(run, cwd) {
  * With neither, the sender is not known and the notice is recorded all the same: `{ host: 'unknown', id:
  * null, ... }`. That is every Codex session today: nothing in this repository reads a session id from
  * Codex, and none of the variables its commands carry is known to hold one. */
-export function senderOf({ self = null, env = {}, projectDir, readdir, readFile, readFacts = sessionFacts }) {
+export function senderOf({ self = null, env = {}, projectDir, projectDirs = [projectDir], readdir, readFile, readFacts = sessionFacts }) {
   const fromFlag = typeof self === 'string' && self !== '';
   const given = fromFlag ? self : env.CLAUDE_CODE_SESSION_ID || null;
   if (given === null) return { host: 'unknown', id: null, source: null, title: null, permissionMode: null, context: null };
   const sender = { host: fromFlag ? 'unknown' : 'claude-code', id: given, source: fromFlag ? 'flag' : 'environment', title: null, permissionMode: null, context: null };
+  const found = transcriptOf(given, projectDirs, readdir);
+  if (found === null) return sender;
   try {
-    const ids = readdir(projectDir).filter((name) => name.endsWith('.jsonl')).map((name) => name.slice(0, -'.jsonl'.length)).filter((id) => isSelf(id, given));
-    if (ids.length !== 1) return sender;
-    [sender.id] = ids;
+    sender.id = found.id;
     sender.host = 'claude-code';
-    const facts = readFacts(readFile(path.join(projectDir, `${sender.id}.jsonl`)), { tail: 0 });
+    const facts = readFacts(readFile(found.file), { tail: 0 });
     sender.title = facts.titleSource === 'custom-title' && typeof facts.title === 'string' ? facts.title : null;
     sender.permissionMode = facts.permissionMode ?? null;
     const measured = Number.isFinite(facts.context?.tokens) && Number.isFinite(facts.contextPercent);
     sender.context = measured ? { tokens: facts.context.tokens, percent: facts.contextPercent } : null;
   } catch {
-    // A sessions folder that is not there, a transcript that cannot be read: the sender keeps what is known.
+    // A transcript that cannot be read: the sender keeps what is known.
   }
   return sender;
 }

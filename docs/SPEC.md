@@ -166,16 +166,16 @@ proofs and by those tasks.
 **Reason:** Anything written outside the repository must come out exactly, or removing the harness costs a purge script.
 **Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/install-session-messages.test.mjs`, `node --test bin/uninstall-kinds.test.mjs`, `node --test bin/tui.test.mjs`
 **Discarded:** Assuming npm: on this machine `npm` is a pnpm shim. Owning a host's settings file whole instead of one entry.
-**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
+**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `bin/tui.mjs` (the menu and its Uninstall submenu), `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
 
 ### Releases
 
 **Problem:** Update and upgrade asked the npm registry for a name nobody holds and installed what it printed with no comparison (`odd/tasks/install-update.md`, T5); until a release source existed no command could update a machine (`odd/tasks/first-version.md`).
-**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in; a pushed `vX.Y.Z` tag is refused by `check --push` when `package.json` at the tagged commit names another version than the tag without its `v`; `scripts/release-proof.mjs` installs a tag with real npm or pnpm into throwaway folders, upgrades to a second tag, moves a project's pin and uninstalls, and the home must be as it started.
+**Requirement:** The newest release is the highest tag named exactly `vX.Y.Z` in the harness's own repository, listed with the machine's own git and credentials within a time bound; upgrade installs that tag and then syncs; tags that cannot be listed exit 1 with the reason and install nothing; no registry is ever asked; a folder of packed tarballs can stand in; a pushed `vX.Y.Z` tag is refused by `check --push` when `package.json` at the tagged commit names another version than the tag without its `v`; `scripts/release-proof.mjs` installs a tag with real npm or pnpm into throwaway folders, upgrades to a second tag, moves a project's pin and uninstalls, and the home must be as it started; `js-harness --version`, `-v` and `version` print the running copy's version alone on one line, which upgrade asks of the copy on the path before it lets that copy sync.
 **Reason:** The machine's git already holds what the repository needs to be read, and no registry holds the package; tagging starts at v0.9.0, a rehearsal release, and v1.0.0 is the first definitive one (`docs/ROADMAP.md`, "Versioning").
-**Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`, `node --test bin/check.test.mjs`, `node --test scripts/release-proof-lib.test.mjs`
+**Proof:** `node --test bin/update.test.mjs`, `node --test bin/release-tags.test.mjs`, `node --test bin/lib/version.test.mjs`, `node --test bin/check.test.mjs`, `node --test scripts/release-proof-lib.test.mjs`, `node --test bin/js-harness.test.mjs`
 **Discarded:** The npm registry as the source. An npm publish, planned for a public repository and left without a date.
-**Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `bin/check.mjs`, `.githooks/pre-push`, `scripts/release-proof.mjs`, `scripts/release-proof-lib.mjs`, `js-harness update`, `js-harness upgrade`
+**Today:** `bin/update.mjs`, `bin/lib/version.mjs`, `bin/check.mjs`, `.githooks/pre-push`, `scripts/release-proof.mjs`, `scripts/release-proof-lib.mjs`, `bin/js-harness.mjs`, `js-harness update`, `js-harness upgrade`
 
 ### Project init
 
@@ -195,6 +195,15 @@ proofs and by those tasks.
 **Discarded:** Plain-text hook output: it enters the model's context. Recommending another tool's own upgrade command where that tool says not to.
 **Today:** `bin/doctor.mjs`, `bin/lib/stack.mjs`, `bin/lib/stack-update.mjs`, `bin/lib/cache.mjs`, `bin/lib/latest.mjs`, `bin/lib/rules-installed.mjs`, `js-harness doctor`, `claude-hook`, `codex-hook`
 
+### The stack install
+
+**Problem:** The doctor named a fix for each gap and nothing ran it, in an order that matters and with no record of what it wrote, so a new machine was set up by hand and nothing could undo it (`odd/tasks/stack-install.md`).
+**Requirement:** `stack` lists, read-only, the tools the harness requires that are missing for this project, in run order, each with its command and its exact undo: the Codex CLI while codexReview is not off, codegraph while codeMap is not off, and codegraph's registrations in both hosts. A tool whose undo is not exact (gentle-ai's own installer, and engram, which it brings), a login and a prerequisite are named as the person's steps and never run; context7 and typescript-lsp are optional. The package manager is named, or read from the copy, never from the word `npm`. Each row run is recorded in the machine manifest before it starts, with its undo, the environment it was given and, read back after it, what that undo applies to; `uninstall machine` undoes the records the last first, drops the record of a tool already gone, keeps and names one that changed since, and keeps the record of an undo that failed for a run again. No test runs a real command.
+**Reason:** Every write outside the repository must be undoable exactly; gentle-ai's uninstall removes whole settings keys and leaves binaries and PATH entries behind, so the harness does not run it (his answer to F1, 2026-10-19).
+**Proof:** `node --test bin/lib/stack-install.test.mjs`, `node --test bin/stack.test.mjs`, `node --test bin/lib/stack-run.test.mjs`, `node --test bin/lib/manifest-stack.test.mjs`, `node --test bin/stack-install.test.mjs`
+**Discarded:** A flag on `install`: install writes the harness's own files and is safe to run unasked. Running gentle-ai's installer with only its own uninstall as the undo.
+**Today:** `bin/stack.mjs`, `bin/lib/stack-install.mjs`, `bin/lib/stack-run.mjs`, `js-harness stack`
+
 ### Progress
 
 **Problem:** "Where are we" was answered by a model reading the roadmap and every feature document, which costs tokens and drifts; states written as prose could not be counted (`odd/tasks/progress-view.md`).
@@ -203,6 +212,15 @@ proofs and by those tasks.
 **Proof:** `node --test bin/progress.test.mjs`, `node --test bin/lib/progress.test.mjs`
 **Discarded:** A published page. Editing checkboxes from the command.
 **Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `bin/lib/progress-pace.mjs` (progress --pace), `js-harness progress`
+
+### The status report
+
+**Problem:** On 2026-10-20 the owner asked the lead how the work was going and got two lines; he asked for a protocol so the answer carries everything since the last report, in detail, and what the lead proposes (`odd/tasks/status-report.md`, S1).
+**Requirement:** A command prints, since a cut, the pull requests merged into the default branch with their commits, each session's last notice, the questions answered and still open, and the roadmap phase by phase with what is left. The cut is a given time, else the last report recorded, else the last day; reading writes nothing, and `--mark` records the report's time and the default branch's commit as a line of the channel record, from which the next report lists what that branch gained; a report a section of which could not be read is not recorded. The orchestrator skill tells the lead to answer from it in six sections.
+**Reason:** "Since the last report" is a time read from a file, not a guess, and the facts come from git and the record, not from a model's memory of the day.
+**Proof:** `node --test bin/report.test.mjs`, `node --test bin/lib/report.test.mjs`, `node --test bin/lib/manifest.test.mjs`
+**Discarded:** `progress --since`: `progress` counts checkboxes and runs no git without `--pace`. The report's time as a notice: a notice to the orchestrator wakes its own wait. Marking on every read: a report looked at and not given would hide its facts from the next one.
+**Today:** `bin/report.mjs`, `bin/lib/report.mjs`, `js-harness report`
 
 ### Onboarding
 
@@ -333,9 +351,9 @@ proofs and by those tasks.
 ### The guard
 
 **Problem:** Sub-agents ran on models the owner's rule of 2026-10-10 did not allow; hours were wrong in 33 of 153 messages; backticks inside double quotes ate a command's name; two whole test runs beside a gate both missed their bounds; memory index lines reached 844 characters; 93 of 267 stated context shares were wrong (`odd/tasks/honesty-audit.md`, `odd/tasks/test-run-warning.md`).
-**Requirement:** A hook before each tool call refuses, with the host's deny and a reason: a sub-agent on a model the project's rules do not give (only where those rules are in force), a message to another session whose stated hour is more than a minute off the clock (after its label, or first, before it), a document hour ahead of the clock, a shell command with backticks inside double quotes, a test run of several files outside a gate's turn while another gate holds the lock, a line over the limit in a memory index, the tools that open sessions out of sight where the project says so, a `start_session` with a brief that names no effort or one above the project's `session-effort` rule where that rule is declared (a fork included), a recursive `rm` or `rmdir` of a drive's root or of a folder at its top, and a gentle-ai review (`assess`, `status`, `start`) whose `--base-ref` is off the head's first-parent line. A stop hook turns the stop back when a reply states its own context share more than 2 points from the recorded one, and never loops. Both write nothing and always exit 0, so an older copy can never block.
+**Requirement:** A hook before each tool call refuses, with the host's deny and a reason: a sub-agent on a model the project's rules do not give (only where those rules are in force), a message to another session whose stated hour is more than a minute off the clock (after its label, or first, before it), a document hour ahead of the clock, a shell command with backticks inside double quotes, a test run of several files outside a gate's turn while another gate holds the lock, a line over the limit in a memory index, the tools that open sessions out of sight where the project says so, a `start_session` with a brief that names no effort or one above the project's `session-effort` rule where that rule is declared (a fork included), a `start_session` whose title is not `<code> <n> · <purpose>` (or `<code> ORQ · <purpose>` for a new lead) with the project's own code, harness.json `"code"`, where the project's `session-title` rule is declared, naming the next free number (one past the highest of that code in the project's channel and openings, also printed by `js-harness sessions --next-number`), or saying to declare the code where the project declares none, a recursive `rm` or `rmdir` of a drive's root or of a folder at its top, and a gentle-ai review (`assess`, `status`, `start`) whose `--base-ref` is off the head's first-parent line. A stop hook turns the stop back when a reply states its own context share more than 2 points from the recorded one, and never loops. Both write nothing and always exit 0, so an older copy can never block.
 **Reason:** Each rule had a measured failure and the owner's order to refuse it; a refusal at the call is the one reader every call meets.
-**Proof:** `node --test bin/guard.test.mjs`, `node --test bin/lib/guard.test.mjs`, `node --test bin/lib/test-run-warning.test.mjs`
+**Proof:** `node --test bin/guard.test.mjs`, `node --test bin/lib/guard.test.mjs`, `node --test bin/lib/session-title-guard.test.mjs`, `node --test bin/lib/test-run-warning.test.mjs`
 **Discarded:** Reading effort: a hook before a tool call cannot. Taking back a reply with a wrong share: impossible; turning the stop back is the nearest. A warning instead of a refusal for test runs. The first backtick detector: 20 hits for 1 real.
 **Today:** `bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/test-run-warning.mjs`, `bin/lib/memory-index-guard.mjs`, `bin/lib/document-hour-guard.mjs`, `js-harness guard`, `claude-guard-hook`, `claude-share-hook`
 
@@ -513,11 +531,11 @@ proofs and by those tasks.
 ### The README held to the dispatcher
 
 **Problem:** No incident. The owner's answer "Una página y cada comando" (lead's transcript `65318fd5`, line 10979), with the order that a test hold the README's commands to the dispatcher's, so it cannot go stale silently.
-**Requirement:** Under "Commands", exactly one section per command of the help, in the same order and no other, each with a fenced example from a real run; "Install", then "Remove", then "Commands". Headings inside fences are not headings of the page.
+**Requirement:** Under "Commands", exactly one section per command of the help, in the same order and no other, each with a fenced example from a real run; "Install", then "Remove", then "Commands". Headings inside fences are not headings of the page. Every command answers `--help` (or `-h`), given alone, with its usage line and exit 0, and runs nothing. A user guide, `docs/GUIDE.md`, linked from the top of the README, takes a new user from the install to a working project.
 **Reason:** A command added, renamed or removed without its section fails a test instead of going stale.
-**Proof:** `node --test bin/readme.test.mjs`
+**Proof:** `node --test bin/readme.test.mjs`, `node --test bin/js-harness.test.mjs`
 **Discarded:** None recorded.
-**Today:** `README.md`, `bin/readme.test.mjs`, `bin/js-harness.mjs`
+**Today:** `README.md`, `docs/GUIDE.md`, `bin/readme.test.mjs`, `bin/js-harness.mjs`
 
 ### A process is named by the image it runs
 

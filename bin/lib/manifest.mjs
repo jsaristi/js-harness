@@ -34,11 +34,12 @@ js-harness commands:
 - \`js-harness check --push\` — the gate a push must pass, and the only check it runs: every code commit since the remote's default branch lies in a recorded Codex review (\`--remote <name>\`, default origin). Where \`codexReview\` is off at the pushed commit it asks for none; the first push to a repository that holds no branch passes and says what went unread.
 - \`js-harness functions\` — each function a project can turn off and on (\`harness.json\` "functions": the code map, the TypeScript language server, the Codex review), its value here and why; \`functions apply\` makes the clone what they ask, \`functions set <name> <value>\` writes one.
 - \`js-harness rules\` — the rules in force: the harness's, and the project's own in \`docs/rules.json\`, each in prose (a file and the phrases that find it), enforced by a sensor, or retired; \`rules check\` and the gate refuse a phrase gone from its file, a sensor no longer declared, or a rule deleted instead of retired. In the harness's own checkout, \`rules change <id>\` is the one command that changes one of its rules, and the gate's \`rules\` row reports a line a commit adds that restates a rule's value instead of marking it \`rule:<id>\`, and fails it once that rule refuses. Its turn-start hook, \`rules --hook\`, tells a session once when the rules on the default branch changed since its merge base, after a compaction too and to a sub-agent at its start.
+- \`js-harness report [--since <time>] [--mark]\` — the facts a status report is written from, since the last report: the pull requests merged into the default branch with their commits, each session's last notice, the questions answered and still open, and the roadmap phase by phase with what is left; \`--mark\` records this report as the last one, in the channel record under the home.
 - \`js-harness sessions\` — the board of the project's Claude Code sessions, worktrees, running gates and open pull requests, read-only; \`--watch\` waits and returns when it changes. The \`js-harness-orchestrator\` skill says how sessions share a project.
 - \`js-harness notify --to orchestrator|<number> --kind <kind> "<one line>"\` — append a notice to the project's record of notices between sessions, kept under the home and not in the repository; the orchestrator's watch wakes on one addressed to it. A question to the user is \`--kind question\`, with its fields as JSON on standard input.
 - \`js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)\` — ends when the pull request is merged, origin/main holds the commit or the text, or a notice is addressed to the role; it checks at once and then every ${ruleValue('wait-every', 'seconds')} seconds, gives up after ${ruleValue('wait-for', 'minutes')} minutes (\`--every\`, \`--for\`) with exit 1, and says what it waited for; a work session's wait also ends on a notice to its own number (exit 3), printing it and the same wait to run again; run it in the background and stop it with TaskStop when it is no longer needed. TaskStop has been seen to end the shell of a background command and leave its node process running (2026-10-14): check that none is left.
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
-- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a command typed into the user's terminal that does not end with a note saying what it does, a session started with \`start_session\` that names no effort or one above the project's rule \`session-effort\` (only where that rule is in force; a fork cannot set its own, so start it \`fresh\`),a Bash command with backticks inside double quotes, a recursive \`rm\` or an \`rmdir\` of a folder at the top of a drive (the host holds that one for the user even in bypass mode, so put practice and scratch folders below the project's worktrees folder or in your scratchpad), and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
+- \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a command typed into the user's terminal that does not end with a note saying what it does, a session started with \`start_session\` that names no effort or one above the project's rule \`session-effort\` (only where that rule is in force; a fork cannot set its own, so start it \`fresh\`), a session started with a title that is not \`<code> <n> · <purpose>\` with the project's code, harness.json \`"code"\` (only where the rule \`session-title\` is in force; the reason names the next free number, which \`js-harness sessions --next-number\` prints, or says to declare the code), a Bash command with backticks inside double quotes, a recursive \`rm\` or an \`rmdir\` of a folder at the top of a drive (the host holds that one for the user even in bypass mode, so put practice and scratch folders below the project's worktrees folder or in your scratchpad), and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over 150 characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than 2 points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
 - \`js-harness permit\` — the PermissionRequest hook install registers (\`--hook\`): while the orchestrator holds the relay (\`lease\`), a permission card of another session reaches it first and waits up to 9.5 minutes for \`allow <id>\` or \`deny <id> --reason <text>\`; with no verdict the card reaches the user. \`list\` shows the waiting cards.
 - \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words. On Claude Code a work session that ends its turn holding work the orchestrator handed it, with nothing in its background to wake it, is turned back once, with the wait to arm.
 
@@ -115,7 +116,7 @@ What you run:
 What you may do:
 - What you do alone and what stays the user's is the charter the user approved, at the head of your relief file: read it there, act inside it, and ask before anything it does not name. Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command.
 - You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last. One exception, in the harness's own repository, approved by the user with the protocol for changing a rule: you may run \`js-harness rules change\` from a checkout of a \`rule/\` branch and commit what it writes.
-- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves.
+- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves. Every work session is titled \`<code> <n> · <purpose>\`, \`<code>\` being the project's own identifier in harness.json \`"code"\`, the title you give \`notify --opening\` and \`start_session\` alike, with \`<code> <n>\` from \`js-harness sessions --next-number\`: the number is the session's address, so a free title or a number another session holds sends notices to nobody or to the wrong one. A new lead is titled \`<code> ORQ · <purpose>\`.
 - Ready pull requests are landed with \`js-harness merge-queue --land\`: it builds the candidate the default branch would be, tests it on this machine and on the project's CI, and pushes it when both are green; \`--dry-run\` first shows what it would land and what it leaves out, and why. After a land that moved main, \`js-harness merge-queue --land --refresh-copy\` also brings the installed copy the hooks run up to that main and prints its undo; a land that moved nothing refreshes nothing. Where the queue cannot run, a pull request is merged by hand by the rules that follow.
 - A pull request that changes code is merged on a green run of the project's CI whose checkout says it tested \`Merge <head> into <base>\`, with that base the default branch as origin has it now. A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today. The merge's message names the run, the base it tested and the head.
 - A pull request that changes only documentation (the docs folder and the feature documents; never the agents' instructions or the harness's configuration) is merged without waiting for that run, when \`git merge-tree\` of the default branch and the head is clean.
@@ -135,6 +136,19 @@ Interrupt the user only when:
 5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
 6. a session reached the context pause and its state is not written.
 Say for each session concerned whether to send that session's own prompt, wait, or drop it. Otherwise keep the work moving: the next units of the plan are yours to move inside the charter.
+
+## The status report
+
+When the user asks how the work is going, or how much is done, the answer is a report of everything since the last report, in detail: never a line that all goes well.
+- Run \`js-harness report --mark\`: it prints the facts since the last report (the pull requests merged with their commits, each session's last notice, the questions answered and still open, the roadmap phase by phase with what is left) and records this report as the last one, so the next one starts where this one ends. Read the board and your relief file beside it for what the record does not hold.
+- Answer in the user's language, in these sections, each item in plain words; a section with nothing in it says so in one line, and none is left out:
+
+1. What landed: each pull request said as what it gives the user, not by its branch.
+2. The sessions: each one, what it is for and how far it got.
+3. The user's decisions since the last report, and what each changed.
+4. The map: each roadmap phase with its share done and what is left in it, then the total.
+5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.
+6. What you propose next, and why.
 
 ## The recap
 
@@ -865,7 +879,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks', 'settings'];
+const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -1052,6 +1066,24 @@ export function forgetScheduledTask(home, name, deps = {}) {
   return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name), deps.listDir);
 }
 
+const sameStackRow = (a, b) => a.tool === b.tool && a.dimension === b.dimension;
+
+/** Keeps the record of one row `stack install` runs (odd/tasks/stack-install.md, D7), `{ tool, dimension, run, undo,
+ * applies, env, at }`, in place of the record of the same tool and dimension: `run` and `undo` are the words of the
+ * command and of its exact undo, `applies` what the undo still applies to (the version installed, or the registration
+ * written, read back; `null` before the command has run), `env` the variables the command was given over the
+ * environment, which its undo is given too. Like a scheduled task, no component declares one: `install` and `sync`
+ * carry the array as it is, and `uninstall` hands it to `deps.undoStack`. */
+export function recordStackRow(home, record) {
+  return keepRecord(home, 'stack', record, (entry) => sameStackRow(entry, record));
+}
+
+/** Forgets the record of `row`'s tool and dimension, running nothing; `false` when there was none. What is left of the
+ * manifest is what `forgetOptionalFile` leaves. */
+export function forgetStackRow(home, row, deps = {}) {
+  return forgetRecord(home, 'stack', (entry) => sameStackRow(entry, row), deps.listDir);
+}
+
 /** Puts one record back as it was, for a command that takes back what it did: `record` (what the manifest held
  * for it before) is written again in place of what is there now, or, when there was none, what is there now is
  * forgotten. Only that one record is touched, in the manifest as it is at this moment: whatever another command
@@ -1079,7 +1111,7 @@ export function windowsSystem32(env) {
 
 /** Whether this process is a test: a file run by `node --test` (which sets `NODE_TEST_CONTEXT` for it), or a
  * test file run directly. */
-const underTest = () => process.env.NODE_TEST_CONTEXT !== undefined || /\.test\.[cm]?js$/.test(process.argv[1] ?? '');
+export const underTest = () => process.env.NODE_TEST_CONTEXT !== undefined || /\.test\.[cm]?js$/.test(process.argv[1] ?? '');
 
 /** What `schtasks.exe` printed, as text: UTF-16 when it starts with that mark or reads as it, else one character
  * a byte. Only ASCII is ever compared, and that is the same either way. */
@@ -1480,6 +1512,14 @@ function uninstallInstalled(home, deps) {
     }
   }
 
+  // What `stack install` ran is undone by `deps.undoStack`, which `uninstall machine` hands in: the probes that judge a
+  // record live in bin/lib/stack.mjs, which imports this file. It returns `{ undone, kept, failedRecords }`, and only
+  // the failed records stay, for a second run. Without it nothing is run and every record stays as it is.
+  const stackRecords = manifest.stack ?? [];
+  const stack = stackRecords.length === 0
+    ? { undone: [], kept: [], failedRecords: [] }
+    : deps.undoStack?.(stackRecords) ?? { undone: [], kept: stackRecords.map(({ tool, dimension }) => ({ tool, dimension, reason: 'not-judged' })), failedRecords: stackRecords };
+
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
@@ -1495,10 +1535,14 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0) {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0) {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const keptSettings = settings.failedRecords.map((record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) }));
-    writeManifest(home, { version: null, files: [], entries: [], tasks: stillRecorded, ...(keptSettings.length > 0 && { settings: keptSettings }) });
+    writeManifest(home, {
+      version: null, files: [], entries: [], tasks: stillRecorded,
+      ...(keptSettings.length > 0 && { settings: keptSettings }),
+      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }),
+    });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
@@ -1507,7 +1551,9 @@ function uninstallInstalled(home, deps) {
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
+  const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, ...stackResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

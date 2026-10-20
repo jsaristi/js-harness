@@ -213,7 +213,7 @@ export const REVIEW_EFFORT = ruleValue('review-effort');
 // review does not read every file, and how it says which others to leave out. The fifth, because a run that
 // reviews less than it was asked, or nothing, must not come as a surprise, and `--again` is the way round it.
 // `--session` is not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
-const USAGE =
+export const USAGE =
   'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +

@@ -6,6 +6,9 @@ memory, codegraph owns code structure. js-harness adds the thin layer those leav
 `AGENTS.md`, a pre-commit gate that runs the project's checks, task contracts whose end is a set
 of commands that exit 0, and a record of everything it writes, so that it can be removed exactly.
 
+**New here? Start with the [user guide](docs/GUIDE.md):** install, the menu, the first run, a typical day and
+uninstall. This page is the reference of every command.
+
 It is plain Node with no dependencies. It needs Node 22 or newer and git.
 
 ## Install
@@ -23,25 +26,32 @@ js-harness init
    with `--allow-git`, and npm 11.12 refuses this one under `root`, so `all`. With pnpm: `pnpm add -g github:jsaristi/js-harness`.
 2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
    once per machine.
-3. `js-harness init`, in a git repository, writes `harness.json` (the pin, and `"reply": true`,
+3. `js-harness init`, in a git repository, writes `harness.json` (the pin, `"code"`, the project's
+   identifier its sessions' titles start with, offered from the initials of its name, and `"reply": true`,
    which turns the reply check on), `AGENTS.md`, an empty failures register (`docs/FAILURES.md`)
    and the pre-commit gate of that project.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
+`js-harness --version` (or `-v`, or `version`) prints the version of the copy on the path, alone on one
+line. `js-harness <command> --help` (or `-h`) prints that command's usage and runs nothing.
+
 ## Remove
 
 ```sh
 cd my-project
-js-harness uninstall
-js-harness uninstall --global
-npm rm -g js-harness
+js-harness uninstall            # what init wrote in this project
+js-harness uninstall --global   # what install wrote in the home; the program stays
+pnpm remove -g js-harness       # the program; npm rm -g js-harness for an npm install
 ```
+
+The last line uses the package manager that installed the program. `uninstall --global --everything`
+does the last two in one step and goes further, below.
 
 `uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
 and names them; `uninstall --global --full` removes them too. Files you modified and the memory
 notes themselves are kept either way. `uninstall --global --everything` removes all that js-harness
-keeps on the machine and then the program itself, so `npm rm -g` is not needed after it. Projects'
+keeps on the machine and then the program itself, so no `pnpm remove -g` or `npm rm -g` is needed after it. Projects'
 files are kept. Each kind has a name too (`uninstall project`, `machine`, `snapshots`,
 `everything`), and the TUI's Uninstall opens a submenu of them.
 
@@ -86,6 +96,13 @@ line ending `^{}` for an annotated tag), and `#<that commit>` in place of `#vX.Y
 commit exactly.
 
 ## Commands
+
+Most commands are for you; some exist for the hooks `install` registers or for an orchestrator session
+that leads other sessions, and are rarely typed by hand:
+
+| For you | For hooks and the orchestrator |
+|---|---|
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, functions, remote, memory, fetch, backup | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, wait |
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
 `my-project` is the project's folder. A line `…` marks output left out; output that grows with
@@ -371,6 +388,11 @@ Each kind also has a name, and a named kind never acts by location:
 | `uninstall snapshots` | `uninstall --global --full` | the same, and the memory snapshots | the throughput records, the program |
 | `uninstall everything` | `uninstall --global --everything` | the same, the whole `.js-harness` folder and the program | projects' files |
 
+The machine kinds also undo what `stack install` ran, the last first, printing each undo before
+it runs it: a tool already gone loses its record, one that changed since (you upgraded it, or
+registered it again with another entry) is yours and is kept, named, and one whose undo fails
+stays recorded, so running the uninstall again finishes it, and the exit code is 1.
+
 `uninstall project` outside an initialized project exits 1 and removes nothing; it never falls
 through to the machine. A kind given `--global`, `--full` or `--everything`, or a machine kind
 given `--cwd`, is a usage error.
@@ -513,6 +535,49 @@ Fix:
 …
 ```
 
+### js-harness stack
+
+Read-only. Lists the tools the harness requires that are missing on this machine for this
+project, in the order `stack install` runs them, each with its command and its exact undo:
+the Codex CLI while the project's `codexReview` switch is not off, codegraph while `codeMap`
+is not off, and codegraph's registrations in Claude Code and Codex. What it never runs is
+named as your own step: gentle-ai's installer (its uninstall is not an exact undo, so it
+stays yours, with gentle-ai's own undo beside it), engram, which that installer brings, a
+login, and the prerequisites `git` and `gh`. context7 and typescript-lsp are listed as
+optional. The package manager is `--pm`, else `JS_HARNESS_PM`, else the one that installed
+this copy. `--json` prints `{ mandatory, manual, optional }`. It exits 0 when nothing
+required is missing, 1 when something is.
+
+`js-harness stack install [--prefix <dir>] [--tool <id>]... [--yes]` runs those installs in
+that order. Each is printed with its undo and asked `Run it? [y/N]` in a terminal; without one it
+runs nothing unless given `--yes`, and then only the tools `--tool` names. Each is recorded in the
+machine manifest before it starts, so `uninstall machine` undoes it; a failure that left nothing
+behind loses its record, and one the probe cannot read afterwards keeps it, as does a timeout
+(under `--yes` only: in a terminal nothing is timed out). Under `--prefix` the
+prefix's binaries come first on the PATH of every probe and command. With a `CODEX_HOME` of your
+own elsewhere than `~/.codex`, the registration in Codex is printed for you to run, never run. It
+exits 0 when nothing it set out to install is missing or unverified, 1 when something is
+(declined, failed, timed out or left to you). In the TUI, Install the stack sits after Doctor
+while a required tool is missing, and runs `stack install`, each y/N answered by one key.
+
+```console
+$ js-harness stack
+js-harness stack: 2 to install, 1 of your own steps.
+
+Installs (stack install runs each one after you say yes, in this order):
+  1. codegraph claude
+     run:  claude mcp add -s user codegraph -- codegraph serve --mcp
+     undo: claude mcp remove -s user codegraph
+  2. codegraph codex
+     run:  codex mcp add codegraph -- codegraph serve --mcp
+     undo: codex mcp remove codegraph
+
+Your steps (never run):
+  - codex (codex): a login takes your credentials
+      codex login
+    undo: codex logout
+```
+
 ### js-harness progress
 
 Shows the roadmap's phases and the features, counted from the checkboxes of `docs/ROADMAP.md`
@@ -546,6 +611,51 @@ Pace of origin/main, its first-parent line, by committer day over the last 2 day
 Total       closed 111  reopened 0  added 89  removed 2
 A day       closed 55.5  reopened 0  added 44.5  removed 1
 ```
+
+### js-harness report
+
+The facts a status report is written from, since the last report: the pull requests merged into
+the default branch (origin/HEAD, else `main`, else `HEAD`) with the subjects of their commits,
+each session that wrote a notice with its last one, the questions answered and those still open,
+and the roadmap as the default branch holds it, phase by phase with what is left. The
+orchestrator skill tells the lead to run it when the user asks how the work is going, and to
+answer from it in six sections.
+
+The cut is `--since <time>` (an ISO 8601 time), else the last report recorded, else the last 24
+hours; the first line says which. Reading writes nothing. `--mark` records this report as the
+last one: one line in the project's channel record under the home
+(`.js-harness/channel/<project>.jsonl`), which `uninstall` removes with the rest of the channel.
+The line keeps the commit of the default branch the report read, and the next report lists the
+merges that branch gained since that commit, so a pull request fetched after a report is still
+shown. A section whose source cannot be read says why in its place, the command exits 1, and
+`--mark` then records nothing, since the next report would start after facts this one never
+showed.
+
+```console
+$ js-harness report
+Since 2026-10-19 19:59Z, the last 24 hours: no report is recorded
+
+Landed on origin/main: 9 pull requests
+…
+  #478 fix/notify-worktree-title  merged 2026-10-20 11:42Z
+      - fix(notify): read the title of a session opened in a worktree
+      - docs(notify): record the reviews of the worktree title fix
+…
+Sessions: 8 wrote notices
+…
+  JH 35 · notify title from worktree sessions  closed 2026-10-20 11:39Z  (2 notices)
+      JH 35: PR 478 ready (notify reads titles of worktree sessions; heldWork takes the session's own close). Follow-up proposed: board and transcriptNamed.
+…
+Questions: 10 answered, 1 open
+…
+Map: docs/ROADMAP.md on origin/main  80/85  94%
+…
+  [ ] Onboarding  1/2  50%
+      - Design, past its two readers: the interview, the pre-plan, the plan and the roadmap it writes
+```
+
+With `--mark`, the same report ends in one more line, `Recorded this report at <time>`, and the
+next report starts at that time.
 
 ### js-harness throughput
 
@@ -1218,7 +1328,12 @@ standard input and refuses these things: a sub-agent launched on a model the pro
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or an effort above the
-rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
+rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a `start_session`
+whose title is not `<code> <n> · <purpose>` (or `<code> ORQ · <purpose>` for a new lead) with the project's own code,
+harness.json `"code"` (`init` offers the initials of the project's name; this repository's is `JH`), where the rule
+`session-title` is declared, the reason naming the project's next free number, one past the highest of that code in
+its channel and openings, which `js-harness sessions --next-number` also prints, or saying to declare the code where
+the project declares none (a proposal started by its `proposal_id` carries no title and passes); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
 end with a note saying what it does, `<command>; Write-Host 'NOTE: <what it does>'` (`echo` in an
 SSH host's shell), four words or more, so the user reads it beside the command where it runs and
 learns from it (his request of 2026-10-19); a shell command with backticks

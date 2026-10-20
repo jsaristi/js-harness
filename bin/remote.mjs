@@ -34,7 +34,7 @@ import { unknownArgument } from './lib/args.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 
-const USAGE =
+export const USAGE =
   'Usage: js-harness remote start|stop|status [--cwd <path>] [--home <path>]; start also takes [--name <name>] [--permission-mode <mode>] [--spawn same-dir|worktree|session] [--watchdog]; start and stop also take [--at-login] (start writes a launcher in the Windows Startup folder that starts the server at every login and registers a scheduled task that starts it again within five minutes when it is not running, stop removes both). A server stopped with stop stays stopped until the next start: start --watchdog, which is what the scheduled task runs, starts nothing then, and nothing when the server already runs';
 
 class ArgError extends Error {}

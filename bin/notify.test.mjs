@@ -47,14 +47,15 @@ function withMachine(body) {
 }
 
 /** A session of the project titled `title`, whose last entry is `seconds` before NOW. */
-function writeSession(machine, id, title, { seconds = 60, permissionMode = 'bypassPermissions', usage = null } = {}) {
+function writeSession(machine, id, title, { seconds = 60, permissionMode = 'bypassPermissions', usage = null, projectDir = machine.projectDir } = {}) {
   const at = before(seconds).toISOString();
   const entries = [
     { type: 'custom-title', customTitle: title, sessionId: id },
     { type: 'user', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, permissionMode, origin: { kind: 'human' }, message: { role: 'user', content: 'made up' } },
     { type: 'assistant', timestamp: at, cwd: machine.root, gitBranch: 'main', isSidechain: false, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }], ...(usage === null ? {} : { usage }) } },
   ];
-  const file = path.join(machine.projectDir, `${id}.jsonl`);
+  fs.mkdirSync(projectDir, { recursive: true });
+  const file = path.join(projectDir, `${id}.jsonl`);
   fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n', 'utf8');
   fs.utimesSync(file, before(seconds), before(seconds));
 }
@@ -274,6 +275,20 @@ test('the record is the project\'s, whichever worktree the notice is sent from, 
     ['2026-01-01T12:03:00.000Z', path.join(machine.worktree, 'bin'), path.join(machine.worktree, 'bin')],
   ]);
   assert.deepEqual(fs.readdirSync(channelDir(machine.home)), [`${machine.slug}.jsonl`]);
+}));
+
+test('a session opened in a .claude/worktrees worktree is read from that worktree\'s sessions folder, so its notice carries its title', withMachine(async (machine) => {
+  // JH 30's transcript was filed under D--js-harness--claude-worktrees-compassionate-allen-842d94, and its closed
+  // notice was written with a null title (channel record, 2026-10-20).
+  const appWorktree = path.join(machine.root, '.claude', 'worktrees', 'calm-x');
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: path.join(machine.claudeHome, 'projects', projectSlug(appWorktree)) });
+  const { run } = fakeGit(machine);
+  const listed = [`worktree ${slashes(machine.root)}`, 'HEAD 1111', 'branch refs/heads/main', '', `worktree ${slashes(appWorktree)}`, 'HEAD 2222', 'branch refs/heads/fix/x', '', ''].join('\0');
+  const withWorktrees = (command, args, options) => (args[0] === 'worktree' && args[1] === 'list' ? ok(listed) : run(command, args, options));
+  const { code, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'from the app worktree'], { cwd: appWorktree, run: withWorktrees });
+  assert.deepEqual([code, err], [0, []]);
+  const [notice] = recorded(machine).notices;
+  assert.deepEqual(notice.from, { host: 'claude-code', id: SENDER, source: 'environment', title: SENDER_TITLE, permissionMode: 'bypassPermissions', context: null });
 }));
 
 test('the time is never the caller\'s: there is no flag for it', withMachine(async (machine) => {

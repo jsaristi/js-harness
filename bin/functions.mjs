@@ -9,7 +9,7 @@ import { SWITCHES } from './lib/functions.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { textLike } from './lib/settings-key.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness functions [--json] [--cwd <path>]',
   '       js-harness functions apply [--cwd <path>]',
   '       js-harness functions set <name> <value> [--cwd <path>]',

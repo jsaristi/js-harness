@@ -10,7 +10,7 @@ import { callsOf, countOf, dayOf, launchesOf, usageOf } from './lib/subagent-cou
 import { linesOf } from './lib/lines.mjs';
 import { mainCheckout, parseWorktreeList, projectSlug } from './lib/sessions.mjs';
 
-const USAGE = 'Usage: js-harness subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
+export const USAGE = 'Usage: js-harness subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 // A day of this project's records is about 231 MB, every line of it read: a week is the most one run reads.
 const MAX_DAYS = 7;
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;

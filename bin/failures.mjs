@@ -10,7 +10,7 @@ import { holdsPhrase, parseRegister, summarize } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 
 const REGISTER = 'docs/FAILURES.md';
-const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled]';
+export const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled]';
 
 // The end of the row's detail at every gate: how a session learns the register exists, at no token
 // per turn.

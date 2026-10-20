@@ -13,7 +13,7 @@ import { hygieneState, INDEX_BYTES, journalPath, LINE_CHARS, memoryLocation, NOT
 import { PassError, planPass, undoPass, verifyPass } from './lib/memory-pass.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
 
-const USAGE = `Usage: js-harness memory status [--json] [--history] [--cwd <path>] [--home <path>]
+export const USAGE = `Usage: js-harness memory status [--json] [--history] [--cwd <path>] [--home <path>]
        js-harness memory plan <note>... [--cwd <path>] [--home <path>]
        js-harness memory verify <stamp> [--approved <note>[,<note>...]] [--cwd <path>] [--home <path>]
        js-harness memory undo <stamp> [--cwd <path>] [--home <path>]`;

@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readNotices, senderOf } from './lib/channel.mjs';
-import { mainCheckout, projectSlug, roleNamed, roleOfTitle } from './lib/sessions.mjs';
+import { mainCheckout, projectDirsOf, projectSlug, roleNamed, roleOfTitle } from './lib/sessions.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { renewOwnLease } from './permit.mjs';
 
@@ -19,7 +19,7 @@ import { renewOwnLease } from './permit.mjs';
 export const WAIT_EVERY_SECONDS = ruleValue('wait-every', 'seconds');
 export const WAIT_FOR_MINUTES = ruleValue('wait-for', 'minutes');
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness wait (--pr <number> | --main-has <commit> | --main-file <path> --contains <text> | --notice-to <role or number>)',
   '                       [--every <seconds>] [--for <minutes>] [--cwd <path>] [--home <path>]',
   '  Ends when its one condition holds, and prints one line that says so (exit 0). It first prints what it waits',
@@ -226,8 +226,9 @@ function ownNumber({ env, cwd, run, readdir, readFile, homedir, defaultCwd }) {
   if (!env.CLAUDE_CODE_SESSION_ID) return null;
   try {
     const claudeHome = path.resolve(defaultCwd, env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
-    const projectDir = path.join(claudeHome, 'projects', projectSlug(mainCheckout(run, cwd)));
-    const role = roleOfTitle(senderOf({ env, projectDir, readdir, readFile }).title);
+    // A session opened in a worktree is filed under that worktree's sessions folder, not the main checkout's.
+    const projectDirs = projectDirsOf(run, mainCheckout(run, cwd), claudeHome);
+    const role = roleOfTitle(senderOf({ env, projectDirs, readdir, readFile }).title);
     return role?.role === 'work' ? role.number : null;
   } catch {
     // A session whose number cannot be read keeps the wait it had, as one with none does.

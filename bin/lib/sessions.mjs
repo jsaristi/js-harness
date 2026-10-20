@@ -808,6 +808,32 @@ export function mainCheckout(run, cwd) {
   return top !== undefined && path.relative(path.resolve(cwd, gitDir), commonDir) === '' ? path.resolve(top) : commonDir;
 }
 
+/** The sessions folders of the project at `root` under `claudeHome`: the main checkout's first, then each worktree's
+ * that git lists. Claude Code files a session under the folder it was opened in, so a session opened in a worktree
+ * (the app's `.claude/worktrees/<name>`) is not under the main checkout's: JH 30's closed notice carried a null title
+ * for want of that folder (2026-10-20). A git that cannot list the worktrees, or throws, leaves the main folder alone.
+ * The list is read apart by NUL (`-z`), so a path is the one git wrote whatever it holds, a line break included. */
+export function projectDirsOf(run, root, claudeHome) {
+  const dirs = [path.join(claudeHome, 'projects', projectSlug(root))];
+  let listed;
+  try {
+    listed = run('git', ['worktree', 'list', '--porcelain', '-z'], { cwd: root });
+  } catch {
+    return dirs;
+  }
+  if (listed.error || listed.status !== 0) return dirs;
+  const trees = [];
+  for (const field of String(listed.stdout).split('\0')) {
+    if (field.startsWith('worktree ')) trees.push({ path: field.slice('worktree '.length), bare: false });
+    else if (field === 'bare' && trees.length > 0) trees.at(-1).bare = true;
+  }
+  for (const tree of trees) {
+    const dir = path.join(claudeHome, 'projects', projectSlug(path.resolve(tree.path)));
+    if (!tree.bare && !dirs.includes(dir)) dirs.push(dir);
+  }
+  return dirs;
+}
+
 const failed = (result) => Boolean(result.error) || result.status !== 0;
 
 /** Why a command failed, in one line: what the system said when it could not be started, the first line
@@ -1226,6 +1252,38 @@ export function roleOfTitle(title) {
   if (role === 'ORQ') return { code, role: 'orchestrator', number: null, purpose: purpose.trim() };
   const number = Number(role);
   return Number.isSafeInteger(number) ? { code, role: 'work', number, purpose: purpose.trim() } : null;
+}
+
+/** A project's code: capitals and digits, as `init` offers it, so a title of the agreed shape gives it back whole. */
+const CODE_SHAPE = /^[A-Z0-9]+$/;
+
+/** The code of the project at `root`, the identifier its sessions' titles start with (odd/tasks/session-title.md,
+ * S5): `{ code }`, read from `harness.json` "code" by `readFile`, `code` being `null` where there is no
+ * `harness.json` or it declares none. Throws, naming the file, when it cannot be read, is not a JSON object, or its
+ * "code" is not capitals and digits other than ORQ, or is one `roleOfTitle` would not read back from a title: a code
+ * that cannot be read is never taken for none. */
+export function projectCode(root, readFile) {
+  const file = path.join(root, 'harness.json');
+  let text;
+  try {
+    text = readFile(file);
+  } catch (err) {
+    if (err?.code === 'ENOENT') return { code: null };
+    throw new Error(`${file} could not be read (${err?.code ?? err?.message})`);
+  }
+  let harness;
+  try {
+    harness = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`${file} is not JSON (${err.message})`);
+  }
+  if (!isObject(harness)) throw new Error(`${file} is not a JSON object`);
+  if (!Object.hasOwn(harness, 'code')) return { code: null };
+  const { code } = harness;
+  if (typeof code !== 'string' || !CODE_SHAPE.test(code) || code === 'ORQ' || roleOfTitle(`${code} 1 · x`)?.code !== code) {
+    throw new Error(`${file} "code" must be capitals and digits, the project's identifier such as "JH", and not ORQ`);
+  }
+  return { code };
 }
 
 /** The role `text` names, as `sessions --address` takes it: `orchestrator`, or `ORQ` as the titles spell
