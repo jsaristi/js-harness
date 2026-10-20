@@ -56,7 +56,7 @@ test('stack --json prints the plan in the shape onboarding reads', async () => {
   assert.equal(code, 1);
   const plan = JSON.parse(out);
   assert.deepEqual(Object.keys(plan), ['mandatory', 'manual', 'optional']);
-  assert.deepEqual(plan.mandatory, [{ tool: 'codex', dimension: 'installed', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'] }]);
+  assert.deepEqual(plan.mandatory, [{ tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'], env: {} }]);
 });
 
 test('--pm names the package manager over JS_HARNESS_PM', async () => {
@@ -94,7 +94,7 @@ test('a shown command quotes a word the shell would read, so it runs as printed 
 test('an unknown argument, or a missing value, is a usage error that reads nothing', async () => {
   let read = 0;
   const deps = { read: () => { read += 1; return stack()(); } };
-  for (const argv of [['--bogus'], ['install'], ['--home']]) {
+  for (const argv of [['--bogus'], ['bogus'], ['--home']]) {
     const { code, err } = await run(argv, deps);
     assert.equal(code, 2, argv.join(' '));
     assert.match(err, /Usage: js-harness stack/);

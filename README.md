@@ -509,6 +509,13 @@ optional. The package manager is `--pm`, else `JS_HARNESS_PM`, else the one that
 this copy. `--json` prints `{ mandatory, manual, optional }`. It exits 0 when nothing
 required is missing, 1 when something is.
 
+`js-harness stack install [--prefix <dir>] [--tool <id>]... [--yes]` runs those installs in
+that order. Each is printed with its undo and asked `Run it? [y/N]` in a terminal; without one it
+runs nothing unless given `--yes`, and then only the tools `--tool` names. Each is recorded in the
+machine manifest before it starts, so `uninstall machine` undoes it; a failure that left nothing
+behind loses its record. It exits 0 when nothing it set out to install is missing, 1 when
+something is (declined, failed or timed out).
+
 ```console
 $ js-harness stack
 js-harness stack: 2 to install, 1 of your own steps.
