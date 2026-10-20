@@ -68,6 +68,15 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
   la sesion orquestadora a construir como hemos venido trabajando, ahora si la persona no sabe del stack o es un
   programador muy junior lo vas a guiar a enseñar y darle el criterio de acompañamiento de por que hacerlo como le
   propones para que su proyecto quede excelente y muy bien"
+- S4. His words (2026-10-20, adjusting the lead's seven-point vision after Pregunta 27 "Ajustarla primero",
+  transcript 908805db line 6668), verbatim: "una cosa que me gustaria es que siempre enseñes y des la opcion al
+  usuario a desactivar la enseñanza y ademas que siempre des la asesoria completa osea si el usuario sabe de backend
+  asesoralo y enseñale de todo lo demas, osea de fronted, de arquitectura, de ci and cd osea de todo, lo mismo en
+  analisis de datos, o en una pagina estatica por ejemplo el tema del SEO, GEO y AEO por ejemplo, o de una
+  investigacion de como se deberia hacer el plan para investigar y que medir etc etc osea eres un asesor elite  de
+  talla mundial trabajando para desarrollar el mejor proyecto posible, praticamente sacarlo a delante con todo, a
+  menos que el usuario te indique lo contario osea de que no quiere aprender y de que solo quiere hacerlo facil y
+  rapido sin importar tanto la calidad y la profundidad del proyecto."
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
@@ -331,3 +340,28 @@ plus confirmations, and two readers twice (pre-plan, plan), on the reader model 
 - L3 (2026-10-19) Version 1 committed (`docs(onboarding): open the feature...`); round 1 of the readers recorded under
   `## Reviews`; version 2 written from it; round 2 read the four blockers; version 3 takes its findings. What stays
   open is listed as unguaranteed under `## Reviews`.
+- L10 (2026-10-20) He asked the lead how onboarding should be. The lead's seven points:
+  1. The project's kind first, since it decides which stages apply.
+  2. The developer's level read per area from how they answer, never asked.
+  3. One decision at a time, each with its alternatives and its why, kept as a short ADR in `docs/origin.md`.
+  4. The advanced developer is challenged too.
+  5. Technology advice checked against current sources and cited.
+  6. The same outputs: origin, roadmap, a first feature document with its contract.
+  7. No course platform and a bounded interview.
+  Pregunta 27 (pass the vision to JH 34?) was answered "Ajustarla primero"; S4 is his adjustment.
+  Vision as adjusted, for T6:
+  - Teaching is ON by default, and the user can turn it off at any moment; the choice is recorded and can be turned
+    back on.
+  - The advice covers every area the project's kind needs, whatever the developer knows:
+    - a platform: backend, frontend, architecture, CI/CD, security, observability;
+    - a static site: SEO, GEO and AEO;
+    - data analysis: sources, quality, method, reproducibility;
+    - research: the research plan and what to measure.
+  - The level found per area sets the depth and tone, not whether an area is covered.
+  - A fast mode only when the user says so ("facil y rapido"): minimal advice, with the tradeoffs given up named once
+    and recorded.
+  - The lead's point 7 is revised:
+    - Teaching is now the default.
+    - What stays bounded is the onboarding itself: it settles the decisions the roadmap needs, and the deeper advice
+      of each area becomes a roadmap phase with its own advice when that phase starts.
+    - This is a proposal for T6's readers, not his words.
