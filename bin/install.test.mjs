@@ -2077,3 +2077,18 @@ test('uninstall machine drops the record of a tool already gone, and names one t
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('uninstall machine keeps the record of a tool that answers but cannot be read, and exits 1 (Codex on b9722fc..e57f2d0)', async () => {
+  const home = makeTmpHome();
+  try {
+    const codex = { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['x'], undo: ['y'], applies: '2.0.0', env: {}, at: 'then' };
+    recordStackRow(home, codex);
+    const stackSpawn = (file, args) => ([file, ...args].join(' ') === 'codex --version' ? { status: 0, stdout: 'garbled' } : assert.fail('ran an undo'));
+    const { code, errLines } = await captureConsole(() => uninstallMain(['machine', '--home', home], {}, { stackSpawn }));
+    assert.equal(code, 1);
+    assert.ok(errLines.includes('could not undo codex installed (it answers, but its version cannot be read): it is still recorded; run js-harness uninstall machine again'), errLines.join('\n'));
+    assert.deepEqual(readManifest(home).stack, [codex]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

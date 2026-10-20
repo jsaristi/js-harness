@@ -555,9 +555,9 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
   // this command can be run again: it goes to stderr with that, and with how to look and delete it by hand.
   // A row `stack install` ran: undone (its undo was printed as it ran); already gone, or changed since and so his; or
-  // its undo failed, which keeps its record for a run again and goes to stderr.
+  // its undo failed, could not be judged or waits on another, which keeps its record for a run again and goes to stderr.
   for (const { tool, dimension } of result.stackUndone ?? []) console.log(`undid ${tool} ${dimension}`);
-  const stackNotUndone = (result.stackKept ?? []).filter((row) => row.reason === 'failed' || row.reason === 'not-judged');
+  const stackNotUndone = (result.stackKept ?? []).filter((row) => row.reason !== 'gone' && row.reason !== 'changed');
   for (const row of result.stackKept ?? []) {
     const name = `${row.tool} ${row.dimension}`;
     if (row.reason === 'gone') console.log(`${name} is already gone: its record is dropped`);

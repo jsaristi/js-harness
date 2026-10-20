@@ -94,14 +94,14 @@ test('codexMcpSection reads one [mcp_servers.<name>] table with its subtables, o
 
 test('appliesOf reads a package\'s version, Claude\'s entry and Codex\'s table', () => withHome((home) => {
   const version = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: 'codex-cli 0.50.0\n' } : { status: 1 }));
-  assert.deepEqual(appliesOf({ tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex' }, { home, spawn: version.spawn, platform: 'linux', env: {} }), { present: true, value: '0.50.0' });
-  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'installed', kind: 'package', bin: 'codegraph' }, { home, spawn: version.spawn, platform: 'linux', env: {} }), { present: false, value: null });
-  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'claude', kind: 'registration' }, { home }), { present: false, value: null });
-  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { type: 'stdio', command: 'codegraph', args: ['serve', '--mcp'] } } }));
-  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'claude', kind: 'registration' }, { home }), { present: true, value: { type: 'stdio', command: 'codegraph', args: ['serve', '--mcp'] } });
+  assert.deepEqual(appliesOf({ tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex' }, { home, spawn: version.spawn, platform: 'linux', env: {} }), { present: true, value: '0.50.0', readable: true });
+  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'installed', kind: 'package', bin: 'codegraph' }, { home, spawn: version.spawn, platform: 'linux', env: {} }), { present: false, value: null, readable: true });
+  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'claude', kind: 'registration' }, { home }), { present: false, value: null, readable: true });
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { type: 'stdio', command: 'codegraph', args: ['serve', '--mcp'] } }, readable: true }));
+  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'claude', kind: 'registration' }, { home }), { present: true, value: { type: 'stdio', command: 'codegraph', args: ['serve', '--mcp'] }, readable: true });
   fs.mkdirSync(path.join(home, '.codex'));
   fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[mcp_servers.codegraph]\ncommand = "codegraph"\n');
-  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'codex', kind: 'registration' }, { home }), { present: true, value: '[mcp_servers.codegraph]\ncommand = "codegraph"' });
+  assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'codex', kind: 'registration' }, { home }), { present: true, value: '[mcp_servers.codegraph]\ncommand = "codegraph"', readable: true });
 }));
 
 const PACKAGE = { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'], applies: '0.50.0', env: { PNPM_HOME: '/p' } };
@@ -142,4 +142,23 @@ test('undoStack tries the undo of a record whose command never finished, while i
   const result = undoStack([{ ...PACKAGE, applies: null }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
   assert.deepEqual(result.undone, [{ tool: 'codex', dimension: 'installed' }]);
   assert.equal(calls.length, 2);
+}));
+
+const CODEX_REG = { tool: 'codegraph', dimension: 'codex', kind: 'registration', run: ['codex', 'mcp', 'add'], undo: ['codex', 'mcp', 'remove', 'codegraph'], applies: '[mcp_servers.codegraph]', env: {} };
+
+test('undoStack keeps a record whose probe cannot tell, never dropping it (Codex on b9722fc..e57f2d0)', () => withHome((home) => {
+  const { spawn } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: 'no version here' } : assert.fail('ran an undo')));
+  const result = undoStack([PACKAGE], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.deepEqual(result.kept, [{ tool: 'codex', dimension: 'installed', reason: 'unreadable', why: 'it answers, but its version cannot be read' }]);
+  assert.deepEqual(result.failedRecords, [PACKAGE]);
+}));
+
+test('undoStack keeps the Codex CLI while the undo of a registration in Codex failed, so a run again has it', () => withHome((home) => {
+  fs.mkdirSync(path.join(home, '.codex'));
+  fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[mcp_servers.codegraph]\n');
+  const { spawn, calls } = fakeSpawn(() => ({ status: 1, stderr: 'locked' }));
+  const result = undoStack([PACKAGE, CODEX_REG], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.deepEqual(calls.map((call) => call.args.slice(0, 2)), [['mcp', 'remove']], 'only the registration\'s undo ran');
+  assert.deepEqual(result.kept.map((k) => [k.tool, k.dimension, k.reason]), [['codegraph', 'codex', 'failed'], ['codex', 'installed', 'needed']]);
+  assert.deepEqual(result.failedRecords, [PACKAGE, CODEX_REG], 'in the order they were installed');
 }));

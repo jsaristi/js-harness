@@ -90,10 +90,15 @@ export function codexMcpSection(home, name) {
 export function appliesOf(row, { home, spawn, platform, env }) {
   if (row.kind === 'package') {
     const { state, version } = probeVersionCommand(row.bin, ['--version'], { spawn, platform, env });
-    return state === 'missing' ? { present: false, value: null } : { present: true, value: version };
+    if (state === 'missing') return { present: false, value: null, readable: true };
+    return { present: true, value: version, readable: state === 'ok' };
   }
-  const value = row.dimension === 'claude' ? claudeJsonMcpServer(home, row.tool).entry ?? null : codexMcpSection(home, row.tool);
-  return { present: value !== null, value };
+  if (row.dimension === 'claude') {
+    const { state, entry } = claudeJsonMcpServer(home, row.tool);
+    return { present: entry != null, value: entry ?? null, readable: state !== 'unknown' };
+  }
+  const value = codexMcpSection(home, row.tool);
+  return { present: value !== null, value, readable: true };
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -102,16 +107,30 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  * probed first: a tool already gone loses its record (`gone`); one whose undo no longer applies (he upgraded it, or
  * registered it again with another entry) is his, kept and named, and loses its record (`changed`); else its undo is
  * printed, then run with the record's environment, and one that fails keeps its record, so a second run can finish
- * it (`failed`). A record whose command never got as far as reading back (`applies` is `null`) is undone while its tool
- * is there. */
+ * it (`failed`). A record whose tool answers but cannot be read (`unreadable`) keeps its record untouched, and so does
+ * the Codex CLI while an undo of a registration in Codex failed (`needed`), since that undo needs it. A record whose
+ * command never got as far as reading back (`applies` is `null`) is undone while its tool is there. `failedRecords`
+ * keeps the order they were installed in. */
 export function undoStack(records, { home, spawn = realSpawn, platform = process.platform, env = process.env, log = () => {} }) {
   const undone = [];
   const kept = [];
-  const failedRecords = [];
+  const failed = new Set();
+  const keep = (record, entry) => {
+    kept.push(entry);
+    failed.add(record);
+  };
   for (const record of [...records].reverse()) {
     const key = { tool: record.tool, dimension: record.dimension };
+    if (record.kind === 'package' && record.tool === 'codex' && [...failed].some((other) => other.kind === 'registration' && other.dimension === 'codex')) {
+      keep(record, { ...key, reason: 'needed', why: 'its undo of a registration in Codex failed, and needs it' });
+      continue;
+    }
     const childEnv = withEnv(env, record.env, platform);
     const now = appliesOf(record, { home, spawn, platform, env: childEnv });
+    if (!now.readable) {
+      keep(record, { ...key, reason: 'unreadable', why: 'it answers, but its version cannot be read' });
+      continue;
+    }
     if (!now.present) {
       kept.push({ ...key, reason: 'gone' });
       continue;
@@ -125,9 +144,8 @@ export function undoStack(records, { home, spawn = realSpawn, platform = process
     if (result.ok) {
       undone.push(key);
     } else {
-      kept.push({ ...key, reason: 'failed', why: result.why });
-      failedRecords.push(record);
+      keep(record, { ...key, reason: 'failed', why: result.why });
     }
   }
-  return { undone, kept, failedRecords };
+  return { undone, kept, failedRecords: records.filter((record) => failed.has(record)) };
 }
