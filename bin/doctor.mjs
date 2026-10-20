@@ -112,7 +112,8 @@ export async function resolveLatestVersions(rows, deps) {
   // cache — it is read on every run, online or `--offline`, and overlaid on the cached or fetched
   // network versions. It is not written to the cache either, and (see `isLookupAttempted`) it never
   // counts as an attempted lookup below, so a local answer can neither hide an outage nor be stale.
-  const local = readLocalLatestVersions(rows, { home: deps.home });
+  // `spawn` is for the engram plugin's, read with git from the engram marketplace clone.
+  const local = readLocalLatestVersions(rows, { home: deps.home, spawn: deps.spawn });
   const networkRows = rows.filter((row) => !isLocalSource(row));
   return { ...(await resolveNetworkVersions(networkRows, deps)), ...local };
 }
@@ -184,7 +185,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request, and
   // that request runs beside the lookups of the latest versions, so a slow network is waited on once, not twice.
   const [latestVersions, rules] = await Promise.all([
-    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now }),
+    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now, spawn }),
     harnessRulesRow({
       project,
       declared: harness.declared,
@@ -196,8 +197,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   ]);
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
-    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
+    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major) and on another row (the engram
+    // plugin's names the engram binary's version).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows);
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });

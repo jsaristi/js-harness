@@ -463,6 +463,15 @@ identifier is printed) and whether the remote server of each recorded login laun
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
 `worktrees` row for the worktrees on branches main already holds. `--json` prints the rows.
 
+Its `engram-plugin` row, shown while engram's Claude Code plugin (`engram@engram`) is installed and
+enabled, compares the plugin with the one the engram binary's own release ships: the version that
+tag's `.claude-plugin/marketplace.json` names, read with git from Claude Code's clone of the engram
+marketplace (`~/.claude/plugins/marketplaces/engram`), never from its working tree and never over
+the network. An older plugin is `outdated`, and its fix names both versions:
+`claude plugin marketplace update engram`, then `claude plugin update engram@engram`, then a
+restart of Claude Code. A clone without that tag, or no git, is `unknown`. engram's latest version
+is its highest `v<semver>` release, so its separate `pi-v*` releases are never read as engram's.
+
 Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bundled for its Code
 tab, read from the app's folder under the home (`--home`), never from the environment. The first
 reading is recorded as reviewed in the doctor cache. After an update, the row stays `stale` until

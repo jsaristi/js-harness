@@ -162,6 +162,73 @@ test("doctorMain --json prints a parseable array with the six tool ids, then the
   }
 });
 
+// odd/tasks/engram-plugin-lag.md: the engram binary at 3.5.1 and its Claude plugin at 0.1.12, while the v3.5.1 tag in
+// Claude Code's clone of the engram marketplace ships 0.1.14. `git show` is the fake spawn's, never a real clone.
+function seedEngramPluginLag(home, { gitShow }) {
+  writeJson(path.join(home, '.claude', 'settings.json'), {
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'engram@engram': true },
+  });
+  writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }], 'engram@engram': [{ version: '0.1.12' }] },
+  });
+  fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram'), { recursive: true });
+  const base = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 3.5.1' } });
+  const shown = [];
+  const spawn = (cmd, args, opts) => {
+    if (cmd === 'git' && args[2] === 'show') {
+      shown.push(args[3]);
+      return gitShow(args[3]);
+    }
+    return base(cmd, args, opts);
+  };
+  return { spawn, shown };
+}
+
+test('doctorMain --offline shows the engram plugin outdated against the plugin the engram binary\'s tag ships, with both versions in its fix', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const manifest = JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.14' }] });
+    const { spawn, shown } = seedEngramPluginLag(home, {
+      gitShow: (spec) => (spec === 'v3.5.1:.claude-plugin/marketplace.json' ? { status: 0, stdout: manifest, stderr: '' } : { status: 128, stdout: '', stderr: 'bad revision' }),
+    });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.deepEqual(shown, ['v3.5.1:.claude-plugin/marketplace.json']);
+    assert.match(output, /\nengram\s+3\.5\.1\s+ok\s+ok\s+n\/a\s+unknown\n/);
+    assert.match(output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+outdated\n/);
+    assert.match(
+      output,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is behind 0\.1\.14, the plugin engram v3\.5\.1 ships; update it, then restart Claude Code:\n {4}claude plugin marketplace update engram\n {4}claude plugin update engram@engram\n/,
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorMain fails open to unknown for the engram plugin when the clone cannot answer, and shows no gap for it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const { spawn } = seedEngramPluginLag(home, { gitShow: () => ({ status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' }) });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--offline', '--json'], {}, { spawn, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    const row = JSON.parse(output).find((r) => r.id === 'engram-plugin');
+    assert.equal(row.upToDate, 'unknown');
+    assert.deepEqual(row.gaps, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('doctorMain names the fix commands for gaps and never recommends codegraph upgrade', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
@@ -1119,7 +1186,7 @@ test('an online run refetches when a fresh cache has no key for a network row, a
       codexLogin: 'in',
     });
     const fetchImpl = async (url) =>
-      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => ({ tag_name: 'v2.2.1' }) } : { ok: false };
+      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => [{ tag_name: 'v2.2.1' }] } : { ok: false };
 
     const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
 
@@ -1492,7 +1559,7 @@ test('a failed fetch for one tool keeps its previously cached version; a success
     const spawn = fakeSpawn({});
     const fetchImpl = async (url) => {
       if (url.includes('gentle-ai')) throw new Error('offline for this tool only');
-      if (url.includes('Gentleman-Programming/engram')) return { ok: true, json: async () => ({ tag_name: 'v2.2.1' }) };
+      if (url.includes('Gentleman-Programming/engram')) return { ok: true, json: async () => [{ tag_name: 'v2.2.1' }] };
       return { ok: false };
     };
 

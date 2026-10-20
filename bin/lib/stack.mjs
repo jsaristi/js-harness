@@ -257,6 +257,12 @@ function codexLoginState({ home, env: userEnv = process.env, homedir = os.homedi
 
 const GENTLE_AI_UPGRADE_FIX = ['gentle-ai upgrade', 'gentle-ai sync'];
 
+const ENGRAM_PLUGIN = 'engram@engram';
+// The catalog first: on 2026-10-20 the installed plugin's commit was the marketplace clone's HEAD, 21 commits behind
+// the refs Claude Code had fetched, its catalog still naming 0.1.12. Both commands verified by `--help` that day,
+// neither run (odd/tasks/engram-plugin-lag.md, D3).
+const ENGRAM_PLUGIN_UPDATE_FIX = ['claude plugin marketplace update engram', `claude plugin update ${ENGRAM_PLUGIN}`];
+
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
  * configured state for the current project, and its own fix command per dimension that can gap
  * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
@@ -320,6 +326,24 @@ export const tools = [
       codex: 'gentle-ai sync',
       upToDate: 'gentle-ai upgrade',
     }),
+  },
+  {
+    // engram's Claude Code plugin, whose hooks run in every Claude session: shown only while it is installed and
+    // enabled, so a machine without it sees no row and no gap. Its latest version is the one the engram binary's
+    // own release tag ships (`LOCAL_SOURCES` in latest.mjs), not the newest plugin: an update of the binary alone
+    // left the plugin two versions behind on 2026-10-20 (odd/tasks/engram-plugin-lag.md).
+    id: 'engram-plugin',
+    when: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN).state === 'ok' && claudeEnabledPlugin(home, ENGRAM_PLUGIN) === 'ok',
+    installed: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN),
+    configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
+    project: () => 'n/a',
+    // The versions go in the fix, since the row shows only the installed one: `rows` holds the engram binary's.
+    upToDateFix: (installed, latest, rows = []) => {
+      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
+      const binary = rows.find((row) => row.id === 'engram')?.version;
+      return [`plugin ${installed} is behind ${latest}, the plugin engram v${binary} ships; update it, then restart Claude Code:`, ...ENGRAM_PLUGIN_UPDATE_FIX];
+    },
+    fix: () => ({ upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),
   },
   {
     id: 'codegraph',
