@@ -24,7 +24,7 @@ function readJson(file) {
 /** The app's folders to look in, in order. On Windows the MSIX package keeps its writes in its own LocalCache,
  * which the app sees as %APPDATA%\Claude, so that one comes first. Every path hangs off `home`, never the
  * environment, as the account check's do (bin/lib/stack.mjs): a fixture home is read and nothing else. */
-function appFolders({ platform, home }) {
+export function appFolders({ platform, home }) {
   if (platform === 'darwin') return [path.join(home, 'Library', 'Application Support', 'Claude')];
   if (platform !== 'win32') return [path.join(home, '.config', 'Claude')];
   const folders = [];
