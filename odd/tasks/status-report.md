@@ -111,3 +111,8 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
   Next step: `js-harness codex-review --base fde1b6c6^` over the three commits, fix its findings,
   push `feat/status-report`, open the pull request with a gentle-ai line, then
   `js-harness notify --to orchestrator --kind ready --pr <n>`.
+- L5 (2026-10-20): Codex reviewed ddd4058..0bf3ea7 in 3 parts (recorded). Two P2 findings, both
+  taken: an answer no transcript confirmed (`verified: false`) was printed as his answer (fixed: it
+  reads "answer, not verified (the sender's claim)"; test RED then GREEN), and run from a subfolder
+  `git ls-tree` missed the roadmap (fixed: `--full-tree`; its test passes after the fix, its RED was
+  not run because another session's gate held the lock, and Codex reproduced the defect from `bin/`).

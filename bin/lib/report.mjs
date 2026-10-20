@@ -96,13 +96,13 @@ function answerWords(notice) {
 }
 
 /** The questions of a record (`readNotices`): `answered`, those answered after `cut`, `[{ number, notice, answer,
- * at }]`, and `open`, every question nothing has closed, whenever it was asked, `[{ number, notice }]`. */
+ * verified, at }]` (`verified` false for an answer no transcript confirmed, the sender's claim), and `open`, every question nothing has closed, whenever it was asked, `[{ number, notice }]`. */
 export function questionsOf(record, cut) {
   const answered = [];
   const open = [];
   for (const { number, notice, closed } of recordedQuestions(record)) {
     if (closed === null) open.push({ number, notice });
-    else if (closed.by === 'answer' && Date.parse(closed.notice.at) > cut) answered.push({ number, notice, answer: answerWords(closed.notice), at: Date.parse(closed.notice.at) });
+    else if (closed.by === 'answer' && Date.parse(closed.notice.at) > cut) answered.push({ number, notice, answer: answerWords(closed.notice), verified: closed.notice.verified !== false, at: Date.parse(closed.notice.at) });
   }
   return { answered, open };
 }
@@ -165,7 +165,7 @@ export function reportLines({ cut, branch, landed, sessions, questions, map }) {
     lines.push(`Questions: ${questions.answered.length} answered, ${questions.open.length} open`);
     for (const one of questions.answered) {
       lines.push(`  answered #${one.number} at ${stamp(one.at)}: ${oneLine(one.notice.text)}`);
-      lines.push(`      answer: ${oneLine(one.answer)}`);
+      lines.push(`      ${one.verified === false ? "answer, not verified (the sender's claim)" : 'answer'}: ${oneLine(one.answer)}`);
     }
     for (const one of questions.open) {
       lines.push(`  open #${one.number} since ${stamp(Date.parse(one.notice.at))}: ${oneLine(one.notice.text)}`);

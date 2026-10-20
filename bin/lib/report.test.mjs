@@ -94,6 +94,16 @@ test('an answer that copied his words gives those words', () => {
   assert.equal(answered[0].answer, 'B');
 });
 
+// Codex review of ddd4058..0bf3ea7, part 1: an answer no transcript confirmed is the sender's claim, not his word.
+test('an answer no transcript confirmed is printed as the sender\'s claim', () => {
+  const asked = notice({ kind: 'question', id: 'q-1', text: 'Which?', options: [], waits: 'w' });
+  const claim = notice({ at: '2026-10-20T11:00:00.000Z', kind: 'answer', text: 'B', transcript: 't', line: 4, question: 1, verified: false, copy: null });
+  const questions = questionsOf({ notices: [asked, claim], questions: [{ number: 1, notice: asked }] }, at('2026-10-20T00:00:00Z'));
+  assert.equal(questions.answered[0].verified, false);
+  const lines = reportLines({ cut: { at: at('2026-10-20T00:00:00Z'), source: 'since' }, branch: 'main', landed: [], sessions: [], questions, map: { absent: true } });
+  assert.ok(lines.includes('      answer, not verified (the sender\'s claim): B'), lines.join('\n'));
+});
+
 // --- S2: the map ---
 
 test('mapOf counts each phase of the roadmap and keeps the open steps', () => {

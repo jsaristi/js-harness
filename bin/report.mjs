@@ -78,7 +78,7 @@ function readLanded(run, cwd, ref, cut) {
 /** The roadmap as `ref` holds it, `{ absent: true }` when it holds none, or `{ error }`. Whether it holds one is read
  * from the tree's listing, which is empty for a path it lacks, and not from git's message, which is translated. */
 function readMap(run, cwd, ref) {
-  const listed = gitRead(run, cwd, ['ls-tree', '--name-only', ref, '--', 'docs/ROADMAP.md']);
+  const listed = gitRead(run, cwd, ['ls-tree', '--full-tree', '--name-only', ref, '--', 'docs/ROADMAP.md']);
   if (listed.error) return { error: listed.error };
   if (listed.stdout.trim() === '') return { absent: true };
   const shown = gitRead(run, cwd, ['show', `${ref}:docs/ROADMAP.md`]);

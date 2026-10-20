@@ -129,6 +129,13 @@ test('a merge that names no pull request is counted apart from the pull requests
   assert.match(out, /^Landed on main: 1 pull request and 1 other merge$/m);
 }));
 
+// Codex review of ddd4058..0bf3ea7, part 2: `git ls-tree` reads a path from the folder it runs in.
+test('run from a folder inside the repository, it still finds the roadmap', withProject(async (project) => {
+  const { code, out } = await report([], { ...project, repo: path.join(project.repo, 'docs') });
+  assert.equal(code, 0);
+  assert.match(out, /^Map: docs\/ROADMAP.md on main {2}2\/3 {2}67%$/m);
+}));
+
 test('a default branch with no roadmap says so, and that is no error', withProject(async (project) => {
   git(project.repo, ['rm', '-q', 'docs/ROADMAP.md'], '2026-10-20T11:30:00Z');
   git(project.repo, ['commit', '-q', '-m', 'docs: drop the roadmap'], '2026-10-20T11:30:00Z');
