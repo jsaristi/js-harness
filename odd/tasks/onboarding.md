@@ -122,7 +122,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 ## Tasks
 - [x] T1 (kind: design) This design, past its two readers, and his yes (L22)
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
-- [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
+- [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (merged in `jsaristi/js-harness#468`)
 - [x] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes (fb54c927, L22)
 - [ ] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10)
 - [ ] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
