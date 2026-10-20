@@ -25,6 +25,7 @@ import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.m
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
+import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -211,9 +212,11 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now)] : withBackup;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
-  if (!deps.gentleAiSnapshots) return withStack;
+  // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
+  const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
+  if (!deps.gentleAiSnapshots) return withClean;
   const gentleAi = rows.find((row) => row.id === 'gentle-ai')?.version ?? null;
-  return [...withStack, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
+  return [...withClean, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
 }
 
 /** The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): the gentle-ai version against the one last reviewed,
@@ -292,7 +295,7 @@ function worktreesRow(worktrees, project) {
   return { ...row, project: 'stale', fix: { project: [`${count} on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them`, ...found.map((tree) => `${tree.path} (${tree.branch})`)] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update and gentle-ai-sync rows. Their checks are
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update, clean and gentle-ai-sync rows. Their checks are
  * given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
@@ -302,6 +305,7 @@ export function doctorCommand(argv) {
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
     backup: (home, now) => backupHealth(home, now),
+    clean: { start: backgroundMeasure(process.env, argv) },
   });
 }
 
@@ -433,6 +437,7 @@ export async function hookMain(argv, env = process.env, deps = {}) {
       hostNotice(rows.find((row) => row.id === 'host-update')),
       gentleAiNotice(rows.find((row) => row.id === 'gentle-ai-sync')),
       stackNotice(rows.find((row) => row.id === 'stack-update')),
+      cleanNotice(rows.find((row) => row.id === 'clean')),
     ]
       .filter(Boolean)
       .join('; ');
