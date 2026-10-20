@@ -213,6 +213,15 @@ proofs and by those tasks.
 **Discarded:** A published page. Editing checkboxes from the command.
 **Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `bin/lib/progress-pace.mjs` (progress --pace), `js-harness progress`
 
+### The status report
+
+**Problem:** On 2026-10-20 the owner asked the lead how the work was going and got two lines; he asked for a protocol so the answer carries everything since the last report, in detail, and what the lead proposes (`odd/tasks/status-report.md`, S1).
+**Requirement:** A command prints, since a cut, the pull requests merged into the default branch with their commits, each session's last notice, the questions answered and still open, and the roadmap phase by phase with what is left. The cut is a given time, else the last report recorded, else the last day; reading writes nothing, and `--mark` records the report's time as a line of the channel record. The orchestrator skill tells the lead to answer from it in six sections.
+**Reason:** "Since the last report" is a time read from a file, not a guess, and the facts come from git and the record, not from a model's memory of the day.
+**Proof:** `node --test bin/report.test.mjs`, `node --test bin/lib/report.test.mjs`, `node --test bin/lib/manifest.test.mjs`
+**Discarded:** `progress --since`: `progress` counts checkboxes and runs no git without `--pace`. The report's time as a notice: a notice to the orchestrator wakes its own wait. Marking on every read: a report looked at and not given would hide its facts from the next one.
+**Today:** `bin/report.mjs`, `bin/lib/report.mjs`, `js-harness report`
+
 ### Onboarding
 
 **Problem:** A project set up with `init` had no plan, and js-harness's own was made by hand (pre-plan, then roadmap); his request of 2026-10-19 asks for the pre-plan and the plan to be made with the AI when the harness is installed (`odd/tasks/onboarding.md`).

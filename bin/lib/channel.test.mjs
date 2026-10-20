@@ -350,11 +350,23 @@ test('appendNotice writes one JSON line per notice, creating the folder, and rea
   channel.appendNotice(home, SLUG, second);
   const text = fs.readFileSync(file, 'utf8');
   assert.deepEqual(text.split('\n'), [JSON.stringify(first), JSON.stringify(second), '']);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: file, notices: [first, second], readings: [], reports: [], questions: [], skipped: 0 });
 }));
 
 test('a project with no record yet has no notices, and that is not an error', withHome((home) => {
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [], readings: [], reports: [], questions: [], skipped: 0 });
+}));
+
+// odd/tasks/status-report.md, S4: the time a report was given is a line of its own in the record, not a notice.
+test('appendReport writes a report line beside the notices, and readNotices gives it back as a report, never skipped', withHome((home) => {
+  const notice = note();
+  channel.appendNotice(home, SLUG, notice);
+  const report = channel.newReport({ at: AT, by: 'cccccccc-3333-4333-8333-333333333333' });
+  assert.deepEqual(report, { schema: channel.REPORT_SCHEMA, at: AT, by: 'cccccccc-3333-4333-8333-333333333333' });
+  assert.equal(channel.appendReport(home, SLUG, report), channel.recordPath(home, SLUG));
+  fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify({ schema: channel.REPORT_SCHEMA, at: 'later' })}\n`);
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [notice], readings: [], reports: [report], questions: [], skipped: 1 });
+  assert.equal(channel.newReport({ at: AT }).by, null);
 }));
 
 test('readNotices counts and skips a torn line and a line that is not a notice, and keeps the rest', withHome((home) => {
@@ -385,7 +397,7 @@ test('a record that is there and cannot be read is unavailable with the reason, 
   const readFile = () => {
     throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
   };
-  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG, { readFile }), { path: channel.recordPath(home, SLUG), unavailable: 'EACCES', notices: [], readings: [], reports: [], questions: [], skipped: 0 });
 }));
 
 test('a question, a withdrawal and an answer with a number are kept only when they hold what makes them one', withHome((home) => {
@@ -473,7 +485,7 @@ test('appendReading adds the reading to the record, and readNotices gives the re
   assert.equal(channel.appendReading(home, SLUG, reading), channel.recordPath(home, SLUG));
   const second = note({ kind: 'closed', text: 'delivered' });
   channel.appendNotice(home, SLUG, second);
-  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], questions: [], skipped: 0 });
+  assert.deepEqual(channel.readNotices(home, SLUG), { path: channel.recordPath(home, SLUG), notices: [first, second], readings: [reading], reports: [], questions: [], skipped: 0 });
   // A reading that lost what makes it one is a line the reader does not know, counted as such.
   for (const broken of [{ ...reading, reader: { ...reading.reader, id: 7 } }, { ...reading, title: '' }, { ...reading, at: 'yesterday' }, { ...reading, reader: 'somebody' }]) {
     fs.appendFileSync(channel.recordPath(home, SLUG), `${JSON.stringify(broken)}\n`);
