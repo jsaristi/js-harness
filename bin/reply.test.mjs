@@ -180,6 +180,15 @@ test('work given back with closed or relieved is not held; a waiting notice stil
   assert.match(handedAgain.answer.reason, WARNING, 'work handed after the close is held again');
 });
 
+test('a close the session itself sent gives the work back even with no title on it; another session\'s untitled close does not', async () => {
+  // JH 30 ran in a .claude/worktrees worktree, and its closed notice carried a null title (channel record, 2026-10-20).
+  const untitled = (id) => notice('2026-10-17T01:40:00.000Z', { host: 'claude-code', id, title: null }, { role: 'orchestrator' }, 'closed');
+  const ownClose = await wakeHook({ record: [handed('2026-10-17T01:30:00.000Z'), untitled('s1')] });
+  assert.deepEqual(ownClose.answer, {});
+  const peerClose = await wakeHook({ record: [handed('2026-10-17T01:30:00.000Z'), untitled('p')] });
+  assert.match(peerClose.answer.reason, WARNING, 'a close by another id names no work of this session');
+});
+
 test('an opening hands work too, and a handing older than the session is another session of that number', async () => {
   const opening = { schema: 'js-harness.channel-opening/v1', title: 'JH 26 · canal', at: '2026-10-17T01:10:00.000Z', from: LEAD, text: 'Build T2.' };
   const opened = await wakeHook({ record: [], openings: { 'jh-26.json': opening } });

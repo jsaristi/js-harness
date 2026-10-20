@@ -640,6 +640,26 @@ export function placeOf(run, cwd) {
   return { worktree: top === null ? null : path.resolve(top), branch: top === null ? null : firstLine(['branch', '--show-current']) };
 }
 
+/** The one transcript of the session `given` (its id, or the first eight characters of it or more) among the sessions
+ * folders `projectDirs`: `{ id, file }`, or `null` when none or more than one carries it. A folder that cannot be listed
+ * holds none: a worktree that never opened a session has no folder. */
+export function transcriptOf(given, projectDirs, readdir) {
+  const found = [];
+  for (const dir of projectDirs) {
+    let names;
+    try {
+      names = readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const id = name.endsWith('.jsonl') ? name.slice(0, -'.jsonl'.length) : null;
+      if (id !== null && isSelf(id, given)) found.push({ id, file: path.join(dir, name) });
+    }
+  }
+  return found.length === 1 ? found[0] : null;
+}
+
 /** Who sends: `{ host, id, source, title, permissionMode, context }`.
  *
  * The id is the one Claude Code gives every command a session runs (`CLAUDE_CODE_SESSION_ID`, `source:
@@ -654,23 +674,23 @@ export function placeOf(run, cwd) {
  * With neither, the sender is not known and the notice is recorded all the same: `{ host: 'unknown', id:
  * null, ... }`. That is every Codex session today: nothing in this repository reads a session id from
  * Codex, and none of the variables its commands carry is known to hold one. */
-export function senderOf({ self = null, env = {}, projectDir, readdir, readFile, readFacts = sessionFacts }) {
+export function senderOf({ self = null, env = {}, projectDir, projectDirs = [projectDir], readdir, readFile, readFacts = sessionFacts }) {
   const fromFlag = typeof self === 'string' && self !== '';
   const given = fromFlag ? self : env.CLAUDE_CODE_SESSION_ID || null;
   if (given === null) return { host: 'unknown', id: null, source: null, title: null, permissionMode: null, context: null };
   const sender = { host: fromFlag ? 'unknown' : 'claude-code', id: given, source: fromFlag ? 'flag' : 'environment', title: null, permissionMode: null, context: null };
+  const found = transcriptOf(given, projectDirs, readdir);
+  if (found === null) return sender;
   try {
-    const ids = readdir(projectDir).filter((name) => name.endsWith('.jsonl')).map((name) => name.slice(0, -'.jsonl'.length)).filter((id) => isSelf(id, given));
-    if (ids.length !== 1) return sender;
-    [sender.id] = ids;
+    sender.id = found.id;
     sender.host = 'claude-code';
-    const facts = readFacts(readFile(path.join(projectDir, `${sender.id}.jsonl`)), { tail: 0 });
+    const facts = readFacts(readFile(found.file), { tail: 0 });
     sender.title = facts.titleSource === 'custom-title' && typeof facts.title === 'string' ? facts.title : null;
     sender.permissionMode = facts.permissionMode ?? null;
     const measured = Number.isFinite(facts.context?.tokens) && Number.isFinite(facts.contextPercent);
     sender.context = measured ? { tokens: facts.context.tokens, percent: facts.contextPercent } : null;
   } catch {
-    // A sessions folder that is not there, a transcript that cannot be read: the sender keeps what is known.
+    // A transcript that cannot be read: the sender keeps what is known.
   }
   return sender;
 }

@@ -63,7 +63,7 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 
 export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -790,7 +790,9 @@ export async function sessionsMain(
     if (found.unreadable > 0) stderr(`js-harness sessions: ${unreadable} and ${found.unreadable === 1 ? 'is' : 'are'} not counted`);
     // A look at an opening, another session's most often: printed, and nothing is recorded.
     if (parsed.peek) return 0;
-    const reader = senderOf({ self: parsed.self ?? null, env, projectDir, readdir, readFile, readFacts });
+    // The worktrees are listed only when a session is named to look for: an opening read by nobody runs no more git.
+    const someone = Boolean(parsed.self || env.CLAUDE_CODE_SESSION_ID);
+    const reader = senderOf({ self: parsed.self ?? null, env, projectDirs: someone ? projectDirsOf(run, root, claudeHome) : [], readdir, readFile, readFacts });
     // The session that stored the opening reads it back to check it: it is not the session it is for,
     // and a reading of its own would give it that title on the board if its transcript carried none. It
     // is the same session when either id is the start of the other: `notify --opening --self` keeps the
