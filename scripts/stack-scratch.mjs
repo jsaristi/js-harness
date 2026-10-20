@@ -9,6 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { claudeJsonMcpServer } from '../bin/lib/stack.mjs';
+import { codexMcpSection } from '../bin/lib/stack-run.mjs';
 import { compareSnapshots, contentHash } from './practice-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -61,6 +63,23 @@ export function shimContent(target, platform) {
   return platform === 'win32' ? `@"${target}" %*\r\n` : `#!/bin/sh\nexec "${target}" "$@"\n`;
 }
 
+/** The programs the launchers pnpm writes outside Windows call, which are shell scripts. */
+const POSIX_UTILITIES = ['sh', 'dirname', 'basename', 'sed', 'uname', 'cat', 'readlink'];
+
+/** The programs the trial shims into its PATH: pnpm, git and claude, and outside Windows `POSIX_UTILITIES`. */
+export function shimNames(platform) {
+  return platform === 'win32' ? ['pnpm', 'git', 'claude'] : ['pnpm', 'git', 'claude', ...POSIX_UTILITIES];
+}
+
+/** The registrations of codegraph still in the scratch home, as `<tool> <host>`: a dropped record is no proof that
+ * `uninstall machine` removed one, so the trial reads both back. */
+export function registrationsLeftIn(home) {
+  return [
+    ...(claudeJsonMcpServer(home, 'codegraph').entry ? ['codegraph claude'] : []),
+    ...(codexMcpSection(home, 'codegraph') !== null ? ['codegraph codex'] : []),
+  ];
+}
+
 /** His files the trial must leave as they are. */
 export function realFilesOf(home) {
   return [
@@ -87,6 +106,7 @@ export function trialVerdict({ stack, installs, doctor, uninstall, differences }
   if (uninstall.code !== 0) failures.push(`uninstall machine exited ${uninstall.code}`);
   if (uninstall.manifestLeft) failures.push('uninstall machine left the manifest');
   for (const name of uninstall.prefixPackages) failures.push(`the scratch prefix still holds ${name}`);
+  for (const name of uninstall.registrationsLeft) failures.push(`uninstall machine left the registration ${name}`);
   for (const difference of differences) failures.push(`his file ${difference.change}: ${difference.path}`);
   return { pass: failures.length === 0, failures };
 }
@@ -128,14 +148,14 @@ function main(argv) {
   const layout = scratchLayout(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-stack-scratch-')));
   for (const dir of [layout.appData, layout.localAppData, layout.prefixBin, layout.bin, layout.project]) fs.mkdirSync(dir, { recursive: true });
 
-  // The shims: node itself, linked (pnpm's own shims start it by name), and pnpm, git and claude.
+  // The shims: node itself, linked (pnpm's own shims start it by name), and the programs of `shimNames`.
   const nodeCopy = path.join(layout.bin, path.basename(process.execPath));
   try {
     fs.linkSync(process.execPath, nodeCopy);
   } catch {
     fs.copyFileSync(process.execPath, nodeCopy);
   }
-  for (const name of ['pnpm', 'git', 'claude']) {
+  for (const name of shimNames(platform)) {
     const target = locate(name, platform);
     if (!target) throw new Error(`${name} is not on your PATH: the trial needs it`);
     const shim = path.join(layout.bin, platform === 'win32' ? `${name}.cmd` : name);
@@ -177,6 +197,7 @@ function main(argv) {
     code: uninstallRun.code,
     manifestLeft: fs.existsSync(path.join(layout.home, '.js-harness', 'manifest.json')),
     prefixPackages: packagesIn(layout.prefix),
+    registrationsLeft: registrationsLeftIn(layout.home),
   };
   const differences = compareSnapshots(before, snapshotOfHim(platform));
 

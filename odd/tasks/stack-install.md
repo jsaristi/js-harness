@@ -318,3 +318,14 @@ onboarding's files; a note in the shared notes folder hands that session this co
   - gentle-ai: dba54d18 assessed medium, review_due false, reason under_budget.
   - gentle-ai: cea616b9 assessed medium, review_due false, reason under_budget.
   - gentle-ai: b9553aba assessed medium, review_due false, reason under_budget.
+  - gentle-ai: e57f2d0c assessed medium, review_due false, reason under_budget (302 lines).
+- L10 (2026-10-20) Codex on b9722fc..e57f2d0 (4 parts) gave nine P2 findings, all taken, fixed test-first:
+  6bf07353 keeps a stack record the undo cannot judge (`unreadable`) or still needs (the Codex CLI while an undo of
+  a registration in Codex failed, `needed`), in install order, with exit 1 (RED 2 in stack-run, 1 in install, then
+  GREEN); 5a6ca247 puts a prefix's `bin` first on the PATH of every probe and command and in npm's record, leaves a
+  registration in Codex to him when his `CODEX_HOME` is elsewhere than `<home>/.codex`, and calls a row done only
+  on an `ok` probe (RED 3 in stack-install, 1 in lib/stack-install, then GREEN); the next commit shims the programs
+  pnpm's POSIX launchers call and reads both registrations back after `uninstall machine` in the trial (its RED was
+  first a syntax error of the test file, then not run again before GREEN: observed GREEN only).
+  - gentle-ai: 6bf07353 assessed medium, review_due false, reason under_budget (86 lines).
+  - gentle-ai: 5a6ca247 assessed medium, review_due false, reason under_budget (126 lines).

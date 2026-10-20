@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { D2_ROWS, realFilesOf, scratchEnv, scratchLayout, shimContent, trialVerdict } from './stack-scratch.mjs';
+import { D2_ROWS, realFilesOf, registrationsLeftIn, scratchEnv, scratchLayout, shimContent, shimNames, trialVerdict } from './stack-scratch.mjs';
 
 // The pure parts of the trial of odd/tasks/stack-install.md (D9): where it puts things, the environment every command
 // of it gets, the shims, the files of his it hashes, and the verdict. The trial itself downloads, so it is run by hand.
@@ -57,7 +59,7 @@ const GOOD = {
   stack: { code: 1, plan: { mandatory: D2_ROWS.map((key) => ({ tool: key.split('.')[0], dimension: key.split('.')[1] })) } },
   installs: [{ tool: 'codex', code: 0 }, { tool: 'codegraph', code: 0 }],
   doctor: [okRow('codex', { claude: 'n/a', codex: 'missing' }), okRow('codegraph')],
-  uninstall: { code: 0, manifestLeft: false, prefixPackages: [] },
+  uninstall: { code: 0, manifestLeft: false, prefixPackages: [], registrationsLeft: [] },
   differences: [],
 };
 
@@ -70,7 +72,7 @@ test('trialVerdict names each thing that went wrong', () => {
     stack: { code: 0, plan: { mandatory: [] } },
     installs: [{ tool: 'codex', code: 1 }],
     doctor: [okRow('codex', { installed: 'unknown' }), okRow('codegraph', { claude: 'missing' })],
-    uninstall: { code: 1, manifestLeft: true, prefixPackages: ['@openai/codex'] },
+    uninstall: { code: 1, manifestLeft: true, prefixPackages: ['@openai/codex'], registrationsLeft: ['codegraph codex'] },
     differences: [{ path: '/h/.claude.json', change: 'changed' }],
   };
   assert.deepEqual(trialVerdict(bad).failures, [
@@ -82,6 +84,28 @@ test('trialVerdict names each thing that went wrong', () => {
     'uninstall machine exited 1',
     'uninstall machine left the manifest',
     'the scratch prefix still holds @openai/codex',
+    'uninstall machine left the registration codegraph codex',
     'his file changed: /h/.claude.json',
   ]);
+});
+
+// Codex on b9722fc..e57f2d0: the launchers pnpm writes on Linux and macOS are shell scripts that call these
+// programs, and a dropped record is no proof a registration was removed, so the trial reads both back.
+test('shimNames adds, outside Windows, the programs the shell launchers of pnpm call', () => {
+  assert.deepEqual(shimNames('win32'), ['pnpm', 'git', 'claude']);
+  const posix = shimNames('linux');
+  for (const name of ['pnpm', 'git', 'claude', 'sh', 'dirname', 'sed', 'uname']) assert.ok(posix.includes(name), name);
+});
+
+test('registrationsLeftIn reads back both registrations of codegraph in the scratch home', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-scratch-test-'));
+  try {
+    assert.deepEqual(registrationsLeftIn(home), []);
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { command: 'codegraph' } } }));
+    fs.mkdirSync(path.join(home, '.codex'));
+    fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[mcp_servers.codegraph]\ncommand = "codegraph"\n');
+    assert.deepEqual(registrationsLeftIn(home), ['codegraph claude', 'codegraph codex']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
