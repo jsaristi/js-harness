@@ -484,3 +484,57 @@ ceiling.
   para cada uno de los ejemplos". So every profile under `## Reference profiles` now has the same depth and the same
   parts as the static site's: default, why, something else when, a measured bar, the areas particular to its kind,
   and what it teaches.
+- L12 (2026-10-20) He asked for a detailed review of what is missing and what to improve. Two read-only readers ran on
+  Opus at high effort: A on product and advice, B on the design against the built code. Their findings, merged, for
+  T6.
+  - Missing:
+    - (1) The code knows no kind, level or advice mode: nine fixed topics (`bin/lib/onboard.mjs:17-27`,
+      `bin/lib/onboard.test.mjs:20`), and no stage advises, it only asks (`bin/lib/onboard.mjs:495`).
+    - (2) The pre-plan has no stack, architecture or ADR shape (`bin/lib/onboard.mjs:44`, `:110-113`).
+    - (3) The teaching and fast-mode choice is stored and checked nowhere.
+    - (4) `onboard check` cannot prove the advice is complete. Each profile should declare area ids, and every area
+      must then be decided (ADR-n), deferred to a named phase, or, in fast mode only, skipped.
+    - (5) The profiles' bars are not tied to the roadmap's done-when commands.
+    - (6) Freshness is invisible: an ADR source with its URL, version and read date is needed.
+    - (7) Missing kinds:
+      - CLI tool or library;
+      - API or backend-only service;
+      - AI/LLM app;
+      - e-commerce;
+      - internal tool;
+      - browser extension, desktop app, game, ML training;
+      - mixed and unknown kinds.
+    - (8) Missing areas:
+      - cost and budget;
+      - legal: privacy law, cookie consent, license, terms;
+      - team and timeline;
+      - maintenance after launch;
+      - i18n;
+      - front end and UX in Platform;
+      - CI and tests in Data and Research;
+      - product analytics.
+    - (9) The owner-only steps (domain, accounts, store fees, payment providers) and their costs.
+    - (10) A worked example origin and roadmap per kind.
+  - Improve:
+    - The profiles live in `bin/lib/profiles-data.mjs`. That is data like `bin/lib/rules-data.mjs`, since only `bin/`
+      ships. It is printed one profile or area at a time and held by a shape test.
+    - The interview order: repository; kind with what and for whom; mode; outcome; stack already decided; one
+      decision per area in dependency order; constraints; scope; owner steps; order; risks.
+    - Level is read from the answers and the repository, said in one line, and raised at once by "ya sé esto".
+    - A decided stack is kept as the owner's ADR, challenged only with a sourced risk, and then deepened.
+    - An existing repository gets a keep, migrate or contain audit per area.
+    - Approval works per decision plus a short summary that can be read on a phone.
+    - One format for every bar target: source, how it is measured, and its command.
+  - Wrong or risky:
+    - Core Web Vitals at p75 are field data: CI can only run lab proxies (Lighthouse LCP, CLS, TBT).
+    - Auth.js has been maintained by the Better Auth team since 2025-09-22, and they recommend Better Auth for new
+      projects. Tool names age too, not only versions.
+    - Google restricted FAQ rich results and deprecated HowTo rich results (2023-08).
+    - ADRs cannot live in the frozen origin: they go to `docs/adr/` or the roadmap's Decided table.
+    - L10 point 6 (a first feature document) contradicts D5.
+    - The numeric targets carry no source.
+    - T4's done-when still names the scratch project S3 rejected (`:22-24`).
+    - The interview could reach 20-30 exchanges with teaching on, each commit through the gate.
+    - Resume can lose the mode unless it is written the moment it is said.
+    - A research done-when invites fake commands; prescribe a check script in the first phase instead.
+    - D8 refuses the existing plan an advanced owner often brings: named as a known gap.
