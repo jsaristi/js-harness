@@ -11,7 +11,7 @@ import {
 } from './lib/onboard.mjs';
 import { agentsTemplate, projectLocation } from './lib/project.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness onboard [--cwd <path>]',
   '       js-harness onboard check [--plan] [--cwd <path>]',
   '       js-harness onboard hash [--cwd <path>]',

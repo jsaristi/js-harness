@@ -36,7 +36,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
 
-const USAGE = 'Usage: js-harness guard --hook\n'
+export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a start_session that names no effort or one above the rule session-effort (where\n'

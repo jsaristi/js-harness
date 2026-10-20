@@ -48,7 +48,7 @@ import {
 
 export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
   '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]... [--copied-at <YYYY-MM-DDTHH:MMZ>]',
   '       js-harness throughput status',

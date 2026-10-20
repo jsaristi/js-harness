@@ -28,7 +28,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { readStalled } from './lib/stall.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness loop run <name> --purpose "<text>" --until "<end condition>" [--owner <session id>] [--restart [--take-over]] -- <command> [args]',
   '       js-harness loop status [--json]',
   '       js-harness loop stop <name> [--owner <session id>] [--take-over]',

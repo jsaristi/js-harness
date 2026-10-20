@@ -16,7 +16,7 @@ import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFA
 import { unknownArgument } from './lib/args.mjs';
 import { readSessionsWindow } from './sessions.mjs';
 
-const USAGE = 'Usage: js-harness unseen [--hours <n>] [--claude-home <path>] [--records-only] [--json]';
+export const USAGE = 'Usage: js-harness unseen [--hours <n>] [--claude-home <path>] [--records-only] [--json]';
 const KNOWN = { valued: ['--hours', '--claude-home'], bare: ['--json', '--records-only'] };
 const DEFAULT_HOURS = 168;
 const NOTHING = 'unseen: nothing opened out of his sight';

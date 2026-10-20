@@ -19,7 +19,7 @@ import path from 'node:path';
 import { appendNotice, channelDir, newNotice } from './lib/channel.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
-const USAGE = 'Usage: js-harness permit --hook | lease [--session <id>] [--minutes <n>] [--take-over] | lease --off | list [--json]\n'
+export const USAGE = 'Usage: js-harness permit --hook | lease [--session <id>] [--minutes <n>] [--take-over] | lease --off | list [--json]\n'
   + '       | allow <id> | deny <id> --reason <text>\n'
   + '  --hook   the PermissionRequest hook install registers: while a lead holds the relay, a card of another session\n'
   + '           is told to the orchestrator and waits up to 9.5 minutes for its verdict; with none it reaches the user\n'

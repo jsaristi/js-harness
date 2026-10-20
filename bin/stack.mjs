@@ -25,6 +25,14 @@ const INSTALL_USAGE = 'Usage: js-harness stack install [--home <path>] [--cwd <p
 const INSTALL_KNOWN = { valued: ['--home', '--cwd', '--pm', '--prefix', '--tool'], bare: ['--yes'] };
 /** The tools `stack install` runs rows of: what `--tool` may name. */
 const RUNNABLE_TOOLS = [...new Set(RUNNABLE.map((row) => row.tool))];
+const HELP = [
+  USAGE,
+  '  Read-only: the tools the harness requires that are missing here, each with its command and its exact undo.',
+  INSTALL_USAGE,
+  '  Runs those installs in that order, each printed with its undo and asked y/N in a terminal; without one, only',
+  '  the tools --tool names, under --yes. Each is recorded before it starts, so uninstall machine undoes it.',
+  `  --tool: ${RUNNABLE_TOOLS.join(', ')}`,
+].join('\n');
 const PREREQUISITES = ['git', 'gh'];
 
 class StackArgError extends Error {}
@@ -103,8 +111,14 @@ function render(plan, platform) {
 /** `js-harness stack`: exit 0 when nothing the harness requires is missing (optional gaps aside), 1 when something
  * is, 2 on a usage error. `deps.read` (default `readStack`) is the seam that probes the machine. */
 export async function stackMain(argv, env = process.env, deps = {}) {
-  if (argv[0] === 'install') return stackInstallMain(argv.slice(1), env, deps);
   const log = deps.log ?? ((line) => console.log(line));
+  // `stack --help` and `stack install --help` print both forms and read nothing (user-guide S4).
+  const asked = argv[0] === 'install' ? argv.slice(1) : argv;
+  if (asked.length === 1 && (asked[0] === '--help' || asked[0] === '-h')) {
+    log(HELP);
+    return 0;
+  }
+  if (argv[0] === 'install') return stackInstallMain(argv.slice(1), env, deps);
   const error = deps.error ?? ((line) => console.error(line));
   let args;
   try {

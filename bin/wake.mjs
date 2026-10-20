@@ -15,7 +15,7 @@ import { removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { WAKE_WINDOW_MS, wakePlan, wakeText } from './lib/wake.mjs';
 
-const USAGE = [
+export const USAGE = [
   'Usage: js-harness wake [--notify] [--boot-time <iso>] [--cwd <path>] [--claude-home <path>] [--home <path>]',
   '       js-harness wake --at-login [--remove] [--cwd <path>] [--claude-home <path>] [--home <path>]',
   '',

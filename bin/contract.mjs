@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
 import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 
-const USAGE =
+export const USAGE =
   'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>] | modes <file> [--task <id>] [--cwd <dir>]';
 
 // Each done-when command may run this long, unless `run --timeout <minutes>` says otherwise: the declared
