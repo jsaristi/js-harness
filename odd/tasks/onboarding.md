@@ -900,6 +900,7 @@ ceiling.
   - gentle-ai: `2fede5c1..12aa07ce` approved after one bounded correction (readability, reliability; lineage review-bf067ebd0c1e7217, acknowledged): R3-uncommitted-trim fixed in `12aa07ce`. Codex over 6e99eda..ef60d12: one P2.
   - gentle-ai: `ef60d123` assessed `medium`, review not due (`under_budget`, 13 lines), from that review's advisories; Codex in 6e99eda..ef60d12.
   - gentle-ai: `04163529` assessed `medium`, review not due (`under_budget`, 44 lines): Codex's P2 on a remote branch hidden behind a local one, fixed with its RED test.
+  - gentle-ai: `437a5a7f`, `5f507d36` (`3a9f6601..5f507d36`) assessed `medium`, review not due (`under_budget`, 3 paths, 15 lines): Codex's P2 fix on slice 3a, and main's `init`, `install` and T3 lines taken before merging main. Codex recorded 437a5a7..5f507d3 (correct, 0.99) and the merge 5f507d3..7edd0fa (correct, 0.99).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
