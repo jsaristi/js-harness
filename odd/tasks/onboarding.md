@@ -61,7 +61,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
-- [ ] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests
+- [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (merged in `jsaristi/js-harness#468`)
 - [ ] T4 (kind: verify) The one real onboarding of the done-when
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
 

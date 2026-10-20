@@ -64,9 +64,10 @@ Nothing: the task was given whole (L1).
 - [x] T1 (kind: build) `--help` on every command through the dispatcher, `update` refusing unknown flags, `stack`
   help naming `install` and the `--tool` ids, the loop test (S2-S5, S7). Route: inline. RED: 6 failing
   (`node --test bin/js-harness.test.mjs bin/update.test.mjs bin/stack.test.mjs`), GREEN: 129 of 129 with readme.
-- [ ] T2 (kind: docs) `docs/GUIDE.md`, README link, Remove, command index and version aliases, SPEC lines (S1, S6,
+- [x] T2 (kind: docs) `docs/GUIDE.md`, README link, Remove, command index and version aliases, SPEC lines (S1, S6,
   S8, S9). Route: inline.
-- [ ] T3 (kind: docs) ROADMAP and `odd/tasks/onboarding.md` ticks (S10). Route: inline.
+- [x] T3 (kind: docs) ROADMAP and `odd/tasks/onboarding.md` ticks (S10). Route: inline. `js-harness progress`:
+  Onboarding 1/2, the design item open.
 - [ ] T4 (kind: verify) Gate, gentle-ai review per code commit, Codex review, pull request.
 
 ## Log
@@ -84,3 +85,10 @@ Nothing: the task was given whole (L1).
   (`bin/update.test.mjs`, "updateMain keeps ignoring flags it does not know") was the behavior S3 removes; it now
   pins the refusal and that `--home`, `--repo` and `--source` are still taken. The loop test asks each command in
   its own process, since `reply`, `fetch` and `backup` write their help to stdout directly, not through console.log.
+- L4 (2026-10-20): S8 is an index, not a split: `bin/readme.test.mjs` holds the README's command sections to the
+  dispatcher's order, so the README's Commands section and the guide open with one table of which commands are the
+  user's and which are for hooks and the orchestrator. README's Remove keeps `uninstall --global` and names the
+  package manager's own removal (pnpm first) in place of a bare `npm rm -g`, rather than leading with
+  `--everything`, which cannot be undone.
+- L5 (2026-10-20): gentle-ai evidence per code commit, for the merge queue.
+  - gentle-ai: ee2a7289 assessed medium, review_due false, reason under_budget (316 lines, executable_change bin/audit.mjs).

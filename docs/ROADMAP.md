@@ -234,7 +234,7 @@ Sebastián, 2026-10-19: "una funcionalidad de onboarding para que cuando instale
 hagamos todo el pre plan y el plan ya con la ia para ejecutar un roadmap completo y bien estructurado del
 proyecto".
 - [ ] Design, past its two readers: the interview, the pre-plan, the plan and the roadmap it writes
-- [ ] `js-harness onboard` after `init`, with tests
+- [x] `js-harness onboard` after `init`, with tests (slice 1 `jsaristi/js-harness#466`: check, hash, template; slice 2 `jsaristi/js-harness#468`: the stages and resume, `init`'s closing line)
 
 ## F5 result
 

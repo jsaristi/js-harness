@@ -6,6 +6,9 @@ memory, codegraph owns code structure. js-harness adds the thin layer those leav
 `AGENTS.md`, a pre-commit gate that runs the project's checks, task contracts whose end is a set
 of commands that exit 0, and a record of everything it writes, so that it can be removed exactly.
 
+**New here? Start with the [user guide](docs/GUIDE.md):** install, the menu, the first run, a typical day and
+uninstall. This page is the reference of every command.
+
 It is plain Node with no dependencies. It needs Node 22 or newer and git.
 
 ## Install
@@ -30,19 +33,25 @@ js-harness init
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
+`js-harness --version` (or `-v`, or `version`) prints the version of the copy on the path, alone on one
+line. `js-harness <command> --help` (or `-h`) prints that command's usage and runs nothing.
+
 ## Remove
 
 ```sh
 cd my-project
-js-harness uninstall
-js-harness uninstall --global
-npm rm -g js-harness
+js-harness uninstall            # what init wrote in this project
+js-harness uninstall --global   # what install wrote in the home; the program stays
+pnpm remove -g js-harness       # the program; npm rm -g js-harness for an npm install
 ```
+
+The last line uses the package manager that installed the program. `uninstall --global --everything`
+does the last two in one step and goes further, below.
 
 `uninstall --global` keeps the snapshots of memory passes, the only copy of what a pass changed,
 and names them; `uninstall --global --full` removes them too. Files you modified and the memory
 notes themselves are kept either way. `uninstall --global --everything` removes all that js-harness
-keeps on the machine and then the program itself, so `npm rm -g` is not needed after it. Projects'
+keeps on the machine and then the program itself, so no `pnpm remove -g` or `npm rm -g` is needed after it. Projects'
 files are kept. Each kind has a name too (`uninstall project`, `machine`, `snapshots`,
 `everything`), and the TUI's Uninstall opens a submenu of them.
 
@@ -87,6 +96,13 @@ line ending `^{}` for an annotated tag), and `#<that commit>` in place of `#vX.Y
 commit exactly.
 
 ## Commands
+
+Most commands are for you; some exist for the hooks `install` registers or for an orchestrator session
+that leads other sessions, and are rarely typed by hand:
+
+| For you | For hooks and the orchestrator |
+|---|---|
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, functions, remote, memory, fetch, backup | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, wait |
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
 `my-project` is the project's folder. A line `…` marks output left out; output that grows with
