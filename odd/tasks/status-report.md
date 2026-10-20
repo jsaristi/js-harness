@@ -83,7 +83,7 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
 | T1 | S1-S6 | inline | done | this document |
 | T2 | S2-S5 | inline | done | RED then GREEN (124 tests): tests first, then `bin/report.mjs`, `bin/lib/report.mjs`, the report line in `bin/lib/channel.mjs` |
 | T3 | S6 | inline | done | RED then GREEN (manifest 181 tests): the orchestrator skill, the command list of the js-harness skill, README, GUIDE, ROADMAP |
-| T4 | S2-S6 | inline | open | `npm run check`, gentle-ai review, Codex review, pull request |
+| T4 | S2-S6 | inline | done | gate green on each commit; gentle-ai L3, L4, L6; Codex L5, L6; pull request (L6) |
 | T5 | S2-S5 | inline | done | the gentle-ai advisories of L3, tests first (8 RED, then 81 GREEN) |
 
 ## Log
@@ -116,3 +116,7 @@ records the report's time makes the delta a fact; the orchestrator skill makes t
   reads "answer, not verified (the sender's claim)"; test RED then GREEN), and run from a subfolder
   `git ls-tree` missed the roadmap (fixed: `--full-tree`; its test passes after the fix, its RED was
   not run because another session's gate held the lock, and Codex reproduced the defect from `bin/`).
+- L6 (2026-10-20): the Codex fixes committed as 13d66520 (gate passed). gentle-ai: 0bf3ea79..13d66520
+  assessed medium, review_due false, reason under_budget (30 lines, executable_change
+  bin/lib/report.mjs). Codex rechecked 0bf3ea7..13d6652: both findings fixed, verdict correct
+  (0.99), recorded. T4 done: the branch is pushed and its pull request opened.
