@@ -251,7 +251,7 @@ const SETUP = (...lines) => ['# Onboarding', '', '## Setup', ...lines, '', '## I
 test('profile lists the kinds, prints a kind, and explains one area of the kinds named', async (t) => {
   const root = project(t);
   assert.deepEqual(await onboard(root, 'profile'), { code: 0, out: kindsLines().join('\n'), err: '' });
-  assert.deepEqual(await onboard(root, 'profile', 'static-site'), { code: 0, out: kindLines(advisedProfile(['static-site'])).join('\n'), err: '' });
+  assert.deepEqual(await onboard(root, 'profile', 'static-site'), { code: 0, out: kindLines(advisedProfile(['static-site']), 'static-site').join('\n'), err: '' });
   assert.deepEqual(await onboard(root, 'profile', 'platform,multiplatform-app', '--area', 'A:auth'), {
     code: 0,
     out: areaLines(advisedProfile(['platform', 'multiplatform-app']), 'A:auth').join('\n'),
@@ -288,6 +288,7 @@ test('profile names what is missing when it cannot tell the kind, the size or th
     [bare, ['profile', 'shop'], 'shop is not a kind of the profiles; js-harness onboard profile lists them'],
     [bare, ['profile', 'static-site', '--area', 'A:auth'], 'A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas'],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Size: large (L5)') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH} has no - Kind: line under ## Setup: name a kind, or write it there`],
+    [project(t, { [ONBOARDING_PATH]: SETUP('- Teaching: on (L2)') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH} has no - Kind: and no - Size: line under ## Setup: name a kind and --size, or write both there`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: shop') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH}, ## Setup: shop is not a kind of the profiles; js-harness onboard profile lists them`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: platform', '- Size: medium') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH}, ## Setup: Size is medium, not small or large`],
   ];

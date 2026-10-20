@@ -870,6 +870,23 @@ ceiling.
   Codex in plain text, a relaying lead carrying approvals with their verbatim answers quoted, the approval sized for
   a phone, "accepted ADR" defined, stale wording. Unguaranteed: D15 was not read again (no third round), and how well
   the session deduces is for T4's two real trials to show.
+- Profiles round, slice 3a (2026-10-20, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+  over 86e5e635 and d3b2643e: one on claims and gaps with the sources fetched, one on gaps only, running the command.
+  Blockers taken:
+  - a target only real users can show was a first-phase step that could never close; now its step is the measure
+    wired before launch (`barStep`);
+  - "measured in CI" printed from the field contradicted seven commands; each command now says where it runs;
+  - `modern-image-formats` left Lighthouse 13, so it is `image-delivery-insight`;
+  - the SEO target cited Google for "one h1", sitemap and robots.txt, which its guide does not require;
+  - a small platform had no error tracking; observability and telemetry are now core there;
+  - account deletion lacked Google Play's web link.
+  Advisories taken: the `other (nearest: X)` label and a hint that carries the kind; both missing Setup lines named
+  at once; advice order (team, i18n, legal, store-policy); multiplatform auth, back end and security core, data
+  added, MASVS; Play's closed test of 12 testers for 14 days; Vercel Hobby's non-commercial terms; Better Auth
+  joining Vercel on 2026-07-07; TBT's mobile threshold; teaching lines neutral between web and app; Flutter's reason;
+  a platform `seo` area; three more shape checks (ID form, an area or target listed twice, a common core area made
+  non-core). Each new fact was fetched from its source first. Not taken: `team` as a dependency of the stack beyond
+  `architecture`. Unguaranteed: the fixes were not read again (no third round).
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
@@ -1066,3 +1083,10 @@ ceiling.
   are done. The D15 insert had also pasted an older copy of the top half: its regex ends in a dollar sign and a
   backtick, which String.replace reads as "the text before the match". That copy is removed; one `## Tasks` remains.
   Next: T7, slice 3a.
+- L23 (2026-10-20) T7 slice 3a written: `bin/lib/profiles-data.mjs` (global areas, static-site, platform,
+  multiplatform-app, other, sourced targets), `bin/lib/profiles.mjs`, `onboard profile` (86e5e635, d3b2643e), route
+  inline (one unit, no Writer trigger). One addition to D9's grammar: `--size small|large` with `--checklist`, so a
+  checklist can be printed for a kind named on the command line with no onboarding document. A field target's bar
+  step is its measure wired before launch, so the first build phase can close (the readers' B1); D5 is unchanged.
+  The profiles round is under `## Reviews`. Next: gentle-ai review of the slice from 65f81a30, Codex review, push,
+  PR, then slice 3b (data-analysis, research, pre-project).

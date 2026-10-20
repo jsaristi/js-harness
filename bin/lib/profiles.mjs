@@ -23,7 +23,8 @@ export function parseKind(value, data = PROFILES) {
   if (nearest || text === 'other') {
     const near = nearest ? nearest[1].trim() : 'none';
     if (near === 'none') return { kinds: ['other'], label: 'other (nearest: none)' };
-    if (!kinds.has(near) || near === 'other') return notAKind(near);
+    if (near === 'other') return { error: 'other cannot be its own nearest kind: name a kind with a profile, or none' };
+    if (!kinds.has(near)) return notAKind(near);
     return { kinds: [near], label: `other (nearest: ${near})` };
   }
   const ids = text.split(',').map((id) => id.trim());
@@ -123,7 +124,13 @@ export function advisedProfile(kindIds, data = PROFILES) {
 }
 
 const sized = (items, size) => (size === 'small' ? items.filter((item) => item.core) : items);
-const barStep = (target) => `${target.target}; measured ${WHERE[target.measured]} by ${target.command}`;
+
+/** A target as a roadmap step. The command says where it runs; a target only real users can show is the step the
+ * first build phase can finish, its measure wired before launch (D5). */
+const barStep = (target) =>
+  (target.measured === 'field'
+    ? `${target.command} wired before launch, so production shows: ${target.target}`
+    : `${target.target}; measured by ${target.command}`);
 
 /** The lines to paste: `advice` under the onboarding's `## Advice`, `bar` as steps of the roadmap (D5, D6). */
 export function checklistLines(profile, which, size) {
@@ -133,9 +140,16 @@ export function checklistLines(profile, which, size) {
 
 const core = (item) => (item.core ? ' (core)' : '');
 
-/** One or more kinds: each one's advice, then the areas and the bar of both sizes. */
-export function kindLines(profile) {
+/** How a kind label is typed on the command line: quoted when it holds a space. */
+const typed = (label) => (label.includes(' ') ? `"${label}"` : label.replaceAll(', ', ','));
+
+/** One or more kinds, as `label` names them: each one's advice, then the areas and the bar of both sizes. */
+export function kindLines(profile, label) {
   const lines = [];
+  const near = NEAREST.exec(label);
+  if (near && near[1] !== 'none') {
+    lines.push(`Kind: ${label}. No profile of its own: it is advised as ${near[1]}, through the areas and bar of ${near[1]}.`);
+  }
   for (const kind of profile.kinds) {
     lines.push(`${kind.title} (${kind.id})`, `Default: ${kind.default}`, `Why: ${kind.why}`, `Something else when: ${kind.elseWhen}`, '');
   }
@@ -143,7 +157,7 @@ export function kindLines(profile) {
   for (const area of profile.areas) lines.push(`  A:${area.id} ${area.title}${core(area)}`);
   lines.push('Bar (a small project keeps the core ones):');
   for (const target of profile.targets) lines.push(`  B:${target.id} ${target.target}${core(target)}`);
-  lines.push('Next: js-harness onboard profile --area <id> explains one area; --checklist advice|bar prints the lines to paste.');
+  lines.push(`Next: js-harness onboard profile ${typed(label)} --area <id> explains one area; --checklist advice|bar --size small|large prints the lines to paste.`);
   return lines;
 }
 
@@ -174,22 +188,36 @@ export function kindsLines(data = PROFILES) {
   return [
     'Kinds (js-harness onboard profile <kind>[,<kind>] prints one):',
     ...data.KINDS.map((kind) => {
-      const how = kind.id === 'other' ? '; in ## Setup it is written other (nearest: <kind>) or other (nearest: none)' : '';
+      const how = kind.id === 'other' ? '; written other (nearest: <kind>) or other (nearest: none), quoted on the command line' : '';
       return `  ${kind.id.padEnd(width)}  ${kind.title}${how}`;
     }),
   ];
 }
 
 const blank = (value) => typeof value !== 'string' || value.trim() === '';
+const ID = /^[a-z0-9-]+$/;
 
+/** An ID defined twice, or not in the form D6's lines take (`A:<id>`, `B:<id>`). */
 function duplicates(list, what) {
   const seen = new Set();
   const findings = [];
   for (const item of list) {
     if (seen.has(item.id)) findings.push(`${what} ${item.id} is defined twice`);
+    else if (!ID.test(item.id)) findings.push(`${what} ${item.id} is not an ID of lowercase letters, digits and hyphens`);
     seen.add(item.id);
   }
   return findings;
+}
+
+/** The IDs a kind lists more than once. */
+function listedTwice(entries) {
+  const seen = new Set();
+  const twice = new Set();
+  for (const entry of entries) {
+    if (seen.has(entry.id)) twice.add(entry.id);
+    seen.add(entry.id);
+  }
+  return [...twice];
 }
 
 /** The sets of areas that are after one another in a cycle, each sorted. */
@@ -247,6 +275,12 @@ export function shapeFindings(data = PROFILES) {
       if (areas.has(entry.id) && blank(entry.default ?? areas.get(entry.id).default)) {
         findings.push(`kind ${kind.id}: area ${entry.id} has no default, of the kind or of the area`);
       }
+    }
+    for (const id of listedTwice(kind.areas)) findings.push(`kind ${kind.id} lists area ${id} twice`);
+    for (const id of listedTwice(kind.bar)) findings.push(`kind ${kind.id} lists target ${id} twice`);
+    for (const entry of kind.areas) {
+      const area = areas.get(entry.id);
+      if (area?.common && area.core && !entry.core) findings.push(`kind ${kind.id} makes the common core area ${entry.id} non-core`);
     }
     const unknownTarget = kind.bar.filter((entry) => !targets.has(entry.id));
     for (const entry of unknownTarget) findings.push(`kind ${kind.id}: target ${entry.id} is no target`);

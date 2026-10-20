@@ -263,6 +263,9 @@ function profileOutput(root, { kind, area, checklist, size }) {
     if (kinds.error) return kinds;
   } else {
     if (document === null) return { error: `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform` };
+    if (!setup.Kind && checklist && !size && !setup.Size) {
+      return { error: `${ONBOARDING_PATH} has no - Kind: and no - Size: line under ## Setup: name a kind and --size, or write both there` };
+    }
     if (!setup.Kind) return { error: `${ONBOARDING_PATH} has no - Kind: line under ## Setup: name a kind, or write it there` };
     kinds = parseKind(setup.Kind);
     if (kinds.error) return { error: `${ONBOARDING_PATH}, ## Setup: ${kinds.error}` };
@@ -274,7 +277,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
     const name = area.startsWith('A:') ? area : `A:${area}`;
     return { error: `${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas` };
   }
-  if (!checklist) return { lines: kindLines(advised) };
+  if (!checklist) return { lines: kindLines(advised, kinds.label) };
   let chosen = size;
   if (!chosen) {
     if (!setup.Size) return { error: `--checklist needs the size: pass --size small|large, or write - Size: under ## Setup in ${ONBOARDING_PATH}` };

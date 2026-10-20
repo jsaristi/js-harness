@@ -48,6 +48,7 @@ test('parseKind reads every Kind form of D6, with or without its Log line', () =
   assert.deepEqual(parseKind('other (nearest: shop)', DATA), { error: 'shop is not a kind of the profiles; js-harness onboard profile lists them' });
   assert.deepEqual(parseKind('site, other', DATA), { error: 'other is written alone, as other (nearest: <kind>) or other (nearest: none)' });
   assert.deepEqual(parseKind('site, site', DATA), { error: 'site is named twice' });
+  assert.deepEqual(parseKind('other (nearest: other)', DATA), { error: 'other cannot be its own nearest kind: name a kind with a profile, or none' });
 });
 
 test('parseSize reads small or large, with or without its Log line', () => {
@@ -84,15 +85,16 @@ test('the checklists print the lines to paste: a small project keeps the core on
   const profile = advisedProfile(['site'], DATA);
   assert.deepEqual(checklistLines(profile, 'advice', 'small'), ['- [ ] A:ui UI', '- [ ] A:ci CI']);
   assert.deepEqual(checklistLines(profile, 'advice', 'large'), ['- [ ] A:ui UI', '- [ ] A:host HOST', '- [ ] A:ci CI', '- [ ] A:team TEAM']);
-  assert.deepEqual(checklistLines(profile, 'bar', 'small'), ['- [ ] B:gate gate target; measured in CI by gate command']);
+  assert.deepEqual(checklistLines(profile, 'bar', 'small'), ['- [ ] B:gate gate target; measured by gate command']);
+  // A target only real users can show is a step the first phase can finish: its measure wired before launch.
   assert.deepEqual(checklistLines(profile, 'bar', 'large'), [
-    '- [ ] B:speed speed target; measured in production by speed command',
-    '- [ ] B:gate gate target; measured in CI by gate command',
+    '- [ ] B:speed speed command wired before launch, so production shows: speed target',
+    '- [ ] B:gate gate target; measured by gate command',
   ]);
 });
 
 test('kindLines prints each kind\'s advice, then the areas and the bar with their core marks', () => {
-  const lines = kindLines(advisedProfile(['site'], DATA), DATA);
+  const lines = kindLines(advisedProfile(['site'], DATA), 'site');
   assert.deepEqual(lines, [
     'Site (site)',
     'Default: a site',
@@ -107,8 +109,12 @@ test('kindLines prints each kind\'s advice, then the areas and the bar with thei
     'Bar (a small project keeps the core ones):',
     '  B:speed speed target',
     '  B:gate gate target (core)',
-    'Next: js-harness onboard profile --area <id> explains one area; --checklist advice|bar prints the lines to paste.',
+    'Next: js-harness onboard profile site --area <id> explains one area; --checklist advice|bar --size small|large prints the lines to paste.',
   ]);
+  // other (nearest: <kind>) says so before the nearest kind's advice, and its hint keeps the label.
+  const near = kindLines(advisedProfile(['app'], DATA), 'other (nearest: app)');
+  assert.equal(near[0], 'Kind: other (nearest: app). No profile of its own: it is advised as app, through the areas and bar of app.');
+  assert.equal(near.at(-1), 'Next: js-harness onboard profile "other (nearest: app)" --area <id> explains one area; --checklist advice|bar --size small|large prints the lines to paste.');
 });
 
 test('areaLines prints one area: what it decides, the three levels, pitfalls, each kind\'s advice and its targets', () => {
@@ -123,7 +129,7 @@ test('areaLines prints one area: what it decides, the three levels, pitfalls, ea
     'Default (site): site ui',
     'Alternatives (site): plain html',
     'Default (app): app ui',
-    'Bar: B:speed speed target; measured in production by speed command; source: https://example.org',
+    'Bar: B:speed speed command wired before launch, so production shows: speed target; source: https://example.org',
     'Read the current docs and release notes of what you recommend, and cite them in its ADR (D12).',
   ]);
   assert.deepEqual(areaLines(profile, 'ci').slice(0, 1), ['A:ci CI (core)']);
@@ -135,7 +141,7 @@ test('kindsLines lists every kind and how other is written', () => {
     'Kinds (js-harness onboard profile <kind>[,<kind>] prints one):',
     '  site   Site',
     '  app    App',
-    '  other  Other; in ## Setup it is written other (nearest: <kind>) or other (nearest: none)',
+    '  other  Other; written other (nearest: <kind>) or other (nearest: none), quoted on the command line',
   ]);
 });
 
@@ -162,6 +168,18 @@ test('shapeFindings names each part a profile misses', () => {
   const coreOnLoose = structuredClone(DATA);
   coreOnLoose.KINDS[0].bar.push({ id: 'deploys', core: true });
   assert.deepEqual(shapeFindings(coreOnLoose), ['kind site: target deploys is core, but its area host is not']);
+
+  const loose = structuredClone(DATA);
+  loose.KINDS[0].areas.push({ id: 'ci', core: false }, { id: 'ui', core: true, default: 'again' });
+  loose.KINDS[0].bar.push({ id: 'gate', core: true });
+  loose.AREAS.push(AREA('Bad_Id'));
+  assert.deepEqual(shapeFindings(loose), [
+    'area Bad_Id is not an ID of lowercase letters, digits and hyphens',
+    'kind site lists area ui twice',
+    'kind site lists target gate twice',
+    'kind site makes the common core area ci non-core',
+    'kind site: target gate is core, but its area ci is not',
+  ]);
 
   const thin = structuredClone(DATA);
   delete thin.AREAS[1].teach.some;
