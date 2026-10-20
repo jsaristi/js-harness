@@ -77,12 +77,15 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
   talla mundial trabajando para desarrollar el mejor proyecto posible, praticamente sacarlo a delante con todo, a
   menos que el usuario te indique lo contario osea de que no quiere aprender y de que solo quiere hacerlo facil y
   rapido sin importar tanto la calidad y la profundidad del proyecto."
+- S5. His words (2026-10-20, transcript 908805db line 6769), verbatim: "por ejemplo una web estatica se hace con Astro
+  y ademas deber ser rapida osea necesito que de una vez coloques ejemplo reales para que el harnes los pueda seguir y
+  aportar mas". The lead's draft of those examples is `## Reference profiles` below; T6 makes them the advisor's data.
 
 ## Tasks
 - [ ] T1 (kind: design) This design, past its two readers, and his yes
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (PR 468, merged)
-- [ ] T6 (kind: design) Design v4 from S3: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
+- [ ] T6 (kind: design) Design v4 from S3-S5 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes
 - [ ] T4 (kind: verify) The one real onboarding of the done-when, after T6 (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (on `main` once `feat/release-095` lands) and record the reviews
 
@@ -249,6 +252,62 @@ Building it: one session, two slices of about 400-500 authored lines each with t
 `progress` are 385 and 322 lines before tests), one gate per commit, one gentle-ai and one Codex review per slice,
 and the one real onboarding of the done-when. Using it in a project: one interview session of about nine questions
 plus confirmations, and two readers twice (pre-plan, plan), on the reader model the rules give.
+
+## Reference profiles
+Draft by the lead (2026-10-20) for S5, not yet past T6's readers. One profile per project kind: the default the
+advisor proposes, why, when it proposes something else, the bar the project must measure, and the areas it teaches
+(S4: all of them, unless the user turns teaching off or asks for fast and easy). Versions are left out on purpose:
+at advice time the session reads the current docs and release notes and cites them (vision point 5), so a profile
+never ages into stale advice. The advisor may depart from a profile, saying why; the profile is the floor, not the
+ceiling.
+
+- Static site (landing, portfolio, blog, docs, marketing):
+  - Default: Astro, static output; content collections for the content, `astro:assets` for images; islands only where
+    a component needs JavaScript. For docs, Starlight (built on Astro). Hosted on a static CDN (Cloudflare Pages,
+    Netlify, Vercel or GitHub Pages).
+  - Why: it ships zero JavaScript by default, so the page is fast before anyone optimizes it; content is typed.
+  - Something else when: the "site" is really an app behind a login (see Platform), or a CMS-driven site with heavy
+    editors (Astro plus a headless CMS, still static where it can be).
+  - Bar, measured in CI on every pull request: Core Web Vitals "good" at the 75th percentile (LCP <= 2.5 s,
+    INP <= 200 ms, CLS <= 0.1); Lighthouse performance, accessibility, best practices and SEO >= 95 on the key pages;
+    a JavaScript budget per page (none on pure content pages); images in AVIF or WebP with explicit sizes.
+  - SEO: semantic HTML, one h1, titles and meta descriptions per page, canonical URLs, sitemap and robots.txt,
+    Open Graph and social cards, internal links, no broken links (checked in CI).
+  - AEO (answer engines, featured snippets): content that answers a question in its first paragraph, question-shaped
+    headings, schema.org JSON-LD (Organization, WebSite, Article, FAQPage or HowTo where the content truly is one).
+  - GEO (generative engines): clear entities and facts with sources, author and date on content, structured data,
+    pages an AI crawler can read without JavaScript; llms.txt only as an emerging, optional convention, said as such.
+  - Teaches: accessibility (WCAG AA), performance budgets, analytics that respect privacy, CI with preview deploys.
+- Platform (web app with accounts and data):
+  - Default: TypeScript end to end; a server-rendered React framework or React with Vite for the front end; a typed
+    API; PostgreSQL with migrations; authentication from a maintained library or provider, never hand-rolled.
+  - Why: one language across the stack, a relational store that fits most business data, auth risk handed to experts.
+  - Something else when: the team knows another stack well (the advisor then deepens that stack, as S3 asks), the data
+    is truly document-shaped, or the load profile calls for it, with the reason recorded.
+  - Bar: tests at three levels (unit, integration against a real database, end to end with Playwright) in CI; every
+    pull request deploys a preview; migrations reversible; secrets out of the repository; OWASP Top 10 reviewed;
+    logs, metrics and traces (OpenTelemetry) from the first deploy; an error budget once it has users.
+  - Teaches: architecture (modules by feature, boundaries, where business rules live), API design, data modeling,
+    security, CI/CD, observability, cost.
+- Multiplatform app (iOS, Android, maybe web):
+  - Default: React Native with Expo when the team knows TypeScript or React; Flutter when it starts fresh and wants
+    one rendering engine everywhere.
+  - Bar: builds and store submissions from CI (EAS or the Flutter equivalent), crash reporting, offline behavior
+    defined, accessibility on both platforms, app size and start time measured.
+  - Teaches: the store review process, release channels and updates, platform differences, privacy rules.
+- Data analysis:
+  - Default: Python with a locked environment (uv), DuckDB or Polars for the data, notebooks or Quarto for the report,
+    data validated at the edges.
+  - Bar: the analysis reruns from raw data with one command; every number in the report traces to code; the data's
+    source, date and license recorded; assumptions and limits stated.
+  - Teaches: the question before the data, data quality, choosing the method, avoiding leakage and p-hacking,
+    communicating uncertainty.
+- Research:
+  - Default: a research plan before any search: the question, why it matters, scope, hypotheses or what would change
+    the answer, method, sources and how they are judged, what is measured and how, threats to validity, schedule.
+  - Bar: every claim cites its source; the search is recorded so it can be repeated; findings separated from
+    opinion; the plan's measures reported, including the ones that came out against.
+  - Teaches: framing a question, source quality, sampling, bias, reproducibility, writing the result for its reader.
 
 ## Reviews
 - Round 1 (2026-10-19), two read-only readers on claude-opus-5-5 over version 1.
