@@ -279,34 +279,90 @@ ceiling.
     pages an AI crawler can read without JavaScript; llms.txt only as an emerging, optional convention, said as such.
   - Teaches: accessibility (WCAG AA), performance budgets, analytics that respect privacy, CI with preview deploys.
 - Platform (web app with accounts and data):
-  - Default: TypeScript end to end; a server-rendered React framework or React with Vite for the front end; a typed
-    API; PostgreSQL with migrations; authentication from a maintained library or provider, never hand-rolled.
-  - Why: one language across the stack, a relational store that fits most business data, auth risk handed to experts.
-  - Something else when: the team knows another stack well (the advisor then deepens that stack, as S3 asks), the data
-    is truly document-shaped, or the load profile calls for it, with the reason recorded.
-  - Bar: tests at three levels (unit, integration against a real database, end to end with Playwright) in CI; every
-    pull request deploys a preview; migrations reversible; secrets out of the repository; OWASP Top 10 reviewed;
-    logs, metrics and traces (OpenTelemetry) from the first deploy; an error budget once it has users.
-  - Teaches: architecture (modules by feature, boundaries, where business rules live), API design, data modeling,
-    security, CI/CD, observability, cost.
+  - Default: TypeScript end to end. Front end: Next.js when public pages must rank and load fast, React with Vite when
+    everything sits behind a login. API: typed calls inside one TypeScript codebase (tRPC or server actions), REST
+    with an OpenAPI contract when others consume it. Data: PostgreSQL, schema and migrations through an ORM (Drizzle
+    or Prisma). Auth: a maintained library or provider (Auth.js, Better Auth, Clerk, Auth0), never hand-rolled.
+    Jobs: a queue for anything slow. Hosting: a managed platform plus managed PostgreSQL.
+  - Why: one language and one type system from database to screen; a relational store fits most business data and
+    keeps it consistent; authentication is the riskiest code to write, so experts write it.
+  - Something else when: the team already knows a stack. If they say MERN (S3's example), the advisor deepens MERN
+    instead of replacing it: MongoDB schema validation, indexes per query, transactions where money or stock moves,
+    Express organized by feature. The same for Django, Rails or Laravel teams. Also when data is truly
+    document-shaped, or when real time is the core (then WebSockets or a realtime service from day one). The reason
+    is recorded as an ADR.
+  - Bar, starting targets agreed with the user and measured in CI or production:
+    - Speed: API reads p95 <= 300 ms; Core Web Vitals "good" on public pages.
+    - Tests: unit tests on business rules, integration tests against a real PostgreSQL (Testcontainers), end to end
+      with Playwright on the main journeys; all on every pull request with lint, typecheck and build.
+    - Delivery: a preview deploy per pull request; production deploys only from main through CI; migrations reviewed
+      and reversible; dependency updates automated (Renovate or Dependabot).
+    - Reliability: backups with a restore actually tested; an SLO and an error budget once there are users.
+  - Architecture: modules by feature (screaming architecture); business rules in a domain layer with no framework in
+    it; the database and outside services behind ports and adapters; one ADR per decision in `docs/origin.md`.
+  - Security: OWASP Top 10 and ASVS level 1 as the checklist; input validated at every boundary (Zod or equivalent);
+    rate limits on auth and public endpoints; secrets in a secrets manager, never in the repository; least privilege
+    for the database user.
+  - Observability: structured logs, metrics and traces with OpenTelemetry, error tracking (Sentry or equivalent), all
+    from the first deploy.
+  - Teaches: architecture, API design, data modeling and indexes, security, CI/CD, observability, cost control.
 - Multiplatform app (iOS, Android, maybe web):
-  - Default: React Native with Expo when the team knows TypeScript or React; Flutter when it starts fresh and wants
-    one rendering engine everywhere.
-  - Bar: builds and store submissions from CI (EAS or the Flutter equivalent), crash reporting, offline behavior
-    defined, accessibility on both platforms, app size and start time measured.
-  - Teaches: the store review process, release channels and updates, platform differences, privacy rules.
+  - Default: React Native with Expo (Expo Router; EAS for builds, store submission and over-the-air updates) when the
+    team knows TypeScript or React; Flutter when it starts fresh and wants one rendering engine everywhere.
+  - Why: one codebase for both stores; Expo takes the native build pipeline off the team's hands; over-the-air updates
+    fix JavaScript bugs without waiting for store review.
+  - Something else when: the app lives on deep platform features (AR, heavy background work, rich widgets): native
+    Swift and Kotlin; shared logic with fully native screens: Kotlin Multiplatform; no store presence needed: a PWA
+    (then the Static site or Platform profile applies).
+  - Bar, starting targets agreed with the user:
+    - Speed: cold start under 2 s on a mid-range Android; lists at 60 fps; an app size budget.
+    - Stability: crash-free sessions >= 99.5%, from crash reporting wired before the first beta.
+    - Behavior: offline behavior defined per screen; permissions asked in context, at the moment they are needed.
+    - Tests: unit tests plus end to end flows (Maestro or Detox) on both platforms in CI; signed release builds only
+      from CI; staged rollouts.
+  - Accessibility: VoiceOver and TalkBack labels, dynamic type, contrast, touch targets, checked on real devices.
+  - Stores and privacy: App Store Review Guidelines and Google Play policies read before design; Apple's privacy
+    manifest and Google's data safety form filled from what the app really collects; account deletion inside the app
+    when it has accounts.
+  - Teaches: release channels and versioning, store review, platform differences, push notifications, privacy law.
 - Data analysis:
-  - Default: Python with a locked environment (uv), DuckDB or Polars for the data, notebooks or Quarto for the report,
-    data validated at the edges.
-  - Bar: the analysis reruns from raw data with one command; every number in the report traces to code; the data's
-    source, date and license recorded; assumptions and limits stated.
-  - Teaches: the question before the data, data quality, choosing the method, avoiding leakage and p-hacking,
-    communicating uncertainty.
+  - Default: Python with a locked environment (uv); DuckDB for SQL over files and Parquet; Polars for dataframes
+    (pandas where a library needs it); notebooks to explore, Quarto for the report; validation at load (pandera or
+    equivalent); raw data immutable and every step a script, run by one command (make or just); data versioned by
+    hash, or with DVC when it is large.
+  - Why: the analysis can be rerun and checked by anyone; DuckDB and Polars handle data far past a laptop's pandas
+    limit on one machine; validation stops bad data before it becomes a wrong chart.
+  - Something else when: the team works in R (tidyverse and Quarto, the same bar); the data lives in a warehouse and
+    the analysis recurs (dbt models with tests); the data does not fit one machine (Spark, rarely needed).
+  - Bar:
+    - Reproducible: a clean checkout reruns from raw data to report with one command, with the same numbers.
+    - Traceable: every number and chart in the report comes from code in the repository.
+    - Documented: a data card per source (origin, date, license, how it was collected, known gaps).
+    - Sound: the question and the method written before looking at the outcome; a holdout or validation set for any
+      model; uncertainty reported with intervals, not only point estimates.
+    - Honest charts: labeled axes and units, bars from zero, no truncated scales without saying so.
+  - Data handling: personal data minimized, pseudonymized and never committed; access recorded.
+  - Teaches: framing the question, data quality, choosing the method, leakage and p-hacking, communicating
+    uncertainty to non-experts.
 - Research:
-  - Default: a research plan before any search: the question, why it matters, scope, hypotheses or what would change
-    the answer, method, sources and how they are judged, what is measured and how, threats to validity, schedule.
-  - Bar: every claim cites its source; the search is recorded so it can be repeated; findings separated from
-    opinion; the plan's measures reported, including the ones that came out against.
+  - Default: a research plan before any search, with the question, why it matters, scope, hypotheses or what would
+    change the answer, method, sources and how they are judged, what is measured and how, threats to validity,
+    ethics and schedule. Tools: a reference manager (Zotero), a search log (database, query, date, results kept),
+    preregistration (OSF) for empirical studies, a data management plan.
+  - Why: a plan written first keeps the result from bending toward what the researcher hoped; a logged search can be
+    repeated and audited.
+  - Something else when: the kind of research changes the method.
+    - Literature review: PRISMA-style flow (found, screened, included, why excluded).
+    - User research: an interview protocol, a sample matched to the question, consent, synthesis by affinity mapping.
+    - Experiment: hypotheses, a power analysis for the sample size, the analysis fixed in advance.
+    - Market research: sources ranked by reliability, sizing shown with its assumptions.
+    - Technical spike: the question, a time box and the success criteria, a written answer at the end.
+  - Bar:
+    - Measured: each outcome defined and operationalized (what is counted, how, by whom); the sample size justified;
+      inter-rater agreement reported when people code data.
+    - Valid: internal, external and construct validity threats named, with what was done about each.
+    - Cited: every claim carries its source; findings kept apart from opinion; the evidence against reported too.
+    - Ethical: consent and privacy handled whenever people take part.
   - Teaches: framing a question, source quality, sampling, bias, reproducibility, writing the result for its reader.
 
 ## Reviews
@@ -424,3 +480,7 @@ ceiling.
     - What stays bounded is the onboarding itself: it settles the decisions the roadmap needs, and the deeper advice
       of each area becomes a roadmap phase with its own advice when that phase starts.
     - This is a proposal for T6's readers, not his words.
+- L11 (2026-10-20) Pointed at the static-site profile, his words (transcript 908805db line 6852), verbatim: "Exacto, asi
+  para cada uno de los ejemplos". So every profile under `## Reference profiles` now has the same depth and the same
+  parts as the static site's: default, why, something else when, a measured bar, the areas particular to its kind,
+  and what it teaches.
