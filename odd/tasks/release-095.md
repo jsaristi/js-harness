@@ -62,3 +62,8 @@ Anything beyond the two tags he approved in Pregunta 16 and v0.96.0 (S6).
   - PR 471 had moved the uninstall kinds into a submenu (Project, Machine, Machine + memory snapshots, Everything), while the walk still looked for project/Uninstall and "Uninstall everything".
   - The walk read only draws below a command's output, so a draw made in place behind the TUI's erase sequence (the submenu opening) left it on a stale screen. That is how it chose Everything for Machine.
   The fix: the walk opens the submenu and leaves it with Escape after a no, and it reads in-place draws. The walk then passed 21/21 (`node scripts/tui-walk.mjs`, exit 0).
+- L17 (2026-10-20) The reviews of 95a8a6d9, the walk fix:
+  - gentle-ai: 211c65e8..95a8a6d9 was assessed medium by the gate, with no review due (under_budget).
+  - Codex: correct, confidence 0.94 (`js-harness codex-review --base 211c65e8`).
+  - Gate: its first run failed on `evals/ports.test.mjs:80`, recorded as ports-test-free-port-race in docs/FAILURES.md; the second run passed on CI.
+  - The full suite on main f91a9a6 ran under the lock: 6692 tests, 6671 pass, 0 fail, 21 skipped.
