@@ -918,6 +918,14 @@ ceiling.
   per-kind override of teaching and pitfalls (the shape has none; global teaching stays generic). Recorded for D12:
   OpenAI announced it would acquire Astral (uv) on 2026-03-19, and dbt Labs and Fivetran merged on 2026-06-01, both
   keeping their tools open source. Unguaranteed: the fixes were not read again (no third round).
+- Slice 3b, gentle-ai (2026-10-20): `dfae6be0..364ada0c` (eadb813f and the pause line), assessed `medium` and
+  `under_budget`, started through the preflight status as each slice is; lenses readability and reliability,
+  approved and acknowledged (lineage review-b2c7fd9b754587c5). Informational, left for later: the refusal's text when
+  a kind's `joins` is empty (`bin/lib/profiles.mjs:43`); the kind IDs rebuilt per kind in `shapeFindings`
+  (`bin/lib/profiles.mjs:280-281`); no test that the real data refuses `pre-project,platform`
+  (`bin/lib/profiles-data.test.mjs:12-13`); a kind that lists itself in `joins` is not named.
+- Slice 3b, Codex (2026-10-20): `dfae6be..364ada0` in 2 parts, recorded; correct (0.86 on the data, 0.96 on the
+  join rule), no findings.
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
@@ -1135,3 +1143,6 @@ ceiling.
   reliability, the `granted` invocation pre-granted); `js-harness codex-review --base dfae6be0`; push with
   `git push origin HEAD:feat/onboarding-plan-advisor`; the 3b lines in PR 481's body or a PR of its own; the ready
   notice; then slice 3c.
+- L26 (2026-10-20) Resumed after the restart: PR 481 is in main (11ff331). Slice 3b passed gentle-ai and Codex
+  (`## Reviews`) and is pushed for its own pull request. The orchestrator's resume message names T8 next; slice 3c
+  (cli-library, api-service, ai-app, tui-app) stays open in T7.
