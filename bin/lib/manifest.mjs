@@ -11,6 +11,7 @@ import { channelDir } from './channel.mjs';
 import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
+import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
@@ -128,6 +129,8 @@ When the user asks for something, place it with the roadmap and the board:
 - new work gets the opening prompt of a new work session; a design conversation is a session of its own too;
 - note in the relief file what was asked and where it went, and go on.
 
+Teaching, where the roadmap holds \`## Advice mode\` (a project planned with \`js-harness onboard\`): the work session that puts a decision to the user writes into the question's text what the line's \`Teaching\` value calls for, and you show that text unchanged. When the user asks to stop or resume the teaching, or says they already know an area, it takes effect at once: send a one-line notice of it to the open work sessions, and carry it in the opening prompt of any work session you open before the roadmap holds it; the work session that next changes the roadmap writes it into \`## Advice mode\`. A roadmap without that section changes nothing here.
+
 Interrupt the user only when:
 1. a question waits for them (Questions to the user, above);
 2. a session finished with nothing running behind it;
@@ -183,11 +186,12 @@ Compaction, and a relief only on request. You hold nothing the files do not. A c
 - Give this opening prompt only when the user asks for a new lead, always the same:
 
 \`\`\`
-You are the orchestrator of this project's sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.
+${LEAD_OPENING_PROMPT}
 \`\`\`
 
 - When you start from that prompt, read the list (\`js-harness rules\`), the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you lead. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): when it closed with its summary, the board lists it under \`to archive\`: read the summary, then archive the session with the host's tool to archive sessions, without asking, and name it in the recap. When the host refuses because the session still has live work, turn its Remote Control off with the host's tool, then archive it again, without asking: a Remote Control link counts as live work and keeps a finished session from being archived. A finished session that closed without a summary is asked for one first, by \`SendMessage\` to its title, and archived once it closes with it.
 - The orchestrator before you, once it is renamed out of the role's title (\`<code> ORQ relevada\`), runs \`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"\`: \`js-harness sessions --measures\` counts the reliefs from those notices.
+- When no orchestrator came before you, as for the first lead after a project's onboarding, there is no relief file or earlier reply to read: read the list (\`js-harness rules\`), the roadmap (\`js-harness progress\`) and the board, write the relief file's first line, ask the user through the question tool for the charter that heads it, and say that you lead; until a charter is approved, ask before each step it would name.
 - When you come back from a compaction, do what a new lead does: the files are the record, your summary is not.
 - Loops have owners. At your start and after a compaction, run \`js-harness loop status\`. A compaction or a restart marks your background tasks stopped while their processes live on: restart each loop you own with \`js-harness loop run <name> --restart ...\`, so a task of yours holds it again. Never stop or restart a loop another session owns: a second lead (a fork) that finds loops another owns leaves them alone and says so. At a handover, the new lead takes each loop over with \`--restart --take-over\`, after the relief line where the old lead gave them up; the old lead starts no loop again.
 
@@ -213,6 +217,7 @@ When the user says they will reinstall the machine or wipe its disk, nothing of 
 - Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
 - While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does a gentle-ai review, whose reviewer has no tools. Give that review a base on the head's first-parent line, and on \`operation_timeout\` run it once more, then go on as \`js-harness-protocols\` section 3 says.
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
+- Where the roadmap holds \`## Advice mode\`, read it before you put a decision to the user: with \`Teaching: on\`, the question's text says why, at the level the line records for the area the decision touches, and names that area's ADR, or its open decision (\`OD<n>\`) while it has none; you teach nowhere else. A notice from the lead that the teaching or a level changed holds from the moment it arrives, and the first change of yours to the roadmap writes it into \`## Advice mode\`.
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
 - When a pull request of yours is ready to land, say so with \`js-harness notify --to orchestrator --kind ready --pr <number> "<what it holds>"\`: the land finds whose pull request it is from that notice, not from the branch you sent it from.

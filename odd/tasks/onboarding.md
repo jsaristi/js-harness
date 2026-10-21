@@ -125,8 +125,8 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (merged in `jsaristi/js-harness#468`)
 - [x] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes (fb54c927, L22)
 - [x] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10) (3c is PR 493, L33)
-- [ ] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
-- [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
+- [x] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12) (PRs 486, 488, 490, 494)
+- [x] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC (`e8edbfaa`, `bf1d1d8e`, `e3f74e8c`; L35-L37)
 - [ ] T4 (kind: verify) The two real onboardings of the done-when (S9), after T9: the Astro static site, then the platform pre-project (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (`docs/ROADMAP.md:231-237`, on `main` now) and record the reviews
 
@@ -995,6 +995,20 @@ ceiling.
   `eb51a24..57d761d`: correct (0.96).
 - Slice 4d's fixes, gentle-ai (2026-10-21): `c46f4393` (`57d761d3..c46f4393`) approved (readability, reliability;
   lineage review-cebc9fdb0b8b776a, acknowledged), no advisories. Codex `57d761d..c46f439`: correct (0.99).
+- T9, independent verifier (2026-10-21) on `aeef4541..bf1d1d8e`, Risk item 3: six of six pass, no blocker, eight
+  advisories taken (L37).
+- T9 handoff, gentle-ai (2026-10-21): `e8edbfaa` (`aeef4541..e8edbfaa`, reviewed alone in a detached worktree)
+  approved (readability, reliability; lineage review-bd14d28b2a5599bd, acknowledged); R2-orphaned-skill-jsdoc and
+  R3-cli-handoff-partial-assert taken (L37), R3-detached-jsdoc is the same as the first. Codex `aeef454..bf1d1d8`:
+  correct (0.91).
+- T9 skill, gentle-ai (2026-10-21): `bf1d1d8e` (`e8edbfaa..bf1d1d8e`, Risk item 3, reviewed alone in a detached
+  worktree) approved (readability, reliability; lineage review-66a7b158699fae0c, acknowledged), four suggestions.
+  gentle-ai on `e3f74e8c` (`bf1d1d8e..e3f74e8c`): approved (readability, reliability; lineage review-87ea8c53d1d3ac4c,
+  acknowledged), two suggestions. Not taken: the two referent suggestions ("the line", "the level") point at the
+  `## Advice mode` line named in the same sentence; the test's order and bounds suggestions, since each text is
+  pinned whole and by section; R2-first-lead-charter-order, the charter asked before the lead says it leads is
+  the order the skill's own handover uses; R3-removed-manifest-export, since the export was added in `e8edbfaa`
+  and never shipped. Codex `bf1d1d8..e3f74e8`: correct (0.97).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -1327,3 +1341,38 @@ ceiling.
   ADR (D2, D10); stage 5 pastes `--checklist bar` into the first build phase and fills `## Decided` and
   `## Advice mode` (D2, D5). Stage 6 is left as is: D2 says "as stage 4, for the roadmap", and the areas were
   confirmed at stage 4. Lib 41, cli 19 pass. With 4d, T8 is complete once reviewed.
+- L35 (2026-10-21) Slice 4d is PR 494: reviewed (`## Reviews`), PR 493 landed (main `bae404fd`), 494 retargeted
+  to main with `origin/main` merged in at `aeef4541`, no rebase; ready recorded at 05:39Z. T8 is done. T9 starts
+  on branch `feat/onboarding-handoff` from `aeef4541`, route inline, in two commits so the high-risk one stands
+  alone: (1) the handoff (D13), not high risk, since the installed skill's text is unchanged: RED on the Onboarded
+  lines (lib: `LEAD_OPENING_PROMPT` not exported; cli: 18 pass, 1 fail), then `manifest.mjs` exports the lead's
+  opening prompt, the skill interpolates it in place of its literal (same bytes), and `onboard` prints after
+  `Next:` that the build orchestrator is a new lead session and that prompt; a test pins that the skill holds it.
+  README and SPEC name the handoff, and SPEC the v4 conversation and its ADRs. Lib 42, cli 19, manifest 183 pass.
+  (2) next: the skill's first-lead case, its teaching paragraph under "The lead" and the work session's line
+  (D13), Risk item 3, with an independent verifier.
+- L36 (2026-10-21) T9 (1) committed `e8edbfaa`, gate green. (2), test first: RED on one new manifest test (183
+  pass, 1 fail) that places three texts, then in the skill: the first lead's case, after the relieved-notice bullet,
+  which an existing test keeps right after the handover (first placed before it, that test failed, so it moved);
+  one Teaching paragraph under "The lead", before "Interrupt the user only when"; one line under "A work session".
+  Each opens with "where the roadmap holds `## Advice mode`", so a project with no such section reads no change
+  (D13's Risk). The user's words in D13 ("sin enseñanza", "ya sé esto") are said in English in the skill, as asking
+  to stop or resume the teaching and saying they already know an area. Manifest 184 pass. Risk: item 3 (the
+  orchestrator skill, installed per home for both hosts, is a text every project's sessions consume).
+- L37 (2026-10-21) T9 (2) committed `bf1d1d8e`, gate green. Correction to L36: only the two teaching texts open with
+  "where the roadmap holds `## Advice mode`"; the first-lead bullet is conditioned on no orchestrator before it,
+  as D13 asks, and reaches every project's first lead. The independent verifier (all six items pass, 245 of 245
+  tests in a scratch copy; the skill generated at `aeef4541` and `e8edbfaa` is byte-identical, and at `bf1d1d8e`
+  differs by exactly the three texts, Claude's and Codex's equal) found no blocker and eight advisories, all taken
+  in the next commit, test first where they change text: the first lead also reads the rules list and asks the user
+  for the charter that heads the relief file, asking before each step until one is approved; one trigger phrase,
+  "puts a decision to the user", in both teaching texts; an area still open names its `OD<n>` in place of an ADR;
+  the prompt moves to `bin/lib/lead-prompt.mjs`, a module with no imports, so the onboard lib, which does no I/O,
+  no longer loads the manifest's graph; the skill's JSDoc back above its function (also gentle-ai's
+  R2-orphaned-skill-jsdoc on `e8edbfaa`); the CLI test pins the four handoff lines (gentle-ai's
+  R3-cli-handoff-partial-assert); this correction. Manifest 184, lib 42, cli 19 pass.
+- L38 (2026-10-21) T9 is done: the verifier and both gentle-ai reviews passed, Codex correct on the whole range;
+  the detached review worktree is removed. PR 494 landed (main `81305126`); main is merged into
+  `feat/onboarding-handoff` before its PR. Next: T4, the two real onboardings of S9 (the Astro static site, then
+  the platform pre-project). Each is a conversation with the owner in a project of his, so it starts when he opens
+  that project's session; then T5.

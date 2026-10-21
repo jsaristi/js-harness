@@ -229,7 +229,8 @@ map is off prints `codegraph init skipped: the code map is off` and gets no `.co
 The pre-plan and the roadmap of a project after `init`, written by the session the owner talks to;
 the command calls no model. With no verb it reads the files and git, prints the stage the
 onboarding is in (Read, Conversation and advice, Pre-plan, its review, Plan, its review, Close, then awaiting
-merge and onboarded) and what the session does next, so a new session, a compaction or the other
+merge and onboarded, which hands off to the build orchestrator with the opening prompt the
+`js-harness-orchestrator` skill gives a new lead) and what the session does next, so a new session, a compaction or the other
 host resumes by running it again; an onboarding on another branch is named with its worktree or
 the switch that resumes it. `check` names what is still missing and the stage it sends the work
 back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file,

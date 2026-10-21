@@ -3,6 +3,7 @@
 // missing file), so the tests use inline fixture strings. The check never runs a command.
 import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
+import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { cellsOf, parseRoadmap, tokenize } from './progress.mjs';
 import { PROFILES, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
 
@@ -941,7 +942,12 @@ export function stageReport(files, { agentsTemplate = '', profiles = PROFILES, g
     ];
   } else {
     const next = (parseContract(files.roadmap).get('Next') ?? '').split('\n').map((line) => line.trim()).filter(Boolean).join(' ');
-    lines = [`Onboarded: ${ROADMAP_PATH} is the plan.`, `Next: ${next}`];
+    lines = [
+      `Onboarded: ${ROADMAP_PATH} is the plan, and the plan orchestrator's work is done.`,
+      `Next: ${next}`,
+      'The build orchestrator is a new lead session, started with the prompt below, the one the js-harness-orchestrator skill gives:',
+      LEAD_OPENING_PROMPT,
+    ];
   }
   if (git.uncommitted.length > 0) {
     lines.push(`Not committed: ${git.uncommitted.join(', ')}. Commit them on this branch, so the next session finds them.`);

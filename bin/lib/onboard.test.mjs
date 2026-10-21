@@ -5,6 +5,8 @@ import {
   adrTemplate, checkOnboarding, currentStage, featureTemplate, hashes, originTemplate, roadmapTemplate, shortHash, stageReport,
 } from './onboard.mjs';
 import { validateContract } from './contract.mjs';
+import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
+import { components } from './manifest.mjs';
 import { parseRoadmap } from './progress.mjs';
 import { ADRS, ADVICE, AGENTS_TEMPLATE, ORIGIN, PROFILES, ROADMAP, SETUP, adr, answered, onboardingDoc, files } from './onboard.testkit.mjs';
 
@@ -590,8 +592,19 @@ test('stageReport: a complete onboarding waits for its merge, then points at the
   for (const git of [{ defaultHasRoadmap: true }, { branch: 'main' }]) {
     const done = report(closed, git);
     assert.equal(done.code, 0);
-    assert.deepEqual(done.lines, ['Onboarded: docs/ROADMAP.md is the plan.', 'Next: P1 Catalog, its first step.']);
+    assert.deepEqual(done.lines, [
+      'Onboarded: docs/ROADMAP.md is the plan, and the plan orchestrator\'s work is done.',
+      'Next: P1 Catalog, its first step.',
+      'The build orchestrator is a new lead session, started with the prompt below, the one the js-harness-orchestrator skill gives:',
+      LEAD_OPENING_PROMPT,
+    ]);
   }
+});
+
+// D13: the handoff prints the skill's own prompt, so the two never drift apart.
+test('the handoff prints the lead\'s opening prompt the orchestrator skill gives', () => {
+  assert.equal(LEAD_OPENING_PROMPT, 'You are the orchestrator of this project\'s sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.');
+  assert.ok(components.find(({ id }) => id === 'claude-orchestrator-skill').content('0.0.0').includes(`\`\`\`\n${LEAD_OPENING_PROMPT}\n\`\`\``));
 });
 
 test('stageReport: no document here and one on another branch says where, and how to resume', () => {
