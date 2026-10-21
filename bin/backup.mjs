@@ -23,10 +23,11 @@ import {
 } from './lib/backup.mjs';
 import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
 import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore.mjs';
+import { humanSize, readiness } from './lib/backup-ready.mjs';
 import { bundleRefs, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
 
 const USAGE = [
-  'Usage: js-harness backup <run | status | summary | init | restore | verify | --hook>',
+  'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook>',
   '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
   '    js-harness home, reference copies of the config, the plugin lists and Claude Desktop\'s notes and presets, and for',
   '    each repository of config.json\'s `bundles` a bundle of what no remote holds (every stash entry included), a',
@@ -39,6 +40,12 @@ const USAGE = [
   '    (the first run after a reinstall). Once a day it also pushes the public summary to the memory-summary branch;',
   '    a summary that cannot be pushed is recorded and never fails the backup.',
   '  status  The last run, the last success, the last failure and why, and the commits still to push.',
+  '  ready  Whether this machine can be wiped: a `missing:` line for each thing the backup is configured for that has',
+  '    no copy off it (the clone ahead of origin or never pushed, a file or an Engram count the last backup does not',
+  '    hold, and for each repository of `bundles` no remote, commits or a stash entry in no bundle, a worktree\'s edits',
+  '    or its .git/js-harness records changed since, an untracked file too large to copy), and a `not copied:` line',
+  '    with the size of what the backup never copies (Claude transcripts, Claude Desktop data). It writes nothing and',
+  '    exits 1 while anything is missing.',
   '  summary [--summary-repo <dir>]  Print the public summary as the next run would push it: the roadmap and feature documents on the',
   "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
   '    private-terms.txt.',
@@ -537,6 +544,35 @@ function verifyCommand(args, deps) {
   }
 }
 
+/** `backup ready`: whether this machine can be wiped. Every thing configured that has no copy off it is a `missing:`
+ * line and makes the exit 1; what the backup does not copy is a `not copied:` line with its size, and never fails it. */
+function readyCommand(deps) {
+  const paths = backupPaths(deps.home);
+  const config = readJson(paths.config);
+  if (!config) {
+    deps.stdout.write('backup ready: no, the backup is not initialised (js-harness backup init --repo <owner/name>)\n');
+    return 1;
+  }
+  const { missing, notCopied } = readiness({
+    home: deps.home,
+    clone: paths.clone,
+    config,
+    scope: config.scope ?? DEFAULT_SCOPE,
+    desktop: deps.desktop,
+    run: deps.run,
+    env: deps.env,
+  });
+  const lines = [
+    ...missing.map((thing) => `missing: ${thing}`),
+    ...notCopied.map((n) => `not copied: ${n.what}: ${n.files} files, ${humanSize(n.bytes)}`),
+    missing.length
+      ? `backup ready: no, ${missing.length} things have no copy off this machine`
+      : 'backup ready: yes, everything the backup is configured for has a copy off this machine',
+  ];
+  deps.stdout.write(`${lines.join('\n')}\n`);
+  return missing.length ? 1 : 0;
+}
+
 /** How long without a success before `doctor` calls the backup stopped: the hook backs up every 30 minutes of work, so
  * a day without one is a backup that is not running, not a quiet day. */
 export const BACKUP_STALE_HOURS = 24;
@@ -756,6 +792,7 @@ export async function backupMain(args, deps = defaultDeps()) {
   const [sub, ...rest] = args;
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
+  if (sub === 'ready') return readyCommand(deps);
   if (sub === 'summary') return summaryCommand(rest, deps);
   if (sub === 'restore') return restoreCommand(rest, deps);
   if (sub === 'verify') return verifyCommand(rest, deps);

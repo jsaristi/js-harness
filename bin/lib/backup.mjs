@@ -171,8 +171,9 @@ const MIRRORED = ['claude', 'js-harness-home', 'config'];
  * value blanked and the file named with its kinds, and a file the clone holds under `claude/` or `js-harness-home/`
  * that the home no longer has removed, so the clone is the home as it is now. Under a project scope only that
  * project's memory folders are copied, and another project's copy left from a wider scope is removed. `desktop`,
- * Claude Desktop's folder, adds its `DESKTOP_FILES`. The home is only read. */
-export function collectFiles({ home, dest, scope = 'all', desktop }) {
+ * Claude Desktop's folder, adds its `DESKTOP_FILES`. The home is only read; with `write: false` nothing is written at
+ * all, and the files are only listed as a run would copy them (`backup ready` compares them with the last backup). */
+export function collectFiles({ home, dest, scope = 'all', desktop, write = true }) {
   const files = [];
   const redacted = [];
   const kept = new Set();
@@ -191,14 +192,16 @@ export function collectFiles({ home, dest, scope = 'all', desktop }) {
         buffer = Buffer.from(scan.text, 'utf8');
         redacted.push({ path: target, kinds: scan.kinds });
       }
-      const out = path.join(dest, target);
-      fs.mkdirSync(path.dirname(out), { recursive: true });
-      fs.writeFileSync(out, buffer);
+      if (write) {
+        const out = path.join(dest, target);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, buffer);
+      }
       files.push({ path: target, bytes: buffer.length, sha256: sha256(buffer) });
       kept.add(target);
     }
   }
-  for (const root of MIRRORED) {
+  for (const root of write ? MIRRORED : []) {
     for (const relative of walk(path.join(dest, root))) {
       const target = `${root}/${relative}`;
       if (!kept.has(target)) fs.rmSync(path.join(dest, target));

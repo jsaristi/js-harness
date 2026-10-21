@@ -8,12 +8,12 @@ Branch: feat/backup-ready. Delivery: ask-on-risk. Tests: `node --test` through `
 His words (S0): "si yo hoy quiero volver a instalar windows y dejar todo desde cero pero no quiero perder el avance de lo que hemos hecho". `backup verify` restored the backup byte for byte on 2026-10-20, but two readers then found what a disk loss or a reinstall would still lose: stash entries after the first, uncommitted edits in the worktrees, the review records the pre-push hook reads, and a few small Desktop and plugin files. Nothing said, before a wipe, whether anything was still only on this disk.
 
 ## Done when
-- `node --test bin/backup.test.mjs bin/lib/backup.test.mjs bin/lib/backup-restore.test.mjs bin/lib/backup-ready.test.mjs` exits 0
+- `node --test bin/backup.test.mjs bin/lib/backup.test.mjs bin/lib/backup-restore.test.mjs` exits 0
 - `npm run check` exits 0
 - `js-harness backup ready` on his machine lists what is still not copied, and exits non-zero while anything configured has no copy off the machine (S9).
 
 ## In scope / Out of scope
-- In: `bin/backup.mjs`, `bin/lib/backup.mjs`, `bin/lib/backup-restore.mjs`, a new `bin/lib/backup-ready.mjs`, their tests, the backup help, README and user guide lines.
+- In: `bin/backup.mjs`, `bin/lib/backup.mjs`, `bin/lib/backup-restore.mjs`, new `bin/lib/backup-repos.mjs` and `bin/lib/backup-ready.mjs`, their tests (in `bin/backup.test.mjs`, through the command), the backup help, README and user guide lines.
 - Out: the default scope and the Claude transcripts — both are his open decisions (S8); other projects' backups, which come later.
 
 ## Constraints
@@ -44,12 +44,13 @@ Nothing: review consent is pre-granted; product questions go to the orchestrator
 - [x] T1 (docs) this document — inline
 - [x] T2 (build) every stash entry and detached worktree HEAD as refs in the bundle, built in a scratch repository that borrows the source's objects, so the source is never written; doc comment fixed (S5, S6) — inline
 - [x] T3 (build) patches of uncommitted edits per worktree and the `.git/js-harness` records under `git/<source>/`, secrets blanked; restore puts them beside the bundles with the line that uses them (S5, S7, S10) — inline
-- [x] T4 (build) Desktop side-session-notes and session presets, the plugin lists, as reference copies; a change to them makes a backup due (S5, S7) — inline
-- [ ] T5 (build) `backup ready` (S1-S4, S11) — inline
-- [ ] T6 (docs) help, README, user guide — inline
+- [x] T4 (build) Desktop side-session-notes and session presets, the plugin lists, as reference copies; a change to them makes a backup due (S5, S7) — inline. T2-T4: commit 672810bf; gentle-ai not due on it alone (under_budget, 494 lines), assessed with the slice
+- [x] T5 (build) `backup ready` (S1-S4, S11) — inline
+- [x] T6 (docs) help, README, SPEC, user guide — inline
 - [ ] T7 (verify) gate, gentle-ai review, codex-review, run on his machine (S9) — inline
 
 ## Log
 - L1 (2026-10-20, the lead's brief): build a read-only readiness check and close the small gaps of `js-harness backup`, as an ODD feature, on `feat/backup-ready`.
 - L2 (2026-10-20) verified the readers' facts: the bundle is `git bundle create --all --not --remotes` (`bin/backup.mjs:173`), and a test bundle of a repo with two stash entries named only `refs/stash`; `git bundle create … 'stash@{1}'` names no ref for it, so the entries become refs in a scratch repository whose `objects/info/alternates` points at the source. `--all` in the source also reaches every worktree's detached HEAD, which `for-each-ref` does not list, so those become refs too. The Desktop files are `%APPDATA%\Claude\side-session-notes\` and `%APPDATA%\Claude\ccd-session-presets.json`. His config is `bundles: ["D:/js-harness"]`, `scope: "all"`; the checkout has 59 worktrees and two stash entries.
 - L3 (2026-10-20) T2-T4 built test-first, each RED observed first. Found on the way: a worktree copy two whole-path names deep in the clone passed Windows' 260 characters and `git add -A` left it out while the manifest named it; the copies now sit under short names (`<last path part>-<hash>`), the add runs with `core.longpaths`, and a failed add fails the run. The Desktop folder comes from `deps.desktop` (`%APPDATA%\Claude` by default), never from the environment inside a test, so no test reads his real notes.
+- L4 (2026-10-21) T5 built test-first (RED: `ready` was an unknown subcommand, exit 2). First count gave 3 commits for one new commit and one new stash: a stash entry's own commits were counted as commits on no remote while it already has its own line, so they are left out of the count. Run on his machine (S9), 34 s, exit 1: the clone 7 commits ahead of origin; 47 files changed since the last backup (the new plugin and Desktop copies, which no backup has made yet); D:/js-harness 1 commit on no remote not in the bundle and stash@{1} in no bundle (stash@{0} is, as refs/stash); 5 worktrees with edits; the .git/js-harness records; not copied: 156 transcripts, 1.1 GB, and Claude Desktop data, 24,743 files, 1.2 GB.

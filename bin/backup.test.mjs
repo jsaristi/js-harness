@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { backupHealth, backupMain, backupPaths, bundleName, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
-import { shortKey } from './lib/backup-repos.mjs';
+import { shortKey, UNTRACKED_MAX_BYTES } from './lib/backup-repos.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
 // asked. The clone's fetch URL names the private repository, its push URL the bare one, so the origin guard reads the
@@ -107,6 +107,10 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
       }
       if (cmd === 'git' && args.includes('get-url') && args.includes('--push')) {
         return { status: 0, stdout: `${state.pushUrls.join('\n')}\n`, stderr: '' };
+      }
+      // What origin holds, asked of the bare repository the push goes to, so `backup ready` reaches no network.
+      if (cmd === 'git' && args[1] === paths.clone && args[2] === 'ls-remote') {
+        return defaultRun('git', ['-C', paths.clone, 'ls-remote', bare, ...args.slice(4)], options);
       }
       if (cmd === 'git' && args[0] === 'clone' && args[2] === `https://github.com/${REPO}.git`) {
         defaultRun('git', ['clone', '-q', bare, args[3]]);
@@ -439,6 +443,101 @@ test('a run keeps each worktree\'s uncommitted edits and the git directory\'s js
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   assert.equal(remoteFile(bare, `${base}/worktrees/${side}.patch`).status, 128, 'the stale patch is gone');
   assert.equal(remoteFile(bare, `${base}/js-harness/codex-reviews.jsonl`).status, 0, 'the records stay');
+});
+
+/** A source repository with a remote that holds its main, so only what follows is on no remote. */
+function pushedRepo(root, name) {
+  const origin = path.join(root, `${name}-origin.git`);
+  defaultRun('git', ['init', '-q', '--bare', origin]);
+  const dir = sourceRepo(path.join(root, name));
+  for (const args of [['remote', 'add', 'origin', origin], ['push', '-q', 'origin', 'main']]) {
+    const result = spawnSync('git', ['-C', dir, ...args], { env: GIT_ENV, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  return dir;
+}
+
+/** Every file under a folder with its bytes, to prove a command wrote nothing there. */
+function snapshot(dir) {
+  const out = {};
+  const visit = (at) => {
+    for (const entry of fs.readdirSync(at, { withFileTypes: true })) {
+      const full = path.join(at, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else out[path.relative(dir, full)] = fs.readFileSync(full).toString('base64');
+    }
+  };
+  visit(dir);
+  return out;
+}
+
+test('backup ready names what has no copy off this machine, passes once a run copied it, and writes nothing', async (t) => {
+  const { root, home, deps, paths, state } = setup(t);
+  deps.desktop = path.join(root, 'desktop');
+  fs.mkdirSync(path.join(deps.desktop, 'Cache'), { recursive: true });
+  fs.writeFileSync(path.join(deps.desktop, 'Cache', 'blob'), Buffer.alloc(3 * 1024));
+  fs.writeFileSync(path.join(home, '.claude', 'projects', 'D--p', 'chat.jsonl'), Buffer.alloc(2 * 1024));
+  const source = pushedRepo(root, 'app');
+  const g = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { env: GIT_ENV, encoding: 'utf8' });
+  fs.writeFileSync(path.join(source, 'a.txt'), 'a');
+  g(source, 'add', 'a.txt');
+  g(source, 'stash', 'push', '-q', '-m', 'kept aside');
+  const worktree = path.join(root, 'side');
+  g(source, 'worktree', 'add', '-q', '-b', 'side', worktree);
+  fs.writeFileSync(path.join(worktree, 'draft.md'), 'not committed\n');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
+
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /missing: the backup clone .* holds no backup yet/);
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 0, deps.stdout.text);
+  assert.match(deps.stdout.text, /not copied: Claude transcripts \(.*\): 1 files, 2 KB/);
+  assert.match(deps.stdout.text, /not copied: Claude Desktop data \(.*\), besides its notes and presets: 1 files, 3 KB/);
+  assert.match(deps.stdout.text, /backup ready: yes/);
+
+  // Each kind of loss, one at a time on the same machine.
+  g(source, 'commit', '-q', '--allow-empty', '-m', 'not pushed');
+  fs.writeFileSync(path.join(source, 'b.txt'), 'b');
+  g(source, 'add', 'b.txt');
+  g(source, 'stash', 'push', '-q', '-m', 'second');
+  fs.writeFileSync(path.join(worktree, 'draft.md'), 'edited again\n');
+  fs.writeFileSync(path.join(home, '.claude', 'projects', 'D--p', 'memory', 'MEMORY.md'), '- a new note\n');
+  fs.mkdirSync(path.join(source, '.git', 'js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(source, '.git', 'js-harness', 'codex-reviews.jsonl'), '{}\n');
+  state.engram = { ...EXPORT, observations: [...EXPORT.observations, { id: 3, title: 'c' }] };
+  const before = { home: snapshot(home), source: snapshot(path.join(source, '.git')) };
+  deps.stdout = sink();
+
+  assert.equal(await backupMain(['ready'], deps), 1);
+
+  const out = deps.stdout.text;
+  assert.match(out, /missing: .*app: 1 commits on no remote are not in the latest bundle/);
+  assert.match(out, /missing: .*app: stash@\{0\} \(On main: second\) is in no bundle/);
+  assert.doesNotMatch(out, /stash@\{1\}/, 'the entry the last run bundled is not named');
+  assert.match(out, /missing: .*side: uncommitted edits the last backup does not hold/);
+  assert.match(out, /missing: 1 files changed since the last backup: claude\/projects\/D--p\/memory\/MEMORY.md/);
+  assert.match(out, /missing: .*app: records in .git\/js-harness changed since the last backup: js-harness\/codex-reviews.jsonl/);
+  assert.match(out, /missing: Engram holds 3 observations, the last backup 2/);
+  assert.match(out, /backup ready: no, 6 things have no copy off this machine/);
+  assert.deepEqual({ home: snapshot(home), source: snapshot(path.join(source, '.git')) }, before, 'ready wrote nothing');
+});
+
+test('backup ready names a clone ahead of origin, a source with no remote and an untracked file too large to copy', async (t) => {
+  const { root, deps, paths } = setup(t);
+  const source = sourceRepo(path.join(root, 'local-only'));
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  spawnSync('git', ['-C', paths.clone, 'commit', '-q', '--allow-empty', '-m', 'here only'], { env: GIT_ENV });
+  fs.writeFileSync(path.join(source, 'huge.bin'), Buffer.alloc(UNTRACKED_MAX_BYTES + 1));
+  deps.stdout = sink();
+
+  assert.equal(await backupMain(['ready'], deps), 1);
+
+  assert.match(deps.stdout.text, /missing: the backup clone is 1 commits ahead of origin/);
+  assert.match(deps.stdout.text, /missing: .*local-only has no remote: its commits are in the bundle only/);
+  assert.match(deps.stdout.text, /missing: .*huge\.bin: untracked, 5\.0 MB, too large to copy/);
 });
 
 test('backup init creates the repository private when it is missing, refuses a public one, and clones', async (t) => {
