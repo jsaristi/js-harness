@@ -1400,3 +1400,4 @@ ceiling.
 - L41 (2026-10-21) The link case, test first: a CLI test makes `docs/ROADMAP.md` a link and expects the refusal.
   This machine refuses the link (EPERM), so the test skips here and RED was not observed locally; GitHub's Linux
   run executes it. `planFiles` now takes any entry that is not a directory. Cli 20 pass, 1 skipped.
+- Plan-name fix, gentle-ai (2026-10-21): `835e3993` (`0881ec00..835e3993`, lineage review-221341dcb26f0b7d) and `0b91c043` (`835e3993..0b91c043`, lineage review-b6d7c91710b9278b) approved and acknowledged; the link warning taken in `0b91c043`. Codex `0881ec0..835e399` incorrect (0.96, the link), recheck `835e399..0b91c04` correct (0.98).
