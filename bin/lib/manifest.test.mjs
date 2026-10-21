@@ -3838,3 +3838,23 @@ test('the orchestrator skill says the user never compacts by hand and the lead s
   assert.ok(text.includes('- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by `SendMessage` to its title; never hand the user a compaction command or a resume prompt to send.'));
   assert.doesNotMatch(text, /\/compact/, 'no compaction command is named to the user');
 });
+
+// D13 of odd/tasks/onboarding.md: the first lead of a project starts with no orchestrator before it, and the teaching
+// the onboarding recorded reaches the user in the questions, written by the work session and shown by the lead.
+const FIRST_LEAD = '- When no orchestrator came before you, as for the first lead after a project\'s onboarding, there is no relief file or earlier reply to read: start from the roadmap (`js-harness progress`) and the board, write the relief file\'s first line, and say that you lead.';
+const LEAD_TEACHING = 'Teaching, where the roadmap holds `## Advice mode` (a project planned with `js-harness onboard`): the work session that asks the user a question writes into its text what the line\'s `Teaching` value calls for, and you show that text unchanged. When the user asks to stop or resume the teaching, or says they already know an area, it takes effect at once: send a one-line notice of it to the open work sessions, and carry it in the opening prompt of any work session you open before the roadmap holds it; the work session that next changes the roadmap writes it into `## Advice mode`. A roadmap without that section changes nothing here.';
+const SESSION_TEACHING = '- Where the roadmap holds `## Advice mode`, read it before you put a decision to the user: with `Teaching: on`, the question\'s text says why, at the level the line records for the area the decision touches, and names that area\'s ADR; you teach nowhere else. A notice from the lead that the teaching or a level changed holds from the moment it arrives, and the first change of yours to the roadmap writes it into `## Advice mode`.';
+
+test('the orchestrator skill gives the first lead its start and carries the onboarding\'s teaching, where a roadmap records it', () => {
+  const text = components[2].content('0.1.0');
+  const at = (needle) => {
+    const index = text.indexOf(needle);
+    assert.ok(index !== -1, needle);
+    return index;
+  };
+  assert.ok(at(FIRST_LEAD) > at('- When you start from that prompt, read the list'));
+  assert.ok(at(FIRST_LEAD) < at('## Before a reinstall'));
+  assert.ok(at(LEAD_TEACHING) > at('\n## The lead\n') && at(LEAD_TEACHING) < at('\n## The status report\n'));
+  assert.ok(at(SESSION_TEACHING) > at('\n## A work session\n'));
+  assert.equal(components[3].content('0.1.0'), text, 'Codex gets the same skill');
+});

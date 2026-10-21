@@ -1337,3 +1337,11 @@ ceiling.
   README and SPEC name the handoff, and SPEC the v4 conversation and its ADRs. Lib 42, cli 19, manifest 183 pass.
   (2) next: the skill's first-lead case, its teaching paragraph under "The lead" and the work session's line
   (D13), Risk item 3, with an independent verifier.
+- L36 (2026-10-21) T9 (1) committed `e8edbfaa`, gate green. (2), test first: RED on one new manifest test (183
+  pass, 1 fail) that places three texts, then in the skill: the first lead's case, after the relieved-notice bullet,
+  which an existing test keeps right after the handover (first placed before it, that test failed, so it moved);
+  one Teaching paragraph under "The lead", before "Interrupt the user only when"; one line under "A work session".
+  Each opens with "where the roadmap holds `## Advice mode`", so a project with no such section reads no change
+  (D13's Risk). The user's words in D13 ("sin enseñanza", "ya sé esto") are said in English in the skill, as asking
+  to stop or resume the teaching and saying they already know an area. Manifest 184 pass. Risk: item 3 (the
+  orchestrator skill, installed per home for both hosts, is a text every project's sessions consume).
