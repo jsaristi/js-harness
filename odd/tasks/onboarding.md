@@ -945,6 +945,12 @@ ceiling.
   - gentle-ai: `437a5a7f`, `5f507d36` (`3a9f6601..5f507d36`) assessed `medium`, review not due (`under_budget`, 3 paths, 15 lines): Codex's P2 fix on slice 3a, and main's `init`, `install` and T3 lines taken before merging main. Codex recorded 437a5a7..5f507d3 (correct, 0.99) and the merge 5f507d3..7edd0fa (correct, 0.99).
   - gentle-ai: `c38a508c` approved (readability, reliability; lineage review-904644ed8258b6dc, acknowledged); Codex one P2, the same as R2-001.
   - gentle-ai: `5cba6d26` approved (reliability; lineage review-36b6ebaa093ffcc1, acknowledged): the fix of R2-001 and Codex's P2; Codex recheck fixed, correct (0.99).
+  - gentle-ai: `9f5d7446` approved after one bounded correction (resilience, readability, reliability; lineage review-654db40f4e81ed8e, acknowledged): R3-closed-onboarding-regresses fixed.
+  - gentle-ai: `f26ee232` approved, the bounded correction of `9f5d7446`, validated (lineage review-654db40f4e81ed8e, acknowledged).
+  - gentle-ai: `0ec1ba66` approved (resilience, reliability; lineage review-d572c7b81ed4696f, acknowledged): the claim fix from L31's advisories; one advisory left, an EEXIST from a writer other than onboard in the gap after the second listing.
+  - gentle-ai: `1a83873e` approved (reliability; lineage review-101fc8c0468042fe, acknowledged): Codex's P2; Codex recheck fixed, correct (0.99).
+- Slice 4b, Codex (2026-10-20): `cd940af..0ec1ba6` in 2 parts, recorded; one P2, the unread-ADR Risks check still ran
+  after O6. The fix `0ec1ba6..1a83873` recorded as its recheck: fixed, correct (0.99).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -1172,3 +1178,47 @@ ceiling.
   first: that case goes back to the advice step; the area-suffix message names the fast form; a checklist that prints
   no area asks for no paste; checklist lines that are not areas are skipped. Left as is: a document closed in v3's
   format reads as stage 2 again, which D6 accepts because no project was onboarded with v3.
+- L29 (2026-10-20) Slice 4a is PR 486 (base main, ready notice recorded 00:50Z). Slice 4b started, uncommitted in the
+  worktree: `bin/lib/onboard.testkit.mjs` has `adr()`, `ADRS` (0001 A:stack, 0002 A:hosting), `adrs` in `files()` and
+  O3/O5 recording `adrs sha256`. Next step, in order: (1) tests first in `bin/lib/onboard.test.mjs`: O3/O5 fixtures at
+  lines 132-148, 336, 417, 426 gain `adrs sha256`; the fast cases (lines 84, 110) gain `- Given up (fast, L20): ...`
+  and an ADR-0003 with a `profile:` source; new tests for the ADR checks, the `adrs` hash, a no on one area sending
+  the work back to stage 3, and the empty checklist's step (R3-002). (2) `bin/lib/onboard.mjs`: `adrTemplate`,
+  `hashes` with `adrs` (sorted paths, path and text), RECORDS O3 ['origin','adrs'] and O5 ['roadmap','origin','adrs'],
+  HASHED.adrs 'docs/adr/'; in `conversation`, ADR checks for settled areas only (exists, `## Area` matches, one
+  source in a D12 form, `profile:` only with fast, template lines, belongs to an area or superseded/withdrawn until
+  O6) as stage-2 `wrong` findings with their own file, so `wrong` becomes finding objects; the given-up line required
+  with fast and refused without; in `checkOnboarding`, a `not read` ADR named under the pre-plan's `## Risks`
+  (stage 3); stage 3, 4 and 6 texts with the adrs hash and D15's no on one area. (3) `bin/onboard.mjs`: readFiles
+  reads `docs/adr/*.md` into `adrs`; `template adr <slug> [--write]` (slug `^[a-z0-9]+(-[a-z0-9]+)*$`, next number,
+  `wx`, refused when another file took the number); `docs/adr` in `gitContext`'s status; USAGE; `closed()` in
+  `bin/onboard.test.mjs` writes ADRS. Then README, gentle-ai, Codex, push to a new branch from main, PR, ready notice.
+- L30 (2026-10-20) Slice 4b written test first, as L29 planned, with three choices made on the way: (a) `wrong` stays
+  a list of strings, an ADR's finding prefixed with its file, which the stage report splits back into its FAIL line,
+  so the stage-2 fixtures keep their shape; (b) the orphan check (an ADR no area names) waits until every area is
+  pasted and settled, because a session writes the ADR before it checks its area; (c) two sessions that take one
+  number with two slugs both write, and listing again keeps the name that sorts first and refuses the other
+  (`writeAdr`, its `readdir` the test's seam). Lib 35 tests and command 18 pass. Next: gate, commit, gentle-ai,
+  Codex, push, PR, ready notice; then 4c.
+- L31 (2026-10-20) gentle-ai on `cd940af5..9f5d7446` (lenses resilience, readability, reliability; lineage
+  review-654db40f4e81ed8e): one critical, the ADR and given-up checks ran after O6, fixed test first in `f26ee232`,
+  validated, approved and acknowledged. Advisories taken in the next commit: L30's (c) left a window (a session that
+  listed again before the other wrote kept its file, and the other could keep one too), so a number is now claimed
+  first with an exclusive `docs/adr/.<nnnn>.claim`, removed once the ADR is written; a dangling link under
+  `docs/adr/` no longer crashes `readFiles`; two doc comments fixed. Left: in-progress v3-format approvals lacking
+  `adrs sha256` (none exist, D6), the `file: message` round trip, the two ADR path patterns, the `adrs` defaults.
+- L32 (2026-10-20) Slice 4b is PR 488 (`feat/onboarding-adrs`, base `feat/onboarding-conversation`, stacked on PR
+  486): reviewed, and the commits listed under ## Reviews. `notify --kind ready` refuses a PR not on main, so a note
+  went to the orchestrator; once 486 merges, retarget 488 to main (`gh pr edit 488 --base main`) and send its ready
+  notice. Slice 4c starts on top of 4b, on a new branch `feat/onboarding-plan` from `7ff16b85`. Its plan, test first:
+  (1) hashes per D6 (line 360): `answers` leaves out the given-up line and `roadmap` the `## Advice mode` section;
+  until now both were inside. (2) The pre-plan (D4, D6 line 377): `## Stack and architecture`, whose table
+  `Area | Decision | ADR` has one row per decided area (an area of `## Advice` settled with an ADR), and
+  `## Owner steps`, both in `originTemplate` and the check. (3) The roadmap (D5, D6 line 379): `## Decided`
+  `Area | Decision | ADR` names every accepted ADR (named by a checked area, neither superseded nor withdrawn, once O3
+  is checked); `## Advice mode` holds one line `Teaching: <on|off> · Mode: <full|fast> · Level: A:<id> <level>, ...`,
+  its values not compared; until O6, every `B:` ID `--checklist bar` prints for Kind and Size is on a Checklist step,
+  under `## Open decisions` on a line with its area's `OD<n>`, or named in the given-up line; `roadmapTemplate`
+  gains both sections. (4) `--plan` reads the onboarding document for Kind, Size, the areas and the given-up line.
+  (5) The Close text (D7, line 417): the checking command in "How it works". The testkit's PROFILES gains bar
+  targets; its ORIGIN and ROADMAP gain the new sections.
