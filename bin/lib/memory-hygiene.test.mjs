@@ -52,6 +52,18 @@ test('with no pass recorded the folder is due once, for that reason alone', () =
   });
 });
 
+// A new project's memory folder holds nothing to clean: JH 43 (2026-10-21) was told a pass was due right after init,
+// with "index 0 B ... 0 notes".
+test('a memory folder with no note and an empty index is not due for want of a pass', () => {
+  for (const files of [{}, { 'MEMORY.md': '' }]) {
+    withFolder(files, (folder) => {
+      const state = hygieneState({ memory: readMemory(folder), journal: [], now: NOW });
+      assert.equal(state.due, false, JSON.stringify(files));
+      assert.deepEqual(state.reasons, []);
+    });
+  }
+});
+
 test('an index over its byte budget and lines over the host length are due, naming the lines', () => {
   const long = `- [a](a.md) — ${'x'.repeat(LINE_CHARS)}`;
   const filler = Array.from({ length: Math.ceil(INDEX_BYTES / 100) }, () => `<!-- ${'y'.repeat(92)} -->`).join('\n');
