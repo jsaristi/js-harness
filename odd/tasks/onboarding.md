@@ -1401,3 +1401,12 @@ ceiling.
   This machine refuses the link (EPERM), so the test skips here and RED was not observed locally; GitHub's Linux
   run executes it. `planFiles` now takes any entry that is not a directory. Cli 20 pass, 1 skipped.
 - Plan-name fix, gentle-ai (2026-10-21): `835e3993` (`0881ec00..835e3993`, lineage review-221341dcb26f0b7d) and `0b91c043` (`835e3993..0b91c043`, lineage review-b6d7c91710b9278b) approved and acknowledged; the link warning taken in `0b91c043`. Codex `0881ec0..835e399` incorrect (0.96, the link), recheck `835e399..0b91c04` correct (0.98).
+- L42 (2026-10-21) T4's first real run (JH 43, the pre-project in its own folder) reported surprises in the notes
+  file `jh36-t4-preproject-findings.md`. Fixed here, each test first: the stage lines count the eight stages of D2
+  and Awaiting merge says it is stage 8 (`9057dc44`, finding 1); the templates say "their words", and the templates
+  test holds every template to no pronoun of the owner (`9057dc44`, finding 4); an empty memory folder is no longer
+  due for want of a pass (`b8134afe`, finding 3). Finding 2 is not a defect: init writes the TypeScript plugin
+  `false`, off, where no file is TypeScript (`bin/lib/project-apply.mjs:16`). Finding 7, notify's channel, is its
+  own pull request; findings 5 (gate noise) and 8 (a reply state for an open question of the conversation) go to
+  the lead as proposals.
+- JH 43 fixes, gentle-ai on `9057dc44` and `b8134afe` (`453b72d6..b8134afe`, readability and reliability, lineage review-c26294b8af4a5dd2): approved and acknowledged; four informational advisories not taken: STAGES lists the stages a finding sends back to, which 8 is not, the commit body cites D2, and `memory.notes` is read unguarded on the next line already. Codex `453b72d..b8134af` correct (0.97), recorded.
