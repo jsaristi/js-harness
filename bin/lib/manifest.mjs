@@ -140,7 +140,7 @@ Say for each session concerned whether to send that session's own prompt, wait, 
 
 ## The status report
 
-When the user asks how the work is going, or how much is done, the answer is a report of everything since the last report, in detail: never a line that all goes well.
+When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well.
 - Run \`js-harness report --mark\`: it prints the facts since the last report (the pull requests merged with their commits, each session's last notice, the questions answered and still open, the roadmap phase by phase with what is left) and records this report as the last one, so the next one starts where this one ends. Read the board and your relief file beside it for what the record does not hold.
 - Answer in the user's language, in these sections, each item in plain words; a section with nothing in it says so in one line, and none is left out:
 
@@ -150,6 +150,8 @@ When the user asks how the work is going, or how much is done, the answer is a r
 4. The map: each roadmap phase with its share done and what is left in it, then the total.
 5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.
 6. What you propose next, and why.
+
+- Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user). A list or a paragraph in its place is not the report.
 
 ## The restart
 
