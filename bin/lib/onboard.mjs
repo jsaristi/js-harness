@@ -30,7 +30,7 @@ export const TOPICS = [
   'Risks and unknowns',
 ];
 /** The number of the topic of the owner's level, which `- Level:` under `## Setup` records (D3). */
-const LEVEL_TOPIC = 3;
+export const LEVEL_TOPIC = 3;
 /** The topics a plan cannot be made without: never unknown, and checked only once the owner said or confirmed them
  * (D3, D15). */
 const REQUIRED_TOPICS = [1, 2, 3, 4, 9];

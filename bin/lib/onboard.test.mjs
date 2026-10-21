@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_LINE, ROADMAP_PATH, SUMMARY_LINE, TOPICS,
+  AGENTS_PATH, LEVEL_TOPIC, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_LINE, ROADMAP_PATH, SUMMARY_LINE, TOPICS,
   adrTemplate, checkOnboarding, currentStage, featureTemplate, hashes, originTemplate, roadmapTemplate, shortHash, stageReport,
 } from './onboard.mjs';
 import { validateContract } from './contract.mjs';
@@ -438,7 +438,7 @@ test('currentStage, stage 2: the next step of the conversation, what it covered,
   const kindSize = ['- Kind: shop (L3)', '- Size: large (L3)', ...opened];
   // The paste waits while the owner's level, topic 3, is open; a deduced level has been shown.
   assert.deepEqual(stageTwo({ setup: kindSize, advice: [], topics: early }).step, 'converse');
-  const levelShown = early.map((line, i) => (i === 2 ? `- [ ] 3 ${TOPICS[2]} — deduced (L5)` : line));
+  const levelShown = early.map((line, i) => (i === LEVEL_TOPIC - 1 ? `- [ ] ${LEVEL_TOPIC} ${TOPICS[i]} — deduced (L5)` : line));
   assert.deepEqual(stageTwo({ setup: kindSize, advice: [], topics: levelShown }).step, 'advice');
   // A pasted set the profiles no longer print is pasted again.
   assert.deepEqual(stageTwo({ setup: kindSize, advice: ADVICE.slice(0, 1), topics: levelShown }).step, 'advice');
@@ -543,8 +543,10 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   // The paste completes Level, which D3 writes only once the conversation shows it (JH 43, finding 10): while topic 3,
   // the owner's level, is open, the conversation goes on first.
   const levelOpen = answered();
-  levelOpen[2] = `- [ ] 3 ${TOPICS[2]}`;
+  levelOpen[LEVEL_TOPIC - 1] = `- [ ] ${LEVEL_TOPIC} ${TOPICS[LEVEL_TOPIC - 1]}`;
   assert.match(doOf({ setup: ['- Kind: shop', '- Size: large (L3)', '- Teaching: on (L2)', '- Mode: full'], advice: [], topics: levelOpen }), /^Do: guide the conversation toward what is still open/);
+  // Pasted, with Level still unwritten: the same wait.
+  assert.match(doOf({ setup: SETUP.filter((line) => !line.startsWith('- Level')), topics: levelOpen }), /^Do: guide the conversation toward what is still open/);
   const summary = answered();
   summary[11] = SUMMARY_LINE;
   const summing = report({ onboarding: onboardingDoc({ topics: summary }) }).lines;
