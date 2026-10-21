@@ -1299,5 +1299,8 @@ ceiling.
   conventions in their own repository, Development status; npm trusted publishing, which adds provenance by itself;
   Textualize closed in 2025, Textual still maintained). Field commands are noun phrases, since the bar line prints
   "<command> wired before launch". Committed `37c0fbd2`; the two readers of S10 ran on it: five blockers and the
-  advisories taken, one left (`## Reviews`, "Profiles round, slice 3c"). Next: commit the round, gentle-ai and
-  Codex on `42c7b7e3..HEAD`, push, PR (base `feat/onboarding-plan` until PR 490 lands, then main), ready notice.
+  advisories taken, one left (`## Reviews`, "Profiles round, slice 3c"), committed `2fb7ebf7`. gentle-ai on
+  `42c7b7e3..2fb7ebf7` (readability, reliability; lineage review-ded9f4c72667edb4): approved and acknowledged, four
+  warnings informational; R3-ai-app-join-unsupported does not hold (`onboard profile ai-app,platform` exits 0) nor
+  R2-target-count (65 targets, 46 before). Codex `42c7b7e..2fb7ebf` in 2 parts: correct (0.87, 0.99). Next: push,
+  PR (base `feat/onboarding-plan` until PR 490 lands, then main), ready notice; then T8's remaining work.
