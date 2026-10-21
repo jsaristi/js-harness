@@ -1420,3 +1420,11 @@ ceiling.
   owner switched that repository to a static site (its L5), so T4 no longer tests the pre-project kind unless he
   reverts; nothing changed for it. Next step: write the RED test of finding 10 in `bin/lib/onboard.test.mjs`, then
   gentle-ai, Codex, PR on main, ready notice to the orchestrator.
+- L44 (2026-10-21) Finding 10 fixed in `524391f9`: RED was the Do line right after Kind and Size, still the paste;
+  GREEN, the step chooser offers the paste only once topic 3 (`LEVEL_TOPIC`) is checked or deduced, and keeps the
+  conversation going while it is open; 62 onboard tests pass. `1bfaeabc` takes gentle-ai's two advisories: the
+  constant is exported and the tests read it, and the pasted-but-no-Level half of the gate has its assertion.
+- gentle-ai on `524391f9` (`b63a5202..524391f9`, readability and reliability, lineage review-757e5b8a1c158446):
+  approved and acknowledged, two suggestions, both taken in `1bfaeabc`; gentle-ai on `1bfaeabc`: assessed medium,
+  not due (under budget).
+- Codex: `b63a520..1bfaeab` correct (0.96), recorded.
