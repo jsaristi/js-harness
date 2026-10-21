@@ -91,10 +91,11 @@ notice. They were picked while he was away; the orchestrator asks him later.
 - [x] T2 (S8-S11, kind: build) The measure, the doctor row and its notice, help, README, guide, SPEC, roadmap.
   Route: inline (depends on T1). RED: the clean-row test of `bin/doctor.test.mjs` (no row). GREEN: `bin/doctor.test.mjs`
   90/90, `bin/js-harness.test.mjs` 49/49 (the row list names `clean`; a named home starts no measure).
-- [ ] T3 (kind: verify) Gate, gentle-ai review per code commit, Codex review, pull request, ready notice.
+- [x] T3 (kind: verify) Gate, gentle-ai review per code commit, Codex review, pull request, ready notice.
+  Route: inline. PR 487; gentle-ai per code commit in L5-L7; Codex e22ef3f..ba4d841 (2 found) and ba4d841..2fa562a (both fixed).
 
 ## Next step
-T3: Codex review of e22ef3f1..HEAD (running), then push (retry after a minute when github.com fails), the PR, notify ready.
+None in this feature: PR 487 waits for the merge queue. Follow-ups in L5-L7.
 
 ## Log
 - L1 (2026-10-20, his words, verbatim, relayed by the orchestrator): "Listo hagamos esto" and "Quiero que ese
