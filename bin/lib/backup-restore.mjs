@@ -118,13 +118,15 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
   const bundles = path.join(home, '.js-harness', 'restored-bundles');
   place(from, 'git', home, slugs, { overwrite: true });
   for (const name of walk(path.join(from, 'git')).filter((name) => name.endsWith('.bundle'))) {
-    say(`commits on no remote: in the checkout they came from, git fetch ${path.join(bundles, name)} '+refs/*:refs/restored/*'`);
+    // Quoted, so a home with a space (C:\Users\First Last) stays one argument.
+    say(`commits on no remote: in the checkout they came from, git fetch "${path.join(bundles, name)}" '+refs/*:refs/restored/*'`);
   }
   for (const entry of (manifest.bundles ?? []).filter((b) => b.folder)) {
     const folder = path.join(bundles, entry.folder);
     for (const w of entry.worktrees ?? []) {
-      if (w.patch) say(`uncommitted edits of ${w.path}: git -C ${w.path} apply ${path.join(folder, 'worktrees', `${w.key}.patch`)}`);
+      if (w.patch) say(`uncommitted edits of ${w.path}: git -C "${w.path}" apply "${path.join(folder, 'worktrees', `${w.key}.patch`)}"`);
       if (w.untracked) say(`  its untracked files are in ${path.join(folder, 'worktrees', `${w.key}.untracked`)}`);
+      if (w.binary) say(`  its changed binary files are in ${path.join(folder, 'worktrees', `${w.key}.binary`)}: copy them over the checkout after the patch`);
     }
     if (fs.existsSync(path.join(folder, 'js-harness'))) {
       say(`js-harness records of ${entry.source}: copy ${path.join(folder, 'js-harness')} into its .git/js-harness/, so its reviewed commits need no new review`);

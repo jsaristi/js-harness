@@ -1474,7 +1474,8 @@ session presets, blanks every secret value it finds (a token, a key, a field nam
 credential), and for each repository of `config.json`'s `bundles` (`init` seeds it with
 `D:/js-harness` when that checkout exists) keeps a bundle of the commits on no remote, every stash
 entry and each worktree's detached commit included, a patch of each worktree's uncommitted edits
-with its untracked files (one over 5 MB is left out and named by `ready`), and the records of its
+with its untracked files and its changed binary files copied whole, where the secret blanking can
+read them (one over 5 MB is left out and named by `ready`), and the records of its
 `.git/js-harness` (codex-review's, which the pre-push hook reads, and the merge queue's). It
 pushes it all to a private GitHub repository through a clone under
 `~/.js-harness/memory-backup`. A run with nothing new commits nothing. The home is copied without

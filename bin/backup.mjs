@@ -655,15 +655,19 @@ export function dueReason(home, now, desktop) {
   if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return 'a run holds the lock';
   const success = Date.parse(readJson(paths.last)?.lastSuccess?.at ?? '') || 0;
   if (now - success < BACKUP_EVERY_MINUTES * 60_000) return 'backed up less than 30 minutes ago';
-  if (success && newestChange(home, desktop) <= success && !memoryFolderGone(home, paths.clone)) return 'nothing changed since the last backup';
+  if (success && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';
   return null;
 }
 
-/** Whether a memory folder the clone holds is gone from the home: a folder deleted whole leaves no time to compare. */
-function memoryFolderGone(home, clone) {
+/** Whether something the clone holds is gone from the home: a memory folder, a plugin list, or Desktop's notes or
+ * presets. A thing deleted whole leaves no time to compare. */
+function copiedSourceGone(home, clone, desktop) {
   const held = path.join(clone, 'claude', 'projects');
   const slugs = fs.existsSync(held) ? fs.readdirSync(held) : [];
-  return slugs.some((slug) => !fs.existsSync(path.join(home, '.claude', 'projects', slug, 'memory')));
+  if (slugs.some((slug) => !fs.existsSync(path.join(home, '.claude', 'projects', slug, 'memory')))) return true;
+  const sources = ['installed_plugins.json', 'known_marketplaces.json'].map((name) => [path.join(clone, 'config', 'claude', 'plugins', name), path.join(home, '.claude', 'plugins', name)]);
+  if (desktop) sources.push(...['side-session-notes', 'ccd-session-presets.json'].map((name) => [path.join(clone, 'config', 'claude-desktop', name), path.join(desktop, name)]));
+  return sources.some(([copy, live]) => fs.existsSync(copy) && !fs.existsSync(live));
 }
 
 function hookCommand(deps) {

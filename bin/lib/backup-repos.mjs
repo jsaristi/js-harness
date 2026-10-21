@@ -75,10 +75,11 @@ export function unpushedCount(git, source, listed) {
 
 /** What the backup keeps of a repository beside its bundle, as `{ path, buffer, kinds }` with `path` relative to its
  * folder `git/<shortKey(source)>/`: each worktree's uncommitted edits as `worktrees/<key>.patch` (`git diff HEAD`, staged
- * and not) and its untracked files under `worktrees/<key>.untracked/`, and the files at the top of the git directory's
- * `js-harness/` folder, the codex-review and merge-queue records (its `traces/` are test timing caches). Every file has
- * its secrets blanked, `kinds` naming them. Also the worktrees that have edits, and the untracked files too large to copy.
- * Null when git cannot read the repository. */
+ * and not, its binary files left out) with those binary files whole under `worktrees/<key>.binary/`, its untracked files
+ * under `worktrees/<key>.untracked/`, and the files at the top of the git directory's `js-harness/` folder, the
+ * codex-review and merge-queue records (its `traces/` are test timing caches). Every file has its secrets blanked,
+ * `kinds` naming them. Also the worktrees that have edits, and the files too large to copy. Null when git cannot read
+ * the repository or one of its worktrees. */
 export function repoFiles(git, source) {
   const commonDir = git(source, ['rev-parse', '--git-common-dir']);
   if (commonDir.status !== 0) return null;
@@ -89,31 +90,40 @@ export function repoFiles(git, source) {
     const scan = redactSecrets(buffer.toString('utf8'));
     files.push({ path: relative, buffer: scan.kinds.length ? Buffer.from(scan.text, 'utf8') : buffer, kinds: scan.kinds });
   };
+  // Copies a file of the worktree whole; false when it is no regular file. lstat, not stat: a symlink may point outside
+  // the checkout, at a file that must never reach the backup.
+  const copyWhole = (worktree, name, folder) => {
+    const full = path.join(worktree, name);
+    let stat;
+    try {
+      stat = fs.lstatSync(full);
+    } catch {
+      return false;
+    }
+    if (!stat.isFile()) return false;
+    if (stat.size > UNTRACKED_MAX_BYTES) skipped.push({ path: full, bytes: stat.size });
+    else add(`${folder}/${name}`, fs.readFileSync(full));
+    return true;
+  };
   for (const worktree of worktreesOf(git, source).filter((w) => !w.prunable)) {
     const key = shortKey(worktree.path);
-    // A buffer, not text: a change to a file that is not UTF-8 must come back as the same bytes.
-    const diff = git(worktree.path, ['diff', 'HEAD', '--binary'], { encoding: 'buffer' });
-    const patch = diff.status === 0 && diff.stdout.length > 0;
-    if (patch) add(`worktrees/${key}.patch`, diff.stdout);
+    // A failed read is no clean worktree: the whole source counts as unreadable, so its last copies stay.
+    const numstat = git(worktree.path, ['diff', 'HEAD', '--numstat', '--no-renames', '-z']);
     const others = git(worktree.path, ['ls-files', '--others', '--exclude-standard', '-z']);
+    if (numstat.status !== 0 || others.status !== 0) return null;
+    // A changed binary file is copied whole, where the blanking can read it; inside a patch git compresses it.
+    const binaries = numstat.stdout.split('\0').filter((row) => row.startsWith('-\t-\t')).map((row) => row.slice(4));
+    const binary = binaries.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.binary`));
+    const excluded = binary.map((name) => `:(exclude,literal)${name}`);
+    // A buffer, not text: a change to a file that is not UTF-8 must come back as the same bytes.
+    const diff = git(worktree.path, ['diff', 'HEAD', '--binary', '--no-renames', '--', '.', ...excluded], { encoding: 'buffer' });
+    if (diff.status !== 0) return null;
+    const patch = diff.stdout.length > 0;
+    if (patch) add(`worktrees/${key}.patch`, diff.stdout);
     // A name ending in `/` is a nested repository, which is its own source.
-    const names = others.status === 0 ? others.stdout.split('\0').filter((name) => name && !name.endsWith('/')) : [];
-    let untracked = 0;
-    for (const name of names) {
-      const full = path.join(worktree.path, name);
-      let stat;
-      // lstat, not stat: a symlink may point outside the checkout, at a file that must never reach the backup.
-      try {
-        stat = fs.lstatSync(full);
-      } catch {
-        continue;
-      }
-      if (!stat.isFile()) continue;
-      untracked += 1;
-      if (stat.size > UNTRACKED_MAX_BYTES) skipped.push({ path: full, bytes: stat.size });
-      else add(`worktrees/${key}.untracked/${name}`, fs.readFileSync(full));
-    }
-    if (patch || untracked) worktrees.push({ path: worktree.path, key, patch, untracked });
+    const names = others.stdout.split('\0').filter((name) => name && !name.endsWith('/'));
+    const untracked = names.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.untracked`)).length;
+    if (patch || untracked || binary.length) worktrees.push({ path: worktree.path, key, patch, untracked, binary: binary.length });
   }
   const records = path.join(path.resolve(source, commonDir.stdout.trim()), 'js-harness');
   const entries = fs.existsSync(records) ? fs.readdirSync(records, { withFileTypes: true }) : [];

@@ -101,7 +101,7 @@ function repoState(git, source, manifest) {
   const backed = new Map((manifest.files ?? []).filter((f) => f.path.startsWith(folder)).map((f) => [f.path.slice(folder.length), f.sha256]));
   const stale = new Set(now.files.filter((f) => backed.get(f.path) !== sha256(f.buffer)).map((f) => f.path));
   for (const w of now.worktrees) {
-    if ([...stale].some((p) => p === `worktrees/${w.key}.patch` || p.startsWith(`worktrees/${w.key}.untracked/`))) {
+    if ([...stale].some((p) => p === `worktrees/${w.key}.patch` || p.startsWith(`worktrees/${w.key}.untracked/`) || p.startsWith(`worktrees/${w.key}.binary/`))) {
       found.push(`${w.path}: uncommitted edits the last backup does not hold`);
     }
   }

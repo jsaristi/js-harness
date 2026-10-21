@@ -123,7 +123,7 @@ test('restore puts the worktree patches and the git records beside the bundles, 
     fs.writeFileSync(path.join(from, relative), text);
     manifest.files.push({ path: relative, bytes: Buffer.byteLength(text), sha256: sha256(Buffer.from(text)) });
   }
-  manifest.bundles = [{ source: 'D:\\work\\app', folder: 'app-1a2b3c4d', commits: 0, refs: [], worktrees: [{ path: 'D:/work/side', key: 'side-5e6f7a8b', patch: true, untracked: 1 }] }];
+  manifest.bundles = [{ source: 'D:\\work\\app', folder: 'app-1a2b3c4d', commits: 0, refs: [], worktrees: [{ path: 'D:/work/side', key: 'side-5e6f7a8b', patch: true, untracked: 1, binary: 1 }] }];
   fs.writeFileSync(path.join(from, 'manifest.json'), JSON.stringify(manifest));
   const home = path.join(root, 'home');
   const stdout = sink();
@@ -134,8 +134,10 @@ test('restore puts the worktree patches and the git records beside the bundles, 
   for (const [relative, text] of Object.entries(copies)) {
     assert.equal(fs.readFileSync(path.join(home, '.js-harness', 'restored-bundles', relative.slice('git/'.length)), 'utf8'), text);
   }
-  assert.ok(stdout.text.includes(`uncommitted edits of D:/work/side: git -C D:/work/side apply ${path.join(restored, 'worktrees', 'side-5e6f7a8b.patch')}`), stdout.text);
+  // Quoted, so a path with a space (C:\Users\First Last) stays one argument.
+  assert.ok(stdout.text.includes(`uncommitted edits of D:/work/side: git -C "D:/work/side" apply "${path.join(restored, 'worktrees', 'side-5e6f7a8b.patch')}"`), stdout.text);
   assert.ok(stdout.text.includes(`its untracked files are in ${path.join(restored, 'worktrees', 'side-5e6f7a8b.untracked')}`), stdout.text);
+  assert.ok(stdout.text.includes(`its changed binary files are in ${path.join(restored, 'worktrees', 'side-5e6f7a8b.binary')}: copy them over the checkout after the patch`), stdout.text);
   assert.ok(stdout.text.includes(`js-harness records of D:\\work\\app: copy ${path.join(restored, 'js-harness')} into its .git/js-harness/`), stdout.text);
   const verified = verifyBackup({ from, run: fakeEngram().run, env: {}, tmp: root });
   assert.ok(verified.lines.some((line) => /^ok files: 8 of 8/.test(line)), verified.lines.join('\n'));
@@ -195,7 +197,7 @@ test('restore imports Engram into the home, places every copy, and never writes 
   assert.deepEqual(result.kept, ['js-harness-home/state.json']);
   assert.match(stdout.text, /C--old-place -> .*D--new-place/);
   assert.match(stdout.text, /engram 3\.4\.0.*engram 3\.5\.0/, 'a version difference is said');
-  assert.ok(stdout.text.includes(`git fetch ${bundle}`), 'the bundle is not unbundled by itself; the line to do it is printed');
+  assert.ok(stdout.text.includes(`git fetch "${bundle}"`), 'the bundle is not unbundled by itself; the line to do it is printed');
 });
 
 test('restore refuses a home whose Engram already holds observations, unless --merge', async (t) => {
