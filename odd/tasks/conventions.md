@@ -70,11 +70,11 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 |----|-------|-------|--------|--------|
 | T1 | S8 | inline | done | 2e65f295 |
 | T2 | S2, S8 | inline | done | 2e65f295 |
-| T3 | S3, S8 | inline | done | this commit |
-| T4 | S4, S8 | inline | done | this commit |
-| T5 | S5 | inline | done | this commit |
+| T3 | S3, S8 | inline | done | 10a7601d |
+| T4 | S4, S8 | inline | done | 10a7601d |
+| T5 | S5 | inline | done | 10a7601d |
 | T6 | S6 | inline | open (waits L3) | |
-| T7 | S7 | inline | open | |
+| T7 | S7 | inline | done | this commit |
 | T8 | S1 | inline | open | |
 
 - [x] T1 (kind: build) `bin/lib/ratchet.mjs`: the one comparison every legacy list uses
@@ -83,7 +83,7 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 - [x] T4 (kind: build) pure modules hold their claim
 - [x] T5 (kind: build) shipped text names the user
 - [ ] T6 (kind: build) the review lines
-- [ ] T7 (kind: docs) the protocols skill's trigger
+- [x] T7 (kind: docs) the protocols skill's trigger
 - [ ] T8 (kind: docs) the roadmap item, reviews, the pull request
 
 ## Log
@@ -118,3 +118,7 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
   `bin/lib/codex-review-prompt.mjs` ships to every project, so js-harness's own style cannot be hardcoded there;
   `AGENTS.md` stands at 1497 of 1500 tokens. Asked the lead where the lines go (A: generic lines in our prompt texts;
   B: A and `own` as the default; C: a project-declared checklist).
+- L4. 2026-10-21. T7 adds section 8 to the protocols skill. Section 7 names a protocol change among the
+  user's decisions; this one is item 5 of the plan Pregunta 40 approved (the lead's brief), so it is not asked
+  again. The skill ships to every project, so the section is written for any project and names js-harness's own
+  tests as its example. docs/SPEC.md said "seven protocols" while the skill held seven; it says eight now.
