@@ -221,13 +221,13 @@ test('bare onboard: a fresh project is at stage 1, and an uncommitted document i
   assert.equal(fresh.code, 0);
   assert.equal(fresh.err, '');
   assert.deepEqual(fresh.out.split('\n').slice(0, 2), [
-    'Stage 1 of 7, Read: no onboarding document yet.',
+    'Stage 1 of 8, Read: no onboarding document yet.',
     'First: git switch -c onboarding, the branch the onboarding is committed on, so a session in another worktree finds it.',
   ]);
   git(root, 'switch', '-q', '-c', 'onboarding');
   assert.equal((await onboard(root, 'template', 'feature', '--write')).code, 0);
   const started = (await onboard(root)).out.split('\n');
-  assert.equal(started[0], 'Stage 1 of 7, Read: O1 is not checked yet.');
+  assert.equal(started[0], 'Stage 1 of 8, Read: O1 is not checked yet.');
   assert.equal(started.at(-1), 'Not committed: odd/tasks/onboarding.md. Commit them on this branch, so the next session finds them.');
   // Committed, then edited again: git status starts the line with a space, which is no part of the path.
   git(root, 'add', '-A');
@@ -287,7 +287,7 @@ test('bare onboard: a closed onboarding waits for its merge, and once merged poi
   const waiting = await onboard(root);
   assert.equal(waiting.code, 0);
   assert.deepEqual(waiting.out.split('\n'), [
-    'Awaiting merge: the onboarding is complete on branch onboarding, and main has no docs/ROADMAP.md yet.',
+    'Stage 8 of 8, Awaiting merge: the onboarding is complete on branch onboarding, and main has no docs/ROADMAP.md yet.',
     'Merging it is the owner\'s decision, under this repository\'s policy. To propose it: git push -u origin onboarding, then gh pr create --base main --head onboarding.',
   ]);
   git(root, 'switch', '-q', 'main');

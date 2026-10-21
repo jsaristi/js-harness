@@ -151,7 +151,9 @@ export function hygieneState({ memory, journal, now, lineCount, commitExists, ru
   const lines = memory.index?.lines ?? [];
   const lastPass = journal.filter((entry) => entry.kind === 'verify' && !Number.isNaN(Date.parse(entry.at))).at(-1) ?? null;
 
-  if (lastPass === null) reasons.push({ id: 'no-pass', detail: 'no verified pass recorded yet' });
+  // A folder with no note and no index line has nothing a pass would clean, as a new project's has.
+  const empty = memory.notes.length === 0 && lines.length === 0;
+  if (lastPass === null && !empty) reasons.push({ id: 'no-pass', detail: 'no verified pass recorded yet' });
   if ((memory.index?.bytes ?? 0) > indexBytes) {
     reasons.push({ id: 'index-bytes', detail: `the index is ${memory.index.bytes} B, over ${indexBytes}` });
   }
