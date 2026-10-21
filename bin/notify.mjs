@@ -211,8 +211,9 @@ function codeAt(root, readFile) {
 }
 
 /** The projects whose orchestrator a session titled with `code` reports to, read from the channel under `home`:
- * `[{ root, slug }]`, one for each record but this project's (`slug`) whose latest notice from an orchestrator titled
- * with `code` was written in a project that declares `code` and whose record it is. Nothing else names where a
+ * `[{ cwd, slug }]`, one for each record but this project's (`slug`) whose newest notice from an orchestrator titled
+ * with `code`, of those written in a folder git still places in the project whose record it is, places it in a
+ * project that declares `code`: `cwd` is that project's main checkout. Nothing else names where a
  * project is: a record is named by its folder, and its notices say where they were written. */
 function leadProjectsOf(code, { home, slug, run, readdir, readFile }) {
   let names;
@@ -225,13 +226,18 @@ function leadProjectsOf(code, { home, slug, run, readdir, readFile }) {
   for (const name of names.filter((one) => one.endsWith('.jsonl')).sort()) {
     const other = name.slice(0, -'.jsonl'.length);
     if (other === slug) continue;
-    const latest = readNotices(home, other, { readFile }).notices.findLast((notice) => {
+    const written = readNotices(home, other, { readFile }).notices.filter((notice) => {
       const role = roleOfTitle(notice.from?.title);
       return role?.role === 'orchestrator' && role.code === code && typeof notice.cwd === 'string';
     });
-    if (latest === undefined) continue;
-    const root = mainCheckout(run, latest.cwd);
-    if (projectSlug(root) === other && codeAt(root, readFile) === code) leads.push({ cwd: root, slug: other });
+    // Newest first, each folder once: the folder of the latest may be a worktree removed since, which git no longer
+    // places in the project (Codex, P2).
+    for (const folder of [...new Set(written.map((notice) => notice.cwd).reverse())]) {
+      const root = mainCheckout(run, folder);
+      if (projectSlug(root) !== other) continue;
+      if (codeAt(root, readFile) === code) leads.push({ cwd: root, slug: other });
+      break;
+    }
   }
   return leads;
 }

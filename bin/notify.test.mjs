@@ -1415,6 +1415,26 @@ test('a session titled with another project\'s code is refused when no record ho
   assert.deepEqual(recorded(machine).notices, []);
 }));
 
+// Codex on 453b72d..242ed87 (P2): a worktree is removed once its pull request lands, and the lead's latest notice may
+// have been written there.
+test('a lead whose latest notice came from a removed worktree is found by an earlier one', withMachine(async (machine) => {
+  const { other, run: live, otherDir } = twoProjects(machine);
+  const gone = path.join(machine.dir, 'proj-worktrees', 'landed');
+  let removed = false;
+  const run = (command, args, options = {}) => (removed && command === 'git' && options.cwd === gone ? notARepository() : live(command, args, options));
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  for (const cwd of [machine.worktree, gone]) {
+    const lead = await runNotify(machine, ['--to', '5', '--kind', 'note', 'onboard it'], { cwd, env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR }, run });
+    assert.equal(lead.code, 0, lead.err.join('\n'));
+  }
+  removed = true;
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+
+  const { code, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'stage 2 reached'], { cwd: other, run });
+  assert.equal(code, 0, err.join('\n'));
+  assert.equal(recorded(machine).notices.at(-1).text, 'stage 2 reached');
+}));
+
 test('a session titled with another project\'s code is refused when two records hold that project\'s orchestrator', withMachine(async (machine) => {
   const { other, run, otherDir, folders } = twoProjects(machine, [['copy', 'JH']]);
   writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
