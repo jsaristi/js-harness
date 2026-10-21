@@ -292,12 +292,27 @@ export function refusal(target, { root, guard, ...deps }) {
   return protectedReason(resolved, guard ?? guardOf(deps));
 }
 
+/** The first line every CACHEDIR.TAG starts with (https://bford.info/cachedir/). */
+const CACHEDIR_SIGNATURE = 'Signature: 8a477f597d28d172789f06886806bc55';
+
+/** True when `folder` carries a CACHEDIR.TAG with its signature: the tool that owns it marks it regenerable. */
+function taggedCache(folder) {
+  try {
+    return fs.readFileSync(path.join(folder, 'CACHEDIR.TAG'), 'utf8').startsWith(CACHEDIR_SIGNATURE);
+  } catch {
+    return false;
+  }
+}
+
 /** Why the cache folder `target` may not be handed to its tool's clean command, or `null` when it may: the tool
- * deletes the whole folder, so it must hold and be none of the guarded paths, sit in no git worktree and hold no
- * git repository. */
+ * deletes the whole folder, so it must hold and be none of the guarded paths, sit in no git worktree, and hold no
+ * git repository unless a CACHEDIR.TAG marks it a cache (uv keeps a .git of its own in its tagged cache). */
 function cacheRefusal(target, guard) {
   const resolved = path.resolve(target);
-  return protectedReason(resolved, guard) ?? (measureTree(resolved).linkedWorktree ? 'it holds a git repository' : null);
+  const reason = protectedReason(resolved, guard);
+  if (reason) return reason;
+  if (measureTree(resolved).linkedWorktree && !taggedCache(resolved)) return 'it holds a git repository and no CACHEDIR.TAG marks it a cache';
+  return null;
 }
 
 export const logPath = (home) => path.join(home, '.js-harness', 'clean-log.jsonl');

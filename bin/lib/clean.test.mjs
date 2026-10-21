@@ -157,6 +157,24 @@ test('a cache inside a git worktree or holding a protected path is refused, and 
   assert.ok(fs.existsSync(path.join(checkout, 'gomod', 'cache', 'm')));
 });
 
+test('a cache holding a git repository is refused unless a CACHEDIR.TAG marks it a cache', (t) => {
+  const { deps, home, uvCache, tools } = fixture(t);
+  file(path.join(uvCache, 'sdists-v9', '.git'), 10);
+  applyKinds(scan(deps).filter((kind) => kind.id === 'uv-cache'), deps);
+  assert.ok(!tools.calls.includes('uv cache clean'));
+  assert.equal(readLog(home)[0].result, 'refused');
+  assert.match(readLog(home)[0].error, /git repository/);
+  // uv tags its cache and keeps a .git of its own in it: the tagged cache goes to its tool.
+  fs.writeFileSync(path.join(uvCache, 'CACHEDIR.TAG'), 'Signature: 8a477f597d28d172789f06886806bc55\n# This file is a cache directory tag.\n');
+  applyKinds(scan(deps).filter((kind) => kind.id === 'uv-cache'), deps);
+  assert.ok(tools.calls.includes('uv cache clean'));
+  // A tag without the signature marks nothing.
+  fs.writeFileSync(path.join(uvCache, 'CACHEDIR.TAG'), 'not a tag\n');
+  const before = tools.calls.filter((call) => call === 'uv cache clean').length;
+  applyKinds(scan(deps).filter((kind) => kind.id === 'uv-cache'), deps);
+  assert.equal(tools.calls.filter((call) => call === 'uv cache clean').length, before);
+});
+
 test('a tool that fails is recorded as failed', (t) => {
   const { deps, home } = fixture(t);
   const kinds = scan(deps).filter((kind) => kind.id === 'uv-cache');

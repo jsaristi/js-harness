@@ -125,3 +125,8 @@ T3: Codex review of e22ef3f1..HEAD (running), then push (retry after a minute wh
   [P1] a cache folder inside a git worktree, holding a git repository or a protected path went to its tool's clean
   command unchecked; it is now refused and recorded, the tool not run. [P2] an old regular file named tmp.* or
   js-harness-* was listed as scratch; only folders are now.
+  - gentle-ai: 41b4a893 reviewed in lineage review-d76fbd52b2b7a939 (lenses risk, reliability), approved and acknowledged.
+- L7 (2026-10-20): advisory R3-cache-git-checkout-refusal was real here: the uv cache of this machine keeps a .git
+  in sdists-v9, so 41b4a893 refused uv cache clean for good. A cache holding a git repository now goes to its tool
+  when a CACHEDIR.TAG with its signature marks it a cache (uv tags its cache), and is refused otherwise. Left as
+  follow-up: R1-001, the tool re-resolves its cache folder after the check (needs the environment to change mid-run).
