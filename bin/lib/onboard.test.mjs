@@ -10,6 +10,7 @@ import { ADRS, ADVICE, AGENTS_TEMPLATE, ORIGIN, PROFILES, ROADMAP, SETUP, adr, a
 
 /** The fixture ADRs' hash, as O3 and O5 record it. */
 const ADRS_HASH = () => hashes({ onboarding: null, origin: null, roadmap: null, adrs: ADRS }).adrs;
+const ROADMAP_HASH = (roadmap = ROADMAP) => hashes({ onboarding: null, origin: null, roadmap }).roadmap;
 
 const check = (over = {}, options = {}) => checkOnboarding(files(over), { agentsTemplate: AGENTS_TEMPLATE, profiles: PROFILES, ...options });
 const messages = (findings) => findings.map((f) => `${f.file} (stage ${f.stage}): ${f.message}`);
@@ -187,7 +188,7 @@ test('an approval must be checked, name its Log line, and hold the hash of the f
   assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) })), [
     'odd/tasks/onboarding.md (stage 4): O3 is not checked: the pre-plan has no approval yet',
   ]);
-  assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o5: `- [x] O5 Roadmap approved (roadmap sha256:${shortHash(ROADMAP)}, origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()})` }) })), [
+  assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o5: `- [x] O5 Roadmap approved (roadmap sha256:${ROADMAP_HASH()}, origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()})` }) })), [
     'odd/tasks/onboarding.md (stage 6): O5 names no Log line (L<n>) with the owner\'s yes',
   ]);
   assert.deepEqual(messages(check({ onboarding: onboardingDoc({ o3: '- [x] O3 Pre-plan approved (L12)' }) })), [
@@ -204,7 +205,7 @@ test('an approval names a Log line that is under ## Log', () => {
 });
 
 test('an approval may run over the continuation lines of its item', () => {
-  const o5 = `- [x] O5 Roadmap approved (roadmap sha256:${shortHash(ROADMAP)},
+  const o5 = `- [x] O5 Roadmap approved (roadmap sha256:${ROADMAP_HASH()},
   origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L14)`;
   assert.deepEqual(check({ onboarding: onboardingDoc({ o5 }) }), []);
 });
@@ -276,11 +277,12 @@ test('the roadmap carries every pre-plan phase and every open decision, and says
     .replace('| P2 Orders | Orders by mail | `npm run e2e` exits 0 | Not started |\n', '')
     .replace('### P2 Orders\n- [ ] An order reaches the owner by mail\n\n', '')
     .replace('## Next\nP1 Catalog, its first step.\n\n', '')
-    .replace('- OD1 Which payment provider.\n', '- Nothing open.\n');
+    .replace(/- OD1 Which payment provider.*\n/, '- Nothing open.\n');
   const onboarding = onboardingDoc({ roadmap });
   assert.deepEqual(messages(check({ roadmap, onboarding })), [
     'docs/ROADMAP.md (stage 5): the pre-plan phase "P2 Orders" is not a roadmap phase',
     'docs/ROADMAP.md (stage 5): no ## Next: the first unchecked step and the text that starts its session',
+    "docs/ROADMAP.md (stage 5): B:privacy is on no Checklist step: paste it from js-harness onboard profile --checklist bar, put it under ## Open decisions with its area's OD, or name it in the given-up line",
     'docs/ROADMAP.md (stage 5): OD1 is open in docs/origin.md and not under ## Open decisions',
   ]);
 });
@@ -316,6 +318,36 @@ test('hashes: each file\'s short sha256, and the answers\', or null where a file
   const text = [...ADRS].map(([path, body]) => `## ${path}\n${body}`).join('\n');
   assert.equal(hashes({ onboarding: null, origin: null, roadmap: null, adrs: reversed }).adrs, shortHash(text));
   assert.equal(hashes({ onboarding: null, origin: null, roadmap: null, adrs: new Map() }).adrs, shortHash(''));
+});
+
+test('hashes leave out what teaching and mode may change: the given-up line, and the roadmap\'s ## Advice mode', () => {
+  const answers = (advice) => hashes({ onboarding: onboardingDoc({ advice }), origin: null, roadmap: null }).answers;
+  assert.equal(answers([...ADVICE, '- Given up (fast, L20): B:uptime']), answers(ADVICE));
+  const roadmap = (mode) => hashes({ onboarding: null, origin: null, roadmap: ROADMAP.replace(/Teaching: on · Mode: full/, mode) }).roadmap;
+  assert.equal(roadmap('Teaching: off · Mode: fast'), roadmap('Teaching: on · Mode: full'));
+  assert.notEqual(ROADMAP_HASH(ROADMAP.replace('Bread on a page', 'Cakes')), ROADMAP_HASH());
+});
+
+test('the pre-plan names each decided area under ## Stack and architecture, and the owner\'s steps', () => {
+  const origin = ORIGIN.replace('| Hosting | a VPS | ADR-0002 |\n', '').replace(/## Owner steps\n- Rent the VPS \(about 6 USD a month\)\.\n/, '');
+  assert.deepEqual(messages(check({ origin, onboarding: onboardingDoc({ origin }) })), [
+    'docs/origin.md (stage 3): missing section "## Owner steps"',
+    'docs/origin.md (stage 3): ## Stack and architecture has no row for A:hosting (ADR-0002)',
+  ]);
+});
+
+test('the roadmap: ## Decided names each accepted ADR, ## Advice mode is one line, and each B: target has its place', () => {
+  const at = (roadmap) => messages(check({ roadmap, onboarding: onboardingDoc({ roadmap }) })).filter((line) => line.includes('(stage 5)'));
+  assert.deepEqual(at(ROADMAP.replace('| Hosting | a VPS | ADR-0002 |\n', '')), ['docs/ROADMAP.md (stage 5): ## Decided does not name ADR-0002, accepted for A:hosting']);
+  assert.deepEqual(at(ROADMAP.replace(' · Mode: full', '')), ['docs/ROADMAP.md (stage 5): ## Advice mode is not one line "Teaching: on|off · Mode: full|fast · Level: A:<id> new|some|experienced, ..."']);
+  const noUptime = ROADMAP.replace(/- \[ \] B:uptime .*\n/, '');
+  assert.deepEqual(at(noUptime), ['docs/ROADMAP.md (stage 5): B:uptime is on no Checklist step: paste it from js-harness onboard profile --checklist bar, put it under ## Open decisions with its area\'s OD, or name it in the given-up line']);
+  const noPrivacy = ROADMAP.replace(': B:privacy waits on it', '');
+  assert.deepEqual(at(noPrivacy).length, 1);
+  // The given-up line excuses a target, and --plan reads it from the onboarding document.
+  const fast = SETUP.map((line) => line.replace('Mode: full', 'Mode: fast (L11)'));
+  const doc = onboardingDoc({ roadmap: noUptime, setup: fast, advice: [...ADVICE, '- Given up (fast, L20): B:uptime'] });
+  assert.deepEqual(messages(check({ roadmap: noUptime, onboarding: doc }, { plan: true })), []);
 });
 
 test('the templates: the feature is a valid contract with its setup, eleven topics and the summary line, and the others start with what check asks for', () => {
@@ -410,7 +442,7 @@ test('currentStage: the first stage whose record is missing or no longer holds',
 
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) }), { stage: 4, changed: false });
   const origin = ORIGIN.replace('bread online', 'bread and cakes online');
-  const o5 = `- [x] O5 Roadmap approved (roadmap sha256:${shortHash(ROADMAP)}, origin sha256:${shortHash(origin)}, adrs sha256:${ADRS_HASH()}; L14)`;
+  const o5 = `- [x] O5 Roadmap approved (roadmap sha256:${ROADMAP_HASH()}, origin sha256:${shortHash(origin)}, adrs sha256:${ADRS_HASH()}; L14)`;
   assert.deepEqual(stage({ origin, onboarding: onboardingDoc({ o5 }) }), { stage: 4, changed: true });
 
   assert.deepEqual(stage({ onboarding: onboardingDoc({ o4: ' ' }) }), { stage: 5 });
@@ -500,7 +532,7 @@ test('stageReport: each later stage says what it waits on and what records it', 
   const roadmap = ROADMAP.replace('Bread on a page', 'Bread and cakes on a page');
   const changed = report({ roadmap }).lines;
   assert.equal(changed[0], 'Stage 6 of 7, Plan review: docs/ROADMAP.md changed since its approval.');
-  has(changed, `(roadmap sha256:${shortHash(roadmap)}, origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L<n>)`);
+  has(changed, `(roadmap sha256:${ROADMAP_HASH(roadmap)}, origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L<n>)`);
 
   const close = report({ agents: '# shop\n' }).lines;
   assert.equal(close[0], 'Stage 7 of 7, Close: 1 finding left.');

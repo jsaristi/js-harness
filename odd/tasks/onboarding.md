@@ -1222,3 +1222,22 @@ ceiling.
   gains both sections. (4) `--plan` reads the onboarding document for Kind, Size, the areas and the given-up line.
   (5) The Close text (D7, line 417): the checking command in "How it works". The testkit's PROFILES gains bar
   targets; its ORIGIN and ROADMAP gain the new sections.
+  PR 486 merged (main `6b8a16a8`); 488 retargeted to main with no rebase (merge-tree clean) and its ready notice
+  recorded at 01:59Z. Merge main into `feat/onboarding-plan` before 4c's PR, which then targets 488's branch until 488 lands.
+  Progress, uncommitted on branch `feat/onboarding-plan` (worktree `D:\js-harness-worktrees\onboarding-v4`, from
+  `c32195c2`): (5) was already done in 4a. The testkit has PROFILES TARGETS ci-gate (A:stack, core), uptime
+  (A:hosting), privacy (A:legal); shop's bar lists the three; ORIGIN has `## Stack and architecture` (ADR-0001,
+  ADR-0002) and `## Owner steps`; ROADMAP has `## Decided` with an ADR column, `## Advice mode`, the B:ci-gate and
+  B:uptime steps in P1, and B:privacy on OD1's line. O5 and the tests take the roadmap hash from `hashes()` (test
+  helper `ROADMAP_HASH`). RED tests written in `bin/lib/onboard.test.mjs` (the three tests before "the templates",
+messages quoted there are the spec), RED observed: exactly those three fail (lib 35 pass, 3 fail). (1) done in `answersText` and `hashes` (GREEN, 36
+pass). (2) done: `ORIGIN_SECTIONS` and the row check in `checkOnboarding`'s origin block (GREEN, 37 pass; the
+template is not updated yet). (3) done after a host compaction at 02:02Z: `roadmapFindings(roadmap, origin, {onboarding,
+adrs, profiles})`, from both callers so `--plan` gets it, checks the `## Advice mode` line (`ADVICE_MODE`) and, until O6,
+`decidedAndBar`: once O3, `## Decided` names each accepted ADR not retired; each `B:` ID `--checklist bar` prints for
+Kind and Size is on a Checklist step, on an Open decisions line with its area's `open (ODn)`, or in the given-up line.
+Test 21 now also expects B:privacy stranded, since it removes OD1's line. Templates carry Stack and architecture,
+Owner steps, Decided's ADR column and Advice mode; README names the roadmap checks. Lib 38 pass, cli 19 pass. Planned
+then: (`ORIGIN_SECTIONS`, the templates,
+  `answersText` and the roadmap hash dropping their parts, `roadmapFindings` taking onboarding, adrs and profiles,
+  `--plan` passing them), then README, gentle-ai, Codex, push, PR stacked on 488.

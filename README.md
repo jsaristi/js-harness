@@ -255,7 +255,10 @@ adrs      sha256:e3b0c44298fc
 ```
 
 The `check` is cut to three of its findings. A project with a plan of its own and no onboarding
-anywhere is left alone, exit 1. The design is `odd/tasks/onboarding.md`.
+anywhere is left alone, exit 1. Until the close, `check` also holds the roadmap to the advice:
+`## Decided` names every accepted ADR, and every `B:` target that `profile --checklist bar` prints
+for the project's Kind and Size is on a Checklist step, waits under `## Open decisions` with its
+area's open decision, or is named in the given-up line. The design is `odd/tasks/onboarding.md`.
 
 `profile` prints the advice the session gives from, one piece at a time, so none of it loads on
 every turn: with no argument the kinds of project it knows; with a kind (or two, joined by a
