@@ -545,20 +545,28 @@ test('stageReport: each later stage says what it waits on and what records it', 
   assert.equal(pre[0], 'Stage 3 of 7, Pre-plan: the conversation is complete.');
   has(pre, 'js-harness onboard template origin --write');
   has(pre, `answers sha256:${recordedAnswers()}`);
+  has(pre, 'from the conversation and the ADRs');
+  has(pre, '## Stack and architecture one row per area settled with an ADR');
+  has(pre, '## Owner steps');
   const revised = answered();
   revised[0] += ', revised in L20';
   const again = report({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (answers sha256:${recordedAnswers()})` }) }).lines;
   assert.equal(again[0], 'Stage 3 of 7, Pre-plan: the conversation changed since O2 recorded it.');
   assert.ok(!again.some((line) => line.includes('template origin')), again.join('\n'));
+  has(again, 'revise docs/origin.md from the conversation and the ADRs');
 
   const review = report({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) }).lines;
   assert.equal(review[0], 'Stage 4 of 7, Pre-plan review: docs/origin.md waits for the owner\'s approval.');
   has(review, '"Pre-plan round <n>: ..."');
+  has(review, 'one question, "Is the pre-plan approved, with its ADRs?", whose text is a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR');
   has(review, `(origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L<n>)`);
 
   const plan = report({ onboarding: onboardingDoc({ o4: ' ' }) }).lines;
   assert.equal(plan[0], 'Stage 5 of 7, Plan: the pre-plan is approved.');
   has(plan, 'js-harness onboard check --plan');
+  has(plan, 'paste what js-harness onboard profile --checklist bar prints into the first build phase');
+  has(plan, '## Decided from the ADRs');
+  has(plan, '## Advice mode from ## Setup');
 
   const roadmap = ROADMAP.replace('Bread on a page', 'Bread and cakes on a page');
   const changed = report({ roadmap }).lines;

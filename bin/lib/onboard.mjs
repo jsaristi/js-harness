@@ -862,21 +862,21 @@ function stageLines(at, files, git) {
     case 3:
       return [
         heading(at.changed ? 'the conversation changed since O2 recorded it.' : 'the conversation is complete.'),
-        `Do: ${files.origin === null ? `js-harness onboard template origin --write, then fill ${ORIGIN_PATH}` : `revise ${ORIGIN_PATH}`} from the conversation: every section, the owner's words with their dates, each unknown topic as an open decision.`,
+        `Do: ${files.origin === null ? `js-harness onboard template origin --write, then fill ${ORIGIN_PATH}` : `revise ${ORIGIN_PATH}`} from the conversation and the ADRs: every section, the owner's words with their dates, ## Stack and architecture one row per area settled with an ADR, ## Owner steps each with its cost, each unknown topic as an open decision.`,
         `Record: check O2 with "(answers sha256:${current.answers})", the hash js-harness onboard hash prints.`,
         THEN,
       ];
     case 4:
       return [
         heading(at.changed ? `${ORIGIN_PATH} changed since its approval.` : `${ORIGIN_PATH} waits for the owner's approval.`),
-        `Do: two readers read ${ORIGIN_PATH} and docs/adr/ against the conversation; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question: is the pre-plan approved, with its ADRs?`,
+        `Do: two readers read ${ORIGIN_PATH} and docs/adr/ against the conversation; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question, "Is the pre-plan approved, with its ADRs?", whose text is a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR, so a yes confirms them.`,
         `Record: a yes is logged verbatim, and O3 checked with "(origin sha256:${current.origin}, adrs sha256:${current.adrs}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again. A no on one area edits its ADR in place, keeping its number: its Status becomes "proposed (L<the no>)" and the area's suffix "the owner's, ADR-<nnnn> (L<the no>)", which sends the work back to stage 3.`,
         THEN,
       ];
     case 5:
       return [
         heading('the pre-plan is approved.'),
-        `Do: ${files.roadmap === null ? `js-harness onboard template roadmap --write, then fill ${ROADMAP_PATH}` : `fill ${ROADMAP_PATH}`} from the approved pre-plan: every pre-plan phase with its steps under ## Checklist, a done-when command per phase, ## Next, and every open decision. Run js-harness onboard check --plan until it exits 0, then check O4.`,
+        `Do: ${files.roadmap === null ? `js-harness onboard template roadmap --write, then fill ${ROADMAP_PATH}` : `fill ${ROADMAP_PATH}`} from the approved pre-plan: every pre-plan phase with its steps under ## Checklist, a done-when command per phase, ## Next, and every open decision; paste what js-harness onboard profile --checklist bar prints into the first build phase; fill ## Decided from the ADRs, and ## Advice mode from ## Setup. Run js-harness onboard check --plan until it exits 0, then check O4.`,
         THEN,
       ];
     case 6: {
