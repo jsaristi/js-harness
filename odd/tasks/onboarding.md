@@ -124,7 +124,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [x] T2 (kind: build) Slice 1: `onboard check` (D6), `hash`, `template`, the two exported helpers, help, README, SPEC, with tests (51e4c07e and its review fixes)
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (merged in `jsaristi/js-harness#468`)
 - [x] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes (fb54c927, L22)
-- [ ] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10)
+- [x] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10) (3c is PR 493, L33)
 - [ ] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
 - [ ] T4 (kind: verify) The two real onboardings of the done-when (S9), after T9: the Astro static site, then the platform pre-project (its scratch-project interview was stopped by S3)
@@ -1307,3 +1307,14 @@ ceiling.
   warnings informational; R3-ai-app-join-unsupported does not hold (`onboard profile ai-app,platform` exits 0) nor
   R2-target-count (65 targets, 46 before). Codex `42c7b7e..2fb7ebf` in 2 parts: correct (0.87, 0.99). Next: push,
   PR (base `feat/onboarding-plan` until PR 490 lands, then main), ready notice; then T8's remaining work.
+- L34 (2026-10-21) PR 490 landed; slice 3c is PR 493, base main, `origin/main` (`138c4428`) merged in at
+  `eb51a248` with no rebase, its gentle-ai line added under ## Reviews, ready recorded at 05:19Z. T7 is done.
+  The host compacted this session at 00:20 local; it resumed from this document. What T8 still lacked, read
+  against D2, D4, D5 and D10: the stage lines of 3, 4 and 5 still read as v3's. Slice 4d, on branch
+  `feat/onboarding-stage-lines` from `eb51a248`, route inline (one function and its test): RED on the later-stages
+  test (lib 40 pass, 1 fail), then stage 3 says the pre-plan is written from the conversation and the ADRs, with
+  `## Stack and architecture` one row per area settled with an ADR and `## Owner steps` each with its cost (D4);
+  stage 4's one question carries the summary a phone shows whole, every area in one line with its proposal and
+  ADR (D2, D10); stage 5 pastes `--checklist bar` into the first build phase and fills `## Decided` and
+  `## Advice mode` (D2, D5). Stage 6 is left as is: D2 says "as stage 4, for the roadmap", and the areas were
+  confirmed at stage 4. Lib 41, cli 19 pass. With 4d, T8 is complete once reviewed.
