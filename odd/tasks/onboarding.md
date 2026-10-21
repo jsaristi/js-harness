@@ -1172,3 +1172,18 @@ ceiling.
   first: that case goes back to the advice step; the area-suffix message names the fast form; a checklist that prints
   no area asks for no paste; checklist lines that are not areas are skipped. Left as is: a document closed in v3's
   format reads as stage 2 again, which D6 accepts because no project was onboarded with v3.
+- L29 (2026-10-20) Slice 4a is PR 486 (base main, ready notice recorded 00:50Z). Slice 4b started, uncommitted in the
+  worktree: `bin/lib/onboard.testkit.mjs` has `adr()`, `ADRS` (0001 A:stack, 0002 A:hosting), `adrs` in `files()` and
+  O3/O5 recording `adrs sha256`. Next step, in order: (1) tests first in `bin/lib/onboard.test.mjs`: O3/O5 fixtures at
+  lines 132-148, 336, 417, 426 gain `adrs sha256`; the fast cases (lines 84, 110) gain `- Given up (fast, L20): ...`
+  and an ADR-0003 with a `profile:` source; new tests for the ADR checks, the `adrs` hash, a no on one area sending
+  the work back to stage 3, and the empty checklist's step (R3-002). (2) `bin/lib/onboard.mjs`: `adrTemplate`,
+  `hashes` with `adrs` (sorted paths, path and text), RECORDS O3 ['origin','adrs'] and O5 ['roadmap','origin','adrs'],
+  HASHED.adrs 'docs/adr/'; in `conversation`, ADR checks for settled areas only (exists, `## Area` matches, one
+  source in a D12 form, `profile:` only with fast, template lines, belongs to an area or superseded/withdrawn until
+  O6) as stage-2 `wrong` findings with their own file, so `wrong` becomes finding objects; the given-up line required
+  with fast and refused without; in `checkOnboarding`, a `not read` ADR named under the pre-plan's `## Risks`
+  (stage 3); stage 3, 4 and 6 texts with the adrs hash and D15's no on one area. (3) `bin/onboard.mjs`: readFiles
+  reads `docs/adr/*.md` into `adrs`; `template adr <slug> [--write]` (slug `^[a-z0-9]+(-[a-z0-9]+)*$`, next number,
+  `wx`, refused when another file took the number); `docs/adr` in `gitContext`'s status; USAGE; `closed()` in
+  `bin/onboard.test.mjs` writes ADRS. Then README, gentle-ai, Codex, push to a new branch from main, PR, ready notice.
