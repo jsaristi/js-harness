@@ -371,9 +371,9 @@ function conversation(onboarding, { profiles, compare }) {
   else if (!/\bL\d+\b/.test(summary[2])) wrongly('S names no Log line (L<n>) of the last answer');
 
   const areas = adviceAreas(onboarding);
-  const expected = kinds && size ? checklistLines(advisedProfile(kinds, profiles), 'advice', size).map((line) => line.match(AREA_LINE)[2]) : null;
+  const expected = kinds && size ? checklistLines(advisedProfile(kinds, profiles), 'advice', size).map((line) => line.match(AREA_LINE)?.[2]).filter(Boolean) : null;
   let pasted = areas.size > 0;
-  if (!pasted && expected) notYet('## Advice is empty: paste what js-harness onboard profile --checklist advice prints');
+  if (!pasted && expected?.length > 0) notYet('## Advice is empty: paste what js-harness onboard profile --checklist advice prints');
   else if (expected) {
     for (const id of expected.filter((id) => !areas.has(id))) wrongly(`## Advice lacks ${id}, which js-harness onboard profile --checklist advice prints for this Kind and Size`);
     for (const id of [...areas.keys()].filter((id) => !expected.includes(id))) wrongly(`## Advice lists ${id}, which js-harness onboard profile --checklist advice does not print for this Kind and Size`);
@@ -384,7 +384,7 @@ function conversation(onboarding, { profiles, compare }) {
     if (!area.done) {
       open.areas.push(id);
       notYet(`${id} is not settled yet`);
-    } else if (!AREA_SETTLED.test(area.suffix ?? '')) wrongly(`${id} is checked with "${area.suffix ?? ''}": write proposed, asked or the owner's, ADR-<nnnn> (L<n>), or open (OD<n>)`);
+    } else if (!AREA_SETTLED.test(area.suffix ?? '')) wrongly(`${id} is checked with "${area.suffix ?? ''}": write proposed, asked or the owner's, ADR-<nnnn> (L<n>), open (OD<n>), or with Mode fast, default, fast, ADR-<nnnn> (L<n>)`);
     else if (area.suffix.startsWith('default, fast') && !fast) wrongly(`${id} is settled default, fast, but Mode is not fast`);
     else coveredAreas += 1;
   }
@@ -394,9 +394,10 @@ function conversation(onboarding, { profiles, compare }) {
   }
 
   const kindKnown = setup.Kind !== undefined && (kinds !== null || !compare);
+  // The advice step also asks for Level, which is completed with the paste: a Level never written goes back there.
   const step = !opened ? 'opening'
     : !kindKnown || size === null ? 'kind'
-      : !pasted ? 'advice'
+      : !pasted || setup.Level === undefined ? 'advice'
         : open.topics.length > 0 || open.areas.length > 0 ? 'converse'
           : waiting.length > 0 || !summed ? 'summary'
             : 'fix';

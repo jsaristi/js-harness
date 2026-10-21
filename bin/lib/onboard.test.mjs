@@ -103,13 +103,16 @@ test('## Advice: the areas --checklist advice prints for Kind and Size, each set
     '- [x] A:legal Legal — default, fast, ADR-0003 (L20)',
   ] }), atTwo(
     'A:stack is not settled yet',
-    'A:hosting is checked with "a VPS": write proposed, asked or the owner\'s, ADR-<nnnn> (L<n>), or open (OD<n>)',
+    'A:hosting is checked with "a VPS": write proposed, asked or the owner\'s, ADR-<nnnn> (L<n>), open (OD<n>), or with Mode fast, default, fast, ADR-<nnnn> (L<n>)',
     'A:legal is settled default, fast, but Mode is not fast',
   ));
   const fast = SETUP.map((line) => line.replace('Mode: full', 'Mode: fast (L11)'));
   assert.deepEqual(checkTwo({ setup: fast, advice: [ADVICE[0], '- [x] A:hosting Hosting — asked, ADR-0002 (L18)', '- [x] A:legal Legal — default, fast, ADR-0003 (L20)'] }), []);
   const level = SETUP.map((line) => line.replace(', A:legal some', ''));
   assert.deepEqual(checkTwo({ setup: level }), atTwo('Level has no level for A:legal'));
+  // A Kind and Size whose checklist prints no area ask for no paste.
+  const none = SETUP.map((line) => line.replace('Kind: shop', 'Kind: other (nearest: none)').replace('large (L3)', 'small (L3)'));
+  assert.ok(!checkTwo({ setup: none, advice: [] }).some((line) => line.includes('## Advice is empty')));
 });
 
 test('once the onboarding is closed (O6), Kind and the areas are no longer compared with the profiles', () => {
@@ -306,6 +309,8 @@ test('currentStage, stage 2: the next step of the conversation, what it covered,
   assert.deepEqual(stageTwo({ topics: summary }), {
     at: 2, step: 'summary', covered: { topics: 10, areas: 3, total: 3 }, open: { topics: [], areas: [] }, waiting: [3], wrong: [],
   });
+  // A Level never completed after the paste sends the session back to the step that asks for it.
+  assert.deepEqual(stageTwo({ setup: SETUP.filter((line) => !line.startsWith('- Level')) }).step, 'advice');
   // What is wrong is named, and the conversation goes on around it.
   const mode = SETUP.map((line) => line.replace('Mode: full', 'Mode: quick'));
   assert.deepEqual(stageTwo({ setup: mode }), {

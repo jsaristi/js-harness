@@ -1154,3 +1154,9 @@ ceiling.
   summary, fix); the Close text on topics 1, 6, 7 and 9. The lib takes the profiles as `profiles`, a fixture in its
   tests. On the branch `feat/onboarding-conversation`, stacked on PR 484. Next: 4b, the ADRs (`template adr`, their
   checks, the `adrs` hash on O3 and O5) and fast mode's given-up line; then 4c, the pre-plan and roadmap additions.
+- L28 (2026-10-20) Slice 4a passed gentle-ai (lineage review-904644ed8258b6dc, readability and reliability, approved,
+  acknowledged) with five informational findings, and Codex (2 parts) with one P2 that matches gentle-ai's R2-001: a
+  Level never written after the paste left stage 2 on "fix" with nothing printed. Fixed in the next commit, test
+  first: that case goes back to the advice step; the area-suffix message names the fast form; a checklist that prints
+  no area asks for no paste; checklist lines that are not areas are skipped. Left as is: a document closed in v3's
+  format reads as stage 2 again, which D6 accepts because no project was onboarded with v3.
