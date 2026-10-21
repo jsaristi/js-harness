@@ -373,8 +373,8 @@ const retired = (status) => /^(superseded|withdrawn)\b/.test(status);
 
 /** The ADRs' findings (D12), each in its own file: each ADR a settled area names exists, names that area, cites a
  * source in one of the three forms (the profile only with Mode fast) and holds no template line. Once every area is
- * settled (`settled`, and only until O6), each ADR belongs to an area of ## Advice, or is superseded or withdrawn: an
- * ADR is written before its area is checked. */
+ * settled (`settled`), each ADR belongs to an area of ## Advice, or is superseded or withdrawn: an ADR is written
+ * before its area is checked. Run only until O6 closes the onboarding. */
 function adrFindings(areas, adrs, { fast, settled, wrongly }) {
   const byNumber = new Map();
   for (const path of [...adrs.keys()].sort()) {
@@ -497,10 +497,13 @@ function conversation(onboarding, { profiles, compare, adrs }) {
     else if (area.suffix.startsWith('default, fast') && !fast) wrongly(`${id} is settled default, fast, but Mode is not fast`);
     else coveredAreas += 1;
   }
-  adrFindings(areas, adrs, { fast, settled: compare && pasted && open.areas.length === 0, wrongly });
-  const givenUp = (parseContract(onboarding).get('Advice') ?? '').split('\n').map((line) => line.match(GIVEN_UP_LINE)).find(Boolean);
-  if (fast && !GIVEN_UP_FORM.test(givenUp?.[1] ?? '')) wrongly('Mode is fast, and ## Advice has no line "- Given up (fast, L<n>): <the bar IDs and the depth left out>"');
-  else if (!fast && givenUp) wrongly('## Advice has a given-up line, but Mode is not fast');
+  // The ADRs live on after O6, superseded and edited by later work, and ## Advice is history: neither is checked then.
+  if (compare) {
+    adrFindings(areas, adrs, { fast, settled: pasted && open.areas.length === 0, wrongly });
+    const givenUp = (parseContract(onboarding).get('Advice') ?? '').split('\n').map((line) => line.match(GIVEN_UP_LINE)).find(Boolean);
+    if (fast && !GIVEN_UP_FORM.test(givenUp?.[1] ?? '')) wrongly('Mode is fast, and ## Advice has no line "- Given up (fast, L<n>): <the bar IDs and the depth left out>"');
+    else if (!fast && givenUp) wrongly('## Advice has a given-up line, but Mode is not fast');
+  }
   if (levels && areas.size > 0) {
     for (const id of [...areas.keys()].filter((id) => !levels.includes(id))) wrongly(`Level has no level for ${id}`);
     for (const id of levels.filter((id) => !areas.has(id))) wrongly(`Level names ${id}, which is not under ## Advice`);

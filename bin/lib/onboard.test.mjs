@@ -171,6 +171,11 @@ test('O3 and O5 record the ADRs; a no on one area edits its ADR in place and sen
 test('once the onboarding is closed (O6), Kind and the areas are no longer compared with the profiles', () => {
   const setup = SETUP.map((line) => line.replace('Kind: shop', 'Kind: bakery').replace('A:legal some', 'A:legal some, A:payments new'));
   assert.deepEqual(check({ onboarding: onboardingDoc({ setup, advice: [...ADVICE, '- [x] A:payments Payments — open (OD2)'], o6: 'x' }) }), []);
+  // The ADRs live on after it, and Advice is history: neither is held to the onboarding's rules again.
+  const fast = SETUP.map((line) => line.replace('Mode: full', 'Mode: fast (L11)'));
+  const later = new Map([['docs/adr/0002-hosting.md', '# ADR-0002: Hosting\n\n## Status\nsuperseded by ADR-0009\n'], ['docs/adr/0009-cloud.md', '# ADR-0009: Cloud\n']]);
+  assert.deepEqual(check({ onboarding: onboardingDoc({ setup: fast, o6: 'x' }), adrs: later }), []);
+  assert.equal(stage({ onboarding: onboardingDoc({ setup: fast, o6: 'x' }), adrs: later }).stage, 'done');
 });
 
 test('an approval must be checked, name its Log line, and hold the hash of the file as it is now', () => {
