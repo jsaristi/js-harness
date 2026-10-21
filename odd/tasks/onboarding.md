@@ -951,6 +951,14 @@ ceiling.
   - gentle-ai: `1a83873e` approved (reliability; lineage review-101fc8c0468042fe, acknowledged): Codex's P2; Codex recheck fixed, correct (0.99).
 - Slice 4b, Codex (2026-10-20): `cd940af..0ec1ba6` in 2 parts, recorded; one P2, the unread-ADR Risks check still ran
   after O6. The fix `0ec1ba6..1a83873` recorded as its recheck: fixed, correct (0.99).
+- Slice 4c, gentle-ai (2026-10-21), all acknowledged:
+  - `7682f604` approved (readability, reliability; lineage review-cf9c2e1c4d31d648), nine advisories; taken in
+    `0b51844d`: the advice mode messages after O6, a `## Setup` copy refused, a misplaced JSDoc, missing tests.
+  - `0b51844d` approved (reliability; lineage review-0f6e38a5c51a548d); its no-onboarding warning not taken (L32).
+  - `71ad7541` approved (reliability; lineage review-e219e0df55b950f8): Codex's two P2s; two warnings not taken (L32).
+- Slice 4c, Codex (2026-10-21): `c32195c..0b51844` recorded, incorrect (0.99), two P2s: the Advice mode cut at an
+  unindented heading only, and a fenced `B:` step counted. The fix `0b51844..71ad754` recorded as its recheck: both
+  fixed, correct (0.98). PR 490.
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
