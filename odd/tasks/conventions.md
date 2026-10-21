@@ -74,7 +74,7 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 | T3 | S3, S8 | inline | done | 10a7601d |
 | T4 | S4, S8 | inline | done | 10a7601d |
 | T5 | S5 | inline | done | 10a7601d |
-| T6 | S6 | inline | done | this commit |
+| T6 | S6 | inline | done | 53691533 |
 | T7 | S7 | inline | done | 35cbdcec |
 | T5b | S2-S5 | inline | done | a1ba5c61 (the review's advisory findings) |
 | T8 | S1 | inline | open | |
@@ -144,3 +144,7 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
   conventions ADR. Making `own` the default (B) changes every installed project's review, so it is his call and not
   ours now." Built: `CONVENTIONS` ends the whole-range (v2), part (v4) and merge (v3) texts, before what a review
   out of a gate turn is told of the tests.
+- L7. 2026-10-21. gentle-ai reviewed 35cbdcec..53691533 (risk raised to high by item 3: the shipped review prompt;
+  lenses readability, reliability), approved, acknowledged (lineage review-10be85bd9b7512ce). Its three advisory
+  findings, a test title that still said the whole-range text was kept, a version tag that named one of three
+  versions, and a comment line run together, are taken in the next commit, which touches tests and comments only.

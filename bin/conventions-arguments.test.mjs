@@ -28,8 +28,10 @@ const REFUSAL = new RegExp(`unknown argument: ${UNKNOWN}(?:$|[ ;(])`);
 
 // The argv a command needs before the unknown flag to reach its own parsing: a subcommand, or what must stand
 // before it. Each is a read-only form (`status`, `list`, `check`, `--dry-run`), so a command that ignores the flag
-// does read-only work here, beside the scratch homes. A command not named here is probed bare (`<command> --no-such-flag`). What follows `--` stays after
-// the probe, since `gate` hands everything after it on.
+// does read-only work here, beside the scratch homes.
+//
+// A command not named here is probed bare (`<command> --no-such-flag`). What follows `--` stays after the probe,
+// since `gate` hands everything after it on.
 const BEFORE = {
   gate: ['--', 'node', '--version'],
   loop: ['status'],

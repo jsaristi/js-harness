@@ -7,7 +7,8 @@ const FROM = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
 const TREE = 'c'.repeat(40);
 
-// Every text ends with CONVENTIONS (`v2`); `body` is a text without that tail, what the tests below compare.
+// Every text ends with CONVENTIONS (the whole range from `v2`, a part from `v4`, a merge from `v3`); `body` is a text
+// without that tail, what the tests below compare.
 const TAIL = `\n${CONVENTIONS}\n`;
 function body(text) {
   assert.ok(text.endsWith(TAIL), text);
@@ -138,7 +139,7 @@ test('reviewPrompt refuses a range that is not two commit ids, since both go int
 
 const PART = { index: 2, of: 3, files: ['bin/a.mjs', 'docs/my notes.md'] };
 
-test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text and its version', () => {
+test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text before the conventions', () => {
   // `v2`: the command of a part reads its file names literally (`--literal-pathspecs`), which `v1` did not.
   // `v3`: it says so when the range leaves files out of the review, and a range of one part that does is
   // asked with it. `v4`: it ends with CONVENTIONS.
