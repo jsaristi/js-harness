@@ -157,6 +157,29 @@
       "by": "session"
     }
   },
+  "restart-announce": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Recuerdame avisarme cuando tenga que reiniciar y por favor escribemelo en mayusculas para pdoer saber algo asi: YA PUEDES REINICIAR Y ACTUALIZAR!!! y pausas todo para darme tiempo a hacerlo",
+        "date": "2026-10-20",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 10294
+      },
+      {
+        "quote": "por favor agregame lo de avisarme asi al harnes",
+        "date": "2026-10-20",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 10399
+      }
+    ],
+    "reading": "When he must restart or update (a Claude Desktop update js-harness doctor reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), the lead first pauses everything at a safe point: each working session on this machine commits what is ready, pushes only when its check passes, writes its state to its feature document and starts nothing new, and the lead stops its own loops and waits once the board shows nothing working. \"Pausas todo para darme tiempo\" puts the pause before the notice. Then the lead says, in capitals, the phrase he gave, with what to do in order, what not to touch and the line to send it back; when he is back it resumes the sessions by message and carries out js-harness doctor's fixes. His second line asks that this be in the harness: the orchestrator skill's \"The restart\" carries it.",
+    "accepted": "Not put to him as a reading: he was away when the skill text was written (a work session, from the lead's brief of 2026-10-20), and it is his to correct.",
+    "checked": {
+      "date": "2026-10-20",
+      "by": "command"
+    }
+  },
   "review-effort": {
     "kind": "words",
     "quotes": [

@@ -190,6 +190,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] The orchestrator ships as a skill the installer writes and removes through the manifest
 - [x] On this machine: installed, an orchestrator session opened with it, one real stretch supervised
 - [x] The status report: `js-harness report --mark` gives the facts since the last report, and the orchestrator skill answers "how is it going" from them in six sections (`odd/tasks/status-report.md`)
+- [x] The restart: before the user restarts or updates, the lead pauses every session at a safe point and only then says so in capitals (`rule:restart-announce`, the orchestrator skill's "The restart")
 
 ### F6 Codex parity
 - [x] The eval tasks run on Codex
