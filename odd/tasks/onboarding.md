@@ -918,6 +918,30 @@ ceiling.
   per-kind override of teaching and pitfalls (the shape has none; global teaching stays generic). Recorded for D12:
   OpenAI announced it would acquire Astral (uv) on 2026-03-19, and dbt Labs and Fivetran merged on 2026-06-01, both
   keeping their tools open source. Unguaranteed: the fixes were not read again (no third round).
+- Profiles round, slice 3c (2026-10-21, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+  over 37c0fbd2: one on claims and gaps with the sources fetched, one on gaps only, running the command for every
+  kind, checklist, new area and four joins. Blockers taken:
+  - `B:release-provenance` fit only public npm or PyPI packages: npm adds provenance only from a public repository on
+    GitHub Actions or GitLab, and GoReleaser's Homebrew tap needs its own token. It now asks for trusted publishing
+    where the registry offers it, a build attestation for binaries (GitHub artifact attestations, fetched first, or
+    cosign), and any remaining token scoped to one repository; `A:distribution` and tui-app's default say the same;
+  - the CLI's security default read secrets from the environment, which clig.dev says not to do; now a file, stdin
+    or a secret manager, and the area is core, a published package being a supply-chain target;
+  - a small library-only project got a command's area and target and none for its exports: `A:library-api` and
+    `B:api-surface` are core beside `A:cli-design` and `B:cli-conventions`, each opening "for a command" or "for a
+    library", and a project without one proposes none in a one-line ADR and checks the step with its reason;
+  - tui-app had no security area: added, non-core, with control sequences stripped from untrusted text;
+  - a small ai-app had a core security area and no security target: `B:asvs-l1` and `B:rate-limits` are core there.
+  Advisories taken: field commands that read doubled after "wired before launch" (`api-latency` and `telemetry`
+  too, both from 3a); `B:no-color` counts color (SGR) codes only, since a TUI always prints others; `B:os-matrix`
+  covers binaries; `B:api-latency` leaves model calls to `B:ai-latency`; snapshot tests and per-user rate limits
+  taught at the middle level; restoring the terminal is in the core `B:tui-keyboard`, and q quits outside text
+  input; trusted publishing taught at the middle level; `A:cli-design` alternatives; "dist, formerly cargo-dist";
+  the EU AI Act's Article 50 duties from 2026-08-02; the OWASP Top 10 for Agentic Applications for agents;
+  `B:rate-limits`, `B:problem-details` and `B:openapi-contract` claim of their RFC or spec only what it says, the rest
+  marked agreed; RFC 9745 and RFC 8594 for deprecation; `asvs-l1` non-core in api-service; an accessibility area and
+  a join with platform for an AI web product; the changelog's Unreleased section. Not taken: the SLO target's "once
+  there are users" (3a's text, out of this slice). Unguaranteed: the fixes were not read again (no third round).
 - Slice 3b, gentle-ai (2026-10-20): `dfae6be0..364ada0c` (eadb813f and the pause line), assessed `medium` and
   `under_budget`, started through the preflight status as each slice is; lenses readability and reliability,
   approved and acknowledged (lineage review-b2c7fd9b754587c5). Informational, left for later: the refusal's text when
@@ -1265,3 +1289,15 @@ ceiling.
   roadmap with no such section (the `bare` assertion). Steps source: `parseRoadmap` takes `*`/`+` bullets, any indent,
   and steps before the first `###` as `(unassigned)` (`bin/lib/progress.mjs:205`, `:216`). PR 488 merged before 4c's
   PR, so main is merged into `feat/onboarding-plan` and 4c's PR targets main.
+- L33 (2026-10-21) Slice 4c is PR 490 (`feat/onboarding-plan`, base main), its ready notice recorded at 02:27Z. T7
+  slice 3c on branch `feat/onboarding-profiles-3c`, from `42c7b7e3`, route inline (one data file, one unit): RED on
+  the kinds test, now the eleven of S8 in order; then `cli-library`, `api-service`, `ai-app` and `tui-app`, which
+  joins `cli-library`. Eight areas: `cli-design`, `terminal-ui`, `library-api` after `frontend`; `model`,
+  `retrieval`, `evals`, `ai-safety` after `jobs`; `distribution` after `release`, whose teaching is a mobile
+  store's. Nineteen targets. A read-only research agent fetched every URL and claim first: all held; four moved or
+  changed and cite where they are now (OWASP API Security at api-security.owasp.org; the OpenTelemetry GenAI
+  conventions in their own repository, Development status; npm trusted publishing, which adds provenance by itself;
+  Textualize closed in 2025, Textual still maintained). Field commands are noun phrases, since the bar line prints
+  "<command> wired before launch". Committed `37c0fbd2`; the two readers of S10 ran on it: five blockers and the
+  advisories taken, one left (`## Reviews`, "Profiles round, slice 3c"). Next: commit the round, gentle-ai and
+  Codex on `42c7b7e3..HEAD`, push, PR (base `feat/onboarding-plan` until PR 490 lands, then main), ready notice.
