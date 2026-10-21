@@ -1357,3 +1357,75 @@ test('a closed notice runs the real summary check with notify\'s own git: refuse
   // The refused close wrote nothing; the one that passed carries the file the board's `to archive:` line names.
   assert.deepEqual(readNotices(machine.home, projectSlug(work)).notices.filter((one) => one.kind === 'closed').map((one) => one.summary), [file]);
 }));
+
+// --- a session of another project's lead ---
+
+// JH 43 (2026-10-21) ran the onboarding of a new project, coded PP, that the lead of js-harness had started: its
+// notice went to PP's record, "where no orchestrator listens". A session's title names the project whose lead
+// counts it, so a title of another project's code sends the notice to that project's record.
+
+/** The checkout `machine.root`, coded JH and with worktrees, and a new project `other` beside it, coded PP. */
+function twoProjects(machine) {
+  const other = path.join(machine.dir, 'new-project');
+  for (const [folder, code] of [[machine.root, 'JH'], [other, 'PP']]) {
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, 'harness.json'), JSON.stringify({ version: '0.97.0', code, reply: true }));
+  }
+  const lead = fakeGit(machine).run;
+  const run = (command, args, options = {}) => {
+    const inOther = typeof options.cwd === 'string' && path.resolve(options.cwd).startsWith(other);
+    if (command === 'git' && inOther && args[0] === 'rev-parse' && args.includes('--git-common-dir')) return ok(`${slashes(other)}/.git\n`);
+    return lead(command, args, options);
+  };
+  return { other, run, otherDir: path.join(machine.claudeHome, 'projects', projectSlug(other)) };
+}
+
+test('a session titled with another project\'s code notifies that project\'s orchestrator, where it listens', withMachine(async (machine) => {
+  const { other, run, otherDir } = twoProjects(machine);
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  const lead = await runNotify(machine, ['--to', '5', '--kind', 'note', 'onboard the new project'], { env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR }, run });
+  assert.equal(lead.code, 0, lead.err.join('\n'));
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+
+  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'stage 2 reached'], { cwd: other, run });
+  assert.equal(code, 0, err.join('\n'));
+  const sent = recorded(machine).notices.at(-1);
+  assert.equal(sent.text, 'stage 2 reached');
+  assert.equal(sent.from.title, SENDER_TITLE, 'the sender is read where its transcript is, in its own folder');
+  assert.equal(sent.cwd, other, 'the notice still says where the sender works');
+  assert.deepEqual(readNotices(machine.home, projectSlug(other)).notices, [], 'nothing in the new project\'s record');
+  assert.ok(out.includes(`js-harness notify: ${JSON.stringify(SENDER_TITLE)} is a session of the project coded JH, and this folder's project is coded PP: the notice goes to JH's record, where its orchestrator listens (${machine.root})`), out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('js-harness notify: recorded note for the orchestrator') && line.endsWith(` in ${machine.record}`)), out.join('\n'));
+  assert.ok(out.includes(`address of the orchestrator: ${ORCHESTRATOR_TITLE}`), out.join('\n'));
+}));
+
+test('a session titled with another project\'s code is refused when no record holds that project\'s orchestrator', withMachine(async (machine) => {
+  const { other, run, otherDir } = twoProjects(machine);
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+
+  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'stage 2 reached'], { cwd: other, run });
+  assert.equal(code, 1);
+  assert.deepEqual(out, []);
+  assert.deepEqual(err, [`js-harness notify: not recorded: ${JSON.stringify(SENDER_TITLE)} is a session of the project coded JH, and this folder's project is coded PP, where JH's orchestrator does not listen; no record of the channel holds a notice of JH's orchestrator. Send it from JH's project: --cwd <its folder>.`]);
+  assert.deepEqual(readNotices(machine.home, projectSlug(other)).notices, []);
+  assert.deepEqual(recorded(machine).notices, []);
+}));
+
+// Sent with --cwd from the new project, the same notice of JH 43 was recorded with no title: its transcript is filed
+// under the folder it runs in, not under the project --cwd names.
+test('a notice sent with --cwd to another project reads the sender where it runs', withMachine(async (machine) => {
+  const { other, run, otherDir } = twoProjects(machine);
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+  const { code, err } = await runNotify(machine, ['--cwd', machine.root, '--to', 'orchestrator', '--kind', 'note', 'from the new project'], { cwd: other, run });
+  assert.equal(code, 0, err.join('\n'));
+  assert.equal(recorded(machine).notices.at(-1).from.title, SENDER_TITLE);
+}));
+
+test('a session in a project with no code notifies this project as before', withMachine(async (machine) => {
+  const { other, run, otherDir } = twoProjects(machine);
+  fs.writeFileSync(path.join(other, 'harness.json'), JSON.stringify({ version: '0.97.0', reply: true }));
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+  const { code, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'no code here'], { cwd: other, run });
+  assert.equal(code, 0, err.join('\n'));
+  assert.deepEqual(readNotices(machine.home, projectSlug(other)).notices.map((one) => one.text), ['no code here']);
+}));

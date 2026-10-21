@@ -20,8 +20,8 @@ import { sessionsMain } from './sessions.mjs';
 import { stampOff } from './lib/guard.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { closeProblems } from './lib/summary.mjs';
-import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, transcriptOf, writeOpening } from './lib/channel.mjs';
-import { askingRule, mainCheckout, projectDirsOf, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
+import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, channelDir, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, transcriptOf, writeOpening } from './lib/channel.mjs';
+import { askingRule, mainCheckout, projectCode, projectDirsOf, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 
 export const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
@@ -34,7 +34,9 @@ export const USAGE = [
   '    the address of the role as `sessions --address` gives it. The exit is 0 once the notice is recorded,',
   '    with an address or without one. The exit is 1 when a check refuses the notice and it is not recorded (a text that',
   '    stamps the wrong hour, a ready pull request the land would leave out, a summary not ready, a record that cannot',
-  '    be written), and 2 for a usage error.',
+  '    be written, a sender of another project\'s lead whose record is not found), and 2 for a usage error.',
+  '  A sender whose title carries another project\'s code (harness.json "code") records in the record where that',
+  '    project\'s orchestrator last wrote, and says so; with no such record, or several, use --cwd <its folder>.',
   `    Kinds: ${NOTICE_KINDS.join(', ')}. An answer carries the user's words and says where they`,
   '    are read, with --transcript and --line; no other kind takes them. The text is one line of',
   `    ${NOTICE_TEXT_MAX} characters at most.`,
@@ -199,6 +201,41 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 // How much of a relief line the command prints back: the stamp and the start of it. The file has it whole.
 const SHOWN = 300;
 
+/** The code of the project at `root` (`projectCode`), or `null` when it declares none or its harness.json cannot be read. */
+function codeAt(root, readFile) {
+  try {
+    return projectCode(root, readFile).code;
+  } catch {
+    return null;
+  }
+}
+
+/** The projects whose orchestrator a session titled with `code` reports to, read from the channel under `home`:
+ * `[{ root, slug }]`, one for each record but this project's (`slug`) whose latest notice from an orchestrator titled
+ * with `code` was written in a project that declares `code` and whose record it is. Nothing else names where a
+ * project is: a record is named by its folder, and its notices say where they were written. */
+function leadProjectsOf(code, { home, slug, run, readdir, readFile }) {
+  let names;
+  try {
+    names = readdir(channelDir(home));
+  } catch {
+    return [];
+  }
+  const leads = [];
+  for (const name of names.filter((one) => one.endsWith('.jsonl')).sort()) {
+    const other = name.slice(0, -'.jsonl'.length);
+    if (other === slug) continue;
+    const latest = readNotices(home, other, { readFile }).notices.findLast((notice) => {
+      const role = roleOfTitle(notice.from?.title);
+      return role?.role === 'orchestrator' && role.code === code && typeof notice.cwd === 'string';
+    });
+    if (latest === undefined) continue;
+    const root = mainCheckout(run, latest.cwd);
+    if (projectSlug(root) === other && codeAt(root, readFile) === code) leads.push({ root, slug: other });
+  }
+  return leads;
+}
+
 /** What would leave pull request `pr` out of a land before it builds, by the land's own functions and words: its
  * `pullRequestProblems` (UNKNOWN mergeable read as the land reads it, GitHub not having computed it yet), then its
  * `reviewEvidence` of the head against origin/main, fetched first. `[]` when the land would build it. */
@@ -359,7 +396,9 @@ export async function notifyMain(
   const claudeHome = path.resolve(defaultCwd, parsed.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
   const projectDir = path.join(claudeHome, 'projects', slug);
   // A session opened in a worktree is filed under that worktree's sessions folder, not the main checkout's.
-  const projectDirs = projectDirsOf(run, root, claudeHome);
+  // One sent with --cwd from another project is filed under the folder it runs in, which is searched too.
+  const ranIn = projectDirsOf(run, mainCheckout(run, defaultCwd), claudeHome);
+  const projectDirs = [...new Set([...projectDirsOf(run, root, claudeHome), ...ranIn])];
   const from = senderOf({ self: parsed.self ?? null, env, projectDirs, readdir, readFile });
   // A session opened from the phone has no title in its transcript: its title is the one of the opening
   // it read, which `sessions --opening` wrote in the record. A title in the transcript wins.
@@ -403,6 +442,24 @@ export async function notifyMain(
     return 0;
   }
 
+  // A session's title names the project whose lead counts it. One titled with another project's code, such as a
+  // session that lead started in a new project to onboard it, writes where that lead listens: this folder's record
+  // has no orchestrator (JH 43 in a new project coded PP, 2026-10-21). A project with no code keeps its notices.
+  let target = { root: cwd, slug };
+  const titled = roleOfTitle(from.title);
+  const here = codeAt(root, readFile);
+  if (titled !== null && here !== null && titled.code !== here) {
+    const leads = leadProjectsOf(titled.code, { home, slug, run, readdir, readFile });
+    const whose = `${JSON.stringify(from.title)} is a session of the project coded ${titled.code}, and this folder's project is coded ${here}`;
+    if (leads.length !== 1) {
+      const none = leads.length === 0 ? `no record of the channel holds a notice of ${titled.code}'s orchestrator` : `the records of ${leads.map((one) => one.root).join(', ')} each hold one`;
+      stderr(`js-harness notify: not recorded: ${whose}, where ${titled.code}'s orchestrator does not listen; ${none}. Send it from ${titled.code}'s project: --cwd <its folder>.`);
+      return 1;
+    }
+    target = leads[0];
+    stdout(`js-harness notify: ${whose}: the notice goes to ${titled.code}'s record, where its orchestrator listens (${target.root})`);
+  }
+
   // An answer or a withdrawal to a question: the record must hold that question and leave it open, and an
   // answer's words are read from its transcript before anything is written. Nothing here writes.
   if (parsed.notice?.question !== undefined) {
@@ -411,7 +468,7 @@ export async function notifyMain(
       return 1;
     };
     const number = parsed.notice.question;
-    const record = readNotices(home, slug, { readFile });
+    const record = readNotices(home, target.slug, { readFile });
     if (record.unavailable !== undefined) return notRecorded(`the channel's record ${record.path} could not be read (${record.unavailable})`);
     const questions = recordedQuestions(record);
     const theQuestion = questions.find((one) => one.number === number);
@@ -462,9 +519,9 @@ export async function notifyMain(
   const notice = { ...draft, at, from, cwd, ...placeOf(run, cwd) };
   let file;
   try {
-    file = appendNotice(home, slug, notice);
+    file = appendNotice(home, target.slug, notice);
   } catch (err) {
-    stderr(`js-harness notify: could not write ${recordPath(home, slug)} (${err.code ?? err.message})`);
+    stderr(`js-harness notify: could not write ${recordPath(home, target.slug)} (${err.code ?? err.message})`);
     return 1;
   }
   const role = roleWords(notice.to);
@@ -474,7 +531,7 @@ export async function notifyMain(
   // How many questions of the record wait for him once this one is written: the rule for asking him says how many.
   let questionsWaiting = 0;
   if (notice.kind === 'question') {
-    const back = readNotices(home, slug, { readFile });
+    const back = readNotices(home, target.slug, { readFile });
     const found = back.unavailable === undefined ? back.questions.find((one) => one.notice.id === notice.id) : undefined;
     if (found !== undefined) {
       questionNumber = found.number;
@@ -533,7 +590,7 @@ export async function notifyMain(
   const err = [];
   let code;
   try {
-    const asked = ['--address', parsed.notice.to, '--cwd', cwd, ...(parsed.claudeHome !== undefined ? ['--claude-home', claudeHome] : []), ...(parsed.self !== undefined ? ['--self', parsed.self] : [])];
+    const asked = ['--address', parsed.notice.to, '--cwd', target.root, ...(parsed.claudeHome !== undefined ? ['--claude-home', claudeHome] : []), ...(parsed.self !== undefined ? ['--self', parsed.self] : [])];
     // The harness home goes in the environment, where the board looks for it: it reads the record this
     // command writes, by which a session with no title in its transcript holds its role.
     code = await sessions(asked, { cwd: defaultCwd, stdout: (line) => out.push(line), stderr: (line) => err.push(line), env: { ...env, JS_HARNESS_HOME: home }, now, homedir, run, readFile, readdir });
