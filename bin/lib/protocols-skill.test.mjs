@@ -95,7 +95,7 @@ test('the throughput review section holds its judgment steps, its five questions
   const review = sections(TEXT)[6];
   const text = review.lines.join('\n').replace(/\s+/g, ' ');
   assert.match(review.lines.find((line) => line.trim() !== ''), /^Incident \(2026-10-16\): .*239 minutes.*flaky test/);
-  for (const step of ['- Candidates: ', '- Readers: ', '- Stop rule: ', '- His decisions: ', '- Five questions: ', '- What leaves: ']) assert.ok(text.includes(step), step);
+  for (const step of ['- Candidates: ', '- Readers: ', '- Stop rule: ', "- The user's decisions: ", '- Five questions: ', '- What leaves: ']) assert.ok(text.includes(step), step);
   assert.ok(review.lines.some((line) => /^- Cost: .+ Reviewed by 2026-11-16\.$/.test(line)), text);
   for (const id of ['throughput-quiet-runs', 'throughput-quiet-days', 'double-review']) assert.ok(text.includes(`\`rule:${id}\``), id);
   assert.ok(text.includes('js-harness throughput reviewed'), 'it says how a review is recorded');

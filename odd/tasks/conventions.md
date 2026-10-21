@@ -68,20 +68,20 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 ## Tasks
 | ID | Specs | Route | Status | Commit |
 |----|-------|-------|--------|--------|
-| T1 | S8 | inline | open | |
-| T2 | S2, S8 | inline | open | |
-| T3 | S3, S8 | inline | open | |
-| T4 | S4, S8 | inline | open | |
-| T5 | S5 | inline | open | |
+| T1 | S8 | inline | done | 2e65f295 |
+| T2 | S2, S8 | inline | done | 2e65f295 |
+| T3 | S3, S8 | inline | done | this commit |
+| T4 | S4, S8 | inline | done | this commit |
+| T5 | S5 | inline | done | this commit |
 | T6 | S6 | inline | open (waits L3) | |
 | T7 | S7 | inline | open | |
 | T8 | S1 | inline | open | |
 
-- [ ] T1 (kind: build) `bin/lib/ratchet.mjs`: the one comparison every legacy list uses
-- [ ] T2 (kind: build) the refused-flag wording and exit 2, with its legacy list; "unknown flag" becomes "unknown argument"
-- [ ] T3 (kind: build) the error split
-- [ ] T4 (kind: build) pure modules hold their claim
-- [ ] T5 (kind: build) shipped text names the user
+- [x] T1 (kind: build) `bin/lib/ratchet.mjs`: the one comparison every legacy list uses
+- [x] T2 (kind: build) the refused-flag wording and exit 2, with its legacy list; "unknown flag" becomes "unknown argument"
+- [x] T3 (kind: build) the error split
+- [x] T4 (kind: build) pure modules hold their claim
+- [x] T5 (kind: build) shipped text names the user
 - [ ] T6 (kind: build) the review lines
 - [ ] T7 (kind: docs) the protocols skill's trigger
 - [ ] T8 (kind: docs) the roadmap item, reviews, the pull request
