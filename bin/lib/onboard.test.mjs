@@ -343,11 +343,32 @@ test('the roadmap: ## Decided names each accepted ADR, ## Advice mode is one lin
   const noUptime = ROADMAP.replace(/- \[ \] B:uptime .*\n/, '');
   assert.deepEqual(at(noUptime), ['docs/ROADMAP.md (stage 5): B:uptime is on no Checklist step: paste it from js-harness onboard profile --checklist bar, put it under ## Open decisions with its area\'s OD, or name it in the given-up line']);
   const noPrivacy = ROADMAP.replace(': B:privacy waits on it', '');
-  assert.deepEqual(at(noPrivacy).length, 1);
+  assert.deepEqual(at(noPrivacy), ['docs/ROADMAP.md (stage 5): B:privacy is on no Checklist step: paste it from js-harness onboard profile --checklist bar, put it under ## Open decisions with its area\'s OD, or name it in the given-up line']);
   // The given-up line excuses a target, and --plan reads it from the onboarding document.
   const fast = SETUP.map((line) => line.replace('Mode: full', 'Mode: fast (L11)'));
   const doc = onboardingDoc({ roadmap: noUptime, setup: fast, advice: [...ADVICE, '- Given up (fast, L20): B:uptime'] });
   assert.deepEqual(messages(check({ roadmap: noUptime, onboarding: doc }, { plan: true })), []);
+});
+
+test('the roadmap\'s advice mode takes a copy of ## Setup, a retired ADR leaves ## Decided, and none of it holds after the close', () => {
+  const at = (roadmap, doc = {}, adrs = ADRS) => messages(check({ roadmap, adrs, onboarding: onboardingDoc({ roadmap, adrs, ...doc }) })).filter((line) => line.includes('(stage 5)'));
+  const copied = ROADMAP.replace('Teaching: on · Mode: full · Level: A:stack experienced, A:hosting some, A:legal some', 'Teaching: on (L2) · Mode: full · Level: A:stack experienced, A:hosting some, A:legal some (L4)');
+  assert.deepEqual(at(copied), []);
+  const noMode = ROADMAP.replace(/## Advice mode\n.*\n\n/, '');
+  assert.deepEqual(at(noMode), ['docs/ROADMAP.md (stage 5): no ## Advice mode: copy Teaching, Mode and Level from the onboarding\'s ## Setup']);
+  const superseded = new Map([...ADRS, ['docs/adr/0002-hosting.md', adr('0002', 'Hosting', 'A:hosting', { status: 'superseded by ADR-0003 (L30)' })]]);
+  assert.deepEqual(at(ROADMAP.replace('| Hosting | a VPS | ADR-0002 |\n', ''), {}, superseded), []);
+  // A closed onboarding keeps its roadmap as it was: none of the v4 roadmap messages comes back.
+  const old = noMode.replace(/- \[ \] B:uptime .*\n/, '').replace('| Hosting | a VPS | ADR-0002 |\n', '').replace('B:privacy waits on it', 'legal waits on it');
+  assert.deepEqual(at(old, { o6: 'x' }), []);
+  assert.deepEqual(at(old.replace('## Phases', '## Advice mode\nTeaching: on\n\n## Phases'), { o6: 'x' }), []);
+});
+
+test('the roadmap hash reads CRLF as it always did, and leaves out a CRLF ## Advice mode', () => {
+  const crlf = ROADMAP.replace(/\n/g, '\r\n');
+  const bare = crlf.replace(/## Advice mode\r\n.*\r\n\r\n/, '');
+  assert.equal(hashes({ onboarding: null, origin: null, roadmap: bare }).roadmap, shortHash(bare));
+  assert.equal(ROADMAP_HASH(crlf), ROADMAP_HASH(crlf.replace('Teaching: on · Mode: full', 'Teaching: off · Mode: fast')));
 });
 
 test('the templates: the feature is a valid contract with its setup, eleven topics and the summary line, and the others start with what check asks for', () => {

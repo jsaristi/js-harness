@@ -288,8 +288,8 @@ const GIVEN_UP_LINE = /^\s*[-*+]\s+Given up\b(.*)$/;
 const GIVEN_UP_FORM = /^ \(fast, L\d+\): \S/;
 // An ADR's number, in an area's suffix and in its file's path.
 const ADR_NAMED = /\bADR-(\d{4})\b/;
-// The roadmap's ## Advice mode line (D6), its values not compared.
-const ADVICE_MODE = /^Teaching: (?:on|off) · Mode: (?:full|fast) · Level: A:[a-z0-9-]+ (?:new|some|experienced)(?:, A:[a-z0-9-]+ (?:new|some|experienced))*$/;
+// The roadmap's ## Advice mode line (D6), its values not compared; a copy of ## Setup keeps its (L<n>) references.
+const ADVICE_MODE = /^Teaching: (?:on|off)(?: \(L\d+\))? · Mode: (?:full|fast)(?: \(L\d+\))? · Level: A:[a-z0-9-]+ (?:new|some|experienced)(?:, A:[a-z0-9-]+ (?:new|some|experienced))*(?: \(L\d+\))?$/;
 const ADR_PATH = /^docs\/adr\/(\d{4})-[^/]+\.md$/;
 const WRONG_IN_ADR = /^(docs\/adr\/[^/:]+\.md): (.*)$/;
 // The three forms of an ADR's source (D12): a page read on a date, the profile (fast only), or docs not read.
@@ -610,7 +610,6 @@ function logIds(onboarding) {
   return ids;
 }
 
-/** The roadmap's findings (stage 5): its phases, steps, rows and done-when commands, and its ties to the pre-plan. */
 /** The roadmap's v4 messages read against the onboarding (D5): once O3 is checked, `## Decided` names every accepted
  * ADR, one a checked area names and neither superseded nor withdrawn; and every `B:` target `--checklist bar` prints
  * for Kind and Size is on a Checklist step, under `## Open decisions` on a line with its area's open decision, or
@@ -646,6 +645,8 @@ function decidedAndBar(sections, onboarding, tasks, { adrs, profiles }) {
   return messages;
 }
 
+/** The roadmap's findings (stage 5): its phases, steps, rows and done-when commands, and its ties to the pre-plan; with
+ * an open onboarding, its advice mode, decisions and bar (`decidedAndBar`). */
 function roadmapFindings(roadmap, origin, { onboarding = null, adrs = new Map(), profiles = PROFILES } = {}) {
   const at = (message) => ({ file: ROADMAP_PATH, stage: 5, message });
   const findings = [];
@@ -676,12 +677,14 @@ function roadmapFindings(roadmap, origin, { onboarding = null, adrs = new Map(),
     }
   }
   if (!sections.get('Next')) findings.push(at('no ## Next: the first unchecked step and the text that starts its session'));
-  // v4 (D5): the advice mode line, its values not compared (D2), and until O6 the decisions and the bar.
-  const mode = sections.get('Advice mode');
-  if (mode === undefined && onboarding !== null) findings.push(at('no ## Advice mode: copy Teaching, Mode and Level from the onboarding\'s ## Setup'));
-  else if (mode !== undefined && !ADVICE_MODE.test(mode)) findings.push(at('## Advice mode is not one line "Teaching: on|off · Mode: full|fast · Level: A:<id> new|some|experienced, ..."'));
+  // v4 (D5), until O6: a closed onboarding's roadmap is the project's, and these messages do not come back.
   const tasks = onboarding === null ? null : onboardingTasks(onboarding);
-  if (tasks && !tasks.get('O6')?.done) findings.push(...decidedAndBar(sections, onboarding, tasks, { adrs, profiles }).map(at));
+  if (tasks && !tasks.get('O6')?.done) {
+    const mode = sections.get('Advice mode');
+    if (mode === undefined) findings.push(at('no ## Advice mode: copy Teaching, Mode and Level from the onboarding\'s ## Setup'));
+    else if (!ADVICE_MODE.test(mode)) findings.push(at('## Advice mode is not one line "Teaching: on|off · Mode: full|fast · Level: A:<id> new|some|experienced, ..."'));
+    findings.push(...decidedAndBar(sections, onboarding, tasks, { adrs, profiles }).map(at));
+  }
   if (origin !== null) {
     const carried = sections.get('Open decisions') ?? '';
     for (const id of openDecisions(parseContract(origin).get('Open decisions'))) {
