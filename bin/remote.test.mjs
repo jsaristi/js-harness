@@ -334,11 +334,11 @@ test('a bad invocation refuses with the usage line', async () => {
   const cases = [
     [[], /a subcommand is required/],
     [['restart', '--cwd', root], /unknown subcommand: restart/],
-    [['start', '--cwd', root, '--bogus'], /unknown flag: --bogus/],
+    [['start', '--cwd', root, '--bogus'], /unknown argument: --bogus/],
     [['start', '--cwd', root, '--name'], /--name requires a value/],
     [['start', '--cwd', '--home', 'x'], /--cwd requires a value/],
-    [['status', '--cwd', root, '--name', 'x'], /unknown flag: --name/],
-    [['stop', '--cwd', root, '--spawn', 'worktree'], /unknown flag: --spawn/],
+    [['status', '--cwd', root, '--name', 'x'], /unknown argument: --name/],
+    [['stop', '--cwd', root, '--spawn', 'worktree'], /unknown argument: --spawn/],
     [['start', '--cwd', root, '--spawn', 'elsewhere'], /--spawn must be one of same-dir, worktree, session/],
     [['start', '--cwd', root, '--permission-mode', 'accept&Edits'], /--permission-mode/],
   ];
@@ -1852,7 +1852,7 @@ test('--at-login is a switch of start and stop only, and the usage line says wha
   const root = makeProject();
   const world = fakeWorld();
   assert.equal(await remoteMain(['status', '--cwd', root, '--at-login'], {}, world.deps), 2);
-  assert.match(world.err(), /unknown flag: --at-login/);
+  assert.match(world.err(), /unknown argument: --at-login/);
   assert.match(world.err(), /start and stop also take \[--at-login\]/);
   assert.match(world.err(), /Startup folder/);
 });
@@ -2556,8 +2556,8 @@ test('--watchdog is a switch of start only, cannot be combined with --at-login, 
   const home = tempDir();
   const { env, startupDir } = makeAppData();
   const cases = [
-    [['stop', '--cwd', root, '--home', home, '--watchdog'], /unknown flag: --watchdog/],
-    [['status', '--cwd', root, '--home', home, '--watchdog'], /unknown flag: --watchdog/],
+    [['stop', '--cwd', root, '--home', home, '--watchdog'], /unknown argument: --watchdog/],
+    [['status', '--cwd', root, '--home', home, '--watchdog'], /unknown argument: --watchdog/],
     [['start', '--cwd', root, '--home', home, '--watchdog', '--at-login'], /--watchdog cannot be combined with --at-login/],
     [['start', '--cwd', root, '--home', home, '--at-login', '--watchdog'], /--watchdog cannot be combined with --at-login/],
   ];

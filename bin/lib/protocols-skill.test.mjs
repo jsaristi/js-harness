@@ -32,8 +32,8 @@ test('the protocols skill has a one-line description a host can read, with the v
   assert.match(frontmatter[1], /\(js-harness v0\.1\.0\)/);
 });
 
-test('the protocols skill opens with an index of its seven situations, in the order of its sections', () => {
-  assert.equal(PROTOCOLS.length, 7);
+test('the protocols skill opens with an index of its eight situations, in the order of its sections', () => {
+  assert.equal(PROTOCOLS.length, 8);
   const body = TEXT.split('\n---\n')[1];
   const index = body.split('\n').filter((line) => /^\d\. /.test(line)).slice(0, PROTOCOLS.length);
   assert.deepEqual(index, PROTOCOLS.map((title, i) => `${i + 1}. ${title}.`));
@@ -95,7 +95,7 @@ test('the throughput review section holds its judgment steps, its five questions
   const review = sections(TEXT)[6];
   const text = review.lines.join('\n').replace(/\s+/g, ' ');
   assert.match(review.lines.find((line) => line.trim() !== ''), /^Incident \(2026-10-16\): .*239 minutes.*flaky test/);
-  for (const step of ['- Candidates: ', '- Readers: ', '- Stop rule: ', '- His decisions: ', '- Five questions: ', '- What leaves: ']) assert.ok(text.includes(step), step);
+  for (const step of ['- Candidates: ', '- Readers: ', '- Stop rule: ', "- The user's decisions: ", '- Five questions: ', '- What leaves: ']) assert.ok(text.includes(step), step);
   assert.ok(review.lines.some((line) => /^- Cost: .+ Reviewed by 2026-11-16\.$/.test(line)), text);
   for (const id of ['throughput-quiet-runs', 'throughput-quiet-days', 'double-review']) assert.ok(text.includes(`\`rule:${id}\``), id);
   assert.ok(text.includes('js-harness throughput reviewed'), 'it says how a review is recorded');
@@ -122,4 +122,18 @@ test('a proposal reaches the user only after two readers, and a handoff names th
 test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {
   assert.doesNotMatch(TEXT, /Sebasti/);
   assert.match(TEXT, /the user/);
+});
+
+// The trigger of odd/tasks/conventions.md, S7: before a new file is written, the session is pointed at the checks that
+// hold the project's conventions, so it writes the way the rest is written instead of learning it from a red gate.
+test('section 8 points a session writing a new command, module or document at the convention tests and the review', () => {
+  const text = protocolsSkillContent('0.1.0');
+  assert.match(text, /^description: .*writing a new command, module or document/m);
+  const section = sections(text).find((found) => found.heading === '8. Writing a new command, module or document');
+  assert.ok(section, 'section 8 exists');
+  const body = section.lines.join('\n');
+  assert.ok(body.includes('`bin/conventions-*.test.mjs`'), body);
+  assert.ok(body.includes('legacy list'), body);
+  assert.ok(body.includes('never a conventions document'), body);
+  assert.ok(body.includes('reviewer'), body);
 });

@@ -57,7 +57,7 @@ function parseInstallArgs(argv, env) {
       acceptMessages = true;
       continue;
     }
-    if (token !== '--home') throw new ScopeArgError(`unknown flag: ${token}`);
+    if (token !== '--home') throw new ScopeArgError(`unknown argument: ${token}`);
     home = requireScopeValue(argv, i, token);
     i++;
   }
@@ -169,7 +169,7 @@ function parseScopeArgs(argv, env) {
     } else if (token === '--global') {
       global = true;
     } else {
-      throw new ScopeArgError(`unknown flag: ${token}`);
+      throw new ScopeArgError(`unknown argument: ${token}`);
     }
   }
   if (global && cwd !== undefined) {

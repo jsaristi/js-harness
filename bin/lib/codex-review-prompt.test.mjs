@@ -1,23 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN } from './codex-review-prompt.mjs';
+import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN, CONVENTIONS } from './codex-review-prompt.mjs';
 import { NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 const FROM = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
 const TREE = 'c'.repeat(40);
 
+// Every text ends with CONVENTIONS (the whole range from `v2`, a part from `v4`, a merge from `v3`); `body` is a text
+// without that tail, what the tests below compare.
+const TAIL = `\n${CONVENTIONS}\n`;
+function body(text) {
+  assert.ok(text.endsWith(TAIL), text);
+  return text.slice(0, -TAIL.length);
+}
+
 // --- the prompt ---
 
 test('the prompt is versioned', () => {
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v1');
-  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v2');
+  // `v2` of the whole range and `v3` of a merge: the text ends with CONVENTIONS.
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v2');
+  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v3');
+});
+
+// odd/tasks/conventions.md, S6: what no test can judge is asked of the reviewer on each diff, in words that hold for
+// any project, since this prompt is every installed project's.
+test('every text of the prompt ends with the conventions around the change, once, before what is said of the tests', () => {
+  const texts = [
+    reviewPrompt({ from: FROM, head: HEAD }),
+    reviewPrompt({ from: FROM, head: HEAD, intent: { goal: 'g', doneWhen: 'd' } }),
+    reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 2, files: ['a.mjs'] } }),
+    reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 1, files: ['a.mjs'] }, merge: TREE }),
+  ];
+  for (const text of texts) {
+    assert.ok(text.endsWith(`\n\n${CONVENTIONS}\n`), text);
+    assert.equal(text.split(CONVENTIONS).length, 2, text);
+  }
+  const ran = reviewPrompt({ from: FROM, head: HEAD, suiteRan: true });
+  assert.ok(ran.endsWith(`\n\n${CONVENTIONS}\n\n${SUITE_RAN}\n`), ran);
+  assert.match(CONVENTIONS, /^## The conventions around it\n/);
+  for (const subject of ['pure', 'errors', 'voice', 'names', 'a finding']) assert.ok(CONVENTIONS.includes(subject), subject);
+  assert.doesNotMatch(CONVENTIONS, /js-harness|bin\/|Sebasti/);
 });
 
 test('the prompt of a merge names the diff of the automatic merge and the merge by file, one part of one included, and is never that of a whole range', () => {
   const text = reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 1, files: ['bin/a.mjs', 'odd name.txt'] }, merge: TREE });
   assert.equal(
-    text,
+    body(text),
     [
       `Review what was written in the merge commit ${HEAD}, whose first parent is ${FROM}: the resolution of its conflicts and any edit made in it. This review covers the files the command below names.`,
       `Run \`git --literal-pathspecs diff --no-renames ${TREE} ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: ${TREE} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
@@ -79,8 +108,8 @@ test('reviewPrompt without an intent says nothing of one', () => {
 test('reviewPrompt with an intent adds the goal and the done-when under a heading, to judge the change against', () => {
   const intent = { goal: 'The command measures every attempt.', doneWhen: '- `npm run check` exits 0\n- The roadmap records the result' };
   const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
-  assert.ok(prompt.startsWith(reviewPrompt({ from: FROM, head: HEAD })), 'the intent comes after the range, which stays as it was');
-  const added = prompt.slice(reviewPrompt({ from: FROM, head: HEAD }).length);
+  assert.ok(body(prompt).startsWith(body(reviewPrompt({ from: FROM, head: HEAD }))), 'the intent comes after the range, which stays as it was');
+  const added = body(prompt).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
   assert.match(added, /^\n## What the change is for\n/);
   assert.match(added, /judge the change against/i);
   // A reviewed range is a slice of its feature, so a criterion a later slice meets is not a defect of this one.
@@ -110,15 +139,16 @@ test('reviewPrompt refuses a range that is not two commit ids, since both go int
 
 const PART = { index: 2, of: 3, files: ['bin/a.mjs', 'docs/my notes.md'] };
 
-test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text and its version', () => {
+test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text before the conventions', () => {
   // `v2`: the command of a part reads its file names literally (`--literal-pathspecs`), which `v1` did not.
   // `v3`: it says so when the range leaves files out of the review, and a range of one part that does is
-  // asked with it.
-  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v3');
+  // asked with it. `v4`: it ends with CONVENTIONS.
+  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v4');
   assert.notEqual(REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION);
-  // The text a whole range was asked with in the runs recorded under `v1`, to the character.
+  // The text a whole range was asked with in the runs recorded under `v1`, to the character, which `v2` ends with
+  // CONVENTIONS.
   assert.equal(
-    reviewPrompt({ from: FROM, head: HEAD }),
+    body(reviewPrompt({ from: FROM, head: HEAD })),
     `Review the code changes in the committed range ${FROM}..${HEAD}.\n` +
       `Run \`git diff ${FROM} ${HEAD}\` to inspect them: its output is the whole change under review.\n` +
       'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.\n',
@@ -167,11 +197,11 @@ test('reviewPrompt for a part says the other files of the range are reviewed in 
 
 test('reviewPrompt for a part carries the intent after it, as the prompt of a whole range does', () => {
   const intent = { goal: 'The command measures every attempt.', doneWhen: '- `npm run check` exits 0' };
-  const bare = reviewPrompt({ from: FROM, head: HEAD, part: PART });
-  const prompt = reviewPrompt({ from: FROM, head: HEAD, part: PART, intent });
+  const bare = body(reviewPrompt({ from: FROM, head: HEAD, part: PART }));
+  const prompt = body(reviewPrompt({ from: FROM, head: HEAD, part: PART, intent }));
   assert.ok(prompt.startsWith(bare), prompt);
-  const whole = reviewPrompt({ from: FROM, head: HEAD, intent });
-  assert.equal(prompt.slice(bare.length), whole.slice(reviewPrompt({ from: FROM, head: HEAD }).length), 'the same section, word for word');
+  const whole = body(reviewPrompt({ from: FROM, head: HEAD, intent }));
+  assert.equal(prompt.slice(bare.length), whole.slice(body(reviewPrompt({ from: FROM, head: HEAD })).length), 'the same section, word for word');
 });
 
 test('quotedPath: a plain path is written as it is, and any other in single quotes, which no shell reads into', () => {
@@ -220,7 +250,7 @@ test('reviewPrompt refuses a part that is not one: a number out of its range, a 
 test('a part of a range that leaves files out says the other files are in the other parts or left out, and is the text it was when none is', () => {
   const none = reviewPrompt({ from: FROM, head: HEAD, part: PART });
   assert.equal(reviewPrompt({ from: FROM, head: HEAD, part: PART, leftOut: 0 }), none);
-  assert.ok(none.endsWith('The other files the range changes are reviewed in the other parts: read them for context, and report nothing about them.\n'), none);
+  assert.ok(body(none).endsWith('The other files the range changes are reviewed in the other parts: read them for context, and report nothing about them.\n'), none);
   const some = reviewPrompt({ from: FROM, head: HEAD, part: PART, leftOut: 4 });
   const lines = some.split('\n');
   assert.deepEqual(lines.slice(0, 3), none.split('\n').slice(0, 3), 'what is reviewed, and how it is shown, are said as they were');
@@ -232,7 +262,7 @@ test('a part of a range that leaves files out says the other files are in the ot
 
 test('a range of one part that leaves files out is asked by its files, as a part is, and is not called a part', () => {
   const sole = { index: 1, of: 1, files: ['bin/a.mjs', 'src/my code.js'] };
-  const prompt = reviewPrompt({ from: FROM, head: HEAD, part: sole, leftOut: 2 });
+  const prompt = body(reviewPrompt({ from: FROM, head: HEAD, part: sole, leftOut: 2 }));
   assert.equal(
     prompt,
     `Review the code changes in the committed range ${FROM}..${HEAD}. This review covers the files the command below names.\n` +
@@ -243,9 +273,9 @@ test('a range of one part that leaves files out is asked by its files, as a part
   assert.doesNotMatch(prompt, /\bparts?\b/);
   // The intent goes after it, as after any other.
   const intent = { goal: 'The command measures every attempt.', doneWhen: '- `npm run check` exits 0' };
-  const withIntent = reviewPrompt({ from: FROM, head: HEAD, part: sole, leftOut: 2, intent });
+  const withIntent = body(reviewPrompt({ from: FROM, head: HEAD, part: sole, leftOut: 2, intent }));
   assert.ok(withIntent.startsWith(prompt), withIntent);
-  assert.equal(withIntent.slice(prompt.length), reviewPrompt({ from: FROM, head: HEAD, intent }).slice(reviewPrompt({ from: FROM, head: HEAD }).length));
+  assert.equal(withIntent.slice(prompt.length), body(reviewPrompt({ from: FROM, head: HEAD, intent })).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length));
 });
 
 test('reviewPrompt refuses what cannot be: a whole range that leaves files out, one part of a range that leaves none out, a count that is none', () => {

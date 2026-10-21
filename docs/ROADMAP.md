@@ -244,6 +244,15 @@ proyecto".
 - [ ] Design, past its two readers: the interview, the pre-plan, the plan and the roadmap it writes
 - [x] `js-harness onboard` after `init`, with tests (slice 1 `jsaristi/js-harness#466`: check, hash, template; slice 2 `jsaristi/js-harness#468`: the stages and resume, `init`'s closing line)
 
+### Conventions
+Sebastián, 2026-10-21: the harness reads like a "frankestein", written one way here and another there, and asked
+"como verificamos que de ahora a futuro va a ver uniformidad, sobretodo cuando no es mismo modelo a futuro?";
+Pregunta 40, "Sí, arrancala". No conventions document: each convention is held where code is written, by a test
+in `bin/` whose header states it, by a review line, or by a declared rule, and each test's legacy list only
+shrinks (`bin/lib/ratchet.mjs`; `odd/tasks/conventions.md`).
+- [ ] Part 1, js-harness itself: the refused-argument wording, the error split, pure modules and the shipped voice held by tests; the review lines; the protocols skill's trigger
+- [ ] Part 2, onboarding profiles: the conventions a project picks at onboarding, after onboarding v4 closes
+
 ## F5 result
 
 Five tasks, three trials per config and effort, Opus 5.5 under `bypassPermissions`, Claude Code

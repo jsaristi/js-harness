@@ -219,7 +219,7 @@ test('installMain refuses a word it does not know before it writes anything: exi
       for (const words of [argv, ['--home', home, ...argv], [...argv, '--home', home]]) {
         const { code, outLines, errLines } = await captureConsole(() => installMain(words, { JS_HARNESS_HOME: home }));
         assert.equal(code, 2, words.join(' '));
-        assert.deepEqual(errLines, [`unknown flag: ${argv[0]}\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]`], words.join(' '));
+        assert.deepEqual(errLines, [`unknown argument: ${argv[0]}\n\nUsage: js-harness install [--home <path>] [--accept-session-messages]`], words.join(' '));
         assert.deepEqual(outLines, [], words.join(' '));
         assert.deepEqual(fs.readdirSync(home), [], `nothing is written for: ${words.join(' ')}`);
       }
@@ -1052,7 +1052,7 @@ test('--full goes with --global only, exit 2, and stays an unknown flag of sync'
   }
   const synced = await captureConsole(() => syncMain(['--global', '--full']));
   assert.equal(synced.code, 2);
-  assert.ok(synced.errLines[0].startsWith('unknown flag: --full'), synced.errLines.join('\n'));
+  assert.ok(synced.errLines[0].startsWith('unknown argument: --full'), synced.errLines.join('\n'));
 });
 
 test('a home holding a dollar sign is printed in single quotes, so the kept line\'s commands run as they are copied', async () => {
@@ -1358,7 +1358,7 @@ test('uninstallMain finds schtasks from the environment it is given and nowhere 
 test('uninstallMain rejects an unknown flag with usage and exit 2', async () => {
   const { code, errLines } = await captureConsole(() => uninstallMain(['--bogus']));
   assert.equal(code, 2);
-  assert.ok(errLines.some((l) => l.includes('unknown flag: --bogus')));
+  assert.ok(errLines.some((l) => l.includes('unknown argument: --bogus')));
   assert.ok(errLines.some((l) => l.includes('Usage: js-harness uninstall')));
 });
 
@@ -1554,7 +1554,7 @@ const projectDeps = () => ({ spawn: fakeCodegraphSpawn(), platform: 'linux' });
 test('syncMain rejects an unknown flag with usage and exit 2', async () => {
   const { code, errLines } = await captureConsole(() => syncMain(['--bogus']));
   assert.equal(code, 2);
-  assert.ok(errLines.some((l) => l.includes('unknown flag: --bogus')));
+  assert.ok(errLines.some((l) => l.includes('unknown argument: --bogus')));
   assert.ok(errLines.some((l) => l.includes('Usage: js-harness sync')));
 });
 

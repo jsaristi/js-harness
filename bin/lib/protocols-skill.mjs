@@ -1,10 +1,10 @@
-// The third skill, `js-harness-protocols`: what to do in seven situations, loaded only when a session is in one of
-// them. One skill and not seven, because the description of every installed skill is read on every turn. The design
+// The third skill, `js-harness-protocols`: what to do in eight situations, loaded only when a session is in one of
+// them. One skill and not eight, because the description of every installed skill is read on every turn. The design
 // is in odd/tasks/rule-hierarchy.md ("Protocols", T7). Each section opens with the incident it came for and its
 // date, so that it can be withdrawn when the incident has not come back; a rule it relies on is named by its id
 // (`rule:<id>`), never restated, so `js-harness rules change` reaches it with nothing to carry by hand.
 
-/** The seven situations, in the order of the index and of the sections. */
+/** The eight situations, in the order of the index and of the sections. */
 export const PROTOCOLS = [
   'Asking the user for a decision',
   'Closing a reply',
@@ -13,12 +13,13 @@ export const PROTOCOLS = [
   'Reporting a mistake',
   'Handing off, to the user, to a session or to a sub-agent',
   'Reviewing throughput',
+  'Writing a new command, module or document',
 ];
 
 export function protocolsSkillContent(version) {
   return `---
 name: js-harness-protocols
-description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off or reviewing throughput (js-harness v${version}).
+description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off, reviewing throughput or writing a new command, module or document (js-harness v${version}).
 ---
 
 # Protocols
@@ -106,9 +107,20 @@ The measure, the trigger and the re-measure are commands: the heartbeat's \`DUE:
 - Candidates: each with its baseline, target, cost, owner, risk item, and why quality is unchanged: no check, review or test is removed or weakened, and the land's proof never shrinks. Each figure is marked measured (with the row of the table it comes from), derived, or estimate.
 - Readers: only when a candidate list goes to the user, never on the daily review: it first passes the two readers of section 1 (\`rule:double-review\`), one rerunning the figures and attacking the reasoning, one looking for what is missing; the version the user gets lists what they changed.
 - Stop rule: a candidate whose gain is less than its cost is dropped, and why is written down. Record each review with \`js-harness throughput reviewed --day <day> --found nothing|candidates\`, and what ships with \`js-harness throughput shipped <item>\`. After \`rule:throughput-quiet-runs\` reviews in a row that found nothing, the review comes every \`rule:throughput-quiet-days\` instead of daily; one that finds candidates makes it daily again.
-- His decisions: spend, a protocol change, a security or system setting, anything irreversible, one question at a time (section 1). The lead assigns everything else.
+- The user's decisions: spend, a protocol change, a security or system setting, anything irreversible, one question at a time (section 1). The lead assigns everything else.
 - Five questions: it happened (the incident); twice in a day, at a cost of up to 64.4 session-hours of turns that ended in silence over two days; a check does the measuring, the trigger, the snapshots and the re-measure, so only this judgment is prose; no section held a recurring review, and sections 1 and 4 are named, not copied; its cost and what leaves follow.
 - What leaves: the hand-written measure scripts in the lead's notes.
 - Cost: one command a day, weekly once quiet, and two readers only with a candidate list. Reviewed by 2026-11-16.
+
+## 8. ${PROTOCOLS[7]}
+
+Incident (2026-10-21): the user found the harness written one way in one part and another way in the next, with nothing that would make a later model write the way the rest is written; the drift stood exactly where no rule was written: the wording of a refused flag, how an error is signalled, how shipped text names the user.
+
+- Read two neighbours of the same kind first, and write the way they do: the header comment that says what the file is for and why, the shape of its exports and errors, the test beside it.
+- The project's conventions are held by tests that state each rule in their header and say how to comply; in js-harness, \`bin/conventions-*.test.mjs\`. Run them before the commit, not after a red gate.
+- A file on a convention's legacy list that you touch is made to comply, and leaves the list in the same commit: the list only shrinks.
+- A new convention is a test with its legacy list, written once where it is enforced; never a conventions document, which restates the rules and is not read while code is written. What no test can judge (a pure core with the I/O at the command's edge, the voice of the text, how precise a name is) is the reviewer's, on each diff.
+- Five questions: it happened (the incident); the drift was found in three places at once; the checks do the holding, and this section only points at them before the first line is written; no section covered writing; it costs one section read when a new file is written, and no conventions document leaves because none was written.
+- Cost: this section, read only when a new command, module or document is written. Reviewed by 2026-11-21.
 `;
 }
