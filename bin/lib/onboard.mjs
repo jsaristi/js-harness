@@ -671,8 +671,10 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents, adrs = ne
     for (const line of templateLinesLeft(origin, originTemplate(''))) {
       findings.push({ file: ORIGIN_PATH, stage: 3, message: `still holds the template line "${line}"` });
     }
+    // Once O6 closes the onboarding, the pre-plan is frozen: an ADR written later is not its risk.
     const risks = sections.get('Risks') ?? '';
-    for (const number of unreadAdrs(adrs).filter((n) => !new RegExp(`\\bADR-${n}\\b`).test(risks))) {
+    const open = onboarding !== null && !onboardingTasks(onboarding).get('O6')?.done;
+    for (const number of (open ? unreadAdrs(adrs) : []).filter((n) => !new RegExp(`\\bADR-${n}\\b`).test(risks))) {
       findings.push({ file: ORIGIN_PATH, stage: 3, message: `ADR-${number} has a source not read, and ## Risks does not name it` });
     }
   }

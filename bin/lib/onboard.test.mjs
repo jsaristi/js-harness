@@ -173,7 +173,7 @@ test('once the onboarding is closed (O6), Kind and the areas are no longer compa
   assert.deepEqual(check({ onboarding: onboardingDoc({ setup, advice: [...ADVICE, '- [x] A:payments Payments — open (OD2)'], o6: 'x' }) }), []);
   // The ADRs live on after it, and Advice is history: neither is held to the onboarding's rules again.
   const fast = SETUP.map((line) => line.replace('Mode: full', 'Mode: fast (L11)'));
-  const later = new Map([['docs/adr/0002-hosting.md', '# ADR-0002: Hosting\n\n## Status\nsuperseded by ADR-0009\n'], ['docs/adr/0009-cloud.md', '# ADR-0009: Cloud\n']]);
+  const later = new Map([['docs/adr/0002-hosting.md', '# ADR-0002: Hosting\n\n## Status\nsuperseded by ADR-0009\n'], ['docs/adr/0009-cloud.md', '# ADR-0009: Cloud\n'], ['docs/adr/0010-tax.md', adr('0010', 'Tax', 'A:legal', { sources: ['- not read: no docs yet (2026-11-02)'] })]]);
   assert.deepEqual(check({ onboarding: onboardingDoc({ setup: fast, o6: 'x' }), adrs: later }), []);
   assert.equal(stage({ onboarding: onboardingDoc({ setup: fast, o6: 'x' }), adrs: later }).stage, 'done');
 });
