@@ -1207,3 +1207,18 @@ ceiling.
   first with an exclusive `docs/adr/.<nnnn>.claim`, removed once the ADR is written; a dangling link under
   `docs/adr/` no longer crashes `readFiles`; two doc comments fixed. Left: in-progress v3-format approvals lacking
   `adrs sha256` (none exist, D6), the `file: message` round trip, the two ADR path patterns, the `adrs` defaults.
+- L32 (2026-10-20) Slice 4b is PR 488 (`feat/onboarding-adrs`, base `feat/onboarding-conversation`, stacked on PR
+  486): reviewed, and the commits listed under ## Reviews. `notify --kind ready` refuses a PR not on main, so a note
+  went to the orchestrator; once 486 merges, retarget 488 to main (`gh pr edit 488 --base main`) and send its ready
+  notice. Slice 4c starts on top of 4b, on a new branch `feat/onboarding-plan` from `7ff16b85`. Its plan, test first:
+  (1) hashes per D6 (line 360): `answers` leaves out the given-up line and `roadmap` the `## Advice mode` section;
+  until now both were inside. (2) The pre-plan (D4, D6 line 377): `## Stack and architecture`, whose table
+  `Area | Decision | ADR` has one row per decided area (an area of `## Advice` settled with an ADR), and
+  `## Owner steps`, both in `originTemplate` and the check. (3) The roadmap (D5, D6 line 379): `## Decided`
+  `Area | Decision | ADR` names every accepted ADR (named by a checked area, neither superseded nor withdrawn, once O3
+  is checked); `## Advice mode` holds one line `Teaching: <on|off> · Mode: <full|fast> · Level: A:<id> <level>, ...`,
+  its values not compared; until O6, every `B:` ID `--checklist bar` prints for Kind and Size is on a Checklist step,
+  under `## Open decisions` on a line with its area's `OD<n>`, or named in the given-up line; `roadmapTemplate`
+  gains both sections. (4) `--plan` reads the onboarding document for Kind, Size, the areas and the given-up line.
+  (5) The Close text (D7, line 417): the checking command in "How it works". The testkit's PROFILES gains bar
+  targets; its ORIGIN and ROADMAP gain the new sections.
