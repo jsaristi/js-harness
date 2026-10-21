@@ -540,6 +540,53 @@ test('backup ready names a clone ahead of origin, a source with no remote and an
   assert.match(deps.stdout.text, /missing: .*huge\.bin: untracked, 5\.0 MB, too large to copy/);
 });
 
+test('backup ready fails closed when git cannot count or read a source, and when the backup is not initialised', async (t) => {
+  const { root, deps, paths } = setup(t);
+  const source = sourceRepo(path.join(root, 'src'));
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const run = deps.run;
+  const failing = (what) => (cmd, args, options) =>
+    cmd === 'git' && args[1] === source && args.includes(what) ? { status: 128, stdout: '', stderr: 'fatal' } : run(cmd, args, options);
+
+  deps.run = failing('rev-list');
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1, deps.stdout.text);
+  assert.match(deps.stdout.text, /missing: .*src: git could not count its commits outside the bundle/);
+
+  deps.run = failing('--git-common-dir');
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1, deps.stdout.text);
+  assert.match(deps.stdout.text, /missing: .*src: its worktrees and records could not be read/);
+
+  deps.run = run;
+  fs.rmSync(paths.config);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /backup ready: no, the backup is not initialised/);
+});
+
+test('backup run never copies the file an untracked symlink points at', async (t) => {
+  const { root, bare, deps, paths } = setup(t);
+  const source = sourceRepo(path.join(root, 'src'));
+  const outside = path.join(root, 'outside.txt');
+  fs.writeFileSync(outside, 'private bytes from outside the checkout\n');
+  try {
+    fs.symlinkSync(outside, path.join(source, 'link.txt'), 'file');
+  } catch {
+    t.skip('this machine cannot create a symlink');
+    return;
+  }
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  const listed = defaultRun('git', ['--git-dir', bare, 'ls-tree', '-r', '--name-only', 'HEAD']).stdout;
+  assert.ok(!listed.includes('link.txt'), listed);
+  const all = defaultRun('git', ['--git-dir', bare, 'grep', '-l', 'private bytes', 'HEAD']).stdout;
+  assert.equal(all, '');
+});
+
 test('backup init creates the repository private when it is missing, refuses a public one, and clones', async (t) => {
   const { paths, deps, state } = setup(t, { visibility: null });
   fs.rmSync(paths.clone, { recursive: true, force: true });

@@ -102,8 +102,9 @@ export function repoFiles(git, source) {
     for (const name of names) {
       const full = path.join(worktree.path, name);
       let stat;
+      // lstat, not stat: a symlink may point outside the checkout, at a file that must never reach the backup.
       try {
-        stat = fs.statSync(full);
+        stat = fs.lstatSync(full);
       } catch {
         continue;
       }

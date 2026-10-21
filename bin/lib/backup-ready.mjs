@@ -87,12 +87,16 @@ function repoState(git, source, manifest) {
   // A stash entry has its own line below, so its two commits are not counted here as well.
   const commits = refs.filter((line) => !/ refs\/(stash|js-harness\/stash\/\d+)$/.test(line)).map((line) => line.split(' ')[0]);
   const input = `${commits.join('\n')}\n--not\n--remotes\n${bundled.join('\n')}\n`;
-  const outside = Number(git(source, ['rev-list', '--count', '--ignore-missing', '--stdin'], { input }).stdout.trim()) || 0;
-  if (outside) found.push(`${source}: ${outside} commits on no remote are not in the latest bundle`);
+  // A failed count is a gap, never zero: this check decides whether a disk may be wiped.
+  const counted = git(source, ['rev-list', '--count', '--ignore-missing', '--stdin'], { input });
+  const outside = counted.status === 0 ? Number(counted.stdout.trim()) || 0 : null;
+  if (outside === null) found.push(`${source}: git could not count its commits outside the bundle`);
+  else if (outside) found.push(`${source}: ${outside} commits on no remote are not in the latest bundle`);
   for (const stash of stashesOf(git, source)) {
     if (!bundled.includes(stash.sha)) found.push(`${source}: ${stash.name} (${stash.subject}) is in no bundle`);
   }
   const now = repoFiles(git, source);
+  if (!now) return [...found, `${source}: its worktrees and records could not be read`];
   const folder = `git/${shortKey(source)}/`;
   const backed = new Map((manifest.files ?? []).filter((f) => f.path.startsWith(folder)).map((f) => [f.path.slice(folder.length), f.sha256]));
   const stale = new Set(now.files.filter((f) => backed.get(f.path) !== sha256(f.buffer)).map((f) => f.path));
