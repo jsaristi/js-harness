@@ -126,7 +126,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [x] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes (fb54c927, L22)
 - [x] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10) (3c is PR 493, L33)
 - [x] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12) (PRs 486, 488, 490, 494)
-- [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
+- [x] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC (`e8edbfaa`, `bf1d1d8e`, `e3f74e8c`; L35-L37)
 - [ ] T4 (kind: verify) The two real onboardings of the done-when (S9), after T9: the Astro static site, then the platform pre-project (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (`docs/ROADMAP.md:231-237`, on `main` now) and record the reviews
 
@@ -1001,6 +1001,14 @@ ceiling.
   approved (readability, reliability; lineage review-bd14d28b2a5599bd, acknowledged); R2-orphaned-skill-jsdoc and
   R3-cli-handoff-partial-assert taken (L37), R3-detached-jsdoc is the same as the first. Codex `aeef454..bf1d1d8`:
   correct (0.91).
+- T9 skill, gentle-ai (2026-10-21): `bf1d1d8e` (`e8edbfaa..bf1d1d8e`, Risk item 3, reviewed alone in a detached
+  worktree) approved (readability, reliability; lineage review-66a7b158699fae0c, acknowledged), four suggestions.
+  `e3f74e8c` (`bf1d1d8e..e3f74e8c`) approved (readability, reliability; lineage review-87ea8c53d1d3ac4c,
+  acknowledged), two suggestions. Not taken: the two referent suggestions ("the line", "the level") point at the
+  `## Advice mode` line named in the same sentence; the test's order and bounds suggestions, since each text is
+  pinned whole and by section; R2-first-lead-charter-order, the charter asked before the lead says it leads is
+  the order the skill's own handover uses; R3-removed-manifest-export, since the export was added in `e8edbfaa`
+  and never shipped. Codex `bf1d1d8..e3f74e8`: correct (0.97).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -1363,3 +1371,8 @@ ceiling.
   no longer loads the manifest's graph; the skill's JSDoc back above its function (also gentle-ai's
   R2-orphaned-skill-jsdoc on `e8edbfaa`); the CLI test pins the four handoff lines (gentle-ai's
   R3-cli-handoff-partial-assert); this correction. Manifest 184, lib 42, cli 19 pass.
+- L38 (2026-10-21) T9 is done: the verifier and both gentle-ai reviews passed, Codex correct on the whole range;
+  the detached review worktree is removed. PR 494 landed (main `81305126`); main is merged into
+  `feat/onboarding-handoff` before its PR. Next: T4, the two real onboardings of S9 (the Astro static site, then
+  the platform pre-project). Each is a conversation with the owner in a project of his, so it starts when he opens
+  that project's session; then T5.
