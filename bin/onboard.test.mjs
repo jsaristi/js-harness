@@ -325,6 +325,21 @@ test('bare onboard: a plan of its own in another case is named as it is on disk,
   assert.equal(fs.existsSync(path.join(root, ONBOARDING_PATH)), false);
 });
 
+// Codex on 835e399: a plan that is a link was found by reading it, and the name lookup must not drop it.
+test('bare onboard: a plan of its own that is a link is still left alone, exit 1', async (t) => {
+  const root = project(t, { 'plans/roadmap.md': '# Roadmap kept elsewhere\n' });
+  fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+  try {
+    fs.symlinkSync(path.join(root, 'plans', 'roadmap.md'), path.join(root, ROADMAP_PATH), 'file');
+  } catch (err) {
+    if (err.code === 'EPERM') return t.skip('this machine does not let a test make a link');
+    throw err;
+  }
+  const { code, out } = await onboard(root);
+  assert.equal(code, 1);
+  assert.equal(out.split('\n')[0], 'This project has a plan of its own: docs/ROADMAP.md.');
+});
+
 test('an argument it does not take is a usage error, exit 2', async (t) => {
   const root = project(t);
   for (const argv of [['check', '--force'], ['template'], ['template', 'plan'], ['template', 'adr'], ['template', 'adr', 'a', 'b'], ['template', 'feature', 'runtime'], ['hash', 'extra'], ['check', '--cwd'], ['--plan'], ['--write'], ['stage']]) {

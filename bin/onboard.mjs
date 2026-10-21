@@ -160,7 +160,8 @@ function planFiles(root) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return [];
     throw err;
   }
-  const onDisk = (file) => entries.find((entry) => entry.isFile() && `docs/${entry.name}`.toLowerCase() === file.toLowerCase());
+  // A link to a plan counts, as reading it did before; a directory of that name does not.
+  const onDisk = (file) => entries.find((entry) => !entry.isDirectory() && `docs/${entry.name}`.toLowerCase() === file.toLowerCase());
   return [ORIGIN_PATH, ROADMAP_PATH].map(onDisk).filter(Boolean).map((entry) => `docs/${entry.name}`);
 }
 

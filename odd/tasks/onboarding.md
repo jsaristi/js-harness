@@ -1397,3 +1397,6 @@ ceiling.
   `docs/ROADMAP.md` the old read-based check found. Next step: test first, a symlinked `docs/ROADMAP.md` is still
   refused; `planFiles` takes any entry that is not a directory; Codex recheck; then the gentle-ai line, push,
   PR (base main) and the ready notice to the orchestrator. The lead holds the T4 steps and prompt (L39).
+- L41 (2026-10-21) The link case, test first: a CLI test makes `docs/ROADMAP.md` a link and expects the refusal.
+  This machine refuses the link (EPERM), so the test skips here and RED was not observed locally; GitHub's Linux
+  run executes it. `planFiles` now takes any entry that is not a directory. Cli 20 pass, 1 skipped.
