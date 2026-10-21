@@ -2748,6 +2748,20 @@ test('the orchestrator skill says how the lead answers how the work is going: re
   assert.ok(js.includes('- `js-harness report [--since <time>] [--mark]` —'), 'the js-harness skill lists the command');
 });
 
+// odd/tasks/backup-ready.md, L5: his words, "Deja lo que tenga que quedar como protocolo armado"; a reinstall is
+// prepared the same way each time: the readiness check, the private checklist, one item at a time, then the restore.
+test('the orchestrator skill says how a reinstall is prepared: backup ready, the checklist, the pause, then the restore', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## Before a reinstall\n'));
+  for (const line of [
+    '1. Run `js-harness backup ready`.',
+    '2. Recall your private checklist of the machine: it names other projects, so it lives in your memory, never in the repository.',
+    '3. Resolve each item with the user one at a time, through the question tool.',
+    '4. Pause every session at a safe point, then tell the user in capitals that they can restart.',
+    '5. After the reinstall, in this order: the logins, `gh auth login` first since the backup repository needs it; then `js-harness backup restore` and `js-harness backup verify`; then `js-harness doctor`.',
+  ]) assert.ok(text.includes(line), line);
+});
+
 test('the orchestrator skill says what every recap carries and how a block waits while the user is away', () => {
   const text = components[2].content('0.1.0');
   assert.ok(text.includes('\n## The recap\n'));

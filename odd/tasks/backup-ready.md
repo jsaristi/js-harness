@@ -47,6 +47,7 @@ Nothing: review consent is pre-granted; product questions go to the orchestrator
 - [x] T4 (build) Desktop side-session-notes and session presets, the plugin lists, as reference copies; a change to them makes a backup due (S5, S7) — inline. T2-T4: commit 672810bf; gentle-ai not due on it alone (under_budget, 494 lines), assessed with the slice
 - [x] T5 (build) `backup ready` (S1-S4, S11) — inline
 - [x] T6 (docs) help, README, SPEC, user guide — inline
+- [x] T8 (docs) the lead's addition: ROADMAP items, "Before a reinstall" in the orchestrator skill with its test (written with the text, so no RED was observed apart) — inline
 - [ ] T7 (verify) gate, gentle-ai review, codex-review, run on his machine (S9) — inline
 
 ## Log
@@ -61,6 +62,6 @@ Nothing: review consent is pre-granted; product questions go to the orchestrator
 - D4 (decision, his words) Other projects come later: "Los otros proyectos ya los tratamos despues ... lo mas importante ahora es este proyecto ... cuando yo vaya a reiniciar te voy a preguntar primero y tu ya me recordaras todo".
 
 ## Next step
-1. T8 (docs): the lead's addition above — ROADMAP items, the "Before a reinstall" skill section and its test; commit.
+1. T8 done.
 2. T7: `npm run check`; then `gentle-ai review assess --cwd . --agent claude-code --base-ref e22ef3f1 --committed-only --json` on the slice 672810bf..HEAD (the Stop hook offered the whole branch: per AGENTS.md only its read-only status was run, nothing started); when due, run its returned next_transition with `--lenses risk,reliability --lenses-reason "...")`, consent pre-granted (run the `granted` invocation); then `js-harness codex-review --base e22ef3f1`; record each gentle-ai line here per code commit.
 3. Push `feat/backup-ready`, open the PR (body ends with the Claude Code line and carries the gentle-ai line), then `js-harness notify --to orchestrator --kind ready "<PR and one line>"`.

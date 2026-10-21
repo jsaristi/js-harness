@@ -229,6 +229,10 @@ ways; Pregunta 19 chose "Los dos (Recommended)". A first copy was made by hand o
 - [x] A living summary in the public repository, regenerated each cycle, project matters only (decisions, conventions, state, open work; nothing personal), that a session reads to catch up
 - [x] The full Engram export in a private repository of its own, pushed at each session's close
 - [x] Restore proven from both on a scratch home
+- [x] `js-harness backup ready`: says before a wipe what still has no copy off the machine (`odd/tasks/backup-ready.md`)
+- [x] The small backup gaps: every stash entry, worktree edits, the `.git/js-harness` records, Desktop notes and presets, the plugin lists
+- [x] The reinstall protocol, "Before a reinstall" in the orchestrator skill (his words, 2026-10-21: "Deja lo que tenga que quedar como protocolo armado")
+- [ ] A from-zero rehearsal in a Hyper-V VM, the proof (Windows Sandbox cannot run WSL2 or winget). Later, only if it shows the need: a per-project import (engram exports per project, but `engram import` has no filter) and pinning the reviewed stack versions
 
 ### Onboarding
 Sebastián, 2026-10-19: "una funcionalidad de onboarding para que cuando instalemos el harnes en un proyecto

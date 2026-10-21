@@ -186,6 +186,15 @@ How a lead is rotated, where the host nests a session under the one that started
 - Before a lead is archived, detach every session it started: archiving a session archives its idle side sessions.
 - Before the user leaves, open the reserve sessions the stretch will need: the session-start tool is refused on turns the user did not start, so a reserve waits with \`js-harness wait --notice-to <number>\` until you send it its feature.
 
+## Before a reinstall
+
+When the user says they will reinstall the machine or wipe its disk, nothing of the work may live only there. It comes back three ways: git holds the repositories, branches, stashes and edits; \`js-harness backup\` holds the memory, \`~/.js-harness\`, the Desktop notes and the review records; a reinstall list holds the rest (\`winget export\` and \`import\`, Node through nvm, \`wsl --export\` and \`--import\`, and each login, which the harness never enters).
+1. Run \`js-harness backup ready\`. Clear each \`missing:\` line (push, commit, \`js-harness backup run\`) until it says yes, or say why that item stays.
+2. Recall your private checklist of the machine: it names other projects, so it lives in your memory, never in the repository.
+3. Resolve each item with the user one at a time, through the question tool.
+4. Pause every session at a safe point, then tell the user in capitals that they can restart.
+5. After the reinstall, in this order: the logins, \`gh auth login\` first since the backup repository needs it; then \`js-harness backup restore\` and \`js-harness backup verify\`; then \`js-harness doctor\`.
+
 ## A work session
 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
