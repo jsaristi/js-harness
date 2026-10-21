@@ -926,6 +926,16 @@ ceiling.
   (`bin/lib/profiles-data.test.mjs:12-13`); a kind that lists itself in `joins` is not named.
 - Slice 3b, Codex (2026-10-20): `dfae6be..364ada0` in 2 parts, recorded; correct (0.86 on the data, 0.96 on the
   join rule), no findings.
+- Slice 4a, gentle-ai (2026-10-20): `f0a461f5..c38a508c` (c38a508c), assessed `medium` and `under_budget`, started
+  through the preflight status; lenses readability and reliability, approved and acknowledged (lineage
+  review-904644ed8258b6dc). Its fix `c38a508c..5cba6d26` (5cba6d26), lens reliability, approved and acknowledged
+  (lineage review-36b6ebaa093ffcc1). Taken in 5cba6d26: R2-001 (a missing Level hidden behind "fix"), R2-002 (the fast
+  form in the suffix message), R3-empty-advice-stuck, R3-checklist-parse-crash. Left: R3-closed-onboarding-reopened (a
+  v3-format document, accepted by D6); the fix review's R3-002 and R3-003 (tests that pin the empty checklist's step
+  and a non-area checklist line), for 4b. Its R3-001 does not hold: with an empty checklist, `pasted` becomes true in
+  the `else if (expected)` branch (`bin/lib/onboard.mjs`, `conversation`).
+- Slice 4a, Codex (2026-10-20): `f0a461f..c38a508` in 2 parts, recorded; one P2, the same as R2-001. The fix
+  `c38a508..5cba6d2` recorded as its recheck: fixed, correct (0.99).
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
