@@ -945,6 +945,12 @@ ceiling.
   - gentle-ai: `437a5a7f`, `5f507d36` (`3a9f6601..5f507d36`) assessed `medium`, review not due (`under_budget`, 3 paths, 15 lines): Codex's P2 fix on slice 3a, and main's `init`, `install` and T3 lines taken before merging main. Codex recorded 437a5a7..5f507d3 (correct, 0.99) and the merge 5f507d3..7edd0fa (correct, 0.99).
   - gentle-ai: `c38a508c` approved (readability, reliability; lineage review-904644ed8258b6dc, acknowledged); Codex one P2, the same as R2-001.
   - gentle-ai: `5cba6d26` approved (reliability; lineage review-36b6ebaa093ffcc1, acknowledged): the fix of R2-001 and Codex's P2; Codex recheck fixed, correct (0.99).
+  - gentle-ai: `9f5d7446` approved after one bounded correction (resilience, readability, reliability; lineage review-654db40f4e81ed8e, acknowledged): R3-closed-onboarding-regresses fixed.
+  - gentle-ai: `f26ee232` approved, the bounded correction of `9f5d7446`, validated (lineage review-654db40f4e81ed8e, acknowledged).
+  - gentle-ai: `0ec1ba66` approved (resilience, reliability; lineage review-d572c7b81ed4696f, acknowledged): the claim fix from L31's advisories; one advisory left, an EEXIST from a writer other than onboard in the gap after the second listing.
+  - gentle-ai: `1a83873e` approved (reliability; lineage review-101fc8c0468042fe, acknowledged): Codex's P2; Codex recheck fixed, correct (0.99).
+- Slice 4b, Codex (2026-10-20): `cd940af..0ec1ba6` in 2 parts, recorded; one P2, the unread-ADR Risks check still ran
+  after O6. The fix `0ec1ba6..1a83873` recorded as its recheck: fixed, correct (0.99).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
