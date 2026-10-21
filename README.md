@@ -256,7 +256,8 @@ adrs      sha256:e3b0c44298fc
 ```
 
 The `check` is cut to three of its findings. A project with a plan of its own and no onboarding
-anywhere is left alone, exit 1. Until the close, `check` also holds the roadmap to the advice:
+anywhere is left alone, exit 1; `docs/origin.md` and `docs/ROADMAP.md` are found in any case, and named as the disk
+names them. Until the close, `check` also holds the roadmap to the advice:
 `## Decided` names every accepted ADR, and every `B:` target that `profile --checklist bar` prints
 for the project's Kind and Size is on a Checklist step, waits under `## Open decisions` with its
 area's open decision, or is named in the given-up line. The design is `odd/tasks/onboarding.md`.

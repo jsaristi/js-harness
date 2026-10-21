@@ -313,6 +313,18 @@ test('bare onboard: a plan of its own is left alone, exit 1', async (t) => {
   assert.equal(fs.existsSync(path.join(root, ONBOARDING_PATH)), false);
 });
 
+// T4 of odd/tasks/onboarding.md met it first: a site's own docs/roadmap.md. A file system that ignores case reads it as
+// docs/ROADMAP.md, one that does not would let the onboarding write a second roadmap beside it; either way the refusal
+// names the file as it is on disk.
+test('bare onboard: a plan of its own in another case is named as it is on disk, exit 1', async (t) => {
+  const root = project(t, { 'docs/roadmap.md': '# Roadmap of the site\n' });
+  const { code, out, err } = await onboard(root);
+  assert.equal(code, 1);
+  assert.equal(err, '');
+  assert.equal(out.split('\n')[0], 'This project has a plan of its own: docs/roadmap.md.');
+  assert.equal(fs.existsSync(path.join(root, ONBOARDING_PATH)), false);
+});
+
 test('an argument it does not take is a usage error, exit 2', async (t) => {
   const root = project(t);
   for (const argv of [['check', '--force'], ['template'], ['template', 'plan'], ['template', 'adr'], ['template', 'adr', 'a', 'b'], ['template', 'feature', 'runtime'], ['hash', 'extra'], ['check', '--cwd'], ['--plan'], ['--write'], ['stage']]) {

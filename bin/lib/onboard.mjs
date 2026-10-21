@@ -920,7 +920,8 @@ function elsewhereLine({ branch, worktree, remote = false, local = null }, git) 
 export function stageReport(files, { agentsTemplate = '', profiles = PROFILES, git }) {
   if (files.onboarding === null) {
     if (git.elsewhere.length > 0) return { code: 0, lines: git.elsewhere.map((place) => elsewhereLine(place, git)) };
-    const own = [[ORIGIN_PATH, files.origin], [ROADMAP_PATH, files.roadmap]].filter(([, text]) => text !== null).map(([file]) => file);
+    // `planFiles`, where the caller lists them, are the plan's files as the disk names them, in any case (readFiles).
+    const own = files.planFiles ?? [[ORIGIN_PATH, files.origin], [ROADMAP_PATH, files.roadmap]].filter(([, text]) => text !== null).map(([file]) => file);
     if (own.length > 0) {
       return {
         code: 1,

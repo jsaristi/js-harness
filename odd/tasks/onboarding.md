@@ -1376,3 +1376,18 @@ ceiling.
   `feat/onboarding-handoff` before its PR. Next: T4, the two real onboardings of S9 (the Astro static site, then
   the platform pre-project). Each is a conversation with the owner in a project of his, so it starts when he opens
   that project's session; then T5.
+- L39 (2026-10-21) PR 495 landed (06:14Z). The lead (his "Arranca T4", the static site first) asked how T4 runs v4
+  while the installed copy is the tag v0.97.0 (pnpm global, no `bin/lib/lead-prompt.mjs`) and main also says
+  0.97.0, so `upgrade --source` installs nothing. Answer sent: install main by sha as `merge-queue --refresh-copy`
+  does (`bin/lib/refresh-copy.mjs:284`, `:303`, `:319`, `:322`: settings backup, `pnpm add -g` by sha, `install`,
+  `doctor`), the one way that runs the binary, hooks and both hosts' skills 0.98.0 ships; a source checkout's
+  stage lines print `js-harness` commands the old copy would run, and `sync --global` from source mixes v4 skills
+  with a 0.97.0 binary. Two findings on `D:\abogadaclaudiajimenez`, read without writing: it is not initialized
+  (v4's bare `onboard` there: "not an initialized project"), and after `init` its `docs/roadmap.md` (the site's
+  April roadmap) stops the onboarding, "This project has a plan of its own: docs/ROADMAP.md.", reproduced in a
+  scratch repository (removed). The opening prompt for the T4 session went to the lead with both steps.
+  The message named a file that is not on disk, and a case-sensitive file system would not see it at all, so the
+  onboarding would write a second roadmap beside it. Fixed on branch `fix/onboard-plan-name` from main
+  `0881ec00`, test first: RED on a CLI test with `docs/roadmap.md` (19 pass, 1 fail: "docs/ROADMAP.md"), then
+  `readFiles` lists `planFiles`, the plan's files matched in any case and named as the disk names them, which the
+  own-plan refusal reads. Cli 20, lib 42, init 12 pass; README says so.
