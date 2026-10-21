@@ -993,6 +993,8 @@ ceiling.
   stage line is pinned by its words, the file's way); R3-checklist-command-unproved does not hold, since
   `onboard profile --checklist bar` is the command 4c's bar check already names (`bin/lib/onboard.mjs:653`). Codex
   `eb51a24..57d761d`: correct (0.96).
+- Slice 4d's fixes, gentle-ai (2026-10-21): `c46f4393` (`57d761d3..c46f4393`) approved (readability, reliability;
+  lineage review-cebc9fdb0b8b776a, acknowledged), no advisories. Codex `57d761d..c46f439`: correct (0.99).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
