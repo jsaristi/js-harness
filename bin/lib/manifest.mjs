@@ -73,6 +73,10 @@ the machine; a rule belongs in a check, a line of \`AGENTS.md\` or a protocol.
 /** The second skill: how several sessions share one project. A session that supervises the others reads
  * the orchestrator's part, a session that works next to others reads the work session's; the design is
  * in odd/tasks/session-board.md ("The orchestrator"). Every line is paid each time a host loads it. */
+/** The opening prompt of a new lead, as the orchestrator skill gives it; `onboard` prints it at the handoff (D13 of
+ * odd/tasks/onboarding.md), so the two never drift apart. */
+export const LEAD_OPENING_PROMPT = 'You are the orchestrator of this project\'s sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.';
+
 function orchestratorSkillContent(version) {
   return `---
 name: js-harness-orchestrator
@@ -183,7 +187,7 @@ Compaction, and a relief only on request. You hold nothing the files do not. A c
 - Give this opening prompt only when the user asks for a new lead, always the same:
 
 \`\`\`
-You are the orchestrator of this project's sessions. Follow the js-harness-orchestrator skill: you take over from the orchestrator before you.
+${LEAD_OPENING_PROMPT}
 \`\`\`
 
 - When you start from that prompt, read the list (\`js-harness rules\`), the relief file, the board and the last reply of the orchestrator before you (its id is in the relief file; \`js-harness sessions --tail <n>\` prints more lines of every last reply). Then say that you lead. Only after that is the old orchestrator archived, so there are never two: the new orchestrator archives the old orchestrator itself when the host gives it a tool to archive sessions, and the user does otherwise. The same holds for a work session whose work is fully finished (nothing uncommitted or unpushed in its worktree, no open pull request of its own, nothing queued for it): when it closed with its summary, the board lists it under \`to archive\`: read the summary, then archive the session with the host's tool to archive sessions, without asking, and name it in the recap. When the host refuses because the session still has live work, turn its Remote Control off with the host's tool, then archive it again, without asking: a Remote Control link counts as live work and keeps a finished session from being archived. A finished session that closed without a summary is asked for one first, by \`SendMessage\` to its title, and archived once it closes with it.

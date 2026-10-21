@@ -292,7 +292,11 @@ test('bare onboard: a closed onboarding waits for its merge, and once merged poi
   git(root, 'switch', '-q', 'main');
   git(root, 'merge', '-q', 'onboarding');
   git(root, 'switch', '-q', '-c', 'feat/catalog');
-  assert.deepEqual(await onboard(root), { code: 0, out: 'Onboarded: docs/ROADMAP.md is the plan.\nNext: P1 Catalog, its first step.', err: '' });
+  const done = await onboard(root);
+  assert.equal(done.code, 0);
+  assert.equal(done.err, '');
+  assert.deepEqual(done.out.split('\n').slice(0, 2), ['Onboarded: docs/ROADMAP.md is the plan, and the plan orchestrator\'s work is done.', 'Next: P1 Catalog, its first step.']);
+  assert.match(done.out.split('\n').at(-1), /^You are the orchestrator of this project's sessions\. /);
 });
 
 test('bare onboard: a plan of its own is left alone, exit 1', async (t) => {

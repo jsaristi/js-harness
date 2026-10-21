@@ -125,7 +125,7 @@ one gentle-ai review and one Codex review per slice, and the one real onboarding
 - [x] T3 (kind: build) Slice 2: bare `onboard`, its stages and resume (D2, D7, D8), `init`'s closing line, with tests (merged in `jsaristi/js-harness#468`)
 - [x] T6 (kind: design) Design v4 from S3-S8, L12 and `## Reference profiles`: the onboarding as a plan orchestrator that asks the project's kind and the developer's level, and advises the stack and the architecture, past its two readers and his yes (fb54c927, L22)
 - [x] T7 (kind: build) Slices 3a-3c: `bin/lib/profiles-data.mjs` with the eleven kinds of S8, `onboard profile`, the shape test (D9, D14), after his yes to v4; each profile passes two readers when it is written (S10) (3c is PR 493, L33)
-- [ ] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12)
+- [x] T8 (kind: build) Slice 4: the v4 conversation (D3, D15), `## Setup` and `## Advice`, ADRs, the origin and roadmap additions, their checks and stage lines, Close renumbered (D2-D7, D10-D12) (PRs 486, 488, 490, 494)
 - [ ] T9 (kind: build) Slice 5: the orchestrator skill's teaching paragraph and the handoff line (D13), README, SPEC
 - [ ] T4 (kind: verify) The two real onboardings of the done-when (S9), after T9: the Astro static site, then the platform pre-project (its scratch-project interview was stopped by S3)
 - [ ] T5 (kind: docs) Tick the ROADMAP's Onboarding steps (`docs/ROADMAP.md:231-237`, on `main` now) and record the reviews
@@ -1327,3 +1327,13 @@ ceiling.
   ADR (D2, D10); stage 5 pastes `--checklist bar` into the first build phase and fills `## Decided` and
   `## Advice mode` (D2, D5). Stage 6 is left as is: D2 says "as stage 4, for the roadmap", and the areas were
   confirmed at stage 4. Lib 41, cli 19 pass. With 4d, T8 is complete once reviewed.
+- L35 (2026-10-21) Slice 4d is PR 494: reviewed (`## Reviews`), PR 493 landed (main `bae404fd`), 494 retargeted
+  to main with `origin/main` merged in at `aeef4541`, no rebase; ready recorded at 05:39Z. T8 is done. T9 starts
+  on branch `feat/onboarding-handoff` from `aeef4541`, route inline, in two commits so the high-risk one stands
+  alone: (1) the handoff (D13), not high risk, since the installed skill's text is unchanged: RED on the Onboarded
+  lines (lib: `LEAD_OPENING_PROMPT` not exported; cli: 18 pass, 1 fail), then `manifest.mjs` exports the lead's
+  opening prompt, the skill interpolates it in place of its literal (same bytes), and `onboard` prints after
+  `Next:` that the build orchestrator is a new lead session and that prompt; a test pins that the skill holds it.
+  README and SPEC name the handoff, and SPEC the v4 conversation and its ADRs. Lib 42, cli 19, manifest 183 pass.
+  (2) next: the skill's first-lead case, its teaching paragraph under "The lead" and the work session's line
+  (D13), Risk item 3, with an independent verifier.
