@@ -94,7 +94,10 @@ notice. They were picked while he was away; the orchestrator asks him later.
 - [ ] T3 (kind: verify) Gate, gentle-ai review per code commit, Codex review, pull request, ready notice.
 
 ## Next step
-T3.
+T3: fix the gentle-ai advisories R1-001/R3-nested-full-repo (skip a scratch folder holding any .git), R3-duplicate-kind
+(dedupe --kind), R4-cache-failure-error-lost (exit status when stderr is empty), R3-exit-nothing-confirmed (usage
+wording), with tests; commit; then js-harness codex-review --base e22ef3f1; push (retry after a minute when github.com
+fails); PR; feature doc gentle-ai lines; notify ready.
 
 ## Log
 - L1 (2026-10-20, his words, verbatim, relayed by the orchestrator): "Listo hagamos esto" and "Quiero que ese
@@ -113,3 +116,5 @@ T3.
   clean both run the tools from the home: a store on another drive is not seen (a follow-up, not this feature).
   The background measure starts only for the machine's own home, because the whole-cycle tests and the practice
   runs name a scratch home with `JS_HARNESS_HOME` and a detached measure would outlive them.
+- L4 (2026-10-20): gentle-ai: f4c550e7 and 9e66d1a1 reviewed in lineage review-cbebddd665ec664f (escalated to high,
+  item 1; lenses risk, resilience, reliability), approved and acknowledged, authority burned, ten advisories.

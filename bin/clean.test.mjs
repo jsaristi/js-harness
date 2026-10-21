@@ -124,3 +124,11 @@ test('js-harness clean --help prints the usage and runs nothing', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.ok(result.stdout.startsWith(USAGE.split('\n')[0]));
 });
+
+test('a kind named twice is deleted once, and the run exits 0', async (t) => {
+  const setup = fixture(t);
+  const { code } = await clean(['--apply', '--kind', 'codex-releases', '--kind', 'codex-releases'], setup);
+  assert.equal(code, 0);
+  const log = await clean(['--log', '--json'], setup);
+  assert.deepEqual(JSON.parse(log.out).map((entry) => entry.result), ['deleted', 'deleted']);
+});

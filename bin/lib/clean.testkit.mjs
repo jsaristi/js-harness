@@ -64,7 +64,8 @@ export function fixture(t) {
   file(path.join(tmp, 'js-harness-home-old', 'y'), 70);
   file(path.join(tmp, 'other-old', 'z'), 80);
   file(path.join(tmp, 'tmp.worktree', 'repo', '.git'), 10);
-  for (const name of ['tmp.oldOne', 'js-harness-home-old', 'other-old', 'tmp.worktree']) age(path.join(tmp, name), 10);
+  file(path.join(tmp, 'tmp.clone', 'repo', '.git', 'HEAD'), 10);
+  for (const name of ['tmp.oldOne', 'js-harness-home-old', 'other-old', 'tmp.worktree', 'tmp.clone']) age(path.join(tmp, name), 10);
   const pnpmStore = path.join(root, 'pnpm-store');
   file(path.join(pnpmStore, 'v11', 'files', 'a'), 3000);
   const uvCache = path.join(root, 'uv-cache');

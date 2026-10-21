@@ -59,7 +59,7 @@ function answer(run, command, args) {
 }
 
 /** `{ bytes, newest, linkedWorktree }` of a file or folder: its size with everything under it, the newest time of
- * anything in it, and whether it holds a `.git` file (a linked worktree of a repository elsewhere). Links are not
+ * anything in it, and whether it holds a `.git` (a clone, or a linked worktree of a repository elsewhere). Links are not
  * followed; what cannot be read counts as nothing. */
 export function measureTree(target) {
   const total = { bytes: 0, newest: 0, linkedWorktree: false };
@@ -73,10 +73,10 @@ export function measureTree(target) {
       continue;
     }
     total.newest = Math.max(total.newest, stat.mtimeMs);
+    if (current !== target && path.basename(current) === '.git') total.linkedWorktree = true;
     if (stat.isSymbolicLink()) continue;
     if (!stat.isDirectory()) {
       total.bytes += stat.size;
-      if (path.basename(current) === '.git') total.linkedWorktree = true;
       continue;
     }
     let names = [];
@@ -329,7 +329,7 @@ export function applyKinds(kinds, deps) {
       const result = run(kind.command[0], kind.command.slice(1));
       const after = measureTree(folder.path).bytes;
       const ok = result && !result.error && result.status === 0;
-      const error = ok ? undefined : String(result?.error?.message ?? result?.stderr ?? `exit ${result?.status}`).trim();
+      const error = ok ? undefined : String(result?.error?.message || result?.stderr || `exit ${result?.status}`).trim() || `exit ${result?.status}`;
       record({ kind: kind.id, path: kind.command.join(' '), bytes: Math.max(0, folder.bytes - after), result: ok ? 'deleted' : 'failed', ...(error ? { error } : {}), after });
       continue;
     }

@@ -19,8 +19,8 @@ export const USAGE = [
   'the sizes for the clean row of doctor and deletes nothing. Package caches are cleaned only by their own tools.',
   `Kinds: ${KIND_IDS.join(', ')}.`,
   'Never deleted: ~/.claude/projects, ~/.engram, ~/.js-harness, the current Codex runtime, the running Claude,',
-  'anything inside a git worktree, anything off the known list. Exit 0, 1 when nothing was confirmed or a deletion',
-  'failed, 2 for a usage error.',
+  'anything inside a git worktree, anything off the known list. Exit 0, 1 when --apply has no terminal and no --kind',
+  'or a deletion failed or was refused, 2 for a usage error.',
 ].join('\n');
 
 class CleanArgError extends Error {}
@@ -34,7 +34,7 @@ function parseArgs(argv, env, deps) {
     if (value === undefined || value.startsWith('--')) throw new CleanArgError(`${flag} requires a value`);
     return [value];
   });
-  const kinds = values('--kind');
+  const kinds = [...new Set(values('--kind'))];
   for (const kind of kinds) if (!KIND_IDS.includes(kind)) throw new CleanArgError(`unknown kind: ${kind}`);
   const args = {
     home: values('--home')[0] ?? env.JS_HARNESS_HOME ?? deps.scan?.home ?? os.homedir(),
