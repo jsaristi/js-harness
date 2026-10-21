@@ -1243,4 +1243,12 @@ ceiling.
   `## Advice mode` or a superseded ADR. Not taken: R3-crlf-roadmap-hash, since `shortHash` already turns CRLF into
   LF (`bin/lib/onboard.mjs:243`), now pinned by a test; the HTML comment in the section, which `parseContract`
   removes; the two readability suggestions (comment grouping, the ADR number read twice). Lib 40, cli 19 pass.
-  Next: commit, Codex on the slice, merge main, push, PR stacked on 488.
+  Committed `0b51844d`. gentle-ai on `7682f604..0b51844d` (lens reliability; lineage review-0f6e38a5c51a548d):
+  approved and acknowledged; its warning, that with no onboarding document a malformed `## Advice mode` goes
+  unchecked, not taken: the check was new in `7682f604`, so nothing shipped is lost, and the line belongs to the
+  onboarding. Codex on `c32195c..0b51844` (incorrect, 0.99) found two P2s, both taken test first: the hash's regex
+  ended `## Advice mode` at an unindented `## ` only, so after ` ## Phases` it dropped the phases too and a changed
+  Done when kept O5; it now cuts the section where `tokenize` ends it (`withoutSection`), the same hash as before
+  for every roadmap the old regex read right. And `decidedAndBar` counted a `B:` step inside a fenced example; it
+  now reads the steps from `parseRoadmap`. Lib 41, cli 19, progress 43 pass. Next: commit, gentle-ai and the Codex
+  recheck, merge main, push, PR stacked on 488.

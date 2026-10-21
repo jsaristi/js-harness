@@ -3,7 +3,7 @@
 // missing file), so the tests use inline fixture strings. The check never runs a command.
 import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
-import { cellsOf, parseRoadmap } from './progress.mjs';
+import { cellsOf, parseRoadmap, tokenize } from './progress.mjs';
 import { PROFILES, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
 
 export const ONBOARDING_PATH = 'odd/tasks/onboarding.md';
@@ -260,12 +260,23 @@ function adrsText(adrs) {
 
 /** The hashes an approval records (D2): of the answers, of the pre-plan, of the roadmap and of `docs/adr/` (`adrs`,
  * `Map(path -> text)`); `null` for what is missing. */
+/** `markdown` without its `## <title>` section, ended where the parser ends it (`tokenize`: indented headings count,
+ * fenced ones do not); unchanged when it has none. */
+function withoutSection(markdown, title) {
+  const tokens = tokenize(markdown);
+  const start = tokens.findIndex((token) => token.heading?.level === 2 && token.heading.title === title);
+  if (start === -1) return markdown;
+  const next = tokens.findIndex((token, i) => i > start && token.heading?.level === 2);
+  const lines = tokens.map((token) => token.line);
+  return [...lines.slice(0, start), ...(next === -1 ? [] : lines.slice(next))].join('\n');
+}
+
 export function hashes({ onboarding, origin, roadmap, adrs = null }) {
   return {
     answers: onboarding === null ? null : shortHash(answersText(onboarding)),
     origin: origin === null ? null : shortHash(origin),
     // `## Advice mode` changes when the owner asks (D13), so it is left out: a teaching change reopens nothing.
-    roadmap: roadmap === null ? null : shortHash(roadmap.replace(/\r\n/g, '\n').replace(/^## Advice mode\n(?:(?!## ).*\n?)*/m, '')),
+    roadmap: roadmap === null ? null : shortHash(withoutSection(roadmap, 'Advice mode')),
     adrs: adrs === null ? null : shortHash(adrsText(adrs)),
   };
 }
@@ -614,7 +625,7 @@ function logIds(onboarding) {
  * ADR, one a checked area names and neither superseded nor withdrawn; and every `B:` target `--checklist bar` prints
  * for Kind and Size is on a Checklist step, under `## Open decisions` on a line with its area's open decision, or
  * named in the given-up line. */
-function decidedAndBar(sections, onboarding, tasks, { adrs, profiles }) {
+function decidedAndBar(roadmap, sections, onboarding, tasks, { adrs, profiles }) {
   const messages = [];
   const areas = adviceAreas(onboarding);
   if (tasks.get('O3')?.done) {
@@ -630,7 +641,7 @@ function decidedAndBar(sections, onboarding, tasks, { adrs, profiles }) {
   const size = /^(small|large) \(L\d+\)$/.exec(setup.Size ?? '')?.[1];
   if (!kind || kind.error || !size) return messages;
   const profile = advisedProfile(kind.kinds, profiles);
-  const steps = (sections.get('Checklist') ?? '').split('\n').filter((line) => /^\s*[-*+]\s+\[[ xX]\]/.test(line));
+  const steps = parseRoadmap(roadmap).phases.flatMap((phase) => phase.steps.map((step) => step.text));
   const waiting = (sections.get('Open decisions') ?? '').split('\n');
   const givenUp = (parseContract(onboarding).get('Advice') ?? '').split('\n').find((line) => GIVEN_UP_LINE.test(line)) ?? '';
   for (const id of checklistLines(profile, 'bar', size).map((line) => /\bB:([a-z0-9-]+)/.exec(line)?.[1]).filter(Boolean)) {
@@ -683,7 +694,7 @@ function roadmapFindings(roadmap, origin, { onboarding = null, adrs = new Map(),
     const mode = sections.get('Advice mode');
     if (mode === undefined) findings.push(at('no ## Advice mode: copy Teaching, Mode and Level from the onboarding\'s ## Setup'));
     else if (!ADVICE_MODE.test(mode)) findings.push(at('## Advice mode is not one line "Teaching: on|off · Mode: full|fast · Level: A:<id> new|some|experienced, ..."'));
-    findings.push(...decidedAndBar(sections, onboarding, tasks, { adrs, profiles }).map(at));
+    findings.push(...decidedAndBar(roadmap, sections, onboarding, tasks, { adrs, profiles }).map(at));
   }
   if (origin !== null) {
     const carried = sections.get('Open decisions') ?? '';

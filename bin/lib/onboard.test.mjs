@@ -369,6 +369,16 @@ test('the roadmap hash reads CRLF as it always did, and leaves out a CRLF ## Adv
   const bare = crlf.replace(/## Advice mode\r\n.*\r\n\r\n/, '');
   assert.equal(hashes({ onboarding: null, origin: null, roadmap: bare }).roadmap, shortHash(bare));
   assert.equal(ROADMAP_HASH(crlf), ROADMAP_HASH(crlf.replace('Teaching: on · Mode: full', 'Teaching: off · Mode: fast')));
+  // Only ## Advice mode, as the parser reads its end: an indented heading after it still counts.
+  const indented = ROADMAP.replace('## Phases', ' ## Phases');
+  assert.notEqual(ROADMAP_HASH(indented), ROADMAP_HASH(indented.replace('`npm run e2e` exits 0 | Not started', '`npm run e3e` exits 0 | Not started')));
+});
+
+test('a B: target in a fenced example under ## Checklist is no step', () => {
+  const fenced = ROADMAP.replace(/- \[ \] B:uptime .*\n/, '```\n- [ ] B:uptime example only\n```\n');
+  assert.deepEqual(messages(check({ roadmap: fenced, onboarding: onboardingDoc({ roadmap: fenced }) })).filter((line) => line.includes('(stage 5)')), [
+    'docs/ROADMAP.md (stage 5): B:uptime is on no Checklist step: paste it from js-harness onboard profile --checklist bar, put it under ## Open decisions with its area\'s OD, or name it in the given-up line',
+  ]);
 });
 
 test('the templates: the feature is a valid contract with its setup, eleven topics and the summary line, and the others start with what check asks for', () => {
