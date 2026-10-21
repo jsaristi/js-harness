@@ -9,10 +9,11 @@ test('the profiles hold their shape: unique IDs, ordered areas, common areas eve
   assert.deepEqual(shapeFindings({ AREAS, KINDS, TARGETS }), []);
 });
 
-test('the build ships the kinds of slices 3a and 3b, other included', () => {
-  for (const id of ['static-site', 'platform', 'multiplatform-app', 'data-analysis', 'research', 'pre-project', 'other']) {
-    assert.ok(KINDS.some((kind) => kind.id === id), `missing kind ${id}`);
-  }
+test('the build ships the eleven kinds of S8, other included, in that order', () => {
+  assert.deepEqual(KINDS.map((kind) => kind.id), [
+    'static-site', 'platform', 'multiplatform-app', 'data-analysis', 'research',
+    'cli-library', 'api-service', 'ai-app', 'tui-app', 'pre-project', 'other',
+  ]);
 });
 
 test('the common areas are the eight of D9, and architecture, cost, legal and CI are core', () => {
