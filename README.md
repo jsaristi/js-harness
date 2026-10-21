@@ -1191,10 +1191,11 @@ address of the orchestrator: no single one now (sessions --address exit 1): …
 A session's title names the project whose lead counts it. A session titled with another
 project's code (`harness.json` "code"), such as one a lead starts in a new project to onboard it,
 records its notices where that lead listens: in the record whose latest notice from an
-orchestrator of that code was written in that project. That is said in a line before the notice.
-When no record, or more than one, holds such a notice, the notice is refused with exit 1 and
-nothing written; `--cwd <that project's folder>` sends it there. A project with no code keeps its
-notices. Sent with `--cwd`, the sender is still read where it runs.
+orchestrator of that code was written in that project, and a line after the confirmation says
+so. When no record, or more than one, holds such a notice, the notice is refused with exit 1 and
+nothing written; `--cwd <that project's folder>` sends it there. A project with no code, or whose
+`harness.json` cannot be read, keeps its notices. Sent with `--cwd`, the sender is still read
+where it runs.
 
 A pull request ready to land is announced with `--kind ready --pr <number>`: the record keeps
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which

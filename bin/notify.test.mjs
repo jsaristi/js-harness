@@ -1364,20 +1364,24 @@ test('a closed notice runs the real summary check with notify\'s own git: refuse
 // notice went to PP's record, "where no orchestrator listens". A session's title names the project whose lead
 // counts it, so a title of another project's code sends the notice to that project's record.
 
-/** The checkout `machine.root`, coded JH and with worktrees, and a new project `other` beside it, coded PP. */
-function twoProjects(machine) {
+/** The checkout `machine.root`, coded JH and with worktrees, and a new project `other` beside it, coded PP, then each
+ * of `more`, `[name, code]`, as a checkout of its own: `{ other, run, otherDir, folders }`, `folders` by name. */
+function twoProjects(machine, more = []) {
   const other = path.join(machine.dir, 'new-project');
-  for (const [folder, code] of [[machine.root, 'JH'], [other, 'PP']]) {
+  const folders = Object.fromEntries(more.map(([name]) => [name, path.join(machine.dir, name)]));
+  const own = [[other, 'PP'], ...more.map(([name, code]) => [folders[name], code])];
+  for (const [folder, code] of [[machine.root, 'JH'], ...own]) {
     fs.mkdirSync(folder, { recursive: true });
     fs.writeFileSync(path.join(folder, 'harness.json'), JSON.stringify({ version: '0.97.0', code, reply: true }));
   }
   const lead = fakeGit(machine).run;
   const run = (command, args, options = {}) => {
-    const inOther = typeof options.cwd === 'string' && path.resolve(options.cwd).startsWith(other);
-    if (command === 'git' && inOther && args[0] === 'rev-parse' && args.includes('--git-common-dir')) return ok(`${slashes(other)}/.git\n`);
+    const asked = typeof options.cwd === 'string' ? path.resolve(options.cwd) : null;
+    const checkout = own.map(([folder]) => folder).find((folder) => asked === folder || asked?.startsWith(folder + path.sep));
+    if (command === 'git' && checkout !== undefined && args[0] === 'rev-parse' && args.includes('--git-common-dir')) return ok(`${slashes(checkout)}/.git\n`);
     return lead(command, args, options);
   };
-  return { other, run, otherDir: path.join(machine.claudeHome, 'projects', projectSlug(other)) };
+  return { other, run, otherDir: path.join(machine.claudeHome, 'projects', projectSlug(other)), folders };
 }
 
 test('a session titled with another project\'s code notifies that project\'s orchestrator, where it listens', withMachine(async (machine) => {
@@ -1394,8 +1398,8 @@ test('a session titled with another project\'s code notifies that project\'s orc
   assert.equal(sent.from.title, SENDER_TITLE, 'the sender is read where its transcript is, in its own folder');
   assert.equal(sent.cwd, other, 'the notice still says where the sender works');
   assert.deepEqual(readNotices(machine.home, projectSlug(other)).notices, [], 'nothing in the new project\'s record');
-  assert.ok(out.includes(`js-harness notify: ${JSON.stringify(SENDER_TITLE)} is a session of the project coded JH, and this folder's project is coded PP: the notice goes to JH's record, where its orchestrator listens (${machine.root})`), out.join('\n'));
-  assert.ok(out.some((line) => line.startsWith('js-harness notify: recorded note for the orchestrator') && line.endsWith(` in ${machine.record}`)), out.join('\n'));
+  assert.ok(out[0].startsWith('js-harness notify: recorded note for the orchestrator') && out[0].endsWith(` in ${machine.record}`), out.join('\n'));
+  assert.equal(out[1], `js-harness notify: ${JSON.stringify(SENDER_TITLE)} is a session of the project coded JH, and this folder's project is coded PP: the notice went to JH's record, where its orchestrator listens (${machine.root})`, 'said once it is recorded');
   assert.ok(out.includes(`address of the orchestrator: ${ORCHESTRATOR_TITLE}`), out.join('\n'));
 }));
 
@@ -1409,6 +1413,38 @@ test('a session titled with another project\'s code is refused when no record ho
   assert.deepEqual(err, [`js-harness notify: not recorded: ${JSON.stringify(SENDER_TITLE)} is a session of the project coded JH, and this folder's project is coded PP, where JH's orchestrator does not listen; no record of the channel holds a notice of JH's orchestrator. Send it from JH's project: --cwd <its folder>.`]);
   assert.deepEqual(readNotices(machine.home, projectSlug(other)).notices, []);
   assert.deepEqual(recorded(machine).notices, []);
+}));
+
+test('a session titled with another project\'s code is refused when two records hold that project\'s orchestrator', withMachine(async (machine) => {
+  const { other, run, otherDir, folders } = twoProjects(machine, [['copy', 'JH']]);
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE, { projectDir: path.join(machine.claudeHome, 'projects', projectSlug(folders.copy)) });
+  for (const cwd of [machine.worktree, folders.copy]) {
+    const lead = await runNotify(machine, ['--to', '5', '--kind', 'note', 'onboard it'], { cwd, env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR }, run });
+    assert.equal(lead.code, 0, lead.err.join('\n'));
+  }
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+  const before = [machine.slug, projectSlug(folders.copy), projectSlug(other)].map((slug) => readNotices(machine.home, slug).notices.length);
+
+  const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'note', 'stage 2 reached'], { cwd: other, run });
+  assert.equal(code, 1);
+  assert.deepEqual(out, []);
+  const [first, second] = [machine.root, folders.copy].sort((a, b) => projectSlug(a).localeCompare(projectSlug(b)));
+  assert.deepEqual(err, [`js-harness notify: not recorded: ${JSON.stringify(SENDER_TITLE)} is a session of the project coded JH, and this folder's project is coded PP, where JH's orchestrator does not listen; the records of ${first}, ${second} each hold one. Send it from JH's project: --cwd <its folder>.`]);
+  assert.deepEqual([machine.slug, projectSlug(folders.copy), projectSlug(other)].map((slug) => readNotices(machine.home, slug).notices.length), before);
+}));
+
+test('a question from a session titled with another project\'s code is numbered in that project\'s record', withMachine(async (machine) => {
+  const { other, run, otherDir } = twoProjects(machine);
+  writeSession(machine, ORCHESTRATOR, ORCHESTRATOR_TITLE);
+  await askQuestion(machine, { env: { CLAUDE_CODE_SESSION_ID: ORCHESTRATOR }, run, newId: () => SECOND_ID });
+  writeSession(machine, SENDER, SENDER_TITLE, { projectDir: otherDir });
+
+  const { code, out, err } = await askQuestion(machine, { cwd: other, run });
+  assert.equal(code, 0, err.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('js-harness notify: recorded question 2 for the orchestrator')), out.join('\n'));
+  assert.deepEqual(readNotices(machine.home, machine.slug).questions.map((one) => one.notice.id), [SECOND_ID, QUESTION_ID]);
+  assert.deepEqual(readNotices(machine.home, projectSlug(other)).notices, []);
 }));
 
 // Sent with --cwd from the new project, the same notice of JH 43 was recorded with no title: its transcript is filed

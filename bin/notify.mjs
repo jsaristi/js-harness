@@ -231,7 +231,7 @@ function leadProjectsOf(code, { home, slug, run, readdir, readFile }) {
     });
     if (latest === undefined) continue;
     const root = mainCheckout(run, latest.cwd);
-    if (projectSlug(root) === other && codeAt(root, readFile) === code) leads.push({ root, slug: other });
+    if (projectSlug(root) === other && codeAt(root, readFile) === code) leads.push({ cwd: root, slug: other });
   }
   return leads;
 }
@@ -397,7 +397,7 @@ export async function notifyMain(
   const projectDir = path.join(claudeHome, 'projects', slug);
   // A session opened in a worktree is filed under that worktree's sessions folder, not the main checkout's.
   // One sent with --cwd from another project is filed under the folder it runs in, which is searched too.
-  const ranIn = projectDirsOf(run, mainCheckout(run, defaultCwd), claudeHome);
+  const ranIn = parsed.cwd === undefined ? [] : projectDirsOf(run, mainCheckout(run, defaultCwd), claudeHome);
   const projectDirs = [...new Set([...projectDirsOf(run, root, claudeHome), ...ranIn])];
   const from = senderOf({ self: parsed.self ?? null, env, projectDirs, readdir, readFile });
   // A session opened from the phone has no title in its transcript: its title is the one of the opening
@@ -445,19 +445,22 @@ export async function notifyMain(
   // A session's title names the project whose lead counts it. One titled with another project's code, such as a
   // session that lead started in a new project to onboard it, writes where that lead listens: this folder's record
   // has no orchestrator (JH 43 in a new project coded PP, 2026-10-21). A project with no code keeps its notices.
-  let target = { root: cwd, slug };
+  // `target` is the record the notice goes to (`slug`) and the folder `sessions --address` is asked from (`cwd`): this
+  // folder, a worktree included, or the main checkout of the lead's project. `routed` is the line that says so.
+  let target = { cwd, slug };
+  let routed = null;
   const titled = roleOfTitle(from.title);
   const here = codeAt(root, readFile);
   if (titled !== null && here !== null && titled.code !== here) {
     const leads = leadProjectsOf(titled.code, { home, slug, run, readdir, readFile });
     const whose = `${JSON.stringify(from.title)} is a session of the project coded ${titled.code}, and this folder's project is coded ${here}`;
     if (leads.length !== 1) {
-      const none = leads.length === 0 ? `no record of the channel holds a notice of ${titled.code}'s orchestrator` : `the records of ${leads.map((one) => one.root).join(', ')} each hold one`;
+      const none = leads.length === 0 ? `no record of the channel holds a notice of ${titled.code}'s orchestrator` : `the records of ${leads.map((one) => one.cwd).join(', ')} each hold one`;
       stderr(`js-harness notify: not recorded: ${whose}, where ${titled.code}'s orchestrator does not listen; ${none}. Send it from ${titled.code}'s project: --cwd <its folder>.`);
       return 1;
     }
     target = leads[0];
-    stdout(`js-harness notify: ${whose}: the notice goes to ${titled.code}'s record, where its orchestrator listens (${target.root})`);
+    routed = `js-harness notify: ${whose}: the notice went to ${titled.code}'s record, where its orchestrator listens (${target.cwd})`;
   }
 
   // An answer or a withdrawal to a question: the record must hold that question and leave it open, and an
@@ -548,6 +551,7 @@ export async function notifyMain(
   const hour = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
   const holding = from.context ? `, holding ${from.context.percent}% of its context` : '';
   stdout(`js-harness notify: recorded ${what} for ${role} at ${hour} local (${at}) from ${senderWords(from)}${holding} in ${file}`);
+  if (routed !== null) stdout(routed);
   if (notice.copy) {
     for (const one of notice.copy.answers) stdout(`the user's answer, ${one.how}: ${one.answer.length > SHOWN ? `${one.answer.slice(0, SHOWN)}…` : one.answer}`);
   }
@@ -590,7 +594,7 @@ export async function notifyMain(
   const err = [];
   let code;
   try {
-    const asked = ['--address', parsed.notice.to, '--cwd', target.root, ...(parsed.claudeHome !== undefined ? ['--claude-home', claudeHome] : []), ...(parsed.self !== undefined ? ['--self', parsed.self] : [])];
+    const asked = ['--address', parsed.notice.to, '--cwd', target.cwd, ...(parsed.claudeHome !== undefined ? ['--claude-home', claudeHome] : []), ...(parsed.self !== undefined ? ['--self', parsed.self] : [])];
     // The harness home goes in the environment, where the board looks for it: it reads the record this
     // command writes, by which a session with no title in its transcript holds its role.
     code = await sessions(asked, { cwd: defaultCwd, stdout: (line) => out.push(line), stderr: (line) => err.push(line), env: { ...env, JS_HARNESS_HOME: home }, now, homedir, run, readFile, readdir });
