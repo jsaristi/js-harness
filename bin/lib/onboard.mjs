@@ -190,6 +190,38 @@ The one living plan of this project. Each fact lives in one place:
 }
 
 /** The first 12 hex of the sha256 of `text` with LF line ends, so a CRLF checkout hashes as its LF one. */
+/** An ADR's skeleton (D12): `onboard template adr <slug>` prints it, numbered `number`. Its Status is a fixed text, so
+ * the approval edits no ADR. */
+export function adrTemplate(number) {
+  return `# ADR-${number}: <the decision, in a few words>
+
+## Status
+proposed (L<n>); accepted with the pre-plan (O3)
+
+## Area
+A:<id>
+
+## Context
+<why this area needs a decision now>
+
+## Decision
+<what is decided>
+
+## Alternatives considered
+- <an alternative> — <why not>
+
+## Consequences
+<what it brings, and what it gives up>
+
+## Sources
+<!-- One per line: "- <URL> — <what it says> (version <v> where there is one, read <YYYY-MM-DD>)"; with Mode fast only, "- profile: <kind> A:<id> (js-harness <version>)"; or "- not read: <why> (<YYYY-MM-DD>)", and the pre-plan names this ADR under ## Risks. -->
+- <URL> — <what it says> (read <YYYY-MM-DD>)
+
+## The owner's words
+<the owner's words, verbatim, where the decision is the owner's; otherwise delete this section>
+`;
+}
+
 export function shortHash(text) {
   return crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
 }
@@ -202,13 +234,19 @@ function answersText(onboarding) {
   return ['## Interview', sections.get('Interview') ?? '', '## Advice', sections.get('Advice') ?? '', `Kind: ${setup.Kind ?? ''}`, `Size: ${setup.Size ?? ''}`].join('\n');
 }
 
-/** The hashes an approval records (D2): of the answers, of the pre-plan and of the roadmap; `null` for what is
- * missing. */
-export function hashes({ onboarding, origin, roadmap }) {
+/** `docs/adr/` as one text: each ADR's path and text, in the order of their paths. */
+function adrsText(adrs) {
+  return [...adrs].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([path, text]) => `## ${path}\n${text}`).join('\n');
+}
+
+/** The hashes an approval records (D2): of the answers, of the pre-plan, of the roadmap and of `docs/adr/` (`adrs`,
+ * `Map(path -> text)`); `null` for what is missing. */
+export function hashes({ onboarding, origin, roadmap, adrs = null }) {
   return {
     answers: onboarding === null ? null : shortHash(answersText(onboarding)),
     origin: origin === null ? null : shortHash(origin),
     roadmap: roadmap === null ? null : shortHash(roadmap),
+    adrs: adrs === null ? null : shortHash(adrsText(adrs)),
   };
 }
 
@@ -224,7 +262,21 @@ const SUMMARY_ITEM = /^\s*[-*+]\s+\[([ xX])\]\s+S\b(.*)$/;
 const AREA_LINE = /^\s*[-*+]\s+\[([ xX])\]\s+(A:[a-z0-9-]+)\s+(.+?)(?:\s+—\s+(.+?))?\s*$/;
 const AREA_SETTLED = /^(?:(?:proposed|asked|the owner's|default, fast), ADR-\d{4} \(L\d+\)|open \(OD\d+\))$/;
 const LEVEL_ENTRY = /^(A:[a-z0-9-]+) (?:new|some|experienced)$/;
-const RECORDED_HASH = /\b(answers|origin|roadmap) sha256:([0-9a-f]{12})\b/g;
+const RECORDED_HASH = /\b(answers|origin|roadmap|adrs) sha256:([0-9a-f]{12})\b/g;
+// Fast mode's line under ## Advice that names what it gives up (D11).
+const GIVEN_UP_LINE = /^\s*[-*+]\s+Given up\b(.*)$/;
+const GIVEN_UP_FORM = /^ \(fast, L\d+\): \S/;
+// An ADR's number, in an area's suffix and in its file's path.
+const ADR_NAMED = /\bADR-(\d{4})\b/;
+const ADR_PATH = /^docs\/adr\/(\d{4})-[^/]+\.md$/;
+const WRONG_IN_ADR = /^(docs\/adr\/[^/:]+\.md): (.*)$/;
+// The three forms of an ADR's source (D12): a page read on a date, the profile (fast only), or docs not read.
+const SOURCE_FORMS = {
+  read: /^https?:\/\/\S+ — .+\((?:.*, )?read \d{4}-\d{2}-\d{2}\)$/,
+  profile: /^profile: [a-z0-9-]+ A:[a-z0-9-]+ \(js-harness \d+\.\d+\.\d+\)$/,
+  notRead: /^not read: .+ \(\d{4}-\d{2}-\d{2}\)$/,
+};
+const SOURCE_FORMS_TEXT = '<URL> — <what it says> (read <YYYY-MM-DD>), profile: <kind> A:<id> (js-harness <version>), or not read: <why> (<YYYY-MM-DD>)';
 const LOG_REFERENCE = /\bL\d+\b/g;
 // A Log entry: its ID at the start of a list item.
 const LOG_ITEM = /^\s*[-*+]\s+(L\d+)\b/;
@@ -309,17 +361,74 @@ function levelAreas(value) {
   return entries.every(Boolean) ? entries.map((entry) => entry[1]) : null;
 }
 
+/** An ADR's sections, its Status's first line, and its sources: the list items under `## Sources`. */
+function readAdr(text) {
+  const sections = parseContract(text);
+  const items = (sections.get('Sources') ?? '').split('\n').map((line) => /^\s*[-*+]\s+(.*\S)\s*$/.exec(line)?.[1]).filter(Boolean);
+  return { area: (sections.get('Area') ?? '').split('\n')[0].trim(), status: (sections.get('Status') ?? '').split('\n')[0].trim(), sources: items };
+}
+
+/** Whether an ADR's Status takes it out of the advice: superseded by a later one, or withdrawn (D12). */
+const retired = (status) => /^(superseded|withdrawn)\b/.test(status);
+
+/** The ADRs' findings (D12), each in its own file: each ADR a settled area names exists, names that area, cites a
+ * source in one of the three forms (the profile only with Mode fast) and holds no template line. Once every area is
+ * settled (`settled`, and only until O6), each ADR belongs to an area of ## Advice, or is superseded or withdrawn: an
+ * ADR is written before its area is checked. */
+function adrFindings(areas, adrs, { fast, settled, wrongly }) {
+  const byNumber = new Map();
+  for (const path of [...adrs.keys()].sort()) {
+    const number = ADR_PATH.exec(path)?.[1];
+    if (number && !byNumber.has(number)) byNumber.set(number, path);
+  }
+  const named = new Set();
+  for (const [id, area] of areas) {
+    const number = area.done ? ADR_NAMED.exec(area.suffix ?? '')?.[1] : undefined;
+    if (!number) continue;
+    named.add(number);
+    const path = byNumber.get(number);
+    if (!path) {
+      wrongly(`${id} names ADR-${number}, which is not under docs/adr/: js-harness onboard template adr <slug> --write starts it`);
+      continue;
+    }
+    const text = adrs.get(path);
+    const record = readAdr(text);
+    const at = (message) => wrongly(message, path);
+    if (record.area !== id) at(`## Area is "${record.area}", but ${id} names ADR-${number}`);
+    if (record.sources.length === 0) at('names no source under ## Sources');
+    for (const source of record.sources.filter((line) => !Object.values(SOURCE_FORMS).some((form) => form.test(line)))) {
+      at(`the source "- ${source}" is in none of the three forms: ${SOURCE_FORMS_TEXT}`);
+    }
+    if (!fast && record.sources.some((line) => SOURCE_FORMS.profile.test(line))) at('cites the profile as a source, which only Mode fast allows: read the docs and cite them');
+    for (const line of templateLinesLeft(text, adrTemplate(number))) at(`still holds the template line "${line}"`);
+  }
+  if (!settled) return;
+  for (const [number, path] of byNumber) {
+    if (!named.has(number) && !retired(readAdr(adrs.get(path)).status)) {
+      wrongly(`belongs to no area of ## Advice: name ADR-${number} on its area, or mark it superseded or withdrawn under ## Status`, path);
+    }
+  }
+}
+
+/** The ADRs whose docs were not read (D12), by number: the pre-plan names each under ## Risks. */
+function unreadAdrs(adrs) {
+  return [...adrs].filter(([, text]) => {
+    const record = readAdr(text);
+    return !retired(record.status) && record.sources.some((line) => SOURCE_FORMS.notRead.test(line));
+  }).map(([path]) => ADR_PATH.exec(path)?.[1]).filter(Boolean).sort();
+}
+
 /** Where the conversation stands (stage 2, D3 and D15), read from `## Setup`, `## Interview` and `## Advice`.
- * `findings` is every stage-2 finding in the document's order; `wrong` the messages of those that are written wrong,
- * rather than not covered yet; `step` what the session does next. `compare`: whether Kind and the areas are still
+ * `findings` is every stage-2 finding in the document's order, an ADR's in its own file; `wrong` the messages of those
+ * that are written wrong, rather than not covered yet, an ADR's prefixed with its file; `step` what the session does next. `compare`: whether Kind and the areas are still
  * held to the profiles, which they are until O6 closes the onboarding. */
-function conversation(onboarding, { profiles, compare }) {
+function conversation(onboarding, { profiles, compare, adrs }) {
   const findings = [];
   const wrong = [];
-  const notYet = (message) => findings.push(message);
-  const wrongly = (message) => {
-    findings.push(message);
-    wrong.push(message);
+  const notYet = (message) => findings.push({ file: ONBOARDING_PATH, stage: 2, message });
+  const wrongly = (message, file = ONBOARDING_PATH) => {
+    findings.push({ file, stage: 2, message });
+    wrong.push(file === ONBOARDING_PATH ? message : `${file}: ${message}`);
   };
 
   const setup = setupValues(onboarding);
@@ -388,6 +497,10 @@ function conversation(onboarding, { profiles, compare }) {
     else if (area.suffix.startsWith('default, fast') && !fast) wrongly(`${id} is settled default, fast, but Mode is not fast`);
     else coveredAreas += 1;
   }
+  adrFindings(areas, adrs, { fast, settled: compare && pasted && open.areas.length === 0, wrongly });
+  const givenUp = (parseContract(onboarding).get('Advice') ?? '').split('\n').map((line) => line.match(GIVEN_UP_LINE)).find(Boolean);
+  if (fast && !GIVEN_UP_FORM.test(givenUp?.[1] ?? '')) wrongly('Mode is fast, and ## Advice has no line "- Given up (fast, L<n>): <the bar IDs and the depth left out>"');
+  else if (!fast && givenUp) wrongly('## Advice has a given-up line, but Mode is not fast');
   if (levels && areas.size > 0) {
     for (const id of [...areas.keys()].filter((id) => !levels.includes(id))) wrongly(`Level has no level for ${id}`);
     for (const id of levels.filter((id) => !areas.has(id))) wrongly(`Level names ${id}, which is not under ## Advice`);
@@ -402,7 +515,7 @@ function conversation(onboarding, { profiles, compare }) {
           : waiting.length > 0 || !summed ? 'summary'
             : 'fix';
   return {
-    findings: findings.map((message) => ({ file: ONBOARDING_PATH, stage: 2, message })),
+    findings,
     wrong,
     step,
     covered: { topics: coveredTopics, areas: coveredAreas, total: expected ? expected.length : areas.size || null },
@@ -412,7 +525,7 @@ function conversation(onboarding, { profiles, compare }) {
 }
 
 /** Where each recorded hash is taken from, as a finding names it. */
-const HASHED = { answers: 'the conversation (## Interview, ## Advice, Kind and Size)', origin: ORIGIN_PATH, roadmap: ROADMAP_PATH };
+const HASHED = { answers: 'the conversation (## Interview, ## Advice, Kind and Size)', origin: ORIGIN_PATH, roadmap: ROADMAP_PATH, adrs: 'docs/adr/' };
 
 /** The hashes a task's item records, by name: `Map(name -> 12 hex)`. */
 function recordedHashes(task) {
@@ -428,8 +541,8 @@ function changedSince(task, files, current) {
 /** The tasks that record what they were made from, in the order of their stages (D2). */
 const RECORDS = [
   { id: 'O2', stage: 3, unchecked: 'the pre-plan is not written from the conversation yet', files: ['answers'], approval: false },
-  { id: 'O3', stage: 4, unchecked: 'the pre-plan has no approval yet', files: ['origin'], approval: true },
-  { id: 'O5', stage: 6, unchecked: 'the roadmap has no approval yet', files: ['roadmap', 'origin'], approval: true },
+  { id: 'O3', stage: 4, unchecked: 'the pre-plan has no approval yet', files: ['origin', 'adrs'], approval: true },
+  { id: 'O5', stage: 6, unchecked: 'the roadmap has no approval yet', files: ['roadmap', 'origin', 'adrs'], approval: true },
 ];
 
 /** One recorded task's findings: checked, and each hash it must record matching the text as it is now; for an
@@ -516,7 +629,7 @@ function roadmapFindings(roadmap, origin) {
  * `files` holds each file's text, `null` where it is missing; `agentsTemplate` is the base `AGENTS.md` `init` writes,
  * whose placeholder lines must be gone. With `plan`, only the roadmap and its ties to the pre-plan (stage 5). Once
  * O6 closes the onboarding, the approvals are no longer compared with the files, which live on. */
-export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agentsTemplate = '', plan = false, profiles = PROFILES } = {}) {
+export function checkOnboarding({ onboarding, origin, roadmap, agents, adrs = new Map() }, { agentsTemplate = '', plan = false, profiles = PROFILES } = {}) {
   const findings = [];
   const missing = (file, stage, template) => ({ file, stage, message: `missing: js-harness onboard template ${template} --write starts it` });
   if (plan) {
@@ -528,8 +641,8 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agent
   else {
     const tasks = onboardingTasks(onboarding);
     const compare = !tasks.get('O6')?.done;
-    findings.push(...conversation(onboarding, { profiles, compare }).findings);
-    const current = hashes({ onboarding, origin, roadmap });
+    findings.push(...conversation(onboarding, { profiles, compare, adrs }).findings);
+    const current = hashes({ onboarding, origin, roadmap, adrs });
     const logged = logIds(onboarding);
     for (const record of RECORDS) {
       findings.push(...recordFindings(tasks.get(record.id), { ...record, current, compare, logged: record.approval ? logged : null }));
@@ -553,6 +666,10 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agent
     }
     for (const line of templateLinesLeft(origin, originTemplate(''))) {
       findings.push({ file: ORIGIN_PATH, stage: 3, message: `still holds the template line "${line}"` });
+    }
+    const risks = sections.get('Risks') ?? '';
+    for (const number of unreadAdrs(adrs).filter((n) => !new RegExp(`\\bADR-${n}\\b`).test(risks))) {
+      findings.push({ file: ORIGIN_PATH, stage: 3, message: `ADR-${number} has a source not read, and ## Risks does not name it` });
     }
   }
 
@@ -580,17 +697,17 @@ export function findingLine({ file, stage, message }) {
  * changed }` (changed: its record names a hash that moved), `{ stage: 5 }`, `{ stage: 7, findings }`, or
  * `{ stage: 'done' }` once the check passes and O6 is checked. */
 export function currentStage(files, { agentsTemplate = '', profiles = PROFILES } = {}) {
-  const { onboarding } = files;
+  const { onboarding, adrs = new Map() } = files;
   if (onboarding === null) return { stage: 1 };
   const tasks = onboardingTasks(onboarding);
   if (!tasks.get('O1')?.done) return { stage: 1 };
   const compare = !tasks.get('O6')?.done;
-  const talk = conversation(onboarding, { profiles, compare });
+  const talk = conversation(onboarding, { profiles, compare, adrs });
   if (talk.findings.length > 0) {
     const { step, covered, open, waiting, wrong } = talk;
     return { stage: 2, step, covered, open, waiting, wrong };
   }
-  const current = hashes(files);
+  const current = hashes({ ...files, adrs });
   for (const { id, stage, files: names } of RECORDS) {
     // O4 records no hash, only that the roadmap is written; a checked task whose file is gone is not done.
     if (id === 'O5' && (!tasks.get('O4')?.done || files.roadmap === null)) return { stage: 5 };
@@ -611,7 +728,7 @@ const CONVERSATION_STEPS = {
   opening: 'open the conversation: say who you are in this project (the plan orchestrator, who advises every area and then hands over to the build orchestrator), what it will produce (the pre-plan, its decisions and the roadmap), that teaching is on, that saying "no teaching" turns it off and "easy and fast" asks for the fast plan, in the owner\'s language; then invite the owner to tell the project in their own words: what it is, for whom, why now. Log that as a (session) Log line, write - Teaching: on (L<n>), and commit at once.',
   kind: 'follow the owner\'s thread; from it, write - Kind: (the kinds js-harness onboard profile lists) and - Size: small (L<n>) or large (L<n>) under ## Setup, deduced values included, each deduction logged as a (session) Log line with the words it came from, and commit at once.',
   advice: 'run js-harness onboard profile --checklist advice and paste what it prints under ## Advice, in place of what is there; in the same commit, complete - Level: with every area\'s level, the level of its layer, and some for an area of no layer unless the owner said otherwise.',
-  converse: `guide the conversation toward what is still open: open questions in plain chat, explaining why each matters for the plan, and every so often a line on what you understood and what comes next. Log what settles each item and check it: a topic "— answered (L<n>)", "— deduced (L<n>)" or "— unknown (OD<n>)", an area with its proposal and ADR. Explain an area with js-harness onboard profile --area <id> once topic 7 is covered. Topics ${REQUIRED_LIST} are checked only once the owner says or confirms them.`,
+  converse: `guide the conversation toward what is still open: open questions in plain chat, explaining why each matters for the plan, and every so often a line on what you understood and what comes next. Log what settles each item and check it: a topic "— answered (L<n>)", "— deduced (L<n>)" or "— unknown (OD<n>)", an area with its proposal and its ADR (js-harness onboard template adr <slug> --write starts one; cite the docs you read for it, with their date). Explain an area with js-harness onboard profile --area <id> once topic 7 is covered. Topics ${REQUIRED_LIST} are checked only once the owner says or confirms them.`,
   summary: 'log the summary as a (session) Log line and give it: what you understood, what you deduced and from what, and your recommendation for each area in a line. Then ask only the deepening questions still worth asking, one at a time through the question tool (on Codex, in plain text with numbered options), the recommended option first, each logged as a (session) Log line before it is asked. Log each answer verbatim and check or correct what it covers, a confirmed deduction "— confirmed (L<n>)". Check S with the Log line of the last answer.',
   fix: 'fix each line above.',
 };
@@ -621,7 +738,7 @@ const named = (word, items) => `${word}${items.length === 1 ? '' : 's'} ${items.
 
 /** What the session does at `at`, the result of currentStage, as lines of the command's output. */
 function stageLines(at, files, git) {
-  const current = hashes(files);
+  const current = hashes({ ...files, adrs: files.adrs ?? new Map() });
   const tasks = files.onboarding === null ? new Map() : onboardingTasks(files.onboarding);
   const heading = (what) => `Stage ${at.stage} of 7, ${STAGES[at.stage]}: ${what}`;
   switch (at.stage) {
@@ -640,7 +757,11 @@ function stageLines(at, files, git) {
       const opened = [open.topics.length > 0 ? named('topic', open.topics) : null, open.areas.length > 0 ? named('area', open.areas) : null].filter(Boolean);
       return [
         heading(`covered: ${covered.topics} of ${TOPICS.length} topics${areas}.`),
-        ...wrong.map((message) => findingLine({ file: ONBOARDING_PATH, stage: 2, message })),
+        ...wrong.map((line) => {
+          // An ADR's finding is prefixed with its file (see conversation).
+          const [, file = ONBOARDING_PATH, message = line] = WRONG_IN_ADR.exec(line) ?? [];
+          return findingLine({ file, stage: 2, message });
+        }),
         ...(opened.length > 0 ? [`Open: ${opened.join('; ')}.`] : []),
         ...(waiting.length > 0 ? [`Deduced, waiting for the owner's confirmation: ${named('topic', waiting)}.`] : []),
         `Do: ${CONVERSATION_STEPS[at.step]}`,
@@ -657,8 +778,8 @@ function stageLines(at, files, git) {
     case 4:
       return [
         heading(at.changed ? `${ORIGIN_PATH} changed since its approval.` : `${ORIGIN_PATH} waits for the owner's approval.`),
-        `Do: two readers read ${ORIGIN_PATH} against the interview; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question: is the pre-plan approved?`,
-        `Record: a yes is logged verbatim, and O3 checked with "(origin sha256:${current.origin}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again.`,
+        `Do: two readers read ${ORIGIN_PATH} and docs/adr/ against the conversation; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question: is the pre-plan approved, with its ADRs?`,
+        `Record: a yes is logged verbatim, and O3 checked with "(origin sha256:${current.origin}, adrs sha256:${current.adrs}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again. A no on one area edits its ADR in place, keeping its number: its Status becomes "proposed (L<the no>)" and the area's suffix "the owner's, ADR-<nnnn> (L<the no>)", which sends the work back to stage 3.`,
         THEN,
       ];
     case 5:
@@ -675,7 +796,7 @@ function stageLines(at, files, git) {
       return [
         heading(what),
         `Do: two readers read ${ROADMAP_PATH} against the approved pre-plan; record their round under ## Reviews as "Roadmap round <n>: ..." and take what they find. Then ask the owner one question: is the roadmap approved?`,
-        `Record: a yes is logged verbatim, and O5 checked with "(roadmap sha256:${current.roadmap}, origin sha256:${current.origin}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again.`,
+        `Record: a yes is logged verbatim, and O5 checked with "(roadmap sha256:${current.roadmap}, origin sha256:${current.origin}, adrs sha256:${current.adrs}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again.`,
         THEN,
       ];
     }

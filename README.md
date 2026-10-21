@@ -232,7 +232,8 @@ onboarding is in (Read, Conversation and advice, Pre-plan, its review, Plan, its
 merge and onboarded) and what the session does next, so a new session, a compaction or the other
 host resumes by running it again; an onboarding on another branch is named with its worktree or
 the switch that resumes it. `check` names what is still missing and the stage it sends the work
-back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file.
+back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file,
+and `template adr <slug>` numbers the next decision record under `docs/adr/`.
 
 ```console
 $ js-harness onboard
@@ -250,6 +251,7 @@ $ js-harness onboard hash
 answers   sha256:91f9c265f5ad
 origin    missing
 roadmap   missing
+adrs      sha256:e3b0c44298fc
 ```
 
 The `check` is cut to three of its findings. A project with a plan of its own and no onboarding

@@ -1187,3 +1187,10 @@ ceiling.
   reads `docs/adr/*.md` into `adrs`; `template adr <slug> [--write]` (slug `^[a-z0-9]+(-[a-z0-9]+)*$`, next number,
   `wx`, refused when another file took the number); `docs/adr` in `gitContext`'s status; USAGE; `closed()` in
   `bin/onboard.test.mjs` writes ADRS. Then README, gentle-ai, Codex, push to a new branch from main, PR, ready notice.
+- L30 (2026-10-20) Slice 4b written test first, as L29 planned, with three choices made on the way: (a) `wrong` stays
+  a list of strings, an ADR's finding prefixed with its file, which the stage report splits back into its FAIL line,
+  so the stage-2 fixtures keep their shape; (b) the orphan check (an ADR no area names) waits until every area is
+  pasted and settled, because a session writes the ADR before it checks its area; (c) two sessions that take one
+  number with two slugs both write, and listing again keeps the name that sorts first and refuses the other
+  (`writeAdr`, its `readdir` the test's seam). Lib 35 tests and command 18 pass. Next: gate, commit, gentle-ai,
+  Codex, push, PR, ready notice; then 4c.
