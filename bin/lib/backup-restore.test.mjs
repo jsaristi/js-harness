@@ -123,7 +123,7 @@ test('restore puts the worktree patches and the git records beside the bundles, 
     fs.writeFileSync(path.join(from, relative), text);
     manifest.files.push({ path: relative, bytes: Buffer.byteLength(text), sha256: sha256(Buffer.from(text)) });
   }
-  manifest.bundles = [{ source: 'D:\\work\\app', folder: 'app-1a2b3c4d', commits: 0, refs: [], worktrees: [{ path: 'D:/work/side', key: 'side-5e6f7a8b', patch: true, untracked: 1, binary: 1 }] }];
+  manifest.bundles = [{ source: 'D:\\work\\app', folder: 'app-1a2b3c4d', commits: 0, refs: [], worktrees: [{ path: 'D:/work/side', key: 'side-5e6f7a8b', patch: true, untracked: 1, binary: 1, deletedBinary: 1 }] }];
   fs.writeFileSync(path.join(from, 'manifest.json'), JSON.stringify(manifest));
   const home = path.join(root, 'home');
   const stdout = sink();
@@ -138,6 +138,7 @@ test('restore puts the worktree patches and the git records beside the bundles, 
   assert.ok(stdout.text.includes(`uncommitted edits of D:/work/side: git -C "D:/work/side" apply "${path.join(restored, 'worktrees', 'side-5e6f7a8b.patch')}"`), stdout.text);
   assert.ok(stdout.text.includes(`its untracked files are in ${path.join(restored, 'worktrees', 'side-5e6f7a8b.untracked')}`), stdout.text);
   assert.ok(stdout.text.includes(`its changed binary files are in ${path.join(restored, 'worktrees', 'side-5e6f7a8b.binary')}: copy them over the checkout after the patch`), stdout.text);
+  assert.ok(stdout.text.includes(`the binary files it deleted are named in ${path.join(restored, 'worktrees', 'side-5e6f7a8b.deleted-binaries.txt')}: delete them after the patch`), stdout.text);
   assert.ok(stdout.text.includes(`js-harness records of D:\\work\\app: copy ${path.join(restored, 'js-harness')} into its .git/js-harness/`), stdout.text);
   const verified = verifyBackup({ from, run: fakeEngram().run, env: {}, tmp: root });
   assert.ok(verified.lines.some((line) => /^ok files: 8 of 8/.test(line)), verified.lines.join('\n'));

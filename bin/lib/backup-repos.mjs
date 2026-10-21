@@ -86,13 +86,15 @@ export function repoFiles(git, source) {
   const files = [];
   const skipped = [];
   const worktrees = [];
-  const add = (relative, buffer) => {
-    const scan = redactSecrets(buffer.toString('utf8'));
-    files.push({ path: relative, buffer: scan.kinds.length ? Buffer.from(scan.text, 'utf8') : buffer, kinds: scan.kinds });
+  // `encoding` is how the bytes are read for the blanking: a whole file may be binary, and latin1 maps each byte to one
+  // character and back, so only the secret changes, where UTF-8 would turn every invalid byte into U+FFFD.
+  const add = (relative, buffer, encoding = 'utf8') => {
+    const scan = redactSecrets(buffer.toString(encoding));
+    files.push({ path: relative, buffer: scan.kinds.length ? Buffer.from(scan.text, encoding) : buffer, kinds: scan.kinds });
   };
   // Copies a file of the worktree whole; false when it is no regular file. lstat, not stat: a symlink may point outside
   // the checkout, at a file that must never reach the backup.
-  const copyWhole = (worktree, name, folder) => {
+  const copyWhole = (worktree, name, folder, kind) => {
     const full = path.join(worktree, name);
     let stat;
     try {
@@ -101,8 +103,8 @@ export function repoFiles(git, source) {
       return false;
     }
     if (!stat.isFile()) return false;
-    if (stat.size > UNTRACKED_MAX_BYTES) skipped.push({ path: full, bytes: stat.size });
-    else add(`${folder}/${name}`, fs.readFileSync(full));
+    if (stat.size > UNTRACKED_MAX_BYTES) skipped.push({ path: full, bytes: stat.size, kind });
+    else add(`${folder}/${name}`, fs.readFileSync(full), 'latin1');
     return true;
   };
   for (const worktree of worktreesOf(git, source).filter((w) => !w.prunable)) {
@@ -111,10 +113,13 @@ export function repoFiles(git, source) {
     const numstat = git(worktree.path, ['diff', 'HEAD', '--numstat', '--no-renames', '-z']);
     const others = git(worktree.path, ['ls-files', '--others', '--exclude-standard', '-z']);
     if (numstat.status !== 0 || others.status !== 0) return null;
-    // A changed binary file is copied whole, where the blanking can read it; inside a patch git compresses it.
+    // No binary file goes in the patch, where git compresses it past the blanking: a changed one is copied whole, and a
+    // deleted one, whose old bytes the patch would carry, is kept by name only.
     const binaries = numstat.stdout.split('\0').filter((row) => row.startsWith('-\t-\t')).map((row) => row.slice(4));
-    const binary = binaries.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.binary`));
-    const excluded = binary.map((name) => `:(exclude,literal)${name}`);
+    const binary = binaries.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.binary`, 'changed binary'));
+    const deleted = binaries.filter((name) => !fs.existsSync(path.join(worktree.path, name)));
+    if (deleted.length) add(`worktrees/${key}.deleted-binaries.txt`, Buffer.from(`${deleted.join('\n')}\n`));
+    const excluded = binaries.map((name) => `:(exclude,literal)${name}`);
     // A buffer, not text: a change to a file that is not UTF-8 must come back as the same bytes.
     const diff = git(worktree.path, ['diff', 'HEAD', '--binary', '--no-renames', '--', '.', ...excluded], { encoding: 'buffer' });
     if (diff.status !== 0) return null;
@@ -122,8 +127,8 @@ export function repoFiles(git, source) {
     if (patch) add(`worktrees/${key}.patch`, diff.stdout);
     // A name ending in `/` is a nested repository, which is its own source.
     const names = others.stdout.split('\0').filter((name) => name && !name.endsWith('/'));
-    const untracked = names.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.untracked`)).length;
-    if (patch || untracked || binary.length) worktrees.push({ path: worktree.path, key, patch, untracked, binary: binary.length });
+    const untracked = names.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.untracked`, 'untracked')).length;
+    if (patch || untracked || binary.length || deleted.length) worktrees.push({ path: worktree.path, key, patch, untracked, binary: binary.length, deletedBinary: deleted.length });
   }
   const records = path.join(path.resolve(source, commonDir.stdout.trim()), 'js-harness');
   const entries = fs.existsSync(records) ? fs.readdirSync(records, { withFileTypes: true }) : [];

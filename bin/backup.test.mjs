@@ -434,7 +434,7 @@ test('a run keeps each worktree\'s uncommitted edits and the git directory\'s js
   const manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
   assert.ok(manifest.files.some((f) => f.path === `${base}/worktrees/${side}.patch`), 'the manifest lists the patch');
   assert.ok(manifest.redacted.some((f) => f.path === `${base}/worktrees/${side}.patch`), 'and names its secret');
-  assert.deepEqual(manifest.bundles[0].worktrees, [{ path: worktree.replace(/\\/g, '/'), key: side, patch: true, untracked: 1, binary: 0 }]);
+  assert.deepEqual(manifest.bundles[0].worktrees, [{ path: worktree.replace(/\\/g, '/'), key: side, patch: true, untracked: 1, binary: 0, deletedBinary: 0 }]);
 
   // Committed and clean again: the next run keeps no stale patch.
   g(worktree, 'checkout', '-q', '--', 'tracked.txt');
@@ -449,12 +449,15 @@ test('a changed binary file is copied whole with its secrets blanked, never enco
   const { root, bare, paths, deps } = setup(t);
   const source = sourceRepo(path.join(root, 'work', 'app'));
   const g = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { env: GIT_ENV, encoding: 'utf8' });
-  const head = Buffer.from([0, 1, 2, 0]);
+  // 0xff and 0xfe are no UTF-8: a blanking that decodes as UTF-8 would turn them into U+FFFD.
+  const head = Buffer.from([0, 0xff, 0xfe, 0]);
   fs.writeFileSync(path.join(source, 'blob.dat'), Buffer.concat([head, Buffer.from('old\n')]));
   fs.writeFileSync(path.join(source, 'a.txt'), 'one\n');
-  g(source, 'add', 'blob.dat', 'a.txt');
-  g(source, 'commit', '-q', '-m', 'binary');
   const secret = `ghp_${'b'.repeat(36)}`;
+  fs.writeFileSync(path.join(source, 'gone.dat'), Buffer.concat([head, Buffer.from(`token ${secret}\n`)]));
+  g(source, 'add', 'blob.dat', 'a.txt', 'gone.dat');
+  g(source, 'commit', '-q', '-m', 'binary');
+  fs.rmSync(path.join(source, 'gone.dat'));
   fs.writeFileSync(path.join(source, 'blob.dat'), Buffer.concat([head, Buffer.from(`token ${secret}\n`)]));
   fs.appendFileSync(path.join(source, 'a.txt'), 'more\n');
   fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
@@ -464,13 +467,18 @@ test('a changed binary file is copied whole with its secrets blanked, never enco
   const base = `git/${shortKey(source)}/worktrees/${shortKey(source)}`;
   const patch = remoteFile(bare, `${base}.patch`).stdout;
   assert.match(patch, /\+more/);
-  assert.doesNotMatch(patch, /blob\.dat|GIT binary patch/);
+  assert.doesNotMatch(patch, /blob\.dat|gone\.dat|GIT binary patch/);
+  // A deleted binary file's old bytes would ride in the patch's reverse half: only its name is kept.
+  assert.equal(remoteFile(bare, `${base}.deleted-binaries.txt`).stdout, 'gone.dat\n');
   const copy = remoteFile(bare, `${base}.binary/blob.dat`);
   assert.equal(copy.status, 0, 'the binary file is copied whole');
   assert.doesNotMatch(copy.stdout, new RegExp(secret));
   assert.match(copy.stdout, /token <redacted>/);
+  const bytes = spawnSync('git', ['--git-dir', bare, 'show', `HEAD:${base}.binary/blob.dat`]).stdout;
+  assert.deepEqual(bytes.subarray(0, 4), head, 'only the secret changes: every other byte is kept');
   const manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
   assert.equal(manifest.bundles[0].worktrees[0].binary, 1);
+  assert.equal(manifest.bundles[0].worktrees[0].deletedBinary, 1);
 });
 
 test('a worktree git cannot diff keeps its last copies, and ready names it', async (t) => {
@@ -608,6 +616,10 @@ test('backup ready names a clone ahead of origin, a source with no remote and an
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   spawnSync('git', ['-C', paths.clone, 'commit', '-q', '--allow-empty', '-m', 'here only'], { env: GIT_ENV });
   fs.writeFileSync(path.join(source, 'huge.bin'), Buffer.alloc(UNTRACKED_MAX_BYTES + 1));
+  fs.writeFileSync(path.join(source, 'big.dat'), Buffer.from([0, 1]));
+  spawnSync('git', ['-C', source, 'add', 'big.dat'], { env: GIT_ENV });
+  spawnSync('git', ['-C', source, 'commit', '-q', '-m', 'big'], { env: GIT_ENV });
+  fs.writeFileSync(path.join(source, 'big.dat'), Buffer.alloc(UNTRACKED_MAX_BYTES + 1));
   deps.stdout = sink();
 
   assert.equal(await backupMain(['ready'], deps), 1);
@@ -615,6 +627,7 @@ test('backup ready names a clone ahead of origin, a source with no remote and an
   assert.match(deps.stdout.text, /missing: the backup clone is 1 commits ahead of origin/);
   assert.match(deps.stdout.text, /missing: .*local-only has no remote: its commits are in the bundle only/);
   assert.match(deps.stdout.text, /missing: .*huge\.bin: untracked, 5\.0 MB, too large to copy/);
+  assert.match(deps.stdout.text, /missing: .*big\.dat: changed binary, 5\.0 MB, too large to copy/);
 });
 
 test('backup ready fails closed when git cannot count or read a source, and when the backup is not initialised', async (t) => {

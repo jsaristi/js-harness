@@ -127,6 +127,7 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
       if (w.patch) say(`uncommitted edits of ${w.path}: git -C "${w.path}" apply "${path.join(folder, 'worktrees', `${w.key}.patch`)}"`);
       if (w.untracked) say(`  its untracked files are in ${path.join(folder, 'worktrees', `${w.key}.untracked`)}`);
       if (w.binary) say(`  its changed binary files are in ${path.join(folder, 'worktrees', `${w.key}.binary`)}: copy them over the checkout after the patch`);
+      if (w.deletedBinary) say(`  the binary files it deleted are named in ${path.join(folder, 'worktrees', `${w.key}.deleted-binaries.txt`)}: delete them after the patch`);
     }
     if (fs.existsSync(path.join(folder, 'js-harness'))) {
       say(`js-harness records of ${entry.source}: copy ${path.join(folder, 'js-harness')} into its .git/js-harness/, so its reviewed commits need no new review`);
