@@ -1250,5 +1250,10 @@ ceiling.
   ended `## Advice mode` at an unindented `## ` only, so after ` ## Phases` it dropped the phases too and a changed
   Done when kept O5; it now cuts the section where `tokenize` ends it (`withoutSection`), the same hash as before
   for every roadmap the old regex read right. And `decidedAndBar` counted a `B:` step inside a fenced example; it
-  now reads the steps from `parseRoadmap`. Lib 41, cli 19, progress 43 pass. Next: commit, gentle-ai and the Codex
-  recheck, merge main, push, PR stacked on 488.
+  now reads the steps from `parseRoadmap`. Lib 41, cli 19, progress 43 pass. Committed `71ad7541`. Codex rechecked
+  `0b51844..71ad754`: both fixed, correct (0.98). gentle-ai on `0b51844d..71ad7541` (lens reliability; lineage
+  review-e219e0df55b950f8): approved and acknowledged, two warnings not taken. Hash continuity: the Advice mode cut is
+  new in `7682f604` and never shipped; main's hash is the raw `shortHash(roadmap)`, which `withoutSection` keeps for a
+  roadmap with no such section (the `bare` assertion). Steps source: `parseRoadmap` takes `*`/`+` bullets, any indent,
+  and steps before the first `###` as `(unassigned)` (`bin/lib/progress.mjs:205`, `:216`). PR 488 merged before 4c's
+  PR, so main is merged into `feat/onboarding-plan` and 4c's PR targets main.
