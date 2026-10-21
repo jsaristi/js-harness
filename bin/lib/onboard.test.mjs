@@ -436,9 +436,12 @@ test('currentStage, stage 2: the next step of the conversation, what it covered,
     at: 2, step: 'kind', covered: { topics: 1, areas: 0, total: null }, open: { topics: [2, 3, 4, 6, 7, 8, 9, 10, 11], areas: [] }, waiting: [1], wrong: [],
   });
   const kindSize = ['- Kind: shop (L3)', '- Size: large (L3)', ...opened];
-  assert.deepEqual(stageTwo({ setup: kindSize, advice: [], topics: early }).step, 'advice');
+  // The paste waits while the owner's level, topic 3, is open; a deduced level has been shown.
+  assert.deepEqual(stageTwo({ setup: kindSize, advice: [], topics: early }).step, 'converse');
+  const levelShown = early.map((line, i) => (i === 2 ? `- [ ] 3 ${TOPICS[2]} — deduced (L5)` : line));
+  assert.deepEqual(stageTwo({ setup: kindSize, advice: [], topics: levelShown }).step, 'advice');
   // A pasted set the profiles no longer print is pasted again.
-  assert.deepEqual(stageTwo({ setup: kindSize, advice: ADVICE.slice(0, 1), topics: early }).step, 'advice');
+  assert.deepEqual(stageTwo({ setup: kindSize, advice: ADVICE.slice(0, 1), topics: levelShown }).step, 'advice');
   const pasted = ['- [ ] A:stack Stack', '- [x] A:hosting Hosting — proposed, ADR-0002 (L13)', '- [ ] A:legal Legal'];
   assert.deepEqual(stageTwo({ advice: pasted, topics: early }), {
     at: 2, step: 'converse', covered: { topics: 1, areas: 1, total: 3 }, open: { topics: [2, 3, 4, 6, 7, 8, 9, 10, 11], areas: ['A:stack', 'A:legal'] }, waiting: [1], wrong: [],
@@ -537,6 +540,11 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   assert.match(opening, /- Teaching: on \(L<n>\), and commit at once\.$/);
   assert.match(doOf({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }), /^Do: follow the owner's thread; from it, write - Kind: .* and - Size: /);
   assert.match(doOf({ setup: ['- Kind: shop', '- Size: large (L3)', '- Teaching: on (L2)', '- Mode: full'], advice: [] }), /^Do: run js-harness onboard profile --checklist advice and paste what it prints under ## Advice/);
+  // The paste completes Level, which D3 writes only once the conversation shows it (JH 43, finding 10): while topic 3,
+  // the owner's level, is open, the conversation goes on first.
+  const levelOpen = answered();
+  levelOpen[2] = `- [ ] 3 ${TOPICS[2]}`;
+  assert.match(doOf({ setup: ['- Kind: shop', '- Size: large (L3)', '- Teaching: on (L2)', '- Mode: full'], advice: [], topics: levelOpen }), /^Do: guide the conversation toward what is still open/);
   const summary = answered();
   summary[11] = SUMMARY_LINE;
   const summing = report({ onboarding: onboardingDoc({ topics: summary }) }).lines;

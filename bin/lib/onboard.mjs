@@ -29,6 +29,8 @@ export const TOPICS = [
   'Order: what comes first, and what can wait',
   'Risks and unknowns',
 ];
+/** The number of the topic of the owner's level, which `- Level:` under `## Setup` records (D3). */
+const LEVEL_TOPIC = 3;
 /** The topics a plan cannot be made without: never unknown, and checked only once the owner said or confirmed them
  * (D3, D15). */
 const REQUIRED_TOPICS = [1, 2, 3, 4, 9];
@@ -548,10 +550,13 @@ function conversation(onboarding, { profiles, compare, adrs }) {
   }
 
   const kindKnown = setup.Kind !== undefined && (kinds !== null || !compare);
-  // The advice step also asks for Level, which is completed with the paste: a Level never written goes back there.
+  // The advice step also asks for Level, which is completed with the paste: a Level never written goes back there,
+  // once the conversation has shown the owner's level (topic 3, done or deduced, D3); until then it goes on
+  // (JH 43, finding 10).
+  const levelShown = !open.topics.includes(LEVEL_TOPIC);
   const step = !opened ? 'opening'
     : !kindKnown || size === null ? 'kind'
-      : !pasted || setup.Level === undefined ? 'advice'
+      : (!pasted || setup.Level === undefined) && levelShown ? 'advice'
         : open.topics.length > 0 || open.areas.length > 0 ? 'converse'
           : waiting.length > 0 || !summed ? 'summary'
             : 'fix';
