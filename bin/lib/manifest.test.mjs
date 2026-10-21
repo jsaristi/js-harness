@@ -2735,7 +2735,8 @@ test('the orchestrator skill says how the lead answers how the work is going: re
   const text = components[2].content('0.1.0');
   assert.ok(text.includes('\n## The status report\n'));
   for (const line of [
-    'When the user asks how the work is going, or how much is done, the answer is a report of everything since the last report, in detail: never a line that all goes well.',
+    'When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well.',
+    '- Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user). A list or a paragraph in its place is not the report.',
     '- Run `js-harness report --mark`:',
     '1. What landed: each pull request said as what it gives the user, not by its branch.',
     '2. The sessions: each one, what it is for and how far it got.',
