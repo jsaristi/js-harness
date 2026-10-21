@@ -157,6 +157,23 @@
       "by": "session"
     }
   },
+  "report-table": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Muéstrame siempre una tabla . Hazme 'hazlo como protocolo dentro del arnés . Cuando me muestres siempre que te pida qué has hecho",
+        "date": "2026-10-20",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 13882
+      }
+    ],
+    "reading": "Whenever he asks what the lead has done (or how the work is going, which the status report already answers), the answer shows a table: each section of the report that holds items is a table with one row an item, not a list or a paragraph. \"Hazlo como protocolo dentro del arnés\" puts it in the orchestrator skill's \"The status report\", where the report's sections are already defined.",
+    "accepted": "Not put to him as a reading: written by the lead right after his message, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-20",
+      "by": "command"
+    }
+  },
   "restart-announce": {
     "kind": "words",
     "quotes": [
