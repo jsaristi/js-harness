@@ -287,8 +287,8 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
       // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
       // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, and
-      // `memory-backup` (odd/tasks/memory-backup.md) follows it.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'memory-backup', 'host-update', 'stack-update', 'gentle-ai-sync'],
+      // `memory-backup` (odd/tasks/memory-backup.md) follows it. `clean` (odd/tasks/clean.md) follows `stack-update`.
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'memory-backup', 'host-update', 'stack-update', 'clean', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.

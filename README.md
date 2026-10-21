@@ -490,6 +490,15 @@ identifier is printed) and whether the remote server of each recorded login laun
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
 `worktrees` row for the worktrees on branches main already holds. `--json` prints the rows.
 
+Its `engram-plugin` row, shown while engram's Claude Code plugin (`engram@engram`) is installed and
+enabled, compares the plugin with the one the engram binary's own release ships: the version that
+tag's `.claude-plugin/marketplace.json` names, read with git from Claude Code's clone of the engram
+marketplace (`~/.claude/plugins/marketplaces/engram`), never from its working tree and never over
+the network. An older plugin is `outdated`, and its fix names both versions:
+`claude plugin marketplace update engram`, then `claude plugin update engram@engram`, then a
+restart of Claude Code. A clone without that tag, or no git, is `unknown`. engram's latest version
+is its highest `v<semver>` release, so its separate `pi-v*` releases are never read as engram's.
+
 Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bundled for its Code
 tab, read from the app's folder under the home (`--home`), never from the environment. The first
 reading is recorded as reviewed in the doctor cache. After an update, the row stays `stale` until
@@ -1464,9 +1473,16 @@ Next rung: open https://www.npmjs.com/package/react in the built-in browser and 
 The memory that survives the machine: a PC Manager cleanup or a Windows reinstall that wipes
 Engram, the Claude memory folders or `~/.js-harness` loses nothing that was backed up.
 `backup run` exports Engram and copies the Claude memory folders of its scope, then the js-harness
-home and reference copies of the Claude, Codex and Engram config, blanks every secret value it
-finds (a token, a key, a field named like a credential), bundles the commits of `D:/js-harness`
-that are on no remote, and pushes it all to a private GitHub repository through a clone under
+home and reference copies of the Claude, Codex and Engram config, the plugin lists
+(`installed_plugins.json`, `known_marketplaces.json`) and Claude Desktop's side-session notes and
+session presets, blanks every secret value it finds (a token, a key, a field named like a
+credential), and for each repository of `config.json`'s `bundles` (`init` seeds it with
+`D:/js-harness` when that checkout exists) keeps a bundle of the commits on no remote, every stash
+entry and each worktree's detached commit included, a patch of each worktree's uncommitted edits
+with its untracked files and its changed binary files copied whole, where the secret blanking can
+read them (one over 5 MB is left out and named by `ready`), and the records of its
+`.git/js-harness` (codex-review's, which the pre-push hook reads, and the merge queue's). It
+pushes it all to a private GitHub repository through a clone under
 `~/.js-harness/memory-backup`. A run with nothing new commits nothing. The home is copied without
 its logs, its own backup clone, what a restore left there, and codex-review's per-run Codex homes,
 which hold a link to Codex's login.
@@ -1505,6 +1521,21 @@ every URL of its origin must be `jsaristi/js-harness` on github.com, or no summa
 a day, a run failed after the last success, or the clone is gone, so the session-start hook says
 it stopped.
 
+Before a wipe or a reinstall, `backup ready` says whether the machine can go. It writes nothing,
+and exits 1 while anything the backup is configured for has no copy off the machine, one
+`missing:` line each: the clone ahead of origin, never pushed or apart from it; a file or an Engram
+count the last backup does not hold; and for each repository of `bundles`, no remote, commits or a
+stash entry in no bundle, a worktree's edits or the `.git/js-harness` records changed since the
+last backup, an untracked file too large to copy. What the backup never copies is a `not copied:`
+line with its size, and never fails it: the Claude transcripts and Claude Desktop's own data.
+
+```console
+$ js-harness backup ready
+missing: D:/js-harness: stash@{1} (On feat/x: held out) is in no bundle
+not copied: Claude transcripts (C:\Users\me\.claude\projects\*\*.jsonl): 156 files, 1.1 GB
+backup ready: no, 1 things have no copy off this machine
+```
+
 After a reinstall, the steps are in `RESTORE.md` in the private repository (`init` writes it);
 in short, before any session and before `install`:
 
@@ -1517,12 +1548,14 @@ $ node bin/js-harness.mjs backup verify --from https://github.com/<owner>/<name>
 (refused when that Engram already holds observations or its count cannot be read, unless
 `--merge`; a restore run again skips the import it already did), puts back the memory folders (`--map <old path>=<new path>` for a project now
 elsewhere) and `~/.js-harness` without its install manifest, never over a live file, and leaves the
-old config files in `~/.js-harness/restored-config` to compare by hand. `verify --from` restores
+old config files in `~/.js-harness/restored-config` to compare by hand, and the bundles, patches
+and records in `~/.js-harness/restored-bundles`, each with the line that puts it back (`git fetch`
+for a bundle, `git apply` for a patch, the folder to copy into `.git/js-harness`). `verify --from` restores
 into a scratch home and checks the four counts and every file byte for byte; `verify --summary`
 checks the public summary's sections and privacy. The private clone keeps every byte as written
 (`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers in both hosts: when a
-backup is due (30 minutes since the last success, and Engram, a memory folder or the home
-changed since) it starts a run detached and returns; where `init` never ran it does nothing.
+backup is due (30 minutes since the last success, and Engram, a memory folder, the home, a plugin
+list or Claude Desktop's notes or presets changed since) it starts a run detached and returns; where `init` never ran it does nothing.
 The detached run outlives the hook and the host in both: measured on Claude Code 2.1.301 and Codex
 0.162.1, the child was alive seconds after the host process exited. Codex runs a hook only once its
 config records it as trusted (`hooks.state` in `config.toml`); until then only Claude Code's Stop
@@ -1532,3 +1565,51 @@ hook starts backups.
 $ js-harness backup status
 backup: not initialised (js-harness backup init --repo <owner/name>)
 ```
+
+### js-harness clean
+
+The regenerable leftovers our way of developing leaves behind, which nothing else deletes: old
+Codex app-server releases (every one but the release `current` points to and the one
+`auto-update-version` names), old Claude Code CLI versions (the highest and the running one are
+kept), the desktop app's old Code tab CLIs (the highest is kept), Codex's marketplace staging and
+`tmp.*` or `js-harness-*` test scratch in the temp folder once untouched for 3 days (a scratch
+folder holding a linked git worktree is kept), and the npm, pnpm, Go and uv caches when their tool
+answers. With no flags it lists each kind, why it is safe to delete, each item with its size, and a
+total, and deletes nothing.
+
+`clean --apply` scans again and deletes only the kinds you confirm: in a terminal it asks y/N per
+kind; without one it deletes only the kinds named with `--kind <id>`, and with none named it
+deletes nothing and exits 1. A folder is renamed before it is removed, so one with a file in use (a
+running binary on Windows) fails whole and stays. A package cache is cleaned only by its own tool
+(`npm cache clean --force`, `pnpm store prune`, `go clean -modcache`, `uv cache clean`), never by
+hand; `pnpm store prune` removes only the packages no project uses, so its size is "up to". Each
+deletion, failure or refusal is appended to `~/.js-harness/clean-log.jsonl` with when, the kind,
+the path or command and the bytes; `clean --log` prints it. Never deleted: `~/.claude/projects`,
+engram's store (`~/.engram`), `~/.js-harness`, the current Codex runtime, the running Claude,
+anything inside a git worktree, and anything the scan of the same run did not find.
+
+The smart part runs from `doctor`: when the last measure is 7 days old or missing, doctor and its
+session-start hook start `clean --measure` detached (measuring takes about half a minute on a
+machine with these caches, more than the hook's 10 seconds) and return. The measure writes
+`~/.js-harness/clean.json` and deletes nothing. Once its total reaches 2 GB, the `clean` row of
+doctor is a gap that recommends `js-harness clean`, and the hook's notice names the size, once per
+measure. `JS_HARNESS_CLEAN_MEASURE=off` turns the background measure off.
+
+```console
+$ js-harness clean
+codex-releases 1.7 GB: old Codex app-server releases: Codex runs the one `current` points to, and downloads again a release it lacks
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.157.1-x86_64-pc-windows-msvc  425.5 MB
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.158.0-x86_64-pc-windows-msvc  427.2 MB
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.159.0-x86_64-pc-windows-msvc  427.5 MB
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.159.1-x86_64-pc-windows-msvc  427.6 MB
+claude-versions 506.7 MB: old Claude Code CLI versions: the highest and the running one are kept, and the updater downloads what it needs
+  C:\Users\Oficina\.local\share\claude\versions\2.1.296  248.4 MB
+  C:\Users\Oficina\.local\share\claude\versions\2.1.300  258.3 MB
+go-modcache 544.7 MB: the Go module cache: go downloads again what a build needs
+  C:\Users\Oficina\go\pkg\mod  544.7 MB
+  cleaned by: go clean -modcache
+Total: 4.3 GB (plus up to 5.9 GB that pnpm store prune may free)
+Nothing was deleted. js-harness clean --apply asks y/N per kind; --apply --kind <id> deletes only the kinds named.
+```
+
+The run above is cut to three of its kinds.

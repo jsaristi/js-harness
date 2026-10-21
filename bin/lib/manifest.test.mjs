@@ -2714,7 +2714,7 @@ test('the orchestrator skill names the context pause and keeps the fixed prompt 
   assert.doesNotMatch(text, /passed the limit/);
   assert.doesNotMatch(text, /Relief, not compaction/);
   assert.doesNotMatch(text, /\d+ ?%|\d+ percent/, 'the pause is named by its rule, never by a number');
-  assert.ok(text.includes('\n6. a session reached the context pause and its state is not written.\n'));
+  assert.ok(text.includes('\n6. a session reached the context pause and its state is not written;\n'));
   assert.ok(text.includes('A compaction needs no one; a relief needs the user.'));
   assert.ok(text.includes('Give this opening prompt only when the user asks for a new lead'));
 });
@@ -2746,6 +2746,39 @@ test('the orchestrator skill says how the lead answers how the work is going: re
   ]) assert.ok(text.includes(line), line);
   const js = components[0].content('0.1.0');
   assert.ok(js.includes('- `js-harness report [--since <time>] [--mark]` —'), 'the js-harness skill lists the command');
+});
+
+// odd/tasks/backup-ready.md, L5: his words, "Deja lo que tenga que quedar como protocolo armado"; a reinstall is
+// prepared the same way each time: the readiness check, the private checklist, one item at a time, then the restore.
+test('the orchestrator skill says how a reinstall is prepared: backup ready, the checklist, the pause, then the restore', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## Before a reinstall\n'));
+  for (const line of [
+    '1. Run `js-harness backup ready`.',
+    '2. Recall your private checklist of the machine: it names other projects, so it lives in your memory, never in the repository.',
+    '3. Resolve each item with the user one at a time, through the question tool.',
+    '4. Pause every session at a safe point, then tell the user in capitals that they can restart.',
+    '5. After the reinstall, in this order: the logins, `gh auth login` first since the backup repository needs it; then `js-harness backup restore` and `js-harness backup verify`; then `js-harness doctor`.',
+  ]) assert.ok(text.includes(line), line);
+});
+
+// rule:restart-announce. On 2026-10-20 he asked to be told in capitals when to restart, with everything paused first
+// to give him time; the lead pauses every session at a safe point, and only then says it.
+test('the orchestrator skill says how the lead pauses everything before it tells the user to restart', () => {
+  const text = components[2].content('0.1.0');
+  assert.ok(text.includes('\n## The restart\n'));
+  for (const line of [
+    'When the user must restart or update (a Claude Desktop update `js-harness doctor` reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), pause everything at a safe point first, and only then tell them.',
+    'it commits what is ready, pushes only when its check already passes, writes its state to its feature document and starts nothing new',
+    'Keep your watch until the board shows no other session `working` (yours always reads so) and no gate running.',
+    'write the paused sessions and the resume steps to your relief file',
+    'tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!',
+    'what not to touch, and the line to send this session when they are back',
+    'resume each paused session by message',
+    'Run `js-harness doctor` and carry out its fixes',
+    '7. a restart or an update of theirs is ready (The restart, below).',
+  ]) assert.ok(text.includes(line), line);
+  assert.ok(text.indexOf('## The restart') < text.indexOf('## The recap'), 'it sits with the lead\'s other protocols');
 });
 
 test('the orchestrator skill says what every recap carries and how a block waits while the user is away', () => {

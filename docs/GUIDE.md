@@ -67,7 +67,8 @@ Once per machine:
 1. **`js-harness install`** writes the skills and the session hooks for Claude Code and Codex under your home,
    and records each in a manifest, so `uninstall` removes exactly them.
 2. **`js-harness doctor`** lists each tool of the stack (gentle-ai, engram, codegraph, Codex and the optional
-   ones) with what is missing and the command that fixes it.
+   ones) with what is missing and the command that fixes it. Where engram's Claude Code plugin is installed, it
+   also says when the plugin is older than the one the engram binary's release ships.
 3. **`js-harness stack install`** runs the installs js-harness can undo exactly, in order, asking y/N for each
    and recording it before it starts. What it never runs is printed as your own step: gentle-ai's installer
    (which brings engram), logins, and `git` and `gh`. `js-harness stack` alone lists the same, read-only.
@@ -87,7 +88,8 @@ Optionally, once per machine:
 6. **`js-harness backup init --repo <owner/name>`** creates a private GitHub repository for your memory (Engram
    and the Claude memory folders) and clones it. From then on the Stop hook backs it up when due, and
    `js-harness backup status` says when it last succeeded. By default only the `js-harness` project is backed
-   up; set `"scope": "all"` in `~/.js-harness/memory-backup/config.json` for every project.
+   up; set `"scope": "all"` in `~/.js-harness/memory-backup/config.json` for every project. Before you wipe
+   or reinstall the machine, `js-harness backup ready` lists anything that still has no copy off it.
 
 ## A typical day
 
@@ -100,6 +102,24 @@ Optionally, once per machine:
 
 A feature's work is tracked in `odd/tasks/<feature>.md`; `js-harness contract template` prints the skeleton it
 opens with, whose end is a set of commands that exit 0.
+
+## Clean the machine
+
+The stack leaves regenerable leftovers nothing else deletes: old Codex app-server releases, old Claude Code CLIs,
+Codex's marketplace staging, old test scratch in the temp folder, and the npm, pnpm, Go and uv caches.
+
+```sh
+js-harness clean                          # lists each kind, why it is safe, each item's size and a total; deletes nothing
+js-harness clean --apply                  # asks y/N per kind, deletes only the yeses
+js-harness clean --apply --kind uv-cache  # without a terminal: deletes only the kinds named
+js-harness clean --log                    # what was deleted, when and how much
+```
+
+Package caches are cleaned only by their own tools, never by hand, and every deletion is recorded in
+`~/.js-harness/clean-log.jsonl`. Your transcripts, engram's store, `~/.js-harness`, the current Codex runtime, the
+running Claude and anything inside a git worktree are never touched. You do not have to remember to run it: about once
+a week `doctor` measures the leftovers in the background, and once they reach 2 GB the session-start notice says how
+much there is to clean. It never deletes by itself; set `JS_HARNESS_CLEAN_MEASURE=off` to stop the measure.
 
 ## Uninstall
 
@@ -123,4 +143,4 @@ leads other sessions; you rarely type those by hand. The README lists all of the
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, functions, remote, memory, backup, fetch, summary | guard, reply, resume, permit (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit (the orchestrator and its sessions) |
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit (the orchestrator and its sessions) |

@@ -25,6 +25,7 @@ import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.m
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
+import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -112,9 +113,12 @@ export async function resolveLatestVersions(rows, deps) {
   // cache — it is read on every run, online or `--offline`, and overlaid on the cached or fetched
   // network versions. It is not written to the cache either, and (see `isLookupAttempted`) it never
   // counts as an attempted lookup below, so a local answer can neither hide an outage nor be stale.
-  const local = readLocalLatestVersions(rows, { home: deps.home });
-  const networkRows = rows.filter((row) => !isLocalSource(row));
-  return { ...(await resolveNetworkVersions(networkRows, deps)), ...local };
+  // The engram plugin's local read runs git (`deps.git`, a seam for tests) beside the network lookups, never before.
+  const [network, local] = await Promise.all([
+    resolveNetworkVersions(rows.filter((row) => !isLocalSource(row)), deps),
+    readLocalLatestVersions(rows, { home: deps.home, git: deps.git }),
+  ]);
+  return { ...network, ...local };
 }
 
 /** The cache-backed half of `resolveLatestVersions`: every row here is a network lookup (or has no
@@ -184,7 +188,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request, and
   // that request runs beside the lookups of the latest versions, so a slow network is waited on once, not twice.
   const [latestVersions, rules] = await Promise.all([
-    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now }),
+    resolveLatestVersions(localRows, { home, offline, fetch: fetchImpl, now, git: deps.git }),
     harnessRulesRow({
       project,
       declared: harness.declared,
@@ -196,8 +200,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   ]);
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
-    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest);
+    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major) and on another row (the engram
+    // plugin's names the engram binary's version).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows);
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
@@ -207,9 +212,11 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now)] : withBackup;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
-  if (!deps.gentleAiSnapshots) return withStack;
+  // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
+  const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
+  if (!deps.gentleAiSnapshots) return withClean;
   const gentleAi = rows.find((row) => row.id === 'gentle-ai')?.version ?? null;
-  return [...withStack, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
+  return [...withClean, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
 }
 
 /** The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): the gentle-ai version against the one last reviewed,
@@ -288,7 +295,7 @@ function worktreesRow(worktrees, project) {
   return { ...row, project: 'stale', fix: { project: [`${count} on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them`, ...found.map((tree) => `${tree.path} (${tree.branch})`)] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update and gentle-ai-sync rows. Their checks are
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update, clean and gentle-ai-sync rows. Their checks are
  * given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
@@ -298,6 +305,7 @@ export function doctorCommand(argv) {
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
     backup: (home, now) => backupHealth(home, now),
+    clean: { start: backgroundMeasure(process.env, argv) },
   });
 }
 
@@ -429,6 +437,7 @@ export async function hookMain(argv, env = process.env, deps = {}) {
       hostNotice(rows.find((row) => row.id === 'host-update')),
       gentleAiNotice(rows.find((row) => row.id === 'gentle-ai-sync')),
       stackNotice(rows.find((row) => row.id === 'stack-update')),
+      cleanNotice(rows.find((row) => row.id === 'clean')),
     ]
       .filter(Boolean)
       .join('; ');

@@ -200,6 +200,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "restart-announce",
+    "subject": "before the user restarts or updates, the lead pauses every session at a safe point, and only then tells them in capitals",
+    "owner": "sebastian",
+    "since": "2026-10-20",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!",
+      "pause everything at a safe point first, and only then tell them"
+    ]
+  },
+  {
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
