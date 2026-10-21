@@ -1410,3 +1410,21 @@ ceiling.
   own pull request; findings 5 (gate noise) and 8 (a reply state for an open question of the conversation) go to
   the lead as proposals.
 - JH 43 fixes, gentle-ai on `9057dc44` and `b8134afe` (`453b72d6..b8134afe`, readability and reliability, lineage review-c26294b8af4a5dd2): approved and acknowledged; four informational advisories not taken: STAGES lists the stages a finding sends back to, which 8 is not, the commit body cites D2, and `memory.notes` is read unguarded on the next line already. Codex `453b72d..b8134af` correct (0.97), recorded.
+- L43 (2026-10-21) The lead sent JH 43's findings 9 and 10 (findings file, items 9-10). Finding 9 ("Stage 2 of 7"
+  before Kind, "of 8" after) is settled: the installed copies written at 09:46Z hold PR 498's `STAGE_COUNT`, the
+  earlier ones say "of 7", so the count moved when the copy was refreshed mid-stage, not by the Kind. Finding 10:
+  right after Kind and Size, stage 2's Do line asks to paste `onboard profile --checklist advice` with every
+  area's Level, before the conversation has shown the owner's level (D3: Level "is written once the conversation
+  has shown it"). Fix, test first, on branch `fix/onboard-level-wait` (worktree
+  `D:\js-harness-worktrees\onboard-level-wait`): the paste waits until the Level topic is checked. T4 note: the
+  owner switched that repository to a static site (its L5), so T4 no longer tests the pre-project kind unless he
+  reverts; nothing changed for it. Next step: write the RED test of finding 10 in `bin/lib/onboard.test.mjs`, then
+  gentle-ai, Codex, PR on main, ready notice to the orchestrator.
+- L44 (2026-10-21) Finding 10 fixed in `524391f9`: RED was the Do line right after Kind and Size, still the paste;
+  GREEN, the step chooser offers the paste only once topic 3 (`LEVEL_TOPIC`) is checked or deduced, and keeps the
+  conversation going while it is open; 62 onboard tests pass. `1bfaeabc` takes gentle-ai's two advisories: the
+  constant is exported and the tests read it, and the pasted-but-no-Level half of the gate has its assertion.
+- gentle-ai on `524391f9` (`b63a5202..524391f9`, readability and reliability, lineage review-757e5b8a1c158446):
+  approved and acknowledged, two suggestions, both taken in `1bfaeabc`; gentle-ai on `1bfaeabc`: assessed medium,
+  not due (under budget).
+- Codex: `b63a520..1bfaeab` correct (0.96), recorded.
