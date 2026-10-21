@@ -1,5 +1,5 @@
 // The third skill, `js-harness-protocols`: what to do in eight situations, loaded only when a session is in one of
-// them. One skill and not seven, because the description of every installed skill is read on every turn. The design
+// them. One skill and not eight, because the description of every installed skill is read on every turn. The design
 // is in odd/tasks/rule-hierarchy.md ("Protocols", T7). Each section opens with the incident it came for and its
 // date, so that it can be withdrawn when the incident has not come back; a rule it relies on is named by its id
 // (`rule:<id>`), never restated, so `js-harness rules change` reaches it with nothing to carry by hand.

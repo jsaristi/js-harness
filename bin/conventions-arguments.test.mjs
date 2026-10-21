@@ -27,7 +27,8 @@ const UNKNOWN = '--no-such-flag';
 const REFUSAL = new RegExp(`unknown argument: ${UNKNOWN}(?:$|[ ;(])`);
 
 // The argv a command needs before the unknown flag to reach its own parsing: a subcommand, or what must stand
-// before it. A command not named here is probed bare (`<command> --no-such-flag`). What follows `--` stays after
+// before it. Each is a read-only form (`status`, `list`, `check`, `--dry-run`), so a command that ignores the flag
+// does read-only work here, beside the scratch homes. A command not named here is probed bare (`<command> --no-such-flag`). What follows `--` stays after
 // the probe, since `gate` hands everything after it on.
 const BEFORE = {
   gate: ['--', 'node', '--version'],
@@ -98,17 +99,18 @@ test('every command refuses an unknown flag with exit 2 and "unknown argument: <
   const commands = dispatched();
   assert.ok(commands.length >= 10, `only ${commands.length} commands were read from --help`);
   const broken = [];
-  const seen = [];
+  const printed = [];
   for (const command of commands) {
     const result = run(probe(command));
     const lines = result.stderr.split(/\r?\n/);
     if (result.status !== 2 || !lines.some((line) => REFUSAL.test(line))) {
       broken.push(command);
-      seen.push(`${probe(command).join(' ')}: exit ${result.status}, ${JSON.stringify(lines[0])}`);
+      const ended = result.error ? `no exit (${result.error.code ?? result.error.message})` : `exit ${result.status}`;
+      printed.push(`${probe(command).join(' ')}: ${ended}, ${JSON.stringify(lines[0])}`);
     }
   }
   const problems = ratchet({ checked: commands, broken, legacy: LEGACY });
-  assert.deepEqual(problems, [], `${problems.join('\n')}\n\nwhat each command that breaks it printed:\n${seen.join('\n')}`);
+  assert.deepEqual(problems, [], `${problems.join('\n')}\n\nwhat each command that breaks it printed:\n${printed.join('\n')}`);
 });
 
 test('a probe puts the unknown flag after the subcommand and before what a command hands on after --', () => {

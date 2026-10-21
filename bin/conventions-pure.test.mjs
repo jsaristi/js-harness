@@ -38,7 +38,9 @@ function headerOf(text) {
 
 /** The specifiers `text` imports or re-exports statically, without the `node:` prefix. */
 function importsOf(text) {
-  const found = [...text.matchAll(/^\s*(?:import|export)\s[^;]*?\sfrom\s+['"]([^'"]+)['"]/gm), ...text.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)];
+  // `[^;'"`]` keeps a match inside one statement's names: it cannot run on past a quote to pair an `export` line
+  // with a later string that happens to follow a `from`.
+  const found = [...text.matchAll(/^\s*(?:import|export)\s[^;'"`]*?\sfrom\s+['"]([^'"]+)['"]/gm), ...text.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)];
   return found.map((match) => match[1].replace(/^node:/, ''));
 }
 
@@ -55,6 +57,7 @@ test('the header is the opening comment, an import of node:fs is impure with or 
   const text = "#!/usr/bin/env node\n// Pure: it is handed the rows.\nimport fs from 'fs';\nimport {\n  spawnSync,\n} from 'node:child_process';\nexport { x } from './x.mjs';\nimport './side.mjs';\n// not the header\n";
   assert.equal(headerOf(text), '// Pure: it is handed the rows.');
   assert.deepEqual(importsOf(text), ['fs', 'child_process', './x.mjs', './side.mjs']);
+  assert.deepEqual(importsOf("export const NAME = 'x'\nconst note = `read from 'node:fs'`\n"), []);
   assert.ok(!CLAIM.test('stays pure-ish over injectable deps'));
   assert.ok(CLAIM.test('The pure part of `js-harness rules applied`'));
 });

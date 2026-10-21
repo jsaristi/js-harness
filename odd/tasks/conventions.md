@@ -74,7 +74,7 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 | T4 | S4, S8 | inline | done | 10a7601d |
 | T5 | S5 | inline | done | 10a7601d |
 | T6 | S6 | inline | open (waits L3) | |
-| T7 | S7 | inline | done | this commit |
+| T7 | S7 | inline | done | 35cbdcec |
 | T8 | S1 | inline | open | |
 
 - [x] T1 (kind: build) `bin/lib/ratchet.mjs`: the one comparison every legacy list uses
@@ -121,4 +121,9 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 - L4. 2026-10-21. T7 adds section 8 to the protocols skill. Section 7 names a protocol change among the
   user's decisions; this one is item 5 of the plan Pregunta 40 approved (the lead's brief), so it is not asked
   again. The skill ships to every project, so the section is written for any project and names js-harness's own
-  tests as its example. docs/SPEC.md said "seven protocols" while the skill held seven; it says eight now.
+  tests as its example. docs/SPEC.md counted the skill's seven protocols; with section 8 it counts eight.
+- L5. 2026-10-21. gentle-ai reviewed 81305126..35cbdcec (risk raised to high by item 3, the refused-flag wording;
+  lenses risk, readability, reliability), approved, acknowledged (lineage review-5dcdab3bc54a7d23). Eight advisory
+  findings; the fixes commit takes: the comment test reads inline text instead of a comment in another module; a
+  probe that times out says so; `seen` renamed `printed`; the import pattern stops at a quote; the skill header
+  says "not eight"; this L4 restated. The probes are read-only forms, now said where they are listed.

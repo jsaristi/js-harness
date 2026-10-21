@@ -37,14 +37,15 @@ const LEGACY = {
   'windows-daily.mjs': 'prints the refusal from its main and returns 2',
 };
 
-/** The source of `file` without its comment lines, so a comment that names `process.exit` is not a call. */
-function code(file) {
-  return fs
-    .readFileSync(file, 'utf8')
+/** `text` without its comment lines, so a comment that names `process.exit` is not a call. */
+function withoutComments(text) {
+  return text
     .split(/\r?\n/)
     .filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line))
     .join('\n');
 }
+
+const code = (file) => withoutComments(fs.readFileSync(file, 'utf8'));
 
 /** The command modules: each `./<name>.mjs` the dispatcher's COMMANDS table imports. */
 function commandModules() {
@@ -74,8 +75,8 @@ test('no module under bin/lib calls process.exit: it returns, and the command de
   assert.deepEqual(exiting, [], 'return the result to the command; a child script sets process.exitCode instead');
 });
 
-test('a comment line that names process.exit is not a call', () => {
-  const file = path.join(LIB, 'machine-busiest.mjs');
-  assert.match(fs.readFileSync(file, 'utf8'), /process\.exit/);
-  assert.doesNotMatch(code(file), /process\.exit/);
+test('a comment line that names process.exit is not a call, and a line of code is', () => {
+  const text = '// may end in `process.exit` as well\n/* process.exit */\n * process.exit(1)\nreturn 0;\n';
+  assert.doesNotMatch(withoutComments(text), /process\.exit/);
+  assert.match(withoutComments('if (bad) process.exit(2);\n'), /process\.exit\s*\(/);
 });
