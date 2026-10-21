@@ -200,6 +200,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "report-table",
+    "subject": "when the user asks what was done, the lead's status report shows each section that holds items as a table",
+    "owner": "sebastian",
+    "since": "2026-10-20",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "how much is done, or what you have done, the answer is a report",
+      "Show each section that holds items as a table: one row an item"
+    ]
+  },
+  {
     "id": "restart-announce",
     "subject": "before the user restarts or updates, the lead pauses every session at a safe point, and only then tells them in capitals",
     "owner": "sebastian",
