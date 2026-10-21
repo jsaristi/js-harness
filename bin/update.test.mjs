@@ -1262,7 +1262,7 @@ test('status rejects --global with --cwd, an unknown flag and a missing value wi
   try {
     const cases = [
       [['--global', '--cwd', home, '--home', home], /--global cannot be combined with --cwd/],
-      [['--home', home, '--bogus'], /unknown flag: --bogus/],
+      [['--home', home, '--bogus'], /unknown argument: --bogus/],
       [['--home', home, '--cwd'], /--cwd requires a value/],
       [['--home'], /--home requires a value/],
       [['--home', home, '--source', '--global'], /--source requires a value/],

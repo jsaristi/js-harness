@@ -33,7 +33,7 @@ function parseArgs(argv, env) {
       home = requireValue(argv, i, token);
       i++;
     } else {
-      throw new InitArgError(`unknown flag: ${token}`);
+      throw new InitArgError(`unknown argument: ${token}`);
     }
   }
   return {

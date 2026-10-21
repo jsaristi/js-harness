@@ -63,7 +63,7 @@ function parseArgs(argv, env) {
       values[token] = true;
       continue;
     }
-    if (!flags.includes(token)) throw new ArgError(`unknown flag: ${token}`);
+    if (!flags.includes(token)) throw new ArgError(`unknown argument: ${token}`);
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) throw new ArgError(`${token} requires a value`);
     values[token] = value;

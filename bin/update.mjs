@@ -212,7 +212,7 @@ function parseStatusArgs(argv, env) {
       values[token] = value;
       i++;
     } else {
-      throw new StatusArgError(`unknown flag: ${token}`);
+      throw new StatusArgError(`unknown argument: ${token}`);
     }
   }
   if (global && values['--cwd'] !== undefined) throw new StatusArgError('--global cannot be combined with --cwd');
