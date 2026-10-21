@@ -59,7 +59,8 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
   `bin/lib/protocols-skill.mjs`), names the person "the user": never by name, never "he", "him", "his", "the owner"
   or "the person". `AGENTS.md` and the roadmap address Sebastián on purpose and are not shipped.
 - S6. `review`: what no test can judge (paradigm: a pure core and thin I/O commands; voice; the precision of names)
-  is a set of lines the Codex reviewer is asked to apply to each diff. Where they go is the lead's answer (L3).
+  is a set of lines the Codex reviewer is asked to apply to each diff: `CONVENTIONS` of
+  `bin/lib/codex-review-prompt.mjs`, ending every text of our prompt, in words that hold for any project (L6).
 - S7. The protocols skill gains the trigger "writing a new command, module or doc", pointing at those checks; no
   new skill.
 - S8. A ratchet: each check carries an explicit legacy list of files (or commands) that do not comply yet, each with
@@ -73,8 +74,9 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 | T3 | S3, S8 | inline | done | 10a7601d |
 | T4 | S4, S8 | inline | done | 10a7601d |
 | T5 | S5 | inline | done | 10a7601d |
-| T6 | S6 | inline | open (waits L3) | |
+| T6 | S6 | inline | done | this commit |
 | T7 | S7 | inline | done | 35cbdcec |
+| T5b | S2-S5 | inline | done | a1ba5c61 (the review's advisory findings) |
 | T8 | S1 | inline | open | |
 
 - [x] T1 (kind: build) `bin/lib/ratchet.mjs`: the one comparison every legacy list uses
@@ -82,9 +84,17 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 - [x] T3 (kind: build) the error split
 - [x] T4 (kind: build) pure modules hold their claim
 - [x] T5 (kind: build) shipped text names the user
-- [ ] T6 (kind: build) the review lines
+- [x] T6 (kind: build) the review lines
 - [x] T7 (kind: docs) the protocols skill's trigger
 - [ ] T8 (kind: docs) the roadmap item, reviews, the pull request
+
+## Open for part 2 (onboarding profiles)
+- A range of code alone is reviewed with `codex exec review --base` and Codex's own sentence, which takes no prompt
+  of ours, so it does not get `CONVENTIONS`. The two ways to close that gap, to put to Sebastián then (L6):
+  - B: make `--prompt own` the default, so every review gets the lines. It changes every installed project's
+    review, which is his call; on 2026-10-08 the two prompts found the same seeded defects at about the same cost.
+  - C: a checklist each project declares, read into our prompt; it fits once onboarding writes each project's
+    conventions ADR.
 
 ## Log
 - L1. Sebastián, the lead's transcript `908805db-d0b9-4c2f-a9e6-f828b6bf1e41`, line 14626 (2026-10-21T05:18Z), read
@@ -127,3 +137,10 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
   findings; the fixes commit takes: the comment test reads inline text instead of a comment in another module; a
   probe that times out says so; `seen` renamed `printed`; the import pattern stops at a quote; the skill header
   says "not eight"; this L4 restated. The probes are read-only forms, now said where they are listed.
+- L6. 2026-10-21, the lead's answer on where the review lines go: "take A. Add the generic lines to our three
+  prompt texts, with their version bumps, and leave the default `--base` unchanged. Write in your feature document,
+  as an open item for part 2 (onboarding), that code-only ranges miss the lines. Also write B and C there as the
+  options to put to him then. A project checklist (C) fits naturally once onboarding writes each project's
+  conventions ADR. Making `own` the default (B) changes every installed project's review, so it is his call and not
+  ours now." Built: `CONVENTIONS` ends the whole-range (v2), part (v4) and merge (v3) texts, before what a review
+  out of a gate turn is told of the tests.

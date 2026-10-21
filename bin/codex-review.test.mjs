@@ -2299,7 +2299,7 @@ test('the run line says which prompt the review was asked with, and the version 
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
   const runs = readCodexReviewRuns(root);
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v1');
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v2');
   assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.prompt, line.promptVersion]), [
     ['reviewed', 'lean', 'codex', null],
     ['reviewed', 'lean', 'own', REVIEW_PROMPT_VERSION],

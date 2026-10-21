@@ -30,21 +30,22 @@ import { NO_TEST_EXIT, NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 // The version of the text `reviewPrompt` writes, kept in the run line of every review that used it, so that
 // two reviews are only compared knowing whether they were asked the same thing. Any change to the wording
-// below is a new version.
-export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v1';
+// below is a new version. `v2` is `v1` ending with `CONVENTIONS`.
+export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v2';
 
 // The version of the text `reviewPrompt` writes for one part of a range, kept in the run line of that part.
 // It is a version of its own because it is another text: a change to the wording of a part leaves the
 // reviews of whole ranges comparable with one another, and the other way round. `v2` is `v1` with the file
 // names of the part read literally by the command it names (`git --literal-pathspecs diff`, see `scope`).
 // `v3` is `v2` where the range leaves no file out of the review, to the character; where it does, the last
-// line says so, and a range of one part is asked with this text as well.
-export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v3';
+// line says so, and a range of one part is asked with this text as well. `v4` is `v3` ending with `CONVENTIONS`.
+export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v4';
 
 // The version of the text `reviewPrompt` writes for a part of the review of a merge (`merge`): another text,
 // which names what was written in the merge, the diff of the automatic merge's tree and the merge, instead
 // of a diff of two commits. `v1` named `git show --remerge-diff`, which shows nothing in a read-only sandbox.
-export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v2';
+// `v3` is `v2` ending with `CONVENTIONS`.
+export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v3';
 
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
@@ -177,9 +178,21 @@ function scope(from, head, part, leftOut, merge = null) {
  * `suiteRan`, for a review out of a turn of the gate lock, ends the text with `SUITE_RAN`: there the gate has
  * already run the suite on the range, and a `node --test` Codex starts is refused. */
 export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = null, suiteRan = false }) {
-  const text = promptText({ from, head, intent, part, leftOut, merge });
+  const text = `${promptText({ from, head, intent, part, leftOut, merge })}\n${CONVENTIONS}\n`;
   return suiteRan ? `${text}\n${SUITE_RAN}\n` : text;
 }
+
+/** What every text of the prompt asks of the reviewer that no test can judge: that the change follows the
+ * conventions of the code around it (odd/tasks/conventions.md, S6). It is in words that hold for any project, since
+ * this prompt is every installed project's, and it names no convention a project holds by a test. It reaches the
+ * reviews this prompt asks; a range of code alone, asked with `--base` and Codex's sentence, does not get it. */
+export const CONVENTIONS = [
+  '## The conventions around it',
+  'Hold the change to the conventions the code around it already follows, and report a departure from them as a finding:',
+  '- Where the neighbouring modules keep their logic pure and the reading, writing and spawning at the edge of a command, the change does too.',
+  '- It signals its errors the way its neighbours signal theirs, and its text (messages, help, comments) is in the voice of the text beside it.',
+  '- Its names are as precise as its neighbours\' names: a name says what the thing is.',
+].join('\n');
 
 /** What a review out of a turn of the gate lock is told of the tests (`reviewPrompt`'s `suiteRan`): a review
  * that took the refusal for a failure called patches incorrect for it (odd/tasks/faster-check.md, part 2). */
