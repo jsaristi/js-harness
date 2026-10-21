@@ -121,3 +121,7 @@ T3: Codex review of e22ef3f1..HEAD (running), then push (retry after a minute wh
   - gentle-ai: f4c550e7 reviewed in lineage review-cbebddd665ec664f (lenses risk, resilience, reliability), approved and acknowledged.
   - gentle-ai: 9e66d1a1 reviewed in the same lineage review-cbebddd665ec664f, approved and acknowledged.
   - gentle-ai: ba519eb7 reviewed in lineage review-72559356176c153c (lenses risk, reliability), approved and acknowledged.
+- L6 (2026-10-20): Codex reviewed e22ef3f1..ba4d8410 in 3 parts, recorded. Part 2 found two defects, fixed test-first:
+  [P1] a cache folder inside a git worktree, holding a git repository or a protected path went to its tool's clean
+  command unchecked; it is now refused and recorded, the tool not run. [P2] an old regular file named tmp.* or
+  js-harness-* was listed as scratch; only folders are now.

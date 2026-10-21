@@ -65,7 +65,10 @@ export function fixture(t) {
   file(path.join(tmp, 'other-old', 'z'), 80);
   file(path.join(tmp, 'tmp.worktree', 'repo', '.git'), 10);
   file(path.join(tmp, 'tmp.clone', 'repo', '.git', 'HEAD'), 10);
-  for (const name of ['tmp.oldOne', 'js-harness-home-old', 'other-old', 'tmp.worktree', 'tmp.clone']) age(path.join(tmp, name), 10);
+  // Regular files with a scratch name are not scratch folders: the scan keeps them.
+  file(path.join(tmp, 'tmp.notes'), 20);
+  file(path.join(tmp, 'js-harness-report.txt'), 30);
+  for (const name of ['tmp.oldOne', 'js-harness-home-old', 'other-old', 'tmp.worktree', 'tmp.clone', 'tmp.notes', 'js-harness-report.txt']) age(path.join(tmp, name), 10);
   const pnpmStore = path.join(root, 'pnpm-store');
   file(path.join(pnpmStore, 'v11', 'files', 'a'), 3000);
   const uvCache = path.join(root, 'uv-cache');

@@ -99,6 +99,15 @@ function children(folder) {
   }
 }
 
+/** True when `target` is a folder itself, not a file or a link to one. */
+function isFolder(target) {
+  try {
+    return fs.lstatSync(target).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /** The items of `folder` whose names `pick` keeps, each with its size, plus any leftover of a removal that stopped. */
 function itemsOf(folder, pick) {
   return children(folder)
@@ -186,6 +195,7 @@ function folderKinds({ home, tmpdir, platform, now, run }) {
     root: tmpdir,
     items: itemsOf(tmpdir, (name, full) => {
       if (!name.startsWith('tmp.') && !name.startsWith('js-harness-')) return false;
+      if (!isFolder(full)) return false;
       const tree = measureTree(full);
       return !tree.linkedWorktree && tree.newest < now().getTime() - SCRATCH_AGE_DAYS * DAY_MS;
     }),
@@ -265,16 +275,29 @@ function insideWorktree(target) {
   }
 }
 
+/** Why `resolved` is protected, or `null`: it is or holds a guarded path, or it is inside a git worktree. */
+function protectedReason(resolved, guard) {
+  for (const [kept, what] of guard) {
+    if (within(resolved, kept) || within(kept, resolved)) return `it is or holds ${what}`;
+  }
+  if (insideWorktree(resolved)) return 'it is inside a git worktree';
+  return null;
+}
+
 /** Why `target` may not be deleted, or `null` when it may: it must sit right in its kind's folder `root`, hold and be
  * none of the guarded paths, and not be inside a git worktree. `guard` is computed when not given. */
 export function refusal(target, { root, guard, ...deps }) {
   const resolved = path.resolve(target);
   if (!root || path.relative(path.resolve(root), path.dirname(resolved)) !== '') return 'not on the known list of leftovers';
-  for (const [kept, what] of guard ?? guardOf(deps)) {
-    if (within(resolved, kept) || within(kept, resolved)) return `it is or holds ${what}`;
-  }
-  if (insideWorktree(resolved)) return 'it is inside a git worktree';
-  return null;
+  return protectedReason(resolved, guard ?? guardOf(deps));
+}
+
+/** Why the cache folder `target` may not be handed to its tool's clean command, or `null` when it may: the tool
+ * deletes the whole folder, so it must hold and be none of the guarded paths, sit in no git worktree and hold no
+ * git repository. */
+function cacheRefusal(target, guard) {
+  const resolved = path.resolve(target);
+  return protectedReason(resolved, guard) ?? (measureTree(resolved).linkedWorktree ? 'it holds a git repository' : null);
 }
 
 export const logPath = (home) => path.join(home, '.js-harness', 'clean-log.jsonl');
@@ -326,6 +349,11 @@ export function applyKinds(kinds, deps) {
   for (const kind of kinds) {
     if (kind.command) {
       const [folder] = kind.items;
+      const reason = cacheRefusal(folder.path, guard);
+      if (reason) {
+        record({ kind: kind.id, path: folder.path, bytes: 0, result: 'refused', error: reason });
+        continue;
+      }
       const result = run(kind.command[0], kind.command.slice(1));
       const after = measureTree(folder.path).bytes;
       const ok = result && !result.error && result.status === 0;

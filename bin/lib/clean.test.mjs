@@ -132,6 +132,31 @@ test('a package cache is cleaned through its own tool, and the record names the 
   assert.equal(entry.result, 'deleted');
 });
 
+test('a cache inside a git worktree or holding a protected path is refused, and its tool is not run', (t) => {
+  const { deps, home, root, tools } = fixture(t);
+  const checkout = path.join(root, 'checkout');
+  file(path.join(checkout, '.git'), 10);
+  file(path.join(checkout, 'gomod', 'cache', 'm'), 400);
+  const answers = { 'go env GOMODCACHE': path.join(checkout, 'gomod'), 'uv cache dir': home };
+  const run = (command, args) => {
+    const line = [command, ...args].join(' ');
+    if (line in answers) return { status: 0, stdout: `${answers[line]}
+` };
+    return deps.run(command, args);
+  };
+  file(path.join(home, '.claude', 'projects', 'p', 't.jsonl'), 10);
+  const kinds = scan({ ...deps, run }).filter((kind) => kind.id === 'go-modcache' || kind.id === 'uv-cache');
+  assert.equal(kinds.length, 2);
+  applyKinds(kinds, { ...deps, run });
+  assert.ok(!tools.calls.includes('go clean -modcache'));
+  assert.ok(!tools.calls.includes('uv cache clean'));
+  const entries = readLog(home);
+  assert.deepEqual(entries.map((entry) => [entry.kind, entry.result]).sort(), [['go-modcache', 'refused'], ['uv-cache', 'refused']]);
+  assert.match(entries.find((entry) => entry.kind === 'go-modcache').error, /git worktree/);
+  assert.match(entries.find((entry) => entry.kind === 'uv-cache').error, /Claude Code transcripts/);
+  assert.ok(fs.existsSync(path.join(checkout, 'gomod', 'cache', 'm')));
+});
+
 test('a tool that fails is recorded as failed', (t) => {
   const { deps, home } = fixture(t);
   const kinds = scan(deps).filter((kind) => kind.id === 'uv-cache');
