@@ -31,6 +31,7 @@ function restoredPath(home, relative, slugs) {
   // The install manifest records an install the new machine does not have yet; `install` writes its own.
   if (root === 'js-harness-home') return rest.join('/') === 'manifest.json' ? null : path.join(home, '.js-harness', ...rest);
   if (root === 'config') return path.join(home, '.js-harness', 'restored-config', ...rest);
+  if (root === 'git') return path.join(home, '.js-harness', 'restored-bundles', ...rest);
   return null;
 }
 
@@ -112,12 +113,22 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
   say(`config: reference copies in ${path.join(home, '.js-harness', 'restored-config')}, to compare with the live files`);
   for (const relative of kept) say(`kept: ${relative}, a live file is never written over`);
 
+  // The bundles, and beside them each repository's worktree patches and js-harness records: they are put back by hand,
+  // in a checkout that may not exist yet, so every copy comes with the line that uses it.
   const bundles = path.join(home, '.js-harness', 'restored-bundles');
+  place(from, 'git', home, slugs, { overwrite: true });
   for (const name of walk(path.join(from, 'git')).filter((name) => name.endsWith('.bundle'))) {
-    fs.mkdirSync(bundles, { recursive: true });
-    const target = path.join(bundles, name);
-    fs.copyFileSync(path.join(from, 'git', name), target);
-    say(`commits on no remote: in the checkout they came from, git fetch ${target} '+refs/*:refs/restored/*'`);
+    say(`commits on no remote: in the checkout they came from, git fetch ${path.join(bundles, name)} '+refs/*:refs/restored/*'`);
+  }
+  for (const entry of (manifest.bundles ?? []).filter((b) => b.folder)) {
+    const folder = path.join(bundles, entry.folder);
+    for (const w of entry.worktrees ?? []) {
+      if (w.patch) say(`uncommitted edits of ${w.path}: git -C ${w.path} apply ${path.join(folder, 'worktrees', `${w.key}.patch`)}`);
+      if (w.untracked) say(`  its untracked files are in ${path.join(folder, 'worktrees', `${w.key}.untracked`)}`);
+    }
+    if (fs.existsSync(path.join(folder, 'js-harness'))) {
+      say(`js-harness records of ${entry.source}: copy ${path.join(folder, 'js-harness')} into its .git/js-harness/, so its reviewed commits need no new review`);
+    }
   }
   return { manifest, kept, slugs };
 }

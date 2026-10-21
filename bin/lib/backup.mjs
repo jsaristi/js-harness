@@ -82,7 +82,7 @@ export function inScope(slug, scope) {
 }
 
 /** The trees one backup mirrors: where each comes from under the home, where it goes in the clone, and what it skips. */
-function trees(home, scope) {
+function trees(home, scope, desktop) {
   const projects = path.join(home, '.claude', 'projects');
   const memoryTrees = walk(projects, (relative, isDir) => isDir && relative.split('/').length === 2 && !relative.endsWith('/memory'))
     .filter((relative) => relative.split('/')[1] === 'memory')
@@ -107,13 +107,28 @@ function trees(home, scope) {
     },
     // Reference copies (D1): a restore puts them beside the live files, never over them. Login files never come.
     ...CONFIG_FILES.map(([from, to]) => ({ from: path.join(home, ...from), to: `config/${to}`, skip: () => false })),
+    ...(desktop ? DESKTOP_FILES.map((name) => ({ from: path.join(desktop, name), to: `config/claude-desktop/${name}`, skip: () => false })) : []),
   ];
+}
+
+/** What the backup keeps of Claude Desktop's own folder (`desktopDir`), as reference copies: the notes side sessions
+ * leave for each other and the session presets. The rest of it is caches, logs and login state. */
+const DESKTOP_FILES = ['side-session-notes', 'ccd-session-presets.json'];
+
+/** Claude Desktop's folder: `%APPDATA%\Claude` on Windows, as Electron places it on the other systems. */
+export function desktopDir(home, env = {}, platform = process.platform) {
+  if (platform === 'win32') return path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Claude');
+  if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Claude');
+  return path.join(env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Claude');
 }
 
 /** The config the backup keeps a reference copy of: [path under the home, path under `config/`]. A file is a tree of one. */
 const CONFIG_FILES = [
   [['.claude', 'CLAUDE.md'], 'claude/CLAUDE.md'],
   [['.claude', 'settings.json'], 'claude/settings.json'],
+  // Which plugins were installed, from which marketplaces: the lists, not the plugins, which reinstall from them.
+  [['.claude', 'plugins', 'installed_plugins.json'], 'claude/plugins/installed_plugins.json'],
+  [['.claude', 'plugins', 'known_marketplaces.json'], 'claude/plugins/known_marketplaces.json'],
   [['.claude', 'hooks'], 'claude/hooks'],
   [['.claude', 'scheduled-tasks'], 'claude/scheduled-tasks'],
   [['.codex', 'config.toml'], 'codex/config.toml'],
@@ -155,13 +170,13 @@ const MIRRORED = ['claude', 'js-harness-home', 'config'];
 /** Mirrors the Claude memory folders, the js-harness home and the config files into `dest`: each file copied with its sha256, a secret
  * value blanked and the file named with its kinds, and a file the clone holds under `claude/` or `js-harness-home/`
  * that the home no longer has removed, so the clone is the home as it is now. Under a project scope only that
- * project's memory folders are copied, and another project's copy left from a wider scope is removed. The home is
- * only read. */
-export function collectFiles({ home, dest, scope = 'all' }) {
+ * project's memory folders are copied, and another project's copy left from a wider scope is removed. `desktop`,
+ * Claude Desktop's folder, adds its `DESKTOP_FILES`. The home is only read. */
+export function collectFiles({ home, dest, scope = 'all', desktop }) {
   const files = [];
   const redacted = [];
   const kept = new Set();
-  for (const tree of trees(home, scope)) {
+  for (const tree of trees(home, scope, desktop)) {
     for (const relative of treeFiles(tree)) {
       const target = relative ? `${tree.to}/${relative}` : tree.to;
       const source = relative ? path.join(tree.from, relative) : tree.from;

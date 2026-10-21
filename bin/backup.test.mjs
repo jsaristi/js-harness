@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { backupHealth, backupMain, backupPaths, bundleName, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
+import { shortKey } from './lib/backup-repos.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
 // asked. The clone's fetch URL names the private repository, its push URL the bare one, so the origin guard reads the
@@ -274,6 +275,31 @@ test('a memory folder deleted whole makes a backup due, so the clone stops holdi
   assert.equal(dueReason(home, state.now), null);
 });
 
+test('a run copies Claude Desktop\'s notes, and a new note makes a backup due', async (t) => {
+  const { root, bare, home, deps, state } = setup(t);
+  deps.desktop = path.join(root, 'desktop');
+  fs.mkdirSync(path.join(deps.desktop, 'side-session-notes', 'local_1'), { recursive: true });
+  fs.writeFileSync(path.join(deps.desktop, 'side-session-notes', 'local_1', 'a.md'), 'first\n');
+  await backupMain(['run'], deps);
+  assert.equal(remoteFile(bare, 'config/claude-desktop/side-session-notes/local_1/a.md').stdout, 'first\n');
+
+  state.now += 60 * 60_000;
+  const old = new Date(state.now - 2 * 60 * 60_000);
+  for (const file of [
+    path.join(home, '.claude', 'projects', 'D--p', 'memory', 'MEMORY.md'),
+    path.join(home, '.claude', 'projects', 'D--p', 'memory'),
+    path.join(deps.desktop, 'side-session-notes', 'local_1', 'a.md'),
+    path.join(deps.desktop, 'side-session-notes', 'local_1'),
+    path.join(deps.desktop, 'side-session-notes'),
+  ]) {
+    fs.utimesSync(file, old, old);
+  }
+  assert.equal(dueReason(home, state.now, deps.desktop), 'nothing changed since the last backup');
+  fs.writeFileSync(path.join(deps.desktop, 'side-session-notes', 'local_1', 'b.md'), 'second\n');
+  fs.utimesSync(path.join(deps.desktop, 'side-session-notes', 'local_1', 'b.md'), new Date(state.now), new Date(state.now));
+  assert.equal(dueReason(home, state.now, deps.desktop), null);
+});
+
 test('every push URL is checked: a pushurl elsewhere sends nothing', async (t) => {
   const { bare, paths, deps, state } = setup(t);
   state.pushUrls = ['https://github.com/jsaristi/js-harness.git'];
@@ -343,6 +369,76 @@ test('bundles: two sources of one name kept apart, a new tag rebundles, and an u
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   assert.deepEqual(fs.readFileSync(named('personal')), before, 'the last good bundle stays');
   assert.match(deps.stdout.text, /could not be read/);
+});
+
+test('the bundle holds every stash entry and a worktree\'s detached commit, and the source gains no ref', async (t) => {
+  const { root, paths, deps } = setup(t);
+  const source = sourceRepo(path.join(root, 'work', 'app'));
+  const g = (...args) => spawnSync('git', ['-C', source, ...args], { env: GIT_ENV, encoding: 'utf8' });
+  for (const file of ['one.txt', 'two.txt']) {
+    fs.writeFileSync(path.join(source, file), file);
+    g('add', file);
+    g('stash', 'push', '-q', '-m', file);
+  }
+  const worktree = path.join(root, 'work', 'detached');
+  g('worktree', 'add', '-q', '--detach', worktree);
+  spawnSync('git', ['-C', worktree, 'commit', '-q', '--allow-empty', '-m', 'only here'], { env: GIT_ENV });
+  const detached = spawnSync('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+  const refsBefore = g('for-each-ref').stdout;
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  const heads = bundleHeads(path.join(paths.clone, 'git', bundleName(source)));
+  const stashes = g('log', '-g', '--format=%H', 'refs/stash').stdout.trim().split('\n');
+  assert.equal(stashes.length, 2);
+  for (const sha of [...stashes, detached]) assert.match(heads, new RegExp(sha), `${sha} is a head of the bundle`);
+  assert.equal(g('for-each-ref').stdout, refsBefore, 'the source repository gains no ref');
+  const entry = JSON.parse(remoteFile(path.join(root, 'remote.git'), 'manifest.json').stdout).bundles[0];
+  assert.ok(stashes.every((sha) => entry.refs.some((ref) => ref.startsWith(sha))), 'the manifest names the stash entries');
+});
+
+test('a run keeps each worktree\'s uncommitted edits and the git directory\'s js-harness records, secrets blanked', async (t) => {
+  const { root, bare, paths, deps, state } = setup(t);
+  const source = sourceRepo(path.join(root, 'work', 'app'));
+  const g = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { env: GIT_ENV, encoding: 'utf8' });
+  fs.writeFileSync(path.join(source, 'tracked.txt'), 'one\n');
+  g(source, 'add', 'tracked.txt');
+  g(source, 'commit', '-q', '-m', 'tracked');
+  const worktree = path.join(root, 'work', 'side');
+  g(source, 'worktree', 'add', '-q', '-b', 'side', worktree);
+  const secret = `ghp_${'a'.repeat(36)}`;
+  fs.writeFileSync(path.join(worktree, 'tracked.txt'), `one\ntoken ${secret}\n`);
+  fs.mkdirSync(path.join(worktree, 'notes'));
+  fs.writeFileSync(path.join(worktree, 'notes', 'new.md'), 'not committed yet\n');
+  const records = path.join(source, '.git', 'js-harness');
+  fs.mkdirSync(path.join(records, 'traces'), { recursive: true });
+  fs.writeFileSync(path.join(records, 'codex-reviews.jsonl'), '{"range":"a..b"}\n');
+  fs.writeFileSync(path.join(records, 'traces', 'timing.json'), '{}');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source], scope: 'all' }));
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  const base = `git/${shortKey(source)}`;
+  const side = shortKey(worktree);
+  const patch = remoteFile(bare, `${base}/worktrees/${side}.patch`).stdout;
+  assert.match(patch, /\+token <redacted>/);
+  assert.doesNotMatch(patch, new RegExp(secret));
+  assert.equal(remoteFile(bare, `${base}/worktrees/${side}.untracked/notes/new.md`).stdout, 'not committed yet\n');
+  assert.equal(remoteFile(bare, `${base}/js-harness/codex-reviews.jsonl`).stdout, '{"range":"a..b"}\n');
+  assert.equal(remoteFile(bare, `${base}/js-harness/traces/timing.json`).status, 128, 'test timing caches stay out');
+  const manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
+  assert.ok(manifest.files.some((f) => f.path === `${base}/worktrees/${side}.patch`), 'the manifest lists the patch');
+  assert.ok(manifest.redacted.some((f) => f.path === `${base}/worktrees/${side}.patch`), 'and names its secret');
+  assert.deepEqual(manifest.bundles[0].worktrees, [{ path: worktree.replace(/\\/g, '/'), key: side, patch: true, untracked: 1 }]);
+
+  // Committed and clean again: the next run keeps no stale patch.
+  g(worktree, 'checkout', '-q', '--', 'tracked.txt');
+  fs.rmSync(path.join(worktree, 'notes'), { recursive: true });
+  state.now += 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(remoteFile(bare, `${base}/worktrees/${side}.patch`).status, 128, 'the stale patch is gone');
+  assert.equal(remoteFile(bare, `${base}/js-harness/codex-reviews.jsonl`).status, 0, 'the records stay');
 });
 
 test('backup init creates the repository private when it is missing, refuses a public one, and clones', async (t) => {
