@@ -1222,3 +1222,38 @@ ceiling.
   gains both sections. (4) `--plan` reads the onboarding document for Kind, Size, the areas and the given-up line.
   (5) The Close text (D7, line 417): the checking command in "How it works". The testkit's PROFILES gains bar
   targets; its ORIGIN and ROADMAP gain the new sections.
+  PR 486 merged (main `6b8a16a8`); 488 retargeted to main with no rebase (merge-tree clean) and its ready notice
+  recorded at 01:59Z. Merge main into `feat/onboarding-plan` before 4c's PR, which then targets 488's branch until 488 lands.
+  Progress on branch `feat/onboarding-plan` (worktree `D:\js-harness-worktrees\onboarding-v4`): (5) was already
+  done in 4a. The testkit has PROFILES TARGETS ci-gate (A:stack, core), uptime (A:hosting), privacy (A:legal); shop's
+  bar lists the three; ORIGIN has `## Stack and architecture` (ADR-0001, ADR-0002) and `## Owner steps`; ROADMAP
+  has `## Decided` with an ADR column, `## Advice mode`, the B:ci-gate and B:uptime steps in P1, and B:privacy on
+  OD1's line. RED observed on the three new tests (lib 35 pass, 3 fail), then (1) `answersText` and `hashes` drop
+  the given-up line and `## Advice mode`; (2) `ORIGIN_SECTIONS` and the Stack and architecture row check; (3), after
+  a host compaction at 02:02Z, `roadmapFindings(roadmap, origin, {onboarding, adrs, profiles})` from both callers, so
+  `--plan` gets it: until O6 the `## Advice mode` line (`ADVICE_MODE`) and `decidedAndBar` (once O3, `## Decided`
+  names each accepted ADR not retired; each `B:` ID `--checklist bar` prints for Kind and Size is on a Checklist
+  step, on an Open decisions line with its area's `open (ODn)`, or in the given-up line). Test 21 also expects
+  B:privacy stranded, since it removes OD1's line. Templates and README updated. Committed `7682f604` (lib 38, cli
+  19 pass).
+  gentle-ai on `c32195c2..7682f604` (lenses readability, reliability; lineage review-cf9c2e1c4d31d648): approved and
+  acknowledged, nine advisories. Taken test first: the advice mode messages ran after O6 and fired on a closed
+  onboarding (the class of 4b's critical); a copy of `## Setup` with its `(L<n>)` references was refused; the
+  roadmapFindings JSDoc sat above decidedAndBar; the B:privacy case asserted only a count; no test covered a missing
+  `## Advice mode` or a superseded ADR. Not taken: R3-crlf-roadmap-hash, since `shortHash` already turns CRLF into
+  LF (`bin/lib/onboard.mjs:243`), now pinned by a test; the HTML comment in the section, which `parseContract`
+  removes; the two readability suggestions (comment grouping, the ADR number read twice). Lib 40, cli 19 pass.
+  Committed `0b51844d`. gentle-ai on `7682f604..0b51844d` (lens reliability; lineage review-0f6e38a5c51a548d):
+  approved and acknowledged; its warning, that with no onboarding document a malformed `## Advice mode` goes
+  unchecked, not taken: the check was new in `7682f604`, so nothing shipped is lost, and the line belongs to the
+  onboarding. Codex on `c32195c..0b51844` (incorrect, 0.99) found two P2s, both taken test first: the hash's regex
+  ended `## Advice mode` at an unindented `## ` only, so after ` ## Phases` it dropped the phases too and a changed
+  Done when kept O5; it now cuts the section where `tokenize` ends it (`withoutSection`), the same hash as before
+  for every roadmap the old regex read right. And `decidedAndBar` counted a `B:` step inside a fenced example; it
+  now reads the steps from `parseRoadmap`. Lib 41, cli 19, progress 43 pass. Committed `71ad7541`. Codex rechecked
+  `0b51844..71ad754`: both fixed, correct (0.98). gentle-ai on `0b51844d..71ad7541` (lens reliability; lineage
+  review-e219e0df55b950f8): approved and acknowledged, two warnings not taken. Hash continuity: the Advice mode cut is
+  new in `7682f604` and never shipped; main's hash is the raw `shortHash(roadmap)`, which `withoutSection` keeps for a
+  roadmap with no such section (the `bare` assertion). Steps source: `parseRoadmap` takes `*`/`+` bullets, any indent,
+  and steps before the first `###` as `(unassigned)` (`bin/lib/progress.mjs:205`, `:216`). PR 488 merged before 4c's
+  PR, so main is merged into `feat/onboarding-plan` and 4c's PR targets main.

@@ -3,7 +3,7 @@
 // missing file), so the tests use inline fixture strings. The check never runs a command.
 import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
-import { cellsOf, parseRoadmap } from './progress.mjs';
+import { cellsOf, parseRoadmap, tokenize } from './progress.mjs';
 import { PROFILES, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
 
 export const ONBOARDING_PATH = 'odd/tasks/onboarding.md';
@@ -47,7 +47,7 @@ export const STAGES = {
   7: 'Close',
 };
 
-const ORIGIN_SECTIONS = ['Status', 'Goal', 'Why', 'What exists', 'Decisions already made', 'Principles', 'Phases', 'Not built', 'Risks', 'Open decisions', 'Sources'];
+const ORIGIN_SECTIONS = ['Status', 'Goal', 'Why', 'What exists', 'Decisions already made', 'Stack and architecture', 'Owner steps', 'Principles', 'Phases', 'Not built', 'Risks', 'Open decisions', 'Sources'];
 
 export function featureTemplate() {
   return `# Onboarding
@@ -127,6 +127,18 @@ the onboarding closes: what changes after that is recorded in [ROADMAP.md](ROADM
 |------|----------|-------------------|
 | <area> | <decision> | "<his words>" (<date>) |
 
+## Stack and architecture
+<!-- One row per area settled with an ADR under docs/adr/, then a few lines on how the parts fit. -->
+| Area | Decision | ADR |
+|------|----------|-----|
+| <area> | <decision> | ADR-<nnnn> |
+
+<how the parts fit together, in a few lines>
+
+## Owner steps
+<!-- What only the owner can do, each with its cost: an account, a payment, a domain, a signature. -->
+- <a step only the owner can take> (<its cost>)
+
 ## Principles
 1. <a principle of this project> — <why>
 
@@ -163,9 +175,14 @@ The one living plan of this project. Each fact lives in one place:
 1. <a principle, carried from the pre-plan>
 
 ## Decided
-| Area | Decision |
-|------|----------|
-| <area> | <decision> |
+<!-- One row per accepted ADR under docs/adr/, by its number. -->
+| Area | Decision | ADR |
+|------|----------|-----|
+| <area> | <decision> | ADR-<nnnn> |
+
+## Advice mode
+<!-- One line, copied from the onboarding's ## Setup. -->
+Teaching: <on|off> · Mode: <full|fast> · Level: A:<id> <new|some|experienced>, ...
 
 ## Phases
 <!-- One row per phase of the pre-plan, the same names as under Checklist. Done when: a command, \`<command>\` exits 0. -->
@@ -231,7 +248,9 @@ export function shortHash(text) {
 function answersText(onboarding) {
   const sections = parseContract(onboarding);
   const setup = setupValues(onboarding);
-  return ['## Interview', sections.get('Interview') ?? '', '## Advice', sections.get('Advice') ?? '', `Kind: ${setup.Kind ?? ''}`, `Size: ${setup.Size ?? ''}`].join('\n');
+  // Fast mode's given-up line is left out with Mode (D6).
+  const advice = (sections.get('Advice') ?? '').split('\n').filter((line) => !GIVEN_UP_LINE.test(line)).join('\n');
+  return ['## Interview', sections.get('Interview') ?? '', '## Advice', advice, `Kind: ${setup.Kind ?? ''}`, `Size: ${setup.Size ?? ''}`].join('\n');
 }
 
 /** `docs/adr/` as one text: each ADR's path and text, in the order of their paths. */
@@ -241,11 +260,23 @@ function adrsText(adrs) {
 
 /** The hashes an approval records (D2): of the answers, of the pre-plan, of the roadmap and of `docs/adr/` (`adrs`,
  * `Map(path -> text)`); `null` for what is missing. */
+/** `markdown` without its `## <title>` section, ended where the parser ends it (`tokenize`: indented headings count,
+ * fenced ones do not); unchanged when it has none. */
+function withoutSection(markdown, title) {
+  const tokens = tokenize(markdown);
+  const start = tokens.findIndex((token) => token.heading?.level === 2 && token.heading.title === title);
+  if (start === -1) return markdown;
+  const next = tokens.findIndex((token, i) => i > start && token.heading?.level === 2);
+  const lines = tokens.map((token) => token.line);
+  return [...lines.slice(0, start), ...(next === -1 ? [] : lines.slice(next))].join('\n');
+}
+
 export function hashes({ onboarding, origin, roadmap, adrs = null }) {
   return {
     answers: onboarding === null ? null : shortHash(answersText(onboarding)),
     origin: origin === null ? null : shortHash(origin),
-    roadmap: roadmap === null ? null : shortHash(roadmap),
+    // `## Advice mode` changes when the owner asks (D13), so it is left out: a teaching change reopens nothing.
+    roadmap: roadmap === null ? null : shortHash(withoutSection(roadmap, 'Advice mode')),
     adrs: adrs === null ? null : shortHash(adrsText(adrs)),
   };
 }
@@ -268,6 +299,8 @@ const GIVEN_UP_LINE = /^\s*[-*+]\s+Given up\b(.*)$/;
 const GIVEN_UP_FORM = /^ \(fast, L\d+\): \S/;
 // An ADR's number, in an area's suffix and in its file's path.
 const ADR_NAMED = /\bADR-(\d{4})\b/;
+// The roadmap's ## Advice mode line (D6), its values not compared; a copy of ## Setup keeps its (L<n>) references.
+const ADVICE_MODE = /^Teaching: (?:on|off)(?: \(L\d+\))? · Mode: (?:full|fast)(?: \(L\d+\))? · Level: A:[a-z0-9-]+ (?:new|some|experienced)(?:, A:[a-z0-9-]+ (?:new|some|experienced))*(?: \(L\d+\))?$/;
 const ADR_PATH = /^docs\/adr\/(\d{4})-[^/]+\.md$/;
 const WRONG_IN_ADR = /^(docs\/adr\/[^/:]+\.md): (.*)$/;
 // The three forms of an ADR's source (D12): a page read on a date, the profile (fast only), or docs not read.
@@ -588,8 +621,44 @@ function logIds(onboarding) {
   return ids;
 }
 
-/** The roadmap's findings (stage 5): its phases, steps, rows and done-when commands, and its ties to the pre-plan. */
-function roadmapFindings(roadmap, origin) {
+/** The roadmap's v4 messages read against the onboarding (D5): once O3 is checked, `## Decided` names every accepted
+ * ADR, one a checked area names and neither superseded nor withdrawn; and every `B:` target `--checklist bar` prints
+ * for Kind and Size is on a Checklist step, under `## Open decisions` on a line with its area's open decision, or
+ * named in the given-up line. */
+function decidedAndBar(roadmap, sections, onboarding, tasks, { adrs, profiles }) {
+  const messages = [];
+  const areas = adviceAreas(onboarding);
+  if (tasks.get('O3')?.done) {
+    const decided = sections.get('Decided') ?? '';
+    const gone = new Set([...adrs].filter(([, text]) => retired(readAdr(text).status)).map(([path]) => ADR_PATH.exec(path)?.[1]));
+    for (const [id, area] of areas) {
+      const number = area.done ? ADR_NAMED.exec(area.suffix ?? '')?.[1] : undefined;
+      if (number && !gone.has(number) && !new RegExp(`\\bADR-${number}\\b`).test(decided)) messages.push(`## Decided does not name ADR-${number}, accepted for ${id}`);
+    }
+  }
+  const setup = setupValues(onboarding);
+  const kind = setup.Kind === undefined ? null : parseKind(setup.Kind, profiles);
+  const size = /^(small|large) \(L\d+\)$/.exec(setup.Size ?? '')?.[1];
+  if (!kind || kind.error || !size) return messages;
+  const profile = advisedProfile(kind.kinds, profiles);
+  const steps = parseRoadmap(roadmap).phases.flatMap((phase) => phase.steps.map((step) => step.text));
+  const waiting = (sections.get('Open decisions') ?? '').split('\n');
+  const givenUp = (parseContract(onboarding).get('Advice') ?? '').split('\n').find((line) => GIVEN_UP_LINE.test(line)) ?? '';
+  for (const id of checklistLines(profile, 'bar', size).map((line) => /\bB:([a-z0-9-]+)/.exec(line)?.[1]).filter(Boolean)) {
+    const tag = new RegExp(`\\bB:${id}\\b`);
+    const area = profile.targets.find((target) => target.id === id)?.area;
+    const decision = /^open \((OD\d+)\)$/.exec(areas.get(`A:${area}`)?.suffix ?? '')?.[1];
+    const waits = decision && waiting.some((line) => tag.test(line) && new RegExp(`\\b${decision}\\b`).test(line));
+    if (!steps.some((line) => tag.test(line)) && !waits && !tag.test(givenUp)) {
+      messages.push(`B:${id} is on no Checklist step: paste it from js-harness onboard profile --checklist bar, put it under ## Open decisions with its area's OD, or name it in the given-up line`);
+    }
+  }
+  return messages;
+}
+
+/** The roadmap's findings (stage 5): its phases, steps, rows and done-when commands, and its ties to the pre-plan; with
+ * an open onboarding, its advice mode, decisions and bar (`decidedAndBar`). */
+function roadmapFindings(roadmap, origin, { onboarding = null, adrs = new Map(), profiles = PROFILES } = {}) {
   const at = (message) => ({ file: ROADMAP_PATH, stage: 5, message });
   const findings = [];
   const sections = parseContract(roadmap);
@@ -619,6 +688,14 @@ function roadmapFindings(roadmap, origin) {
     }
   }
   if (!sections.get('Next')) findings.push(at('no ## Next: the first unchecked step and the text that starts its session'));
+  // v4 (D5), until O6: a closed onboarding's roadmap is the project's, and these messages do not come back.
+  const tasks = onboarding === null ? null : onboardingTasks(onboarding);
+  if (tasks && !tasks.get('O6')?.done) {
+    const mode = sections.get('Advice mode');
+    if (mode === undefined) findings.push(at('no ## Advice mode: copy Teaching, Mode and Level from the onboarding\'s ## Setup'));
+    else if (!ADVICE_MODE.test(mode)) findings.push(at('## Advice mode is not one line "Teaching: on|off · Mode: full|fast · Level: A:<id> new|some|experienced, ..."'));
+    findings.push(...decidedAndBar(roadmap, sections, onboarding, tasks, { adrs, profiles }).map(at));
+  }
   if (origin !== null) {
     const carried = sections.get('Open decisions') ?? '';
     for (const id of openDecisions(parseContract(origin).get('Open decisions'))) {
@@ -638,7 +715,7 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents, adrs = ne
   const missing = (file, stage, template) => ({ file, stage, message: `missing: js-harness onboard template ${template} --write starts it` });
   if (plan) {
     if (roadmap === null) return [missing(ROADMAP_PATH, 5, 'roadmap')];
-    return roadmapFindings(roadmap, origin);
+    return roadmapFindings(roadmap, origin, { onboarding, adrs, profiles });
   }
 
   if (onboarding === null) findings.push(missing(ONBOARDING_PATH, 1, 'feature'));
@@ -677,10 +754,18 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents, adrs = ne
     for (const number of (open ? unreadAdrs(adrs) : []).filter((n) => !new RegExp(`\\bADR-${n}\\b`).test(risks))) {
       findings.push({ file: ORIGIN_PATH, stage: 3, message: `ADR-${number} has a source not read, and ## Risks does not name it` });
     }
+    // Each area decided with an ADR has its row in the table, so no decision is dropped silently (D4).
+    const stack = sections.get('Stack and architecture') ?? '';
+    for (const [id, area] of open ? adviceAreas(onboarding) : []) {
+      const number = area.done ? ADR_NAMED.exec(area.suffix ?? '')?.[1] : undefined;
+      if (number && stack && !new RegExp(`^\\|.*\\bADR-${number}\\b`, 'm').test(stack)) {
+        findings.push({ file: ORIGIN_PATH, stage: 3, message: `## Stack and architecture has no row for ${id} (ADR-${number})` });
+      }
+    }
   }
 
   if (roadmap === null) findings.push(missing(ROADMAP_PATH, 5, 'roadmap'));
-  else findings.push(...roadmapFindings(roadmap, origin));
+  else findings.push(...roadmapFindings(roadmap, origin, { onboarding, adrs, profiles }));
 
   const close = (message) => ({ file: AGENTS_PATH, stage: 7, message });
   if (agents === null) findings.push(close('missing: js-harness init writes one'));
