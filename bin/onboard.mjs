@@ -145,7 +145,24 @@ function readFiles(root) {
     roadmap: readOrNull(root, ROADMAP_PATH),
     agents: readOrNull(root, AGENTS_PATH),
     adrs,
+    planFiles: planFiles(root),
   };
+}
+
+/** The pre-plan's and the roadmap's files as the disk names them, matched in any case: on a file system that ignores
+ * case `docs/roadmap.md` reads as docs/ROADMAP.md, and on one that does not the onboarding would write a second
+ * roadmap beside it, which a checkout on the first then cannot hold. */
+function planFiles(root) {
+  let entries;
+  try {
+    entries = fs.readdirSync(path.join(root, 'docs'), { withFileTypes: true });
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return [];
+    throw err;
+  }
+  // A link to a plan counts, as reading it did before; a directory of that name does not.
+  const onDisk = (file) => entries.find((entry) => !entry.isDirectory() && `docs/${entry.name}`.toLowerCase() === file.toLowerCase());
+  return [ORIGIN_PATH, ROADMAP_PATH].map(onDisk).filter(Boolean).map((entry) => `docs/${entry.name}`);
 }
 
 /** git's output in `root` without its trailing newline, or `null` when it fails. Only the end is trimmed: the first
