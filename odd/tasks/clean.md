@@ -130,3 +130,6 @@ T3: Codex review of e22ef3f1..HEAD (running), then push (retry after a minute wh
   in sdists-v9, so 41b4a893 refused uv cache clean for good. A cache holding a git repository now goes to its tool
   when a CACHEDIR.TAG with its signature marks it a cache (uv tags its cache), and is refused otherwise. Left as
   follow-up: R1-001, the tool re-resolves its cache folder after the check (needs the environment to change mid-run).
+  - gentle-ai: 8712378f reviewed in lineage review-ff3ecb0e59b1148d (lenses risk, reliability), approved and acknowledged.
+  Its advisories (R1-cachedir-tag-waives-nested-repo-guard, R3-001) accepted as the trade: a repository put inside
+  a tagged cache goes with it, as the tool's own clean command would take it; R3-003 (assert the log entries) left.
