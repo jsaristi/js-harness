@@ -48,6 +48,9 @@ export const STAGES = {
   7: 'Close',
 };
 
+/** How many stages D2 numbers: the seven above, then 8, Awaiting merge, which no finding sends the work back to. */
+const STAGE_COUNT = 8;
+
 const ORIGIN_SECTIONS = ['Status', 'Goal', 'Why', 'What exists', 'Decisions already made', 'Stack and architecture', 'Owner steps', 'Principles', 'Phases', 'Not built', 'Risks', 'Open decisions', 'Sources'];
 
 export function featureTemplate() {
@@ -103,7 +106,7 @@ ${SUMMARY_LINE}
 <!-- One item per round of the two readers: "Pre-plan round <n>: ..." or "Roadmap round <n>: ...", what each reader found and what changed. -->
 
 ## Log
-- L1 <date> The owner's request, verbatim: "<his words>"
+- L1 <date> The owner's request, verbatim: "<their words>"
 `;
 }
 
@@ -118,7 +121,7 @@ the onboarding closes: what changes after that is recorded in [ROADMAP.md](ROADM
 <one sentence: the outcome, not the steps>
 
 ## Why
-<the owner's reason, in his words, with the date>
+<the owner's reason, in their words, with the date>
 
 ## What exists
 <what the project has today, each with its evidence>
@@ -126,7 +129,7 @@ the onboarding closes: what changes after that is recorded in [ROADMAP.md](ROADM
 ## Decisions already made
 | Area | Decision | The owner's words |
 |------|----------|-------------------|
-| <area> | <decision> | "<his words>" (<date>) |
+| <area> | <decision> | "<their words>" (<date>) |
 
 ## Stack and architecture
 <!-- One row per area settled with an ADR under docs/adr/, then a few lines on how the parts fit. -->
@@ -832,7 +835,7 @@ const named = (word, items) => `${word}${items.length === 1 ? '' : 's'} ${items.
 function stageLines(at, files, git) {
   const current = hashes({ ...files, adrs: files.adrs ?? new Map() });
   const tasks = files.onboarding === null ? new Map() : onboardingTasks(files.onboarding);
-  const heading = (what) => `Stage ${at.stage} of 7, ${STAGES[at.stage]}: ${what}`;
+  const heading = (what) => `Stage ${at.stage} of ${STAGE_COUNT}, ${STAGES[at.stage]}: ${what}`;
   switch (at.stage) {
     case 1: {
       const fresh = files.onboarding === null;
@@ -938,7 +941,7 @@ export function stageReport(files, { agentsTemplate = '', profiles = PROFILES, g
   else if (git.branch !== git.defaultBranch && !git.defaultHasRoadmap) {
     const branch = git.branch ?? 'HEAD';
     lines = [
-      `Awaiting merge: the onboarding is complete on branch ${branch}, and ${git.defaultBranch} has no ${ROADMAP_PATH} yet.`,
+      `Stage ${STAGE_COUNT} of ${STAGE_COUNT}, Awaiting merge: the onboarding is complete on branch ${branch}, and ${git.defaultBranch} has no ${ROADMAP_PATH} yet.`,
       `Merging it is the owner's decision, under this repository's policy. To propose it: git push -u origin ${branch}, then gh pr create --base ${git.defaultBranch} --head ${branch}.`,
     ];
   } else {

@@ -404,6 +404,10 @@ test('the templates: the feature is a valid contract with its setup, eleven topi
   for (const section of ['Area', 'Context', 'Decision', 'Alternatives considered', 'Consequences', 'Sources', "The owner's words"]) {
     assert.ok(record.includes(`\n## ${section}\n`), section);
   }
+  // No template assumes the owner's pronoun (JH 43, 2026-10-21: "<his words>" in L1).
+  for (const [name, text] of [['feature', feature], ['origin', origin], ['roadmap', roadmap], ['adr', record]]) {
+    assert.doesNotMatch(text, /\b(his|him|he|her|she)\b/i, name);
+  }
 });
 
 test('a template written as it is fails the check on its own template lines, never passes', () => {
@@ -500,12 +504,12 @@ const nothing = { onboarding: null, origin: null, roadmap: null };
 test('stageReport: stage 1 starts the document, on the onboarding branch', () => {
   const { code, lines } = report(nothing, { branch: 'main' });
   assert.equal(code, 0);
-  assert.equal(lines[0], 'Stage 1 of 7, Read: no onboarding document yet.');
+  assert.equal(lines[0], 'Stage 1 of 8, Read: no onboarding document yet.');
   has(lines, 'git switch -c onboarding');
   has(lines, 'js-harness onboard template feature --write');
   const onBranch = report(nothing).lines;
   assert.ok(!onBranch.some((line) => line.includes('git switch')), onBranch.join('\n'));
-  assert.equal(report({ onboarding: onboardingDoc({ o1: ' ' }) }).lines[0], 'Stage 1 of 7, Read: O1 is not checked yet.');
+  assert.equal(report({ onboarding: onboardingDoc({ o1: ' ' }) }).lines[0], 'Stage 1 of 8, Read: O1 is not checked yet.');
 });
 
 test('stageReport, stage 2: Conversation and advice prints what it covered, what is open and waiting, and one next step', () => {
@@ -516,7 +520,7 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   const { code, lines } = report({ onboarding: onboardingDoc({ topics, advice, setup: SETUP.map((line) => line.replace('Mode: full', 'Mode: quick')) }) });
   assert.equal(code, 0);
   assert.deepEqual(lines, [
-    'Stage 2 of 7, Conversation and advice: covered: 9 of 11 topics, 2 of 3 areas.',
+    'Stage 2 of 8, Conversation and advice: covered: 9 of 11 topics, 2 of 3 areas.',
     'FAIL  odd/tasks/onboarding.md: Mode is "quick": write full, or fast (L<n>) (back to stage 2, Conversation and advice)',
     'Open: topic 8; area A:stack.',
     'Deduced, waiting for the owner\'s confirmation: topic 4.',
@@ -536,15 +540,15 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   const summary = answered();
   summary[11] = SUMMARY_LINE;
   const summing = report({ onboarding: onboardingDoc({ topics: summary }) }).lines;
-  assert.equal(summing[0], 'Stage 2 of 7, Conversation and advice: covered: 11 of 11 topics, 3 of 3 areas.');
+  assert.equal(summing[0], 'Stage 2 of 8, Conversation and advice: covered: 11 of 11 topics, 3 of 3 areas.');
   assert.match(summing.find((line) => line.startsWith('Do: ')), /^Do: log the summary as a \(session\) Log line and give it.*through the question tool.*Check S with the Log line of the last answer\.$/);
   assert.equal(report({ onboarding: onboardingDoc({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }) }).lines[0],
-    'Stage 2 of 7, Conversation and advice: covered: 11 of 11 topics; areas not listed yet.');
+    'Stage 2 of 8, Conversation and advice: covered: 11 of 11 topics; areas not listed yet.');
 });
 
 test('stageReport: each later stage says what it waits on and what records it', () => {
   const pre = report({ origin: null, onboarding: onboardingDoc({ o2: '- [ ] O2 Pre-plan written', o3: '- [ ] O3 Pre-plan approved' }) }).lines;
-  assert.equal(pre[0], 'Stage 3 of 7, Pre-plan: the conversation is complete.');
+  assert.equal(pre[0], 'Stage 3 of 8, Pre-plan: the conversation is complete.');
   has(pre, 'js-harness onboard template origin --write');
   has(pre, `answers sha256:${recordedAnswers()}`);
   has(pre, 'from the conversation and the ADRs');
@@ -553,18 +557,18 @@ test('stageReport: each later stage says what it waits on and what records it', 
   const revised = answered();
   revised[0] += ', revised in L20';
   const again = report({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (answers sha256:${recordedAnswers()})` }) }).lines;
-  assert.equal(again[0], 'Stage 3 of 7, Pre-plan: the conversation changed since O2 recorded it.');
+  assert.equal(again[0], 'Stage 3 of 8, Pre-plan: the conversation changed since O2 recorded it.');
   assert.ok(!again.some((line) => line.includes('template origin')), again.join('\n'));
   has(again, 'revise docs/origin.md from the conversation and the ADRs');
 
   const review = report({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) }).lines;
-  assert.equal(review[0], 'Stage 4 of 7, Pre-plan review: docs/origin.md waits for the owner\'s approval.');
+  assert.equal(review[0], 'Stage 4 of 8, Pre-plan review: docs/origin.md waits for the owner\'s approval.');
   has(review, '"Pre-plan round <n>: ..."');
   has(review, 'one question, "Is the pre-plan approved, with its ADRs?", whose text is a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR');
   has(review, `(origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L<n>)`);
 
   const plan = report({ onboarding: onboardingDoc({ o4: ' ' }) }).lines;
-  assert.equal(plan[0], 'Stage 5 of 7, Plan: the pre-plan is approved.');
+  assert.equal(plan[0], 'Stage 5 of 8, Plan: the pre-plan is approved.');
   has(plan, 'js-harness onboard check --plan');
   has(plan, 'paste what js-harness onboard profile --checklist bar prints into the first build phase');
   has(plan, '## Decided from the ADRs');
@@ -572,20 +576,20 @@ test('stageReport: each later stage says what it waits on and what records it', 
 
   const roadmap = ROADMAP.replace('Bread on a page', 'Bread and cakes on a page');
   const changed = report({ roadmap }).lines;
-  assert.equal(changed[0], 'Stage 6 of 7, Plan review: docs/ROADMAP.md changed since its approval.');
+  assert.equal(changed[0], 'Stage 6 of 8, Plan review: docs/ROADMAP.md changed since its approval.');
   has(changed, `(roadmap sha256:${ROADMAP_HASH(roadmap)}, origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L<n>)`);
 
   const close = report({ agents: '# shop\n' }).lines;
-  assert.equal(close[0], 'Stage 7 of 7, Close: 1 finding left.');
+  assert.equal(close[0], 'Stage 7 of 8, Close: 1 finding left.');
   has(close, `FAIL  AGENTS.md: has no line "${ROADMAP_LINE}" (back to stage 7, Close)`);
   has(close, '"What this project is" from topic 1, and "Constraints" from topics 6, 7 and 9');
-  assert.equal(report().lines[0], 'Stage 7 of 7, Close: js-harness onboard check passes; O6 is not checked yet.');
+  assert.equal(report().lines[0], 'Stage 7 of 8, Close: js-harness onboard check passes; O6 is not checked yet.');
 });
 
 test('stageReport: a complete onboarding waits for its merge, then points at the roadmap', () => {
   const closed = { onboarding: onboardingDoc({ o6: 'x' }) };
   const waiting = report(closed).lines;
-  assert.equal(waiting[0], 'Awaiting merge: the onboarding is complete on branch onboarding, and main has no docs/ROADMAP.md yet.');
+  assert.equal(waiting[0], 'Stage 8 of 8, Awaiting merge: the onboarding is complete on branch onboarding, and main has no docs/ROADMAP.md yet.');
   has(waiting, 'gh pr create --base main --head onboarding');
   has(waiting, 'the owner\'s decision');
 

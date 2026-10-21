@@ -238,7 +238,7 @@ and `template adr <slug>` numbers the next decision record under `docs/adr/`.
 
 ```console
 $ js-harness onboard
-Stage 1 of 7, Read: no onboarding document yet.
+Stage 1 of 8, Read: no onboarding document yet.
 First: git switch -c onboarding, the branch the onboarding is committed on, so a session in another worktree finds it.
 Do: js-harness onboard template feature --write; then read the repository (README, manifests, git log, docs, codegraph where there is code). Write the owner's request verbatim in L1, and what exists under ## What exists, each with its evidence. Check O1.
 Then: commit, and run js-harness onboard again.
