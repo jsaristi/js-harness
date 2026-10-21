@@ -88,6 +88,12 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 - [x] T7 (kind: docs) the protocols skill's trigger
 - [ ] T8 (kind: docs) the roadmap item, reviews, the pull request
 
+## Next step
+All tasks built and both slices approved by gentle-ai (L5, L7). Left: commit 6 (advisory test titles) lands; then
+`js-harness codex-review --base 81305126` over the branch (2 parts, about 310k tokens), its findings treated like
+gentle-ai's; then push `feat/conventions`, open the pull request, tick the roadmap's Part 1, and send
+`js-harness notify --to orchestrator --kind ready`. Worktree `D:\js-harness\.claude\worktrees\clean-5f4555`.
+
 ## Open for part 2 (onboarding profiles)
 - A range of code alone is reviewed with `codex exec review --base` and Codex's own sentence, which takes no prompt
   of ours, so it does not get `CONVENTIONS`. The two ways to close that gap, to put to Sebastián then (L6):
