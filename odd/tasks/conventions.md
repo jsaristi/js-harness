@@ -154,3 +154,6 @@ gentle-ai's; then push `feat/conventions`, open the pull request, tick the roadm
   lenses readability, reliability), approved, acknowledged (lineage review-10be85bd9b7512ce). Its three advisory
   findings, a test title that still said the whole-range text was kept, a version tag that named one of three
   versions, and a comment line run together, are taken in the next commit, which touches tests and comments only.
+- L8. 2026-10-21. gentle-ai assessed 53691533..2ea70ec (24e7ed76, the second review's advisory titles and comments, and
+  2ea70ec, this document): medium, 23 lines, under_budget, not due. Codex reviewed 8130512..2ea70ec: correct in both
+  parts. Pull request jsaristi/js-harness#496.
