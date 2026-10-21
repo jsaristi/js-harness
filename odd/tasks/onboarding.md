@@ -983,6 +983,9 @@ ceiling.
 - Slice 4c, Codex (2026-10-21): `c32195c..0b51844` recorded, incorrect (0.99), two P2s: the Advice mode cut at an
   unindented heading only, and a fenced `B:` step counted. The fix `0b51844..71ad754` recorded as its recheck: both
   fixed, correct (0.98). PR 490.
+- Slice 3c, gentle-ai (2026-10-21): `37c0fbd2`, `2fb7ebf7` (`42c7b7e3..2fb7ebf7`) approved (readability,
+  reliability; lineage review-ded9f4c72667edb4, acknowledged); two warnings do not hold (L33). Codex
+  `42c7b7e..2fb7ebf` in 2 parts: correct (0.87, 0.99). PR 493.
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
