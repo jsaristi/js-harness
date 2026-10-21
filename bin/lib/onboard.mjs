@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
 import { cellsOf, parseRoadmap } from './progress.mjs';
+import { PROFILES, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
 
 export const ONBOARDING_PATH = 'odd/tasks/onboarding.md';
 export const ORIGIN_PATH = 'docs/origin.md';
@@ -13,27 +14,32 @@ export const AGENTS_PATH = 'AGENTS.md';
 /** The line the Close stage adds to `AGENTS.md`, outside the harness block, so every later session starts there. */
 export const ROADMAP_LINE = "The plan is docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/.";
 
-/** The nine topics of the interview, in the order they are asked (D3). */
+/** The eleven topics the conversation covers (D3): what it must have covered, not questions read out in order. */
 export const TOPICS = [
-  'What the project is and for whom',
+  'What the project is, for whom, and its kind',
+  'Its size: small, only what is needed, or large',
+  'The developer\'s level in the kind\'s areas, by layer',
   'The outcome that makes it worth doing',
   'What exists today',
   'Decisions already made, the language of the artifacts among them',
   'Constraints and their reasons',
   'In and out of scope for the first usable version',
-  'What the owner decides alone',
+  'What the owner decides alone, and the steps only the owner can take',
   'Order: what comes first, and what can wait',
   'Risks and unknowns',
 ];
-/** The topics a plan cannot be made without, so they cannot be left unknown (D3). */
-const REQUIRED_TOPICS = [1, 2, 7];
-/** REQUIRED_TOPICS as the output names them: "1, 2 and 7". */
+/** The topics a plan cannot be made without: never unknown, and checked only once the owner said or confirmed them
+ * (D3, D15). */
+const REQUIRED_TOPICS = [1, 2, 3, 4, 9];
+/** REQUIRED_TOPICS as the output names them: "1, 2, 3, 4 and 9". */
 const REQUIRED_LIST = `${REQUIRED_TOPICS.slice(0, -1).join(', ')} and ${REQUIRED_TOPICS.at(-1)}`;
+/** The fixed last item of `## Interview`, checked once the summary is given and its deepening questions answered. */
+export const SUMMARY_LINE = '- [ ] S Summary given and deepening questions answered';
 
 /** The stages a finding sends the work back to, by number (D2). */
 export const STAGES = {
   1: 'Read',
-  2: 'Interview',
+  2: 'Conversation and advice',
   3: 'Pre-plan',
   4: 'Pre-plan review',
   5: 'Plan',
@@ -70,12 +76,21 @@ The two approvals: the pre-plan and the roadmap.
 ## What exists
 <what the repository holds today, each with its evidence: a path, or a command and its output>
 
+## Setup
+<!-- One line each: Kind and Size once the conversation shows them, deduced values included; Level with ## Advice, one level per area; Teaching "on (L<n>)" or "off (L<n>)" once the opening is logged; Mode full, or fast (L<n>). A change here is committed at once. -->
+- Teaching: on
+- Mode: full
+
 ## Interview
-<!-- A topic is checked once answered ("— answered (L<n>)") or marked unknown with its open decision ("— unknown (OD<n>)"). -->
+<!-- A topic is checked "— answered (L<n>)" (the owner said it), "— deduced (L<n>)" (read from the conversation; that Log line names the words), "— confirmed (L<n>)" (a deduction the owner confirmed) or "— unknown (OD<n>)". Topics ${REQUIRED_LIST} are checked only once answered or confirmed. S is checked with the Log line of the last deepening answer. -->
 ${TOPICS.map((title, i) => `- [ ] ${i + 1} ${title}`).join('\n')}
+${SUMMARY_LINE}
+
+## Advice
+<!-- Once Kind and Size are set, paste what js-harness onboard profile --checklist advice prints. An area is checked with its proposal: "— proposed, ADR-<nnnn> (L<n>)", "— asked, ADR-<nnnn> (L<n>)", "— the owner's, ADR-<nnnn> (L<n>)" or "— open (OD<n>)". -->
 
 ## Tasks
-<!-- O2 records the interview's hash; O3 and O5, the files' hashes and the Log line of the owner's yes: "(origin sha256:<12 hex>; L<n>)", as \`js-harness onboard hash\` prints them. -->
+<!-- O2 records the answers' hash; O3 and O5, the files' hashes and the Log line of the owner's yes: "(origin sha256:<12 hex>; L<n>)", as \`js-harness onboard hash\` prints them. -->
 - [ ] O1 Repository read
 - [ ] O2 Pre-plan written
 - [ ] O3 Pre-plan approved
@@ -179,12 +194,19 @@ export function shortHash(text) {
   return crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
 }
 
-/** The hashes an approval records (D2): of the interview's section, of the pre-plan and of the roadmap; `null` for
- * what is missing. */
+/** What the `answers` hash is taken over (D6): `## Interview`, `## Advice`, and the Kind and Size lines of `## Setup`.
+ * Teaching, Mode and Level are left out, so turning teaching off reopens nothing (D2). */
+function answersText(onboarding) {
+  const sections = parseContract(onboarding);
+  const setup = setupValues(onboarding);
+  return ['## Interview', sections.get('Interview') ?? '', '## Advice', sections.get('Advice') ?? '', `Kind: ${setup.Kind ?? ''}`, `Size: ${setup.Size ?? ''}`].join('\n');
+}
+
+/** The hashes an approval records (D2): of the answers, of the pre-plan and of the roadmap; `null` for what is
+ * missing. */
 export function hashes({ onboarding, origin, roadmap }) {
-  const interview = onboarding === null ? undefined : parseContract(onboarding).get('Interview');
   return {
-    interview: interview === undefined ? null : shortHash(interview),
+    answers: onboarding === null ? null : shortHash(answersText(onboarding)),
     origin: origin === null ? null : shortHash(origin),
     roadmap: roadmap === null ? null : shortHash(roadmap),
   };
@@ -194,8 +216,15 @@ export function hashes({ onboarding, origin, roadmap }) {
 const PLACEHOLDER = /<[^<>!][^<>]*>/;
 // An interview topic: its box, its number, the rest of the line.
 const TOPIC_LINE = /^\s*[-*+]\s+\[([ xX])\]\s+(\d+)\b(.*)$/;
+// How a topic is settled (D15): said, deduced or confirmed, with the Log line; or unknown, with its open decision.
+const TOPIC_SAID = /\b(answered|deduced|confirmed) \(L\d+\b/;
 const UNKNOWN = /\bunknown \(OD\d+\)/i;
-const RECORDED_HASH = /\b(interview|origin|roadmap) sha256:([0-9a-f]{12})\b/g;
+const SUMMARY_ITEM = /^\s*[-*+]\s+\[([ xX])\]\s+S\b(.*)$/;
+// An advice area (D6): its box, its ID, its title, and once settled, its suffix after " — ".
+const AREA_LINE = /^\s*[-*+]\s+\[([ xX])\]\s+(A:[a-z0-9-]+)\s+(.+?)(?:\s+—\s+(.+?))?\s*$/;
+const AREA_SETTLED = /^(?:(?:proposed|asked|the owner's|default, fast), ADR-\d{4} \(L\d+\)|open \(OD\d+\))$/;
+const LEVEL_ENTRY = /^(A:[a-z0-9-]+) (?:new|some|experienced)$/;
+const RECORDED_HASH = /\b(answers|origin|roadmap) sha256:([0-9a-f]{12})\b/g;
 const LOG_REFERENCE = /\bL\d+\b/g;
 // A Log entry: its ID at the start of a list item.
 const LOG_ITEM = /^\s*[-*+]\s+(L\d+)\b/;
@@ -256,34 +285,134 @@ function interviewTopics(onboarding) {
   return topics;
 }
 
-/** The numbers of the topics the interview still has to ask, in order: missing, unchecked, or required and unknown. */
-function topicsLeft(onboarding) {
-  const topics = interviewTopics(onboarding);
-  return TOPICS.map((title, i) => i + 1).filter((n) => {
-    const topic = topics.get(n);
-    return !topic?.done || (REQUIRED_TOPICS.includes(n) && UNKNOWN.test(topic.rest));
-  });
+/** How a topic's line says it was settled: `answered`, `deduced`, `confirmed`, `unknown`, or `null`. */
+function topicState(rest) {
+  const said = rest.match(TOPIC_SAID);
+  if (said) return said[1];
+  return UNKNOWN.test(rest) ? 'unknown' : null;
 }
 
-/** The interview's findings (stage 2). */
-function interviewFindings(onboarding) {
+/** The areas under `## Advice` by ID, in order: `Map(id -> { done, suffix })`. */
+function adviceAreas(onboarding) {
+  const areas = new Map();
+  for (const line of (parseContract(onboarding).get('Advice') ?? '').split('\n')) {
+    const area = line.match(AREA_LINE);
+    if (area && !areas.has(area[2])) areas.set(area[2], { done: area[1] !== ' ', suffix: area[4] ?? null });
+  }
+  return areas;
+}
+
+/** The area IDs a Level value names, or `null` when it is not in its format. */
+function levelAreas(value) {
+  const body = /^(.+) \(L\d+\)$/.exec(value);
+  const entries = body ? body[1].split(',').map((entry) => LEVEL_ENTRY.exec(entry.trim())) : [null];
+  return entries.every(Boolean) ? entries.map((entry) => entry[1]) : null;
+}
+
+/** Where the conversation stands (stage 2, D3 and D15), read from `## Setup`, `## Interview` and `## Advice`.
+ * `findings` is every stage-2 finding in the document's order; `wrong` the messages of those that are written wrong,
+ * rather than not covered yet; `step` what the session does next. `compare`: whether Kind and the areas are still
+ * held to the profiles, which they are until O6 closes the onboarding. */
+function conversation(onboarding, { profiles, compare }) {
   const findings = [];
+  const wrong = [];
+  const notYet = (message) => findings.push(message);
+  const wrongly = (message) => {
+    findings.push(message);
+    wrong.push(message);
+  };
+
+  const setup = setupValues(onboarding);
+  let kinds = null;
+  if (setup.Kind === undefined) notYet('## Setup has no Kind line yet');
+  else if (compare) {
+    const kind = parseKind(setup.Kind, profiles);
+    if (kind.error) wrongly(`Kind: ${kind.error}`);
+    else kinds = kind.kinds;
+  }
+  const size = setup.Size === undefined ? null : /^(small|large) \(L\d+\)$/.exec(setup.Size)?.[1] ?? null;
+  if (setup.Size === undefined) notYet('## Setup has no Size line yet');
+  else if (size === null) wrongly(`Size is "${setup.Size}": write small (L<n>) or large (L<n>)`);
+  const levels = setup.Level === undefined ? null : levelAreas(setup.Level);
+  if (setup.Level === undefined) notYet('## Setup has no Level line yet');
+  else if (levels === null) wrongly(`Level is "${setup.Level}": write A:<id> new|some|experienced, one per area of ## Advice, then (L<n>)`);
+  const opened = setup.Teaching !== undefined && setup.Teaching !== 'on';
+  if (!opened) notYet('Teaching is not set: log the opening as a (session) Log line, then write - Teaching: on (L<n>)');
+  else if (!/^(on|off) \(L\d+\)$/.test(setup.Teaching)) wrongly(`Teaching is "${setup.Teaching}": write on (L<n>) or off (L<n>)`);
+  if (setup.Mode === undefined) wrongly('## Setup has no Mode line: write - Mode: full');
+  else if (!/^(full|fast \(L\d+\))$/.test(setup.Mode)) wrongly(`Mode is "${setup.Mode}": write full, or fast (L<n>)`);
+  const fast = /^fast \(L\d+\)$/.test(setup.Mode ?? '');
+
   const topics = interviewTopics(onboarding);
+  const open = { topics: [], areas: [] };
+  const waiting = [];
+  let coveredTopics = 0;
   for (let n = 1; n <= TOPICS.length; n += 1) {
-    if (!topics.has(n)) findings.push(`the interview has no topic ${n}`);
+    if (!topics.has(n)) wrongly(`the interview has no topic ${n}`);
   }
-  for (const [n, topic] of topics) {
-    if (!topic.done) findings.push(`topic ${n} is not answered yet`);
+  for (const [n, topic] of [...topics].filter(([n]) => n >= 1 && n <= TOPICS.length).sort(([a], [b]) => a - b)) {
+    const state = topicState(topic.rest);
+    const required = REQUIRED_TOPICS.includes(n);
+    if (!topic.done && required && state === 'deduced') {
+      waiting.push(n);
+      notYet(`topic ${n} is deduced and waits for the owner's confirmation`);
+    } else if (!topic.done) {
+      open.topics.push(n);
+      notYet(`topic ${n} is not covered yet`);
+    } else if (state === null) wrongly(`topic ${n} is checked with no "— answered (L<n>)", "— deduced (L<n>)", "— confirmed (L<n>)" or "— unknown (OD<n>)"`);
+    else if (required && state === 'unknown') wrongly(`topic ${n} is marked unknown: topics ${REQUIRED_LIST} need an answer`);
+    else if (required && state === 'deduced') wrongly(`topic ${n} is checked as deduced: topics ${REQUIRED_LIST} are checked once the owner says or confirms them`);
+    else coveredTopics += 1;
   }
-  for (const n of REQUIRED_TOPICS) {
-    const topic = topics.get(n);
-    if (topic?.done && UNKNOWN.test(topic.rest)) findings.push(`topic ${n} is marked unknown: topics ${REQUIRED_LIST} need an answer`);
+  const summary = (parseContract(onboarding).get('Interview') ?? '').split('\n').map((line) => line.match(SUMMARY_ITEM)).find(Boolean);
+  const summed = Boolean(summary) && summary[1] !== ' ';
+  if (!summary) wrongly(`the interview has no summary line "${SUMMARY_LINE}"`);
+  else if (!summed) notYet('the summary is not given yet: S is checked once its deepening questions are answered');
+  else if (!/\bL\d+\b/.test(summary[2])) wrongly('S names no Log line (L<n>) of the last answer');
+
+  const areas = adviceAreas(onboarding);
+  const expected = kinds && size ? checklistLines(advisedProfile(kinds, profiles), 'advice', size).map((line) => line.match(AREA_LINE)?.[2]).filter(Boolean) : null;
+  let pasted = areas.size > 0;
+  if (!pasted && expected?.length > 0) notYet('## Advice is empty: paste what js-harness onboard profile --checklist advice prints');
+  else if (expected) {
+    for (const id of expected.filter((id) => !areas.has(id))) wrongly(`## Advice lacks ${id}, which js-harness onboard profile --checklist advice prints for this Kind and Size`);
+    for (const id of [...areas.keys()].filter((id) => !expected.includes(id))) wrongly(`## Advice lists ${id}, which js-harness onboard profile --checklist advice does not print for this Kind and Size`);
+    pasted = expected.length === areas.size && expected.every((id) => areas.has(id));
   }
-  return findings.map((message) => ({ file: ONBOARDING_PATH, stage: 2, message }));
+  let coveredAreas = 0;
+  for (const [id, area] of areas) {
+    if (!area.done) {
+      open.areas.push(id);
+      notYet(`${id} is not settled yet`);
+    } else if (!AREA_SETTLED.test(area.suffix ?? '')) wrongly(`${id} is checked with "${area.suffix ?? ''}": write proposed, asked or the owner's, ADR-<nnnn> (L<n>), open (OD<n>), or with Mode fast, default, fast, ADR-<nnnn> (L<n>)`);
+    else if (area.suffix.startsWith('default, fast') && !fast) wrongly(`${id} is settled default, fast, but Mode is not fast`);
+    else coveredAreas += 1;
+  }
+  if (levels && areas.size > 0) {
+    for (const id of [...areas.keys()].filter((id) => !levels.includes(id))) wrongly(`Level has no level for ${id}`);
+    for (const id of levels.filter((id) => !areas.has(id))) wrongly(`Level names ${id}, which is not under ## Advice`);
+  }
+
+  const kindKnown = setup.Kind !== undefined && (kinds !== null || !compare);
+  // The advice step also asks for Level, which is completed with the paste: a Level never written goes back there.
+  const step = !opened ? 'opening'
+    : !kindKnown || size === null ? 'kind'
+      : !pasted || setup.Level === undefined ? 'advice'
+        : open.topics.length > 0 || open.areas.length > 0 ? 'converse'
+          : waiting.length > 0 || !summed ? 'summary'
+            : 'fix';
+  return {
+    findings: findings.map((message) => ({ file: ONBOARDING_PATH, stage: 2, message })),
+    wrong,
+    step,
+    covered: { topics: coveredTopics, areas: coveredAreas, total: expected ? expected.length : areas.size || null },
+    open,
+    waiting,
+  };
 }
 
 /** Where each recorded hash is taken from, as a finding names it. */
-const HASHED = { interview: '## Interview', origin: ORIGIN_PATH, roadmap: ROADMAP_PATH };
+const HASHED = { answers: 'the conversation (## Interview, ## Advice, Kind and Size)', origin: ORIGIN_PATH, roadmap: ROADMAP_PATH };
 
 /** The hashes a task's item records, by name: `Map(name -> 12 hex)`. */
 function recordedHashes(task) {
@@ -298,7 +427,7 @@ function changedSince(task, files, current) {
 
 /** The tasks that record what they were made from, in the order of their stages (D2). */
 const RECORDS = [
-  { id: 'O2', stage: 3, unchecked: 'the pre-plan is not written from the interview yet', files: ['interview'], approval: false },
+  { id: 'O2', stage: 3, unchecked: 'the pre-plan is not written from the conversation yet', files: ['answers'], approval: false },
   { id: 'O3', stage: 4, unchecked: 'the pre-plan has no approval yet', files: ['origin'], approval: true },
   { id: 'O5', stage: 6, unchecked: 'the roadmap has no approval yet', files: ['roadmap', 'origin'], approval: true },
 ];
@@ -387,7 +516,7 @@ function roadmapFindings(roadmap, origin) {
  * `files` holds each file's text, `null` where it is missing; `agentsTemplate` is the base `AGENTS.md` `init` writes,
  * whose placeholder lines must be gone. With `plan`, only the roadmap and its ties to the pre-plan (stage 5). Once
  * O6 closes the onboarding, the approvals are no longer compared with the files, which live on. */
-export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agentsTemplate = '', plan = false } = {}) {
+export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agentsTemplate = '', plan = false, profiles = PROFILES } = {}) {
   const findings = [];
   const missing = (file, stage, template) => ({ file, stage, message: `missing: js-harness onboard template ${template} --write starts it` });
   if (plan) {
@@ -397,9 +526,9 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents }, { agent
 
   if (onboarding === null) findings.push(missing(ONBOARDING_PATH, 1, 'feature'));
   else {
-    findings.push(...interviewFindings(onboarding));
     const tasks = onboardingTasks(onboarding);
     const compare = !tasks.get('O6')?.done;
+    findings.push(...conversation(onboarding, { profiles, compare }).findings);
     const current = hashes({ onboarding, origin, roadmap });
     const logged = logIds(onboarding);
     for (const record of RECORDS) {
@@ -447,17 +576,20 @@ export function findingLine({ file, stage, message }) {
 }
 
 /** The stage the onboarding is in, read from its files alone (D2): the first whose record is missing or no longer
- * holds. `{ stage: 1 }`, `{ stage: 2, topic, answered }`, `{ stage: 3 | 4 | 6, changed }` (changed: its record
- * names a hash that moved), `{ stage: 5 }`, `{ stage: 7, findings }`, or `{ stage: 'done' }` once the check passes
- * and O6 is checked. */
-export function currentStage(files, { agentsTemplate = '' } = {}) {
+ * holds. `{ stage: 1 }`, `{ stage: 2, step, covered, open, waiting, wrong }` (see conversation), `{ stage: 3 | 4 | 6,
+ * changed }` (changed: its record names a hash that moved), `{ stage: 5 }`, `{ stage: 7, findings }`, or
+ * `{ stage: 'done' }` once the check passes and O6 is checked. */
+export function currentStage(files, { agentsTemplate = '', profiles = PROFILES } = {}) {
   const { onboarding } = files;
   if (onboarding === null) return { stage: 1 };
   const tasks = onboardingTasks(onboarding);
   if (!tasks.get('O1')?.done) return { stage: 1 };
-  const left = topicsLeft(onboarding);
-  if (left.length > 0) return { stage: 2, topic: left[0], answered: TOPICS.length - left.length };
   const compare = !tasks.get('O6')?.done;
+  const talk = conversation(onboarding, { profiles, compare });
+  if (talk.findings.length > 0) {
+    const { step, covered, open, waiting, wrong } = talk;
+    return { stage: 2, step, covered, open, waiting, wrong };
+  }
   const current = hashes(files);
   for (const { id, stage, files: names } of RECORDS) {
     // O4 records no hash, only that the roadmap is written; a checked task whose file is gone is not done.
@@ -467,12 +599,25 @@ export function currentStage(files, { agentsTemplate = '' } = {}) {
     const changed = Boolean(task?.done) && compare && changedSince(task, names, current).length > 0;
     if (!task?.done || changed) return { stage, changed };
   }
-  const findings = checkOnboarding(files, { agentsTemplate });
+  const findings = checkOnboarding(files, { agentsTemplate, profiles });
   if (findings.length > 0 || compare) return { stage: 7, findings };
   return { stage: 'done' };
 }
 
 const THEN = 'Then: commit, and run js-harness onboard again.';
+
+/** What the session does next in the conversation, by the step `conversation` names (D3, D15). */
+const CONVERSATION_STEPS = {
+  opening: 'open the conversation: say who you are in this project (the plan orchestrator, who advises every area and then hands over to the build orchestrator), what it will produce (the pre-plan, its decisions and the roadmap), that teaching is on, that saying "no teaching" turns it off and "easy and fast" asks for the fast plan, in the owner\'s language; then invite the owner to tell the project in their own words: what it is, for whom, why now. Log that as a (session) Log line, write - Teaching: on (L<n>), and commit at once.',
+  kind: 'follow the owner\'s thread; from it, write - Kind: (the kinds js-harness onboard profile lists) and - Size: small (L<n>) or large (L<n>) under ## Setup, deduced values included, each deduction logged as a (session) Log line with the words it came from, and commit at once.',
+  advice: 'run js-harness onboard profile --checklist advice and paste what it prints under ## Advice, in place of what is there; in the same commit, complete - Level: with every area\'s level, the level of its layer, and some for an area of no layer unless the owner said otherwise.',
+  converse: `guide the conversation toward what is still open: open questions in plain chat, explaining why each matters for the plan, and every so often a line on what you understood and what comes next. Log what settles each item and check it: a topic "— answered (L<n>)", "— deduced (L<n>)" or "— unknown (OD<n>)", an area with its proposal and ADR. Explain an area with js-harness onboard profile --area <id> once topic 7 is covered. Topics ${REQUIRED_LIST} are checked only once the owner says or confirms them.`,
+  summary: 'log the summary as a (session) Log line and give it: what you understood, what you deduced and from what, and your recommendation for each area in a line. Then ask only the deepening questions still worth asking, one at a time through the question tool (on Codex, in plain text with numbered options), the recommended option first, each logged as a (session) Log line before it is asked. Log each answer verbatim and check or correct what it covers, a confirmed deduction "— confirmed (L<n>)". Check S with the Log line of the last answer.',
+  fix: 'fix each line above.',
+};
+
+/** `topic 4` or `topics 4, 8`. */
+const named = (word, items) => `${word}${items.length === 1 ? '' : 's'} ${items.join(', ')}`;
 
 /** What the session does at `at`, the result of currentStage, as lines of the command's output. */
 function stageLines(at, files, git) {
@@ -489,17 +634,24 @@ function stageLines(at, files, git) {
         THEN,
       ];
     }
-    case 2:
+    case 2: {
+      const { covered, open, waiting, wrong } = at;
+      const areas = covered.total === null ? '; areas not listed yet' : `, ${covered.areas} of ${covered.total} areas`;
+      const opened = [open.topics.length > 0 ? named('topic', open.topics) : null, open.areas.length > 0 ? named('area', open.areas) : null].filter(Boolean);
       return [
-        heading(`topic ${at.topic} of ${TOPICS.length}, "${TOPICS[at.topic - 1]}" (${at.answered} of ${TOPICS.length} answered).`),
-        `Do: ask the owner about this topic only, one question, and wait for the answer. Log it verbatim with its date as the next L<n>, and check the topic "— answered (L<n>)", or "— unknown (OD<n>)" with the open decision in the Log. Topics ${REQUIRED_LIST} cannot be unknown.`,
-        'Then: commit every three answers, and run js-harness onboard again.',
+        heading(`covered: ${covered.topics} of ${TOPICS.length} topics${areas}.`),
+        ...wrong.map((message) => findingLine({ file: ONBOARDING_PATH, stage: 2, message })),
+        ...(opened.length > 0 ? [`Open: ${opened.join('; ')}.`] : []),
+        ...(waiting.length > 0 ? [`Deduced, waiting for the owner's confirmation: ${named('topic', waiting)}.`] : []),
+        `Do: ${CONVERSATION_STEPS[at.step]}`,
+        'Then: commit every three settled items, and at the summary, and run js-harness onboard again.',
       ];
+    }
     case 3:
       return [
-        heading(at.changed ? '## Interview changed since O2 recorded it.' : 'the interview is complete.'),
-        `Do: ${files.origin === null ? `js-harness onboard template origin --write, then fill ${ORIGIN_PATH}` : `revise ${ORIGIN_PATH}`} from the interview: every section, the owner's words with their dates, each unknown topic as an open decision.`,
-        `Record: check O2 with "(interview sha256:${current.interview})", the hash js-harness onboard hash prints.`,
+        heading(at.changed ? 'the conversation changed since O2 recorded it.' : 'the conversation is complete.'),
+        `Do: ${files.origin === null ? `js-harness onboard template origin --write, then fill ${ORIGIN_PATH}` : `revise ${ORIGIN_PATH}`} from the conversation: every section, the owner's words with their dates, each unknown topic as an open decision.`,
+        `Record: check O2 with "(answers sha256:${current.answers})", the hash js-harness onboard hash prints.`,
         THEN,
       ];
     case 4:
@@ -532,7 +684,7 @@ function stageLines(at, files, git) {
       return [
         heading(count > 0 ? `${count} finding${count === 1 ? '' : 's'} left.` : 'js-harness onboard check passes; O6 is not checked yet.'),
         ...at.findings.map(findingLine),
-        `Do: fill ${AGENTS_PATH} outside its js-harness block: "What this project is" and "Constraints" from topics 1, 4, 5 and 7, the checking command under "How it works", and the line "${ROADMAP_LINE}". Fix each finding at the stage it names.`,
+        `Do: fill ${AGENTS_PATH} outside its js-harness block: "What this project is" from topic 1, and "Constraints" from topics 6, 7 and 9, the checking command under "How it works", and the line "${ROADMAP_LINE}". Fix each finding at the stage it names.`,
         'Then: once js-harness onboard check exits 0, check O6 and commit.',
       ];
     }
@@ -552,7 +704,7 @@ function elsewhereLine({ branch, worktree, remote = false, local = null }, git) 
 /** What bare `onboard` prints, and its exit code: `{ code, lines }`. `git` says where the session is: `branch` (or
  * `null` when detached), `defaultBranch`, `defaultHasRoadmap`, `elsewhere` (other branches holding an onboarding
  * document: `{ branch, worktree, remote, local }`, `local` naming a local branch of a remote's name that lacks it) and `uncommitted` (the onboarding's files git has not committed). */
-export function stageReport(files, { agentsTemplate = '', git }) {
+export function stageReport(files, { agentsTemplate = '', profiles = PROFILES, git }) {
   if (files.onboarding === null) {
     if (git.elsewhere.length > 0) return { code: 0, lines: git.elsewhere.map((place) => elsewhereLine(place, git)) };
     const own = [[ORIGIN_PATH, files.origin], [ROADMAP_PATH, files.roadmap]].filter(([, text]) => text !== null).map(([file]) => file);
@@ -566,7 +718,7 @@ export function stageReport(files, { agentsTemplate = '', git }) {
       };
     }
   }
-  const at = currentStage(files, { agentsTemplate });
+  const at = currentStage(files, { agentsTemplate, profiles });
   let lines;
   if (at.stage !== 'done') lines = stageLines(at, files, git);
   else if (git.branch !== git.defaultBranch && !git.defaultHasRoadmap) {
