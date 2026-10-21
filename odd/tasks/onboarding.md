@@ -894,6 +894,48 @@ ceiling.
 - Slice 3a, Codex (2026-10-20): the same range in 4 parts, recorded. One P2, taken: `B:seo-basics` named only
   Lighthouse, which does not check duplicate titles, canonicals or the sitemap across pages; its command now adds a
   check over the built pages.
+- Profiles round, slice 3b (2026-10-20, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+  over the uncommitted data-analysis, research and pre-project kinds: one on claims and gaps with the sources
+  fetched, one on gaps only, running the command for three imagined users. Blockers taken:
+  - `pre-project,platform` mixed a build's whole bar into the plan; a kind may now carry `joins`, and pre-project
+    joins only research or data-analysis (`parseKind` refuses the rest, exit 2);
+  - research promised market and user research with neither area; market, users, competitors and their two
+    targets are now non-core there;
+  - a small pre-project interviewed people with no consent step; ethics and `B:consent-recorded` are core there;
+  - `B:uncertainty` and `B:decision-recorded` needed a report or an ADR from the end of the work; both are now lab
+    checks on the plan, the criteria committed before the first finding;
+  - `B:clean-rerun` could not run in CI on private or large data; it reruns where the data can reach it, with the
+    log committed and CI rerunning a committed sample.
+  Advisories taken: per-kind defaults for the common areas (legal, cost, maintenance, analytics, i18n); `ci-gate`'s
+  text for projects with no code; the question first in the advice order and the pipeline before CI and the report;
+  raw data fetched with its checksum; a review's method and risk of bias; a no-participants line for consent;
+  `B:data-cards` cites Gebru et al. (datasheets) and Pushkarna et al. (data cards, arXiv 2204.01075), which are two
+  frameworks; the plan's commit before the first data commit, PRISMA-P beside OSF; OSF for confirmatory studies;
+  the search log takes sources found by other means; holdout split before any preprocessing; checkable commands for
+  traceable numbers, cited claims and user evidence; the brief holds one section per onboarding topic; a
+  `feasibility` area and `B:riskiest-assumptions` for the pre-project, with regulation core and method and validity
+  threats added; TAM, SAM and SOM taught to a newcomer; leading questions moved to the middle level. Not taken: a
+  per-kind override of teaching and pitfalls (the shape has none; global teaching stays generic). Recorded for D12:
+  OpenAI announced it would acquire Astral (uv) on 2026-03-19, and dbt Labs and Fivetran merged on 2026-06-01, both
+  keeping their tools open source. Unguaranteed: the fixes were not read again (no third round).
+- Slice 3b, gentle-ai (2026-10-20): `dfae6be0..364ada0c` (eadb813f and the pause line), assessed `medium` and
+  `under_budget`, started through the preflight status as each slice is; lenses readability and reliability,
+  approved and acknowledged (lineage review-b2c7fd9b754587c5). Informational, left for later: the refusal's text when
+  a kind's `joins` is empty (`bin/lib/profiles.mjs:43`); the kind IDs rebuilt per kind in `shapeFindings`
+  (`bin/lib/profiles.mjs:280-281`); no test that the real data refuses `pre-project,platform`
+  (`bin/lib/profiles-data.test.mjs:12-13`); a kind that lists itself in `joins` is not named.
+- Slice 3b, Codex (2026-10-20): `dfae6be..364ada0` in 2 parts, recorded; correct (0.86 on the data, 0.96 on the
+  join rule), no findings.
+- Slice 4a, gentle-ai (2026-10-20): `f0a461f5..c38a508c` (c38a508c), assessed `medium` and `under_budget`, started
+  through the preflight status; lenses readability and reliability, approved and acknowledged (lineage
+  review-904644ed8258b6dc). Its fix `c38a508c..5cba6d26` (5cba6d26), lens reliability, approved and acknowledged
+  (lineage review-36b6ebaa093ffcc1). Taken in 5cba6d26: R2-001 (a missing Level hidden behind "fix"), R2-002 (the fast
+  form in the suffix message), R3-empty-advice-stuck, R3-checklist-parse-crash. Left: R3-closed-onboarding-reopened (a
+  v3-format document, accepted by D6); the fix review's R3-002 and R3-003 (tests that pin the empty checklist's step
+  and a non-area checklist line), for 4b. Its R3-001 does not hold: with an empty checklist, `pasted` becomes true in
+  the `else if (expected)` branch (`bin/lib/onboard.mjs`, `conversation`).
+- Slice 4a, Codex (2026-10-20): `f0a461f..c38a508` in 2 parts, recorded; one P2, the same as R2-001. The fix
+  `c38a508..5cba6d2` recorded as its recheck: fixed, correct (0.99).
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
@@ -901,6 +943,14 @@ ceiling.
   - gentle-ai: `ef60d123` assessed `medium`, review not due (`under_budget`, 13 lines), from that review's advisories; Codex in 6e99eda..ef60d12.
   - gentle-ai: `04163529` assessed `medium`, review not due (`under_budget`, 44 lines): Codex's P2 on a remote branch hidden behind a local one, fixed with its RED test.
   - gentle-ai: `437a5a7f`, `5f507d36` (`3a9f6601..5f507d36`) assessed `medium`, review not due (`under_budget`, 3 paths, 15 lines): Codex's P2 fix on slice 3a, and main's `init`, `install` and T3 lines taken before merging main. Codex recorded 437a5a7..5f507d3 (correct, 0.99) and the merge 5f507d3..7edd0fa (correct, 0.99).
+  - gentle-ai: `c38a508c` approved (readability, reliability; lineage review-904644ed8258b6dc, acknowledged); Codex one P2, the same as R2-001.
+  - gentle-ai: `5cba6d26` approved (reliability; lineage review-36b6ebaa093ffcc1, acknowledged): the fix of R2-001 and Codex's P2; Codex recheck fixed, correct (0.99).
+  - gentle-ai: `9f5d7446` approved after one bounded correction (resilience, readability, reliability; lineage review-654db40f4e81ed8e, acknowledged): R3-closed-onboarding-regresses fixed.
+  - gentle-ai: `f26ee232` approved, the bounded correction of `9f5d7446`, validated (lineage review-654db40f4e81ed8e, acknowledged).
+  - gentle-ai: `0ec1ba66` approved (resilience, reliability; lineage review-d572c7b81ed4696f, acknowledged): the claim fix from L31's advisories; one advisory left, an EEXIST from a writer other than onboard in the gap after the second listing.
+  - gentle-ai: `1a83873e` approved (reliability; lineage review-101fc8c0468042fe, acknowledged): Codex's P2; Codex recheck fixed, correct (0.99).
+- Slice 4b, Codex (2026-10-20): `cd940af..0ec1ba6` in 2 parts, recorded; one P2, the unread-ADR Risks check still ran
+  after O6. The fix `0ec1ba6..1a83873` recorded as its recheck: fixed, correct (0.99).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -1098,3 +1148,77 @@ ceiling.
   step is its measure wired before launch, so the first build phase can close (the readers' B1); D5 is unchanged.
   The profiles round is under `## Reviews`. Next: gentle-ai review of the slice from 65f81a30, Codex review, push,
   PR, then slice 3b (data-analysis, research, pre-project).
+- L24 (2026-10-20) Slice 3a is PR 481, main merged in (5f507d36 took main's help and T3 lines first; Codex read the
+  merge's resolution alone, from a temporary worktree at the commit). T7 slice 3b written: data-analysis, research
+  and pre-project, 14 areas and 16 targets, past their readers (`## Reviews`), route inline (one unit, no Writer
+  trigger). One addition to D9's grammar: a kind's optional `joins`, the kinds it may be joined with, so a plan kind
+  never takes a build kind's bar; `shapeFindings` names a `joins` entry that is no kind. Next: gentle-ai and Codex
+  on the slice, its PR, then slice 3c (cli-library, api-service, ai-app, tui-app).
+- L25 (2026-10-20) Paused at a safe point for his restart, on the orchestrator's word. Slice 3b is eadb813f, committed
+  in `D:\js-harness-worktrees\onboarding-v4` (detached HEAD) and not pushed: the pre-push hook refuses a code commit
+  with no Codex record, and the pause allows no review. origin/feat/onboarding-plan-advisor is at dfae6be0 (PR 481).
+  On resume, in order: gentle-ai on `dfae6be0..HEAD` (`--base-ref dfae6be0 --committed-only`, lenses readability and
+  reliability, the `granted` invocation pre-granted); `js-harness codex-review --base dfae6be0`; push with
+  `git push origin HEAD:feat/onboarding-plan-advisor`; the 3b lines in PR 481's body or a PR of its own; the ready
+  notice; then slice 3c.
+- L26 (2026-10-20) Resumed after the restart: PR 481 is in main (11ff331). Slice 3b passed gentle-ai and Codex
+  (`## Reviews`) and is pushed for its own pull request. The orchestrator's resume message names T8 next; slice 3c
+  (cli-library, api-service, ai-app, tui-app) stays open in T7.
+- L27 (2026-10-20) T8 slice 4a, the conversation in files (D3, D6, D15), tests first: eleven topics, topics 1, 2, 3, 4
+  and 9 checked only `answered` or `confirmed`; the summary line `S`; `## Setup`'s five lines in their formats, Kind
+  through `parseKind`; `## Advice` held to `--checklist advice` for Kind and Size until O6, each area in one of its
+  five forms, every area with a Level; the `answers` hash in place of `interview` (O2); stage 2 renamed "Conversation
+  and advice", with its covered line, what is open and waiting, and one next step (opening, kind, advice, converse,
+  summary, fix); the Close text on topics 1, 6, 7 and 9. The lib takes the profiles as `profiles`, a fixture in its
+  tests. On the branch `feat/onboarding-conversation`, stacked on PR 484. Next: 4b, the ADRs (`template adr`, their
+  checks, the `adrs` hash on O3 and O5) and fast mode's given-up line; then 4c, the pre-plan and roadmap additions.
+- L28 (2026-10-20) Slice 4a passed gentle-ai (lineage review-904644ed8258b6dc, readability and reliability, approved,
+  acknowledged) with five informational findings, and Codex (2 parts) with one P2 that matches gentle-ai's R2-001: a
+  Level never written after the paste left stage 2 on "fix" with nothing printed. Fixed in the next commit, test
+  first: that case goes back to the advice step; the area-suffix message names the fast form; a checklist that prints
+  no area asks for no paste; checklist lines that are not areas are skipped. Left as is: a document closed in v3's
+  format reads as stage 2 again, which D6 accepts because no project was onboarded with v3.
+- L29 (2026-10-20) Slice 4a is PR 486 (base main, ready notice recorded 00:50Z). Slice 4b started, uncommitted in the
+  worktree: `bin/lib/onboard.testkit.mjs` has `adr()`, `ADRS` (0001 A:stack, 0002 A:hosting), `adrs` in `files()` and
+  O3/O5 recording `adrs sha256`. Next step, in order: (1) tests first in `bin/lib/onboard.test.mjs`: O3/O5 fixtures at
+  lines 132-148, 336, 417, 426 gain `adrs sha256`; the fast cases (lines 84, 110) gain `- Given up (fast, L20): ...`
+  and an ADR-0003 with a `profile:` source; new tests for the ADR checks, the `adrs` hash, a no on one area sending
+  the work back to stage 3, and the empty checklist's step (R3-002). (2) `bin/lib/onboard.mjs`: `adrTemplate`,
+  `hashes` with `adrs` (sorted paths, path and text), RECORDS O3 ['origin','adrs'] and O5 ['roadmap','origin','adrs'],
+  HASHED.adrs 'docs/adr/'; in `conversation`, ADR checks for settled areas only (exists, `## Area` matches, one
+  source in a D12 form, `profile:` only with fast, template lines, belongs to an area or superseded/withdrawn until
+  O6) as stage-2 `wrong` findings with their own file, so `wrong` becomes finding objects; the given-up line required
+  with fast and refused without; in `checkOnboarding`, a `not read` ADR named under the pre-plan's `## Risks`
+  (stage 3); stage 3, 4 and 6 texts with the adrs hash and D15's no on one area. (3) `bin/onboard.mjs`: readFiles
+  reads `docs/adr/*.md` into `adrs`; `template adr <slug> [--write]` (slug `^[a-z0-9]+(-[a-z0-9]+)*$`, next number,
+  `wx`, refused when another file took the number); `docs/adr` in `gitContext`'s status; USAGE; `closed()` in
+  `bin/onboard.test.mjs` writes ADRS. Then README, gentle-ai, Codex, push to a new branch from main, PR, ready notice.
+- L30 (2026-10-20) Slice 4b written test first, as L29 planned, with three choices made on the way: (a) `wrong` stays
+  a list of strings, an ADR's finding prefixed with its file, which the stage report splits back into its FAIL line,
+  so the stage-2 fixtures keep their shape; (b) the orphan check (an ADR no area names) waits until every area is
+  pasted and settled, because a session writes the ADR before it checks its area; (c) two sessions that take one
+  number with two slugs both write, and listing again keeps the name that sorts first and refuses the other
+  (`writeAdr`, its `readdir` the test's seam). Lib 35 tests and command 18 pass. Next: gate, commit, gentle-ai,
+  Codex, push, PR, ready notice; then 4c.
+- L31 (2026-10-20) gentle-ai on `cd940af5..9f5d7446` (lenses resilience, readability, reliability; lineage
+  review-654db40f4e81ed8e): one critical, the ADR and given-up checks ran after O6, fixed test first in `f26ee232`,
+  validated, approved and acknowledged. Advisories taken in the next commit: L30's (c) left a window (a session that
+  listed again before the other wrote kept its file, and the other could keep one too), so a number is now claimed
+  first with an exclusive `docs/adr/.<nnnn>.claim`, removed once the ADR is written; a dangling link under
+  `docs/adr/` no longer crashes `readFiles`; two doc comments fixed. Left: in-progress v3-format approvals lacking
+  `adrs sha256` (none exist, D6), the `file: message` round trip, the two ADR path patterns, the `adrs` defaults.
+- L32 (2026-10-20) Slice 4b is PR 488 (`feat/onboarding-adrs`, base `feat/onboarding-conversation`, stacked on PR
+  486): reviewed, and the commits listed under ## Reviews. `notify --kind ready` refuses a PR not on main, so a note
+  went to the orchestrator; once 486 merges, retarget 488 to main (`gh pr edit 488 --base main`) and send its ready
+  notice. Slice 4c starts on top of 4b, on a new branch `feat/onboarding-plan` from `7ff16b85`. Its plan, test first:
+  (1) hashes per D6 (line 360): `answers` leaves out the given-up line and `roadmap` the `## Advice mode` section;
+  until now both were inside. (2) The pre-plan (D4, D6 line 377): `## Stack and architecture`, whose table
+  `Area | Decision | ADR` has one row per decided area (an area of `## Advice` settled with an ADR), and
+  `## Owner steps`, both in `originTemplate` and the check. (3) The roadmap (D5, D6 line 379): `## Decided`
+  `Area | Decision | ADR` names every accepted ADR (named by a checked area, neither superseded nor withdrawn, once O3
+  is checked); `## Advice mode` holds one line `Teaching: <on|off> · Mode: <full|fast> · Level: A:<id> <level>, ...`,
+  its values not compared; until O6, every `B:` ID `--checklist bar` prints for Kind and Size is on a Checklist step,
+  under `## Open decisions` on a line with its area's `OD<n>`, or named in the given-up line; `roadmapTemplate`
+  gains both sections. (4) `--plan` reads the onboarding document for Kind, Size, the areas and the given-up line.
+  (5) The Close text (D7, line 417): the checking command in "How it works". The testkit's PROFILES gains bar
+  targets; its ORIGIN and ROADMAP gain the new sections.

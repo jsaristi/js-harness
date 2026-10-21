@@ -2453,3 +2453,37 @@ test('doctorMain shows the worktrees row ok with none, unknown when it cannot te
     fs.rmSync(project, { recursive: true, force: true });
   }
 });
+
+// The clean row (odd/tasks/clean.md, S8): the last measure of the regenerable leftovers, a gap once its total reaches
+// the threshold, named in the hook's notice; a due measure is started in the background, never run in the hook.
+test('doctorMain shows the clean row stale past the threshold, names its size in the hook, and starts a due measure', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const started = [];
+    const clean = { start: (where) => started.push(where) };
+
+    const first = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, clean });
+    assert.match(first.output, /^clean\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.deepEqual(started, [home], 'no measure yet: one is started');
+
+    const measuredAt = new Date().toISOString();
+    writeJson(path.join(home, '.js-harness', 'clean.json'), { measuredAt, total: 3 * 1024 ** 3, kinds: [{ id: 'codex-releases', bytes: 3 * 1024 ** 3 }] });
+    const table = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, clean });
+    assert.match(table.output, /^clean\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(table.output.includes('3.0 GB of regenerable leftovers'), table.output);
+    assert.ok(table.output.includes('js-harness clean --apply deletes only the kinds you confirm'), table.output);
+    assert.equal(started.length, 1, 'a fresh measure starts none');
+
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, clean });
+    assert.match(JSON.parse(hook.output).systemMessage, /3\.0 GB of leftovers to clean: js-harness clean/);
+    const again = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, clean });
+    assert.equal(again.output, '', 'the same measure is noticed once');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});

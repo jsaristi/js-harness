@@ -134,7 +134,8 @@ Interrupt the user only when:
 3. two gates run at once (a gate that waits for its turn is not one of them);
 4. a prompt they hold became stale;
 5. a feature's plan changed: say what changed, the reason its document gives, and which other session it touches, with a one-line notice for that session, which updates its own document;
-6. a session reached the context pause and its state is not written.
+6. a session reached the context pause and its state is not written;
+7. a restart or an update of theirs is ready (The restart, below).
 Say for each session concerned whether to send that session's own prompt, wait, or drop it. Otherwise keep the work moving: the next units of the plan are yours to move inside the charter.
 
 ## The status report
@@ -149,6 +150,14 @@ When the user asks how the work is going, or how much is done, the answer is a r
 4. The map: each roadmap phase with its share done and what is left in it, then the total.
 5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.
 6. What you propose next, and why.
+
+## The restart
+
+When the user must restart or update (a Claude Desktop update \`js-harness doctor\` reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), pause everything at a safe point first, and only then tell them.
+- Ask each working session on this machine, by \`SendMessage\` to its title, to pause: it commits what is ready, pushes only when its check already passes, writes its state to its feature document and starts nothing new. A session held on a card is brought to the user first; cloud sessions keep working.
+- Keep your watch until the board shows no other session \`working\` (yours always reads so) and no gate running. Then write the paused sessions and the resume steps to your relief file, stop your loops and waits, check that no js-harness node process is left, and run \`js-harness permit lease --off\`.
+- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!! Then say what to do, in order (each update, the restart, any cleanup), what not to touch, and the line to send this session when they are back.
+- When the user is back: after a boot, \`js-harness wake --notify\` first. Take the lease back, start your loops again (\`js-harness loop status\`), and resume each paused session by message, saying so when its worktree shows work cut mid-pause, then turn its Remote Control back on. Run \`js-harness doctor\` and carry out its fixes, the host-update review included.
 
 ## The recap
 

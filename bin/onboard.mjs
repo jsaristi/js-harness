@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH,
-  checkOnboarding, featureTemplate, findingLine, hashes, originTemplate, roadmapTemplate, stageReport,
+  adrTemplate, checkOnboarding, featureTemplate, findingLine, hashes, originTemplate, roadmapTemplate, stageReport,
 } from './lib/onboard.mjs';
 import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseKind, parseSize, setupValues } from './lib/profiles.mjs';
 import { agentsTemplate, projectLocation } from './lib/project.mjs';
@@ -17,13 +17,13 @@ export const USAGE = [
   'Usage: js-harness onboard [--cwd <path>]',
   '       js-harness onboard check [--plan] [--cwd <path>]',
   '       js-harness onboard hash [--cwd <path>]',
-  '       js-harness onboard template feature|origin|roadmap [--write] [--cwd <path>]',
+  '       js-harness onboard template feature|origin|roadmap|adr <slug> [--write] [--cwd <path>]',
   '       js-harness onboard profile [<kind>[,<kind>]] [--area <id> | --checklist advice|bar [--size small|large]] [--cwd <path>]',
   'With no verb: the stage the onboarding is in, read from its files and git, and what the session does next.',
   'check: the onboarding document, docs/origin.md, docs/ROADMAP.md and AGENTS.md against the shape the onboarding',
   'asks for, each finding with the stage it sends the work back to; --plan reads only the roadmap and its ties to the',
   'pre-plan. hash: the sha256 an approval records. template: a skeleton on stdout; --write creates its file instead,',
-  'and refuses one that exists. profile: the kinds of project the advice knows; with kinds, their advice, areas and',
+  'and refuses one that exists; adr <slug> numbers the next ADR, docs/adr/<nnnn>-<slug>.md. profile: the kinds of project the advice knows; with kinds, their advice, areas and',
   'bar; --area explains one area; --checklist prints the lines the onboarding pastes. With no kind it reads Kind and',
   'Size from the onboarding document\'s ## Setup.',
 ].join('\n');
@@ -37,6 +37,11 @@ const TEMPLATES = {
   origin: { file: ORIGIN_PATH, text: (root) => originTemplate(path.basename(root)) },
   roadmap: { file: ROADMAP_PATH, text: () => roadmapTemplate() },
 };
+
+const ADR_DIR = 'docs/adr';
+const ADR_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const ADR_FILE = /^(\d{4})-.+\.md$/;
+const ADR_CLAIM = /^\.(\d{4})\.claim$/;
 
 /** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored. */
 function parseArgs(argv, cwd) {
@@ -75,7 +80,12 @@ function parseArgs(argv, cwd) {
     return { ...parsed, verb, kind: rest[0] ?? null };
   }
   if (verb === 'template') {
-    if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) return { error: 'template takes one of feature, origin, roadmap' };
+    if (rest[0] === 'adr') {
+      // The slug is the file's name: nothing in it can leave docs/adr/.
+      if (rest.length !== 2 || !ADR_SLUG.test(rest[1])) return { error: 'template adr takes a slug of lowercase letters and digits, joined by single dashes, as auth-provider' };
+      return { ...parsed, verb, template: 'adr', slug: rest[1] };
+    }
+    if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) return { error: 'template takes one of feature, origin, roadmap, or adr <slug>' };
     return { ...parsed, verb, template: rest[0] };
   }
   if (rest.length > 0) return { error: `unknown argument: ${rest[0]}` };
@@ -110,12 +120,31 @@ function readOrNull(root, file) {
   }
 }
 
+/** The entries directly under `root`'s docs/adr/, by name; none when there is no such directory. */
+function adrEntries(root, readdir = fs.readdirSync) {
+  try {
+    return readdir(path.join(root, ADR_DIR));
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  }
+}
+
+/** The Markdown entries directly under `root`'s docs/adr/, by name. */
+const adrNames = (root, readdir) => adrEntries(root, readdir).filter((name) => name.endsWith('.md'));
+
 function readFiles(root) {
+  const adrs = new Map();
+  for (const name of adrNames(root)) {
+    // A directory, or a link to nothing, is no ADR.
+    if (fs.statSync(path.join(root, ADR_DIR, name), { throwIfNoEntry: false })?.isFile()) adrs.set(`${ADR_DIR}/${name}`, readOrNull(root, `${ADR_DIR}/${name}`));
+  }
   return {
     onboarding: readOrNull(root, ONBOARDING_PATH),
     origin: readOrNull(root, ORIGIN_PATH),
     roadmap: readOrNull(root, ROADMAP_PATH),
     agents: readOrNull(root, AGENTS_PATH),
+    adrs,
   };
 }
 
@@ -177,7 +206,7 @@ function gitContext(root, files) {
   const branch = git(root, 'symbolic-ref', '--quiet', '--short', 'HEAD');
   const main = defaultBranch(root);
   const defaultHasRoadmap = branch === main ? files.roadmap !== null : [main, `origin/${main}`].some((ref) => holds(root, ref, ROADMAP_PATH));
-  const status = git(root, 'status', '--porcelain', '--untracked-files=all', '--', ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, AGENTS_PATH) ?? '';
+  const status = git(root, 'status', '--porcelain', '--untracked-files=all', '--', ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, AGENTS_PATH, ADR_DIR) ?? '';
   return {
     branch,
     defaultBranch: main,
@@ -224,6 +253,49 @@ function linkOnTheWay(root, file) {
     }
   }
   return null;
+}
+
+/** The number the next ADR takes: the highest under docs/adr/ plus one, four digits. A claim counts as taken, so
+ * one left by a session that stopped only skips its number. */
+function nextAdrNumber(names) {
+  const numbers = names.map((name) => (ADR_FILE.exec(name) ?? ADR_CLAIM.exec(name))?.[1]).filter(Boolean).map(Number);
+  return String(Math.max(0, ...numbers) + 1).padStart(4, '0');
+}
+
+/** Creates docs/adr/<nnnn>-<slug>.md from the ADR template (D12). The number is claimed first, with an exclusive
+ * docs/adr/.<nnnn>.claim, then docs/adr/ is listed again (`readdir`, the tests' seam): a session that finds the claim
+ * taken, or an ADR of that number written since its first listing, is refused and runs it again. A session claims
+ * only after the one before it released the claim, which it does once its ADR is written, so the later one always
+ * sees it. */
+export function writeAdr(root, slug, { stdout, stderr }, readdir = fs.readdirSync) {
+  const number = nextAdrNumber(adrEntries(root, readdir));
+  const file = `${ADR_DIR}/${number}-${slug}.md`;
+  const claim = `${ADR_DIR}/.${number}.claim`;
+  const link = linkOnTheWay(root, file);
+  if (link) {
+    stderr(`${link} is a link: onboard writes only inside the project, so move it aside or write ${file} by hand`);
+    return 1;
+  }
+  fs.mkdirSync(path.join(root, ADR_DIR), { recursive: true });
+  try {
+    fs.writeFileSync(path.join(root, claim), '', { flag: 'wx' });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    stderr(`${file}: another session is writing ADR-${number} (${claim}); run it again for the next number`);
+    return 1;
+  }
+  try {
+    const rival = adrNames(root, readdir).find((name) => name.startsWith(`${number}-`));
+    if (rival) {
+      stderr(`${file}: another session wrote ADR-${number} (${ADR_DIR}/${rival}) first; run it again for the next number`);
+      return 1;
+    }
+    fs.writeFileSync(path.join(root, file), adrTemplate(number), { flag: 'wx' });
+  } finally {
+    fs.rmSync(path.join(root, claim), { force: true });
+  }
+  stdout(`wrote ${file}`);
+  return 0;
 }
 
 function template(root, name, write, { stdout, stderr }) {
@@ -315,5 +387,10 @@ export async function onboardMain(argv, env = process.env, { cwd = process.cwd()
   if (args.verb === 'check') return check(root, args.plan, io);
   if (args.verb === 'hash') return hash(root, io);
   if (args.verb === 'profile') return profile(root, args, io);
+  if (args.template === 'adr') {
+    if (args.write) return writeAdr(root, args.slug, io);
+    stdout(adrTemplate(nextAdrNumber(adrEntries(root))));
+    return 0;
+  }
   return template(root, args.template, args.write, io);
 }

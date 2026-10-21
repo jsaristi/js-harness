@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { onboardMain } from './onboard.mjs';
+import { onboardMain, writeAdr } from './onboard.mjs';
 import {
-  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, featureTemplate, originTemplate, roadmapTemplate, shortHash,
+  AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, adrTemplate, featureTemplate, originTemplate, roadmapTemplate, shortHash,
 } from './lib/onboard.mjs';
-import { files, onboardingDoc } from './lib/onboard.testkit.mjs';
+import { ADRS, files, onboardingDoc } from './lib/onboard.testkit.mjs';
 import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines } from './lib/profiles.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
@@ -85,7 +85,69 @@ test('hash prints each file\'s short sha256, and missing for a file that is not 
   const root = project(t, { 'docs/origin.md': 'the pre-plan\n' });
   assert.deepEqual(await onboard(root, 'hash'), {
     code: 0,
-    out: ['interview missing', `origin    sha256:${shortHash('the pre-plan\n')}`, 'roadmap   missing'].join('\n'),
+    out: ['answers   missing', `origin    sha256:${shortHash('the pre-plan\n')}`, 'roadmap   missing', `adrs      sha256:${shortHash('')}`].join('\n'),
+    err: '',
+  });
+  // docs/adr/ is its Markdown files, each by its path; anything else there is no ADR.
+  write(root, { 'docs/adr/0002-hosting.md': 'b\n', 'docs/adr/0001-runtime.md': 'a\n', 'docs/adr/notes.txt': 'c\n', 'docs/adr/old/0003-x.md': 'd\n' });
+  assert.equal((await onboard(root, 'hash')).out.split('\n').at(-1), `adrs      sha256:${shortHash('## docs/adr/0001-runtime.md\na\n\n## docs/adr/0002-hosting.md\nb\n')}`);
+});
+
+test('template adr <slug> numbers the next ADR, and --write creates docs/adr/<nnnn>-<slug>.md', async (t) => {
+  const root = project(t);
+  assert.deepEqual(await onboard(root, 'template', 'adr', 'runtime'), { code: 0, out: adrTemplate('0001'), err: '' });
+  assert.deepEqual(await onboard(root, 'template', 'adr', 'runtime', '--write'), { code: 0, out: 'wrote docs/adr/0001-runtime.md', err: '' });
+  assert.equal(fs.readFileSync(path.join(root, 'docs/adr/0001-runtime.md'), 'utf8'), adrTemplate('0001'));
+  write(root, { 'docs/adr/0007-cache.md': 'an ADR\n' });
+  assert.deepEqual(await onboard(root, 'template', 'adr', 'auth-provider', '--write'), { code: 0, out: 'wrote docs/adr/0008-auth-provider.md', err: '' });
+  for (const slug of ['../escape', 'Runtime', 'auth_provider', 'x-', 'a--b']) {
+    const { code, err } = await onboard(root, 'template', 'adr', slug);
+    assert.equal(code, 2, slug);
+    assert.match(err, /^template adr takes a slug of lowercase letters and digits, joined by single dashes, as auth-provider\n/, slug);
+  }
+  assert.deepEqual(fs.readdirSync(path.join(root, 'docs/adr')).sort(), ['0001-runtime.md', '0007-cache.md', '0008-auth-provider.md']);
+});
+
+test('template adr --write: a number is claimed before its ADR is written, so two sessions never keep one number', (t) => {
+  const root = project(t, { 'docs/adr/0001-runtime.md': 'an ADR\n' });
+  const dir = path.join(root, 'docs/adr');
+  const run = (readdir) => {
+    const lines = [];
+    const code = writeAdr(root, 'hosting', { stdout: (line) => lines.push(line), stderr: (line) => lines.push(line) }, readdir);
+    return { code, lines };
+  };
+  // The other session wrote its ADR between the listing that numbered this one and this one's claim: whatever the
+  // names' order, this one is refused, and leaves nothing behind.
+  let listings = 0;
+  const wroteFirst = (at) => {
+    const names = fs.readdirSync(at);
+    if (listings++ === 0) fs.writeFileSync(path.join(at, '0002-zeta.md'), 'the other ADR\n');
+    return names;
+  };
+  assert.deepEqual(run(wroteFirst), { code: 1, lines: ['docs/adr/0002-hosting.md: another session wrote ADR-0002 (docs/adr/0002-zeta.md) first; run it again for the next number'] });
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['0001-runtime.md', '0002-zeta.md']);
+  fs.rmSync(path.join(dir, '0002-zeta.md'));
+
+  // The other session holds the claim: this one is refused; a claim left by a session that stopped only skips its
+  // number.
+  listings = 0;
+  const claimedFirst = (at) => {
+    const names = fs.readdirSync(at);
+    if (listings++ === 0) fs.writeFileSync(path.join(at, '.0002.claim'), '');
+    return names;
+  };
+  assert.deepEqual(run(claimedFirst), { code: 1, lines: ['docs/adr/0002-hosting.md: another session is writing ADR-0002 (docs/adr/.0002.claim); run it again for the next number'] });
+  assert.deepEqual(run(fs.readdirSync), { code: 0, lines: ['wrote docs/adr/0003-hosting.md'] });
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['.0002.claim', '0001-runtime.md', '0003-hosting.md']);
+});
+
+test('docs/adr/: an entry that is no file, a dangling link among them, is no ADR', async (t) => {
+  const root = project(t, { 'docs/adr/0001-runtime.md': 'a\n' });
+  fs.mkdirSync(path.join(root, 'docs/adr/0002-dir.md'));
+  fs.symlinkSync(path.join(root, 'nowhere'), path.join(root, 'docs/adr/0003-gone.md'), 'junction');
+  assert.deepEqual(await onboard(root, 'hash'), {
+    code: 0,
+    out: ['answers   missing', 'origin    missing', 'roadmap   missing', `adrs      sha256:${shortHash('## docs/adr/0001-runtime.md\na\n')}`].join('\n'),
     err: '',
   });
 });
@@ -137,10 +199,10 @@ function write(root, files) {
   }
 }
 
-/** The onboarding's four files, complete and closed (O6 checked). */
+/** The onboarding's files, complete and closed (O6 checked): the four documents and the ADRs. */
 const closed = () => {
   const { onboarding, origin, roadmap, agents } = files({ onboarding: onboardingDoc({ o6: 'x' }) });
-  return { [ONBOARDING_PATH]: onboarding, [ORIGIN_PATH]: origin, [ROADMAP_PATH]: roadmap, [AGENTS_PATH]: agents };
+  return { [ONBOARDING_PATH]: onboarding, [ORIGIN_PATH]: origin, [ROADMAP_PATH]: roadmap, [AGENTS_PATH]: agents, ...Object.fromEntries(ADRS) };
 };
 
 /** A project whose `main` holds one commit. */
@@ -172,6 +234,11 @@ test('bare onboard: a fresh project is at stage 1, and an uncommitted document i
   assert.equal((await onboard(root)).out.split('\n').at(-1), 'Then: commit, and run js-harness onboard again.');
   fs.appendFileSync(path.join(root, ONBOARDING_PATH), '- L2 2026-10-19 An answer.\n');
   assert.equal((await onboard(root)).out.split('\n').at(-1), 'Not committed: odd/tasks/onboarding.md. Commit them on this branch, so the next session finds them.');
+  // An ADR is one of the onboarding's files.
+  git(root, 'add', '-A');
+  git(root, 'commit', '-q', '-m', 'an answer');
+  assert.equal((await onboard(root, 'template', 'adr', 'runtime', '--write')).code, 0);
+  assert.equal((await onboard(root)).out.split('\n').at(-1), 'Not committed: docs/adr/0001-runtime.md. Commit them on this branch, so the next session finds them.');
 });
 
 test('bare onboard: an onboarding on another branch is named, with its worktree or the switch that resumes it', async (t) => {
@@ -239,7 +306,7 @@ test('bare onboard: a plan of its own is left alone, exit 1', async (t) => {
 
 test('an argument it does not take is a usage error, exit 2', async (t) => {
   const root = project(t);
-  for (const argv of [['check', '--force'], ['template'], ['template', 'plan'], ['hash', 'extra'], ['check', '--cwd'], ['--plan'], ['--write'], ['stage']]) {
+  for (const argv of [['check', '--force'], ['template'], ['template', 'plan'], ['template', 'adr'], ['template', 'adr', 'a', 'b'], ['template', 'feature', 'runtime'], ['hash', 'extra'], ['check', '--cwd'], ['--plan'], ['--write'], ['stage']]) {
     const { code, err } = await onboard(root, ...argv);
     assert.equal(code, 2, argv.join(' '));
     assert.match(err, /Usage: js-harness onboard/, argv.join(' '));

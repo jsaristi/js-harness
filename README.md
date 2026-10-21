@@ -228,11 +228,12 @@ map is off prints `codegraph init skipped: the code map is off` and gets no `.co
 
 The pre-plan and the roadmap of a project after `init`, written by the session the owner talks to;
 the command calls no model. With no verb it reads the files and git, prints the stage the
-onboarding is in (Read, Interview, Pre-plan, its review, Plan, its review, Close, then awaiting
+onboarding is in (Read, Conversation and advice, Pre-plan, its review, Plan, its review, Close, then awaiting
 merge and onboarded) and what the session does next, so a new session, a compaction or the other
 host resumes by running it again; an onboarding on another branch is named with its worktree or
 the switch that resumes it. `check` names what is still missing and the stage it sends the work
-back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file.
+back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file,
+and `template adr <slug>` numbers the next decision record under `docs/adr/`.
 
 ```console
 $ js-harness onboard
@@ -243,13 +244,14 @@ Then: commit, and run js-harness onboard again.
 $ js-harness onboard template feature --write
 wrote odd/tasks/onboarding.md
 $ js-harness onboard check
-FAIL  odd/tasks/onboarding.md: topic 1 is not answered yet (back to stage 2, Interview)
+FAIL  odd/tasks/onboarding.md: ## Setup has no Kind line yet (back to stage 2, Conversation and advice)
 FAIL  docs/origin.md: missing: js-harness onboard template origin --write starts it (back to stage 3, Pre-plan)
 FAIL  AGENTS.md: has no line "The plan is docs/ROADMAP.md: a session starts there, and each feature's state is in odd/tasks/." (back to stage 7, Close)
 $ js-harness onboard hash
-interview sha256:d4b3c1a78dbe
+answers   sha256:91f9c265f5ad
 origin    missing
 roadmap   missing
+adrs      sha256:e3b0c44298fc
 ```
 
 The `check` is cut to three of its findings. A project with a plan of its own and no onboarding
@@ -1560,3 +1562,51 @@ hook starts backups.
 $ js-harness backup status
 backup: not initialised (js-harness backup init --repo <owner/name>)
 ```
+
+### js-harness clean
+
+The regenerable leftovers our way of developing leaves behind, which nothing else deletes: old
+Codex app-server releases (every one but the release `current` points to and the one
+`auto-update-version` names), old Claude Code CLI versions (the highest and the running one are
+kept), the desktop app's old Code tab CLIs (the highest is kept), Codex's marketplace staging and
+`tmp.*` or `js-harness-*` test scratch in the temp folder once untouched for 3 days (a scratch
+folder holding a linked git worktree is kept), and the npm, pnpm, Go and uv caches when their tool
+answers. With no flags it lists each kind, why it is safe to delete, each item with its size, and a
+total, and deletes nothing.
+
+`clean --apply` scans again and deletes only the kinds you confirm: in a terminal it asks y/N per
+kind; without one it deletes only the kinds named with `--kind <id>`, and with none named it
+deletes nothing and exits 1. A folder is renamed before it is removed, so one with a file in use (a
+running binary on Windows) fails whole and stays. A package cache is cleaned only by its own tool
+(`npm cache clean --force`, `pnpm store prune`, `go clean -modcache`, `uv cache clean`), never by
+hand; `pnpm store prune` removes only the packages no project uses, so its size is "up to". Each
+deletion, failure or refusal is appended to `~/.js-harness/clean-log.jsonl` with when, the kind,
+the path or command and the bytes; `clean --log` prints it. Never deleted: `~/.claude/projects`,
+engram's store (`~/.engram`), `~/.js-harness`, the current Codex runtime, the running Claude,
+anything inside a git worktree, and anything the scan of the same run did not find.
+
+The smart part runs from `doctor`: when the last measure is 7 days old or missing, doctor and its
+session-start hook start `clean --measure` detached (measuring takes about half a minute on a
+machine with these caches, more than the hook's 10 seconds) and return. The measure writes
+`~/.js-harness/clean.json` and deletes nothing. Once its total reaches 2 GB, the `clean` row of
+doctor is a gap that recommends `js-harness clean`, and the hook's notice names the size, once per
+measure. `JS_HARNESS_CLEAN_MEASURE=off` turns the background measure off.
+
+```console
+$ js-harness clean
+codex-releases 1.7 GB: old Codex app-server releases: Codex runs the one `current` points to, and downloads again a release it lacks
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.157.1-x86_64-pc-windows-msvc  425.5 MB
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.158.0-x86_64-pc-windows-msvc  427.2 MB
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.159.0-x86_64-pc-windows-msvc  427.5 MB
+  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.159.1-x86_64-pc-windows-msvc  427.6 MB
+claude-versions 506.7 MB: old Claude Code CLI versions: the highest and the running one are kept, and the updater downloads what it needs
+  C:\Users\Oficina\.local\share\claude\versions\2.1.296  248.4 MB
+  C:\Users\Oficina\.local\share\claude\versions\2.1.300  258.3 MB
+go-modcache 544.7 MB: the Go module cache: go downloads again what a build needs
+  C:\Users\Oficina\go\pkg\mod  544.7 MB
+  cleaned by: go clean -modcache
+Total: 4.3 GB (plus up to 5.9 GB that pnpm store prune may free)
+Nothing was deleted. js-harness clean --apply asks y/N per kind; --apply --kind <id> deletes only the kinds named.
+```
+
+The run above is cut to three of its kinds.
