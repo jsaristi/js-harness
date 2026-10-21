@@ -617,9 +617,13 @@ test('backup ready names a clone ahead of origin, a source with no remote and an
   spawnSync('git', ['-C', paths.clone, 'commit', '-q', '--allow-empty', '-m', 'here only'], { env: GIT_ENV });
   fs.writeFileSync(path.join(source, 'huge.bin'), Buffer.alloc(UNTRACKED_MAX_BYTES + 1));
   fs.writeFileSync(path.join(source, 'big.dat'), Buffer.from([0, 1]));
-  spawnSync('git', ['-C', source, 'add', 'big.dat'], { env: GIT_ENV });
+  fs.writeFileSync(path.join(source, 'kind.dat'), Buffer.from([0, 2]));
+  spawnSync('git', ['-C', source, 'add', 'big.dat', 'kind.dat'], { env: GIT_ENV });
   spawnSync('git', ['-C', source, 'commit', '-q', '-m', 'big'], { env: GIT_ENV });
   fs.writeFileSync(path.join(source, 'big.dat'), Buffer.alloc(UNTRACKED_MAX_BYTES + 1));
+  // A tracked binary file replaced by a folder is no deletion and no copy: it must still be named.
+  fs.rmSync(path.join(source, 'kind.dat'));
+  fs.mkdirSync(path.join(source, 'kind.dat'));
   deps.stdout = sink();
 
   assert.equal(await backupMain(['ready'], deps), 1);
@@ -628,6 +632,12 @@ test('backup ready names a clone ahead of origin, a source with no remote and an
   assert.match(deps.stdout.text, /missing: .*local-only has no remote: its commits are in the bundle only/);
   assert.match(deps.stdout.text, /missing: .*huge\.bin: untracked, 5\.0 MB, too large to copy/);
   assert.match(deps.stdout.text, /missing: .*big\.dat: changed binary, 5\.0 MB, too large to copy/);
+  assert.match(deps.stdout.text, /missing: .*kind\.dat: a binary file now a link or folder, not copied/);
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const manifest = JSON.parse(fs.readFileSync(path.join(paths.clone, 'manifest.json'), 'utf8'));
+  const { worktrees } = manifest.bundles.find((b) => b.source === path.resolve(source));
+  assert.deepEqual(worktrees, [], 'files too large to copy, or not files, are not counted as copied');
 });
 
 test('backup ready fails closed when git cannot count or read a source, and when the backup is not initialised', async (t) => {

@@ -94,18 +94,22 @@ export function repoFiles(git, source) {
   };
   // Copies a file of the worktree whole; false when it is no regular file. lstat, not stat: a symlink may point outside
   // the checkout, at a file that must never reach the backup.
+  // Says what became of the file: 'copied', 'too large' (named in `skipped`), 'gone' or 'not a file'.
   const copyWhole = (worktree, name, folder, kind) => {
     const full = path.join(worktree, name);
     let stat;
     try {
       stat = fs.lstatSync(full);
     } catch {
-      return false;
+      return 'gone';
     }
-    if (!stat.isFile()) return false;
-    if (stat.size > UNTRACKED_MAX_BYTES) skipped.push({ path: full, bytes: stat.size, kind });
-    else add(`${folder}/${name}`, fs.readFileSync(full), 'latin1');
-    return true;
+    if (!stat.isFile()) return 'not a file';
+    if (stat.size > UNTRACKED_MAX_BYTES) {
+      skipped.push({ path: full, bytes: stat.size, kind });
+      return 'too large';
+    }
+    add(`${folder}/${name}`, fs.readFileSync(full), 'latin1');
+    return 'copied';
   };
   for (const worktree of worktreesOf(git, source).filter((w) => !w.prunable)) {
     const key = shortKey(worktree.path);
@@ -116,8 +120,13 @@ export function repoFiles(git, source) {
     // No binary file goes in the patch, where git compresses it past the blanking: a changed one is copied whole, and a
     // deleted one, whose old bytes the patch would carry, is kept by name only.
     const binaries = numstat.stdout.split('\0').filter((row) => row.startsWith('-\t-\t')).map((row) => row.slice(4));
-    const binary = binaries.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.binary`, 'changed binary'));
-    const deleted = binaries.filter((name) => !fs.existsSync(path.join(worktree.path, name)));
+    const fate = new Map(binaries.map((name) => [name, copyWhole(worktree.path, name, `worktrees/${key}.binary`, 'changed binary')]));
+    const binary = binaries.filter((name) => fate.get(name) === 'copied');
+    const deleted = binaries.filter((name) => fate.get(name) === 'gone');
+    // A binary file replaced by a link or a folder is in no copy: it is named, so `ready` says no.
+    for (const name of binaries.filter((n) => fate.get(n) === 'not a file')) {
+      skipped.push({ path: path.join(worktree.path, name), kind: 'a binary file now a link or folder' });
+    }
     if (deleted.length) add(`worktrees/${key}.deleted-binaries.txt`, Buffer.from(`${deleted.join('\n')}\n`));
     const excluded = binaries.map((name) => `:(exclude,literal)${name}`);
     // A buffer, not text: a change to a file that is not UTF-8 must come back as the same bytes.
@@ -127,7 +136,7 @@ export function repoFiles(git, source) {
     if (patch) add(`worktrees/${key}.patch`, diff.stdout);
     // A name ending in `/` is a nested repository, which is its own source.
     const names = others.stdout.split('\0').filter((name) => name && !name.endsWith('/'));
-    const untracked = names.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.untracked`, 'untracked')).length;
+    const untracked = names.filter((name) => copyWhole(worktree.path, name, `worktrees/${key}.untracked`, 'untracked') === 'copied').length;
     if (patch || untracked || binary.length || deleted.length) worktrees.push({ path: worktree.path, key, patch, untracked, binary: binary.length, deletedBinary: deleted.length });
   }
   const records = path.join(path.resolve(source, commonDir.stdout.trim()), 'js-harness');

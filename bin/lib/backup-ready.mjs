@@ -107,7 +107,9 @@ function repoState(git, source, manifest) {
   }
   const records = [...stale].filter((p) => p.startsWith('js-harness/'));
   if (records.length) found.push(`${source}: records in .git/js-harness changed since the last backup: ${listed(records)}`);
-  for (const big of now.skipped) found.push(`${big.path}: ${big.kind ?? 'untracked'}, ${humanSize(big.bytes)}, too large to copy`);
+  for (const big of now.skipped) {
+    found.push(big.bytes === undefined ? `${big.path}: ${big.kind}, not copied` : `${big.path}: ${big.kind ?? 'untracked'}, ${humanSize(big.bytes)}, too large to copy`);
+  }
   return found;
 }
 
