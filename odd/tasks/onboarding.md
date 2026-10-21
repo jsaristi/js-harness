@@ -1391,3 +1391,9 @@ ceiling.
   `0881ec00`, test first: RED on a CLI test with `docs/roadmap.md` (19 pass, 1 fail: "docs/ROADMAP.md"), then
   `readFiles` lists `planFiles`, the plan's files matched in any case and named as the disk names them, which the
   own-plan refusal reads. Cli 20, lib 42, init 12 pass; README says so.
+- L40 (2026-10-21) `835e3993` gate green on GitHub's machines. gentle-ai on `0881ec00..835e3993` (reliability,
+  readability; lineage review-221341dcb26f0b7d): approved and acknowledged, with warnings, among them a symlinked
+  plan file. Codex `0881ec0..835e399`: incorrect (0.96), the same: `entry.isFile()` drops a symlinked
+  `docs/ROADMAP.md` the old read-based check found. Next step: test first, a symlinked `docs/ROADMAP.md` is still
+  refused; `planFiles` takes any entry that is not a directory; Codex recheck; then the gentle-ai line, push,
+  PR (base main) and the ready notice to the orchestrator. The lead holds the T4 steps and prompt (L39).
