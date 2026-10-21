@@ -986,6 +986,13 @@ ceiling.
 - Slice 3c, gentle-ai (2026-10-21): `37c0fbd2`, `2fb7ebf7` (`42c7b7e3..2fb7ebf7`) approved (readability,
   reliability; lineage review-ded9f4c72667edb4, acknowledged); two warnings do not hold (L33). Codex
   `42c7b7e..2fb7ebf` in 2 parts: correct (0.87, 0.99). PR 493.
+- Slice 4d, gentle-ai (2026-10-21): `57d761d3` (`eb51a248..57d761d3`) approved (readability, reliability; lineage
+  review-e8b0f8ab71d70fd6, acknowledged), five informational advisories. Taken in the next commit: the stage 4
+  question's punctuation (R2-stage4-question-punctuation), and the revise branch's new text pinned
+  (R3-revise-branch-new-text-unasserted). Not taken: the stage 3 line's length and the tests pinning prose (every
+  stage line is pinned by its words, the file's way); R3-checklist-command-unproved does not hold, since
+  `onboard profile --checklist bar` is the command 4c's bar check already names (`bin/lib/onboard.mjs:653`). Codex
+  `eb51a24..57d761d`: correct (0.96).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un

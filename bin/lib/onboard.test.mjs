@@ -553,11 +553,12 @@ test('stageReport: each later stage says what it waits on and what records it', 
   const again = report({ onboarding: onboardingDoc({ topics: revised, o2: `- [x] O2 Pre-plan written (answers sha256:${recordedAnswers()})` }) }).lines;
   assert.equal(again[0], 'Stage 3 of 7, Pre-plan: the conversation changed since O2 recorded it.');
   assert.ok(!again.some((line) => line.includes('template origin')), again.join('\n'));
+  has(again, 'revise docs/origin.md from the conversation and the ADRs');
 
   const review = report({ onboarding: onboardingDoc({ o3: '- [ ] O3 Pre-plan approved' }) }).lines;
   assert.equal(review[0], 'Stage 4 of 7, Pre-plan review: docs/origin.md waits for the owner\'s approval.');
   has(review, '"Pre-plan round <n>: ..."');
-  has(review, 'a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR');
+  has(review, 'one question, "Is the pre-plan approved, with its ADRs?", whose text is a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR');
   has(review, `(origin sha256:${shortHash(ORIGIN)}, adrs sha256:${ADRS_HASH()}; L<n>)`);
 
   const plan = report({ onboarding: onboardingDoc({ o4: ' ' }) }).lines;
