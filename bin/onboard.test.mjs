@@ -85,7 +85,7 @@ test('hash prints each file\'s short sha256, and missing for a file that is not 
   const root = project(t, { 'docs/origin.md': 'the pre-plan\n' });
   assert.deepEqual(await onboard(root, 'hash'), {
     code: 0,
-    out: ['interview missing', `origin    sha256:${shortHash('the pre-plan\n')}`, 'roadmap   missing'].join('\n'),
+    out: ['answers   missing', `origin    sha256:${shortHash('the pre-plan\n')}`, 'roadmap   missing'].join('\n'),
     err: '',
   });
 });
