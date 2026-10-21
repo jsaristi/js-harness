@@ -88,7 +88,8 @@ Optionally, once per machine:
 6. **`js-harness backup init --repo <owner/name>`** creates a private GitHub repository for your memory (Engram
    and the Claude memory folders) and clones it. From then on the Stop hook backs it up when due, and
    `js-harness backup status` says when it last succeeded. By default only the `js-harness` project is backed
-   up; set `"scope": "all"` in `~/.js-harness/memory-backup/config.json` for every project.
+   up; set `"scope": "all"` in `~/.js-harness/memory-backup/config.json` for every project. Before you wipe
+   or reinstall the machine, `js-harness backup ready` lists anything that still has no copy off it.
 
 ## A typical day
 

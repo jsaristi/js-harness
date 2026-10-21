@@ -12,6 +12,7 @@ import {
   buildManifest,
   collectFiles,
   defaultRun,
+  desktopDir,
   exportEngram,
   parseStats,
   PUBLIC_REPO,
@@ -22,11 +23,16 @@ import {
 } from './lib/backup.mjs';
 import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
 import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore.mjs';
+import { humanSize, readiness } from './lib/backup-ready.mjs';
+import { bundleRefs, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
 
 const USAGE = [
-  'Usage: js-harness backup <run | status | summary | init | restore | verify | --hook>',
+  'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook>',
   '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
-  '    js-harness home and reference copies of the config, secrets blanked, into the private clone, then push it. The',
+  '    js-harness home, reference copies of the config, the plugin lists and Claude Desktop\'s notes and presets, and for',
+  '    each repository of config.json\'s `bundles` a bundle of what no remote holds (every stash entry included), a',
+  '    patch of each worktree\'s uncommitted edits with its untracked files, and the records in its .git/js-harness;',
+  '    secrets blanked, into the private clone, then push it. The',
   '    scope is config.json\'s `scope`: "all" for every project, or one project name (js-harness when unset). It',
   '    refuses an export that lost more than a tenth of any count (a wiped Engram looks like that; --allow-shrink when',
   '    the drop is meant), a clone whose fetch or push URL is not the configured repository on github.com, and a',
@@ -34,6 +40,12 @@ const USAGE = [
   '    (the first run after a reinstall). Once a day it also pushes the public summary to the memory-summary branch;',
   '    a summary that cannot be pushed is recorded and never fails the backup.',
   '  status  The last run, the last success, the last failure and why, and the commits still to push.',
+  '  ready  Whether this machine can be wiped: a `missing:` line for each thing the backup is configured for that has',
+  '    no copy off it (the clone ahead of origin or never pushed, a file or an Engram count the last backup does not',
+  '    hold, and for each repository of `bundles` no remote, commits or a stash entry in no bundle, a worktree\'s edits',
+  '    or its .git/js-harness records changed since, an untracked file too large to copy), and a `not copied:` line',
+  '    with the size of what the backup never copies (Claude transcripts, Claude Desktop data). It writes nothing and',
+  '    exits 1 while anything is missing.',
   '  summary [--summary-repo <dir>]  Print the public summary as the next run would push it: the roadmap and feature documents on the',
   "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
   '    private-terms.txt.',
@@ -44,7 +56,8 @@ const USAGE = [
   '  restore --from <dir|git url> [--home <dir>] [--merge] [--map <old path>=<new path>]...  Put a backup into a home:',
   '    Engram imported (refused when that Engram already holds observations, unless --merge), the memory folders',
   '    (--map for a project now at another path), ~/.js-harness without its install manifest, the config files in',
-  '    ~/.js-harness/restored-config to compare by hand, the bundles beside them with the line that fetches them. A',
+  '    ~/.js-harness/restored-config to compare by hand, the bundles, patches and records in',
+  '    ~/.js-harness/restored-bundles with the line that uses each. A',
   '    live file is never written over, and a restore run again skips the import it already did. The home is this',
   "    user's unless --home names another.",
   '  verify --from <dir|git url>  Restore into a scratch home, which it then removes, and check the four counts',
@@ -133,7 +146,8 @@ function releaseLock(paths, mine) {
   if (held === mine) fs.rmSync(paths.lock, { force: true });
 }
 
-/** The git repositories whose unpushed commits are bundled (D1): the configured ones, `D:/js-harness` by default. */
+/** The git repositories whose unpushed commits are bundled (D1): config.json's `bundles`, none when it names none.
+ * `init` seeds the list once, with this machine's js-harness checkout when there is one (`defaultDeps().bundles`). */
 function bundleSources(config) {
   return Array.isArray(config.bundles) ? config.bundles : [];
 }
@@ -141,37 +155,51 @@ function bundleSources(config) {
 /** The bundle file of a source, named from its whole path as Claude names a project folder (`D--js-harness`), so two
  * repositories of one name never share a bundle. */
 export function bundleName(source) {
-  const full = path.resolve(source);
-  // The slug folds `a-b` and `a/b` together; the hash of the whole path keeps them apart.
-  const hash = createHash('sha256').update(full.toLowerCase()).digest('hex').slice(0, 8);
-  return `${full.replace(/[^A-Za-z0-9]/g, '-')}-${hash}.bundle`;
+  return `${pathKey(source)}.bundle`;
+}
+
+/** Mirrors `repoFiles` of `source` into the clone's `git/<shortKey(source)>/`, so a file no longer there (a worktree
+ * committed since) goes. Returns the manifest's entries for them, or null, leaving the last copies, when git cannot
+ * read the source. */
+function copyRepoFiles(deps, source, clone) {
+  const kept = repoFiles((cwd, args, options) => git(deps, cwd, args, options), source);
+  if (!kept) return null;
+  const folder = `git/${shortKey(source)}`;
+  fs.rmSync(path.join(clone, folder), { recursive: true, force: true });
+  const files = [];
+  const redacted = [];
+  for (const file of kept.files) {
+    const target = `${folder}/${file.path}`;
+    fs.mkdirSync(path.dirname(path.join(clone, target)), { recursive: true });
+    fs.writeFileSync(path.join(clone, target), file.buffer);
+    files.push({ path: target, bytes: file.buffer.length, sha256: createHash('sha256').update(file.buffer).digest('hex') });
+    if (file.kinds.length) redacted.push({ path: target, kinds: file.kinds });
+  }
+  return { files, redacted, worktrees: kept.worktrees, skipped: kept.skipped };
 }
 
 /** Writes the bundle of every commit of `source` that is on no remote, or removes it when there is none. Returns the
- * refs it holds, every ref and not only the branches, so the bundle is made again whenever what it would hold changes
- * and the manifest changes only when it does. A source git cannot read keeps its last bundle and says why. */
+ * refs it holds, every ref and not only the branches, with each stash entry and each worktree's HEAD (`bundleRefs`), so
+ * the bundle is made again whenever what it would hold changes and the manifest changes only when it does. A source
+ * git cannot read keeps its last bundle and says why. */
 function bundleUnpushed(deps, source, clone) {
   const key = path.resolve(source);
   const out = path.join(clone, 'git', bundleName(source));
   const previous = readJson(path.join(clone, 'manifest.json'))?.bundles?.find((b) => b.source === key);
-  const refs = git(deps, source, ['for-each-ref', '--format=%(objectname) %(refname)']);
-  const unpushed = git(deps, source, ['rev-list', '--count', '--all', '--not', '--remotes']);
-  if (refs.status !== 0 || unpushed.status !== 0) {
+  const gitIn = (cwd, args, options) => git(deps, cwd, args, options);
+  const { listed, reason } = bundleRefs(gitIn, source);
+  const count = listed ? unpushedCount(gitIn, source, listed) : null;
+  if (count === null) {
     // Its commits may be the very ones still to protect: the last bundle stays until git can read the source again.
-    const reason = `${refs.stderr || unpushed.stderr || ''}`.trim().split('\n')[0] || 'git failed';
     const { unreadable, ...last } = previous ?? { source: key, commits: 0, refs: [] };
-    return { ...last, unreadable: reason };
+    return { ...last, unreadable: reason ?? 'git rev-list failed' };
   }
-  const count = Number(unpushed.stdout.trim()) || 0;
   if (count === 0) {
     fs.rmSync(out, { force: true });
     return { source: key, commits: 0, refs: [] };
   }
-  const listed = refs.stdout.split('\n').filter(Boolean).sort();
   if (!(previous && !previous.unreadable && JSON.stringify(previous.refs) === JSON.stringify(listed) && fs.existsSync(out))) {
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    const made = git(deps, source, ['bundle', 'create', out, '--all', '--not', '--remotes']);
-    if (made.status !== 0) throw new Error(`git bundle of ${source} failed: ${made.stderr.trim()}`);
+    writeBundle(gitIn, source, listed, out, deps.tmp);
   }
   return { source: key, commits: count, refs: listed };
 }
@@ -198,13 +226,27 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   // Counts of another scope say nothing about a wipe: the first run after the scope changes takes the export as it is.
   const rescoped = previous !== null && (previous.scope ?? 'all') !== scope;
   const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink: allowShrink || rescoped, scope });
-  const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope });
-  const bundles = bundleSources(config).map((source) => bundleUnpushed(deps, source, paths.clone));
-  // The bundle of a source the last manifest named and config.json no longer does goes; any other file stays, since
-  // a bundle no manifest names may be the only copy of its commits.
+  const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop });
+  const bundles = bundleSources(config).map((source) => {
+    const entry = bundleUnpushed(deps, source, paths.clone);
+    const copied = copyRepoFiles(deps, source, paths.clone);
+    if (copied) {
+      files.push(...copied.files);
+      redacted.push(...copied.redacted);
+      return { ...entry, folder: shortKey(source), worktrees: copied.worktrees, skipped: copied.skipped };
+    }
+    // A source git cannot read keeps its last copies, and the manifest goes on naming them.
+    const folder = `git/${shortKey(source)}/`;
+    files.push(...(previous?.files ?? []).filter((f) => f.path.startsWith(folder)));
+    redacted.push(...(previous?.redacted ?? []).filter((f) => f.path.startsWith(folder)));
+    return entry;
+  });
+  // The bundle and the copies of a source the last manifest named and config.json no longer does go; any other file
+  // stays, since a bundle no manifest names may be the only copy of its commits.
   const configured = new Set(bundleSources(config).map((source) => path.resolve(source)));
   for (const gone of (previous?.bundles ?? []).filter((b) => !configured.has(b.source))) {
     fs.rmSync(path.join(paths.clone, 'git', bundleName(gone.source)), { force: true });
+    fs.rmSync(path.join(paths.clone, 'git', shortKey(gone.source)), { recursive: true, force: true });
   }
   const version = deps.run('engram', ['version']).stdout.trim();
   const manifest = JSON.parse(
@@ -222,7 +264,10 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   // no longer match the sha256 the manifest holds.
   fs.writeFileSync(path.join(paths.clone, '.gitattributes'), '* -text\n');
 
-  git(deps, paths.clone, ['add', '-A']);
+  // A file git cannot add (a path past Windows' 260 characters) would be named by the manifest and not be in the
+  // backup: the run fails instead of pushing a backup that says it holds it.
+  const added = git(deps, paths.clone, ['-c', 'core.longpaths=true', 'add', '-A']);
+  if (added.status !== 0) throw new Error(`git add failed in ${paths.clone}: ${(added.stderr || added.stdout).trim()}`);
   const pending = git(deps, paths.clone, ['status', '--porcelain']).stdout.trim();
   let committed = false;
   if (pending) {
@@ -499,6 +544,35 @@ function verifyCommand(args, deps) {
   }
 }
 
+/** `backup ready`: whether this machine can be wiped. Every thing configured that has no copy off it is a `missing:`
+ * line and makes the exit 1; what the backup does not copy is a `not copied:` line with its size, and never fails it. */
+function readyCommand(deps) {
+  const paths = backupPaths(deps.home);
+  const config = readJson(paths.config);
+  if (!config) {
+    deps.stdout.write('backup ready: no, the backup is not initialised (js-harness backup init --repo <owner/name>)\n');
+    return 1;
+  }
+  const { missing, notCopied } = readiness({
+    home: deps.home,
+    clone: paths.clone,
+    config,
+    scope: config.scope ?? DEFAULT_SCOPE,
+    desktop: deps.desktop,
+    run: deps.run,
+    env: deps.env,
+  });
+  const lines = [
+    ...missing.map((thing) => `missing: ${thing}`),
+    ...notCopied.map((n) => `not copied: ${n.what}: ${n.files} files, ${humanSize(n.bytes)}`),
+    missing.length
+      ? `backup ready: no, ${missing.length} things have no copy off this machine`
+      : 'backup ready: yes, everything the backup is configured for has a copy off this machine',
+  ];
+  deps.stdout.write(`${lines.join('\n')}\n`);
+  return missing.length ? 1 : 0;
+}
+
 /** How long without a success before `doctor` calls the backup stopped: the hook backs up every 30 minutes of work, so
  * a day without one is a backup that is not running, not a quiet day. */
 export const BACKUP_STALE_HOURS = 24;
@@ -545,8 +619,9 @@ function statusCommand(deps) {
   return 0;
 }
 
-/** The newest modification time among the things a backup copies (D2); Engram writes through its WAL. */
-export function newestChange(home) {
+/** The newest modification time among the things a backup copies (D2); Engram writes through its WAL. `desktop` is
+ * Claude Desktop's folder, whose notes and presets are copied too. */
+export function newestChange(home, desktop) {
   let newest = 0;
   // Every file and folder under `target`, folders included: a deletion changes only its folder's time.
   const visit = (target, skip = () => false) => {
@@ -566,31 +641,38 @@ export function newestChange(home) {
   // Only the memory folders count under ~/.claude/projects, never the transcripts beside them.
   for (const slug of fs.existsSync(projects) ? fs.readdirSync(projects) : []) visit(path.join(projects, slug, 'memory'));
   visit(path.join(home, '.js-harness'), (name) => name === 'memory-backup');
+  // The plugin lists change only when a plugin does, so their change alone makes a backup due.
+  for (const name of ['installed_plugins.json', 'known_marketplaces.json']) visit(path.join(home, '.claude', 'plugins', name));
+  if (desktop) for (const name of ['side-session-notes', 'ccd-session-presets.json']) visit(path.join(desktop, name));
   return newest;
 }
 
 /** Whether the hook should start a run now, and why not when it should not. */
-export function dueReason(home, now) {
+export function dueReason(home, now, desktop) {
   const paths = backupPaths(home);
   if (!fs.existsSync(path.join(paths.clone, '.git'))) return 'not initialised';
   const held = lockTime(paths.lock);
   if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return 'a run holds the lock';
   const success = Date.parse(readJson(paths.last)?.lastSuccess?.at ?? '') || 0;
   if (now - success < BACKUP_EVERY_MINUTES * 60_000) return 'backed up less than 30 minutes ago';
-  if (success && newestChange(home) <= success && !memoryFolderGone(home, paths.clone)) return 'nothing changed since the last backup';
+  if (success && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';
   return null;
 }
 
-/** Whether a memory folder the clone holds is gone from the home: a folder deleted whole leaves no time to compare. */
-function memoryFolderGone(home, clone) {
+/** Whether something the clone holds is gone from the home: a memory folder, a plugin list, or Desktop's notes or
+ * presets. A thing deleted whole leaves no time to compare. */
+function copiedSourceGone(home, clone, desktop) {
   const held = path.join(clone, 'claude', 'projects');
   const slugs = fs.existsSync(held) ? fs.readdirSync(held) : [];
-  return slugs.some((slug) => !fs.existsSync(path.join(home, '.claude', 'projects', slug, 'memory')));
+  if (slugs.some((slug) => !fs.existsSync(path.join(home, '.claude', 'projects', slug, 'memory')))) return true;
+  const sources = ['installed_plugins.json', 'known_marketplaces.json'].map((name) => [path.join(clone, 'config', 'claude', 'plugins', name), path.join(home, '.claude', 'plugins', name)]);
+  if (desktop) sources.push(...['side-session-notes', 'ccd-session-presets.json'].map((name) => [path.join(clone, 'config', 'claude-desktop', name), path.join(desktop, name)]));
+  return sources.some(([copy, live]) => fs.existsSync(copy) && !fs.existsSync(live));
 }
 
 function hookCommand(deps) {
   try {
-    if (dueReason(deps.home, deps.now()) === null) deps.startDetached(['backup', 'run']);
+    if (dueReason(deps.home, deps.now(), deps.desktop) === null) deps.startDetached(['backup', 'run']);
   } catch {
     // A Stop hook never breaks a turn.
   }
@@ -700,6 +782,7 @@ function defaultDeps() {
     stdout: process.stdout,
     stderr: process.stderr,
     bundles: ['D:/js-harness'].filter((dir) => fs.existsSync(path.join(dir, '.git'))),
+    desktop: desktopDir(home, process.env),
     // Node itself on this install's own entry point: no `.cmd` shim, no shell between the hook and the run.
     startDetached: (args) => {
       const entry = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
@@ -713,6 +796,7 @@ export async function backupMain(args, deps = defaultDeps()) {
   const [sub, ...rest] = args;
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
+  if (sub === 'ready') return readyCommand(deps);
   if (sub === 'summary') return summaryCommand(rest, deps);
   if (sub === 'restore') return restoreCommand(rest, deps);
   if (sub === 'verify') return verifyCommand(rest, deps);

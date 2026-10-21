@@ -306,6 +306,29 @@ test('collectFiles leaves out gate-log and copies the config files under config/
   ]);
 });
 
+test('collectFiles copies the plugin lists and Claude Desktop\'s notes and presets as reference copies, secrets blanked', (t) => {
+  const home = scratch(t);
+  const desktop = scratch(t);
+  const dest = scratch(t);
+  write(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), '{"plugins":{}}\n');
+  write(path.join(home, '.claude', 'plugins', 'known_marketplaces.json'), '{"m":{}}\n');
+  write(path.join(home, '.claude', 'plugins', 'cache', 'big.bin'), 'not a list');
+  write(path.join(desktop, 'side-session-notes', 'local_1', 'state.md'), `token ghp_${'b'.repeat(36)}\n`);
+  write(path.join(desktop, 'ccd-session-presets.json'), '{"presets":[]}\n');
+  write(path.join(desktop, 'config.json'), '{"desktop":"settings"}\n');
+
+  const { files, redacted } = collectFiles({ home, dest, desktop });
+
+  assert.deepEqual(files.map((f) => f.path).sort(), [
+    'config/claude-desktop/ccd-session-presets.json',
+    'config/claude-desktop/side-session-notes/local_1/state.md',
+    'config/claude/plugins/installed_plugins.json',
+    'config/claude/plugins/known_marketplaces.json',
+  ]);
+  assert.equal(fs.readFileSync(path.join(dest, 'config', 'claude-desktop', 'side-session-notes', 'local_1', 'state.md'), 'utf8'), 'token <redacted>\n');
+  assert.deepEqual(redacted, [{ path: 'config/claude-desktop/side-session-notes/local_1/state.md', kinds: ['GitHub token'] }]);
+});
+
 test('buildManifest holds no time, so the same content gives the same bytes', () => {
   const input = {
     machine: 'DESKTOP-1',
