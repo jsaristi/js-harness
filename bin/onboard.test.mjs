@@ -8,6 +8,7 @@ import { onboardMain, writeAdr } from './onboard.mjs';
 import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, adrTemplate, featureTemplate, originTemplate, roadmapTemplate, shortHash,
 } from './lib/onboard.mjs';
+import { LEAD_OPENING_PROMPT } from './lib/lead-prompt.mjs';
 import { ADRS, files, onboardingDoc } from './lib/onboard.testkit.mjs';
 import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines } from './lib/profiles.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
@@ -295,8 +296,12 @@ test('bare onboard: a closed onboarding waits for its merge, and once merged poi
   const done = await onboard(root);
   assert.equal(done.code, 0);
   assert.equal(done.err, '');
-  assert.deepEqual(done.out.split('\n').slice(0, 2), ['Onboarded: docs/ROADMAP.md is the plan, and the plan orchestrator\'s work is done.', 'Next: P1 Catalog, its first step.']);
-  assert.match(done.out.split('\n').at(-1), /^You are the orchestrator of this project's sessions\. /);
+  assert.deepEqual(done.out.split('\n'), [
+    'Onboarded: docs/ROADMAP.md is the plan, and the plan orchestrator\'s work is done.',
+    'Next: P1 Catalog, its first step.',
+    'The build orchestrator is a new lead session, started with the prompt below, the one the js-harness-orchestrator skill gives:',
+    LEAD_OPENING_PROMPT,
+  ]);
 });
 
 test('bare onboard: a plan of its own is left alone, exit 1', async (t) => {

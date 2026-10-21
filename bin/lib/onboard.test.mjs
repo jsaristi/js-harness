@@ -5,7 +5,8 @@ import {
   adrTemplate, checkOnboarding, currentStage, featureTemplate, hashes, originTemplate, roadmapTemplate, shortHash, stageReport,
 } from './onboard.mjs';
 import { validateContract } from './contract.mjs';
-import { LEAD_OPENING_PROMPT, components } from './manifest.mjs';
+import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
+import { components } from './manifest.mjs';
 import { parseRoadmap } from './progress.mjs';
 import { ADRS, ADVICE, AGENTS_TEMPLATE, ORIGIN, PROFILES, ROADMAP, SETUP, adr, answered, onboardingDoc, files } from './onboard.testkit.mjs';
 

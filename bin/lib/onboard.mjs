@@ -3,7 +3,7 @@
 // missing file), so the tests use inline fixture strings. The check never runs a command.
 import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
-import { LEAD_OPENING_PROMPT } from './manifest.mjs';
+import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { cellsOf, parseRoadmap, tokenize } from './progress.mjs';
 import { PROFILES, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
 

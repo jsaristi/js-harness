@@ -995,6 +995,12 @@ ceiling.
   `eb51a24..57d761d`: correct (0.96).
 - Slice 4d's fixes, gentle-ai (2026-10-21): `c46f4393` (`57d761d3..c46f4393`) approved (readability, reliability;
   lineage review-cebc9fdb0b8b776a, acknowledged), no advisories. Codex `57d761d..c46f439`: correct (0.99).
+- T9, independent verifier (2026-10-21) on `aeef4541..bf1d1d8e`, Risk item 3: six of six pass, no blocker, eight
+  advisories taken (L37).
+- T9 handoff, gentle-ai (2026-10-21): `e8edbfaa` (`aeef4541..e8edbfaa`, reviewed alone in a detached worktree)
+  approved (readability, reliability; lineage review-bd14d28b2a5599bd, acknowledged); R2-orphaned-skill-jsdoc and
+  R3-cli-handoff-partial-assert taken (L37), R3-detached-jsdoc is the same as the first. Codex `aeef454..bf1d1d8`:
+  correct (0.91).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -1345,3 +1351,15 @@ ceiling.
   (D13's Risk). The user's words in D13 ("sin enseñanza", "ya sé esto") are said in English in the skill, as asking
   to stop or resume the teaching and saying they already know an area. Manifest 184 pass. Risk: item 3 (the
   orchestrator skill, installed per home for both hosts, is a text every project's sessions consume).
+- L37 (2026-10-21) T9 (2) committed `bf1d1d8e`, gate green. Correction to L36: only the two teaching texts open with
+  "where the roadmap holds `## Advice mode`"; the first-lead bullet is conditioned on no orchestrator before it,
+  as D13 asks, and reaches every project's first lead. The independent verifier (all six items pass, 245 of 245
+  tests in a scratch copy; the skill generated at `aeef4541` and `e8edbfaa` is byte-identical, and at `bf1d1d8e`
+  differs by exactly the three texts, Claude's and Codex's equal) found no blocker and eight advisories, all taken
+  in the next commit, test first where they change text: the first lead also reads the rules list and asks the user
+  for the charter that heads the relief file, asking before each step until one is approved; one trigger phrase,
+  "puts a decision to the user", in both teaching texts; an area still open names its `OD<n>` in place of an ADR;
+  the prompt moves to `bin/lib/lead-prompt.mjs`, a module with no imports, so the onboard lib, which does no I/O,
+  no longer loads the manifest's graph; the skill's JSDoc back above its function (also gentle-ai's
+  R2-orphaned-skill-jsdoc on `e8edbfaa`); the CLI test pins the four handoff lines (gentle-ai's
+  R3-cli-handoff-partial-assert); this correction. Manifest 184, lib 42, cli 19 pass.
