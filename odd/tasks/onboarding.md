@@ -1194,3 +1194,10 @@ ceiling.
   number with two slugs both write, and listing again keeps the name that sorts first and refuses the other
   (`writeAdr`, its `readdir` the test's seam). Lib 35 tests and command 18 pass. Next: gate, commit, gentle-ai,
   Codex, push, PR, ready notice; then 4c.
+- L31 (2026-10-20) gentle-ai on `cd940af5..9f5d7446` (lenses resilience, readability, reliability; lineage
+  review-654db40f4e81ed8e): one critical, the ADR and given-up checks ran after O6, fixed test first in `f26ee232`,
+  validated, approved and acknowledged. Advisories taken in the next commit: L30's (c) left a window (a session that
+  listed again before the other wrote kept its file, and the other could keep one too), so a number is now claimed
+  first with an exclusive `docs/adr/.<nnnn>.claim`, removed once the ADR is written; a dangling link under
+  `docs/adr/` no longer crashes `readFiles`; two doc comments fixed. Left: in-progress v3-format approvals lacking
+  `adrs sha256` (none exist, D6), the `file: message` round trip, the two ADR path patterns, the `adrs` defaults.

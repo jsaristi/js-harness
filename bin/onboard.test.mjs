@@ -108,15 +108,48 @@ test('template adr <slug> numbers the next ADR, and --write creates docs/adr/<nn
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs/adr')).sort(), ['0001-runtime.md', '0007-cache.md', '0008-auth-provider.md']);
 });
 
-test('template adr --write: of two sessions that took one number, the second is refused and writes nothing', (t) => {
+test('template adr --write: a number is claimed before its ADR is written, so two sessions never keep one number', (t) => {
   const root = project(t, { 'docs/adr/0001-runtime.md': 'an ADR\n' });
-  const lines = [];
-  // The other session's ADR appears between the listing that numbers this one and its write.
+  const dir = path.join(root, 'docs/adr');
+  const run = (readdir) => {
+    const lines = [];
+    const code = writeAdr(root, 'hosting', { stdout: (line) => lines.push(line), stderr: (line) => lines.push(line) }, readdir);
+    return { code, lines };
+  };
+  // The other session wrote its ADR between the listing that numbered this one and this one's claim: whatever the
+  // names' order, this one is refused, and leaves nothing behind.
   let listings = 0;
-  const readdir = (dir) => (listings++ === 0 ? fs.readdirSync(dir) : [...fs.readdirSync(dir), '0002-cache.md']);
-  assert.equal(writeAdr(root, 'hosting', { stdout: (line) => lines.push(line), stderr: (line) => lines.push(line) }, readdir), 1);
-  assert.deepEqual(lines, ['docs/adr/0002-hosting.md: another session took ADR-0002 (docs/adr/0002-cache.md) at the same time; run it again for the next number']);
-  assert.deepEqual(fs.readdirSync(path.join(root, 'docs/adr')), ['0001-runtime.md']);
+  const wroteFirst = (at) => {
+    const names = fs.readdirSync(at);
+    if (listings++ === 0) fs.writeFileSync(path.join(at, '0002-zeta.md'), 'the other ADR\n');
+    return names;
+  };
+  assert.deepEqual(run(wroteFirst), { code: 1, lines: ['docs/adr/0002-hosting.md: another session wrote ADR-0002 (docs/adr/0002-zeta.md) first; run it again for the next number'] });
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['0001-runtime.md', '0002-zeta.md']);
+  fs.rmSync(path.join(dir, '0002-zeta.md'));
+
+  // The other session holds the claim: this one is refused; a claim left by a session that stopped only skips its
+  // number.
+  listings = 0;
+  const claimedFirst = (at) => {
+    const names = fs.readdirSync(at);
+    if (listings++ === 0) fs.writeFileSync(path.join(at, '.0002.claim'), '');
+    return names;
+  };
+  assert.deepEqual(run(claimedFirst), { code: 1, lines: ['docs/adr/0002-hosting.md: another session is writing ADR-0002 (docs/adr/.0002.claim); run it again for the next number'] });
+  assert.deepEqual(run(fs.readdirSync), { code: 0, lines: ['wrote docs/adr/0003-hosting.md'] });
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['.0002.claim', '0001-runtime.md', '0003-hosting.md']);
+});
+
+test('docs/adr/: an entry that is no file, a dangling link among them, is no ADR', async (t) => {
+  const root = project(t, { 'docs/adr/0001-runtime.md': 'a\n' });
+  fs.mkdirSync(path.join(root, 'docs/adr/0002-dir.md'));
+  fs.symlinkSync(path.join(root, 'nowhere'), path.join(root, 'docs/adr/0003-gone.md'), 'junction');
+  assert.deepEqual(await onboard(root, 'hash'), {
+    code: 0,
+    out: ['answers   missing', 'origin    missing', 'roadmap   missing', `adrs      sha256:${shortHash('## docs/adr/0001-runtime.md\na\n')}`].join('\n'),
+    err: '',
+  });
 });
 
 test('check names each finding with the stage it sends the work back to, and exits 1', async (t) => {

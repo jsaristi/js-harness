@@ -189,7 +189,6 @@ The one living plan of this project. Each fact lives in one place:
 `;
 }
 
-/** The first 12 hex of the sha256 of `text` with LF line ends, so a CRLF checkout hashes as its LF one. */
 /** An ADR's skeleton (D12): `onboard template adr <slug>` prints it, numbered `number`. Its Status is a fixed text, so
  * the approval edits no ADR. */
 export function adrTemplate(number) {
@@ -222,6 +221,7 @@ A:<id>
 `;
 }
 
+/** The first 12 hex of the sha256 of `text` with LF line ends, so a CRLF checkout hashes as its LF one. */
 export function shortHash(text) {
   return crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
 }
@@ -361,7 +361,8 @@ function levelAreas(value) {
   return entries.every(Boolean) ? entries.map((entry) => entry[1]) : null;
 }
 
-/** An ADR's sections, its Status's first line, and its sources: the list items under `## Sources`. */
+/** An ADR as its checks read it: the first lines of `## Area` and `## Status`, and its sources, the list items under
+ * `## Sources`. */
 function readAdr(text) {
   const sections = parseContract(text);
   const items = (sections.get('Sources') ?? '').split('\n').map((line) => /^\s*[-*+]\s+(.*\S)\s*$/.exec(line)?.[1]).filter(Boolean);

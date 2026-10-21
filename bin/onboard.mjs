@@ -41,6 +41,7 @@ const TEMPLATES = {
 const ADR_DIR = 'docs/adr';
 const ADR_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const ADR_FILE = /^(\d{4})-.+\.md$/;
+const ADR_CLAIM = /^\.(\d{4})\.claim$/;
 
 /** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored. */
 function parseArgs(argv, cwd) {
@@ -119,20 +120,24 @@ function readOrNull(root, file) {
   }
 }
 
-/** The Markdown files directly under `root`'s docs/adr/, by name; none when there is no such directory. */
-function adrNames(root, readdir = fs.readdirSync) {
+/** The entries directly under `root`'s docs/adr/, by name; none when there is no such directory. */
+function adrEntries(root, readdir = fs.readdirSync) {
   try {
-    return readdir(path.join(root, ADR_DIR)).filter((name) => name.endsWith('.md'));
+    return readdir(path.join(root, ADR_DIR));
   } catch (err) {
     if (err.code === 'ENOENT') return [];
     throw err;
   }
 }
 
+/** The Markdown entries directly under `root`'s docs/adr/, by name. */
+const adrNames = (root, readdir) => adrEntries(root, readdir).filter((name) => name.endsWith('.md'));
+
 function readFiles(root) {
   const adrs = new Map();
   for (const name of adrNames(root)) {
-    if (fs.statSync(path.join(root, ADR_DIR, name)).isFile()) adrs.set(`${ADR_DIR}/${name}`, readOrNull(root, `${ADR_DIR}/${name}`));
+    // A directory, or a link to nothing, is no ADR.
+    if (fs.statSync(path.join(root, ADR_DIR, name), { throwIfNoEntry: false })?.isFile()) adrs.set(`${ADR_DIR}/${name}`, readOrNull(root, `${ADR_DIR}/${name}`));
   }
   return {
     onboarding: readOrNull(root, ONBOARDING_PATH),
@@ -250,37 +255,44 @@ function linkOnTheWay(root, file) {
   return null;
 }
 
-/** The number the next ADR takes: the highest under docs/adr/ plus one, four digits. */
+/** The number the next ADR takes: the highest under docs/adr/ plus one, four digits. A claim counts as taken, so
+ * one left by a session that stopped only skips its number. */
 function nextAdrNumber(names) {
-  const numbers = names.map((name) => ADR_FILE.exec(name)?.[1]).filter(Boolean).map(Number);
+  const numbers = names.map((name) => (ADR_FILE.exec(name) ?? ADR_CLAIM.exec(name))?.[1]).filter(Boolean).map(Number);
   return String(Math.max(0, ...numbers) + 1).padStart(4, '0');
 }
 
-/** Creates docs/adr/<nnnn>-<slug>.md from the ADR template, exclusively. Two sessions that take one number with two
- * slugs both create their file; listing again after the write (`readdir`, the tests' seam) finds the other, and of
- * the two only the one whose name sorts first stays, so the second is refused and runs it again (D12). */
+/** Creates docs/adr/<nnnn>-<slug>.md from the ADR template (D12). The number is claimed first, with an exclusive
+ * docs/adr/.<nnnn>.claim, then docs/adr/ is listed again (`readdir`, the tests' seam): a session that finds the claim
+ * taken, or an ADR of that number written since its first listing, is refused and runs it again. A session claims
+ * only after the one before it released the claim, which it does once its ADR is written, so the later one always
+ * sees it. */
 export function writeAdr(root, slug, { stdout, stderr }, readdir = fs.readdirSync) {
-  const number = nextAdrNumber(adrNames(root, readdir));
+  const number = nextAdrNumber(adrEntries(root, readdir));
   const file = `${ADR_DIR}/${number}-${slug}.md`;
+  const claim = `${ADR_DIR}/.${number}.claim`;
   const link = linkOnTheWay(root, file);
   if (link) {
     stderr(`${link} is a link: onboard writes only inside the project, so move it aside or write ${file} by hand`);
     return 1;
   }
-  const target = path.join(root, file);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(path.join(root, ADR_DIR), { recursive: true });
   try {
-    fs.writeFileSync(target, adrTemplate(number), { flag: 'wx' });
+    fs.writeFileSync(path.join(root, claim), '', { flag: 'wx' });
   } catch (err) {
     if (err.code !== 'EEXIST') throw err;
-    stderr(`${file} exists: onboard never writes over a file`);
+    stderr(`${file}: another session is writing ADR-${number} (${claim}); run it again for the next number`);
     return 1;
   }
-  const rival = adrNames(root, readdir).filter((name) => name.startsWith(`${number}-`)).sort()[0];
-  if (rival !== `${number}-${slug}.md`) {
-    fs.rmSync(target);
-    stderr(`${file}: another session took ADR-${number} (${ADR_DIR}/${rival}) at the same time; run it again for the next number`);
-    return 1;
+  try {
+    const rival = adrNames(root, readdir).find((name) => name.startsWith(`${number}-`));
+    if (rival) {
+      stderr(`${file}: another session wrote ADR-${number} (${ADR_DIR}/${rival}) first; run it again for the next number`);
+      return 1;
+    }
+    fs.writeFileSync(path.join(root, file), adrTemplate(number), { flag: 'wx' });
+  } finally {
+    fs.rmSync(path.join(root, claim), { force: true });
   }
   stdout(`wrote ${file}`);
   return 0;
@@ -377,7 +389,7 @@ export async function onboardMain(argv, env = process.env, { cwd = process.cwd()
   if (args.verb === 'profile') return profile(root, args, io);
   if (args.template === 'adr') {
     if (args.write) return writeAdr(root, args.slug, io);
-    stdout(adrTemplate(nextAdrNumber(adrNames(root))));
+    stdout(adrTemplate(nextAdrNumber(adrEntries(root))));
     return 0;
   }
   return template(root, args.template, args.write, io);
