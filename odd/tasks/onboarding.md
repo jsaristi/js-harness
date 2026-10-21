@@ -926,6 +926,16 @@ ceiling.
   (`bin/lib/profiles-data.test.mjs:12-13`); a kind that lists itself in `joins` is not named.
 - Slice 3b, Codex (2026-10-20): `dfae6be..364ada0` in 2 parts, recorded; correct (0.86 on the data, 0.96 on the
   join rule), no findings.
+- Slice 4a, gentle-ai (2026-10-20): `f0a461f5..c38a508c` (c38a508c), assessed `medium` and `under_budget`, started
+  through the preflight status; lenses readability and reliability, approved and acknowledged (lineage
+  review-904644ed8258b6dc). Its fix `c38a508c..5cba6d26` (5cba6d26), lens reliability, approved and acknowledged
+  (lineage review-36b6ebaa093ffcc1). Taken in 5cba6d26: R2-001 (a missing Level hidden behind "fix"), R2-002 (the fast
+  form in the suffix message), R3-empty-advice-stuck, R3-checklist-parse-crash. Left: R3-closed-onboarding-reopened (a
+  v3-format document, accepted by D6); the fix review's R3-002 and R3-003 (tests that pin the empty checklist's step
+  and a non-area checklist line), for 4b. Its R3-001 does not hold: with an empty checklist, `pasted` becomes true in
+  the `else if (expected)` branch (`bin/lib/onboard.mjs`, `conversation`).
+- Slice 4a, Codex (2026-10-20): `f0a461f..c38a508` in 2 parts, recorded; one P2, the same as R2-001. The fix
+  `c38a508..5cba6d2` recorded as its recheck: fixed, correct (0.99).
 - Code reviews of the build, one line per commit:
   - gentle-ai: `51e4c07e` approved (readability, reliability; lineage review-ef039b34d177cda4, acknowledged); Codex 4 P2.
   - gentle-ai: `5bc31869` assessed `medium`, review not due (`under_budget`, 7 paths, 158 lines); Codex correct (0.96).
@@ -933,6 +943,8 @@ ceiling.
   - gentle-ai: `ef60d123` assessed `medium`, review not due (`under_budget`, 13 lines), from that review's advisories; Codex in 6e99eda..ef60d12.
   - gentle-ai: `04163529` assessed `medium`, review not due (`under_budget`, 44 lines): Codex's P2 on a remote branch hidden behind a local one, fixed with its RED test.
   - gentle-ai: `437a5a7f`, `5f507d36` (`3a9f6601..5f507d36`) assessed `medium`, review not due (`under_budget`, 3 paths, 15 lines): Codex's P2 fix on slice 3a, and main's `init`, `install` and T3 lines taken before merging main. Codex recorded 437a5a7..5f507d3 (correct, 0.99) and the merge 5f507d3..7edd0fa (correct, 0.99).
+  - gentle-ai: `c38a508c` approved (readability, reliability; lineage review-904644ed8258b6dc, acknowledged); Codex one P2, the same as R2-001.
+  - gentle-ai: `5cba6d26` approved (reliability; lineage review-36b6ebaa093ffcc1, acknowledged): the fix of R2-001 and Codex's P2; Codex recheck fixed, correct (0.99).
 
 ## Log
 - L1 (2026-10-19) His request, verbatim: "una funcionalidad de onboarding para que cuando instalemos el harnes en un
@@ -1146,3 +1158,17 @@ ceiling.
 - L26 (2026-10-20) Resumed after the restart: PR 481 is in main (11ff331). Slice 3b passed gentle-ai and Codex
   (`## Reviews`) and is pushed for its own pull request. The orchestrator's resume message names T8 next; slice 3c
   (cli-library, api-service, ai-app, tui-app) stays open in T7.
+- L27 (2026-10-20) T8 slice 4a, the conversation in files (D3, D6, D15), tests first: eleven topics, topics 1, 2, 3, 4
+  and 9 checked only `answered` or `confirmed`; the summary line `S`; `## Setup`'s five lines in their formats, Kind
+  through `parseKind`; `## Advice` held to `--checklist advice` for Kind and Size until O6, each area in one of its
+  five forms, every area with a Level; the `answers` hash in place of `interview` (O2); stage 2 renamed "Conversation
+  and advice", with its covered line, what is open and waiting, and one next step (opening, kind, advice, converse,
+  summary, fix); the Close text on topics 1, 6, 7 and 9. The lib takes the profiles as `profiles`, a fixture in its
+  tests. On the branch `feat/onboarding-conversation`, stacked on PR 484. Next: 4b, the ADRs (`template adr`, their
+  checks, the `adrs` hash on O3 and O5) and fast mode's given-up line; then 4c, the pre-plan and roadmap additions.
+- L28 (2026-10-20) Slice 4a passed gentle-ai (lineage review-904644ed8258b6dc, readability and reliability, approved,
+  acknowledged) with five informational findings, and Codex (2 parts) with one P2 that matches gentle-ai's R2-001: a
+  Level never written after the paste left stage 2 on "fix" with nothing printed. Fixed in the next commit, test
+  first: that case goes back to the advice step; the area-suffix message names the fast form; a checklist that prints
+  no area asks for no paste; checklist lines that are not areas are skipped. Left as is: a document closed in v3's
+  format reads as stage 2 again, which D6 accepts because no project was onboarded with v3.
