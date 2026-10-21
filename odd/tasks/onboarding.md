@@ -1003,7 +1003,7 @@ ceiling.
   correct (0.91).
 - T9 skill, gentle-ai (2026-10-21): `bf1d1d8e` (`e8edbfaa..bf1d1d8e`, Risk item 3, reviewed alone in a detached
   worktree) approved (readability, reliability; lineage review-66a7b158699fae0c, acknowledged), four suggestions.
-  `e3f74e8c` (`bf1d1d8e..e3f74e8c`) approved (readability, reliability; lineage review-87ea8c53d1d3ac4c,
+  gentle-ai on `e3f74e8c` (`bf1d1d8e..e3f74e8c`): approved (readability, reliability; lineage review-87ea8c53d1d3ac4c,
   acknowledged), two suggestions. Not taken: the two referent suggestions ("the line", "the level") point at the
   `## Advice mode` line named in the same sentence; the test's order and bounds suggestions, since each text is
   pinned whole and by section; R2-first-lead-charter-order, the charter asked before the lead says it leads is
