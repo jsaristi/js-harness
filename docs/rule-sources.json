@@ -678,6 +678,71 @@
       "by": "session"
     }
   },
+  "session-prompts": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Respecto al prompt que me envio la sesion remote, como hacemos para sincronizar mejor esto?",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1835
+      },
+      {
+        "quote": "Sí, dejá escrita en la memoria la regla de sincronización",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1872
+      },
+      {
+        "quote": "como hacemos para que la proxima vez el te pueda enviar el mensaje directamente, hay forma que tu te puedas comunicar directamente las sesiones contigo y tu con las sesiones en tiempo real?",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 569
+      },
+      {
+        "quote": "Listo añadamos esta funcionalidad al harnes para que yo no tenga que estar enviando de aqui para alla prompts",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 637
+      },
+      {
+        "quote": "ya te habia dicho que habia autonomia como hacemos para que esto no pase",
+        "date": "2026-10-10",
+        "session": "1d16beeb-2d72-477a-a009-e1945f5e6d39",
+        "line": 449
+      },
+      {
+        "quote": "quiero que siempre lo hagas cuando estemos utilizando 2 sesiones o varias y cuando tengamos unas pausadas osea que cuando se remifique por alguna razon la principal se quede orquestando las otras para seguir en orden y no se vuelva un desorden o nos perdamos del camino",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1395
+      },
+      {
+        "quote": "pero quiero que lo añadamos al harness",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 2439
+      },
+      {
+        "quote": "el ya me envio el siguiente prompt pero esta ejecutando 2 terminales, por que cuando revisese tambien mira eso por que creo que das por hecho que ya termino",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1964
+      },
+      {
+        "quote": "pero la sesion me da una prompt para seguir y tu me das otros, osea la idea de orquestar es ver por donde van pero cada sesion tiene independencia por que o sino tuvieras que tener todo el contexto que le estamos haciendo o el prompt de inicio de sesion no esta bien con su contexto",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 2220
+      }
+    ],
+    "reading": "He asked that sessions stop needing him to carry prompts between them: they talk through the channel (js-harness notify), and a notice is a session's claim, never his word (odd/tasks/session-channel.md). Each session gives prompts only for itself and names the session a prompt is for in its first line; the lead never writes another session's prompts, since each owns its work and context; when work branches, the main session stays orchestrating the others in order. A session is not finished while background work it started still runs, even with its next prompt written. An opening is one short line of his own, and pasted text is not his word (docs/SPEC.md).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "session-stall": {
     "kind": "design",
     "path": "odd/tasks/stalled-sessions.md"

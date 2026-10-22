@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `c45ba33190ab`. In force: 54 (29 of Sebastián, 25 of the project). Retired: 0.
+Hash `c587e533ba06`. In force: 55 (30 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -128,6 +128,11 @@ The model a session runs on: claude-opus-5-5.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+
+### session-prompts
+Sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order: "## A work session - Give prompts only for yourself. A prompt meant for another session names that session in its first line."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-06, 2026-10-06, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-06, 2026-10-06, 2026-10-06, 2026-10-06, checked by the command on 2026-10-22.
 
 ### session-title
 The shape of the title of a session started with start_session: <code> is the project's own identifier, declared in harness.json "code", and the number is the next free one of that code, as js-harness sessions --next-number prints it (a new lead takes ORQ for the number): <code> <n> · <purpose>, <code> from harness.json "code".

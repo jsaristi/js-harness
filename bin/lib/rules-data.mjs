@@ -470,6 +470,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "session-prompts",
+    "subject": "sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Give prompts only for yourself. A prompt meant for another session names that session in its first line.",
+      "You never write another session's prompts: each session owns its work and holds its context."
+    ]
+  },
+  {
     "id": "session-stall",
     "subject": "how long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled",
     "owner": "project",
