@@ -273,6 +273,16 @@ export const RULES = [
     ]
   },
   {
+    "id": "recap-effort-line",
+    "subject": "the lead's recap names each session's effort mode for its kind of work, and why",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "one line a session: its state, the effort mode its kind of work calls for and why;"
+    ]
+  },
+  {
     "id": "report-table",
     "subject": "when the user asks what was done, the lead's status report shows each section that holds items as a table",
     "owner": "sebastian",
