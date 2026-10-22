@@ -363,6 +363,18 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => backupHookEntry(),
   },
+  {
+    id: 'claude-fallback-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => fallbackHookEntry(),
+  },
+  {
+    id: 'codex-fallback-hook',
+    target: (home) => path.join(home, '.codex', 'hooks.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => fallbackHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -501,6 +513,20 @@ export const BACKUP_HOOK_COMMAND = 'js-harness backup --hook || exit 0';
 function backupHookEntry() {
   return {
     hooks: [{ type: 'command', command: BACKUP_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the memory fallback's notice, guarded to exit 0 like the backup's: an older js-harness answers 2. */
+export const FALLBACK_HOOK_COMMAND = 'js-harness backup --session-start || exit 0';
+
+/** `backup --session-start` (bin/backup.mjs) registered as a `SessionStart` hook in both hosts, for every start: after a
+ * compaction the notice is needed most. When Engram holds less than nine tenths of what the last backup held of the
+ * session's project, it sends the session to that project's readable file (odd/tasks/recent-memory.md, D7). An entry
+ * of its own, since doctor's hook prints `systemMessage` only. Five seconds: `engram stats` gets three. */
+function fallbackHookEntry() {
+  return {
+    matcher: 'startup|resume|clear|compact',
+    hooks: [{ type: 'command', command: FALLBACK_HOOK_COMMAND, timeout: 5 }],
   };
 }
 

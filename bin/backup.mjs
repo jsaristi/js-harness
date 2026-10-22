@@ -26,9 +26,11 @@ import { buildRecent } from './lib/backup-recent.mjs';
 import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore.mjs';
 import { humanSize, readiness } from './lib/backup-ready.mjs';
 import { bundleRefs, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
+import { fallbackNotice, projectOf, readStats, STATS_TIMEOUT_MS } from './lib/backup-fallback.mjs';
+import { mainCheckout } from './lib/sessions.mjs';
 
 const USAGE = [
-  'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook>',
+  'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook | --session-start>',
   '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
   '    js-harness home, reference copies of the config, the plugin lists and Claude Desktop\'s notes and presets, and for',
   '    each repository of config.json\'s `bundles` a bundle of what no remote holds (every stash entry included), a',
@@ -66,6 +68,9 @@ const USAGE = [
   '  verify --summary <dir|git url>  Check the memory-summary branch: its four sections, and no line the privacy',
   "    check would drop, with the clone's private-terms.txt when there is one.",
   '  --hook  The Stop hook install registers: when a backup is due it starts `backup run` detached, and returns at once.',
+  '  --session-start  The SessionStart hook install registers: reads the hook input, and when Engram holds less than nine',
+  "    tenths of what the last backup held of the session's project (or does not answer within 3 seconds) it tells the",
+  "    session to read that project's file in recent/ and how to restore Engram. Silent otherwise; always exits 0.",
   '  Its state lives in ~/.js-harness/memory-backup; deleting that folder undoes everything here but the repository.',
 ].join('\n');
 
@@ -296,7 +301,8 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const pushed = pushClone(deps, paths.clone, config.repo);
   const unreadable = bundles.filter((b) => b.unreadable);
   const summary = pushSummary(deps, paths, config);
-  return { counts: exported.counts, live, committed, pushed, redacted: manifest.redacted.length, unreadable, summary };
+  // `recent` reaches last.json too, outside the clone: with the clone gone, the session-start notice still knows the files.
+  return { counts: exported.counts, live, committed, pushed, redacted: manifest.redacted.length, unreadable, summary, recent };
 }
 
 /** Every fetch and push URL of a clone's origin: `get-url --push` applies a pushurl and pushInsteadOf, so it names where
@@ -705,6 +711,46 @@ function hookCommand(deps) {
   return 0;
 }
 
+/** The notice of `backup --session-start` (odd/tasks/recent-memory.md, D7), or null: no backup here, no file for the
+ * session's project, or an Engram that still holds nine tenths of what the last backup held of it. */
+function sessionNotice(deps) {
+  const paths = backupPaths(deps.home);
+  const config = readJson(paths.config);
+  if (!config?.repo) return null;
+  const text = deps.stdin();
+  if (!text.trim()) return null;
+  const cwd = JSON.parse(text)?.cwd;
+  if (typeof cwd !== 'string' || !cwd) return null;
+  const cloneExists = fs.existsSync(path.join(paths.clone, '.git'));
+  const recent = (cloneExists ? readJson(path.join(paths.clone, 'manifest.json'))?.recent : null) ?? readJson(paths.last)?.lastSuccess?.recent;
+  if (!Array.isArray(recent) || !recent.length) return null;
+  const origin = deps.run('git', ['-C', cwd, 'remote', 'get-url', 'origin']);
+  const { project } = projectOf({
+    env: deps.env,
+    cwd,
+    main: mainCheckout(deps.run, cwd),
+    config: (dir) => readJson(path.join(dir, '.engram', 'config.json')),
+    origin: origin.status === 0 ? origin.stdout.trim() : null,
+    recent,
+  });
+  const entry = recent.find((r) => r.project === project);
+  if (!entry) return null;
+  const stats = readStats(deps.run('engram', ['stats', '--project', project], { timeout: STATS_TIMEOUT_MS }));
+  return fallbackNotice({ entry, stats, clone: paths.clone, cloneExists, repo: config.repo });
+}
+
+/** `backup --session-start`: prints the notice in the hooks contract when there is one, and exits 0 whatever happens,
+ * since a SessionStart hook never breaks a session. */
+function sessionStartCommand(deps) {
+  try {
+    const notice = sessionNotice(deps);
+    if (notice) deps.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: notice } })}\n`);
+  } catch {
+    // An unreadable input or a file half-written: nothing to say this time.
+  }
+  return 0;
+}
+
 /** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. */
 function restoreSteps(repo) {
   const url = `https://github.com/${repo}.git`;
@@ -811,6 +857,7 @@ function defaultDeps() {
     stdout: process.stdout,
     stderr: process.stderr,
     bundles: ['D:/js-harness'].filter((dir) => fs.existsSync(path.join(dir, '.git'))),
+    stdin: () => (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8')),
     desktop: desktopDir(home, process.env),
     // Node itself on this install's own entry point: no `.cmd` shim, no shell between the hook and the run.
     startDetached: (args) => {
@@ -831,6 +878,7 @@ export async function backupMain(args, deps = defaultDeps()) {
   if (sub === 'verify') return verifyCommand(rest, deps);
   if (sub === 'init') return initCommand(rest, deps);
   if (sub === '--hook') return hookCommand(deps);
+  if (sub === '--session-start') return sessionStartCommand(deps);
   if (sub === '--help' || sub === '-h' || sub === undefined) {
     deps.stdout.write(`${USAGE}\n`);
     return sub === undefined ? 2 : 0;

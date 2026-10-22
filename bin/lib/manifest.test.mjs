@@ -1224,6 +1224,7 @@ const claudeRulesSubagent = hookById('claude-rules-subagent-hook');
 // What the Claude file holds under SessionStart after an install: the doctor's entry, the resume hook's, then the rules' start entry.
 const ourClaudeStart = () => ourHooks('settings.json', 'SessionStart');
 const isRulesEntry = (entry) => entry?.hooks?.[0]?.command === 'js-harness rules --hook || exit 0';
+const isFallbackEntry = (entry) => entry?.hooks?.[0]?.command === 'js-harness backup --session-start || exit 0';
 
 test('entryComponents declare the turn-start hook of the rules for Claude alone: a turn, a fresh context and a sub-agent', () => {
   assert.deepEqual([claudeRulesTurn.id, claudeRulesStart.id, claudeRulesSubagent.id], ['claude-rules-turn-hook', 'claude-rules-start-hook', 'claude-rules-subagent-hook']);
@@ -1251,10 +1252,10 @@ test('entryComponents declare each hook once: ids are unique, and no two share a
   assert.equal(new Set(declared).size, declared.length, 'two components declare the same entry in the same place');
 });
 
-test('the SessionStart entries come in this order in each host file: the doctor, the resume hook, then the rules', () => {
+test('the SessionStart entries come in this order in each host file: the doctor, the resume hook, the rules, then the memory fallback', () => {
   const sessionStartIds = (file) => componentsIn(file).filter((component) => component.pointer.join('.') === 'hooks.SessionStart').map((component) => component.id);
-  assert.deepEqual(sessionStartIds('settings.json'), ['claude-hook', 'claude-resume-hook', 'claude-rules-start-hook']);
-  assert.deepEqual(sessionStartIds('hooks.json'), ['codex-hook', 'codex-resume-hook']);
+  assert.deepEqual(sessionStartIds('settings.json'), ['claude-hook', 'claude-resume-hook', 'claude-rules-start-hook', 'claude-fallback-hook']);
+  assert.deepEqual(sessionStartIds('hooks.json'), ['codex-hook', 'codex-resume-hook', 'codex-fallback-hook']);
 });
 
 // --- Session channel, the context pause: a `PostToolUse` entry in Claude Code's settings and nowhere else ---
@@ -1386,6 +1387,21 @@ test('entryComponents declare the memory backup hook for both hosts: a Stop entr
   assert.deepEqual(codexBackupHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
   for (const hook of [claudeBackupHook, codexBackupHook]) {
     assert.deepEqual(hook.entry(), { hooks: [{ type: 'command', command: 'js-harness backup --hook || exit 0', timeout: 5 }] });
+  }
+});
+
+test('entryComponents declare the memory fallback notice for both hosts: a SessionStart entry for every start, last', () => {
+  const ids = entryComponents.map((component) => component.id);
+  assert.deepEqual(ids.slice(-2), ['claude-fallback-hook', 'codex-fallback-hook']);
+  const [claudeHook, codexHook] = ['claude-fallback-hook', 'codex-fallback-hook'].map(hookById);
+  assert.deepEqual([claudeHook.pointer, codexHook.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
+  assert.deepEqual(claudeHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  assert.deepEqual(codexHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
+  for (const hook of [claudeHook, codexHook]) {
+    assert.deepEqual(hook.entry(), {
+      matcher: 'startup|resume|clear|compact',
+      hooks: [{ type: 'command', command: 'js-harness backup --session-start || exit 0', timeout: 5 }],
+    });
   }
 });
 
@@ -1522,12 +1538,12 @@ test('an update from an install made before the resume hook adds its entry, and 
       const older = install(home, '0.1.0');
       for (const file of [claudeHook.target(home), codexHook.target(home)]) {
         const data = readJson(file);
-        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact' && !isRulesEntry(entry));
+        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact' && !isRulesEntry(entry) && !isFallbackEntry(entry));
         delete data.hooks.UserPromptSubmit;
         delete data.hooks.SubagentStart;
         fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
       }
-      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact' && !isRulesEntry(record.entry)) }, null, 2), 'utf8');
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact' && !isRulesEntry(record.entry) && !isFallbackEntry(record.entry)) }, null, 2), 'utf8');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? [claudeHook.entry()] : [unrelated, claudeHook.entry()]);
 
       const manifest = sync(home, '0.2.0');

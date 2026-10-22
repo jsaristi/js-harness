@@ -833,14 +833,16 @@ const pause = group(undefined, PAUSE);
 const RULES_HOOK = 'js-harness rules --hook || exit 0';
 const rulesStart = group('compact|clear|resume', RULES_HOOK);
 const rulesTurn = group(undefined, RULES_HOOK);
+const FALLBACK = 'js-harness backup --session-start || exit 0';
+const fallback = group('startup|resume|clear|compact', FALLBACK);
 // A Claude Code file right after install: its SessionStart groups then the rules' own, the PostToolUse list, and the
 // rules' entries under UserPromptSubmit and SubagentStart (`extra` replaces any of those lists).
-const claudeHooksFile = (postToolUse, ...groups) => JSON.stringify({ hooks: { SessionStart: [...groups, rulesStart], PostToolUse: postToolUse, UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn] } }, null, 4);
+const claudeHooksFile = (postToolUse, ...groups) => JSON.stringify({ hooks: { SessionStart: [...groups, rulesStart, fallback], PostToolUse: postToolUse, UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn] } }, null, 4);
 
 test('hostHooksProblem finds none in a Codex file that holds its seeded entry and then each entry of the harness once', () => {
-  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume, fallback), SEEDED, 'codex'), null);
   // The keys of an entry in another order, as a host or another tool may write them back.
-  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [{ hooks: seeded.hooks, matcher: seeded.matcher }, { hooks: doctor.hooks, matcher: doctor.matcher }, resume] } }), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [{ hooks: seeded.hooks, matcher: seeded.matcher }, { hooks: doctor.hooks, matcher: doctor.matcher }, resume, fallback] } }), SEEDED, 'codex'), null);
 });
 
 test('hostHooksProblem finds none in a Claude Code file right after install: the seeded entry, the doctor and resume entries, then the pause entry once', () => {
@@ -848,7 +850,7 @@ test('hostHooksProblem finds none in a Claude Code file right after install: the
 });
 
 test('hostHooksProblem says what it expected and what it found: an entry missing, written twice, with another matcher or command, or out of place', () => {
-  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact); found: ';
+  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact), then "' + FALLBACK + '" (matcher startup|resume|clear|compact); found: ';
   const found = (...groups) => hostHooksProblem(hostFile(...groups), SEEDED, 'codex');
   // What `install` wrote before the resume hook: the doctor's entry alone.
   assert.equal(found(seeded, doctor), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact) | "js-harness doctor --hook" (matcher startup|resume)`);
@@ -865,17 +867,17 @@ test('hostHooksProblem says what it expected and what it found: an entry missing
   // The seeded entry is the user's: gone, changed or no longer first, the file is not what install should leave.
   assert.ok(found(doctor, resume) !== null);
   assert.ok(found(doctor, seeded, resume) !== null);
-  assert.ok(found(group('startup', SEEDED), doctor, resume) === null, 'the seeded entry is told by its command: its matcher is the user\'s to choose');
+  assert.ok(found(group('startup', SEEDED), doctor, resume, fallback) === null, 'the seeded entry is told by its command: its matcher is the user\'s to choose');
   assert.ok(found(seeded, resume, doctor) !== null, 'in the order install writes them');
   assert.equal(found(), `${expected}no entry`);
 });
 
 test('hostHooksProblem holds the turn-start entries of the rules at the end of their Claude Code lists, and none in Codex', () => {
-  const file = (lists) => JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, rulesStart], PostToolUse: [pause], UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn], ...lists } });
+  const file = (lists) => JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, rulesStart, fallback], PostToolUse: [pause], UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn], ...lists } });
   assert.equal(hostHooksProblem(file({ UserPromptSubmit: [group(undefined, 'echo theirs'), rulesTurn] }), SEEDED, 'claude'), null);
   assert.equal(hostHooksProblem(file({ UserPromptSubmit: [] }), SEEDED, 'claude'), `expected "${RULES_HOOK}" (no matcher) once, at the end of hooks.UserPromptSubmit; found: no entry`);
   assert.equal(hostHooksProblem(file({ SubagentStart: undefined }), SEEDED, 'claude'), 'the file holds no list at hooks.SubagentStart');
-  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume], UserPromptSubmit: [rulesTurn] } }), SEEDED, 'codex'), `expected no entry of the harness in hooks.UserPromptSubmit of codex; found: "${RULES_HOOK}" (no matcher)`);
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, fallback], UserPromptSubmit: [rulesTurn] } }), SEEDED, 'codex'), `expected no entry of the harness in hooks.UserPromptSubmit of codex; found: "${RULES_HOOK}" (no matcher)`);
 });
 
 test('hostHooksProblem says so for a host file that is not one: no JSON, no hooks, a list that is none', () => {
@@ -910,9 +912,9 @@ test('hostHooksProblem keeps a user\'s own PostToolUse entry first: the pause en
 });
 
 test('hostHooksProblem finds the pause entry where Codex has none, and finds none in a Codex file without it', () => {
-  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume), SEEDED, 'codex'), null);
-  assert.equal(hostHooksProblem(hooksFile([group(undefined, 'echo user-post-hook')], seeded, doctor, resume), SEEDED, 'codex'), null);
-  assert.equal(hostHooksProblem(hooksFile([pause], seeded, doctor, resume), SEEDED, 'codex'), `expected no entry of the harness in hooks.PostToolUse of codex; found: "${PAUSE}" (no matcher)`);
+  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume, fallback), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(hooksFile([group(undefined, 'echo user-post-hook')], seeded, doctor, resume, fallback), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(hooksFile([pause], seeded, doctor, resume, fallback), SEEDED, 'codex'), `expected no entry of the harness in hooks.PostToolUse of codex; found: "${PAUSE}" (no matcher)`);
 });
 
 // What `uninstall` leaves of a host file is the file as `setup` seeded it, byte for byte: install takes back each list it

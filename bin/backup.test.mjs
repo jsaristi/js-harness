@@ -283,6 +283,59 @@ test('verify, ready, status and doctor check the readable fallback against the e
   assert.match(health.fix[0], /no RECENT\.md in the clone/);
 });
 
+test('backup --session-start points a session whose Engram lost its project to the readable fallback, else says nothing', async (t) => {
+  const { root, paths, deps, state } = setup(t, { engram: MEMORY });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const here = path.join(root, 'checkout');
+  fs.mkdirSync(path.join(here, '.engram'), { recursive: true });
+  fs.writeFileSync(path.join(here, '.engram', 'config.json'), JSON.stringify({ project_name: 'js-harness' }));
+  let answer = null;
+  const asked = [];
+  const run = deps.run;
+  deps.run = (cmd, args, options) => {
+    if (cmd === 'engram' && args[0] === 'stats' && args[1] === '--project') {
+      asked.push([args[2], options?.timeout]);
+      if (answer) return answer;
+    }
+    return run(cmd, args, options);
+  };
+  const start = async (input = { cwd: here, hook_event_name: 'SessionStart', source: 'compact' }) => {
+    deps.stdout = sink();
+    deps.stdin = () => (typeof input === 'string' ? input : JSON.stringify(input));
+    assert.equal(await backupMain(['--session-start'], deps), 0);
+    return deps.stdout.text;
+  };
+
+  // A healthy Engram, an unknown input, a project with no file and a machine with no backup say nothing.
+  assert.equal(await start(), '');
+  assert.deepEqual(asked, [['js-harness', 3000]]);
+  assert.equal(await start('not json'), '');
+  answer = { status: 1, stdout: '', stderr: 'engram: unknown project: js-harness\n' };
+  fs.writeFileSync(path.join(here, '.engram', 'config.json'), JSON.stringify({ project_name: 'elsewhere' }));
+  assert.equal(await start(), '');
+  fs.writeFileSync(path.join(here, '.engram', 'config.json'), JSON.stringify({ project_name: 'js-harness' }));
+
+  const notice = JSON.parse(await start());
+  assert.equal(notice.hookSpecificOutput.hookEventName, 'SessionStart');
+  const context = notice.hookSpecificOutput.additionalContext;
+  assert.match(context, /Engram has no memory of js-harness/);
+  assert.ok(context.includes(path.join(paths.clone, 'recent', 'js-harness.md')), context);
+  assert.ok(context.includes(`js-harness backup restore --from "${paths.clone}" --merge`), context);
+  assert.doesNotMatch(context, /client/, 'another project is never named');
+
+  answer = { status: null, stdout: '', stderr: 'Error: spawnSync engram ETIMEDOUT' };
+  assert.match(JSON.parse(await start()).hookSpecificOutput.additionalContext, /Engram did not answer within 3 seconds/);
+
+  // The clone gone: the entries the last success recorded, and the file read from the private repository.
+  answer = { status: 1, stdout: '', stderr: 'engram: unknown project: js-harness\n' };
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  assert.match(JSON.parse(await start()).hookSpecificOutput.additionalContext, /gh api -H "Accept: application\/vnd\.github\.raw" repos\/jsaristi\/js-harness-memory\/contents\/recent\/js-harness\.md/);
+
+  fs.rmSync(paths.config);
+  assert.equal(await start(), '');
+  assert.equal(state.started.length, 0, 'it starts nothing');
+});
+
 test('a wipe of one project keeps its file and its export, and last.json names it', async (t) => {
   const many = (project, n) => Array.from({ length: n }, (_, i) => ({ id: `${project}-${i}`, sync_id: `obs-${project}-${i}`, type: 'decision', title: `${project} ${i}`, content: 'c', project, updated_at: '2026-10-20 10:00:00' }));
   const { paths, deps, state } = setup(t, { engram: { ...EXPORT, observations: [...many('big', 400), ...many('client', 30)] } });
