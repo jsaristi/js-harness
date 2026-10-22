@@ -632,6 +632,35 @@
       "by": "session"
     }
   },
+  "session-housekeeping": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Siempre recuerdame cual sesion archivar o cual esta parada",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 3332
+      },
+      {
+        "quote": "Quiero que cuando necesites archivar una sesion la archives incluso cuando tu hagas tu reemplazo creando una nueva sesion, archives las antiguas y las sesiones que ya acabaron su trabajo",
+        "date": "2026-10-15",
+        "session": "987548fe-5062-4dd4-9b92-7a246494198f",
+        "line": 455
+      },
+      {
+        "quote": "me gustaria que hicieramos al menos una recopilacion para que cuando se haga por lo menos las sesiones que hay expliquen o hagan un resumen",
+        "date": "2026-10-13",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 14037
+      }
+    ],
+    "reading": "Every recap of the lead names, by title, the sessions to archive and the stopped ones with what each waits for; the lead archives the sessions that finished their work, and its own predecessor when it replaces itself, without asking; a session that finishes says so first and leaves a summary the lead reads before archiving it. What waits for him in a session is said only after reading that session at that moment (rule:session-stall).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "session-model": {
     "kind": "words",
     "quotes": [

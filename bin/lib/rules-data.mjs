@@ -448,6 +448,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "session-housekeeping",
+    "subject": "each recap names the sessions to archive and the stopped ones, and the lead archives finished sessions without asking",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "by title, the sessions to archive and the ones stopped, with what each waits for",
+      "then archive the session with the host's tool to archive sessions, without asking"
+    ]
+  },
+  {
     "id": "session-model",
     "subject": "the model a session runs on",
     "owner": "sebastian",
