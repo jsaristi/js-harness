@@ -28,6 +28,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "ask-before-away",
+    "subject": "before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Before the user leaves, ask in that reply for everything the stretch will need",
+      "While the user is away, a block that waits for them is given once and held until they say they are back"
+    ]
+  },
+  {
     "id": "ci-gate-bound",
     "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
     "owner": "project",
