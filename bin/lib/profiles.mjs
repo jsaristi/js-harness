@@ -7,7 +7,7 @@ export const PROFILES = { AREAS, KINDS, TARGETS };
 
 const LOG_SUFFIX = /\s*\(L\d+\)$/;
 const NEAREST = /^other \(nearest: ([^)]+)\)$/;
-const SETUP_LINE = /^- (Kind|Size|Level|Teaching|Mode): (.+)$/;
+const SETUP_LINE = /^- (Kind|Size|Level|Teaching|Mode|Areas): (.+)$/;
 const WHERE = { lab: 'in CI', field: 'in production', review: 'at each release review' };
 const TEACH_LEVELS = ['new', 'some', 'experienced'];
 
@@ -49,6 +49,24 @@ export function parseKind(value, data = PROFILES) {
 export function parseSize(value) {
   const match = /^(small|large)$/.exec(value.trim().replace(LOG_SUFFIX, ''));
   return match ? match[1] : null;
+}
+
+const ADDED_AREA = /^\+(?:A:)?([a-z0-9-]+) \(L\d+\)$/;
+
+/** The areas an Areas value adds to the size's set, `{ ids }`, or `{ error }`: each is an area the owner asked for
+ * beyond the size, written `+<area> (L<n>)` with the Log line of the request, and must be one of `profile`'s areas. */
+export function parseAreas(value, profile) {
+  const entries = value.split(',').map((entry) => ADDED_AREA.exec(entry.trim()));
+  if (entries.some((entry) => !entry)) {
+    return { error: `Areas is "${value}": write +<area> (L<n>), one per area the owner asked for, joined by commas` };
+  }
+  const ids = entries.map((entry) => entry[1]);
+  const unknown = ids.find((id) => !profile.areas.some((area) => area.id === id));
+  if (unknown) {
+    const kinds = profile.kinds.map((kind) => kind.id);
+    return { error: `A:${unknown} is not an area of ${kinds.join(', ')}; js-harness onboard profile ${kinds.join(',')} lists its areas` };
+  }
+  return { ids };
 }
 
 /** The values of the `## Setup` section of an onboarding document, by key. */
@@ -139,9 +157,13 @@ const barStep = (target) =>
     ? `${target.command} wired before launch, so production shows: ${target.target}`
     : `${target.target}; measured by ${target.command}`);
 
-/** The lines to paste: `advice` under the onboarding's `## Advice`, `bar` as steps of the roadmap (D5, D6). */
-export function checklistLines(profile, which, size) {
-  if (which === 'advice') return sized(profile.areas, size).map((area) => `- [ ] A:${area.id} ${area.title}`);
+/** The lines to paste: `advice` under the onboarding's `## Advice`, `bar` as steps of the roadmap (D5, D6). `added`,
+ * the areas the owner asked for beyond the size (`- Areas:`), join a small set of advice; the bar keeps the size's. */
+export function checklistLines(profile, which, size, added = []) {
+  if (which === 'advice') {
+    const areas = profile.areas.filter((area) => size !== 'small' || area.core || added.includes(area.id));
+    return areas.map((area) => `- [ ] A:${area.id} ${area.title}`);
+  }
   return sized(profile.targets, size).map((target) => `- [ ] B:${target.id} ${barStep(target)}`);
 }
 

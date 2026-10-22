@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { cellsOf, parseRoadmap, tokenize } from './progress.mjs';
-import { PROFILES, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
+import { PROFILES, advisedProfile, checklistLines, parseAreas, parseKind, setupValues } from './profiles.mjs';
 
 export const ONBOARDING_PATH = 'odd/tasks/onboarding.md';
 export const ORIGIN_PATH = 'docs/origin.md';
@@ -83,7 +83,7 @@ The two approvals: the pre-plan and the roadmap.
 <what the repository holds today, each with its evidence: a path, or a command and its output>
 
 ## Setup
-<!-- One line each: Kind and Size once the conversation shows them, deduced values included; Level with ## Advice, one level per area; Teaching "on (L<n>)" or "off (L<n>)" once the opening is logged; Mode full, or fast (L<n>). A change here is committed at once. -->
+<!-- One line each: Kind and Size once the conversation shows them, deduced values included; Level with ## Advice, one level per area; Teaching "on (L<n>)" or "off (L<n>)" once the opening is logged; Mode full, or fast (L<n>); Areas, only when the owner asks for an area a small size leaves out, "+<area> (L<n>)" each, joined by commas. A change here is committed at once. -->
 - Teaching: on
 - Mode: full
 
@@ -520,7 +520,15 @@ function conversation(onboarding, { profiles, compare, adrs }) {
   else if (!/\bL\d+\b/.test(summary[2])) wrongly('S names no Log line (L<n>) of the last answer');
 
   const areas = adviceAreas(onboarding);
-  const expected = kinds && size ? checklistLines(advisedProfile(kinds, profiles), 'advice', size).map((line) => line.match(AREA_LINE)?.[2]).filter(Boolean) : null;
+  // The areas the owner asked for beyond the size join the set (JH 43, finding 11).
+  const advised = kinds ? advisedProfile(kinds, profiles) : null;
+  let added = [];
+  if (advised && setup.Areas !== undefined) {
+    const parsed = parseAreas(setup.Areas, advised);
+    if (parsed.error) wrongly(`Areas: ${parsed.error}`);
+    else added = parsed.ids;
+  }
+  const expected = advised && size ? checklistLines(advised, 'advice', size, added).map((line) => line.match(AREA_LINE)?.[2]).filter(Boolean) : null;
   let pasted = areas.size > 0;
   if (!pasted && expected?.length > 0) notYet('## Advice is empty: paste what js-harness onboard profile --checklist advice prints');
   else if (expected) {

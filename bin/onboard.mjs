@@ -10,7 +10,7 @@ import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH,
   adrTemplate, checkOnboarding, featureTemplate, findingLine, hashes, originTemplate, roadmapTemplate, stageReport,
 } from './lib/onboard.mjs';
-import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseKind, parseSize, setupValues } from './lib/profiles.mjs';
+import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseAreas, parseKind, parseSize, setupValues } from './lib/profiles.mjs';
 import { agentsTemplate, projectLocation } from './lib/project.mjs';
 
 export const USAGE = [
@@ -25,7 +25,7 @@ export const USAGE = [
   'pre-plan. hash: the sha256 an approval records. template: a skeleton on stdout; --write creates its file instead,',
   'and refuses one that exists; adr <slug> numbers the next ADR, docs/adr/<nnnn>-<slug>.md. profile: the kinds of project the advice knows; with kinds, their advice, areas and',
   'bar; --area explains one area; --checklist prints the lines the onboarding pastes. With no kind it reads Kind and',
-  'Size from the onboarding document\'s ## Setup.',
+  'Size from the onboarding document\'s ## Setup, and --checklist advice adds the areas of its - Areas: line.',
 ].join('\n');
 
 /** The flags that take a value, each `profile`'s. */
@@ -373,7 +373,14 @@ function profileOutput(root, { kind, area, checklist, size }) {
     chosen = parseSize(setup.Size);
     if (!chosen) return { error: `${ONBOARDING_PATH}, ## Setup: Size is ${setup.Size}, not small or large` };
   }
-  return { lines: checklistLines(advised, checklist, chosen) };
+  // The areas the owner asked for beyond the size go with the document's Kind, never with a kind named here.
+  let added = [];
+  if (!kind && setup.Areas) {
+    const areas = parseAreas(setup.Areas, advised);
+    if (areas.error) return { error: `${ONBOARDING_PATH}, ## Setup: ${areas.error}` };
+    added = areas.ids;
+  }
+  return { lines: checklistLines(advised, checklist, chosen, added) };
 }
 
 function profile(root, args, { stdout, stderr }) {
