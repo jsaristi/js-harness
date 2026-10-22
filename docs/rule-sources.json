@@ -891,6 +891,29 @@
     "kind": "design",
     "path": "odd/tasks/session-channel.md"
   },
+  "wording-is-the-need": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "No me tomes literal lo que digo, por favor quiero que me guies muy bien en como deberia ser osea cual es la mejor forma?",
+        "date": "2026-10-08",
+        "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
+        "line": 937
+      },
+      {
+        "quote": "recuerda no seguirme al pie de la letra lo que digo osea, siempre analiza lo que digo, entiendelo y hazme una recomendacion de como seria mejor, esto lo tenemos que meter al harnes para que todo lo que proponga lo discutamos con criterio.",
+        "date": "2026-10-10",
+        "session": "4a8db1c5-ba2e-4c72-86b0-1a75ff29bee5",
+        "line": 599
+      }
+    ],
+    "reading": "His words are not to be taken literally: the agent analyses what he says, understands the need, and recommends the best way to meet it, saying what it would do differently from his words and why, so every proposal is discussed with judgment. The template init writes (bin/lib/project.mjs) carries it to every project.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "work-sessions": {
     "kind": "words",
     "quotes": [

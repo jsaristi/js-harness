@@ -612,6 +612,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "wording-is-the-need",
+    "subject": "his wording is the need, not the specification: the agent recommends what is best and says where it differs",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/project.mjs",
+    "phrases": [
+      "The owner's wording is the need, not the specification",
+      "what would be done differently from their words and why"
+    ]
+  },
+  {
     "id": "work-sessions",
     "subject": "the most work sessions open at one time",
     "owner": "sebastian",
