@@ -189,6 +189,168 @@ test('a second run with nothing new commits and pushes nothing', async (t) => {
   assert.equal(remoteCommits(bare), 1);
 });
 
+const MEMORY = {
+  ...EXPORT,
+  observations: [
+    { id: 1, sync_id: 'obs-1', type: 'decision', title: 'Gate lock decided', content: '**Why**: one gate at a time', project: 'js-harness', updated_at: '2026-10-20 10:00:00' },
+    { id: 2, sync_id: 'obs-2', type: 'bugfix', title: 'Client fix', content: 'fixed', project: 'client', updated_at: '2026-10-21 10:00:00' },
+  ],
+};
+
+test('backup run rebuilds RECENT.md and a file per project from the export it accepted, and only then', async (t) => {
+  const { bare, paths, deps, state } = setup(t, { engram: MEMORY });
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  assert.match(remoteFile(bare, 'RECENT.md').stdout, /recent\/js-harness\.md/);
+  assert.match(remoteFile(bare, 'recent/js-harness.md').stdout, /^### Gate lock decided$/m);
+  assert.match(remoteFile(bare, 'recent/client.md').stdout, /^### Client fix$/m);
+  const manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
+  assert.deepEqual(manifest.recent.map(({ project, file, entries, observations }) => ({ project, file, entries, observations })), [
+    { project: 'client', file: 'recent/client.md', entries: 1, observations: 1 },
+    { project: 'js-harness', file: 'recent/js-harness.md', entries: 1, observations: 1 },
+  ]);
+  assert.ok(manifest.files.every((f) => !f.path.startsWith('recent/')), 'restore places only its own roots');
+
+  // A project gone from the export loses its file; an export the shrink guard refuses leaves the files as they were.
+  state.engram = { ...MEMORY, observations: [MEMORY.observations[0], { ...MEMORY.observations[0], id: 3, sync_id: 'obs-3', title: 'Second' }] };
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(remoteFile(bare, 'recent/client.md').status, 128);
+  assert.ok(!fs.existsSync(path.join(paths.clone, 'recent', 'client.md')));
+  const before = remoteFile(bare, 'recent/js-harness.md').stdout;
+  assert.match(before, /^### Second$/m);
+
+  state.engram = { ...MEMORY, sessions: [], observations: [], prompts: [] };
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 1);
+  assert.equal(fs.readFileSync(path.join(paths.clone, 'recent', 'js-harness.md'), 'utf8'), before);
+});
+
+test('a clone with no RECENT.md is due a backup even when nothing changed, and the run rewrites RESTORE.md', async (t) => {
+  const { paths, deps, state } = setup(t, { engram: MEMORY });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  state.now += 60 * 60_000;
+  assert.equal(dueReason(deps.home, state.now), 'nothing changed since the last backup');
+  fs.rmSync(path.join(paths.clone, 'RECENT.md'));
+  assert.equal(dueReason(deps.home, state.now), null);
+  assert.match(fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8'), /recent\//);
+});
+
+test('verify, ready, status and doctor check the readable fallback against the export, naming no project', async (t) => {
+  const { bare, home, paths, deps, state } = setup(t, { engram: MEMORY });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  assert.equal(await backupMain(['verify', '--from', bare], deps), 0, deps.stdout.text + deps.stderr.text);
+  assert.match(deps.stdout.text, /^ok recent: 3 of 3 files rebuilt from the export$/m);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['status'], deps), 0);
+  assert.match(deps.stdout.text, /^recent: 2 projects, newest entry 2026-10-21$/m);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 0, deps.stdout.text);
+
+  // A hand edit, or a run that failed half-way: the file is not what the export rebuilds.
+  const client = path.join(paths.clone, 'recent', 'client.md');
+  const good = fs.readFileSync(client, 'utf8');
+  fs.appendFileSync(client, 'edited by hand\n');
+  deps.stdout = sink();
+  assert.equal(await backupMain(['verify', '--from', paths.clone], deps), 1);
+  assert.match(deps.stdout.text, /^FAIL recent: 1 of 3 files differ from what the export rebuilds: js-harness backup run rebuilds them$/m);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /^missing: 1 readable fallback files differ from what the backup's export rebuilds: js-harness backup run rebuilds them$/m);
+  assert.doesNotMatch(deps.stdout.text + deps.stderr.text, /client/, 'the private project is never named');
+
+  // Another format loses nothing (the export holds it all): a note, never a failure.
+  fs.writeFileSync(client, good.replace(/^format: \d+$/m, 'format: 0'));
+  deps.stdout = sink();
+  assert.equal(await backupMain(['verify', '--from', paths.clone], deps), 0, deps.stdout.text);
+  assert.match(deps.stdout.text, /^note recent: 1 files were built by another format; the next backup run rebuilds them$/m);
+  deps.stdout = sink();
+  await backupMain(['ready'], deps);
+  assert.match(deps.stdout.text, /^note: 1 readable fallback files were built by another format; the next backup run rebuilds them$/m);
+  assert.doesNotMatch(deps.stdout.text, /missing: .*readable fallback/);
+  fs.writeFileSync(client, good);
+
+  // doctor: a success that left no RECENT.md is no backup of the fallback; ready says so too.
+  assert.equal(backupHealth(home, state.now).state, 'ok');
+  fs.rmSync(path.join(paths.clone, 'RECENT.md'));
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /^missing: the backup holds no readable fallback of Engram \(RECENT\.md\): js-harness backup run writes it$/m);
+  const health = backupHealth(home, state.now);
+  assert.equal(health.state, 'stale');
+  assert.match(health.fix[0], /no RECENT\.md in the clone/);
+});
+
+test('backup --session-start points a session whose Engram lost its project to the readable fallback, else says nothing', async (t) => {
+  const { root, paths, deps, state } = setup(t, { engram: MEMORY });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const here = path.join(root, 'checkout');
+  fs.mkdirSync(path.join(here, '.engram'), { recursive: true });
+  fs.writeFileSync(path.join(here, '.engram', 'config.json'), JSON.stringify({ project_name: 'js-harness' }));
+  let answer = null;
+  const asked = [];
+  const run = deps.run;
+  deps.run = (cmd, args, options) => {
+    if (cmd === 'engram' && args[0] === 'stats' && args[1] === '--project') {
+      asked.push([args[2], options?.timeout]);
+      if (answer) return answer;
+    }
+    return run(cmd, args, options);
+  };
+  const start = async (input = { cwd: here, hook_event_name: 'SessionStart', source: 'compact' }) => {
+    deps.stdout = sink();
+    deps.stdin = () => (typeof input === 'string' ? input : JSON.stringify(input));
+    assert.equal(await backupMain(['--session-start'], deps), 0);
+    return deps.stdout.text;
+  };
+
+  // A healthy Engram, an unknown input, a project with no file and a machine with no backup say nothing.
+  assert.equal(await start(), '');
+  assert.deepEqual(asked, [['js-harness', 3000]]);
+  assert.equal(await start('not json'), '');
+  answer = { status: 1, stdout: '', stderr: 'engram: unknown project: js-harness\n' };
+  fs.writeFileSync(path.join(here, '.engram', 'config.json'), JSON.stringify({ project_name: 'elsewhere' }));
+  assert.equal(await start(), '');
+  fs.writeFileSync(path.join(here, '.engram', 'config.json'), JSON.stringify({ project_name: 'js-harness' }));
+
+  const notice = JSON.parse(await start());
+  assert.equal(notice.hookSpecificOutput.hookEventName, 'SessionStart');
+  const context = notice.hookSpecificOutput.additionalContext;
+  assert.match(context, /Engram has no memory of js-harness/);
+  assert.ok(context.includes(path.join(paths.clone, 'recent', 'js-harness.md')), context);
+  assert.ok(context.includes(`js-harness backup restore --from "${paths.clone}" --merge`), context);
+  assert.doesNotMatch(context, /client/, 'another project is never named');
+
+  answer = { status: null, stdout: '', stderr: 'Error: spawnSync engram ETIMEDOUT' };
+  assert.match(JSON.parse(await start()).hookSpecificOutput.additionalContext, /Engram did not answer within 3 seconds/);
+
+  // The clone gone: the entries the last success recorded, and the file read from the private repository.
+  answer = { status: 1, stdout: '', stderr: 'engram: unknown project: js-harness\n' };
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  assert.match(JSON.parse(await start()).hookSpecificOutput.additionalContext, /gh api -H "Accept: application\/vnd\.github\.raw" repos\/jsaristi\/js-harness-memory\/contents\/recent\/js-harness\.md/);
+
+  fs.rmSync(paths.config);
+  assert.equal(await start(), '');
+  assert.equal(state.started.length, 0, 'it starts nothing');
+});
+
+test('a wipe of one project keeps its file and its export, and last.json names it', async (t) => {
+  const many = (project, n) => Array.from({ length: n }, (_, i) => ({ id: `${project}-${i}`, sync_id: `obs-${project}-${i}`, type: 'decision', title: `${project} ${i}`, content: 'c', project, updated_at: '2026-10-20 10:00:00' }));
+  const { paths, deps, state } = setup(t, { engram: { ...EXPORT, observations: [...many('big', 400), ...many('client', 30)] } });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const kept = fs.readFileSync(path.join(paths.clone, 'recent', 'client.md'), 'utf8');
+
+  state.engram = { ...EXPORT, observations: many('big', 400) };
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 1);
+  assert.match(deps.stderr.text, /1 project lost more than a tenth/);
+  assert.doesNotMatch(deps.stderr.text, /client/);
+  assert.equal(fs.readFileSync(path.join(paths.clone, 'recent', 'client.md'), 'utf8'), kept);
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.last, 'utf8')).lastFailure.projects, [{ project: 'client', before: 30, after: 0 }]);
+});
+
 test('backup run pushes nothing while the repository does not read PRIVATE, and records why', async (t) => {
   for (const visibility of ['PUBLIC', null]) {
     const { bare, paths, deps } = setup(t, { visibility });

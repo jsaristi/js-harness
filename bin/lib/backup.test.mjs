@@ -257,6 +257,34 @@ test('exportEngram refuses a drop of more than a tenth in any count, and allowSh
   assert.equal(exportEngram({ dest, run: exporting(EXPORT), allowShrink: true }).counts.sessions, 1);
 });
 
+test('exportEngram refuses a wipe of one project the totals hide, and allowShrink lets it through', (t) => {
+  const dest = scratch(t);
+  const of = (project, n) => Array.from({ length: n }, (_, i) => ({ id: `${project}-${i}`, project }));
+  const before = { ...EXPORT, observations: [...of('big', 400), ...of('client', 30), ...of('tiny', 5)] };
+  write(path.join(dest, 'engram', 'export.json'), JSON.stringify(before));
+
+  // 30 of 435 is under a tenth of the total, so only the per-project check sees it.
+  const clientGone = { ...before, observations: [...of('big', 400), ...of('tiny', 5)] };
+  assert.throws(
+    () => exportEngram({ dest, run: exporting(clientGone) }),
+    (error) => /1 project lost more than a tenth of its observations/.test(error.message) && /restore it first/.test(error.message) && error.projects?.[0]?.project === 'client',
+  );
+  const clientHalved = { ...before, observations: [...of('big', 400), ...of('client', 15), ...of('tiny', 5)] };
+  assert.throws(() => exportEngram({ dest, run: exporting(clientHalved) }), /1 project lost/);
+  // A project under 20 observations is too small to tell a wipe from a cleanup.
+  const tinyGone = { ...before, observations: [...of('big', 400), ...of('client', 30)] };
+  assert.equal(exportEngram({ dest, run: exporting(tinyGone) }).counts.observations, 430);
+  assert.equal(exportEngram({ dest, run: exporting({ ...tinyGone, observations: of('big', 400) }), allowShrink: true }).counts.observations, 400);
+});
+
+test('the refusal of a total drop says to restore first, never to force it', (t) => {
+  const dest = scratch(t);
+  write(path.join(dest, 'engram', 'export.json'), JSON.stringify({ ...EXPORT, sessions: Array.from({ length: 20 }, (_, i) => ({ id: i })) }));
+  assert.throws(() => exportEngram({ dest, run: exporting(EXPORT) }), /restore it first \(js-harness backup restore --from .+ --merge\); --allow-shrink only when the drop is meant/);
+  // One argument even where the home has a space (Codex).
+  assert.throws(() => exportEngram({ dest, run: exporting(EXPORT) }), (error) => error.message.includes(`--from "${dest}" --merge`));
+});
+
 test('exportEngram leaves the file untouched when only exported_at changed', (t) => {
   const dest = scratch(t);
   const file = path.join(dest, 'engram', 'export.json');

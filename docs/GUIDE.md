@@ -89,7 +89,9 @@ Optionally, once per machine:
    and the Claude memory folders) and clones it. From then on the Stop hook backs it up when due, and
    `js-harness backup status` says when it last succeeded. By default only the `js-harness` project is backed
    up; set `"scope": "all"` in `~/.js-harness/memory-backup/config.json` for every project. Before you wipe
-   or reinstall the machine, `js-harness backup ready` lists anything that still has no copy off it.
+   or reinstall the machine, `js-harness backup ready` lists anything that still has no copy off it. Each
+   run also writes a readable copy of each project's recent memory (`recent/<project>.md`), and a session
+   that starts while Engram lost its project is told to read it.
 
 ## A typical day
 

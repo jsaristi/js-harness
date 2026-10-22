@@ -1548,7 +1548,28 @@ not copied: Claude transcripts (C:\Users\me\.claude\projects\*\*.jsonl): 156 fil
 backup ready: no, 1 things have no copy off this machine
 ```
 
-After a reinstall, the steps are in `RESTORE.md` in the private repository (`init` writes it);
+While Engram is down, the memory stays readable. Every run also writes, from the export it
+accepted, `RECENT.md` and `recent/<project>.md` in the private repository: each project's last 100
+important observations in full (pinned first, decisions favoured, one another superseded left out,
+one under an unjudged conflict marked), under a head with the project's state and an index of each
+entry's line. A run also refuses an export in which one project of at least 20 observations lost
+more than a tenth of them, so a wipe of one client's memory under `"all"` never replaces its copy;
+the refusal names `backup restore --merge` before `--allow-shrink`. `verify` and `ready` rebuild the
+files from the export and say, by count and never by name, when one differs; `status` names the
+projects and the newest entry; `doctor` calls the backup stale when a success left no `RECENT.md`.
+
+A SessionStart hook in both hosts, `backup --session-start`, resolves the session's project and asks
+`engram stats` for it within 3 seconds. When Engram holds less than nine tenths of what the last
+backup held of it, the session is told so, pointed to its file's head, and given the restore command;
+otherwise it says nothing:
+
+```console
+js-harness: Engram has no memory of js-harness (memory fallback, odd/tasks/recent-memory.md).
+The Engram protocol shown at this start is not working for this project. ...
+Read C:\Users\me\.js-harness\memory-backup\repo\recent\js-harness.md, lines 1-120 first ...
+```
+
+After a reinstall, the steps are in `RESTORE.md` in the private repository (`init` writes it, every run rewrites it);
 in short, before any session and before `install`:
 
 ```console

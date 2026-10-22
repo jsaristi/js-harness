@@ -19,7 +19,7 @@ import { readLock } from './memory-pass.mjs';
 function skillContent(version) {
   return `---
 name: js-harness
-description: Install, update, and check js-harness (v${version}) status and commands, and run a memory hygiene pass when one is due.
+description: Install, update, and check js-harness (v${version}) status and commands, run a memory hygiene pass when one is due, and recover the memory when Engram's is empty, failing or its tools are missing.
 ---
 
 js-harness commands:
@@ -68,6 +68,21 @@ the machine; a rule belongs in a check, a line of \`AGENTS.md\` or a protocol.
   again, or \`js-harness memory undo <stamp>\`, which puts back only what nobody wrote since.
 - Report the index bytes before and after, what was checked, what was not, and what waits for the user.
 - This protocol is withdrawn after six passes in a row with nothing due but the clock and nobody using it.
+
+## When Engram fails
+
+Engram is the memory; when it holds nothing of the project, errors, or its tools are missing, the backup keeps a
+readable copy: \`RECENT.md\` and \`recent/<project>.md\` in the private backup clone
+(\`~/.js-harness/memory-backup/repo\`), rebuilt at every \`js-harness backup run\` with the project's last 100
+important observations in full. The session-start notice names the file when Engram lost the project.
+1. Read the file's head first (the lines the notice or \`RECENT.md\` gives: the state and an index with each
+   entry's line), then only the entries you need, by that line. Never edit these files: each run rebuilds them.
+2. With the clone gone, find the private repository with \`gh repo list --visibility private\` and read the file
+   with \`gh api -H "Accept: application/vnd.github.raw" repos/<owner>/<name>/contents/recent/<project>.md\`.
+3. Tell the user that Engram is down before work that depends on past decisions.
+4. Once \`engram stats\` answers, bring it back with \`js-harness backup restore --from "<clone>" --merge\`, which adds
+   only what Engram lacks. Never \`js-harness backup run --allow-shrink\` after a wipe: it would replace the good
+   copy with the wiped memory.
 `;
 }
 
@@ -204,7 +219,7 @@ How a lead is rotated, where the host nests a session under the one that started
 ## Before a reinstall
 
 When the user says they will reinstall the machine or wipe its disk, nothing of the work may live only there. It comes back three ways: git holds the repositories, branches, stashes and edits; \`js-harness backup\` holds the memory, \`~/.js-harness\`, the Desktop notes and the review records; a reinstall list holds the rest (\`winget export\` and \`import\`, Node through nvm, \`wsl --export\` and \`--import\`, and each login, which the harness never enters).
-1. Run \`js-harness backup ready\`. Clear each \`missing:\` line (push, commit, \`js-harness backup run\`) until it says yes, or say why that item stays.
+1. Run \`js-harness backup ready\`. Clear each \`missing:\` line (push, commit, \`js-harness backup run\`) until it says yes, or say why that item stays; it covers the readable copy of Engram too (\`RECENT.md\`), which a session reads while Engram is restored.
 2. Recall your private checklist of the machine: it names other projects, so it lives in your memory, never in the repository.
 3. Resolve each item with the user one at a time, through the question tool.
 4. Pause every session at a safe point, then tell the user in capitals that they can restart.
@@ -363,6 +378,18 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => backupHookEntry(),
   },
+  {
+    id: 'claude-fallback-hook',
+    target: (home) => path.join(home, '.claude', 'settings.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => fallbackHookEntry(),
+  },
+  {
+    id: 'codex-fallback-hook',
+    target: (home) => path.join(home, '.codex', 'hooks.json'),
+    pointer: ['hooks', 'SessionStart'],
+    entry: () => fallbackHookEntry(),
+  },
 ];
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
@@ -501,6 +528,20 @@ export const BACKUP_HOOK_COMMAND = 'js-harness backup --hook || exit 0';
 function backupHookEntry() {
   return {
     hooks: [{ type: 'command', command: BACKUP_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The command of the memory fallback's notice, guarded to exit 0 like the backup's: an older js-harness answers 2. */
+export const FALLBACK_HOOK_COMMAND = 'js-harness backup --session-start || exit 0';
+
+/** `backup --session-start` (bin/backup.mjs) registered as a `SessionStart` hook in both hosts, for every start: after a
+ * compaction the notice is needed most. When Engram holds less than nine tenths of what the last backup held of the
+ * session's project, it sends the session to that project's readable file (odd/tasks/recent-memory.md, D7). An entry
+ * of its own, since doctor's hook prints `systemMessage` only. Five seconds: `engram stats` gets three. */
+function fallbackHookEntry() {
+  return {
+    matcher: 'startup|resume|clear|compact',
+    hooks: [{ type: 'command', command: FALLBACK_HOOK_COMMAND, timeout: 5 }],
   };
 }
 

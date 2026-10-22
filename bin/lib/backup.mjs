@@ -239,6 +239,23 @@ export function defaultRun(cmd, args, options = {}) {
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? String(result.error ?? '') };
 }
 
+/** A project is checked on its own only from this many observations: under it a cleanup and a wipe look alike. */
+export const PROJECT_GUARD_MIN = 20;
+
+/** The projects of `before` that held at least `PROJECT_GUARD_MIN` observations and keep less than nine tenths of them in
+ * `after`, with both counts: under scope `all` a whole project can be wiped while the totals lose less than a tenth. */
+export function shrunkProjects(before, after) {
+  const tally = (data) => {
+    const counts = new Map();
+    for (const o of Array.isArray(data?.observations) ? data.observations : []) counts.set(o.project, (counts.get(o.project) ?? 0) + 1);
+    return counts;
+  };
+  const now = tally(after);
+  return [...tally(before)]
+    .filter(([project, held]) => held >= PROJECT_GUARD_MIN && (now.get(project) ?? 0) < held * (1 - SHRINK_LIMIT))
+    .map(([project, held]) => ({ project, before: held, after: now.get(project) ?? 0 }));
+}
+
 /** An export's text with its `exported_at` left out, so two exports of the same memory compare equal. */
 function withoutTime(data) {
   const { exported_at: _time, ...rest } = data;
@@ -270,13 +287,18 @@ export function exportEngram({ dest, run = defaultRun, allowShrink = false, scop
     const counts = exportCounts(data);
     const previous = readJson(target);
     if (previous && !allowShrink) {
+      // --allow-shrink after a wipe would write the wiped memory over the good copy, so the way out named first is the
+      // restore (odd/tasks/recent-memory.md, D6).
+      const way = `if Engram was wiped, restore it first (js-harness backup restore --from "${dest}" --merge); --allow-shrink only when the drop is meant`;
       const before = exportCounts(previous);
       const lost = COUNTED.find((key) => counts[key] < before[key] * (1 - SHRINK_LIMIT));
       if (lost) {
-        throw new Error(
-          `the export holds ${counts[lost]} ${lost}, the last backup ${before[lost]}: refused, because a wiped ` +
-            'Engram looks like this (run with --allow-shrink if the drop is meant)',
-        );
+        throw new Error(`the export holds ${counts[lost]} ${lost}, the last backup ${before[lost]}: refused, because a wiped Engram looks like this (${way})`);
+      }
+      const projects = shrunkProjects(previous, data);
+      if (projects.length) {
+        // The names stay out of the message, which a session may paste in public; last.json keeps them.
+        throw Object.assign(new Error(`${projects.length} project lost more than a tenth of its observations since the last backup: refused, because a wiped project looks like this (${way})`), { projects });
       }
     }
     if (previous && withoutTime(previous) === withoutTime(data)) return { counts, changed: false, kinds: scan.kinds };
