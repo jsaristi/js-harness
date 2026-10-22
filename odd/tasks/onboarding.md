@@ -1428,3 +1428,22 @@ ceiling.
   approved and acknowledged, two suggestions, both taken in `1bfaeabc`; gentle-ai on `1bfaeabc`: assessed medium,
   not due (under budget).
 - Codex: `b63a520..1bfaeab` correct (0.96), recorded.
+- L45 (2026-10-22) JH 43's finding 11 (findings file, item 11). A small static site could not plan
+  `A:answer-engines`, which its owner asked for ("SEO, GEO y AEO", its L9): a small set keeps the core areas only,
+  and stage 2 refused any other area pasted under `## Advice`. Question 44 asked the owner how such an area joins a
+  small set. He answered "Línea en Setup (Recommended)" at 2026-10-22T21:52:49Z, line 18526 of transcript
+  908805db-d0b9-4c2f-a9e6-f828b6bf1e41 (read with `sessions --quote`). Built in `bac069f4`:
+  - The new line is `- Areas: +<area> (L<n>)` under `## Setup`, entries joined by commas.
+  - It is read by `profile --checklist advice` (the document's Kind only) and by the stage-2 expected set.
+  - Only the kind's areas are accepted, each entry with the Log line of the request; the bar keeps the size's targets.
+  - RED was parseAreas, the profile command and the stage-2 check; GREEN 75 tests.
+- L46 (`78927745`): gentle-ai's findings on `bac069f4`, taken. `sized()` takes the added areas, so advice and bar
+  share the size rule, and `addedAreas()` is the one reader of the line. `--checklist bar` no longer reads it, and
+  the unknown-area error names the line. Not taken: an Areas line is checked only once Kind resolves, since the
+  kind's areas are what it is checked against.
+- gentle-ai on `bac069f4` (`9cb4eb28..bac069f4`, readability and reliability, lineage review-8d63d0cca0f69e79):
+  approved and acknowledged, three warnings and three suggestions, taken in `78927745` as L46 says.
+- gentle-ai on `78927745` (`bac069f4..78927745`): assessed medium, not due (under budget).
+- Codex: `9cb4eb2..7892774` correct (0.89), recorded.
+- For JH 43's visa site, write `- Areas: +answer-engines (L9)` under `## Setup`, then paste again what
+  `js-harness onboard profile --checklist advice` prints, and add `A:answer-engines` to Level.

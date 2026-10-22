@@ -267,7 +267,8 @@ every turn: with no argument the kinds of project it knows; with a kind (or two,
 comma) its default, why, and its areas and bar; `--area <id>` one area, explained for each level
 of experience, with its pitfalls, each kind's advice and its sourced targets; `--checklist
 advice|bar` the lines the onboarding pastes. With no kind it reads `Kind` and `Size` from the
-onboarding document's `## Setup`; a small project keeps the core areas only.
+onboarding document's `## Setup`; a small project keeps the core areas only, plus each area the
+owner asked for on its `- Areas: +<area> (L<n>)` line, such as `- Areas: +answer-engines (L9)`.
 
 ```console
 $ js-harness onboard profile platform --checklist advice --size small

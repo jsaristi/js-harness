@@ -383,6 +383,28 @@ test('profile with no kind reads Kind and Size from the onboarding\'s ## Setup',
   });
 });
 
+test('profile --checklist adds the areas of the document\'s - Areas: line to its Kind and Size', async (t) => {
+  const root = project(t, { [ONBOARDING_PATH]: SETUP('- Kind: static-site (L3)', '- Size: small (L3)', '- Areas: +answer-engines (L9)') });
+  const site = advisedProfile(['static-site']);
+  const out = checklistLines(site, 'advice', 'small', ['answer-engines']);
+  assert.ok(out.includes('- [ ] A:answer-engines Answer and generative engines (AEO, GEO)'), out.join('\n'));
+  assert.deepEqual(await onboard(root, 'profile', '--checklist', 'advice'), { code: 0, out: out.join('\n'), err: '' });
+  assert.deepEqual(await onboard(root, 'profile', '--checklist', 'bar'), { code: 0, out: checklistLines(site, 'bar', 'small').join('\n'), err: '' });
+  // A kind named on the command line is another profile: the document's Areas go with the document's Kind.
+  assert.deepEqual(await onboard(root, 'profile', 'platform', '--checklist', 'advice'), {
+    code: 0, out: checklistLines(advisedProfile(['platform']), 'advice', 'small').join('\n'), err: '',
+  });
+  const bad = (areas) => project(t, { [ONBOARDING_PATH]: SETUP('- Kind: static-site', '- Size: small (L3)', `- Areas: ${areas}`) });
+  assert.deepEqual(await onboard(bad('answer-engines'), 'profile', '--checklist', 'advice'), {
+    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas is "answer-engines": write +<area> (L<n>), one per area the owner asked for, joined by commas`,
+  });
+  assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'advice'), {
+    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas names A:auth, which is not an area of static-site; js-harness onboard profile static-site lists its areas`,
+  });
+  // The bar does not read Areas, so a bad line there does not stop it.
+  assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'bar'), { code: 0, out: checklistLines(site, 'bar', 'small').join('\n'), err: '' });
+});
+
 test('profile names what is missing when it cannot tell the kind, the size or the area, exit 2', async (t) => {
   const bare = project(t);
   const cases = [
