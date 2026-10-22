@@ -100,7 +100,7 @@ Codex: the resume hook already returns `additionalContext` on Codex's SessionSta
 - [x] T3 (build) the per-project guard and the refusal text (D6) — inline
 - [x] T4 (build) `runBackup` writes the files and the manifest's `recent`, rewrites RESTORE.md, `dueReason`; verify, ready, status, doctor (D5, D8) — inline
 - [x] T5 (build) `backup --session-start` and its two hook entries (D7) — inline
-- [ ] T6 (docs) the skill, RESTORE.md text, help, README, SPEC, guide, roadmap (D9) — inline
+- [x] T6 (docs) the skill, RESTORE.md text, help, README, SPEC, guide, roadmap (D9) — inline
 - [ ] T7 (verify) gate, gentle-ai, Codex, the real run, `backup verify`, `ready`, Codex's notice, the probe (D8) — inline
 
 ## Log
@@ -111,9 +111,10 @@ Codex: the resume hook already returns `additionalContext` on Codex's SessionSta
 - L5 (2026-10-22) T4: RED observed for verify's `recent` line; then `newest` in the manifest's `recent` (for `status`), `recentInClone` (bin/lib/backup-restore.mjs) shared by `verify` and `ready`, the `note:` lines, `doctor` stale on no RECENT.md. One choice past the design: a clone with no RECENT.md at all (a backup made before this feature) is a `note` in `verify`, not a FAIL, since its export holds everything; `ready` still lists it as `missing`, since a run fixes it before a wipe. Those two lines were written with their code, not before it. `status` says `recent: <n> projects, newest entry <day>`.
 - L6 (2026-10-22) T4 in 4d8625ed (gentle-ai: medium, under_budget). Codex reviewed 314ce05..4d8625e (455k input tokens, from a detached worktree so T5 could be written beside it; the record is in the common git dir): three P2, all real and fixed in 39ab0e7c with their tests written first and seen failing: the restore path quoted in the refusal and the notice (a home with a space), and file names kept distinct when a project is named like another's suffixed name (one project's memory overwrote another's). The same commit makes `readStats` read `defaultRun`'s shape, where a time-out is folded into stderr. The slice 03221112..39ab0e7c was under budget; it is reviewed on its own before T5 (lineage review-130f00580471f1ff, risk and reliability), because T5 is high risk.
 - L7 (2026-10-22) T5: RED seen for `backup --session-start` and the two entries, then built. Risk: item 5 (install writes a SessionStart entry into both hosts' hook files), so it is its own commit and its own review. `recent` also goes into last.json's `lastSuccess`, so the notice knows the files when the clone is gone. The practice fixtures and the manifest's order tests now hold the entry last in SessionStart on both hosts; docs/SPEC.md gained the capability "The memory is readable when Engram fails", needed by the gate's spec row.
+- L8 (2026-10-22) The slice 03221112..39ab0e7c: gentle-ai approved and acknowledged (lineage review-130f00580471f1ff). T5 in 26a7a0e2 (its first commit attempt failed on bin/clean-home.test.mjs, which lists the SessionStart entries a clean home runs: the new one ran, exited 0 and said nothing; the list was updated). T5 reviewed alone, escalated on item 5, lenses risk, resilience and reliability: approved and acknowledged (lineage review-17b9bb271e8b95b0). T6: the js-harness skill's description and its section "When Engram fails", the orchestrator skill's "Before a reinstall", README, GUIDE, the roadmap line; SPEC came with T5.
 
 ## Next step
 Resume on branch feat/recent-memory in D:\js-harness\.claude\worktrees\backup-ready-a4ce86. Done: T1, T2 (659c5538), T3 (c507b45f); T5's pure part written (bin/lib/backup-fallback.mjs, uncommitted). Next, in order:
-1. gentle-ai: the slice 03221112..39ab0e7c is being reviewed (L6); acknowledge it, then assess T5's commit with `--escalate-item 5` against 39ab0e7c and review it alone; then Codex on the commits after 4d8625e (`js-harness codex-review --base 2c1a257a` starts after the last record).
-2. T4 and T5: done (L5, L7).
-3. T6 docs (D9), T7 verify (real run, verify, ready, Codex notice once, the probe with its rubric written first; transcript to the side-session notes folder).
+1. gentle-ai: done through T5 (L8); assess T6's commit against 26a7a0e2. Codex on the commits after 4d8625e (`js-harness codex-review --base 2c1a257a` starts after the last record).
+2. T4, T5, T6: done (L5, L7, L8).
+3. Was T6 docs (D9), T7 verify (real run, verify, ready, Codex notice once, the probe with its rubric written first; transcript to the side-session notes folder).
