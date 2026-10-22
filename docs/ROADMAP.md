@@ -235,7 +235,7 @@ ways; Pregunta 19 chose "Los dos (Recommended)". A first copy was made by hand o
 - [x] `js-harness backup ready`: says before a wipe what still has no copy off the machine (`odd/tasks/backup-ready.md`)
 - [x] The small backup gaps: every stash entry, worktree edits, the `.git/js-harness` records, Desktop notes and presets, the plugin lists
 - [x] The reinstall protocol, "Before a reinstall" in the orchestrator skill (his words, 2026-10-21: "Deja lo que tenga que quedar como protocolo armado")
-- [ ] The readable fallback of Engram (Pregunta 45): `RECENT.md` and a file per project in the private repository, rebuilt at every run, and a session-start notice that sends a session to it when Engram lost its project (`odd/tasks/recent-memory.md`)
+- [x] The readable fallback of Engram (Pregunta 45): `RECENT.md` and a file per project in the private repository, rebuilt at every run, and a session-start notice that sends a session to it when Engram lost its project; built and proven by a session that answered from it with Engram off (`odd/tasks/recent-memory.md`)
 - [ ] A from-zero rehearsal in a Hyper-V VM, the proof (Windows Sandbox cannot run WSL2 or winget). Later, only if it shows the need: a per-project import (engram exports per project, but `engram import` has no filter) and pinning the reviewed stack versions
 
 ### Onboarding
