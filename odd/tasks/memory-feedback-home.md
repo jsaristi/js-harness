@@ -95,3 +95,5 @@ Deleting any memory note: one list, sent through the lead.
   (rule/question-context) waits behind it, one open at a time. So T1 goes out alone in the pull request of
   rule/memory-feedback-home, and T2, which declares rules of its own, runs on a new rule/ branch once the lead's has
   landed, from L7's plan.
+- L9 (2026-10-22) gentle-ai: 73f61b9f..3a5bd482 (the fix of L5's findings) assessed medium by the commit's gate,
+  review_due false (under_budget, 102 lines); no review due, none started. Codex covered it (L6).
