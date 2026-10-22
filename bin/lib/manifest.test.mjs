@@ -2745,6 +2745,16 @@ test('the orchestrator skill says how a lead is rotated: started and detached, n
   assert.ok(text.includes('- Before the user leaves, open the reserve sessions the stretch will need'));
 });
 
+// rule:question-context: on 2026-10-22 he answered a question by asking what it was for: he had taken an
+// onboarding question for the backup work. Every question now says first which work it serves.
+test('the orchestrator skill says every question opens with what it is for', () => {
+  const text = components[2].content('0.1.0');
+  for (const line of [
+    '- Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes.',
+    'record the question with `--kind question`, its `text` opening with what it is for',
+  ]) assert.ok(text.includes(line), line);
+});
+
 // odd/tasks/status-report.md, S6: on 2026-10-20 he asked how it was going and got two lines; the answer is a
 // report of everything since the last one, from the facts `report --mark` prints, in six sections.
 test('the orchestrator skill says how the lead answers how the work is going: report --mark, then six sections', () => {
