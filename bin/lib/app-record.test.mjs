@@ -55,6 +55,18 @@ test('appRoot keeps the old folder while it holds no marker, and with no LOCALAP
   assert.equal(lib.appRoot({ APPDATA: WIN_ENV.APPDATA }, 'win32', 'C:\\Users\\me', marked), ROOT);
 });
 
+test('appRoot follows no marker whose name is not a moved folder, nor one whose folder is gone', () => {
+  for (const name of ['.user-data-left...', '.user-data-left.claude_a.b', '.user-data-left.other']) {
+    const fs = fakeFs({ [nodePath.join(ROOT, name)]: '', [nodePath.join(MOVED, 'config.json')]: '{}' });
+    assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', fs), ROOT, name);
+  }
+  const both = fakeFs({ [nodePath.join(ROOT, '.user-data-left.x..y')]: '', [nodePath.join(ROOT, '.user-data-left.claude_abc123')]: '', [nodePath.join(MOVED, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', both), MOVED);
+  // A marker left behind once the moved folder is removed keeps the old folder, where the app writes again.
+  const stale = fakeFs({ [nodePath.join(ROOT, '.user-data-left.claude_abc123')]: '', [nodePath.join(ROOT, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', stale), ROOT);
+});
+
 test('appRoot takes the one Claude-Data folder when the old folder is gone, and the old path when there are several', () => {
   const one = fakeFs({ [nodePath.join(MOVED, 'config.json')]: '{}' });
   assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', one), MOVED);

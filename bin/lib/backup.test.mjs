@@ -378,7 +378,11 @@ test('desktopDir follows the marker Claude Desktop leaves in its old Windows fol
     fs.mkdirSync(old, { recursive: true });
     fs.mkdirSync(moved, { recursive: true });
     fs.writeFileSync(path.join(old, '.user-data-left.claude_abc123'), '');
+    assert.equal(desktopDir(home, env, 'win32'), old, 'an empty moved folder is not followed');
+    fs.writeFileSync(path.join(moved, 'config.json'), '{}');
     assert.equal(desktopDir(home, env, 'win32'), moved);
+    // With no LOCALAPPDATA, the home's AppData\Local is where the app moved to.
+    assert.equal(desktopDir(home, { APPDATA: env.APPDATA }, 'win32'), moved);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
