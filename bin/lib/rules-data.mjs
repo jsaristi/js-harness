@@ -229,6 +229,17 @@ export const RULES = [
     "unit": "days"
   },
   {
+    "id": "mistake-report",
+    "subject": "a mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "What stops it from happening again: a check before a line, a line before a protocol.",
+      "How it will be proven later that it has not come back"
+    ]
+  },
+  {
     "id": "person-present",
     "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
     "owner": "project",

@@ -286,6 +286,29 @@
     "kind": "design",
     "path": "odd/tasks/memory-hygiene.md"
   },
+  "mistake-report": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "tiendes a decirme que fue el error, pero necesito que me digas tambien como lo vas a solucionar actualmente y como vamos a hacer para que eso no vuelva a pasar y como se va a integrar",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 669
+      },
+      {
+        "quote": "y ademas de debe a futuro comprobar que esto no vuelva a fallar",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 1283
+      }
+    ],
+    "reading": "A report of a mistake says what it was, how it is being fixed now, what stops it from happening again, how that enters the harness, and how it will be proven later that it has not come back. The protocols skill's section on reporting a mistake carries it.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "person-present": {
     "kind": "design",
     "path": "odd/tasks/session-channel.md"
