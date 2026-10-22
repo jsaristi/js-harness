@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `0720d4ea3cb3`. In force: 43 (19 of Sebastián, 24 of the project). Retired: 0.
+Hash `f5076d97f202`. In force: 44 (19 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -136,7 +136,7 @@ How long each done-when command of a contract run may run, unless the run says o
 
 ### control-phrase-min
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
-- Read by: `bin/lib/failures.mjs`, `bin/lib/rules.mjs`.
+- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
 
 ### gate-log-command
@@ -158,6 +158,12 @@ How long a command run under the gate lock may run before it is stopped with eve
 How long a gate waits for its turn of the lock before it gives up, by default: 60 minutes. The flag `--wait` overrides it for one run.
 - Read by: `bin/js-harness.mjs`, `bin/lib/gate-lock.mjs`, `bin/lib/manifest.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/gate-lock.md`.
+
+### memory-feedback-home
+Where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise: a declared rule:<id>, or a phrase of AGENTS.md quoted on a line that names it.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/memory-feedback-guard.mjs`.
+- Since 2026-10-22. Row: reports. Source: design, `odd/tasks/memory-feedback-home.md`.
 
 ### memory-index-bytes
 The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.

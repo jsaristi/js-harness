@@ -162,6 +162,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "memory-feedback-home",
+    "subject": "where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise",
+    "owner": "project",
+    "scope": "repository",
+    "since": "2026-10-22",
+    "value": "a declared rule:<id>, or a phrase of AGENTS.md quoted on a line that names it"
+  },
+  {
     "id": "memory-index-bytes",
     "subject": "the bytes the memory index may hold before a memory hygiene pass is due",
     "owner": "project",

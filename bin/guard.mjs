@@ -23,7 +23,10 @@
 //     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
 //     every session, so that path loads nothing but that file: the modules of the other checks are imported only for
 //     the tools they check. Then, for a Markdown file, a line that stamps today's date with an hour ahead of the clock
-//     (bin/lib/document-hour-guard.mjs; odd/tasks/session-channel.md, T12b), imported only for a `.md` path.
+//     (bin/lib/document-hour-guard.mjs; odd/tasks/session-channel.md, T12b), imported only for a `.md` path. Before it,
+//     a note of a memory folder whose type is `feedback` that names no home of its rule in the repository, where the
+//     rule `memory-feedback-home` is declared (bin/lib/memory-feedback-guard.mjs, imported only for a memory note;
+//     odd/tasks/memory-feedback-home.md). `guard --memory <folder>` runs the same check over a whole folder.
 // `js-harness guard --stop` is the `Stop` hook (odd/tasks/honesty-audit.md, T16): a reply that states the session's own
 // context share more than 2 points from the share its transcript records (bin/lib/audit.mjs, `shareRefusal`). A reply
 // is not a tool call and is already shown when the hook runs, so it cannot be refused before it is sent: the hook
@@ -34,7 +37,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { memoryIndexRefusal } from './lib/memory-index-guard.mjs';
+import { memoryFileOf, memoryIndexRefusal, memoryNoteType, resultOf } from './lib/memory-index-guard.mjs';
 
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
@@ -44,9 +47,14 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
   + '  does, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
-  + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md) or a line in a Markdown\n'
+  + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md), that leaves a feedback note\n'
+  + '  of a memory folder naming no home of its rule in the repository (where the rules declare memory-feedback-home),\n'
+  + '  or that puts a line in a Markdown\n'
   + '  file that stamps today with an hour ahead of the clock; lets a git commit or merge wrapped in js-harness gate --\n'
   + '  run with a hint beside its result, since a plain one waits for its turn by itself; always exits 0\n'
+  + '       js-harness guard --memory <folder>\n'
+  + '  lists each feedback note of the memory folder that names no home of its rule in the repository, a declared\n'
+  + '  `rule:<id>` or a phrase of AGENTS.md quoted on a line that names it, and exits 1; exits 0 when every one does\n'
   + '       js-harness guard --stop\n'
   + '  reads a Stop payload on standard input; turns the stop back when the reply states this session\'s context share\n'
   + '  more than 2 points from the share its transcript records, so the session corrects it; always exits 0\n';
@@ -65,15 +73,29 @@ function gitRoot(cwd) {
   return result.status === 0 && top !== undefined ? path.resolve(top) : cwd;
 }
 
-/** The text of the project's rules file, or null when it has none. Any other failure throws. */
-function rulesTextOf(root, readFile) {
+/** The text of `file`, or null when there is none. Any other failure throws. */
+function optionalText(file, readFile) {
   try {
-    return readFile(path.join(root, 'bin', 'lib', 'rules-data.mjs'));
+    return readFile(file);
   } catch (err) {
     if (err.code === 'ENOENT') return null;
     throw err;
   }
 }
+
+/** The memory note the `Write` or `Edit` of `input` leaves, read from disk with `readNote` for an Edit, or null. */
+function noteLeft(tool, input, readNote) {
+  let before = null;
+  try {
+    before = readNote(input.file_path);
+  } catch {
+    // A new note, or one that cannot be read: the call's own text is judged.
+  }
+  return resultOf(tool, input, typeof before === 'string' ? before : null);
+}
+
+/** The text of the project's rules file, or null when it has none. Any other failure throws. */
+const rulesTextOf = (root, readFile) => optionalText(path.join(root, 'bin', 'lib', 'rules-data.mjs'), readFile);
 
 /** Why the call of `payload` is refused, or null. */
 async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env = {}, homedir = os.homedir }) {
@@ -82,6 +104,17 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (FILE_TOOLS.has(tool)) {
     const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
+    const note = memoryFileOf(input.file_path, claudeConfigDir);
+    const text = note !== null && note.toLowerCase() !== 'memory.md' ? noteLeft(tool, input, readIndex) : null;
+    // Only a feedback note loads its module and reads the project (odd/tasks/memory-feedback-home.md, S2).
+    if (typeof text === 'string' && memoryNoteType(text) === 'feedback') {
+      const root = projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
+      const feedback = (await import('./lib/memory-feedback-guard.mjs')).feedbackNoteRefusal(note, text, {
+        rulesText: rulesTextOf(root, readFile),
+        agentsText: () => optionalText(path.join(root, 'AGENTS.md'), readFile),
+      });
+      if (feedback !== null) return feedback;
+    }
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
   const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
@@ -161,6 +194,47 @@ async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoo
   return shareRefusal(given ?? recorded.text, recorded);
 }
 
+/** `guard --memory <folder>`: each feedback note of the memory folder `folder` that names no home of its rule, one line
+ * each, and exit 1; exit 0 when every one names its home, or when the project in the working directory does not
+ * declare `rule:memory-feedback-home`. A folder that cannot be read exits 1 (odd/tasks/memory-feedback-home.md, S3). */
+async function memoryForm(folder, { projectRoot, readFile, stdout, stderr }) {
+  const { homeRuleValue, noteRefusal } = await import('./lib/memory-feedback-guard.mjs');
+  const root = projectRoot(process.cwd());
+  const value = homeRuleValue(rulesTextOf(root, readFile));
+  if (value === null) {
+    stdout('rule memory-feedback-home is not in force in this project: nothing checked\n');
+    return 0;
+  }
+  let names;
+  try {
+    names = fs.readdirSync(folder).filter((name) => /\.md$/i.test(name) && name.toLowerCase() !== 'memory.md').sort();
+  } catch (err) {
+    stderr(`js-harness guard: cannot read the memory folder ${folder}: ${err.message}\n`);
+    return 1;
+  }
+  const agents = optionalText(path.join(root, 'AGENTS.md'), readFile);
+  let feedback = 0;
+  let homeless = 0;
+  for (const name of names) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(folder, name), 'utf8');
+    } catch (err) {
+      // A note that cannot be read may be a feedback note: it counts as one with no home known.
+      homeless += 1;
+      stdout(`${name}: cannot be read (${err.code ?? err.message}), so its home is not known\n`);
+      continue;
+    }
+    if (memoryNoteType(text) !== 'feedback') continue;
+    feedback += 1;
+    if (noteRefusal(name, text, agents, value) === null) continue;
+    homeless += 1;
+    stdout(`${name}: a feedback note that names no home of its rule in the repository\n`);
+  }
+  if (homeless === 0) stdout(`every feedback note names its home (${feedback} feedback notes)\n`);
+  return homeless === 0 ? 0 : 1;
+}
+
 export async function guardMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
   now = () => new Date(),
@@ -177,6 +251,7 @@ export async function guardMain(argv, {
   homedir = os.homedir,
   exists = fs.existsSync,
 } = {}) {
+  if (argv[0] === '--memory' && argv.length === 2) return memoryForm(argv[1], { projectRoot, readFile, stdout, stderr });
   if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
     stderr(USAGE);
     return 2;
