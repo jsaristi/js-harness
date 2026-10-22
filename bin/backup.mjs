@@ -391,7 +391,7 @@ function record(paths, now, outcome) {
   const last = readJson(paths.last) ?? {};
   const at = new Date(now).toISOString();
   const next = { ...last, lastRun: at };
-  if (outcome.error) next.lastFailure = { at, error: outcome.error };
+  if (outcome.error) next.lastFailure = { at, error: outcome.error, ...(outcome.projects ? { projects: outcome.projects } : {}) };
   else next.lastSuccess = { at, ...outcome };
   writeJson(paths.last, next);
   return next;
@@ -418,7 +418,8 @@ function runCommand(args, deps) {
     }
     return 0;
   } catch (error) {
-    record(paths, deps.now(), { error: error.message });
+    // A wiped project's name stays in last.json, under the home, never in the printed line.
+    record(paths, deps.now(), { error: error.message, projects: error.projects });
     deps.stderr.write(`backup: ${error.message}\n`);
     return 1;
   } finally {

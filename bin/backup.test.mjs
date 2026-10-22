@@ -227,6 +227,21 @@ test('backup run rebuilds RECENT.md and a file per project from the export it ac
   assert.equal(fs.readFileSync(path.join(paths.clone, 'recent', 'js-harness.md'), 'utf8'), before);
 });
 
+test('a wipe of one project keeps its file and its export, and last.json names it', async (t) => {
+  const many = (project, n) => Array.from({ length: n }, (_, i) => ({ id: `${project}-${i}`, sync_id: `obs-${project}-${i}`, type: 'decision', title: `${project} ${i}`, content: 'c', project, updated_at: '2026-10-20 10:00:00' }));
+  const { paths, deps, state } = setup(t, { engram: { ...EXPORT, observations: [...many('big', 400), ...many('client', 30)] } });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const kept = fs.readFileSync(path.join(paths.clone, 'recent', 'client.md'), 'utf8');
+
+  state.engram = { ...EXPORT, observations: many('big', 400) };
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 1);
+  assert.match(deps.stderr.text, /1 project lost more than a tenth/);
+  assert.doesNotMatch(deps.stderr.text, /client/);
+  assert.equal(fs.readFileSync(path.join(paths.clone, 'recent', 'client.md'), 'utf8'), kept);
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.last, 'utf8')).lastFailure.projects, [{ project: 'client', before: 30, after: 0 }]);
+});
+
 test('backup run pushes nothing while the repository does not read PRIVATE, and records why', async (t) => {
   for (const visibility of ['PUBLIC', null]) {
     const { bare, paths, deps } = setup(t, { visibility });
