@@ -17,7 +17,9 @@
 //   findings it checked (`recheckOf`); its run line counts what it found (`recheck`).
 // - A second recheck of the same findings is refused before anything runs: from the head of a recheck that
 //   left one open, and from the head of a review whose findings were already rechecked (`--again` included).
-//   What is still open becomes a follow-up task, and the range is recorded as a skip (`secondRecheckRefused`).
+//   What is still open becomes a follow-up task (`secondRecheckRefused`). A range whose every code commit
+//   has a record is then recorded as a skip; one that holds code no record covers is reviewed from the
+//   nearest commit behind it that starts a review, with `--again`, so that no skip leaves new code unread.
 //
 // Its limit: new code committed in the same range as a correction is read as a follow-up, not reviewed;
 // only a blocking finding stops it. A session that wants new work reviewed in full commits the correction
@@ -37,6 +39,9 @@ export const BLOCKS = '[blocks]';
 
 /** How many commits behind the start of a range are looked through for the review its findings ended at. */
 export const RECHECK_LOOK_BACK = 500;
+
+/** How many commits behind a refused range are tried for one a run with `--again` reviews as any other. */
+export const REVIEW_FROM_LOOK_BACK = 20;
 
 /** The answer a run line kept: its `answer` (every reviewed line since the recheck), or else the
  * `kept.review` of a part of a range reviewed in parts, which kept its answer before `answer` existed.
@@ -231,14 +236,30 @@ export function classifyRecheck(review, prior) {
   };
 }
 
-/** The refusal of a second recheck of the findings of the review that ended at `of`. */
-export function secondRecheckRefused({ of, open, base }) {
+/** The refusal of a second recheck of the findings of the review that ended at `of`, of the range from
+ * `base`. `uncovered` is the short ids of its code commits no Codex review record covers, or `null` when the
+ * records could not be read against it; `reviewFrom` the nearest commit behind `base` a review as any other
+ * starts at, or `null`.
+ *
+ * Only a range whose every code commit has a record is offered the skip. One that holds code no review read
+ * is offered the review that reads it: a skip is for when Codex cannot run (AGENTS.md), and on 2026-10-19 a
+ * session that followed the skip this refusal offered left a new commit no review had read. */
+export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null }) {
   const first = open === null ? 'the counts of the first were not kept' : open === 0 ? 'the first found every one fixed' : `the first left ${open === 1 ? '1 finding' : `${open} findings`} not fixed or blocking`;
-  return (
-    `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n` +
-    'Record a follow-up task for what is still open in the feature document, then record this range as a skip: ' +
-    `\`codex-review --base ${base} --unavailable "second recheck refused: <task>"\`.`
-  );
+  const refused = `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
+  const task = 'Record a follow-up task for what is still open in the feature document';
+  if (Array.isArray(uncovered) && uncovered.length === 0) {
+    return `${refused}${task}, then record this range as a skip: \`codex-review --base ${base} --unavailable "second recheck refused: <task>"\`.`;
+  }
+  const held =
+    uncovered === null
+      ? 'This range may hold code commits no Codex review record covers (the records could not be read against it)'
+      : `This range holds ${uncovered.length === 1 ? '1 code commit' : `${uncovered.length} code commits`} no Codex review record covers (${uncovered.join(', ')})`;
+  const review =
+    reviewFrom === null
+      ? 'no commit behind it starts a review rather than a recheck, so there is no command to name: ask the user how they are reviewed.'
+      : `review them from the nearest commit behind it that starts a review rather than a recheck, which reads again what a record covers after it: \`codex-review --base ${reviewFrom} --again\`.`;
+  return `${refused}${held}, and a skip would leave them unread. ${task}, then ${review}`;
 }
 
 /** The refusal of a recheck that would be reviewed in more than one part. */
