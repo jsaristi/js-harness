@@ -560,6 +560,53 @@
       "by": "session"
     }
   },
+  "rules-live-in-the-harness": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "todo lo que estamos implementando es para el harnes y estamos haciendo doogfooding",
+        "date": "2026-10-07",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 7178
+      },
+      {
+        "quote": "todo lo que queda en memoria se olvida, siempre pero SIEMPRe y ten en cuenta esta directiva, TODO debe quedar guardado y cementado en el harness osea en la documentacion pero tambien en los archivos donde debe ir para que el harness funcione bien aqui y en cualquier otra parte que se instale",
+        "date": "2026-10-08",
+        "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
+        "line": 555
+      },
+      {
+        "quote": "Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
+        "date": "2026-10-09",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 11284
+      },
+      {
+        "quote": "la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones",
+        "date": "2026-10-09",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 11284
+      },
+      {
+        "quote": "Me gusta lo que estas haciendo de medir todo, sobre todo ahora, ver y analizar problemas o cosas a mejorar con todo hasta en esta misma sesion y las otras sesiones y la comunicaciones todo para que mejoremos el harness",
+        "date": "2026-10-10",
+        "session": "4a8db1c5-ba2e-4c72-86b0-1a75ff29bee5",
+        "line": 1315
+      },
+      {
+        "quote": "este harnes tiene prohibido que utilicemos Claude.md solo Agents.md",
+        "date": "2026-10-15",
+        "session": "987548fe-5062-4dd4-9b92-7a246494198f",
+        "line": 1270
+      }
+    ],
+    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness; and the harness never uses CLAUDE.md, only AGENTS.md (odd/tasks/memory-hygiene.md). The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "sensor-silence": {
     "kind": "design",
     "path": "odd/tasks/first-version.md"
