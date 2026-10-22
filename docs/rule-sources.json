@@ -138,6 +138,23 @@
     "kind": "design",
     "path": "odd/tasks/session-channel.md"
   },
+  "question-context": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Estas preguntas son para el trabajo que estamos haciendo o para el backup? me puedes explicar por favor por que te he estado respondiendo negativamente o no respondiendo es por que me confundo para que es esta informacion, pense que estabamos haciendo lo del backup. Siempre que me hagas un pregunta Dime para que es para yo tener contexto de que responder y poder responder bien, ademas metelo al protocolo del harnes como creas que debe ir",
+        "date": "2026-10-22",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 18198
+      }
+    ],
+    "reading": "He took Pregunta 44, an onboarding question from the static-site trial, for the backup work and answered it by asking what it was for. Every question now opens by naming the work it serves (the project, feature or session, by the name he knows) and what its answer changes. \"Metelo al protocolo del harnes como creas que debe ir\" puts it in the orchestrator skill's \"Questions to the user\", and in the work session's line that records a question, since the session writes the question's text.",
+    "accepted": "Not put to him as a reading: written by the lead right after his message, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "questions-one-place": {
     "kind": "words",
     "quotes": [

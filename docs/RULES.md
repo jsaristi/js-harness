@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `f5076d97f202`. In force: 44 (19 of Sebastián, 25 of the project). Retired: 0.
+Hash `22989f29e2b1`. In force: 45 (20 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -35,6 +35,11 @@ A design before it is built, and what reaches the user to decide, passes two rea
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
 - Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+
+### question-context
+Every question to the user opens with what it is for: the work it serves and what its answer changes: "- Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-22, checked by the command on 2026-10-22.
 
 ### questions-one-place
 Every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
