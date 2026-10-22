@@ -53,7 +53,7 @@ Deleting any memory note: one list, sent through the lead.
 - [x] T1 (kind: build) S2: the guard, test first; the rule memory-feedback-home declared with `js-harness rules change` (73f61b9f, fix 3a5bd482)
 - [x] T2 (kind: build) S3: the move pass over the feedback notes (259dec8b..b0aa1e41, one commit a rule; memory pass 20261022T233738619Z)
 - [x] T3 (kind: docs) S4: help text, README/GUIDE, roadmap (help and README with T1; roadmap F4 item ticked with T2)
-- [ ] T4 (kind: verify) S4: gentle-ai review and Codex review of the slice
+- [x] T4 (kind: verify) S4: gentle-ai review and Codex review of the slice (T1: L5, L6; T2: L12)
 
 ## Moved out of memory
 T2 shrank each feedback note of the memory folder that holds a rule of his to a pointer: the rules declared by this
@@ -159,3 +159,6 @@ he did not type; his exact words are in the rule sources):
   --memory` run from main fails: it should land promptly. Deletion candidates for the lead: the six retyped lessons
   (one-sample-is-not-a-diagnosis, conflict-merge-costs-review, no-unread-flag-on-a-writing-command,
   proof-is-a-condition, hours-are-read-not-guessed, heredoc-eats-backslashes). Next: T4.
+- L12 (2026-10-22) gentle-ai: b7eb9349..0ef3e980 (the twelve rule commits 259dec8b..b0aa1e41 and the document commits)
+  assessed medium, review_due false (under_budget); no review due, none started. Codex on 1aafa5c..0ef3e98, 2 parts:
+  "the patch is correct" (0.93 and 0.87), no findings, 197,246 input tokens; recorded. T4 done.
