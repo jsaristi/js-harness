@@ -25,7 +25,8 @@ const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
 
 /** Each project's file in the clone (D1): the name in lower case with every character outside `[a-z0-9_-]` a `-`, so
  * no name reaches another folder; a Windows reserved name gains `-project`; names two projects would share each gain
- * the first 8 hex digits of their project's sha256. A `Map` of project to clone-relative path. */
+ * the first 8 hex digits of their project's sha256, more where that name is still another project's. A `Map` of
+ * project to clone-relative path. */
 export function recentFiles(projects) {
   const base = (project) => {
     const name = String(project).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
@@ -33,8 +34,20 @@ export function recentFiles(projects) {
   };
   const taken = new Map();
   for (const project of projects) taken.set(base(project), (taken.get(base(project)) ?? 0) + 1);
-  const hash = (project) => createHash('sha256').update(String(project)).digest('hex').slice(0, 8);
-  return new Map(projects.map((p) => [p, `recent/${base(p)}${taken.get(base(p)) > 1 ? `-${hash(p)}` : ''}.md`]));
+  // The names no other project shares first, so a project named like another's suffixed name keeps its own (Codex).
+  const used = new Set(projects.filter((p) => taken.get(base(p)) === 1).map(base));
+  const hash = (project) => createHash('sha256').update(String(project)).digest('hex');
+  const named = new Map();
+  for (const p of projects) {
+    if (taken.get(base(p)) === 1) {
+      named.set(p, `recent/${base(p)}.md`);
+      continue;
+    }
+    const name = [8, 16, 64].map((digits) => `${base(p)}-${hash(p).slice(0, digits)}`).find((candidate) => !used.has(candidate));
+    used.add(name);
+    named.set(p, `recent/${name}.md`);
+  }
+  return named;
 }
 
 /** What a project's file holds (D3, D4): `entries`, at most `RECENT_LIMIT` important observations by weight, newest

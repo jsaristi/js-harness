@@ -284,7 +284,7 @@ export function exportEngram({ dest, run = defaultRun, allowShrink = false, scop
     if (previous && !allowShrink) {
       // --allow-shrink after a wipe would write the wiped memory over the good copy, so the way out named first is the
       // restore (odd/tasks/recent-memory.md, D6).
-      const way = `if Engram was wiped, restore it first (js-harness backup restore --from ${dest} --merge); --allow-shrink only when the drop is meant`;
+      const way = `if Engram was wiped, restore it first (js-harness backup restore --from "${dest}" --merge); --allow-shrink only when the drop is meant`;
       const before = exportCounts(previous);
       const lost = COUNTED.find((key) => counts[key] < before[key] * (1 - SHRINK_LIMIT));
       if (lost) {

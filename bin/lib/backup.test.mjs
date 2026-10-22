@@ -281,6 +281,8 @@ test('the refusal of a total drop says to restore first, never to force it', (t)
   const dest = scratch(t);
   write(path.join(dest, 'engram', 'export.json'), JSON.stringify({ ...EXPORT, sessions: Array.from({ length: 20 }, (_, i) => ({ id: i })) }));
   assert.throws(() => exportEngram({ dest, run: exporting(EXPORT) }), /restore it first \(js-harness backup restore --from .+ --merge\); --allow-shrink only when the drop is meant/);
+  // One argument even where the home has a space (Codex).
+  assert.throws(() => exportEngram({ dest, run: exporting(EXPORT) }), (error) => error.message.includes(`--from "${dest}" --merge`));
 });
 
 test('exportEngram leaves the file untouched when only exported_at changed', (t) => {

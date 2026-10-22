@@ -35,10 +35,13 @@ export function projectOf({ env, cwd, main, config, origin, recent }) {
 }
 
 /** What an `engram stats --project <p>` run says: `ok` with its observations, `unknown` for a project Engram does not
- * hold, `timeout`, or `failed` with the reason. */
+ * hold, `timeout`, or `failed` with the reason. Takes spawnSync's result, or `defaultRun`'s, which folds the error into
+ * stderr and leaves the status null. */
 export function readStats(result) {
-  if (result?.error?.code === 'ETIMEDOUT') return { state: 'timeout' };
-  if (result?.error) return { state: 'failed', reason: `engram could not be run (${result.error.code ?? result.error.message})` };
+  const folded = result?.status === null ? /spawnSync \S+ (E[A-Z]+)/.exec(result?.stderr ?? '')?.[1] : undefined;
+  const error = result?.error ?? (folded ? { code: folded } : null);
+  if (error?.code === 'ETIMEDOUT') return { state: 'timeout' };
+  if (error) return { state: 'failed', reason: `engram could not be run (${error.code ?? error.message})` };
   const text = `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`;
   if (/unknown project/i.test(text)) return { state: 'unknown' };
   const observations = /^\s*Observations:\s+(\d+)/m.exec(result?.stdout ?? '')?.[1];
@@ -70,7 +73,7 @@ export function fallbackNotice({ entry, stats, clone, cloneExists, repo }) {
     `js-harness: ${reason} (memory fallback, odd/tasks/recent-memory.md).`,
     'The Engram protocol shown at this start is not working for this project. Until Engram is back, the readable fallback is the memory:',
     read,
-    `To bring Engram back: \`js-harness backup restore --from ${from} --merge\` (it adds only what Engram lacks); never \`js-harness backup run --allow-shrink\` before that, which would replace the good copy with the wiped memory.`,
+    `To bring Engram back: \`js-harness backup restore --from "${from}" --merge\` (it adds only what Engram lacks); never \`js-harness backup run --allow-shrink\` before that, which would replace the good copy with the wiped memory.`,
     'Say so to the user before work that depends on past decisions.',
   ].join('\n');
 }

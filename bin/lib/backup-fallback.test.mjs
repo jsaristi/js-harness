@@ -33,6 +33,9 @@ test('readStats reads the observations, an unknown project, a time-out and a fai
   assert.deepEqual(readStats({ status: null, error: { code: 'ETIMEDOUT' }, stdout: '', stderr: '' }), { state: 'timeout' });
   assert.deepEqual(readStats({ status: null, error: { code: 'ENOENT' }, stdout: '', stderr: '' }), { state: 'failed', reason: 'engram could not be run (ENOENT)' });
   assert.deepEqual(readStats({ status: 2, stdout: '', stderr: 'database is locked\n' }), { state: 'failed', reason: 'database is locked' });
+  // `defaultRun` folds spawnSync's error into stderr and leaves the status null.
+  assert.deepEqual(readStats({ status: null, stdout: '', stderr: 'Error: spawnSync engram ETIMEDOUT' }), { state: 'timeout' });
+  assert.deepEqual(readStats({ status: null, stdout: '', stderr: 'Error: spawnSync engram ENOENT' }), { state: 'failed', reason: 'engram could not be run (ENOENT)' });
 });
 
 const notice = (stats, fields = {}) => fallbackNotice({ entry: RECENT[0], stats, clone: 'C:\\Users\\me\\.js-harness\\memory-backup\\repo', cloneExists: true, repo: 'me/memory', ...fields });
@@ -54,7 +57,7 @@ test('a wiped, emptied, silent or failing Engram gets the file, its head, the or
     assert.match(text, reason);
     assert.match(text, /C:\\Users\\me\\\.js-harness\\memory-backup\\repo\\recent\\js-harness\.md/);
     assert.match(text, /lines 1-120/);
-    assert.match(text, /js-harness backup restore --from C:\\Users\\me\\\.js-harness\\memory-backup\\repo --merge/);
+    assert.match(text, /js-harness backup restore --from "C:\\Users\\me\\\.js-harness\\memory-backup\\repo" --merge/);
     assert.match(text, /never `js-harness backup run --allow-shrink`/);
     assert.match(text, /the Engram protocol shown at this start is not working for this project/i);
     assert.doesNotMatch(text, /client/);
@@ -64,5 +67,10 @@ test('a wiped, emptied, silent or failing Engram gets the file, its head, the or
 test('with the clone gone, the notice reads the file from the private repository', () => {
   const text = notice({ state: 'unknown' }, { cloneExists: false });
   assert.match(text, /gh api -H "Accept: application\/vnd\.github\.raw" repos\/me\/memory\/contents\/recent\/js-harness\.md/);
-  assert.match(text, /js-harness backup restore --from https:\/\/github\.com\/me\/memory\.git --merge/);
+  assert.match(text, /js-harness backup restore --from "https:\/\/github\.com\/me\/memory\.git" --merge/);
+});
+
+test('a home with a space keeps the restore command one argument (Codex)', () => {
+  const text = notice({ state: 'unknown' }, { clone: 'C:\\Users\\First Last\\.js-harness\\memory-backup\\repo' });
+  assert.ok(text.includes('js-harness backup restore --from "C:\\Users\\First Last\\.js-harness\\memory-backup\\repo" --merge'), text);
 });

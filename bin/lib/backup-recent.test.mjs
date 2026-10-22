@@ -199,6 +199,12 @@ test('file names are safe, lower case, never a Windows reserved name, and never 
   assert.match(files.get('My-App'), /^recent\/my-app-[0-9a-f]{8}\.md$/);
   assert.match(files.get('my app'), /^recent\/my-app-[0-9a-f]{8}\.md$/);
   assert.notEqual(files.get('My-App'), files.get('my app'));
+  // A project already named as another's suffixed name (Codex): every final name is distinct, in any order.
+  for (const projects of [['My-App', 'my app', 'my-app-8c91cc8c'], ['my-app-8c91cc8c', 'my app', 'My-App']]) {
+    const named = recentFiles(projects);
+    assert.equal(new Set(named.values()).size, 3, [...named.values()].join(', '));
+    assert.equal(named.get('my-app-8c91cc8c'), 'recent/my-app-8c91cc8c.md');
+  }
 });
 
 test('compareRecent: equal files, a changed or missing one of this format, and one of another format', () => {
