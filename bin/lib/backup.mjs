@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { windowsFolder } from './app-record.mjs';
 
 export const REDACTED = '<redacted>';
 
@@ -115,9 +116,13 @@ function trees(home, scope, desktop) {
  * leave for each other and the session presets. The rest of it is caches, logs and login state. */
 const DESKTOP_FILES = ['side-session-notes', 'ccd-session-presets.json'];
 
-/** Claude Desktop's folder: `%APPDATA%\Claude` on Windows, as Electron places it on the other systems. */
+/** Claude Desktop's folder: on Windows `%APPDATA%\Claude`, or where the app moved it from there (`windowsFolder`),
+ * as Electron places it on the other systems. */
 export function desktopDir(home, env = {}, platform = process.platform) {
-  if (platform === 'win32') return path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Claude');
+  if (platform === 'win32') {
+    const old = path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Claude');
+    return windowsFolder(old, env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'));
+  }
   if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Claude');
   return path.join(env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Claude');
 }

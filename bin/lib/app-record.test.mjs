@@ -38,6 +38,42 @@ test('appRoot is the Application Support folder on macOS, and the .config folder
   assert.equal(lib.appRoot({}, 'darwin', ''), null);
 });
 
+// Claude Desktop moved its folder to %LOCALAPPDATA%\Claude-Data\claude_<id> and left only a marker file in the old one.
+const LOCAL = nodePath.join('C:', 'Users', 'me', 'AppData', 'Local');
+const WIN_ENV = { APPDATA: nodePath.dirname(ROOT), LOCALAPPDATA: LOCAL };
+const MOVED = nodePath.join(LOCAL, 'Claude-Data', 'claude_abc123');
+
+test('appRoot follows the marker the app leaves in the old folder to its new one under LOCALAPPDATA', () => {
+  const fs = fakeFs({ [nodePath.join(ROOT, '.user-data-left.claude_abc123')]: '', [nodePath.join(MOVED, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', fs), MOVED);
+});
+
+test('appRoot keeps the old folder while it holds no marker, and with no LOCALAPPDATA to follow one to', () => {
+  const kept = fakeFs({ [nodePath.join(ROOT, 'config.json')]: '{}', [nodePath.join(MOVED, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', kept), ROOT);
+  const marked = fakeFs({ [nodePath.join(ROOT, '.user-data-left.claude_abc123')]: '' });
+  assert.equal(lib.appRoot({ APPDATA: WIN_ENV.APPDATA }, 'win32', 'C:\\Users\\me', marked), ROOT);
+});
+
+test('appRoot follows no marker whose name is not a moved folder, nor one whose folder is gone', () => {
+  for (const name of ['.user-data-left...', '.user-data-left.claude_a.b', '.user-data-left.other']) {
+    const fs = fakeFs({ [nodePath.join(ROOT, name)]: '', [nodePath.join(MOVED, 'config.json')]: '{}' });
+    assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', fs), ROOT, name);
+  }
+  const both = fakeFs({ [nodePath.join(ROOT, '.user-data-left.x..y')]: '', [nodePath.join(ROOT, '.user-data-left.claude_abc123')]: '', [nodePath.join(MOVED, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', both), MOVED);
+  // A marker left behind once the moved folder is removed keeps the old folder, where the app writes again.
+  const stale = fakeFs({ [nodePath.join(ROOT, '.user-data-left.claude_abc123')]: '', [nodePath.join(ROOT, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', stale), ROOT);
+});
+
+test('appRoot takes the one Claude-Data folder when the old folder is gone, and the old path when there are several', () => {
+  const one = fakeFs({ [nodePath.join(MOVED, 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', one), MOVED);
+  const two = fakeFs({ [nodePath.join(MOVED, 'config.json')]: '{}', [nodePath.join(LOCAL, 'Claude-Data', 'claude_xyz', 'config.json')]: '{}' });
+  assert.equal(lib.appRoot(WIN_ENV, 'win32', 'C:\\Users\\me', two), ROOT);
+});
+
 // --- appSessions ---
 
 test('appSessions maps each session record by its cliSessionId to where it sits: archived, in routines, or in sessions', () => {

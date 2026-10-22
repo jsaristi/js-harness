@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { redactSecrets, collectFiles, exportEngram, parseStats, buildManifest, pushRefusal, repoOf, scopeArgs, inScope } from './backup.mjs';
+import { redactSecrets, collectFiles, exportEngram, parseStats, buildManifest, pushRefusal, repoOf, scopeArgs, inScope, desktopDir } from './backup.mjs';
 
 function scratch(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-lib-'));
@@ -365,5 +365,25 @@ test('repoOf reads only github.com itself, over https or ssh', () => {
   assert.equal(repoOf('ssh://git@github.com/o/n.git'), 'o/n');
   for (const url of ['https://notgithub.com/o/n.git', 'https://github.com.evil.example/o/n.git', 'https://evil.example/github.com/o/n.git', 'http://github.com/o/n.git', 'D:/github.com/o/n.git']) {
     assert.equal(repoOf(url), null, url);
+  }
+});
+
+test('desktopDir follows the marker Claude Desktop leaves in its old Windows folder to the one it moved to', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-dir-'));
+  try {
+    const env = { APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local') };
+    const old = path.join(env.APPDATA, 'Claude');
+    assert.equal(desktopDir(home, env, 'win32'), old);
+    const moved = path.join(env.LOCALAPPDATA, 'Claude-Data', 'claude_abc123');
+    fs.mkdirSync(old, { recursive: true });
+    fs.mkdirSync(moved, { recursive: true });
+    fs.writeFileSync(path.join(old, '.user-data-left.claude_abc123'), '');
+    assert.equal(desktopDir(home, env, 'win32'), old, 'an empty moved folder is not followed');
+    fs.writeFileSync(path.join(moved, 'config.json'), '{}');
+    assert.equal(desktopDir(home, env, 'win32'), moved);
+    // With no LOCALAPPDATA, the home's AppData\Local is where the app moved to.
+    assert.equal(desktopDir(home, { APPDATA: env.APPDATA }, 'win32'), moved);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });

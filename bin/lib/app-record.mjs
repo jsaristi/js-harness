@@ -6,11 +6,32 @@ import path from 'node:path';
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** The folder the desktop app keeps its records in on `platform`, or `null` when the variable it needs is not set. */
-export function appRoot(env, platform, homedir) {
-  if (platform === 'win32') return env.APPDATA ? path.join(env.APPDATA, 'Claude') : null;
+export function appRoot(env, platform, homedir, { readdir = fs.readdirSync } = {}) {
+  if (platform === 'win32') return env.APPDATA ? windowsFolder(path.join(env.APPDATA, 'Claude'), env.LOCALAPPDATA, readdir) : null;
   if (!homedir) return null;
   if (platform === 'darwin') return path.join(homedir, 'Library', 'Application Support', 'Claude');
   return path.join(homedir, '.config', 'Claude');
+}
+
+const MOVED_MARKER = '.user-data-left.';
+// The name of a moved folder, so a marker can never name a path outside Claude-Data.
+const MOVED_NAME = /^claude_[A-Za-z0-9_-]+$/;
+
+/** Where the app keeps its folder on Windows, given its old one, `%APPDATA%\Claude`. The app moved it to
+ * `%LOCALAPPDATA%\Claude-Data\claude_<id>` and left only a marker file, `.user-data-left.claude_<id>`, in the old
+ * one: the marker names the new folder, while that folder holds something. With no marker and no old folder, the one
+ * `Claude-Data\claude_*` folder there is; otherwise the old folder, as before the move. */
+export function windowsFolder(old, local, readdir = fs.readdirSync) {
+  if (!local) return old;
+  const base = path.join(local, 'Claude-Data');
+  const kept = listing(readdir, old);
+  const marker = kept.find((name) => name.startsWith(MOVED_MARKER) && MOVED_NAME.test(name.slice(MOVED_MARKER.length)));
+  // A marker whose folder is gone or empty is stale: the app writes to the old folder again.
+  const named = marker ? path.join(base, marker.slice(MOVED_MARKER.length)) : null;
+  if (named && listing(readdir, named).length > 0) return named;
+  if (kept.length > 0) return old;
+  const moved = listing(readdir, base).filter((name) => MOVED_NAME.test(name));
+  return moved.length === 1 ? path.join(base, moved[0]) : old;
 }
 
 const listing = (readdir, dir) => {
