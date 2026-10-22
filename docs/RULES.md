@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `aab0841bc565`. In force: 51 (26 of Sebastián, 25 of the project). Retired: 0.
+Hash `22b001354636`. In force: 52 (27 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -75,6 +75,11 @@ Every question of the project reaches the user in the orchestrator's chat, throu
 The lead's recap names each session's effort mode for its kind of work, and why: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
+
+### reply-four-states
+A reply ends in one of four states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of four states."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-22.
 
 ### report-table
 When the user asks what was done, the lead's status report shows each section that holds items as a table: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."

@@ -283,6 +283,18 @@ export const RULES = [
     ]
   },
   {
+    "id": "reply-four-states",
+    "subject": "a reply ends in one of four states, and a question is his decision alone, explained before it is asked",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "A reply ends in one of four states.",
+      "One decision a question, one question at a time, never while work runs.",
+      "Before the question, say what a yes covers in everyday words"
+    ]
+  },
+  {
     "id": "report-table",
     "subject": "when the user asks what was done, the lead's status report shows each section that holds items as a table",
     "owner": "sebastian",
