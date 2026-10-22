@@ -507,6 +507,17 @@ export const RULES = [
     "failure": "session-opened-unseen"
   },
   {
+    "id": "status-report",
+    "subject": "asked how the work goes, the lead reports everything since the last report, in detail",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "When the user asks how the work is going, how much is done, or what you have done",
+      "the answer is a report of everything since the last report, in detail: never a line that all goes well."
+    ]
+  },
+  {
     "id": "subagent-effort",
     "subject": "the effort every sub-agent is launched with",
     "owner": "sebastian",

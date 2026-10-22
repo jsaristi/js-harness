@@ -793,6 +793,23 @@
       "by": "session"
     }
   },
+  "status-report": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "debe haber un protocolo asi que cuando te diga como vamos o que tanto hemos hecho etc tu contestes la informacion desde la ultima vez bien detallado no solo como me respondiste de que vamos bien, dime que me propones",
+        "date": "2026-10-20",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 8945
+      }
+    ],
+    "reading": "When he asks how it goes or how much is done, the lead answers with everything since the last report, in detail: what landed in plain words, each session's state, his decisions, the map per phase with what is left, what waits on him and what it proposes; never only that all goes well. The orchestrator skill's \"The status report\" carries it, with its tables (rule:report-table).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "subagent-effort": {
     "kind": "words",
     "quotes": [
