@@ -194,6 +194,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "lead-charter",
+    "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "merge pull requests by the rules below",
+      "Within it you open the next feature's work session"
+    ]
+  },
+  {
     "id": "memory-feedback-home",
     "subject": "where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise",
     "owner": "project",

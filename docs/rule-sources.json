@@ -215,6 +215,65 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "lead-charter": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "listo te apruebo todo",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 2200
+      },
+      {
+        "quote": "te apruebo todo lo que me pides",
+        "date": "2026-10-11",
+        "session": "7d2ae675-4bf2-4657-aff5-cde2477a4bee",
+        "line": 1360
+      },
+      {
+        "quote": "todas las sesiones deben ser concientes del contexto para que despues no vaya a cortar el contexto a la mitad y dejar todo corto o mal hecho",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 2200
+      },
+      {
+        "quote": "nunca parar por parar compactar",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 2200
+      },
+      {
+        "quote": "necesito que tu orquestador y las sesiones sean mas autonomas y trabajen mas de seguido sin interrupciones, por favor implementalo y dale la informacion para que no paren tanto y avancemos mas",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 1112
+      },
+      {
+        "quote": "fusioná vos el código y dá vos el visto bueno de las etapas",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 1403
+      },
+      {
+        "quote": "Pero necesito que solo puedas abrir sesiones",
+        "date": "2026-10-15",
+        "session": "987548fe-5062-4dd4-9b92-7a246494198f",
+        "line": 687
+      },
+      {
+        "quote": "Tu puedes abrir cualquier sesion y hacer lo que necesites con ella para que me pides permiso?",
+        "date": "2026-10-15",
+        "session": "220663e4-8fae-47cd-92f0-0f2014761721",
+        "line": 3081
+      }
+    ],
+    "reading": "He approved the charter the lead proposed (\"listo te apruebo todo\", \"te apruebo todo lo que me pides\"): the lead does alone, and tells him after, which feature starts next within the order, up to three work sessions, plan steps and notices, pushes and pull requests once the gate and both reviews are green, and merges by the rules, code included (\"fusioná vos el código\"); it opens, wakes and acts on sessions without asking him. What stays his is asked one at a time and never while work runs: spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or its order, a new protocol (odd/tasks/session-channel.md, \"The charter: more autonomy\"). His condition on it: every session watches its context and cuts only at the end of a task, never just to cut, and work goes on without stopping for what is not his (bin/lib/protocols-skill.mjs, \"A cut comes at the end of a task\", \"Decide everything else, say what it costs, and go on.\"). The Codex cost parts are rule:codex-review-rate and its neighbours.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "memory-feedback-home": {
     "kind": "design",
     "path": "odd/tasks/memory-feedback-home.md"

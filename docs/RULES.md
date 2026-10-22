@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `b5db6fb07c0d`. In force: 48 (23 of Sebastián, 25 of the project). Retired: 0.
+Hash `0d3f8048a782`. In force: 49 (24 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -50,6 +50,11 @@ A design before it is built, and what reaches the user to decide, passes two rea
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
 - Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+
+### lead-charter
+What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, checked by the command on 2026-10-22.
 
 ### question-context
 Every question to the user opens with what it is for: the work it serves and what its answer changes: "- Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes."
