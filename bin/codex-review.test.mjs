@@ -6854,17 +6854,43 @@ test('a second recheck of the same findings is refused before anything runs, and
   const { root, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
-  fs.writeFileSync(path.join(root, 'f.txt'), 'four', 'utf8');
-  git(root, 'commit', '-am', 'four');
+  // The recheck's own range again: every code commit of it has a record, so the skip is what is left.
   const records = readCodexReviews(root).length;
   const runs = readCodexReviewRuns(root).length;
+  const fake = fakeCodex(reviewed(root, head));
+  const again = await run(['--base', head, '--again', '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
+  assert.equal(again.code, 1, again.out);
+  assert.ok(again.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run: the first left 1 finding not fixed or blocking.`), again.err);
+  assert.ok(again.err.includes(`\`codex-review --base ${head} --unavailable "second recheck refused: <task>"\``), again.err);
+  assert.equal(fake.calls.length, 0, 'no Codex was launched');
+  assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records, runs]);
+  assert.equal(git(root, 'rev-parse', 'HEAD'), fixed);
+});
+
+test('a refused range that holds a code commit no record covers names a review that reads it, and offers no skip', async () => {
+  const { root, base, head, fixed } = await reviewedThenCorrected();
+  const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
+  assert.equal(second.code, 0, second.err);
+  const added = commitOne(root, 'g.txt', 'new code\n');
+  const records = readCodexReviews(root).length;
   const fake = fakeCodex(reviewed(root, fixed));
   const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
   assert.equal(third.code, 1, third.out);
   assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run: the first left 1 finding not fixed or blocking.`), third.err);
-  assert.ok(third.err.includes(`\`codex-review --base ${fixed} --unavailable "second recheck refused: <task>"\``), third.err);
+  assert.ok(third.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), third.err);
+  // The reviewed head is the base of the recheck, refused as well; the commit before it starts a review.
+  assert.ok(third.err.includes(`\`codex-review --base ${base} --again\``), third.err);
+  assert.ok(!third.err.includes('--unavailable '), third.err);
   assert.equal(fake.calls.length, 0, 'no Codex was launched');
-  assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records, runs]);
+  assert.equal(readCodexReviews(root).length, records);
+  // The command it names runs, as a review, and its record covers the new commit.
+  const named = fakeCodex(reviewed(root, base));
+  const review = await run(['--base', base, '--again', '--cwd', root], { ...named, randomUUID: () => '00000000-0000-4000-8000-000000000004' });
+  assert.equal(review.code, 0, review.err);
+  assert.equal(named.calls.length, 1, 'Codex reviewed it');
+  assert.ok(!review.out.includes('This range is a recheck'), review.out);
+  const record = readCodexReviews(root).at(-1);
+  assert.deepEqual([record.outcome, record.base, record.head, record.recheckOf], ['reviewed', base, added, undefined]);
 });
 
 test('a branch forked at the head of a rechecked review, without the recheck, is new code and is reviewed as any other (L8 of merge-queue)', async () => {

@@ -182,6 +182,24 @@ test('the refusal of a second recheck says why and what to record instead', () =
   assert.match(secondRecheckRefused({ of: C, open: null, base: 'x' }), /not run: the counts of the first were not kept\./);
 });
 
+test('the refusal of a range that holds code no record covers names the review that reads it, and no skip', () => {
+  const said = secondRecheckRefused({ of: C, open: 1, base: B, uncovered: ['1234567'], reviewFrom: A });
+  assert.match(said, /^A second recheck of the findings of the review that ended at ccccccc is not run: the first left 1 finding not fixed or blocking\. Nothing was started or recorded\./);
+  assert.ok(said.includes('1 code commit no Codex review record covers (1234567)'), said);
+  assert.ok(said.includes(`\`codex-review --base ${A} --again\``), said);
+  assert.ok(said.includes('Record a follow-up task'), said);
+  assert.ok(!said.includes('--unavailable '), said);
+  // Records that cannot be read against the range may leave code unread: no skip either.
+  const unknown = secondRecheckRefused({ of: C, open: 1, base: B, uncovered: null, reviewFrom: A });
+  assert.ok(unknown.includes(`\`codex-review --base ${A} --again\``), unknown);
+  assert.ok(!unknown.includes('--unavailable '), unknown);
+  // No commit behind it starts a review: no command to name, and still no skip.
+  const none = secondRecheckRefused({ of: C, open: 1, base: B, uncovered: ['1234567', '89abcde'], reviewFrom: null });
+  assert.ok(none.includes('2 code commits no Codex review record covers (1234567, 89abcde)'), none);
+  assert.ok(none.includes('ask the user'), none);
+  assert.ok(!none.includes('--unavailable '), none);
+});
+
 test('runAnswerFindings tells an answer that found nothing from a line that kept none', () => {
   assert.deepEqual(runAnswerFindings({ answer: { findings: [] } }), []);
   assert.equal(runAnswerFindings({ findings: { total: 0 } }), null);

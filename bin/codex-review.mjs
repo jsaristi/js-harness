@@ -178,7 +178,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, re
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, runsLogged, secondRecheckRefused,
+  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -1340,6 +1340,25 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     };
     return recheckState({ from: anchor, records, runs: readRunLog(), holds });
   };
+  /** The refusal of a second recheck of the range from `from` (`state` its `recheckFor`), with what the
+   * records say of its code commits: those none covers are named, and with them the nearest commit behind
+   * `from`, on its first-parent line, that a run with `--again` reviews as any other. Records that cannot be
+   * read against the range are taken as leaving code unread, so no skip is offered on a guess. */
+  const secondRecheckSaid = (from, state) => {
+    let uncovered = null;
+    try {
+      const coverage = reviewCoverage(root, { from, tip: head, spawn, where });
+      if (!coverage.unknown) uncovered = coverage.uncovered.map((commit) => commit.id.slice(0, 7));
+    } catch {
+      uncovered = null;
+    }
+    let reviewFrom = null;
+    if (uncovered === null || uncovered.length > 0) {
+      const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, from]);
+      reviewFrom = (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
+    }
+    return secondRecheckRefused({ of: state.of, open: state.open, base: from, uncovered, reviewFrom });
+  };
 
   /** Where this run starts, once the Codex review records have been read against its range, `given..head`
    * (`given` the commit the range starts at as it was asked for): that commit, a later one, or `null` when
@@ -1627,7 +1646,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // second recheck of the same findings is not run (`recheckFor`).
     const state = merge !== null ? { kind: 'review' } : recheckFor(from);
     if (state.kind === 'refused') {
-      error(secondRecheckRefused({ of: state.of, open: state.open, base: from }));
+      error(secondRecheckSaid(from, state));
       return 1;
     }
     if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings };
