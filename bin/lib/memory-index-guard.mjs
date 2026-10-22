@@ -8,18 +8,26 @@
  * one home, not a rule. Counted in code points. */
 export const INDEX_LINE_CHARS = 150;
 
-const MEMORY_INDEX = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/]memory[\\/]MEMORY\.md$/i;
+const MEMORY_FILE = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/]memory[\\/]([^\\/]+)$/i;
 
-/** Whether `filePath` is a project's memory index: under a `.claude` folder, or under `configDir` (Claude Code's
- * `CLAUDE_CONFIG_DIR`, which need not be named `.claude`), compared without case and with either separator. */
-export function isMemoryIndex(filePath, configDir) {
-  if (typeof filePath !== 'string') return false;
-  if (MEMORY_INDEX.test(filePath)) return true;
-  if (typeof configDir !== 'string' || configDir === '') return false;
+/** The name of the file `filePath` is in a project's memory folder, or null when it is in none: under a `.claude`
+ * folder, or under `configDir` (Claude Code's `CLAUDE_CONFIG_DIR`, which need not be named `.claude`), compared
+ * without case and with either separator (a name under `configDir` comes back in lower case). */
+export function memoryFileOf(filePath, configDir) {
+  if (typeof filePath !== 'string') return null;
+  const match = MEMORY_FILE.exec(filePath);
+  if (match) return match[1];
+  if (typeof configDir !== 'string' || configDir === '') return null;
   const norm = (text) => text.replace(/\\/g, '/').toLowerCase();
   const root = `${norm(configDir).replace(/\/+$/, '')}/projects/`;
   const file = norm(filePath);
-  return file.startsWith(root) && /^[^/]+\/memory\/memory\.md$/.test(file.slice(root.length));
+  const inside = file.startsWith(root) ? /^[^/]+\/memory\/([^/]+)$/.exec(file.slice(root.length)) : null;
+  return inside === null ? null : inside[1];
+}
+
+/** Whether `filePath` is a project's memory index, `MEMORY.md` of its memory folder. */
+export function isMemoryIndex(filePath, configDir) {
+  return memoryFileOf(filePath, configDir)?.toLowerCase() === 'memory.md';
 }
 
 /** The file the `Write` or `Edit` of `toolInput` leaves, given the file on disk (`before`, null when unreadable), or

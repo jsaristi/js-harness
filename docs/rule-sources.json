@@ -122,6 +122,10 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "memory-feedback-home": {
+    "kind": "design",
+    "path": "odd/tasks/memory-feedback-home.md"
+  },
   "memory-index-bytes": {
     "kind": "design",
     "path": "odd/tasks/memory-hygiene.md"

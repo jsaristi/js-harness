@@ -1372,7 +1372,12 @@ the gate log timed alone over a minute (an eval batch marks itself under `~/.js-
 while its trials run, and `uninstall` removes that folder with the lock's); and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
-which every session reads on every turn; and a `Write` or `Edit` of a Markdown file that brings a
+which every session reads on every turn; a `Write` or `Edit` that leaves a note of a project's memory folder whose
+type is `feedback`, a rule he stated, naming no home of that rule in the repository, where the rule
+`memory-feedback-home` is declared (this repository only): the note names `` `rule:<id>` `` of a live declared rule,
+or quotes, on a line that names AGENTS.md, a phrase of at least twelve characters that AGENTS.md holds
+(`AGENTS.md "<phrase>"`), and the reason says to cement the rule with `js-harness rules change` or in AGENTS.md
+first, since a memory note is read by an agent that may or may not recall it; and a `Write` or `Edit` of a Markdown file that brings a
 line stamping today's date with an hour more than a minute ahead of the clock, where the line
 opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 done.` written at
 14:44). A document also records earlier events, so an hour behind the clock passes; an `Edit` is
@@ -1386,7 +1391,8 @@ shell's `-c` included, from the folder the gate's `--cwd` names. A commit with `
 that makes no commit, a commit after the wrapper (`js-harness gate -- npm test && git commit`)
 and a wrapped test run get none: a test run of your own stays wrapped. A denial on the same call
 wins over the hint. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
-Markdown file the hour check besides. An `Edit` is
+Markdown file the hour check besides; of a memory note, the feedback check, which reads the project only for a
+note whose type is `feedback`. An `Edit` is
 judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
 line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 
@@ -1398,6 +1404,15 @@ project sets them.
 ```console
 $ js-harness guard --hook < send.json
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"js-harness guard: this message stamps 03:10, and the clock says 15:01. Stamp 15:01, or no hour: an hour in a message is read from the clock in the same step, or left out."}}
+```
+
+`guard --memory <folder>` reads a memory folder with the same check: it prints one line for each feedback note
+that names no home of its rule and exits 1, or says how many it read and exits 0; where the project does not
+declare `memory-feedback-home` it checks nothing and exits 0.
+
+```console
+$ js-harness guard --memory ~/.claude/projects/D--js-harness/memory
+every feedback note names its home (23 feedback notes)
 ```
 
 `install` also registers `guard --stop` for Claude Code, as a `Stop` hook: the share check. A
