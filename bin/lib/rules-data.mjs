@@ -17,6 +17,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "announce-finished",
+    "subject": "a session says when it finished and where to return, watches its context, and a rule has one home",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "when a stretch or a session ends, that it ended and which session to return to.",
+      "The user never compacts a session by hand, present or away"
+    ]
+  },
+  {
     "id": "ci-gate-bound",
     "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
     "owner": "project",

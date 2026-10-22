@@ -3,6 +3,59 @@
     "kind": "design",
     "path": "docs/ROADMAP.md"
   },
+  "announce-finished": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "avisame cuando haya terminado todo ya que en la aplicacion de teléfono de Claude no puedo ver los procesos que se estan ejecutando por debajo",
+        "date": "2026-09-28",
+        "session": "c7e6d7d5-78c6-4c97-aa4b-04cd19bcabc9",
+        "line": 1314
+      },
+      {
+        "quote": "siempre quiero que me avises cuando se haya terminado una sesion para yo saber a donde tengo que retornar",
+        "date": "2026-10-07",
+        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
+        "line": 1070
+      },
+      {
+        "quote": "siempre que este muy pendiente del % de contexto",
+        "date": "2026-10-07",
+        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
+        "line": 1070
+      },
+      {
+        "quote": "no quiero que el modelo corte siempre a los 70% sino que termine y termine bien ya si roza el limite ahi si lo paramos y compactamos",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 700
+      },
+      {
+        "quote": "al 85% pausamos no detenemos y miramos si falta poco para poder terminar bien o sino para compactar y continuar post-compactacion",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 757
+      },
+      {
+        "quote": "y no queda con unas reglas viejas y otras nuevas, eso debe quedar super prohibido por que es la peor practica que podemos hacer",
+        "date": "2026-10-11",
+        "session": "7d2ae675-4bf2-4657-aff5-cde2477a4bee",
+        "line": 1745
+      },
+      {
+        "quote": "tengamos alguna mecanismo que cuando lo haga te informe para que no nos pase esto de que crees algo que la sesion no esta haciendo",
+        "date": "2026-10-12",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 2008
+      }
+    ],
+    "reading": "He cannot see background work from the phone, so a stretch or session that ends says so and which session to return to. Each session watches its context share and reports it; it does not cut early at a fixed share but finishes well, pausing near the limit (rule:context-pause) and resuming after the compaction, which it tells the lead in one line (bin/resume.mjs). He never compacts by hand (odd/tasks/no-manual-compact.md). A rule has one home: text it superseded is removed, never left beside the new one (bin/lib/protocols-skill.mjs, \"One home.\").",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "ci-gate-bound": {
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"
