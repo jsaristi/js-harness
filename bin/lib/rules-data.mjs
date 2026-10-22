@@ -197,6 +197,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "question-context",
+    "subject": "every question to the user opens with what it is for: the work it serves and what its answer changes",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Every question opens with what it is for: the work it belongs to",
+      "opening with what it is for (the work it serves and what its answer changes)"
+    ]
+  },
+  {
     "id": "questions-one-place",
     "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked",
     "owner": "sebastian",
