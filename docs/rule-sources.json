@@ -79,6 +79,23 @@
       "by": "command"
     }
   },
+  "background-task-declared": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "colocaste un timer por si el gate linux no funcionaba pero nunca explicaste para que era osea en la ejecucion ni cuando se debia terminar y ahora que sabemos que el gate linux funciona, no se desactivaste ni desmontaste el timer",
+        "date": "2026-10-14",
+        "session": "ffe99ebf-72fb-48da-a79b-e7db21a20b3f",
+        "line": 4215
+      }
+    ],
+    "reading": "A timer, wait or watch a session starts in the background says what it is for and what ends it, and when its condition resolves another way it is stopped in that same step, every process it started with it.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "ci-gate-bound": {
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"

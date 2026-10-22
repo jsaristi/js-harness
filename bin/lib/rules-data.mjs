@@ -39,6 +39,16 @@ export const RULES = [
     ]
   },
   {
+    "id": "background-task-declared",
+    "subject": "a background task says what it is for and what ends it, and is stopped when its condition resolves",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it"
+    ]
+  },
+  {
     "id": "ci-gate-bound",
     "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
     "owner": "project",
