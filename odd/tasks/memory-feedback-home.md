@@ -97,3 +97,7 @@ Deleting any memory note: one list, sent through the lead.
   landed, from L7's plan.
 - L9 (2026-10-22) gentle-ai: 73f61b9f..3a5bd482 (the fix of L5's findings) assessed medium by the commit's gate,
   review_due false (under_budget, 102 lines); no review due, none started. Codex covered it (L6).
+- L10 (2026-10-22) PR 505 landed T1. rule:question-context landed on main b7eb9349 (PR 507), so T2 starts on the
+  branch rule/memory-feedback-move from it. The four stopped explorers (groups 1, 3, 4, 5) were resumed; their maps
+  land in the session's scratchpad as map-g1.json, map-g3.json, map-g4.json, map-g5.json, beside group 2's
+  (also copied to the lead's side-session-notes folder). Next: L7's plan.
