@@ -399,8 +399,10 @@ test('profile --checklist adds the areas of the document\'s - Areas: line to its
     code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas is "answer-engines": write +<area> (L<n>), one per area the owner asked for, joined by commas`,
   });
   assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'advice'), {
-    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas`,
+    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas names A:auth, which is not an area of static-site; js-harness onboard profile static-site lists its areas`,
   });
+  // The bar does not read Areas, so a bad line there does not stop it.
+  assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'bar'), { code: 0, out: checklistLines(site, 'bar', 'small').join('\n'), err: '' });
 });
 
 test('profile names what is missing when it cannot tell the kind, the size or the area, exit 2', async (t) => {

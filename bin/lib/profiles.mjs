@@ -64,9 +64,15 @@ export function parseAreas(value, profile) {
   const unknown = ids.find((id) => !profile.areas.some((area) => area.id === id));
   if (unknown) {
     const kinds = profile.kinds.map((kind) => kind.id);
-    return { error: `A:${unknown} is not an area of ${kinds.join(', ')}; js-harness onboard profile ${kinds.join(',')} lists its areas` };
+    return { error: `Areas names A:${unknown}, which is not an area of ${kinds.join(', ')}; js-harness onboard profile ${kinds.join(',')} lists its areas` };
   }
   return { ids };
+}
+
+/** The areas `## Setup`'s `- Areas:` line adds to `profile`'s size set, `{ ids }` (none without the line), or
+ * `{ error }`. `setup` is what `setupValues` read, which keeps no empty value. */
+export function addedAreas(setup, profile) {
+  return setup.Areas === undefined ? { ids: [] } : parseAreas(setup.Areas, profile);
 }
 
 /** The values of the `## Setup` section of an onboarding document, by key. */
@@ -148,7 +154,8 @@ export function advisedProfile(kindIds, data = PROFILES) {
   };
 }
 
-const sized = (items, size) => (size === 'small' ? items.filter((item) => item.core) : items);
+/** What a size keeps of `items`: a small one the core ones and those in `added`, the areas asked for beyond it. */
+const sized = (items, size, added = []) => (size === 'small' ? items.filter((item) => item.core || added.includes(item.id)) : items);
 
 /** A target as a roadmap step. The command says where it runs; a target only real users can show is the step the
  * first build phase can finish, its measure wired before launch (D5). */
@@ -160,10 +167,7 @@ const barStep = (target) =>
 /** The lines to paste: `advice` under the onboarding's `## Advice`, `bar` as steps of the roadmap (D5, D6). `added`,
  * the areas the owner asked for beyond the size (`- Areas:`), join a small set of advice; the bar keeps the size's. */
 export function checklistLines(profile, which, size, added = []) {
-  if (which === 'advice') {
-    const areas = profile.areas.filter((area) => size !== 'small' || area.core || added.includes(area.id));
-    return areas.map((area) => `- [ ] A:${area.id} ${area.title}`);
-  }
+  if (which === 'advice') return sized(profile.areas, size, added).map((area) => `- [ ] A:${area.id} ${area.title}`);
   return sized(profile.targets, size).map((target) => `- [ ] B:${target.id} ${barStep(target)}`);
 }
 

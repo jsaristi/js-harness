@@ -106,10 +106,10 @@ test('## Advice: the areas --checklist advice prints for Kind and Size, each set
     '## Advice lists A:legal, which js-harness onboard profile --checklist advice does not print for this Kind and Size',
   ));
   assert.deepEqual(checkTwo({ setup: [...SETUP, '- Areas: +hosting'] }), atTwo(
-    'Areas: Areas is "+hosting": write +<area> (L<n>), one per area the owner asked for, joined by commas',
+    'Areas is "+hosting": write +<area> (L<n>), one per area the owner asked for, joined by commas',
   ));
   assert.deepEqual(checkTwo({ setup: [...SETUP, '- Areas: +cdn (L9)'] }), atTwo(
-    'Areas: A:cdn is not an area of shop; js-harness onboard profile shop lists its areas',
+    'Areas names A:cdn, which is not an area of shop; js-harness onboard profile shop lists its areas',
   ));
   assert.deepEqual(checkTwo({ advice: ADVICE.slice(0, 2) }), atTwo(
     '## Advice lacks A:legal, which js-harness onboard profile --checklist advice prints for this Kind and Size',

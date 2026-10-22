@@ -10,7 +10,7 @@ import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH,
   adrTemplate, checkOnboarding, featureTemplate, findingLine, hashes, originTemplate, roadmapTemplate, stageReport,
 } from './lib/onboard.mjs';
-import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseAreas, parseKind, parseSize, setupValues } from './lib/profiles.mjs';
+import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, addedAreas, parseKind, parseSize, setupValues } from './lib/profiles.mjs';
 import { agentsTemplate, projectLocation } from './lib/project.mjs';
 
 export const USAGE = [
@@ -373,14 +373,11 @@ function profileOutput(root, { kind, area, checklist, size }) {
     chosen = parseSize(setup.Size);
     if (!chosen) return { error: `${ONBOARDING_PATH}, ## Setup: Size is ${setup.Size}, not small or large` };
   }
-  // The areas the owner asked for beyond the size go with the document's Kind, never with a kind named here.
-  let added = [];
-  if (!kind && setup.Areas) {
-    const areas = parseAreas(setup.Areas, advised);
-    if (areas.error) return { error: `${ONBOARDING_PATH}, ## Setup: ${areas.error}` };
-    added = areas.ids;
-  }
-  return { lines: checklistLines(advised, checklist, chosen, added) };
+  // The areas the owner asked for beyond the size go with the document's Kind, never with a kind named here, and
+  // only into the advice: the bar does not read them.
+  const added = !kind && checklist === 'advice' ? addedAreas(setup, advised) : { ids: [] };
+  if (added.error) return { error: `${ONBOARDING_PATH}, ## Setup: ${added.error}` };
+  return { lines: checklistLines(advised, checklist, chosen, added.ids) };
 }
 
 function profile(root, args, { stdout, stderr }) {

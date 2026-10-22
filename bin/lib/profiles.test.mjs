@@ -83,7 +83,7 @@ test('parseAreas reads the areas the owner asked for beyond the size, each with 
   for (const value of ['host (L9)', '+host', '+host (L9) +team (L12)', '']) {
     assert.deepEqual(parseAreas(value, profile), { error: `Areas is "${value}": ${form}` }, value);
   }
-  assert.deepEqual(parseAreas('+data (L9)', profile), { error: 'A:data is not an area of site; js-harness onboard profile site lists its areas' });
+  assert.deepEqual(parseAreas('+data (L9)', profile), { error: 'Areas names A:data, which is not an area of site; js-harness onboard profile site lists its areas' });
 });
 
 test('joined kinds take the union of their areas, core when either says so, ordered by after, common areas added', () => {

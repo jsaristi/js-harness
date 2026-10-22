@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { commandsIn, parseContract, tasksOf } from './contract.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { cellsOf, parseRoadmap, tokenize } from './progress.mjs';
-import { PROFILES, advisedProfile, checklistLines, parseAreas, parseKind, setupValues } from './profiles.mjs';
+import { PROFILES, addedAreas, advisedProfile, checklistLines, parseKind, setupValues } from './profiles.mjs';
 
 export const ONBOARDING_PATH = 'odd/tasks/onboarding.md';
 export const ORIGIN_PATH = 'docs/origin.md';
@@ -522,13 +522,9 @@ function conversation(onboarding, { profiles, compare, adrs }) {
   const areas = adviceAreas(onboarding);
   // The areas the owner asked for beyond the size join the set (JH 43, finding 11).
   const advised = kinds ? advisedProfile(kinds, profiles) : null;
-  let added = [];
-  if (advised && setup.Areas !== undefined) {
-    const parsed = parseAreas(setup.Areas, advised);
-    if (parsed.error) wrongly(`Areas: ${parsed.error}`);
-    else added = parsed.ids;
-  }
-  const expected = advised && size ? checklistLines(advised, 'advice', size, added).map((line) => line.match(AREA_LINE)?.[2]).filter(Boolean) : null;
+  const added = advised ? addedAreas(setup, advised) : { ids: [] };
+  if (added.error) wrongly(added.error);
+  const expected = advised && size && !added.error ? checklistLines(advised, 'advice', size, added.ids).map((line) => line.match(AREA_LINE)?.[2]).filter(Boolean) : null;
   let pasted = areas.size > 0;
   if (!pasted && expected?.length > 0) notYet('## Advice is empty: paste what js-harness onboard profile --checklist advice prints');
   else if (expected) {
