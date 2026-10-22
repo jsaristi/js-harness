@@ -37,7 +37,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { memoryFileOf, memoryIndexRefusal } from './lib/memory-index-guard.mjs';
+import { memoryFileOf, memoryIndexRefusal, memoryNoteType, resultOf } from './lib/memory-index-guard.mjs';
 
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
@@ -83,6 +83,17 @@ function optionalText(file, readFile) {
   }
 }
 
+/** The memory note the `Write` or `Edit` of `input` leaves, read from disk with `readNote` for an Edit, or null. */
+function noteLeft(tool, input, readNote) {
+  let before = null;
+  try {
+    before = readNote(input.file_path);
+  } catch {
+    // A new note, or one that cannot be read: the call's own text is judged.
+  }
+  return resultOf(tool, input, typeof before === 'string' ? before : null);
+}
+
 /** The text of the project's rules file, or null when it has none. Any other failure throws. */
 const rulesTextOf = (root, readFile) => optionalText(path.join(root, 'bin', 'lib', 'rules-data.mjs'), readFile);
 
@@ -94,12 +105,13 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     const note = memoryFileOf(input.file_path, claudeConfigDir);
-    if (note !== null && note.toLowerCase() !== 'memory.md') {
-      const root = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
-      const feedback = (await import('./lib/memory-feedback-guard.mjs')).feedbackNoteRefusal(tool, input, note, {
-        readNote: readIndex,
-        rulesText: () => rulesTextOf(root(), readFile),
-        agentsText: () => optionalText(path.join(root(), 'AGENTS.md'), readFile),
+    const text = note !== null && note.toLowerCase() !== 'memory.md' ? noteLeft(tool, input, readIndex) : null;
+    // Only a feedback note loads its module and reads the project (odd/tasks/memory-feedback-home.md, S2).
+    if (typeof text === 'string' && memoryNoteType(text) === 'feedback') {
+      const root = projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
+      const feedback = (await import('./lib/memory-feedback-guard.mjs')).feedbackNoteRefusal(note, text, {
+        rulesText: rulesTextOf(root, readFile),
+        agentsText: () => optionalText(path.join(root, 'AGENTS.md'), readFile),
       });
       if (feedback !== null) return feedback;
     }
@@ -200,12 +212,19 @@ async function memoryForm(folder, { projectRoot, readFile, stdout, stderr }) {
     stderr(`js-harness guard: cannot read the memory folder ${folder}: ${err.message}\n`);
     return 1;
   }
-  const { memoryNoteType } = await import('./lib/memory-rules.mjs');
   const agents = optionalText(path.join(root, 'AGENTS.md'), readFile);
   let feedback = 0;
   let homeless = 0;
   for (const name of names) {
-    const text = fs.readFileSync(path.join(folder, name), 'utf8');
+    let text;
+    try {
+      text = fs.readFileSync(path.join(folder, name), 'utf8');
+    } catch (err) {
+      // A note that cannot be read may be a feedback note: it counts as one with no home known.
+      homeless += 1;
+      stdout(`${name}: cannot be read (${err.code ?? err.message}), so its home is not known\n`);
+      continue;
+    }
     if (memoryNoteType(text) !== 'feedback') continue;
     feedback += 1;
     if (noteRefusal(name, text, agents, value) === null) continue;

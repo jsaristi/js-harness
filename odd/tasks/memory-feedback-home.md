@@ -71,3 +71,9 @@ Deleting any memory note: one list, sent through the lead.
   quotation from its transcript), so the rule memory-feedback-home is declared with owner `project` and this document as
   its design source; the lead was asked for the transcript and may re-own it with his words. A `--memory <folder>` form
   of `guard` reports the folder's notes, so the last line of "Done when" is a command.
+- L5 (2026-10-22) gentle-ai review of b7fe2955..73f61b9f (escalated: item 2, a guard; lenses risk and reliability):
+  approved, acknowledged (lineage review-51c9cc810418a5ba), four advisory findings. Fixed after it: a note's type is
+  read before any module loads (`memoryNoteType` moved to the zero-import memory-index-guard.mjs), `guard --memory`
+  reports a note it cannot read instead of throwing, and the help no longer says every form exits 0. Not taken: "the
+  bundled RULES may differ from the project's file" — `ruleHere` gives the rule's value only when the project's list
+  is the running copy's, so where the check is in force the two are the same list.

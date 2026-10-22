@@ -1396,7 +1396,7 @@ note whose type is `feedback`. An `Edit` is
 judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
 line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 
-It always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
+The hook always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
 The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project
 that installs the harness has them off by default, so the model check applies only where the
 project sets them.

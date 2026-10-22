@@ -6,6 +6,7 @@
 // matter: at the top, or under `metadata:` as this host writes it (31 notes read on 2026-10-14).
 import fs from 'node:fs';
 import path from 'node:path';
+import { memoryNoteType } from './memory-index-guard.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
 import { PROTOCOLS } from './protocols-skill.mjs';
 
@@ -18,18 +19,8 @@ const INDEX = 'MEMORY.md';
 export const MEMORY_RULES_FIX =
   `place each note with the protocol "${PROTOCOLS[3]}" of the js-harness-protocols skill (a check first, else a line of AGENTS.md, else a protocol), then delete the note:`;
 
-/** The `type:` of a note's leading `---` front matter, at any indentation, or `null` when it has
- * none. A flat reader: the front matter of a memory note is a few `key: value` lines. */
-export function memoryNoteType(text) {
-  const lines = text.split(/\r?\n/);
-  if (lines[0] !== '---') return null;
-  for (const line of lines.slice(1)) {
-    if (line === '---') return null;
-    const match = /^\s*type:\s*([A-Za-z]+)\s*$/.exec(line);
-    if (match) return match[1];
-  }
-  return null;
-}
+// The reader of a note's type lives with the guard's memory checks, which import nothing (./memory-index-guard.mjs).
+export { memoryNoteType };
 
 /** The check's cells and lines: `stale` with one line per rule note (`<file> (<type>)`, by name),
  * `ok` when the memory folder holds none, `n/a` when the project has no memory folder, `unknown`

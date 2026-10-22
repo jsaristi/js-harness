@@ -130,6 +130,10 @@ test('guard --memory <folder> lists each feedback note with no home and exits 1,
     assert.deepEqual(await guard(null, { args: ['--memory', folder] }), { code: 0, out: 'every feedback note names its home (2 feedback notes)\n', err: '' });
     const off = await guard(null, { args: ['--memory', folder], rulesText: null });
     assert.deepEqual(off, { code: 0, out: 'rule memory-feedback-home is not in force in this project: nothing checked\n', err: '' });
+    fs.mkdirSync(path.join(folder, 'folder.md'));
+    const unreadable = await guard(null, { args: ['--memory', folder] });
+    assert.equal(unreadable.code, 1);
+    assert.match(unreadable.out, /^folder\.md: cannot be read \(EISDIR\), so its home is not known\n$/);
     const none = await guard(null, { args: ['--memory', path.join(folder, 'missing')] });
     assert.equal(none.code, 1);
     assert.match(none.err, /cannot read the memory folder/);

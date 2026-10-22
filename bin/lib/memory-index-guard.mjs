@@ -25,6 +25,20 @@ export function memoryFileOf(filePath, configDir) {
   return inside === null ? null : inside[1];
 }
 
+/** The `type:` of a note's leading `---` front matter, at any indentation, or `null` when it has
+ * none. A flat reader: the front matter of a memory note is a few `key: value` lines. It is here, in the file
+ * the guard loads for every Write and Edit, so that a note's type is known before any other module is loaded. */
+export function memoryNoteType(text) {
+  const lines = text.split(/\r?\n/);
+  if (lines[0] !== '---') return null;
+  for (const line of lines.slice(1)) {
+    if (line === '---') return null;
+    const match = /^\s*type:\s*([A-Za-z]+)\s*$/.exec(line);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 /** Whether `filePath` is a project's memory index, `MEMORY.md` of its memory folder. */
 export function isMemoryIndex(filePath, configDir) {
   return memoryFileOf(filePath, configDir)?.toLowerCase() === 'memory.md';

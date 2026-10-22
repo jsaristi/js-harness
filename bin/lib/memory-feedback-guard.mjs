@@ -4,9 +4,8 @@
 // note while AGENTS.md said the old one. A feedback note is therefore written only when it names its rule's home in
 // the repository: `rule:<id>` of a live declared rule, or a phrase AGENTS.md holds, quoted on a line that names
 // AGENTS.md. It is in force only where `rule:memory-feedback-home` is: a project that installs the harness turns
-// nothing on by default (odd/tasks/honesty-audit.md S5). Loaded by bin/guard.mjs only for a memory note.
-import { resultOf } from './memory-index-guard.mjs';
-import { memoryNoteType } from './memory-rules.mjs';
+// nothing on by default (odd/tasks/honesty-audit.md S5). Loaded by bin/guard.mjs only for a feedback note.
+import { memoryNoteType } from './memory-index-guard.mjs';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, ruleValue } from './rules.mjs';
 
@@ -55,19 +54,10 @@ export function noteRefusal(name, text, agentsText, value) {
     + undeclared;
 }
 
-/** Why the `Write` or `Edit` of `toolInput` on the memory note `name` is refused, or null. The note is judged as the
- * call leaves it (`readNote` reads it from disk); the project is read (`rulesText()`, `agentsText()`) only for a
- * feedback note, so every other note costs no read. */
-export function feedbackNoteRefusal(toolName, toolInput, name, { readNote, rulesText, agentsText }) {
-  let before = null;
-  try {
-    before = readNote(toolInput.file_path);
-  } catch {
-    // A new note, or one that cannot be read: the call's own text is judged.
-  }
-  const text = resultOf(toolName, toolInput, typeof before === 'string' ? before : null);
-  if (typeof text !== 'string' || memoryNoteType(text) !== 'feedback') return null;
-  const value = homeRuleValue(rulesText());
+/** Why the memory note `name` that a Write or an Edit leaves as `text` is refused, or null, where the project's rules
+ * file reads `rulesText` and its AGENTS.md `agentsText()` (read only when the rule is in force). */
+export function feedbackNoteRefusal(name, text, { rulesText, agentsText }) {
+  const value = homeRuleValue(rulesText);
   if (value === null) return null;
   return noteRefusal(name, text, agentsText(), value);
 }
