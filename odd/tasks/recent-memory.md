@@ -96,8 +96,8 @@ Codex: the resume hook already returns `additionalContext` on Codex's SessionSta
 
 ## Tasks
 - [x] T1 (design) this document, past two readers — inline
-- [ ] T2 (build) `bin/lib/backup-recent.mjs`: selection (D4), entry, state and head text with line numbers (D2, D3), index and names (D1), format — inline
-- [ ] T3 (build) the per-project guard and the refusal text (D6) — inline
+- [x] T2 (build) `bin/lib/backup-recent.mjs`: selection (D4), entry, state and head text with line numbers (D2, D3), index and names (D1), format — inline
+- [x] T3 (build) the per-project guard and the refusal text (D6) — inline
 - [ ] T4 (build) `runBackup` writes the files and the manifest's `recent`, rewrites RESTORE.md, `dueReason`; verify, ready, status, doctor (D5, D8) — inline
 - [ ] T5 (build) `backup --session-start` and its two hook entries (D7) — inline
 - [ ] T6 (docs) the skill, RESTORE.md text, help, README, SPEC, guide, roadmap (D9) — inline
@@ -105,4 +105,12 @@ Codex: the resume hook already returns `additionalContext` on Codex's SessionSta
 
 ## Log
 - L1 (2026-10-22) His answer to Pregunta 45, verbatim in S1. The lead's brief and proposals are S2 and S6.
-- L2 (2026-10-22) Two readers on the first design; what each changed is under "Readers". Code of T2 had started before them; it is reworked to this version.
+- L2 (2026-10-22) Two readers on the first design; what each changed is under "Readers". Code of T2 had started before them; it is reworked to this version. T2's rework was written before its new tests, so its RED was not observed apart; the index-line test then caught a real bug (multi-line content counted as one line).
+- L3 (2026-10-22) T2 in 659c5538 (gentle-ai: medium, under_budget, not due). T3 in c507b45f (Risk: item 1, the guard of stored data: review it alone). `bin/lib/backup-fallback.mjs` and its test (7 pass) are written, uncommitted: project resolution, `readStats`, the notice (D7).
+
+## Next step
+Resume on branch feat/recent-memory in D:\js-harness\.claude\worktrees\backup-ready-a4ce86. Done: T1, T2 (659c5538), T3 (c507b45f); T5's pure part written (bin/lib/backup-fallback.mjs, uncommitted). Next, in order:
+1. gentle-ai review of c507b45f alone (high-risk item 1): `gentle-ai review assess --cwd . --agent claude-code --base-ref 314ce05a --committed-only --json`, consent pre-granted (AGENTS.md); then the slice 2c1a257a..c507b45f; then `js-harness codex-review --base 2c1a257a`.
+2. T4 in bin/backup.mjs: `dueReason` due when the clone has no RECENT.md or the manifest no `recent`; `runBackup` rewrites RESTORE.md from `restoreSteps(config.repo)` plus D9's line; `verify --from` uses `compareRecent` (bin/lib/backup-recent.mjs) on the backup's export: `ok recent: <n> files`, FAIL on `differ`, a note on `otherFormat`; `ready` a `missing:` by count for `differ`, a `note:` for `otherFormat` (readiness in bin/lib/backup-ready.mjs); `status` a `recent:` line; `backupHealth` stale when a success has no RECENT.md. Tests in bin/backup.test.mjs.
+3. T5: `backup --session-start` in bin/backup.mjs: read stdin JSON `cwd`, config, manifest `recent`, `projectOf`, `engram stats --project <p>` with `STATS_TIMEOUT_MS`, `readStats`, `fallbackNotice`, print `{hookSpecificOutput:{hookEventName:'SessionStart',additionalContext}}`, exit 0 always; two entries at the end of `entryComponents` in bin/lib/manifest.mjs, matcher `startup|resume|clear|compact`, timeout 5; install/manifest tests.
+4. T6 docs (D9), T7 verify (real run, verify, ready, Codex notice once, the probe with its rubric written first; transcript to the side-session notes folder).
