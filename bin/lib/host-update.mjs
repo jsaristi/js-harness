@@ -5,6 +5,7 @@
 // icon included, is open (odd/tasks/host-update-check.md). Every read fails open: nothing here throws.
 import fs from 'node:fs';
 import path from 'node:path';
+import { windowsFolder } from './app-record.mjs';
 import { compareSemver } from './version.mjs';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -31,12 +32,13 @@ export function appFolders({ platform, home }) {
   const packages = path.join(home, 'AppData', 'Local', 'Packages');
   try {
     for (const name of fs.readdirSync(packages)) {
-      if (/^Claude_/.test(name)) folders.push(path.join(packages, name, 'LocalCache', 'Roaming', 'Claude'));
+      if (/^Claude_/.test(name)) folders.push(windowsFolder(path.join(packages, name, 'LocalCache', 'Roaming', 'Claude'), path.join(home, 'AppData', 'Local')));
     }
   } catch {
     // No Packages folder: only AppData\Roaming is looked in.
   }
-  folders.push(path.join(home, 'AppData', 'Roaming', 'Claude'));
+  // The app may have moved either folder to AppData\Local\Claude-Data, leaving a marker that names the new one.
+  folders.push(windowsFolder(path.join(home, 'AppData', 'Roaming', 'Claude'), path.join(home, 'AppData', 'Local')));
   return folders;
 }
 

@@ -46,6 +46,22 @@ test('with no package folder AppData/Roaming/Claude is read; macOS and Linux rea
   }
 });
 
+// Claude Desktop moved its folder to AppData/Local/Claude-Data/claude_<id> and left only a marker in the old one
+// (2026-10-21); the row read the old one and reported unknown after the update.
+test('a folder the app moved to AppData/Local/Claude-Data is read through the marker it left in the package folder and AppData/Roaming/Claude', () => {
+  const home = tmp();
+  try {
+    for (const old of [path.join(home, 'AppData', 'Local', 'Packages', 'Claude_pzs8sxrjxfjjc', 'LocalCache', 'Roaming', 'Claude'), path.join(home, 'AppData', 'Roaming', 'Claude')]) {
+      fs.mkdirSync(old, { recursive: true });
+      fs.writeFileSync(path.join(old, '.user-data-left.claude_pzs8sxrjxfjjc'), '');
+    }
+    seedApp(path.join(home, 'AppData', 'Local', 'Claude-Data', 'claude_pzs8sxrjxfjjc'), { running: '3.1.0', staged: null, clis: ['2.1.304', '2.1.308'] });
+    assert.deepEqual(readHostVersions({ platform: 'win32', home }), { found: true, desktop: '3.1.0', staged: null, code: '2.1.308' });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // Every path comes from the home, as the account check's do (bin/lib/stack.mjs, DESKTOP_APP_CONFIG): a fixture home is
 // read and nothing else, so a run with a scratch --home never reads this machine's app (gentle-ai review, 2026-10-15).
 test('the environment is never read: a seeded APPDATA, LOCALAPPDATA or XDG_CONFIG_HOME outside the home is not found', () => {
