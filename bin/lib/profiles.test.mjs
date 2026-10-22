@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseKind, parseSize, setupValues, shapeFindings } from './profiles.mjs';
+import { advisedProfile, areaLines, checklistLines, kindLines, kindsLines, parseAreas, parseKind, parseSize, setupValues, shapeFindings } from './profiles.mjs';
 
 /** A small set of profiles: two kinds that share an area and a target, and one common area. */
 const AREA = (id, extra = {}) => ({
@@ -72,6 +72,18 @@ test('setupValues reads the lines of ## Setup only', () => {
   const doc = ['# x', '## Setup', '- Kind: site', '- Size: small (L5)', 'prose', '## Interview', '- Kind: app'].join('\n');
   assert.deepEqual(setupValues(doc), { Kind: 'site', Size: 'small (L5)' });
   assert.deepEqual(setupValues('# x\n'), {});
+  assert.deepEqual(setupValues('## Setup\n- Areas: +host (L9)\n'), { Areas: '+host (L9)' });
+});
+
+test('parseAreas reads the areas the owner asked for beyond the size, each with its Log line, of the kind only', () => {
+  const profile = advisedProfile(['site'], DATA);
+  assert.deepEqual(parseAreas('+host (L9)', profile), { ids: ['host'] });
+  assert.deepEqual(parseAreas('+host (L9), +A:team (L12)', profile), { ids: ['host', 'team'] });
+  const form = 'write +<area> (L<n>), one per area the owner asked for, joined by commas';
+  for (const value of ['host (L9)', '+host', '+host (L9) +team (L12)', '']) {
+    assert.deepEqual(parseAreas(value, profile), { error: `Areas is "${value}": ${form}` }, value);
+  }
+  assert.deepEqual(parseAreas('+data (L9)', profile), { error: 'A:data is not an area of site; js-harness onboard profile site lists its areas' });
 });
 
 test('joined kinds take the union of their areas, core when either says so, ordered by after, common areas added', () => {
@@ -97,6 +109,10 @@ test('the checklists print the lines to paste: a small project keeps the core on
   assert.deepEqual(checklistLines(profile, 'advice', 'small'), ['- [ ] A:ui UI', '- [ ] A:ci CI']);
   assert.deepEqual(checklistLines(profile, 'advice', 'large'), ['- [ ] A:ui UI', '- [ ] A:host HOST', '- [ ] A:ci CI', '- [ ] A:team TEAM']);
   assert.deepEqual(checklistLines(profile, 'bar', 'small'), ['- [ ] B:gate gate target; measured by gate command']);
+  // An area the owner asked for joins a small set in the advice order; the bar keeps the size's targets.
+  assert.deepEqual(checklistLines(profile, 'advice', 'small', ['team']), ['- [ ] A:ui UI', '- [ ] A:ci CI', '- [ ] A:team TEAM']);
+  assert.deepEqual(checklistLines(profile, 'advice', 'large', ['team']), checklistLines(profile, 'advice', 'large'));
+  assert.deepEqual(checklistLines(profile, 'bar', 'small', ['host']), checklistLines(profile, 'bar', 'small'));
   // A target only real users can show is a step the first phase can finish: its measure wired before launch.
   assert.deepEqual(checklistLines(profile, 'bar', 'large'), [
     '- [ ] B:speed speed command wired before launch, so production shows: speed target',
