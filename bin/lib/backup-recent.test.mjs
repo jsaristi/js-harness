@@ -182,12 +182,12 @@ test('an entry with a pending conflict is marked contested, and the head counts 
 
 test('the manifest line of a project holds its baseline count and the directories its sessions ran in', () => {
   const data = {
-    observations: [obs({ project: 'p', session_id: 's1' }), obs({ project: 'p', type: 'passive' }), obs({ project: 'q' })],
+    observations: [obs({ project: 'p', session_id: 's1', updated_at: day(7) }), obs({ project: 'p', type: 'passive' }), obs({ project: 'q' })],
     sessions: [{ id: 's1', project: 'p', directory: 'D:/p' }, { id: 's2', project: 'p', directory: 'D:/p' }, { id: 's3', project: 'p', directory: 'D:/p/.claude/worktrees/x' }, { id: 's4', project: 'q' }],
     relations: [],
   };
   const [p, q] = buildRecent(data).projects;
-  assert.deepEqual({ ...p, head: 0 }, { project: 'p', file: 'recent/p.md', entries: 1, head: 0, observations: 2, directories: ['D:/p', 'D:/p/.claude/worktrees/x'] });
+  assert.deepEqual({ ...p, head: 0 }, { project: 'p', file: 'recent/p.md', entries: 1, newest: '2026-10-07', head: 0, observations: 2, directories: ['D:/p', 'D:/p/.claude/worktrees/x'] });
   assert.deepEqual(q.directories, []);
 });
 

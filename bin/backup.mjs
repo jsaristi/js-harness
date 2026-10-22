@@ -240,6 +240,8 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink: allowShrink || rescoped, scope });
   // Only now, from the export the shrink guard accepted: a wiped Engram never reaches the readable fallback either.
   const recent = writeRecent(paths.clone);
+  // RESTORE.md holds no time, so every run writes it: a clone made before a change of the steps gets them.
+  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo));
   const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop });
   const bundles = bundleSources(config).map((source) => {
     const entry = bundleUnpushed(deps, source, paths.clone);
@@ -568,7 +570,7 @@ function readyCommand(deps) {
     deps.stdout.write('backup ready: no, the backup is not initialised (js-harness backup init --repo <owner/name>)\n');
     return 1;
   }
-  const { missing, notCopied } = readiness({
+  const { missing, notCopied, notes } = readiness({
     home: deps.home,
     clone: paths.clone,
     config,
@@ -580,6 +582,7 @@ function readyCommand(deps) {
   const lines = [
     ...missing.map((thing) => `missing: ${thing}`),
     ...notCopied.map((n) => `not copied: ${n.what}: ${n.files} files, ${humanSize(n.bytes)}`),
+    ...notes.map((note) => `note: ${note}`),
     missing.length
       ? `backup ready: no, ${missing.length} things have no copy off this machine`
       : 'backup ready: yes, everything the backup is configured for has a copy off this machine',
@@ -593,7 +596,8 @@ function readyCommand(deps) {
 export const BACKUP_STALE_HOURS = 24;
 
 /** The memory-backup row of `doctor` (D2): `n/a` where `init` never ran, `stale` with its reason when no backup
- * succeeded in a day, else `ok`. Reads two files and runs nothing, so the SessionStart hook pays nothing for it. */
+ * succeeded in a day or the success left no readable fallback (odd/tasks/recent-memory.md, D8), else `ok`. Reads files
+ * and runs nothing, so the SessionStart hook pays nothing for it. */
 export function backupHealth(home, now) {
   const paths = backupPaths(home);
   if (!readJson(paths.config)) return { state: 'n/a', fix: [] };
@@ -601,10 +605,12 @@ export function backupHealth(home, now) {
   const success = Date.parse(last.lastSuccess?.at ?? '') || 0;
   const failedSince = last.lastFailure && Date.parse(last.lastFailure.at) > success;
   const cloneGone = !fs.existsSync(path.join(paths.clone, '.git'));
-  if (now - success < BACKUP_STALE_HOURS * 60 * 60_000 && !failedSince && !cloneGone) return { state: 'ok', fix: [] };
+  const noRecent = !cloneGone && success > 0 && !fs.existsSync(path.join(paths.clone, 'RECENT.md'));
+  if (now - success < BACKUP_STALE_HOURS * 60 * 60_000 && !failedSince && !cloneGone && !noRecent) return { state: 'ok', fix: [] };
   const failure = failedSince ? `; last failure ${last.lastFailure.at}: ${last.lastFailure.error}` : '';
   const gone = cloneGone ? `; the clone ${paths.clone} is gone` : '';
-  return { state: 'stale', fix: [`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}${gone}: run js-harness backup status`] };
+  const recent = noRecent ? '; no RECENT.md in the clone, so Engram has no readable fallback' : '';
+  return { state: 'stale', fix: [`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}${gone}${recent}: run js-harness backup status`] };
 }
 
 function statusCommand(deps) {
@@ -623,6 +629,9 @@ function statusCommand(deps) {
     `last failure: ${last.lastFailure ? `${last.lastFailure.at}, ${last.lastFailure.error}` : 'none'}`,
     `to push: ${ahead.status === 0 ? `${ahead.stdout.trim()} commits` : 'unknown (no upstream yet)'}`,
   ];
+  const recent = readJson(path.join(paths.clone, 'manifest.json'))?.recent;
+  const newest = Array.isArray(recent) ? recent.map((r) => r.newest ?? '').sort().at(-1) : '';
+  lines.push(Array.isArray(recent) ? `recent: ${recent.length} projects, newest entry ${newest || 'unknown'}` : 'recent: none yet; the next backup run writes it');
   if (config.summaryRepo) {
     const pushed = last.lastSummary?.pushedAt ? `last pushed ${last.lastSummary.pushedAt}, ${last.lastSummary.commit.slice(0, 8)}` : 'never pushed';
     // A refusal the last attempt outlived is history, not state.
@@ -670,7 +679,9 @@ export function dueReason(home, now, desktop) {
   if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return 'a run holds the lock';
   const success = Date.parse(readJson(paths.last)?.lastSuccess?.at ?? '') || 0;
   if (now - success < BACKUP_EVERY_MINUTES * 60_000) return 'backed up less than 30 minutes ago';
-  if (success && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';
+  // A clone without the readable fallback (the first run after it shipped, or a run that died half-way) is due at once.
+  const fallbackMissing = !fs.existsSync(path.join(paths.clone, 'RECENT.md')) || !Array.isArray(readJson(path.join(paths.clone, 'manifest.json'))?.recent);
+  if (success && !fallbackMissing && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';
   return null;
 }
 
@@ -702,6 +713,9 @@ function restoreSteps(repo) {
     '',
     'Run these in order, in a terminal, before any Claude Code or Codex session: a session started first',
     'would run the backup hook and back up an empty memory.',
+    '',
+    'Before any of it, `RECENT.md` and `recent/<project>.md` in this repository tell where each project stands:',
+    'its recent decisions and work, readable here on GitHub without restoring anything.',
     '',
     '1. Install Node, git, the GitHub CLI (then `gh auth login`) and engram.',
     '2. Install Claude Code and Codex.',

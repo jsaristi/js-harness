@@ -130,7 +130,7 @@ function renderProject(project, { entries, state, important }, contested) {
 
 /** Every file of the fallback from an export: `files`, a `Map` of clone-relative path to text holding `RECENT.md`, the
  * index, and a file for each project with an important observation; `projects`, the manifest's `recent` (D5): each
- * project's file, entries, head length, total observations (the hook's baseline) and the directories its sessions
+ * project's file, entries, newest entry's day, head length, total observations (the hook's baseline) and the directories its sessions
  * ran in (the hook's map). */
 export function buildRecent(data) {
   const observations = Array.isArray(data?.observations) ? data.observations : [];
@@ -147,7 +147,7 @@ export function buildRecent(data) {
     const { text, head } = renderProject(project, selection, contested);
     files.set(file, text);
     const directories = [...new Set(sessions.filter((s) => s.project === project && typeof s.directory === 'string' && s.directory).map((s) => s.directory))].sort();
-    projects.push({ project, file, entries: selection.entries.length, head, observations: observations.filter((o) => o.project === project && !o.deleted_at).length, directories });
+    projects.push({ project, file, entries: selection.entries.length, newest: dayOf(selection.entries[0]), head, observations: observations.filter((o) => o.project === project && !o.deleted_at).length, directories });
   }
   const index = [
     '# Recent memory',
@@ -158,7 +158,7 @@ export function buildRecent(data) {
     'When Engram is down or has lost a project\'s memories, a session reads that project\'s file; RESTORE.md brings',
     'Engram back.',
     '',
-    ...projects.map((p) => `- ${p.project}: \`${p.file}\`, ${p.entries} entries, newest ${dayOf(selections.find((s) => s.project === p.project).selection.entries[0])}`),
+    ...projects.map((p) => `- ${p.project}: \`${p.file}\`, ${p.entries} entries, newest ${p.newest}`),
     '',
   ].join('\n');
   return { files: new Map([['RECENT.md', index], ...files]), projects };

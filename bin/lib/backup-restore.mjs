@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { defaultRun, exportCounts, parseStats, readJson, walk } from './backup.mjs';
 import { privacyCheck } from './backup-summary.mjs';
+import { compareRecent } from './backup-recent.mjs';
 import { projectSlug } from './sessions.mjs';
 
 const COUNTED = ['sessions', 'observations', 'prompts', 'relations'];
@@ -138,6 +139,18 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
 
 const sha256 = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
+/** The readable fallback in the backup clone `dir` against what the clone's own export rebuilds
+ * (odd/tasks/recent-memory.md, D8): `compareRecent`'s `same`, `differ` and `otherFormat`; `total`, the files the
+ * export rebuilds; and `absent`, a clone with no `RECENT.md` at all, as one made before the fallback existed. */
+export function recentInClone(dir) {
+  const read = (file) => {
+    const where = path.join(dir, file);
+    return fs.existsSync(where) ? fs.readFileSync(where, 'utf8') : null;
+  };
+  const result = compareRecent(readJson(path.join(dir, 'engram', 'export.json')), read);
+  return { ...result, total: result.same + result.differ.length + result.otherFormat.length, absent: read('RECENT.md') === null };
+}
+
 /** Restores the backup clone `from` into a scratch home under `tmp`, exports Engram there and checks the four counts
  * against the manifest and the manifest's against the live Engram it recorded, then every backed-up file byte for byte.
  * The scratch home is removed whatever happens. */
@@ -167,6 +180,13 @@ export function verifyBackup({ from, run = defaultRun, env = process.env, tmp = 
     const total = (manifest.files ?? []).length;
     ok &&= same === total;
     lines.push(`${same === total ? 'ok' : 'FAIL'} files: ${same} of ${total} byte for byte`);
+    // Counts only: a project's name, and so its file's, can be a client's.
+    const recent = recentInClone(from);
+    ok &&= recent.absent || recent.differ.length === 0;
+    if (recent.absent) lines.push('note recent: this backup holds no readable fallback yet; the next backup run writes it');
+    else if (recent.differ.length) lines.push(`FAIL recent: ${recent.differ.length} of ${recent.total} files differ from what the export rebuilds: js-harness backup run rebuilds them`);
+    else if (!recent.otherFormat.length) lines.push(`ok recent: ${recent.same} of ${recent.total} files rebuilt from the export`);
+    if (recent.otherFormat.length) lines.push(`note recent: ${recent.otherFormat.length} files were built by another format; the next backup run rebuilds them`);
   } catch (error) {
     ok = false;
     lines.push(`FAIL ${error.message}`);

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { collectFiles, parseStats, readJson, scopeArgs, walk } from './backup.mjs';
 import { bundleRefs, repoFiles, shortKey, stashesOf } from './backup-repos.mjs';
+import { recentInClone } from './backup-restore.mjs';
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
@@ -16,21 +17,29 @@ export function humanSize(bytes) {
   return `${Math.ceil(bytes / 1024)} KB`;
 }
 
-/** What `backup ready` found: `missing`, each thing configured that has no copy off this machine, and `notCopied`,
- * what the backup does not copy at all, with its size. `git` runs git with no optional lock, so not even git's own
- * index refresh is written. `scope` is the backup's, as `backup run` reads it. */
+/** What `backup ready` found: `missing`, each thing configured that has no copy off this machine; `notCopied`, what
+ * the backup does not copy at all, with its size; and `notes`, what is worth saying and loses nothing. `git` runs git
+ * with no optional lock, so not even git's own index refresh is written. `scope` is the backup's, as `backup run`
+ * reads it. */
 export function readiness({ home, clone, config, scope, desktop, run, env = {} }) {
   const git = (cwd, args, options = {}) =>
     run('git', ['-C', cwd, ...args], { env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_OPTIONAL_LOCKS: '0' }, ...options });
   const missing = [];
+  const notes = [];
   const manifest = readJson(path.join(clone, 'manifest.json'));
   if (!manifest) missing.push(`the backup clone ${clone} holds no backup yet: run js-harness backup run`);
   missing.push(...cloneState(git, clone));
   if (manifest) {
     missing.push(...homeState({ home, scope, desktop, manifest, run }));
     for (const source of Array.isArray(config.bundles) ? config.bundles : []) missing.push(...repoState(git, source, manifest));
+    // The readable fallback (odd/tasks/recent-memory.md, D8), by count: a project's name can be a client's. Another
+    // format loses nothing, since the export holds it all.
+    const recent = recentInClone(clone);
+    if (recent.absent) missing.push('the backup holds no readable fallback of Engram (RECENT.md): js-harness backup run writes it');
+    else if (recent.differ.length) missing.push(`${recent.differ.length} readable fallback files differ from what the backup's export rebuilds: js-harness backup run rebuilds them`);
+    if (recent.otherFormat.length) notes.push(`${recent.otherFormat.length} readable fallback files were built by another format; the next backup run rebuilds them`);
   }
-  return { missing, notCopied: notCopied(home, desktop) };
+  return { missing, notCopied: notCopied(home, desktop), notes };
 }
 
 /** The backup clone against its origin: never pushed, ahead, behind, or holding what no run committed. */

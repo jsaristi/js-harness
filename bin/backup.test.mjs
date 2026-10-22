@@ -227,6 +227,62 @@ test('backup run rebuilds RECENT.md and a file per project from the export it ac
   assert.equal(fs.readFileSync(path.join(paths.clone, 'recent', 'js-harness.md'), 'utf8'), before);
 });
 
+test('a clone with no RECENT.md is due a backup even when nothing changed, and the run rewrites RESTORE.md', async (t) => {
+  const { paths, deps, state } = setup(t, { engram: MEMORY });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  state.now += 60 * 60_000;
+  assert.equal(dueReason(deps.home, state.now), 'nothing changed since the last backup');
+  fs.rmSync(path.join(paths.clone, 'RECENT.md'));
+  assert.equal(dueReason(deps.home, state.now), null);
+  assert.match(fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8'), /recent\//);
+});
+
+test('verify, ready, status and doctor check the readable fallback against the export, naming no project', async (t) => {
+  const { bare, home, paths, deps, state } = setup(t, { engram: MEMORY });
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  assert.equal(await backupMain(['verify', '--from', bare], deps), 0, deps.stdout.text + deps.stderr.text);
+  assert.match(deps.stdout.text, /^ok recent: 3 of 3 files rebuilt from the export$/m);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['status'], deps), 0);
+  assert.match(deps.stdout.text, /^recent: 2 projects, newest entry 2026-10-21$/m);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 0, deps.stdout.text);
+
+  // A hand edit, or a run that failed half-way: the file is not what the export rebuilds.
+  const client = path.join(paths.clone, 'recent', 'client.md');
+  const good = fs.readFileSync(client, 'utf8');
+  fs.appendFileSync(client, 'edited by hand\n');
+  deps.stdout = sink();
+  assert.equal(await backupMain(['verify', '--from', paths.clone], deps), 1);
+  assert.match(deps.stdout.text, /^FAIL recent: 1 of 3 files differ from what the export rebuilds: js-harness backup run rebuilds them$/m);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /^missing: 1 readable fallback files differ from what the backup's export rebuilds: js-harness backup run rebuilds them$/m);
+  assert.doesNotMatch(deps.stdout.text + deps.stderr.text, /client/, 'the private project is never named');
+
+  // Another format loses nothing (the export holds it all): a note, never a failure.
+  fs.writeFileSync(client, good.replace(/^format: \d+$/m, 'format: 0'));
+  deps.stdout = sink();
+  assert.equal(await backupMain(['verify', '--from', paths.clone], deps), 0, deps.stdout.text);
+  assert.match(deps.stdout.text, /^note recent: 1 files were built by another format; the next backup run rebuilds them$/m);
+  deps.stdout = sink();
+  await backupMain(['ready'], deps);
+  assert.match(deps.stdout.text, /^note: 1 readable fallback files were built by another format; the next backup run rebuilds them$/m);
+  assert.doesNotMatch(deps.stdout.text, /missing: .*readable fallback/);
+  fs.writeFileSync(client, good);
+
+  // doctor: a success that left no RECENT.md is no backup of the fallback; ready says so too.
+  assert.equal(backupHealth(home, state.now).state, 'ok');
+  fs.rmSync(path.join(paths.clone, 'RECENT.md'));
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /^missing: the backup holds no readable fallback of Engram \(RECENT\.md\): js-harness backup run writes it$/m);
+  const health = backupHealth(home, state.now);
+  assert.equal(health.state, 'stale');
+  assert.match(health.fix[0], /no RECENT\.md in the clone/);
+});
+
 test('a wipe of one project keeps its file and its export, and last.json names it', async (t) => {
   const many = (project, n) => Array.from({ length: n }, (_, i) => ({ id: `${project}-${i}`, sync_id: `obs-${project}-${i}`, type: 'decision', title: `${project} ${i}`, content: 'c', project, updated_at: '2026-10-20 10:00:00' }));
   const { paths, deps, state } = setup(t, { engram: { ...EXPORT, observations: [...many('big', 400), ...many('client', 30)] } });

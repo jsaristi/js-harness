@@ -231,6 +231,8 @@ test('verify restores into a scratch home, checks the counts and every file, and
   assert.equal(good.ok, true, good.lines.join('\n'));
   assert.ok(good.lines.some((line) => /observations: 3 restored, 3 backed up, 3 live/.test(line)));
   assert.ok(good.lines.some((line) => /files: 5 of 5 byte for byte/.test(line)));
+  // A backup made before the readable fallback existed is still a good backup: its export holds everything.
+  assert.ok(good.lines.includes('note recent: this backup holds no readable fallback yet; the next backup run writes it'), good.lines.join('\n'));
   assert.deepEqual(fs.readdirSync(tmp), [], 'the scratch home is gone');
 
   fs.appendFileSync(path.join(from, 'claude', 'projects', 'C--old-place', 'memory', 'MEMORY.md'), 'changed\n');
