@@ -189,6 +189,44 @@ test('a second run with nothing new commits and pushes nothing', async (t) => {
   assert.equal(remoteCommits(bare), 1);
 });
 
+const MEMORY = {
+  ...EXPORT,
+  observations: [
+    { id: 1, sync_id: 'obs-1', type: 'decision', title: 'Gate lock decided', content: '**Why**: one gate at a time', project: 'js-harness', updated_at: '2026-10-20 10:00:00' },
+    { id: 2, sync_id: 'obs-2', type: 'bugfix', title: 'Client fix', content: 'fixed', project: 'client', updated_at: '2026-10-21 10:00:00' },
+  ],
+};
+
+test('backup run rebuilds RECENT.md and a file per project from the export it accepted, and only then', async (t) => {
+  const { bare, paths, deps, state } = setup(t, { engram: MEMORY });
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+
+  assert.match(remoteFile(bare, 'RECENT.md').stdout, /recent\/js-harness\.md/);
+  assert.match(remoteFile(bare, 'recent/js-harness.md').stdout, /^### Gate lock decided$/m);
+  assert.match(remoteFile(bare, 'recent/client.md').stdout, /^### Client fix$/m);
+  const manifest = JSON.parse(remoteFile(bare, 'manifest.json').stdout);
+  assert.deepEqual(manifest.recent.map(({ project, file, entries, observations }) => ({ project, file, entries, observations })), [
+    { project: 'client', file: 'recent/client.md', entries: 1, observations: 1 },
+    { project: 'js-harness', file: 'recent/js-harness.md', entries: 1, observations: 1 },
+  ]);
+  assert.ok(manifest.files.every((f) => !f.path.startsWith('recent/')), 'restore places only its own roots');
+
+  // A project gone from the export loses its file; an export the shrink guard refuses leaves the files as they were.
+  state.engram = { ...MEMORY, observations: [MEMORY.observations[0], { ...MEMORY.observations[0], id: 3, sync_id: 'obs-3', title: 'Second' }] };
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.equal(remoteFile(bare, 'recent/client.md').status, 128);
+  assert.ok(!fs.existsSync(path.join(paths.clone, 'recent', 'client.md')));
+  const before = remoteFile(bare, 'recent/js-harness.md').stdout;
+  assert.match(before, /^### Second$/m);
+
+  state.engram = { ...MEMORY, sessions: [], observations: [], prompts: [] };
+  state.now += 60 * 60_000;
+  assert.equal(await backupMain(['run'], deps), 1);
+  assert.equal(fs.readFileSync(path.join(paths.clone, 'recent', 'js-harness.md'), 'utf8'), before);
+});
+
 test('backup run pushes nothing while the repository does not read PRIVATE, and records why', async (t) => {
   for (const visibility of ['PUBLIC', null]) {
     const { bare, paths, deps } = setup(t, { visibility });

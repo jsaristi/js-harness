@@ -22,6 +22,7 @@ import {
   scopeArgs,
 } from './lib/backup.mjs';
 import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
+import { buildRecent } from './lib/backup-recent.mjs';
 import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore.mjs';
 import { humanSize, readiness } from './lib/backup-ready.mjs';
 import { bundleRefs, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
@@ -204,6 +205,17 @@ function bundleUnpushed(deps, source, clone) {
   return { source: key, commits: count, refs: listed };
 }
 
+/** Writes the readable fallback (odd/tasks/recent-memory.md, D1) from the clone's export: `RECENT.md` and
+ * `recent/<project>.md`, a file of a project gone from the export removed. Returns the manifest's `recent` entries. */
+function writeRecent(clone) {
+  const { files, projects } = buildRecent(readJson(path.join(clone, 'engram', 'export.json')));
+  const folder = path.join(clone, 'recent');
+  fs.mkdirSync(folder, { recursive: true });
+  for (const name of fs.readdirSync(folder)) if (!files.has(`recent/${name}`)) fs.rmSync(path.join(folder, name), { recursive: true, force: true });
+  for (const [file, text] of files) fs.writeFileSync(path.join(clone, file), text);
+  return projects;
+}
+
 /** `backup run`: one backup, start to push. Returns the outcome recorded in last.json. */
 export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const paths = backupPaths(deps.home);
@@ -226,6 +238,8 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   // Counts of another scope say nothing about a wipe: the first run after the scope changes takes the export as it is.
   const rescoped = previous !== null && (previous.scope ?? 'all') !== scope;
   const exported = exportEngram({ dest: paths.clone, run: deps.run, allowShrink: allowShrink || rescoped, scope });
+  // Only now, from the export the shrink guard accepted: a wiped Engram never reaches the readable fallback either.
+  const recent = writeRecent(paths.clone);
   const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop });
   const bundles = bundleSources(config).map((source) => {
     const entry = bundleUnpushed(deps, source, paths.clone);
@@ -259,7 +273,7 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
       redacted: [...redacted, ...(exported.kinds.length ? [{ path: 'engram/export.json', kinds: exported.kinds }] : [])],
     }),
   );
-  writeJson(path.join(paths.clone, 'manifest.json'), { ...manifest, scope, bundles });
+  writeJson(path.join(paths.clone, 'manifest.json'), { ...manifest, scope, bundles, recent });
   // Every byte as written: under core.autocrlf a commit or a checkout would change line endings, and a restore would
   // no longer match the sha256 the manifest holds.
   fs.writeFileSync(path.join(paths.clone, '.gitattributes'), '* -text\n');
