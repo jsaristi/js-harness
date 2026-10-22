@@ -91,3 +91,7 @@ Deleting any memory note: one list, sent through the lead.
   path, his quotes as source; owner project with a design source for an agent's own lesson), declared on this branch
   with `rules change`, then `memory plan`, the notes shrunk to pointers naming `rule:<id>`, `memory verify`, and
   `guard --memory` to exit 0; the notes that are only agents' lessons go to the lead as one deletion list.
+- L8 (2026-10-22) After the restart the lead asked that the rule change land promptly, since its own rule change
+  (rule/question-context) waits behind it, one open at a time. So T1 goes out alone in the pull request of
+  rule/memory-feedback-home, and T2, which declares rules of its own, runs on a new rule/ branch once the lead's has
+  landed, from L7's plan.
