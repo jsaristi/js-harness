@@ -50,7 +50,7 @@ Deleting any memory note: one list, sent through the lead.
   AGENTS.md.
 
 ## Tasks
-- [ ] T1 (kind: build) S2: the guard, test first; the rule memory-feedback-home declared with `js-harness rules change`
+- [x] T1 (kind: build) S2: the guard, test first; the rule memory-feedback-home declared with `js-harness rules change` (73f61b9f, fix 3a5bd482)
 - [ ] T2 (kind: build) S3: the move pass over the feedback notes
 - [ ] T3 (kind: docs) S4: help text, README/GUIDE, roadmap
 - [ ] T4 (kind: verify) S4: gentle-ai review and Codex review of the slice
@@ -77,3 +77,17 @@ Deleting any memory note: one list, sent through the lead.
   reports a note it cannot read instead of throwing, and the help no longer says every form exits 0. Not taken: "the
   bundled RULES may differ from the project's file" — `ruleHere` gives the rule's value only when the project's list
   is the running copy's, so where the check is in force the two are the same list.
+- L6 (2026-10-22) Codex on 50c56ed..3a5bd48: "the patch is correct" (0.87), no findings; recorded. The lead confirmed
+  it has no transcript line for his words either: owner project with the design source stands.
+- L7 (2026-10-22) Paused for a Claude Desktop update, at the lead's request. State for a resume: T1 done and reviewed;
+  T2 under way. Five read-only explorers mapped the 23 feedback notes (restart-announce-caps.md already names
+  rule:restart-announce); only group 2 finished, its map saved to the lead's side-session-notes folder as
+  memory-feedback-home-map-g2.json (cross-session-prompts, no-unread-flag, proof-is-a-condition, hours-are-read,
+  heredoc: 13 rules, 8 with his verified words, 5 the agents' own lessons, every one with a home in the repo). Groups
+  1 (orchestrator-autonomy-charter, status-report-protocol, review-consent-pregranted, one-sample, conflict-merge),
+  3 (guide-not-literal, mistake-report, double-review, background-tasks, phone-cannot-open, session-housekeeping),
+  4 (dogfooding, ask-before-he-leaves, questions-with-buttons, notify-when-done) and 5 (one-prompt-per-reply,
+  effort-by-kind-of-work) were stopped and are to be run again. Plan for T2: one prose rule per note (its main home as
+  path, his quotes as source; owner project with a design source for an agent's own lesson), declared on this branch
+  with `rules change`, then `memory plan`, the notes shrunk to pointers naming `rule:<id>`, `memory verify`, and
+  `guard --memory` to exit 0; the notes that are only agents' lessons go to the lead as one deletion list.

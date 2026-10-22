@@ -164,6 +164,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] Lint/LSP diagnostics wired
 - [x] Budget wired
 - [x] RDD-by-risk wired
+- [ ] A rule he states never lives only in memory: `guard` refuses a feedback note of the memory folder that names no home of its rule in the repository, and his feedback notes are moved to the repository (`odd/tasks/memory-feedback-home.md`; his words, 2026-10-15: "dime como hacemos para que estas directrices importantes deje de estarlas guardando en memoria y las cemente")
 
 ### F5 Evals that discriminate
 - [x] Spend approved by Sebastián
