@@ -91,7 +91,8 @@ Optionally, once per machine:
    up; set `"scope": "all"` in `~/.js-harness/memory-backup/config.json` for every project. Before you wipe
    or reinstall the machine, `js-harness backup ready` lists anything that still has no copy off it. Each
    run also writes a readable copy of each project's recent memory (`recent/<project>.md`), and a session
-   that starts while Engram lost its project is told to read it.
+   that starts while Engram lost its project is told to read it. `js-harness backup init --transcripts-repo
+   <owner/name>` adds a private repository of their own for the Claude transcripts, backed up once a day.
 
 ## A typical day
 
