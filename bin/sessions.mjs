@@ -171,6 +171,7 @@ function parseArgs(argv) {
       parsed[waits.get(token)] = seconds;
     } else if (token === '--peek') {
       parsed.peek = true;
+      continue; // a flag: it takes no value, so the token after it is read as its own
     } else if (token === '--self') {
       parsed.self = requireValue(argv, i, token);
       if (parsed.self.length < 8) throw new SessionsArgError('--self takes a session id, or its first eight characters or more');

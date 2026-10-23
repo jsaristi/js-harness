@@ -1285,6 +1285,32 @@ test('updateMain refuses flags it does not know and still takes --home, --repo a
   assert.equal(taken.code, 0, taken.err);
 });
 
+// odd/tasks/launch-audit/a.md C-a-1, C-a-2: a value flag with no value, or followed by another flag, took that flag
+// as its value (`--repo --home X` made the repository `--home`) or was ignored (`update --source`).
+test('update and upgrade refuse a value flag with no value, or followed by another flag, before anything runs', async () => {
+  const home = makeTmpDir('js-harness-value-home-');
+  try {
+    const cases = [
+      [updateMain, ['--home'], /^--home requires a value\n\nUsage: js-harness update /],
+      [updateMain, ['--repo', '--home', home], /^--repo requires a value\n\nUsage: js-harness update /],
+      [updateMain, ['--source'], /^--source requires a value\n\nUsage: js-harness update /],
+      [upgradeMain, ['--home'], /^--home requires a value\n\nUsage: js-harness upgrade /],
+      [upgradeMain, ['--prefix', '--home', home], /^--prefix requires a value\n\nUsage: js-harness upgrade /],
+      [upgradeMain, ['--pm'], /^--pm requires a value\n\nUsage: js-harness upgrade /],
+    ];
+    for (const [main, argv, message] of cases) {
+      const calls = [];
+      const { code, out, err } = await runCommand(main, argv, {}, pathCopyAnswers(NEWER, calls));
+      assert.equal(code, 2, argv.join(' '));
+      assert.equal(out, '', argv.join(' '));
+      assert.match(err, message, argv.join(' '));
+      assert.equal(calls.length, 0, `${argv.join(' ')} started a process`);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status never prints the bytes of a malformed harness.json (terminal escapes included)', async () => {
   const root = makeProject({ version: '1.0.0' });
   const home = makeTmpDir('js-harness-status-home-');

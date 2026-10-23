@@ -56,7 +56,6 @@ const LEGACY = {
   guard: 'prints only the usage',
   reply: 'prints only the usage',
   backup: 'ignores the flag: `backup status --no-such-flag` exits 1, not initialised',
-  permit: 'ignores the flag: `permit list --no-such-flag` exits 0',
 };
 
 /** The commands `js-harness --help` lists, in its order: the first word of each line under "Commands:". */

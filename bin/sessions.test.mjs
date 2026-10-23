@@ -1942,6 +1942,22 @@ test('--peek prints an opening and records no reading, even as the first a sessi
   assert.match(alone.stderr, /--peek goes only with --opening/);
 }));
 
+test('--peek takes no value: it goes before or after --opening, and a token it does not know is refused as one', withMachine(async (machine) => {
+  writeUntitled(machine, SESSION_D, 30);
+  storeOpening(machine);
+  const env = { CLAUDE_CODE_SESSION_ID: SESSION_D };
+  const before = await runSessions(machine, ['--peek', '--opening', 'JH 6'], { env });
+  assert.deepEqual([before.code, before.stdout, before.stderr, fs.existsSync(recordOf(machine).path)], [0, OPENING_TEXT.trimEnd(), '', false]);
+  const after = await runSessions(machine, ['--opening', 'JH 6', '--peek'], { env });
+  assert.deepEqual([after.code, after.stdout, after.stderr, fs.existsSync(recordOf(machine).path)], [0, OPENING_TEXT.trimEnd(), '', false]);
+  for (const argv of [['--peek', '--bogus'], ['--opening', 'JH 6', '--peek', '--bogus']]) {
+    const refused = await runSessions(machine, argv, { env });
+    assert.deepEqual([refused.code, refused.stdout], [2, '']);
+    assert.match(refused.stderr, /unknown argument: --bogus/);
+    assert.equal(fs.existsSync(recordOf(machine).path), false, 'a refused command records nothing');
+  }
+}));
+
 // A row of the roster is a title (`rosterOf`): two sessions that read one opening carry one title, as two
 // transcripts of a restarted session do, and are one holder. Two openings of one role are two holders.
 test('two untitled sessions that read one opening are one row of its title, and two that read two openings of one role make --address exit 2 with both', withMachine(async (machine) => {

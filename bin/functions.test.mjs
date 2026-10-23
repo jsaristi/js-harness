@@ -118,6 +118,17 @@ test('an argument it does not take is a usage error: exit 2, nothing on stdout',
   assert.match(err, /^unknown argument: --apply-everything\n\nUsage: js-harness functions/);
 });
 
+// odd/tasks/launch-audit/a.md C-a-8: `--cwd` with no path, or followed by another flag, is a usage error like `init`'s.
+test('--cwd with no path, or followed by another flag, is a usage error: exit 2, nothing on stdout', async (t) => {
+  const root = repo(t, { 'notes.md': 'x' });
+  for (const argv of [['--cwd'], ['--cwd', '--json']]) {
+    const { code, out, err } = await functions(root, ...argv);
+    assert.equal(code, 2, argv.join(' '));
+    assert.equal(out, '', argv.join(' '));
+    assert.match(err, /^--cwd requires a value\n\nUsage: js-harness functions/, argv.join(' '));
+  }
+});
+
 // --- apply and set: what the switches write in this clone (slice 2) ---
 
 /** Real git; a fake `codegraph` that makes `.codegraph` as the real one does. */

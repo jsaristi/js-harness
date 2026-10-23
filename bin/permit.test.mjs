@@ -200,6 +200,83 @@ test('a lease another session holds is neither replaced nor ended without --take
   assert.equal((await run(machine, ['lease', '--session', LEAD])).code, 0);
 }));
 
+// The arguments: a flag a subcommand does not know, or a value flag with no value, is refused with exit 2 before anything
+// is written (bin/lib/args.mjs), so a typo never does what the user did not ask (`lease --of` took a 40-minute lease).
+const LEASE_FILE = (machine) => path.join(permitsDir(machine.home, machine.slug), 'lease.json');
+const LEAD_ENV = { env: { CLAUDE_CODE_SESSION_ID: LEAD } };
+
+test('lease refuses a mistyped flag, a flag given where its value belongs, and a value flag with no value: nothing is written', withMachine(async (machine) => {
+  const typo = await run(machine, ['lease', '--of'], LEAD_ENV);
+  assert.equal(typo.code, 2);
+  assert.equal(typo.out, '');
+  assert.match(typo.err, /^js-harness permit: unknown argument: --of\n/);
+  const taken = await run(machine, ['lease', '--session', '--take-over']);
+  assert.equal(taken.code, 2);
+  assert.equal(taken.out, '');
+  assert.match(taken.err, /^js-harness permit: --session requires a value\n/);
+  const unknownAfter = await run(machine, ['lease', '--session', '--bogus']);
+  assert.equal(unknownAfter.code, 2);
+  assert.match(unknownAfter.err, /^js-harness permit: --session requires a value\n/, 'the missing value is named before the flag after it');
+  const minutes = await run(machine, ['lease', '--session', LEAD, '--minutes']);
+  assert.equal(minutes.code, 2);
+  assert.match(minutes.err, /^js-harness permit: --minutes requires a value\n/);
+  const offWithSession = await run(machine, ['lease', '--off', '--session', LEAD]);
+  assert.equal(offWithSession.code, 2);
+  assert.match(offWithSession.err, /^js-harness permit: unknown argument: --session\n/);
+  assert.equal(fs.existsSync(LEASE_FILE(machine)), false);
+}));
+
+test('lease --minutes sets the length of the lease', withMachine(async (machine) => {
+  assert.equal((await run(machine, ['lease', '--session', LEAD, '--minutes', '5'])).code, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(LEASE_FILE(machine), 'utf8')).until, new Date(START + 5 * 60 * 1000).toISOString());
+}));
+
+test('list refuses a flag it does not know rather than printing the plain list', withMachine(async (machine) => {
+  const typo = await run(machine, ['list', '--jsn']);
+  assert.equal(typo.code, 2);
+  assert.equal(typo.out, '');
+  assert.match(typo.err, /^js-harness permit: unknown argument: --jsn\n/);
+  assert.equal((await run(machine, ['list', '--json'])).code, 0);
+}));
+
+test('the hook refuses a flag it does not know: it answers nothing, records no card and tells no orchestrator', withMachine(async (machine) => {
+  await lease(machine);
+  const { code, out, err } = await run(machine, ['--hook', '--zz-audit-sentinel'], { stdin: request(machine) });
+  assert.equal(code, 2);
+  assert.equal(out, '');
+  assert.match(err, /^js-harness permit: unknown argument: --zz-audit-sentinel\n/);
+  assert.equal(fs.existsSync(path.join(permitsDir(machine.home, machine.slug), 'requests')), false);
+  assert.deepEqual(readNotices(machine.home, machine.slug).notices, []);
+}));
+
+test('allow takes no reason and a verdict takes one id: a typed reason is refused, never dropped', withMachine(async (machine) => {
+  await lease(machine);
+  let tried = false;
+  const { out } = await run(machine, ['--hook'], {
+    stdin: request(machine),
+    onLook: async () => {
+      if (tried) return;
+      tried = true;
+      const [id] = await pendingIds(machine);
+      const withReason = await run(machine, ['allow', id, '--reason', 'its work merged'], LEAD_ENV);
+      assert.equal(withReason.code, 2);
+      assert.match(withReason.err, /^js-harness permit: unknown argument: --reason\n/);
+      const extra = await run(machine, ['deny', id, 'its', '--reason', 'its work merged'], LEAD_ENV);
+      assert.equal(extra.code, 2);
+      assert.match(extra.err, /^js-harness permit: unknown argument: its\n/);
+      assert.equal(fs.existsSync(path.join(permitsDir(machine.home, machine.slug), 'verdicts', `${id}.json`)), false);
+      const noReason = await run(machine, ['deny', id, '--reason'], LEAD_ENV);
+      assert.equal(noReason.code, 2);
+      assert.match(noReason.err, /^js-harness permit: --reason requires a value\n/);
+      const flagReason = await run(machine, ['deny', id, '--reason', '--no-verify skips the hook'], LEAD_ENV);
+      assert.equal(flagReason.code, 2);
+      assert.match(flagReason.err, /^js-harness permit: --reason requires a value\n/);
+      assert.equal((await run(machine, ['deny', id, '--reason', 'its work merged in PR 305'], LEAD_ENV)).code, 0);
+    },
+  });
+  assert.equal(JSON.parse(out).hookSpecificOutput.decision.behavior, 'deny');
+}));
+
 test('the public command answers nothing and exits 0 on a payload it cannot read', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-permit-cli-'));
   try {

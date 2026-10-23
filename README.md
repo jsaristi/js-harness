@@ -454,7 +454,8 @@ pin and running version: match
 Says whether a newer release exists: the newest `vX.Y.Z` tag of the repository, read with
 `git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
 another repository). Releases are tagged from v0.9.0; where the repository holds no tag it says
-that and how to get the newest copy. When the tags cannot be listed it says why and exits 1.
+that and how to get the newest copy. When the tags cannot be listed it says why and exits 1. A value
+flag with no value, or followed by another flag, exits 2 with `<flag> requires a value`.
 
 ```console
 $ js-harness update
@@ -467,7 +468,7 @@ Installs the newer release with the package manager, then syncs the home with th
 installed: the repository at its newest tag (`github:jsaristi/js-harness#vX.Y.Z`; `--repo <url or
 folder>` names another repository), or the newest tarball of `--source <dir>`, a folder of `npm pack`
 tarballs, which wins when named and needs no credential. With no release tagged it installs nothing and exits 1; no package registry is ever
-asked.
+asked. A value flag with no value, or followed by another flag, exits 2 with `<flag> requires a value`, before anything is installed.
 
 The package manager is `--pm <command>`, else `JS_HARNESS_PM`, else the one that installed the copy
 running now: `pnpm` for a copy in pnpm's global folder, `npm` otherwise. The menu's Upgrade passes
@@ -1038,7 +1039,7 @@ pre-push check, and the keys of `.claude/settings.local.json`, each recorded in 
 so `uninstall` undoes it. It needs no pin. `js-harness functions set <name> <value>` writes one
 switch into `harness.json` and applies it: `codeMap` takes `auto`, `on-demand`, `always` or `off`;
 `languageServer` and `codexReview` take `auto`, `on` or `off`. `--json` prints the list and `--cwd
-<path>` names another project.
+<path>` names another project. A `--cwd` with no path, or followed by another flag, exits 2 with `--cwd requires a value`.
 
 ### js-harness remote
 
@@ -1263,6 +1264,10 @@ holding the relay gives a verdict, never the session that asks; a lease another 
 only with `--take-over`, as a new orchestrator does. Requests, verdicts,
 the lease and `log.jsonl`, one line per outcome, live under `~/.js-harness/channel/permits/<project>/`, which
 `uninstall` removes with the channel.
+
+Every `permit` subcommand checks each token before it acts: a flag it does not take is refused with
+`unknown argument: <token>`, a value flag with no value (or one followed by another flag) with `<flag> requires a
+value`, and either exits 2 with nothing written. So `permit lease --of` is refused rather than taking a lease.
 
 ### js-harness wake
 
