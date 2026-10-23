@@ -836,7 +836,8 @@ when a declaration, its source, a reader or `docs/RULES.md` is wrong; `rules ren
 `docs/RULES.md`. `rules applied` says what each model alias gave in the records of the last seven
 days. `rules change <id>` is the one command that changes a rule of the harness: in its own checkout,
 on a `rule/` branch, it takes the change as JSON on standard input and writes the declaration, its
-source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing, and
+source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing (it
+fetches nothing either: a turn to refuse counts on the `origin/main` this clone holds, and says so), and
 `--check-source` checks a stored source against its transcript again.
 
 ```console

@@ -123,7 +123,8 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       throw new RuleChangeError(`it runs on a branch rule/<name> based on ${BASE}, and this is ${branch}: git switch -c rule/${id} ${BASE}`);
     }
     // The change is read now and refused for its shape later, where it always was. A turn to refuse is counted on
-    // origin/main as it is now, not on a copy fetched days ago (T16d), so it fetches before origin/main is read.
+    // origin/main as it is now, not on a copy fetched days ago (T16d), so it fetches before origin/main is read. A dry
+    // run moves no ref: it reads the origin/main this clone holds, and says so.
     const input = checkSource ? null : stdin();
     let peeked = null;
     try {
@@ -132,7 +133,8 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       peeked = null;
     }
     const row = peeked?.set?.row;
-    if (row !== null && typeof row === 'object' && Object.hasOwn(row, 'refuses')) {
+    const refusing = row !== null && typeof row === 'object' && Object.hasOwn(row, 'refuses');
+    if (refusing && !dryRun) {
       const fetched = git(['fetch', 'origin', 'main']);
       if (fetched.status !== 0) throw new RuleChangeError(`a turn to refuse counts on ${BASE} as it is now, and git fetch origin main failed${fetched.stderr ? `: ${String(fetched.stderr).trim()}` : ''}`);
     }
@@ -282,6 +284,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       stdout(JSON.stringify(list.find((item) => item.id === id), null, 2));
       stdout(`Source: ${formOnly ? "kept, the rule's own: " : ''}${JSON.stringify(stored, null, 2)}`);
       stdout(`Relief line: ${line}`);
+      if (refusing) stdout('not fetched: the count reads origin/main as this clone holds it; a real change fetches it first');
       if (countLine !== null) stdout(countLine);
       stdout(memory);
       stdout(COST);

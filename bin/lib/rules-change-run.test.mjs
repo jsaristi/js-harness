@@ -549,6 +549,17 @@ test('a value given with patterns is no change of form: the change stores its ow
   assert.match(fs.readFileSync(reliefFile(repo), 'utf8'), /not landed: 60 minutes to 30 minutes; source design; supersedes/);
 });
 
+test('a dry run of a turn to refuse fetches nothing, so no ref moves, and says the count reads the local origin/main', async () => {
+  const repo = repository({ list: SCANNED, files: { 'docs/FAILURES.md': REGISTER } });
+  const asked = [];
+  const before = snapshot(repo);
+  const dry = await change(repo, ['gate-wait', '--dry-run'], { set: { row: { refuses: TODAY } }, source: DESIGN }, { run: fetching(FETCHED, asked) });
+  assert.equal(dry.code, 0, dry.err);
+  assert.deepEqual(asked, [], 'a dry run runs no git fetch');
+  assert.match(dry.out, /^not fetched: the count reads origin\/main as this clone holds it; a real change fetches it first$/m);
+  assert.deepEqual(snapshot(repo), before);
+});
+
 test('the switch back from refuses fetches nothing, writes the reason, and its relief line names the failure', async () => {
   const repo = repository({ list: REFUSING, files: { 'docs/FAILURES.md': REGISTER } });
   const asked = [];
