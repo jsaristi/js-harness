@@ -50,7 +50,7 @@ async function main() {
 
   /** What is wrong with the hook entries of the two host files, or `null`: each must hold its seeded entry
    * and then every entry `install` writes for its host (`hooksOfHost`: the doctor's for `startup|resume` and
-   * the resume hook's for `compact`, for both; the pause hook's for Claude Code only) once, by its event, its
+   * the resume hook's for `compact|clear|startup`, for both; the pause hook's for Claude Code only) once, by its event, its
    * matcher and its command (`hostHooksProblem`). */
   function hostFilesProblem() {
     for (const [filePath, seededCommand, host] of seededCommands) {

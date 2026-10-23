@@ -343,7 +343,7 @@ const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_mess
 
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
  * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
- * at the start of a session and the resume hook's after a compaction, for both hosts; the pause entry after a
+ * at the start of a session and the resume hook's after a compaction or a clear, for both hosts; the pause entry after a
  * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
  * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool; the guard's before a tool call and the
  * share check's at a stop, for Claude Code only; and the reply check's at a stop, for both hosts, since it reads only the
@@ -352,7 +352,7 @@ const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_mess
  * an install that changed. */
 export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
-  Object.freeze({ event: 'SessionStart', matcher: 'compact', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|startup', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),

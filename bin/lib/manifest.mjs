@@ -403,17 +403,19 @@ function hookEntry() {
   };
 }
 
-/** `resume --hook` (bin/resume.mjs) registered as a `SessionStart` hook for the matcher `compact`: after
- * a compaction the session reads its title, its opening and its feature document from files, so nobody
+/** `resume --hook` (bin/resume.mjs) registered as a `SessionStart` hook for the matcher `compact|clear|startup`: after
+ * a compaction, or a clear, the session reads its title, its opening and its feature document from files, so nobody
  * pastes it a resume prompt (odd/tasks/session-channel.md, "Context"). Both hosts match a `SessionStart`
  * entry against the way the session started, and both name a compaction `compact` (their hooks
  * documentation, read on 2026-10-11; in this project's Claude Code transcripts the hooks of other tools
- * ran under `SessionStart:compact` after 40 compactions). It is an entry of its own because the doctor's
- * matcher must not fire on a compaction. Fifteen seconds: the command asks git a handful of questions,
- * each with a limit of its own. */
+ * ran under `SessionStart:compact` after 40 compactions). The desktop app's clear starts a new session whose
+ * start is `startup`, not `clear` (harness-review L12), so that matcher is named too, and the hook speaks on it
+ * only when the app's record of the session names the session it was cleared from (bin/resume.mjs). It is an
+ * entry of its own because the doctor's matcher (`startup|resume`) must not fire on a compaction or a clear.
+ * Fifteen seconds: the command asks git a handful of questions, each with a limit of its own. */
 function resumeHookEntry() {
   return {
-    matcher: 'compact',
+    matcher: 'compact|clear|startup',
     hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }],
   };
 }

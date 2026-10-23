@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// `resume --hook`: what a session reads when it comes back from a compaction, so nobody pastes it a
+// `resume --hook`: what a session reads when it comes back from a compaction or a clear, so nobody pastes it a
 // resume prompt (odd/tasks/session-channel.md, "Context"). It is registered as a `SessionStart` hook with
-// the matcher `compact` (bin/lib/manifest.mjs): the host hands it one JSON object on standard input and
+// the matchers `compact|clear|startup` (bin/lib/manifest.mjs): the host hands it one JSON object on standard input and
 // adds what it prints to what the session reads next. Both hosts document that input and that matcher
 // (Claude Code: `session_id`, `transcript_path`, `cwd`, `source`, and `session_title` when the session has
 // one; Codex: the same without the title), and this project's transcripts record the hooks of other tools
-// run under `SessionStart:compact` after 40 compactions.
+// run under `SessionStart:compact` after 40 compactions. The desktop app's clear starts a new session, which the
+// host reports as `startup`: that start is a clear's only when the app's record of the session names the session it
+// was cleared from (`priorCliSessionIds`, bin/lib/app-record.mjs); any other `startup` prints nothing.
 //
 // It prints a few plain lines: the session's title, the opening stored for that title, the feature
 // document it works on, and what to read there (for an orchestrator, the relief file it keeps instead), and
@@ -37,18 +39,20 @@ import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, 
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { recordReviewStarts } from './lib/review-starts.mjs';
-import { dueNotice } from './lib/memory-hygiene.mjs';
+import { dueNotice, memoryFolderOf } from './lib/memory-hygiene.mjs';
 import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
+import { appRoot, appSessions } from './lib/app-record.mjs';
 import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 
 export const USAGE = [
   'Usage: js-harness resume --hook',
-  '         a SessionStart hook for the matcher "compact": it reads the hook\'s input from standard input and,',
-  '         after a compaction in a project with a harness.json, prints the session\'s title, its opening,',
-  '         its feature document (its relief file, for an orchestrator) and what to read there. It prints',
-  '         nothing anywhere else and writes nothing; when its standard input was not read, it says so on',
-  '         standard error. It always exits 0.',
+  '         a SessionStart hook for the matchers "compact", "clear" and "startup" (the last only for a session the',
+  '         desktop app says was cleared): it reads the hook\'s input from standard input and, after a compaction or',
+  '         a clear in a project with a harness.json, prints the session\'s title, its opening, its feature document',
+  '         (its relief file, for an orchestrator) and what to read there; after a compaction it also tells what its',
+  '         transcript holds of the stretch before it. It prints nothing anywhere else and writes nothing; when its',
+  '         standard input was not read, it says so on standard error. It always exits 0.',
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
   '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
@@ -90,6 +94,9 @@ const DEADLINE_PASSED = 'this hook\'s own deadline passed';
 
 const NO_REPLY = 'This session\'s last reply with text: none in this stretch.';
 const HOST_COMPACTED = 'The host compacted this session by itself: say so in your next reply to the user, first, with what was and was not written before it.';
+// The first line after a clear: the session is a new one with a new transcript, and the conversation before it is not in it.
+const JUST_CLEARED = 'js-harness resume: this session was just cleared: the host started it again with a new transcript. What follows is read from files; the conversation before the clear is not in it.';
+const JUST_COMPACTED = 'js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.';
 // The hour of the compaction is the hook's own clock, since the hook runs at it: 7 of 60 such notices typed it in UTC
 // when the line left it to the session (odd/tasks/wake-and-flag.md, T4).
 const twoDigits = (n) => String(n).padStart(2, '0');
@@ -202,18 +209,21 @@ function transcriptOf(input, sessionId, { projectDir, projectsDir, readFile }) {
 
 /** The session's title and where it was read, `{ title, from }`, in the order of trust: what the host
  * gave the hook, what the transcript carries, the title of the opening the record says the session read.
- * `{ title: null, from }` with what was looked at when none of them has one. The transcript is the text
+ * `{ title: null, from }` with what was looked at when none of them has one. A clear's session has the title the desktop
+ * app's record of it gives (`app`, the record `clearedStart` read; null for a compaction, which reads none) after the
+ * transcript's: a new session may carry no title yet. The transcript is the text
  * `transcriptOf` read, so the file is read once for the title and for the feature document.
  * The title is the one given, with every blank it holds: an opening is stored under its whole title and a
  * notice carries the one of its transcript, so a title with two blanks in a row made one finds neither.
  * It is made one line (`oneLine`) where the session's line prints it, and nowhere else: the titles of the
  * openings the hook lists are printed as they are stored (`printedTitle`), since a blank is what tells two
  * openings apart. */
-function titleOf(input, sessionId, { transcript, record }) {
+function titleOf(input, sessionId, { transcript, record, app = null }) {
   if (typeof input.session_title === 'string' && input.session_title.trim() !== '') return { title: input.session_title, from: 'the title the host gave the hook' };
   // No transcript (a Codex session has none here, or it cannot be read) carries no title.
   const carried = transcript === null ? null : transcriptTitle(transcript);
   if (carried !== null && carried.trim() !== '') return { title: carried, from: 'the title its transcript carries' };
+  if (typeof app?.title === 'string' && app.title.trim() !== '') return { title: app.title, from: 'the title the desktop app records for the session' };
   if (sessionId === null) return { title: null, from: transcript === null ? 'the host gave the hook none and no session id a transcript could be found by' : 'the host gave the hook none and its transcript gives none' };
   const read = titleRead(record.readings, sessionId);
   if (read !== null) return { title: read, from: 'the title of the opening it read, by the channel\'s record' };
@@ -825,10 +835,29 @@ function questionLinesOf(record, { transcript, sessionId, orchestrator, now, quo
   ];
 }
 
+/** Whether a start the host gave the hook is a clear's: a `clear`, or a `startup` of a session the desktop app's record
+ * names as cleared from an earlier one (its `priorCliSessionIds` is not empty, `readApp` giving the app's records by
+ * session id). The app's clear starts a new session, which the host reports as `startup`. A record that cannot be read
+ * names none, so the start is the host's own. The record is read once, here, and comes back as `{ app }` (`app` is the
+ * record, or null when none was read or it names none) for the session's title; `null` when the start is not a clear's. */
+function clearedStart(source, sessionId, readApp) {
+  if (source !== 'clear' && (source !== 'startup' || sessionId === null)) return null;
+  let app = null;
+  if (sessionId !== null) {
+    try {
+      app = readApp().get(sessionId) ?? null;
+    } catch {
+      app = null;
+    }
+  }
+  if (source === 'startup' && (app?.priorCliSessionIds ?? []).length === 0) return null;
+  return { app };
+}
+
 /** The lines the hook prints for the hook input `input`, or none when it is not for it to speak: an input
- * that is not a compaction's, a sub-agent's, or a project that did not opt in. */
-function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, readdir, stat, now, late, isFile, gate }) {
-  if (!isObject(input) || input.source !== 'compact') return [];
+ * that is not a compaction's or a clear's, a sub-agent's, or a project that did not opt in. */
+function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, readdir, stat, now, late, isFile, gate, readApp }) {
+  if (!isObject(input) || !['compact', 'clear', 'startup'].includes(input.source)) return [];
   // A sub-agent's start is not the session's: the hook speaks to the session, not to a sub-agent inside it.
   if (typeof input.agent_id === 'string' && input.agent_id !== '') return [];
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
@@ -852,15 +881,19 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   const projectDir = path.join(projectsDir, slug);
   const harnessHome = env.JS_HARNESS_HOME || homedir();
   const sessionId = typeof input.session_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/.test(input.session_id) ? input.session_id : null;
+  // A start speaks only when it is a clear's: the app's record is read for a start alone, and only in an opted-in project.
+  const compacted = input.source === 'compact';
+  const cleared = compacted ? null : clearedStart(input.source, sessionId, readApp);
+  if (!compacted && cleared === null) return [];
   const record = readNotices(harnessHome, slug, { readFile });
   const transcript = transcriptOf(input, sessionId, { projectDir, projectsDir, readFile });
   // Whether `sessions --quote` can read the transcript: it is in the project's sessions folder, the one that command reads.
   // The stretch's lines and the questions' lines take this one fact; without a transcript it is not used.
   const transcriptFile = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
   const quoted = transcriptFile !== null && path.relative(projectDir, transcriptFile) === path.basename(transcriptFile);
-  const { title, from } = titleOf(input, sessionId, { transcript, record });
+  const { title, from } = titleOf(input, sessionId, { transcript, record, app: cleared?.app ?? null });
 
-  const lines = ['js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.'];
+  const lines = [compacted ? JUST_COMPACTED : JUST_CLEARED];
   lines.push(title === null ? `Session: title not known (${from})` : `Session: "${oneLine(title)}" (${from})`);
 
   const dir = openingsDir(harnessHome, slug);
@@ -868,10 +901,11 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   else lines.push(...openingLines(findOpenings(harnessHome, slug, title, { readdir, readFile }), title));
 
   // The stretch of work before the compaction is read once, here, and only when the transcript was read: the feature
-  // document and the lines of the stretch both come from it. A deadline that passed first names it as not read.
+  // document and the lines of the stretch both come from it. A deadline that passed first names it as not read. A clear
+  // has no stretch: its transcript is the new session's, so the feature document is found by the notices alone.
   const left = [];
   let stretch = null;
-  if (transcript !== null) {
+  if (compacted && transcript !== null) {
     if (late()) left.push(STEP.stretch);
     else stretch = stretchOf(transcript);
   }
@@ -922,7 +956,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   if (subject !== null && !orchestrator) lines.push(...nextModeLines(subject, input));
 
   // The stretch's own steps after the folders: a stretch the deadline passed names the pause and the reply with it.
-  if (transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
+  if (compacted && transcript !== null && stretch === null) left.push(STEP.pause, ...(subject === null ? [] : [STEP.written]), ...(subject?.worktree ? [STEP.worktree] : []), STEP.flight, STEP.reply);
   if (transcript !== null && stretch !== null) {
     // The session is named by its id, as `sessions --quote` takes it, when its transcript is in the project's sessions
     // folder (`quoted`); a transcript is read only when the hook has one.
@@ -932,8 +966,9 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   if (late()) left.push(STEP.questions);
   else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now(), quoted })));
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
-  // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell.
-  if (!orchestrator) lines.push(notifyLine(now()));
+  // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell. After a
+  // clear there is no compaction, so the notice is not written.
+  if (compacted && !orchestrator) lines.push(notifyLine(now()));
   return lines;
 }
 
@@ -1011,7 +1046,7 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run, fileSystem = 
   if (own) {
     try {
       const slug = projectSlug(mainCheckoutByFiles(cwd) ?? mainCheckout(run, cwd));
-      hygiene = dueNotice({ home, slug, folder: path.join(home, '.claude', 'projects', slug, 'memory'), now: Date.now() });
+      hygiene = dueNotice({ home, slug, folder: memoryFolderOf(slug, { home, env }), now: now() });
     } catch {
       // The pause and the inbox are said whatever happens here.
     }
@@ -1044,6 +1079,9 @@ export async function resumeMain(
     stdinIsTTY = tty.isatty(0),
     // The machine's gate, read as `gate-lock.mjs` reads it: its holder, and the gates that wait. Each read may throw.
     gate = { holder: (home) => readGateHolder(home), waiters: (home) => readGateWaiters(home) },
+    // The desktop app's records of its sessions by session id (`appSessions`), read for a start only: it says whether the
+    // start is a clear's. A test hands in its own; a failure reads as no record.
+    readApp = () => appSessions(appRoot(env, process.platform, homedir()), { readdir, readFile }),
   } = {},
 ) {
   // `--pause` is the mode of a `PostToolUse` hook, so it takes no other argument: a hook never sends one, and a
@@ -1086,7 +1124,7 @@ export async function resumeMain(
       if (line !== null) stdout(line);
       return 0;
     }
-    const lines = resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, stat, now, late, isFile, gate });
+    const lines = resumeLines(input, { defaultCwd, env, homedir, run, readFile, readdir, stat, now, late, isFile, gate, readApp });
     if (lines.length > 0) stdout(lines.join('\n'));
   } catch {
     // Fail open: a hook that breaks a session's start is worse than one that says nothing.

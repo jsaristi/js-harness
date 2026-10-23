@@ -128,7 +128,7 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     const ran = [];
     for (const file of [path.join(home, '.claude', 'settings.json'), path.join(home, '.codex', 'hooks.json')]) {
       for (const entry of JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionStart) {
-        const source = entry.matcher === 'compact' ? 'compact' : 'startup';
+        const source = entry.matcher.split('|').includes('compact') ? 'compact' : 'startup';
         const input = JSON.stringify({ hook_event_name: 'SessionStart', source, session_id: '00000000-0000-4000-8000-000000000000', cwd: project });
         for (const { command } of entry.hooks) {
           const hook = spawnSync(command, { cwd: project, env, encoding: 'utf8', input, shell: true, timeout: 60_000 });

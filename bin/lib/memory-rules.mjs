@@ -22,14 +22,21 @@ export const MEMORY_RULES_FIX =
 // The reader of a note's type lives with the guard's memory checks, which import nothing (./memory-index-guard.mjs).
 export { memoryNoteType };
 
+/** The memory folder of the project `slug`: under `CLAUDE_CONFIG_DIR` when the host sets it, else under the `.claude` of
+ * `home`, the rule every reader of the host's folder keeps (`bin/lib/pause.mjs`, `bin/rules.mjs`). The hook's notice,
+ * `js-harness memory` and doctor's memory-rules row all name it here, so they read the same folder the host writes. */
+export function memoryFolderOf(slug, { home, env = process.env }) {
+  return path.join(env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'), 'projects', slug, 'memory');
+}
+
 /** The check's cells and lines: `stale` with one line per rule note (`<file> (<type>)`, by name),
  * `ok` when the memory folder holds none, `n/a` when the project has no memory folder, `unknown`
  * when anything throws. The folder is the main checkout's, so a worktree reads the same notes as
  * the checkout: Claude Code keeps one memory for a repository. */
-export function memoryRulesState({ home, project, spawn }) {
+export function memoryRulesState({ home, project, spawn, env = process.env }) {
   try {
     const run = (command, args, options) => spawn(command, args, { ...options, encoding: 'utf8', windowsHide: true });
-    const folder = path.join(home, '.claude', 'projects', projectSlug(mainCheckout(run, project)), 'memory');
+    const folder = memoryFolderOf(projectSlug(mainCheckout(run, project)), { home, env });
     if (!fs.existsSync(folder)) return { claude: 'n/a', codex: 'n/a', lines: [] };
     const lines = [];
     for (const name of fs.readdirSync(folder).sort()) {
