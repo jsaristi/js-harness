@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import {
   forgetOptionalFile, forgetScheduledTask, lookAtScheduledTask, putOptionalRecordBack, putTaskRecordBack, readManifest, recordOptionalFile,
-  recordScheduledTask, removeScheduledTask, runSchtasks, sameTaskAction, sameTaskName, scheduledTaskAction, sha256, windowsSystem32,
+  recordScheduledTask, removeScheduledTask, runSchtasks, sameTaskAction, sameTaskName, scheduledTaskAction, windowsSystem32,
 } from './lib/manifest.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { killProcesses, killTree, selectDescendants, takeSnapshot } from './lib/process-tree.mjs';
@@ -30,6 +30,7 @@ import {
   SPAWN_MODES, cleanServerEnv, launcherFileName, locate, logNote, loginLauncher, lookUpProcesses, readPersistentEnv, readState, remoteFiles, remoteId,
   resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml, whereabouts,
 } from './lib/remote.mjs';
+import { lookAt, startupLocation } from './lib/startup-file.mjs';
 import { unknownArgument } from './lib/args.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
@@ -390,37 +391,6 @@ const isDirectory = (dir) => {
 /** Whether two paths name one folder on Windows, which does not tell `C:\Users\X` from `c:\users\x`. */
 const sameFolder = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 
-/** Where the login launcher of the project `id` goes: `{ dir, file }`, the user's Startup folder (what Windows
- * runs at every login) and the launcher in it, from the `APPDATA` of `env` and nothing else; `{ why }` when `env`
- * has none. Nothing is created: that folder is Windows's to make. */
-function launcherLocation(env, id) {
-  const key = Object.keys(env).find((name) => /^appdata$/i.test(name));
-  const appData = key === undefined ? '' : String(env[key]).trim();
-  if (appData === '') return { why: 'APPDATA is not set, so the Windows Startup folder cannot be found' };
-  const dir = path.resolve(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-  return { dir, file: path.join(dir, launcherFileName(id)) };
-}
-
-/** What is at the launcher's path and what the machine manifest records for it: `{ bytes, record, ours }`.
- * `bytes` is `null` when no file is there; `ours` says the file is, byte for byte, what js-harness recorded
- * writing: the only launcher it replaces or removes. Throws when the file or the manifest cannot be read, since
- * neither answer is then known. */
-function lookAtLauncher(home, file) {
-  let bytes = null;
-  try {
-    bytes = fs.readFileSync(file);
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw new Error(`what is at ${file} could not be read (${err.message})`);
-  }
-  let record;
-  try {
-    record = readManifest(home)?.optional?.find((entry) => entry.path === file);
-  } catch (err) {
-    throw new Error(`the machine manifest under ${home} could not be read (${err.message})`);
-  }
-  return { bytes, record, ours: bytes !== null && record !== undefined && sha256(bytes) === record.sha256 };
-}
-
 /** What the launcher and the watchdog task both hand `start`: the options this `start --at-login` was given. */
 function startOptions(opts, name, { deps, root, home }) {
   return {
@@ -438,14 +408,14 @@ function startOptions(opts, name, { deps, root, home }) {
  * js-harness recorded writing (an earlier start with other options), and refused otherwise: it is the user's, or
  * one they edited. */
 function planLauncher(options, { env, id, home }) {
-  const where = launcherLocation(env, id);
+  const where = startupLocation(env, launcherFileName(id));
   if (where.why) return { refusal: where.why };
   if (!isDirectory(where.dir)) return { refusal: `the Windows Startup folder does not exist (${where.dir}), and js-harness does not create it` };
   let content;
   let found;
   try {
     content = Buffer.from(loginLauncher(options), 'utf8');
-    found = lookAtLauncher(home, where.file);
+    found = lookAt(home, where.file);
   } catch (err) {
     return { refusal: err.message };
   }
@@ -498,14 +468,14 @@ function writeLauncher({ file, content, found, same }, { deps, home }) {
  * still what js-harness recorded writing is removed. The file goes before its record, so a failure in between
  * leaves a record of a file that is gone, never a launcher that no record names. */
 function disableLauncher({ env, deps, log, error, id, home }) {
-  const where = launcherLocation(env, id);
+  const where = startupLocation(env, launcherFileName(id));
   if (where.why) {
     error(`the login launcher could not be looked for: ${where.why}.`);
     return false;
   }
   let found;
   try {
-    found = lookAtLauncher(home, where.file);
+    found = lookAt(home, where.file);
   } catch (err) {
     error(`the login launcher could not be looked for: ${err.message}.`);
     return false;
@@ -536,11 +506,11 @@ function disableLauncher({ env, deps, log, error, id, home }) {
 
 /** The line `status` adds: `on` when the launcher file is there and the machine manifest records it. */
 function launcherLine({ env, id, home }) {
-  const where = launcherLocation(env, id);
+  const where = startupLocation(env, launcherFileName(id));
   if (where.why) return `login launcher: unknown (${where.why})`;
   let found;
   try {
-    found = lookAtLauncher(home, where.file);
+    found = lookAt(home, where.file);
   } catch (err) {
     return `login launcher: unknown (${err.message})`;
   }
