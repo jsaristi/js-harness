@@ -147,6 +147,20 @@ test('codex fix covers installed, codex and upToDate with the Codex CLI commands
   assert.equal(fix.upToDate, 'npm i -g @openai/codex@latest');
 });
 
+test('the codegraph and codex install lines run the machine\'s package manager, never npm on a pnpm machine (launch audit C-stack-1)', () => {
+  const pnpm = { JS_HARNESS_PM: 'pnpm' };
+  const codex = findTool('codex').fix({ env: pnpm });
+  assert.equal(codex.installed, 'pnpm add -g @openai/codex');
+  assert.equal(codex.upToDate, 'pnpm add -g @openai/codex@latest');
+  const codegraph = findTool('codegraph').fix({ env: pnpm, project: '/root' });
+  assert.equal(codegraph.installed, 'pnpm add -g @colbymchenry/codegraph');
+  assert.equal(codegraph.upToDate, 'pnpm add -g @colbymchenry/codegraph');
+  for (const tool of tools) {
+    for (const command of Object.values(tool.fix({ env: pnpm, project: '/root' })).flat()) assert.doesNotMatch(command, /^npm /, `${tool.id}: ${command}`);
+  }
+  assert.equal(findTool('codex').fix({ env: { JS_HARNESS_PM: 'npm' } }).installed, 'npm i -g @openai/codex', 'npm keeps the line doctor always wrote');
+});
+
 test('gentle-ai upToDate fix is a two-step list, not one line joined by a separator', () => {
   assert.deepEqual(findTool('gentle-ai').fix({}).upToDate, ['gentle-ai upgrade', 'gentle-ai sync']);
 });

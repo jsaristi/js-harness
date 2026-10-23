@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { cmdWord, resolveStackPm } from './package-manager.mjs';
 import { readManifest } from './manifest.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
@@ -263,6 +264,14 @@ const ENGRAM_PLUGIN = 'engram@engram';
 // neither run (odd/tasks/engram-plugin-lag.md, D3).
 const ENGRAM_PLUGIN_UPDATE_FIX = ['claude plugin marketplace update engram', `claude plugin update ${ENGRAM_PLUGIN}`];
 
+/** The global install of `spec` as the machine's package manager runs it: `resolveStackPm` decides it, as `planStack` does,
+ * so a pnpm machine is told `pnpm add -g` and never `npm` (the stack rule). npm keeps `i -g`, the line doctor always
+ * printed. `env` is the environment doctor was given; without one, the process's. */
+function installLine(spec, env) {
+  const pm = resolveStackPm(undefined, env ?? process.env);
+  return [...pm.words.map(cmdWord), pm.kind === 'pnpm' ? 'add' : 'i', '-g', spec].join(' ');
+}
+
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
  * configured state for the current project, and its own fix command per dimension that can gap
  * (`installed`/`claude`/`codex`/`project`/`upToDate` — a tool omits a dimension it has no meaning
@@ -357,16 +366,16 @@ export const tools = [
       if (functions?.codeMap?.value === 'off') return 'n/a';
       return project && fs.existsSync(path.join(project, '.codegraph')) ? 'ok' : 'missing';
     },
-    // Never `codegraph upgrade` (user rule): codegraph's own fix is its npm install, both for
-    // `installed` and `upToDate` — npm is also how an outdated codegraph gets upgraded. `project`
+    // Never `codegraph upgrade` (user rule): codegraph's own fix is its package manager's install, both for
+    // `installed` and `upToDate` — that install is also how an outdated codegraph gets upgraded. `project`
     // carries the actual resolved root (`deps.project`, already resolved by `resolveProjectRoot`
     // before `probeStack` runs), not a literal `<root>` placeholder.
-    fix: ({ project }) => ({
-      installed: 'npm i -g @colbymchenry/codegraph',
+    fix: ({ project, env }) => ({
+      installed: installLine('@colbymchenry/codegraph', env),
       claude: 'claude mcp add -s user codegraph -- codegraph serve --mcp',
       codex: 'codex mcp add codegraph -- codegraph serve --mcp',
       project: `gentle-ai codegraph init --cwd ${project || '<project root>'}`,
-      upToDate: 'npm i -g @colbymchenry/codegraph',
+      upToDate: installLine('@colbymchenry/codegraph', env),
     }),
   },
   {
@@ -419,10 +428,10 @@ export const tools = [
       codex: installed.state === 'missing' ? 'n/a' : codexLoginState(deps),
     }),
     project: () => 'n/a',
-    fix: () => ({
-      installed: 'npm i -g @openai/codex',
+    fix: ({ env }) => ({
+      installed: installLine('@openai/codex', env),
       codex: 'codex login',
-      upToDate: 'npm i -g @openai/codex@latest',
+      upToDate: installLine('@openai/codex@latest', env),
     }),
   },
 ];
