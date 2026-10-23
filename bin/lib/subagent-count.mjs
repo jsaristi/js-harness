@@ -102,12 +102,14 @@ export function usageOf(entries) {
 const TOKEN_FIELDS = ['input', 'cacheCreation', 'cacheRead', 'output'];
 
 /** The local day of an ISO timestamp, `YYYY-MM-DD`, at `offsetMinutes` east of universal time (Bogotá is
- * -300), or `null` for a timestamp that does not parse. The offset is passed in so a test does not depend
- * on the machine's zone. */
+ * -300), or `null` for a timestamp that does not parse. `offsetMinutes` is a number, or a function giving the
+ * offset at a timestamp: a day before a clock change has another offset than today (Codex, 2026-10-15). The
+ * offset is passed in so a test does not depend on the machine's zone. */
 export function dayOf(timestamp, offsetMinutes) {
   const ms = Date.parse(timestamp);
   if (Number.isNaN(ms)) return null;
-  return new Date(ms + offsetMinutes * 60_000).toISOString().slice(0, 10);
+  const offset = typeof offsetMinutes === 'function' ? offsetMinutes(timestamp) : offsetMinutes;
+  return new Date(ms + offset * 60_000).toISOString().slice(0, 10);
 }
 
 /** The model and effort each sub-agent call asked for, by its tool-use id, from a session's entries:
@@ -148,7 +150,8 @@ function ranOf(entries) {
  * asked; both are `null` when the call was not found. Of the description only its first word is kept.
  * `usage` counts only the entries inside the days asked, as the sessions' usage the share compares it with
  * does; `started` says whether the launch began inside them, so one carried over midnight adds its tokens
- * to the next day without counting as one of its launches. */
+ * to the next day without counting as one of its launches. `offsetMinutes` is a number or a function of the
+ * timestamp, as `dayOf` takes it. */
 export function launchesOf(records, { from, to, offsetMinutes, calls = new Map() }) {
   const inWindow = (stamp) => {
     const day = dayOf(stamp, offsetMinutes);

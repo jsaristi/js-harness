@@ -138,3 +138,60 @@ test('a bad flag is a usage error (exit 2), and a project with no records folder
     records.cleanup();
   }
 });
+
+test('subagents reads a day of another season at that season\'s offset, its launches and tokens (Codex, 2026-10-15)', async () => {
+  // UTC-5 in winter, UTC-4 in summer; run in summer about a winter day. 04:30Z on the 16th is 23:30 of the 15th there.
+  const config = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-subagents-'));
+  try {
+    const project = path.join(config, 'project');
+    const folder = path.join(config, 'projects', projectSlug(path.resolve(project)));
+    const agents = path.join(folder, 's1', 'subagents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(folder, 's1.jsonl'), jsonl([{ type: 'assistant', timestamp: '2026-01-16T04:29:00Z', message: { id: 'p1', model: 'claude-opus-5-5', usage: { input_tokens: 300, output_tokens: 3 } } }]));
+    fs.writeFileSync(path.join(agents, 'agent-w1.jsonl'), jsonl([answer('m1', 'claude-haiku-5-5', '2026-01-16T04:30:00Z', 100)]));
+    fs.writeFileSync(path.join(agents, 'agent-w1.meta.json'), JSON.stringify({ agentType: 'general-purpose', description: 'Write it', effort: 'high' }));
+    const out = [];
+    const err = [];
+    const deps = {
+      cwd: project, stdout: (line) => out.push(line), stderr: (line) => err.push(line), run: () => ({ status: 128, stdout: '', stderr: '' }),
+      now: () => Date.parse('2026-07-15T20:00:00.000Z'),
+      offsetMinutes: (timestamp) => (timestamp < '2026-03-08T07:00:00.000Z' ? -300 : -240),
+    };
+    assert.equal(await subagentsMain(['--day', '2026-01-15'], { CLAUDE_CONFIG_DIR: config }, deps), 0, err.join('\n'));
+    assert.match(out[0], /^Sub-agents, local day 2026-01-15 \(UTC-05:00\)/);
+    out.length = 0;
+    assert.equal(await subagentsMain(['--day', '2026-01-15', '--json'], { CLAUDE_CONFIG_DIR: config }, deps), 0);
+    const parsed = JSON.parse(out.join('\n'));
+    assert.equal(parsed.offsetMinutes, -300);
+    assert.deepEqual(parsed.launches.map((launch) => [launch.agentId, launch.started]), [['w1', true]]);
+    assert.equal(parsed.sessions.input, 300, 'the parent entry at 23:29 of the 15th is that day\'s, not the next');
+  } finally {
+    fs.rmSync(config, { recursive: true, force: true });
+  }
+});
+
+test('subagents reads a day east of UTC from the files changed the day before, its first hours included', async () => {
+  // UTC+2: local 00:30 of the 15th is 22:30Z on the 14th, and the file holding it was last written at 23:00Z there.
+  const config = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-subagents-'));
+  try {
+    const project = path.join(config, 'project');
+    const folder = path.join(config, 'projects', projectSlug(path.resolve(project)));
+    const agents = path.join(folder, 's1', 'subagents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(folder, 's1.jsonl'), jsonl([]));
+    const file = path.join(agents, 'agent-e1.jsonl');
+    fs.writeFileSync(file, jsonl([answer('m1', 'claude-haiku-5-5', '2026-01-14T22:30:00Z', 100)]));
+    fs.writeFileSync(path.join(agents, 'agent-e1.meta.json'), JSON.stringify({ agentType: 'general-purpose', description: 'Write it', effort: 'high' }));
+    const changed = new Date('2026-01-14T23:00:00Z');
+    fs.utimesSync(file, changed, changed);
+    const out = [];
+    const code = await subagentsMain(['--day', '2026-01-15', '--json'], { CLAUDE_CONFIG_DIR: config }, {
+      cwd: project, stdout: (line) => out.push(line), stderr: () => {}, run: () => ({ status: 128, stdout: '', stderr: '' }),
+      now: () => Date.parse('2026-07-15T20:00:00.000Z'), offsetMinutes: () => 120,
+    });
+    assert.equal(code, 0);
+    assert.deepEqual(JSON.parse(out.join('\n')).launches.map((launch) => [launch.agentId, launch.started]), [['e1', true]]);
+  } finally {
+    fs.rmSync(config, { recursive: true, force: true });
+  }
+});
