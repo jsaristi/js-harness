@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { hygieneState, INDEX_BYTES, journalPath, LINE_CHARS, memoryLocation, NOTE_BYTES, PASS_DAYS, readJournal, readMemory } from './lib/memory-hygiene.mjs';
-import { PassError, planPass, undoPass, verifyPass } from './lib/memory-pass.mjs';
+import { isStamp, PassError, planPass, undoPass, verifyPass } from './lib/memory-pass.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
 
 export const USAGE = `Usage: js-harness memory status [--json] [--history] [--cwd <path>] [--home <path>]
@@ -19,12 +19,13 @@ export const USAGE = `Usage: js-harness memory status [--json] [--history] [--cw
        js-harness memory undo <stamp> [--cwd <path>] [--home <path>]`;
 
 // What each subcommand takes: how many positional arguments (`min`, `max`) and which flags beyond
-// --cwd and --home, every one of which is refused elsewhere.
+// --cwd and --home, every one of which is refused elsewhere. `stamp` marks the one argument as a pass
+// stamp, refused before anything is read unless it has the shape a pass writes.
 const SHAPES = {
   status: { min: 0, max: 0, bare: ['--json', '--history'], valued: [] },
   plan: { min: 1, max: Infinity, bare: [], valued: [] },
-  verify: { min: 1, max: 1, bare: [], valued: ['--approved'] },
-  undo: { min: 1, max: 1, bare: [], valued: [] },
+  verify: { min: 1, max: 1, bare: [], valued: ['--approved'], stamp: true },
+  undo: { min: 1, max: 1, bare: [], valued: [], stamp: true },
 };
 
 class MemoryArgError extends Error {}
@@ -50,6 +51,7 @@ function parseArgs(argv) {
     }
   }
   if (parsed.args.length < shape.min || parsed.args.length > shape.max) throw new MemoryArgError(`memory ${subcommand}: wrong number of arguments`);
+  if (shape.stamp && !isStamp(parsed.args[0])) throw new MemoryArgError(`memory ${subcommand}: ${parsed.args[0]} is not a pass stamp`);
   return parsed;
 }
 

@@ -168,3 +168,34 @@ test('an unknown subcommand, an unknown flag and a flag with no value are usage 
     }
   });
 });
+
+test('verify and undo refuse a stamp that is not the shape a pass writes (exit 2), and read or write nothing of the state folder', async () => {
+  await withProject(async ({ home, project, folder, journal }) => {
+    write(path.join(folder, 'MEMORY.md'), '- [a](a.md) — hook\n');
+    write(path.join(folder, 'a.md'), note('user'));
+    const hygiene = path.dirname(path.dirname(journal));
+    write(path.join(hygiene, 'outside', 'manifest.json'), JSON.stringify({ stamp: 'outside', writeSet: ['a.md'], before: {} }));
+    for (const stamp of ['../../outside', '../outside', 'outside', '20260101T000000000']) {
+      for (const subcommand of ['verify', 'undo']) {
+        const { code, out, err } = await run([subcommand, stamp, '--cwd', project, '--home', home], {});
+        assert.equal(code, 2, `${subcommand} ${stamp}`);
+        assert.equal(out, '', `${subcommand} ${stamp}`);
+        assert.ok(err.includes(`memory ${subcommand}: ${stamp} is not a pass stamp`), err);
+      }
+    }
+    assert.equal(fs.existsSync(journal), false);
+    assert.equal(fs.existsSync(path.join(hygiene, 'outside', 'after.json')), false);
+  });
+});
+
+test('undo of a well-formed stamp with no state folder is refused by name (exit 1), and creates no state folder', async () => {
+  await withProject(async ({ home, project, folder, journal }) => {
+    write(path.join(folder, 'MEMORY.md'), '- [a](a.md) — hook\n');
+    write(path.join(folder, 'a.md'), note('user'));
+    const { code, out, err } = await run(['undo', '20260101T000000000Z', '--cwd', project, '--home', home], {});
+    assert.equal(code, 1);
+    assert.equal(out, '');
+    assert.equal(err, 'js-harness memory undo: no snapshot 20260101T000000000Z');
+    assert.equal(fs.existsSync(path.dirname(journal)), false);
+  });
+});
