@@ -8,16 +8,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline';
-import { fileURLToPath } from 'node:url';
 import { unknownArgument } from './lib/args.mjs';
 import { forgetStackRow, recordStackRow } from './lib/manifest.mjs';
 import { realCodexHome } from './lib/codex-review-home.mjs';
-import { copyPackageManager } from './lib/package-manager.mjs';
+import { resolveStackPm } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
 import { probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
-import { pmKind, splitCommand } from './lib/version.mjs';
+
+export { resolveStackPm };
 
 const USAGE = 'Usage: js-harness stack [--home <path>] [--cwd <path>] [--pm <command>] [--json]';
 const KNOWN = { valued: ['--home', '--cwd', '--pm'], bare: ['--json'] };
@@ -53,17 +53,6 @@ function parseArgs(argv, env) {
     pm: get('--pm'),
     json: argv.includes('--json'),
   };
-}
-
-/** The package manager of the installs, resolved as `upgrade` resolves it: `--pm`, else `JS_HARNESS_PM`, else the one
- * that installed the running copy. Never read from the word `npm` on the path, which may run pnpm (odd/tasks/stack-install.md, D6).
- * A command line is split into its words, unless the whole line names a file: a path with a space in it stays one word
- * (Codex on 12e46c4..6a2b0ad). `exists` is the seam that looks. */
-export function resolveStackPm(pm, env, copyPath = fileURLToPath(import.meta.url), exists = fs.existsSync) {
-  const command = pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
-  const line = command.trim();
-  const words = /\s/.test(line) && exists(line) ? [line] : splitCommand(line);
-  return { words, kind: pmKind(words) };
 }
 
 /** What the plan reads: the tool rows `probeStack` probes (its checks left out), the project's switches as `doctor`
