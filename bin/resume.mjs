@@ -37,7 +37,7 @@ import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, 
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
 import { recordReviewStarts } from './lib/review-starts.mjs';
-import { dueNotice } from './lib/memory-hygiene.mjs';
+import { dueNotice, memoryFolderOf } from './lib/memory-hygiene.mjs';
 import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
 import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
@@ -1011,7 +1011,7 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run, fileSystem = 
   if (own) {
     try {
       const slug = projectSlug(mainCheckoutByFiles(cwd) ?? mainCheckout(run, cwd));
-      hygiene = dueNotice({ home, slug, folder: path.join(home, '.claude', 'projects', slug, 'memory'), now: Date.now() });
+      hygiene = dueNotice({ home, slug, folder: memoryFolderOf(slug, { home, env }), now: now() });
     } catch {
       // The pause and the inbox are said whatever happens here.
     }

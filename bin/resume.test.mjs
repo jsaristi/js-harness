@@ -1337,6 +1337,30 @@ test('a memory hygiene pass that is due is said once a day by the hook', withMac
   assert.deepEqual((await runPause(machine, input)).lines, [], 'said once that day');
 }));
 
+// C-c-3 of odd/tasks/launch-audit/c.md: with CLAUDE_CONFIG_DIR set, the host's memory is under that folder, and the notice
+// must find it there; the pass is dated by the hook's own clock, as the pause's notice is.
+test('the memory hygiene notice finds the folder under CLAUDE_CONFIG_DIR when the host sets it', withMachine(async (machine) => {
+  const memory = path.join(machine.projectDir, 'memory');
+  fs.mkdirSync(memory, { recursive: true });
+  fs.writeFileSync(path.join(memory, 'MEMORY.md'), `- [A](a.md) — ${'x'.repeat(200)}\n`);
+  fs.writeFileSync(path.join(memory, 'a.md'), '---\nmetadata:\n  type: user\n---\n\nfact\n');
+  const env = { JS_HARNESS_HOME: machine.home, CLAUDE_CONFIG_DIR: machine.claudeHome };
+  const input = pauseInput(machine, UNDER);
+  const context = JSON.parse((await runPause(machine, input, { env })).lines[0]).hookSpecificOutput.additionalContext;
+  assert.match(context, /^js-harness: a memory hygiene pass is due for this project \(no-pass, line-chars\)/);
+}));
+
+test('the memory hygiene notice dates a pass told an hour before the hook\'s clock as told that day, not by the machine\'s clock', withMachine(async (machine) => {
+  const memory = path.join(machine.home, '.claude', 'projects', machine.slug, 'memory');
+  fs.mkdirSync(memory, { recursive: true });
+  fs.writeFileSync(path.join(memory, 'MEMORY.md'), `- [A](a.md) — ${'x'.repeat(200)}\n`);
+  fs.writeFileSync(path.join(memory, 'a.md'), '---\nmetadata:\n  type: user\n---\n\nfact\n');
+  const told = path.join(machine.home, '.js-harness', 'memory-hygiene', machine.slug, 'told');
+  fs.mkdirSync(path.dirname(told), { recursive: true });
+  fs.writeFileSync(told, `${new Date(NOW - 60 * 60 * 1000).toISOString()}\n`);
+  assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER), { now: () => NOW })).lines, [], 'told an hour before the hook\'s clock: not due again');
+}));
+
 test('past the pause with a note waiting, the hook says both in one line: the pause first, then the note', withMachine(async (machine) => {
   noteTo(machine, '5', 'both at once');
   const first = await runPause(machine, titledPauseInput(machine, PAUSED, 'JH 5 · canal entre sesiones'));

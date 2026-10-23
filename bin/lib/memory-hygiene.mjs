@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCitations } from './citations.mjs';
-import { memoryNoteType } from './memory-rules.mjs';
+import { memoryFolderOf, memoryNoteType } from './memory-rules.mjs';
 import { RULES } from './rules-data.mjs';
 import { ruleValue } from './rules.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
@@ -25,11 +25,13 @@ const INDEX = 'MEMORY.md';
 const RULE_TYPES = new Set(['feedback', 'project']);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export { memoryFolderOf };
+
 /** The project's memory folder and slug: the main checkout's, so a worktree reads the same notes,
  * since Claude Code keeps one memory for a repository. */
-export function memoryLocation({ home, project, run }) {
+export function memoryLocation({ home, project, run, env = process.env }) {
   const slug = projectSlug(path.resolve(mainCheckout(run, path.resolve(project))));
-  return { slug, folder: path.join(home, '.claude', 'projects', slug, 'memory') };
+  return { slug, folder: memoryFolderOf(slug, { home, env }) };
 }
 
 /** The folder of memory hygiene under `home`: one folder a project, with its journal, its daily stamp, its

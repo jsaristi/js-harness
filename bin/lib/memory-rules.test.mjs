@@ -82,3 +82,19 @@ test('the fix names the protocol and the order of places, then the deletion of t
   assert.doesNotMatch(MEMORY_RULES_FIX, /recording a new rule/);
   assert.match(MEMORY_RULES_FIX, /delete the note/);
 });
+
+// Launch audit C-c-3: doctor's memory-rules row reads the folder the host writes, under CLAUDE_CONFIG_DIR when it is set.
+test('the memory folder is read under CLAUDE_CONFIG_DIR when the host sets it', () => {
+  const m = machine();
+  try {
+    const config = path.join(m.home, 'config');
+    const memory = path.join(config, 'projects', projectSlug(m.project), 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'rule.md'), '---\nname: rule\ntype: feedback\n---\n');
+    const env = { CLAUDE_CONFIG_DIR: config };
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env }).lines, ['rule.md (feedback)']);
+    assert.equal(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} }).claude, 'n/a');
+  } finally {
+    m.done();
+  }
+});
