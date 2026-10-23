@@ -24,7 +24,7 @@ function spec(...entries) {
   return ['# The specification', '', 'The problem and the bet.', '', '## Capabilities', '', ...entries.flat()].join('\n');
 }
 
-const files = new Set(['bin/lib/reply.mjs', 'bin/reply.mjs', 'docs/SPEC.md']);
+const files = new Set(['bin/lib/reply.mjs', 'bin/lib/reply.test.mjs', 'bin/reply.mjs', 'docs/SPEC.md']);
 const exists = (file) => files.has(file);
 /** What a project's own specification is held to: no list of the harness's commands or entries. */
 const plain = { exists };
@@ -50,6 +50,13 @@ test('a capability that lacks one of the six fields is a finding naming it and t
 test('a capability whose proof names no command in backticks is a finding', () => {
   const { findings } = specFindings(spec(capability('The reply check', { Proof: 'the tests of the reply check' })), plain);
   assert.deepEqual(findings, ['"The reply check" (line 7) has no command in backticks in its **Proof:** field']);
+});
+
+test('a test file the proof names that does not exist is a finding, as a today file is', () => {
+  const kept = specFindings(spec(capability('The reply check', { Proof: '`node --test bin/lib/reply.test.mjs`' })), plain);
+  assert.deepEqual(kept.findings, []);
+  const gone = specFindings(spec(capability('The reply check', { Proof: '`node --test bin/lib/replies.test.mjs`' })), plain);
+  assert.deepEqual(gone.findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist']);
 });
 
 test('a file the today line names that does not exist is a finding; a path:line is read as its path', () => {
@@ -117,13 +124,15 @@ test('a specification with no capability is a finding', () => {
   assert.deepEqual(findings, [`${SPEC_PATH} holds no capability: each is a "### " heading under "## Capabilities"`]);
 });
 
-/** A folder holding `docs/SPEC.md` with `text`, removed after `body` runs. */
+/** A folder holding `docs/SPEC.md` with `text`, and the test file the default proof names, removed after `body` runs. */
 function withSpec(text, body) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-spec-'));
   try {
     if (text !== null) {
       fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
       fs.writeFileSync(path.join(dir, SPEC_PATH), text);
+      fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'bin', 'lib', 'reply.test.mjs'), '');
     }
     return body(dir);
   } finally {
@@ -143,6 +152,16 @@ test('checkSpec passes with the counts, and fails with one line per finding', ()
     assert.deepEqual(checkSpec(dir, { own: false }), [{
       name: 'spec', pass: false, detail: `1 finding in ${SPEC_PATH}`,
       lines: ['"The reply check" (line 7) has no command in backticks in its **Proof:** field'],
+    }]);
+  });
+});
+
+test('checkSpec fails the row when the test file a proof names was deleted, and names the file', () => {
+  withSpec(spec(capability('The reply check', { Today: '`docs/SPEC.md`' })), (dir) => {
+    fs.rmSync(path.join(dir, 'bin', 'lib', 'reply.test.mjs'));
+    assert.deepEqual(checkSpec(dir, { own: false }), [{
+      name: 'spec', pass: false, detail: `1 finding in ${SPEC_PATH}`,
+      lines: ['"The reply check" (line 7) names bin/lib/reply.test.mjs in **Proof:**, which does not exist'],
     }]);
   });
 });

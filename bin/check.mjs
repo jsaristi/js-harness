@@ -2582,7 +2582,10 @@ const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--ref', '--wait'
 const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door', '--verbose'];
 // The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
 // `--door` uses none of them, so one of them with it is refused rather than ignored.
-const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote', '--home'];
+const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--remote', '--home'];
+// The gate's flags that `--push` would take and ignore: a push runs no sensor and takes no lock, so one of these with
+// it is refused rather than ignored, as `--first` is. `--home` and `--remote` are shared by both and stay legal.
+const GATE_ONLY_FLAGS = ['--subagents', '--wait', '--no-wait', '--verbose'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
@@ -2610,6 +2613,10 @@ function parseArgs(argv, env) {
   const first = get('--first');
   if (first !== undefined && first.trim() === '') throw new CheckArgError('--first needs a reason, not an empty one');
   if (first !== undefined && argv.includes('--push')) throw new CheckArgError('--first goes with a gate that runs its sensors, not with --push');
+  const gateOnly = GATE_ONLY_FLAGS.find((flag) => argv.includes('--push') && argv.includes(flag));
+  if (gateOnly !== undefined) throw new CheckArgError(`${gateOnly} goes with a gate that runs its sensors, not with --push`);
+  // `--head` names the commit a push checks (`--push` alone checks HEAD); a gate or the door would take it and ignore it.
+  if (argv.includes('--head') && !argv.includes('--push')) throw new CheckArgError('--head goes with --push');
   const door = argv.includes('--door');
   const base = get('--base') ?? null;
   const branch = get('--branch') ?? null;

@@ -296,6 +296,30 @@ test('hooks are listed in configured order, only for UserPromptSubmit and Sessio
   });
 });
 
+test('hooks that add context before or after a tool call, or at a subagent launch, are listed too', () => {
+  withFixture((home, cwd) => {
+    write(
+      path.join(home, '.claude', 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'guard --hook' }] }],
+          PostToolUse: [{ hooks: [{ type: 'command', command: 'resume --pause' }] }],
+          PostToolUseFailure: [{ matcher: 'WebFetch', hooks: [{ type: 'command', command: 'resume --pause' }] }],
+          SubagentStart: [{ hooks: [{ type: 'command', command: 'rules --hook' }] }],
+          SubagentStop: [{ hooks: [{ type: 'command', command: 'should-not-appear' }] }],
+        },
+      }),
+    );
+    const { hosts } = measurePayload({ home, cwd });
+    assert.deepEqual(hosts[0].hooks, [
+      { event: 'PreToolUse', command: 'guard --hook' },
+      { event: 'PostToolUse', command: 'resume --pause' },
+      { event: 'PostToolUseFailure', command: 'resume --pause' },
+      { event: 'SubagentStart', command: 'rules --hook' },
+    ]);
+  });
+});
+
 test('Codex hooks are read from hooks.json the same way', () => {
   withFixture((home, cwd) => {
     write(

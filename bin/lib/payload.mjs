@@ -142,11 +142,13 @@ function modelInstructionsFile(home) {
   return null;
 }
 
-const CONTEXT_HOOK_EVENTS = ['UserPromptSubmit', 'SessionStart'];
+// The events whose hook output reaches the model's context: stdout of `UserPromptSubmit` and `SessionStart`, and
+// `additionalContext` of the tool events and of `SubagentStart`. `PostToolUseFailure` is here because the harness's
+// own WebFetch notice rides on it (bin/lib/manifest.mjs, webFailureHookEntry). `Stop` and `SubagentStop` add nothing.
+const CONTEXT_HOOK_EVENTS = ['UserPromptSubmit', 'SessionStart', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'SubagentStart'];
 
-/** Context-injecting hook commands from a Claude/Codex hooks config: only `UserPromptSubmit` and
- * `SessionStart` add their stdout to the model's context, so only those events are read, in
- * configured order. Missing or malformed JSON yields no hooks, never a throw. */
+/** Context-injecting hook commands from a Claude/Codex hooks config: only the events of `CONTEXT_HOOK_EVENTS` are
+ * read, in that order and then in configured order within each. Missing or malformed JSON yields no hooks, never a throw. */
 function readHooks(configPath, plugin) {
   const config = readJson(configPath);
   const hooksConfig = config && typeof config === 'object' ? config.hooks : null;

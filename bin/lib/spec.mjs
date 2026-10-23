@@ -74,6 +74,15 @@ export function parseSpec(markdown) {
 /** The text in backticks of a field. */
 const ticked = (text) => [...(text ?? '').matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
 
+/** The files of the repository a proof command runs: its words that name a script or a test file, a `.mjs`, `.js` or
+ * `.md` file or a path with a `/`, and no option. `path:line` is read as its path, as a today item is. */
+function proofFiles(command) {
+  return command
+    .split(/\s+/)
+    .filter((word) => !word.startsWith('-') && (/\.(mjs|js|md)$/.test(word) || word.includes('/')))
+    .map((word) => word.replace(/:\d+(-\d+)?$/, ''));
+}
+
 /** What one item of a today line is: a command, a manifest id, a home path or a file of the repository. */
 function readItem(item, entries) {
   const command = /^js-harness ([a-z][a-z-]*)$/.exec(item);
@@ -97,6 +106,10 @@ export function specFindings(markdown, { exists, commands = null, entries = null
     const where = `"${title}" (line ${line})`;
     for (const name of FIELDS) if (!Object.hasOwn(fields, name) || fields[name].trim() === '') findings.push(`${where} has no **${name}:** field`);
     if (Object.hasOwn(fields, 'Proof') && fields.Proof.trim() !== '' && ticked(fields.Proof).length === 0) findings.push(`${where} has no command in backticks in its **Proof:** field`);
+    // A proof whose test file is gone proves nothing, so its file is held to exist as a today file is.
+    for (const command of ticked(fields.Proof)) {
+      for (const file of proofFiles(command)) if (!exists(file)) findings.push(`${where} names ${file} in **Proof:**, which does not exist`);
+    }
     for (const item of ticked(fields.Today)) {
       const read = readItem(item, entries ?? ids);
       if (read.kind === 'unknown') findings.push(`${where} names "${item}" in **Today:**: ${TODAY_SHAPE}`);
