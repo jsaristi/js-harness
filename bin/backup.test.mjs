@@ -1196,6 +1196,13 @@ test('backup init --transcripts-repo creates it private, refuses a public one an
   assert.equal(await backupMain(['init', '--transcripts-repo', 'jsaristi/open'], deps), 1);
   assert.match(deps.stderr.text, /reads PUBLIC, not PRIVATE/);
   assert.ok(!fs.existsSync(path.join(paths.dir, 'transcripts', 'open')), 'nothing is cloned from a public repository');
+
+  deps.stderr = sink();
+  const calls = state.calls.length;
+  assert.equal(await backupMain(['init', '--transcripts-repo', 'someone/JS-harness-transcripts-1'], deps), 1);
+  assert.match(deps.stderr.text, /refused: someone\/JS-harness-transcripts-1 would share the clone of jsaristi\/js-harness-transcripts-1/);
+  assert.equal(state.calls.length, calls, 'refused before any gh or git call');
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.config, 'utf8')).transcripts.repos, [TREPO]);
 });
 
 test('backup run pushes the transcripts to their own repository once a day, and --transcripts runs them at once', async (t) => {

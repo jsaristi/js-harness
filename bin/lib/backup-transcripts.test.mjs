@@ -220,6 +220,30 @@ test('transcriptsState does not read again a file whose size and time are its en
   assert.deepEqual(transcriptsState({ projects, clones: [{ name: 'r1', dir: clone }], now: Date.now() }), { missing: [], notes: [] });
 });
 
+test('a copy puts back a stored part gone from the clone, though its transcript did not change', (t) => {
+  const { projects, clone } = fixture(t);
+  copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 });
+  const manifest = JSON.parse(fs.readFileSync(path.join(clone, 'manifest.json'), 'utf8'));
+  const part = manifest.files.find((f) => f.path === 'D--p/big.jsonl').parts[1].path;
+  fs.rmSync(path.join(clone, part));
+  assert.equal(copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 }).changed, 1);
+  assert.equal(verifyTranscripts(clone).ok, true);
+});
+
+test('a copy refuses a clone whose manifest names a path outside it, before it writes or deletes anything', (t) => {
+  const { root, projects, clone } = fixture(t);
+  copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 });
+  const manifestFile = path.join(clone, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifest.files.find((f) => f.path === 'D--p/small.jsonl').parts[0].path = '..\\outside.txt';
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  write(path.join(root, 'outside.txt'), 'not the clone\'s\n');
+  fs.appendFileSync(path.join(projects, 'D--p', 'small.jsonl'), '{"more":1}\n');
+  assert.throws(() => copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 }), /r1: D--p\/small\.jsonl: its part \.\.\\outside\.txt leaves the clone/);
+  assert.equal(fs.readFileSync(path.join(root, 'outside.txt'), 'utf8'), 'not the clone\'s\n');
+  assert.equal(fs.readFileSync(manifestFile, 'utf8'), JSON.stringify(manifest), 'the manifest is not rewritten');
+});
+
 test('a manifest path that leaves the projects folder or the clone is refused by verify and restore', (t) => {
   const { root, projects, clone } = fixture(t);
   copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 });

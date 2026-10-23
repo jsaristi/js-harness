@@ -83,6 +83,11 @@ function restoreSteps() {
  * for a next repository, the ones no part can hold with why, and how many files changed. */
 export function copyTranscripts({ projects, clones, partMax = PART_MAX_BYTES, limit = GITHUB_FILE_LIMIT, full = false }) {
   const manifests = clones.map((clone) => readManifest(clone.dir));
+  // A copy deletes the parts a manifest names, so a manifest pointing outside its clone stops it before any change.
+  manifests.forEach((manifest, i) => manifest.files.forEach((entry) => {
+    const refusal = pathRefusal(entry);
+    if (refusal) throw new Error(`${clones[i].name}: ${entry.path}: ${refusal}`);
+  }));
   const holder = new Map();
   manifests.forEach((manifest, i) => manifest.files.forEach((entry) => holder.set(entry.path, { i, entry })));
   const waiting = [];
@@ -93,7 +98,8 @@ export function copyTranscripts({ projects, clones, partMax = PART_MAX_BYTES, li
     const buffer = fs.readFileSync(source);
     const digest = sha256(buffer);
     const held = holder.get(relative);
-    if (held?.entry.sha256 === digest) continue;
+    // Unchanged and every part still in its clone: a part gone from the clone is written again, not pushed as deleted.
+    if (held?.entry.sha256 === digest && held.entry.parts.every((part) => fs.existsSync(path.join(clones[held.i].dir, part.path)))) continue;
     if (!held && full) {
       waiting.push(relative);
       continue;

@@ -146,9 +146,13 @@ function git(deps, cwd, args, options = {}) {
   return deps.run('git', ['-C', cwd, ...args], { env: { ...deps.env, ...NO_PROMPT }, ...options });
 }
 
+// Written whole and renamed into place: a transcripts run and a memory run each update last.json while the other may
+// read it, and a read must never see it half written.
 function writeJson(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
+  const partial = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(partial, `${JSON.stringify(data, null, 2)}\n`);
+  fs.renameSync(partial, file);
 }
 
 /** When a lock was taken: the time it records, or, while its writer has not written it yet, the file's own time. */
@@ -1009,6 +1013,12 @@ function initTranscripts(repo, deps) {
     return 1;
   }
   const clone = path.join(paths.transcripts, repo.split('/')[1]);
+  // A clone is named by the repository alone, so two owners' repositories of one name would share it.
+  const sharing = transcriptsClones(paths, config).find((c) => c.name.toLowerCase() !== repo.toLowerCase() && c.dir.toLowerCase() === clone.toLowerCase());
+  if (sharing) {
+    deps.stderr.write(`backup init: refused: ${repo} would share the clone of ${sharing.name} (${clone}); name the repository otherwise\n`);
+    return 1;
+  }
   const refusal = privateClone(deps, repo, clone, 'js-harness Claude transcripts backup (private)');
   if (refusal) {
     deps.stderr.write(`backup init: ${refusal}\n`);
