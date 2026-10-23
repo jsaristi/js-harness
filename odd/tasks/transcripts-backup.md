@@ -66,6 +66,7 @@ Not blanked. His approval says the transcripts come back identical (S2), and bla
 - [x] T2 (build) `bin/lib/backup-transcripts.mjs`: parts, rejoin, layout, manifest, the copy into a clone, verify and restore (D1, D2, D6), tests first — inline, 6baaf1c5
 - [x] T3 (build) `bin/backup.mjs`: init, run with its lock and rollover, status, ready, doctor, verify, restore, RESTORE.md, help (D3, D4, D6), tests first — inline, 4addc8db and the review fixes
 - [x] T4 (docs) README, the user guide, the roadmap line — inline, e4b37d3a (the roadmap box is ticked with T5)
+- [ ] T6 (fix) Codex's open finding on 5007334d..e8764612, "Serialize updates to the shared backup state": fixed in ddaf5e89 (`updateLast`), to be read by `codex-review --base 439a4312 --again`, since a second recheck is not run — inline
 - [ ] T5 (verify) gate, gentle-ai (items 1 and 2), Codex, the real init and first push after the orchestrator's yes, `verify --transcripts`, `ready` — inline
 
 ## Log
