@@ -337,8 +337,10 @@ export function testRunWarning(command, {
   const held = holder();
   if (!held) return null;
   if (board) {
-    const whose = held.batch ? `the eval batch of ${held.cwd}` : held.cwd ? `the gate of ${held.cwd}` : 'another gate';
-    return `js-harness sessions reads the board outside a turn while ${whose} ${held.batch ? 'runs' : "holds the machine's gate lock"}: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>`;
+    // A gate does not wait for an eval batch (bin/gate.mjs reads no batch mark), so beside a batch the only way is to wait.
+    if (held.batch) return `js-harness sessions reads the board outside a turn while the eval batch of ${held.cwd} runs: a board read slows it; wait for the batch to end`;
+    const whose = held.cwd ? `the gate of ${held.cwd}` : 'another gate';
+    return `js-harness sessions reads the board outside a turn while ${whose} holds the machine's gate lock: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>`;
   }
   let what;
   if (run.files === 1) {

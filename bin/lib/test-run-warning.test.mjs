@@ -300,5 +300,5 @@ test('a board read is found behind sh -c and wsl.exe, and an echo, --help or --o
     assert.equal(warn(command), null, command);
   }
   const batch = () => ({ cwd: 'D:\\js-harness-worktrees\\evals', batch: true });
-  assert.equal(warn('js-harness sessions --watch', batch), 'js-harness sessions reads the board outside a turn while the eval batch of D:\\js-harness-worktrees\\evals runs: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>');
+  assert.equal(warn('js-harness sessions --watch', batch), 'js-harness sessions reads the board outside a turn while the eval batch of D:\\js-harness-worktrees\\evals runs: a board read slows it; wait for the batch to end');
 });
