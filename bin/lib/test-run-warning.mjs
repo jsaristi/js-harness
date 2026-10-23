@@ -179,23 +179,39 @@ function programAt(words) {
   }
 }
 
+/** npm's names of its `test` command, and of the command that runs a script by its name. */
+const NPM_TEST = new Set(['test', 'tst', 't']);
+const NPM_RUN = new Set(['run', 'run-script', 'rum', 'urn']);
+
 /** The commands `npm test` or `npm run test` runs, as the sensors resolve them (bin/check.mjs, `testsCommand`): the
- * `test` script of the package.json in `cwd`, whose last command takes the words after `--` as its files; `null`
- * for any other words, and `[]` where the folder names no test script. */
+ * `test` script of the package.json in `cwd`, or in the folder `--prefix` names, whose last command takes the
+ * words npm hands it, its positional words and those after `--`, as its files; `null` for any other words, and `[]`
+ * where the folder names no test script. npm's other options are its own and are read past. */
 function npmTestCommands(words, cwd) {
-  const verb = words[1]?.text === 'run' ? 2 : 1;
-  if (!NPM.test(words[0]?.text ?? '') || words[verb]?.text !== 'test') return null;
+  if (!NPM.test(words[0]?.text ?? '')) return null;
+  let dir = cwd;
+  const positional = [];
+  let index = 1;
+  for (; index < words.length && words[index].text !== '--'; index += 1) {
+    const text = words[index].text;
+    if (text === '--prefix') {
+      index += 1;
+      dir = path.resolve(cwd, words[index]?.text ?? '');
+    } else if (text.startsWith('--prefix=')) dir = path.resolve(cwd, text.slice('--prefix='.length));
+    else if (!text.startsWith('-')) positional.push(words[index]);
+  }
+  const verb = NPM_RUN.has(positional[0]?.text) ? 1 : 0;
+  if (verb === 1 ? positional[1]?.text !== 'test' : !NPM_TEST.has(positional[0]?.text)) return null;
   let script;
   try {
-    script = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'))?.scripts?.test;
+    script = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))?.scripts?.test;
   } catch (err) {
     script = undefined;
   }
   if (typeof script !== 'string') return [];
   const commands = commandsOf(script);
-  const after = words.slice(verb + 1);
-  const split = after.findIndex((word) => word.text === '--');
-  if (split !== -1 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...after.slice(split + 1)];
+  const handed = [...positional.slice(verb + 1), ...words.slice(index + 1)];
+  if (handed.length > 0 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...handed];
   return commands;
 }
 

@@ -55,6 +55,26 @@ test('npm test runs the test script of its folder: the whole suite, or the files
   }
 });
 
+// Codex on the guard slice: npm hands the script its positional words as well as those after `--`, answers to its
+// aliases of `test`, and `--prefix` picks the package whose script runs.
+test('npm test reads the words npm hands its script, its aliases, and the package --prefix picks', () => {
+  const project = scratchProject({ test: 'node --test' });
+  const other = scratchProject({ test: 'node --test' });
+  const noTest = scratchProject({ lint: 'node lint.mjs' });
+  try {
+    assert.equal(testRunFiles('npm test a.mjs', project), 1);
+    assert.equal(testRunFiles('npm test --silent a.mjs -- b.mjs', project), 2);
+    assert.equal(testRunFiles('npm t', project), 0);
+    assert.equal(testRunFiles('npm run-script test -- a.mjs b.mjs', project), 2);
+    assert.equal(testRunFiles('npm test --prefix other', noTest), null);
+    assert.equal(testRunFiles(`npm test --prefix ${other}`, noTest), 0);
+    assert.equal(testRunFiles(`npm --prefix=${other} test a.mjs`, noTest), 1);
+    assert.equal(testRunFiles(`npm --prefix ${noTest} test`, project), null);
+  } finally {
+    for (const dir of [project, other, noTest]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // C-b-22: the words before the program (`NAME=value`, `env` and its options) are no part of the run.
 test('a node --test behind environment words is still a run: NAME=value and env with its options are read past', () => {
   for (const command of ['FOO=1 node --test', 'env FOO=1 node --test', 'env -i node --test', 'env -u FOO node --test', 'FOO=1 env BAR=2 node --test', 'env -- FOO=1 node --test', 'sh -c "FOO=1 node --test"']) {
