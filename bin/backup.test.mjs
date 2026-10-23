@@ -770,6 +770,28 @@ test('under a project scope, run copies the memory folders of the checkouts git 
   assert.equal(copied(other), false);
 });
 
+test('a bundled linked worktree git cannot read keeps the copies of the checkouts of its repository', async (t) => {
+  const { root, home, deps, paths } = setup(t, { scope: 'js-harness' });
+  const source = sourceRepo(path.join(root, 'code', 'js-harness'));
+  const worktree = path.join(root, 'code', 'side');
+  spawnSync('git', ['-C', source, 'worktree', 'add', '-q', '-b', 'side', worktree], { env: GIT_ENV });
+  for (const place of [source, worktree]) {
+    fs.mkdirSync(path.join(home, '.claude', 'projects', projectSlug(place), 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'projects', projectSlug(place), 'memory', 'MEMORY.md'), '- a note\n');
+  }
+  // `bundles` names the worktree, whose own name is not the scope: its repository's main checkout is.
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [worktree], scope: 'js-harness' }));
+  const copied = (place) => fs.existsSync(path.join(paths.clone, 'claude', 'projects', projectSlug(place), 'memory', 'MEMORY.md'));
+  await backupMain(['run'], deps);
+  assert.equal(copied(source), true);
+  assert.equal(copied(worktree), true);
+
+  fs.renameSync(worktree, `${worktree}-away`);
+  await backupMain(['run'], deps);
+  assert.equal(copied(source), true, 'the checkout copy stays while git cannot read the bundled worktree');
+  assert.equal(copied(worktree), true, 'and so does the worktree copy');
+});
+
 test('backup ready names what has no copy off this machine, passes once a run copied it, and writes nothing', async (t) => {
   const { root, home, deps, paths, state } = setup(t);
   deps.desktop = path.join(root, 'desktop');
