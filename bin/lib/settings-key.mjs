@@ -4,26 +4,14 @@
 // of a project (odd/tasks/on-demand-functions.md) is a key of an object, which is this module.
 import fs from 'node:fs';
 import path from 'node:path';
+import { NEW_SETTINGS_STYLE, detectIndent, serializeJson } from './manifest.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** The indent a file already uses, so a rewrite keeps it: `null` for JSON on one line, a tab, or a count
- * of spaces; 2 where no line is indented. The same reading the machine manifest makes of a host's file. */
-function indentOf(raw) {
-  const body = raw.replace(/\r?\n$/, '');
-  if (!body.includes('\n')) return null;
-  const match = /\n([\t ]+)\S/.exec(body);
-  if (!match) return 2;
-  return match[1].includes('\t') ? '\t' : match[1].length;
-}
-
 /** `data` as the text of a file that looked like `raw`: its indent, its line endings, and a newline at the
- * end only if it had one. */
+ * end only if it had one. The manifest reads and writes a host's file the same way (`serializeJson`). */
 export function textLike(raw, data) {
-  const indent = indentOf(raw);
-  let text = indent === null ? JSON.stringify(data) : JSON.stringify(data, null, indent);
-  if (/\n$/.test(raw)) text += '\n';
-  return raw.includes('\r\n') ? text.replace(/\n/g, '\r\n') : text;
+  return serializeJson(data, { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: detectIndent(raw) });
 }
 
 /** The file as `{ raw, data }`, `{ absent: true }`, or `{ reason }` when it is not a JSON object. */
@@ -102,7 +90,7 @@ export function applySettingsKey(file, pointer, value, earlier = []) {
 
   const madeDir = !fs.existsSync(path.dirname(file));
   if (madeDir) fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, read.absent ? `${JSON.stringify(data, null, 2)}\n` : textLike(read.raw, data));
+  fs.writeFileSync(file, read.absent ? serializeJson(data, NEW_SETTINGS_STYLE) : textLike(read.raw, data));
   return {
     state: 'written',
     record: {

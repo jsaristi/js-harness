@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { applySettingsKey, undoSettingsKey } from './settings-key.mjs';
+import { acceptSessionMessages, userSettingsPath } from './manifest.mjs';
 
 const PASTE = ['env', 'CODEGRAPH_NO_PROMPT_HOOK'];
 const PLUGIN = ['enabledPlugins', 'typescript-lsp@claude-plugins-official'];
@@ -30,7 +31,7 @@ test('a key in a file that does not exist creates the folder and the file, and r
     state: 'written',
     record: { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 },
   });
-  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}\n');
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}');
 });
 
 test('a key in a file that exists is merged beside what is there, in the file own indent and line endings', (t) => {
@@ -45,6 +46,25 @@ test('a key in a file that exists is merged beside what is there, in the file ow
     '{\r\n\t"effortLevel": "high",\r\n\t"enabledPlugins": {\r\n\t\t"typescript-lsp@claude-plugins-official": false\r\n\t}\r\n}\r\n',
   );
 });
+
+// The manifest writes the same object as settings-key does; the bytes must match, so an uninstall that puts a file back
+// reads it the way the other writer left it. A file that exists keeps its indent, line endings and final newline.
+for (const before of [null, '{\r\n\t"effortLevel": "high"\r\n}\r\n']) {
+  test(`a key settings-key writes is byte-identical to the manifest's write of the same object, for ${before === null ? 'a file that does not exist' : 'a file that exists'}`, (t) => {
+    const home = project(t);
+    const manifestFile = userSettingsPath(home);
+    const keyFile = settingsFile(project(t));
+    if (before !== null) {
+      fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
+      fs.writeFileSync(manifestFile, before);
+      fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+      fs.writeFileSync(keyFile, before);
+    }
+    assert.equal(acceptSessionMessages(home, { record: () => {} }).status, 'written');
+    assert.equal(applySettingsKey(keyFile, ['crossSessionInbound'], 'accept').state, 'written');
+    assert.equal(fs.readFileSync(keyFile, 'utf8'), fs.readFileSync(manifestFile, 'utf8'));
+  });
+}
 
 test('a key under an object that is already there creates no container', (t) => {
   const root = withSettings(t, '{\n  "env": {\n    "OTHER": "x"\n  }\n}');
