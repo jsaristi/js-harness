@@ -35,20 +35,26 @@ export function addedLines(diff) {
   const added = [];
   let file = null;
   let next = 0;
+  // The new-file lines of the current hunk the header has not yet counted: while any remain, a `+` line is
+  // added text, even one that starts with `+++ `.
+  let left = 0;
   for (const line of diff.split(/\r?\n/)) {
-    if (line.startsWith('+++ ')) {
-      // Git ends the name of a path that holds a space with a tab.
-      file = line === '+++ /dev/null' ? null : line.slice(4).replace(/\t$/, '').replace(/^b\//, '');
-      continue;
-    }
-    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
     if (hunk) {
       next = Number(hunk[1]);
+      left = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      continue;
+    }
+    if (line.startsWith('diff --git ')) left = 0;
+    if (left === 0 && line.startsWith('+++ ')) {
+      // Git ends the name of a path that holds a space with a tab.
+      file = line === '+++ /dev/null' ? null : line.slice(4).replace(/\t$/, '').replace(/^b\//, '');
       continue;
     }
     if (file !== null && line.startsWith('+')) {
       added.push({ file, line: next, text: line.slice(1) });
       next += 1;
+      if (left > 0) left -= 1;
     }
   }
   return added;

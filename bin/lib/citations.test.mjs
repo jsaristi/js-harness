@@ -48,6 +48,27 @@ test('added lines are read from a diff with no context, with their file and new 
   ]);
 });
 
+test('an added line that starts with `++ ` or `+++ ` is text of its hunk, and the next file header is read after the hunk', () => {
+  const diff = [
+    'diff --git a/a.md b/a.md',
+    '--- /dev/null',
+    '+++ b/a.md',
+    '@@ -0,0 +1,2 @@',
+    '+++ counter in C',
+    '+see `x.md:3`',
+    'diff --git a/b.md b/b.md',
+    '--- /dev/null',
+    '+++ b/b.md',
+    '@@ -0,0 +1 @@',
+    '+after',
+  ].join('\n');
+  assert.deepEqual(addedLines(diff), [
+    { file: 'a.md', line: 1, text: '++ counter in C' },
+    { file: 'a.md', line: 2, text: 'see `x.md:3`' },
+    { file: 'b.md', line: 1, text: 'after' },
+  ]);
+});
+
 test('each citation resolves, or says why not: no such file, past its end, no such commit', () => {
   const files = new Map([['bin/check.mjs', 1500], ['bin/lib/stack.mjs', 700]]);
   const added = [
