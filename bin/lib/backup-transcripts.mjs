@@ -135,7 +135,7 @@ export function copyTranscripts({ projects, clones, partMax = PART_MAX_BYTES, li
 /** Whether a manifest's relative path leaves the folder it is read against: absolute, on a drive, or through `..`. A
  * manifest comes from a repository, so a tampered one must not make a restore write or read outside its folders. */
 function leaves(relative) {
-  return typeof relative !== 'string' || path.isAbsolute(relative) || /^[a-zA-Z]:/.test(relative) || relative.split(/[\/]/).includes('..');
+  return typeof relative !== 'string' || path.isAbsolute(relative) || /^[a-zA-Z]:/.test(relative) || relative.split(/[\\/]/).includes('..');
 }
 
 /** Why a manifest entry's paths cannot be used, or null. */
@@ -186,10 +186,13 @@ export function restoreTranscripts({ from, home, stdout }) {
   const manifest = readJson(path.join(from, MANIFEST));
   if (!manifest) throw new Error(`no ${MANIFEST} in ${from}: it holds no transcripts backup`);
   const projects = path.join(home, '.claude', 'projects');
-  let restored = 0;
+  // Every path is checked before any file is written, so a tampered manifest restores nothing.
   for (const entry of manifest.files) {
     const refusal = pathRefusal(entry);
     if (refusal) throw new Error(`${entry.path}: ${refusal}`);
+  }
+  let restored = 0;
+  for (const entry of manifest.files) {
     const target = path.join(projects, ...entry.path.split('/'));
     if (fs.existsSync(target)) {
       stdout.write(`kept: ${entry.path}, a live file is never written over\n`);

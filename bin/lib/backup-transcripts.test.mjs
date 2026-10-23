@@ -234,13 +234,16 @@ test('a manifest path that leaves the projects folder or the clone is refused by
   for (const [change, reason] of [
     [(entry) => { entry.path = '../../escaped.jsonl'; }, /\.\.\/\.\.\/escaped\.jsonl: its path leaves the projects folder/],
     [(entry) => { entry.parts[0].path = '../outside.txt'; }, /D--p\/small\.jsonl: its part \.\.\/outside\.txt leaves the clone/],
+    [(entry) => { entry.path = '..\\..\\escaped.jsonl'; }, /\.\.\\\.\.\\escaped\.jsonl: its path leaves the projects folder/],
+    [(entry) => { entry.parts[0].path = '..\\outside.txt'; }, /D--p\/small\.jsonl: its part \.\.\\outside\.txt leaves the clone/],
   ]) {
     tamper(change);
     const checked = verifyTranscripts(clone);
     assert.equal(checked.ok, false);
     assert.match(checked.lines.join('\n'), reason);
-    const home = path.join(root, 'home');
+    const home = path.join(root, 'restored');
     assert.throws(() => restoreTranscripts({ from: clone, home, stdout: out }), reason);
+    assert.equal(fs.existsSync(path.join(home, '.claude', 'projects', 'D--p', 'big.jsonl')), false, 'a refused manifest restores nothing');
     fs.rmSync(home, { recursive: true, force: true });
   }
   assert.equal(fs.existsSync(path.join(root, 'escaped.jsonl')), false);
