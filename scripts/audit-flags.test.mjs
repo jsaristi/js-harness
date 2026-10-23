@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   applyAllow,
+  audit as auditFlags,
   classifyProbe,
   commandSections,
   commandsFromHelp,
@@ -19,6 +20,7 @@ import {
   markdownLines,
   parserFlags,
   probesOf,
+  subcommandFlags,
   subWords,
 } from './audit-flags.mjs';
 
@@ -379,4 +381,83 @@ console.log(JSON.stringify({ names: homes.map(([name]) => name), missing }));
   const { names, missing } = JSON.parse(result.stdout);
   assert.ok(names.includes('HOME') && names.includes('TEMP') && names.includes('TMP'), result.stdout);
   assert.deepEqual(missing, []);
+});
+
+const SENTINEL = '--zz-audit-sentinel';
+const REPO_ROOT = path.resolve(path.dirname(SCRIPT), '..');
+const refused = (stderr, status = 2) => ({ status, stdout: '', stderr, error: undefined });
+
+test('a refusal that names the sentinel in any wording is the parser taking the flag before it', () => {
+  const probe = { command: 'throughput', sub: [], flag: '--json', value: 'none', places: ['help'] };
+  assert.equal(classifyProbe(probe, refused('js-harness throughput: --zz-audit-sentinel is not an option of throughput\n')), null);
+  assert.equal(classifyProbe({ ...probe, command: 'windows-daily' }, refused('js-harness windows-daily: --zz-audit-sentinel is no argument of this command\n')), null);
+  assert.equal(classifyProbe({ ...probe, command: 'rules', flag: '--hook' }, refused('js-harness rules --hook: unknown argument --zz-audit-sentinel\n')), null);
+});
+
+test('a refusal that names the flag as not an option is not accepted, and one that names the flag and its value is the flag taken', () => {
+  const probe = { command: 'loop', sub: ['run'], flag: '--ghost', value: 'none', places: ['help'] };
+  assert.deepEqual(classifyProbe(probe, refused('js-harness loop: --ghost is not an option of loop run\n')), { kind: 'not-accepted', detail: 'help' });
+  const since = { command: 'throughput', sub: [], flag: '--since', value: 'space', places: ['help'] };
+  assert.equal(classifyProbe(since, refused('js-harness throughput: --since takes a day as YYYY-MM-DD: x\n')), null);
+  const max = { command: 'gate', sub: [], flag: '--max', value: 'space', places: ['help'] };
+  assert.equal(classifyProbe(max, refused('--max takes a number of minutes above zero, not "x"\n')), null);
+});
+
+test('a backup probe whose value its command names is taken, and a refusal that names a flag and its missing value is taken', () => {
+  const restore = { command: 'backup', sub: ['restore'], flag: '--from', value: 'space', places: ['help'] };
+  assert.equal(classifyProbe(restore, refused('backup restore: git clone x failed: Error: spawnSync git ENOENT\n', 1)), null);
+  const init = { command: 'backup', sub: ['init'], flag: '--repo', value: 'space', places: ['help'] };
+  assert.equal(classifyProbe(init, refused('backup init: --repo <owner/name> is required\n')), null);
+});
+
+test('a flag the parser says needs a value is probed once more with one, and a flag its value refusal names is taken', () => {
+  const docs = '# spec\n\nThe alpha command takes `js-harness alpha --needy` and `js-harness alpha --since <day>`.\n';
+  withFixture({ 'docs/SPEC.md': docs }, (dir) => {
+    const probed = [];
+    const run = (script, args) => {
+      const line = args.join(' ');
+      if (args.includes(SENTINEL)) probed.push(line);
+      if (line === `alpha --needy ${SENTINEL}`) return refused('js-harness alpha: --needy needs a value\n');
+      if (line === `alpha --needy x ${SENTINEL}`) return refused(`js-harness alpha: ${SENTINEL} is not an option of alpha\n`);
+      if (line === `alpha --since x ${SENTINEL}`) return refused('js-harness alpha: --since takes a day as YYYY-MM-DD: x\n');
+      return isolated(script, args);
+    };
+    const { findings } = auditFlags({ repo: dir, only: 'alpha', run });
+    const locations = findings.map(({ location }) => location);
+    assert.ok(!locations.includes('alpha --needy'), locations.join(', '));
+    assert.ok(!locations.includes('alpha --since'), locations.join(', '));
+    assert.deepEqual(probed.filter((call) => call.startsWith('alpha --needy')), [`alpha --needy ${SENTINEL}`, `alpha --needy x ${SENTINEL}`]);
+  });
+});
+
+test('a help line that opens with a sub word places the flags of its usage after that word, and a flag of the description is bare', () => {
+  const commands = ['backup', 'init', 'restore', 'verify', 'summary'];
+  const restore = '  restore --from <dir|git url> [--home <dir>] [--merge]  Put a backup into a home, with --transcripts named in prose';
+  assert.deepEqual(flagsOnLine(restore, 'backup', commands).map(({ command, sub, flag }) => [command, sub, flag]), [
+    ['backup', ['restore'], '--from'],
+    ['backup', ['restore'], '--home'],
+    ['backup', ['restore'], '--merge'],
+    ['backup', [], '--transcripts'],
+  ]);
+  const run = '  run [--allow-shrink] [--adopt] [--transcripts]  Back up now: the Engram export';
+  assert.deepEqual(flagsOnLine(run, 'backup', commands).map(({ sub, flag }) => [sub, flag]), [
+    [['run'], '--allow-shrink'],
+    [['run'], '--adopt'],
+    [['run'], '--transcripts'],
+  ]);
+});
+
+test('the flags written in an alternatives group of the usage line are subcommands, not flags', () => {
+  assert.deepEqual(subcommandFlags('Usage: js-harness backup <run | status | --hook | --session-start>\n  run [--adopt]  Back up now\n'), ['--hook', '--session-start']);
+  assert.deepEqual(subcommandFlags('Usage: js-harness guard --hook\n'), []);
+});
+
+test('the backup probes stop before any action in an empty home: run finds no config, and init names its refusal before a repository is read', () => {
+  const dispatcher = path.join(REPO_ROOT, 'bin', 'js-harness.mjs');
+  const run = isolated(dispatcher, ['backup', 'run', '--allow-shrink', 'x', SENTINEL]);
+  assert.equal(run.status, 1, run.stderr);
+  assert.match(run.stderr, /not initialised/);
+  const init = isolated(dispatcher, ['backup', 'init', '--repo', 'x', SENTINEL]);
+  assert.equal(init.status, 2, init.stderr);
+  assert.match(init.stderr, /--repo <owner\/name> is required/);
 });

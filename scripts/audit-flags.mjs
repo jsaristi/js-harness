@@ -8,8 +8,16 @@
 // the command with that flag, the value `x` when the place shows one (`--to <n>`, `--pm npm|pnpm`, `--home=<path>`),
 // and a sentinel unknown argument after it. Every command refuses an argument it does not know with exit 2 and
 // `unknown argument: <token>` before it does any work (bin/conventions-arguments.test.mjs), so the probe never runs the
-// command. A refusal naming the flag is `not-accepted`; one naming the sentinel or the value means the parser took the
-// flag; anything else is `unprobed`, with the first line of stderr as the detail.
+// command. A refusal naming the flag as unknown is `not-accepted`. The parser took the flag when a refusal names the
+// sentinel in any wording, names the flag as the subject of its value message (`--since takes a day as YYYY-MM-DD: x`),
+// or names the value the probe gave; a flag the parser says needs a value is probed once more with one. Anything else
+// is `unprobed`, with the first line of stderr as the detail.
+//
+// backup does not refuse an argument it does not know, so its probes rely on the empty home they run in: a probe
+// placed after its subcommand (`backup restore --from x`) reads no config and clones no repository (git is not on the
+// probe's PATH), and `init --repo x` fails the repository name before it reads one. A flag of a subcommand is placed
+// after that subcommand (a help line that opens with it, `  restore --from ...`); a subcommand named in a usage group
+// (`<run | --hook>`) is no flag.
 //
 // Accepted but not documented. A flag literal in the command's entry file (bin/<name>.mjs, as the dispatcher's COMMANDS
 // names it) that its `--help` does not name is `undocumented`. A file that several commands share counts a literal as
@@ -67,6 +75,8 @@ const LIST_HEAD = /parse|flag|option|known|new (?:Set|Map)\(|valid|allow|switch|
 const QUOTED_ITEM = /(['"`])([^'"`]*)\1/g;
 const holdsNonFlag = (items) => [...items.matchAll(QUOTED_ITEM)].some((item) => !item[2].startsWith('--'));
 const LIST_TAIL = /^\s*\.(includes|has)\(/;
+// A help line's sub word: two spaces, a plain word, then a bracket, a placeholder or a flag after a space.
+const SUB_LINE = /^ {2}([a-z][a-z-]*)(?= +[[<-])/;
 const QUOTED_FLAG = /(['"`])(--[a-z][a-z0-9-]*)\1/g;
 
 /** The commands `--help` of the dispatcher lists, in its order: the first word of each line under "Commands:". */
@@ -152,11 +162,20 @@ export function valueShape(after) {
 export function flagsOnLine(line, fallback, commands) {
   const mentions = [...line.matchAll(MENTION)].filter((match) => commands.includes(match[1]));
   const names = [...line.matchAll(new RegExp(`(?<![\w-])(js-harness +)?(${commands.join('|')})(?![\w-])`, 'g'))];
+  // A help line that opens with a sub word (`  restore --from <dir|git url> [--home <dir>]  Put a backup`) gives its usage
+  // flags to that word: the usage is the text before the two spaces that open the description.
+  const head = fallback !== null ? SUB_LINE.exec(line) : null;
+  const descriptionAt = head ? line.slice(head[0].length).search(/ {2}/) : -1;
+  const usageEnd = head ? (descriptionAt === -1 ? line.length : head[0].length + descriptionAt) : 0;
   const found = [];
   for (const match of line.matchAll(FLAG)) {
     const flag = match[0];
     if (flag === '--help') continue;
     const at = match.index;
+    if (head && head[1] !== fallback && at > head[0].length && at < usageEnd) {
+      found.push({ command: fallback, sub: [head[1]], flag, value: valueShape(line.slice(at + flag.length)) });
+      continue;
+    }
     const gap = (earlier, later) => /^\s*$/.test(line.slice(earlier.index + earlier[0].length, later.index));
     const direct = names.filter((named) => named.index < at).at(-1);
     const chained = direct !== undefined && names.some((named) => named.index + named[0].length <= direct.index && gap(named, direct));
@@ -190,6 +209,13 @@ export function flagsOnLine(line, fallback, commands) {
     found.push({ command, sub, flag, value: valueShape(line.slice(at + flag.length)) });
   }
   return found;
+}
+
+/** The flags a command's usage names as subcommands: the `--` words of an alternatives group (`<run | --hook>`) on its
+ * `Usage:` line. backup's `--hook` and `--session-start` are subcommands, so no probe may read them as flags. */
+export function subcommandFlags(text) {
+  const usage = text.split('\n').find((line) => line.startsWith('Usage:')) ?? '';
+  return [...usage.matchAll(/<([^<>]*\|[^<>]*)>/g)].flatMap((group) => group[1].split('|').map((item) => item.trim()).filter((item) => item.startsWith('--')));
 }
 
 /** The flags a command's `--help` names: each line read the way flagsOnLine reads it, placed as `help` (or `help of <command>`
@@ -264,15 +290,37 @@ export function probeArgs({ command, sub, flag, value }) {
   return [command, ...sub, token, ...(value === 'space' ? ['x'] : []), SENTINEL, ...(TAIL[command] ?? [])];
 }
 
-/** The finding of one probe's result, or null when the parser took the flag. */
+// A word of a refusal, bounded so `--x` is not `--xy`. The words here are flags, the sentinel and the probe's value `x`.
+const WORD = (word) => new RegExp(`(?<![\\w-])${word}(?![\\w-])`);
+// A message whose subject is the flag: `--since takes ...`, or `js-harness throughput: --since takes ...`.
+const SUBJECT = (flag) => new RegExp(`(?:^|: )${flag}(?![\\w-])`);
+const WORDING = /\b(?:takes|requires|needs|is required)\b/;
+// The token a refusal names: `unknown argument: <token>`, or `<token> is not an option of` (or `is no argument of`).
+const REFUSED = /unknown argument:? ([^\s;(]+)|(\S+) (?:is not an option of|is no argument of)/;
+
+/** Whether a refusal says the flag needs a value: `js-harness backup verify: --from needs a value`. */
+export function needsValue(stderr, flag) {
+  return stderr.split(/\r?\n/).some((line) => SUBJECT(flag).test(line) && /\b(?:requires|needs) a value\b/.test(line));
+}
+
+/** The finding of one probe's result, or null when the parser took the flag. A refusal that names the flag as unknown is
+ * not-accepted. Otherwise the parser took the flag when the refusal names the sentinel (any wording), names the flag as the
+ * subject of its value message (`--since takes a day as YYYY-MM-DD: x`), or names the value the probe gave, which the flag
+ * consumed. `probe.value` is the value the attempt gave, so a bare probe's `x` is a sub word, not a value. */
 export function classifyProbe(probe, result) {
   const lines = (result.stderr ?? '').split(/\r?\n/);
-  const refused = lines.map((line) => /unknown argument: ([^\s;(]+)/.exec(line)).find(Boolean)?.[1];
-  if (result.status === 2 && refused !== undefined) {
-    if (refused === probe.flag || refused.startsWith(`${probe.flag}=`)) return { kind: 'not-accepted', detail: probe.places.join(', ') };
-    if (refused === SENTINEL || refused === 'x') return null;
-  }
   if (result.error) return { kind: 'unprobed', detail: String(result.error.code ?? result.error.message) };
+  const refused = lines.map((line) => REFUSED.exec(line)).filter(Boolean).map((match) => match[1] ?? match[2]);
+  if (result.status === 2 && refused.some((token) => token === probe.flag || token.startsWith(`${probe.flag}=`))) {
+    return { kind: 'not-accepted', detail: probe.places.join(', ') };
+  }
+  const taken = (result.status === 2 && refused.includes('x'))
+    || (result.status !== 0 && (
+      lines.some((line) => WORD(SENTINEL).test(line))
+      || lines.some((line) => SUBJECT(probe.flag).test(line) && WORDING.test(line))
+      || (probe.value !== 'none' && lines.some((line) => WORD('x').test(line)))
+    ));
+  if (taken) return null;
   const first = lines.find((line) => line.trim() !== '');
   return { kind: 'unprobed', detail: first ?? `exit ${result.status}, no output` };
 }
@@ -416,19 +464,23 @@ export function audit({ repo = REPO_ROOT, only = null, allow = [], run = isolate
     const text = readText(path.join(repo, file));
     return text === null ? [] : [{ tag, text: text.replace(/\r\n/g, '\n') }];
   });
+  // A subcommand named in a usage group is no flag of its command (backup's `--hook`), so no probe reads it as one.
+  const subFlags = new Map(commands.map((command) => [command, subcommandFlags(help.get(command))]));
   const occurrences = [
     ...selected.flatMap((command) => helpOccurrences(command, help.get(command), commands)),
     ...documentedOccurrences(docs, commands),
-  ].filter((occurrence) => selected.includes(occurrence.command));
+  ].filter((occurrence) => selected.includes(occurrence.command) && !subFlags.get(occurrence.command).includes(occurrence.flag));
 
   const findings = [];
   for (const probe of probesOf(occurrences)) {
-    let result = run(dispatcher, probeArgs(probe));
-    // A parser that says the flag requires a value is probed once more with one: the place did not show it.
-    if (probe.value === 'none' && result.status === 2 && (result.stderr ?? '').includes(`${probe.flag} requires a value`)) {
-      result = run(dispatcher, probeArgs({ ...probe, value: 'space' }));
+    let attempt = probe;
+    let result = run(dispatcher, probeArgs(attempt));
+    // A parser that says the flag needs a value is probed once more with one: the place did not show it.
+    if (probe.value === 'none' && result.status === 2 && needsValue(result.stderr ?? '', probe.flag)) {
+      attempt = { ...probe, value: 'space' };
+      result = run(dispatcher, probeArgs(attempt));
     }
-    const verdict = classifyProbe(probe, result);
+    const verdict = classifyProbe(attempt, result);
     if (verdict) findings.push({ kind: verdict.kind, location: [probe.command, ...probe.sub, probe.flag].join(' '), detail: verdict.detail });
   }
 
