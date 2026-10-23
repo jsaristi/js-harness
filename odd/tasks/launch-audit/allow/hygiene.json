@@ -1,0 +1,312 @@
+[
+  {
+    "kind": "secret",
+    "location": "token: '22-aaaaaaaaaaaa'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/check.test.mjs@add22877:3395)"
+  },
+  {
+    "kind": "secret",
+    "location": "token: '4321-aaaaaaaaaaaa'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/check.test.mjs@add22877:3480)"
+  },
+  {
+    "kind": "secret",
+    "location": "-----BEGIN OPENSSH PRIVATE KEY-----",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/lib/backup.test.mjs@ff273064:44)"
+  },
+  {
+    "kind": "secret",
+    "location": "-----BEGIN RSA PRIVATE KEY-----",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/lib/backup.test.mjs@ff273064:64)"
+  },
+  {
+    "kind": "secret",
+    "location": "token: '11-aaaaaaaaaaaa'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/lib/sessions.test.mjs@0eb1ebd1:1693)"
+  },
+  {
+    "kind": "secret",
+    "location": "token: '22-bbbbbbbbbbbb'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/lib/sessions.test.mjs@0eb1ebd1:1694)"
+  },
+  {
+    "kind": "secret",
+    "location": "token: 'sentinel-secret'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/lib/stack.test.mjs@9ead5673:998)"
+  },
+  {
+    "kind": "secret",
+    "location": "SECRET = 'SECRET-PLANTED-7f3a'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (bin/subagents.test.mjs@4393e1e3:11)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN: 'sekrit-claude-token-0123456789'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/codex-configs.test.mjs@863ffef0:54)"
+  },
+  {
+    "kind": "secret",
+    "location": "API_KEY: 'sekrit-openai-key-0123456789'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/codex-configs.test.mjs@863ffef0:55)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN = 'sekrit-claude-token-0123456789'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/codex-home.test.mjs@3cab2427:542)"
+  },
+  {
+    "kind": "secret",
+    "location": "token: 'SENTINEL-DUMMY-LOGIN'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/codex-home.test.mjs@3cab2427:666)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN = 'sekrit-oauth-value-0123456789'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/configs.test.mjs@271cfe84:398)"
+  },
+  {
+    "kind": "secret",
+    "location": "sk-ant-api03-DUMMY-isolation-probe-not-a-real-key",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/isolation-probe.mjs@d19aa3a1:63)"
+  },
+  {
+    "kind": "secret",
+    "location": "API_KEY = 'sk-ant-api03-DUMMY-isolation-probe-not-a-real-key'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/isolation-probe.mjs@d19aa3a1:63)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN: 'oauth-sentinel-must-not-print'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/isolation-probe.test.mjs@42394579:583)"
+  },
+  {
+    "kind": "secret",
+    "location": "token = 'js-harness-iso-probe-EmPty1'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/isolation-probe.test.mjs@42394579:1578)"
+  },
+  {
+    "kind": "secret",
+    "location": "sk-ant-oat01-FAKE-never-in-a-file-or-a-stream-0123456789",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:314)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN = 'sk-ant-oat01-FAKE-never-in-a-file-or-a-stream-0123456789'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:314)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN: 'inherited-oauth'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:433)"
+  },
+  {
+    "kind": "secret",
+    "location": "API_KEY: 'inherited-key'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:433)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN: 'inherited-auth'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:433)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN = 'inherited-oauth-token'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:449)"
+  },
+  {
+    "kind": "secret",
+    "location": "API_KEY = 'inherited-api-key'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/suite.test.mjs@a692cd14:450)"
+  },
+  {
+    "kind": "secret",
+    "location": "TOKEN = '@@TRIAL_HOME@@'",
+    "why": "a fake value of a test fixture or a redaction test, not a credential (evals/without.mjs@28c5bad5:357)"
+  },
+  {
+    "kind": "email",
+    "location": "git@github.com",
+    "why": "the user of an SSH remote, not an address"
+  },
+  {
+    "kind": "email",
+    "location": "user@github.com",
+    "why": "a placeholder address of a test fixture (bin/lib/backup.test.mjs@ff273064:391)"
+  },
+  {
+    "kind": "email",
+    "location": "secret@db.example.com",
+    "why": "a placeholder address of a test fixture (bin/lib/machine-busiest.test.mjs@a659dfb4:80)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\RUNNER~1",
+    "why": "the CI runner's short home name, not a person"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\Oficina",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/a",
+    "why": "a placeholder home of a test fixture or a document example (bin/check-shadow-wsl.test.mjs@17993127:21)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\x",
+    "why": "a placeholder home of a test fixture or a document example (bin/codex-review.test.mjs@5764022c:558)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\Oficina",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "c:\\\\users\\\\oficina",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:/Users/x",
+    "why": "a placeholder home of a test fixture or a document example (bin/codex-review.test.mjs@5764022c:6734)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:/Users/u",
+    "why": "a placeholder home of a test fixture or a document example (bin/guard-feedback.test.mjs@a2d6c26f:14)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\o",
+    "why": "a placeholder home of a test fixture or a document example (bin/install.test.mjs@e3cb95df:1081)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\First",
+    "why": "a placeholder home of a test fixture or a document example (bin/install.test.mjs@e3cb95df:1083)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\a",
+    "why": "a placeholder home of a test fixture or a document example (bin/install.test.mjs@e3cb95df:1091)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\Ana",
+    "why": "a placeholder home of a test fixture or a document example (bin/install.test.mjs@e3cb95df:1098)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\First",
+    "why": "a placeholder home of a test fixture or a document example (bin/install.test.mjs@e3cb95df:1108)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\someone",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/backup-summary.test.mjs@8f79a201:68)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/someone",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/backup-summary.test.mjs@8f79a201:69)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/o",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/gate-wsl-trace.test.mjs@41be2c03:8)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "c:/Users/a",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/gate-wsl.test.mjs@3ad497a9:46)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\Ana",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/guard.test.mjs@790aafae:352)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\\\\\Users\\\\\\\\test",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/payload.test.mjs@8647e76e:207)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\test",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/payload.test.mjs@8647e76e:213)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\Sebasti",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/x",
+    "why": "a placeholder home of a test fixture or a document example (bin/lib/remote.test.mjs@1e8e386b:191)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\X",
+    "why": "a placeholder home of a test fixture or a document example (bin/remote.mjs@5858316b:390)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "c:\\users\\x",
+    "why": "a placeholder home of a test fixture or a document example (bin/remote.mjs@5858316b:390)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:/Users/Oficina",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/oficina",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/release",
+    "why": "a placeholder home of a test fixture or a document example (odd/tasks/install-update.md@e488b290:112)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\…",
+    "why": "a placeholder home of a test fixture or a document example (odd/tasks/memory-backup.md@f277ed4f:192)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/seb",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/Seb",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\Oficina-practice",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "c:/users/OFICINA",
+    "why": "his own account name; the live occurrence is fixed or carried as M5, history keeps it (M5)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/.js-harness",
+    "why": "a placeholder home of a test fixture or a document example (scripts/practice-lib.test.mjs@26c4949d:480)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\him",
+    "why": "a placeholder home of a test fixture or a document example (scripts/stack-scratch.test.mjs@bfea2f43:24)"
+  }
+]
