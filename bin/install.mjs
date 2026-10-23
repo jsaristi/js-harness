@@ -301,7 +301,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
-    console.error(err.message);
+    console.error(err.refusal);
     return 1;
   }
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
@@ -454,7 +454,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
-    console.error(err.message);
+    console.error(err.refusal);
     return 1;
   }
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
@@ -480,7 +480,7 @@ export async function uninstallMain(argv, env = process.env, deps = {}) {
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was removed (`uninstall` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
-    console.error(err.message);
+    console.error(err.refusal);
     return 1;
   }
 }

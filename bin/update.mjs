@@ -351,7 +351,7 @@ async function machineStatus(opts, env, spawn) {
   } catch (err) {
     // A machine manifest that does not parse: one line, nothing printed before it.
     if (!(err instanceof MalformedManifestError)) throw err;
-    console.error(err.message);
+    console.error(err.refusal);
     return 1;
   }
   const { latest, problem } = latestFor(opts);
@@ -499,7 +499,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
     installedVersion(opts.home);
   } catch (err) {
     if (!(err instanceof MalformedManifestError)) throw err;
-    console.error(err.message);
+    console.error(err.refusal);
     return 1;
   }
   const { latest, problem } = latestFor(opts);

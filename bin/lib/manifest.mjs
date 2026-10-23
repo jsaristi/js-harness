@@ -894,13 +894,19 @@ export function manifestPath(home) {
   return path.join(home, '.js-harness', 'manifest.json');
 }
 
-/** A machine manifest that does not parse. `readManifest` names its file here; the commands that read it say this one
- * line and change nothing. It is a SyntaxError, so a caller that already catches a bad manifest still does. */
+/** A machine manifest that does not parse. `readManifest` names its file here; the commands that read it before any
+ * step say `refusal`, this one line with what they did, and change nothing. A caller that wraps the message may go on
+ * after it, so the message claims nothing of that. It is a SyntaxError, so a caller that already catches a bad
+ * manifest still does. */
 export class MalformedManifestError extends SyntaxError {
   constructor(file) {
-    super(`the machine manifest ${file} is not valid JSON; nothing was changed`);
+    super(`the machine manifest ${file} is not valid JSON`);
     this.name = 'MalformedManifestError';
     this.file = file;
+  }
+
+  get refusal() {
+    return `${this.message}; nothing was changed`;
   }
 }
 
