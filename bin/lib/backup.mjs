@@ -79,12 +79,13 @@ export function scopeArgs(scope) {
 
 /** Whether a Claude project folder belongs to the scope: under a project scope, the folder of a checkout whose last
  * path part is the project (`D--js-harness`) or of a worktree inside it (`D--js-harness--claude-worktrees-x`), and
- * the folder of each path in `checkouts` (the checkout and worktrees git lists for the project, `checkoutsOf`) or of
- * a worktree inside one. A checkout below the drive root is matched by its whole slug, never by a part of it: Claude
- * turns every character but a letter or digit into `-`, so a part would let `harness` take `D--js-harness`. */
+ * the folder of each path in `checkouts` (the checkout and worktrees git lists for the project, `checkoutsOf`). A
+ * checkout below the drive root is matched by its whole slug, never by a part of it: Claude turns every character but
+ * a letter or digit into `-`, so a part would let `harness` take `D--js-harness`, and a prefix a copy beside the
+ * checkout (`js-harness - Copy`) or another repository in one of its dot-folders. */
 export function inScope(slug, scope, checkouts = []) {
   if (scope === 'all' || slug.endsWith(`--${scope}`) || slug.includes(`--${scope}--`)) return true;
-  return checkouts.some((place) => slug === projectSlug(place) || slug.startsWith(`${projectSlug(place)}--`));
+  return checkouts.some((place) => slug === projectSlug(place));
 }
 
 /** The trees one backup mirrors: where each comes from under the home, where it goes in the clone, and what it skips. */

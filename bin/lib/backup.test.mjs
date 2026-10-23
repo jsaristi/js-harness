@@ -162,7 +162,10 @@ test('scopeArgs and inScope read one scope value: "all" or one project name', ()
   // A checkout below the drive root is in scope by the slugs of the paths git lists for it, never by a substring.
   assert.equal(inScope('C--Users-ana-code-js-harness', 'js-harness'), false);
   assert.equal(inScope('C--Users-ana-code-js-harness', 'js-harness', ['C:\\Users\\ana\\code\\js-harness']), true);
-  assert.equal(inScope('C--Users-ana-code-js-harness--claude-worktrees-x', 'js-harness', ['C:/Users/ana/code/js-harness']), true);
+  assert.equal(inScope('C--Users-ana-code-js-harness--claude-worktrees-x', 'js-harness', ['C:/Users/ana/code/js-harness', 'C:/Users/ana/code/js-harness/.claude/worktrees/x']), true);
+  // Only the paths git lists: a copy beside the checkout or another repository inside one of its dot-folders is not one.
+  assert.equal(inScope('C--Users-ana-code-js-harness---Copy', 'js-harness', ['C:/Users/ana/code/js-harness']), false);
+  assert.equal(inScope('C--Users-ana-code-js-harness--vendor-client', 'js-harness', ['C:/Users/ana/code/js-harness']), false);
   assert.equal(inScope('C--Users-ana-code-side', 'js-harness', ['C:/Users/ana/code/js-harness', 'C:/Users/ana/code/side']), true);
   assert.equal(inScope('-home-ana-js-harness', 'js-harness', ['/home/ana/js-harness']), true);
   assert.equal(inScope('D--js-harness', 'harness', ['C:/Users/ana/code/harness']), false);
