@@ -1678,15 +1678,15 @@ measure. `JS_HARNESS_CLEAN_MEASURE=off` turns the background measure off.
 ```console
 $ js-harness clean
 codex-releases 1.7 GB: old Codex app-server releases: Codex runs the one `current` points to, and downloads again a release it lacks
-  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.157.1-x86_64-pc-windows-msvc  425.5 MB
-  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.158.0-x86_64-pc-windows-msvc  427.2 MB
-  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.159.0-x86_64-pc-windows-msvc  427.5 MB
-  C:\Users\Oficina\.codex\packages\app-server-daemon\releases\0.159.1-x86_64-pc-windows-msvc  427.6 MB
+  C:\Users\you\.codex\packages\app-server-daemon\releases\0.157.1-x86_64-pc-windows-msvc  425.5 MB
+  C:\Users\you\.codex\packages\app-server-daemon\releases\0.158.0-x86_64-pc-windows-msvc  427.2 MB
+  C:\Users\you\.codex\packages\app-server-daemon\releases\0.159.0-x86_64-pc-windows-msvc  427.5 MB
+  C:\Users\you\.codex\packages\app-server-daemon\releases\0.159.1-x86_64-pc-windows-msvc  427.6 MB
 claude-versions 506.7 MB: old Claude Code CLI versions: the highest and the running one are kept, and the updater downloads what it needs
-  C:\Users\Oficina\.local\share\claude\versions\2.1.296  248.4 MB
-  C:\Users\Oficina\.local\share\claude\versions\2.1.300  258.3 MB
+  C:\Users\you\.local\share\claude\versions\2.1.296  248.4 MB
+  C:\Users\you\.local\share\claude\versions\2.1.300  258.3 MB
 go-modcache 544.7 MB: the Go module cache: go downloads again what a build needs
-  C:\Users\Oficina\go\pkg\mod  544.7 MB
+  C:\Users\you\go\pkg\mod  544.7 MB
   cleaned by: go clean -modcache
 Total: 4.3 GB (plus up to 5.9 GB that pnpm store prune may free)
 Nothing was deleted. js-harness clean --apply asks y/N per kind; --apply --kind <id> deletes only the kinds named.
