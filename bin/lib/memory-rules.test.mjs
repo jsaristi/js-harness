@@ -41,7 +41,7 @@ test('notes of type feedback and project are the gap, one line each; user and re
     m.note('link.md', 'name: link\nmetadata:\n  type: reference');
     fs.writeFileSync(path.join(m.memory, 'MEMORY.md'), '- [Rule](rule-b.md) — type: feedback\n');
     fs.writeFileSync(path.join(m.memory, 'notes.txt'), 'type: feedback');
-    const state = memoryRulesState({ home: m.home, project: m.project, spawn: noGit });
+    const state = memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} });
     assert.deepEqual(state, { claude: 'stale', codex: 'n/a', lines: ['decision-a.md (project)', 'rule-b.md (feedback)'] });
   } finally {
     m.done();
@@ -51,13 +51,13 @@ test('notes of type feedback and project are the gap, one line each; user and re
 test('no such note is ok, no memory folder is n/a, and a folder that cannot be read is unknown', () => {
   const m = machine();
   try {
-    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit }), { claude: 'n/a', codex: 'n/a', lines: [] });
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} }), { claude: 'n/a', codex: 'n/a', lines: [] });
     m.note('who.md', 'name: who\ntype: user');
-    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit }), { claude: 'ok', codex: 'n/a', lines: [] });
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} }), { claude: 'ok', codex: 'n/a', lines: [] });
     const boom = () => {
       throw new Error('made up');
     };
-    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: boom }), { claude: 'unknown', codex: 'n/a', lines: [] });
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: boom, env: {} }), { claude: 'unknown', codex: 'n/a', lines: [] });
   } finally {
     m.done();
   }
@@ -70,7 +70,7 @@ test('from a linked worktree the notes are the main checkout\'s, where Claude Co
     const worktree = path.join(path.dirname(m.project), 'worktrees', 'feature');
     const common = path.join(m.project, '.git');
     const git = (command, args) => (args.includes('--git-common-dir') ? { status: 0, stdout: `${common}\n`, stderr: '' } : noGit());
-    assert.deepEqual(memoryRulesState({ home: m.home, project: worktree, spawn: git }).lines, ['rule.md (feedback)']);
+    assert.deepEqual(memoryRulesState({ home: m.home, project: worktree, spawn: git, env: {} }).lines, ['rule.md (feedback)']);
   } finally {
     m.done();
   }

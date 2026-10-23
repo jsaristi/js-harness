@@ -209,18 +209,21 @@ function transcriptOf(input, sessionId, { projectDir, projectsDir, readFile }) {
 
 /** The session's title and where it was read, `{ title, from }`, in the order of trust: what the host
  * gave the hook, what the transcript carries, the title of the opening the record says the session read.
- * `{ title: null, from }` with what was looked at when none of them has one. The transcript is the text
+ * `{ title: null, from }` with what was looked at when none of them has one. A clear's session has the title the desktop
+ * app's record of it gives (`app`, the record `clearedStart` read; null for a compaction, which reads none) after the
+ * transcript's: a new session may carry no title yet. The transcript is the text
  * `transcriptOf` read, so the file is read once for the title and for the feature document.
  * The title is the one given, with every blank it holds: an opening is stored under its whole title and a
  * notice carries the one of its transcript, so a title with two blanks in a row made one finds neither.
  * It is made one line (`oneLine`) where the session's line prints it, and nowhere else: the titles of the
  * openings the hook lists are printed as they are stored (`printedTitle`), since a blank is what tells two
  * openings apart. */
-function titleOf(input, sessionId, { transcript, record }) {
+function titleOf(input, sessionId, { transcript, record, app = null }) {
   if (typeof input.session_title === 'string' && input.session_title.trim() !== '') return { title: input.session_title, from: 'the title the host gave the hook' };
   // No transcript (a Codex session has none here, or it cannot be read) carries no title.
   const carried = transcript === null ? null : transcriptTitle(transcript);
   if (carried !== null && carried.trim() !== '') return { title: carried, from: 'the title its transcript carries' };
+  if (typeof app?.title === 'string' && app.title.trim() !== '') return { title: app.title, from: 'the title the desktop app records for the session' };
   if (sessionId === null) return { title: null, from: transcript === null ? 'the host gave the hook none and no session id a transcript could be found by' : 'the host gave the hook none and its transcript gives none' };
   const read = titleRead(record.readings, sessionId);
   if (read !== null) return { title: read, from: 'the title of the opening it read, by the channel\'s record' };
@@ -835,16 +838,20 @@ function questionLinesOf(record, { transcript, sessionId, orchestrator, now, quo
 /** Whether a start the host gave the hook is a clear's: a `clear`, or a `startup` of a session the desktop app's record
  * names as cleared from an earlier one (its `priorCliSessionIds` is not empty, `readApp` giving the app's records by
  * session id). The app's clear starts a new session, which the host reports as `startup`. A record that cannot be read
- * names none, so the start is the host's own. */
+ * names none, so the start is the host's own. The record is read once, here, and comes back as `{ app }` (`app` is the
+ * record, or null when none was read or it names none) for the session's title; `null` when the start is not a clear's. */
 function clearedStart(source, sessionId, readApp) {
-  if (source === 'clear') return true;
-  if (source !== 'startup' || sessionId === null) return false;
-  try {
-    const record = readApp().get(sessionId);
-    return (record?.priorCliSessionIds ?? []).length > 0;
-  } catch {
-    return false;
+  if (source !== 'clear' && (source !== 'startup' || sessionId === null)) return null;
+  let app = null;
+  if (sessionId !== null) {
+    try {
+      app = readApp().get(sessionId) ?? null;
+    } catch {
+      app = null;
+    }
   }
+  if (source === 'startup' && (app?.priorCliSessionIds ?? []).length === 0) return null;
+  return { app };
 }
 
 /** The lines the hook prints for the hook input `input`, or none when it is not for it to speak: an input
@@ -874,16 +881,17 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   const projectDir = path.join(projectsDir, slug);
   const harnessHome = env.JS_HARNESS_HOME || homedir();
   const sessionId = typeof input.session_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/.test(input.session_id) ? input.session_id : null;
-  // A start speaks only when it is a clear's: the app's record is read for a `startup` alone, and only in an opted-in project.
+  // A start speaks only when it is a clear's: the app's record is read for a start alone, and only in an opted-in project.
   const compacted = input.source === 'compact';
-  if (!compacted && !clearedStart(input.source, sessionId, readApp)) return [];
+  const cleared = compacted ? null : clearedStart(input.source, sessionId, readApp);
+  if (!compacted && cleared === null) return [];
   const record = readNotices(harnessHome, slug, { readFile });
   const transcript = transcriptOf(input, sessionId, { projectDir, projectsDir, readFile });
   // Whether `sessions --quote` can read the transcript: it is in the project's sessions folder, the one that command reads.
   // The stretch's lines and the questions' lines take this one fact; without a transcript it is not used.
   const transcriptFile = transcriptFileOf(input, sessionId, { projectDir, projectsDir });
   const quoted = transcriptFile !== null && path.relative(projectDir, transcriptFile) === path.basename(transcriptFile);
-  const { title, from } = titleOf(input, sessionId, { transcript, record });
+  const { title, from } = titleOf(input, sessionId, { transcript, record, app: cleared?.app ?? null });
 
   const lines = [compacted ? JUST_COMPACTED : JUST_CLEARED];
   lines.push(title === null ? `Session: title not known (${from})` : `Session: "${oneLine(title)}" (${from})`);

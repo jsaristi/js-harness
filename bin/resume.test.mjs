@@ -510,6 +510,29 @@ test('a sub-agent\'s clear, or its start after a clear, prints nothing: the hook
   }
 }));
 
+// A clear's title is the app's when neither the hook input nor the new transcript gives one: the app's record is the one
+// it already reads for a start, so the opening of the session is still found.
+test('a clear whose hook input and transcript give no title is titled by the title the desktop app records for the session', withMachine(async (machine) => {
+  notified(machine);
+  const opening = opened(machine).path;
+  fs.writeFileSync(path.join(machine.projectDir, `${SESSION}.jsonl`), `${JSON.stringify(answered(1, 'Done.'))}\n`);
+  const FROM = 'the title the desktop app records for the session';
+  const app = () => new Map([[SESSION, { title: TITLE, priorCliSessionIds: ['bbbbbbbb-2222-4222-8222-222222222222'] }]]);
+  for (const source of ['clear', 'startup']) {
+    const { code, lines, stderr } = await runHook(machine, hookInput(machine, { source }), { readApp: app });
+    assert.deepEqual([code, stderr], [0, ''], source);
+    assert.deepEqual(lines.slice(0, 3), [
+      CLEARED,
+      `Session: "${TITLE}" (${FROM})`,
+      `Opening: ${opening}  (print it: js-harness sessions --opening '${TITLE}')`,
+    ], source);
+  }
+  // A compaction does not read the app's record: its title is still the one the transcript and the hook give, which is none.
+  const compacted = await runHook(machine, hookInput(machine, { source: 'compact' }), { readApp: app });
+  assert.match(compacted.lines[1], /^Session: title not known/);
+  assert.doesNotMatch(compacted.lines.join('\n'), new RegExp(FROM.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+}));
+
 test('in hook mode an input that was not read is said on standard error, and nothing is printed; a pause run says nothing', withMachine(async (machine) => {
   titled(machine);
   const said = (why) => `js-harness resume --hook: the host's JSON was expected on standard input and none was read (${why}); nothing was looked at.`;
@@ -1415,6 +1438,11 @@ test('the memory hygiene notice dates a pass told an hour before the hook\'s clo
   fs.mkdirSync(path.dirname(told), { recursive: true });
   fs.writeFileSync(told, `${new Date(NOW - 60 * 60 * 1000).toISOString()}\n`);
   assert.deepEqual((await runPause(machine, pauseInput(machine, UNDER), { now: () => NOW })).lines, [], 'told an hour before the hook\'s clock: not due again');
+  // The positive twin, in the same setup: the same pass told a day and more before the clock is due again, and is said.
+  fs.writeFileSync(told, `${new Date(NOW - 25 * 60 * 60 * 1000).toISOString()}\n`);
+  const said = await runPause(machine, pauseInput(machine, UNDER), { now: () => NOW });
+  assert.equal(said.lines.length, 1, 'told a day and more before the clock: due again, and said');
+  assert.match(JSON.parse(said.lines[0]).hookSpecificOutput.additionalContext, /^js-harness: a memory hygiene pass is due for this project \(no-pass, line-chars\)/);
 }));
 
 test('past the pause with a note waiting, the hook says both in one line: the pause first, then the note', withMachine(async (machine) => {
