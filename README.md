@@ -1529,7 +1529,7 @@ The scope is the `scope` field of `~/.js-harness/memory-backup/config.json`: `"a
 every Engram project and every Claude memory folder, a project name only that project and the
 memory folders of its checkout and worktrees: a checkout named after the project at a drive root, or
 the checkout and worktrees git lists for a repository of `bundles` whose main checkout has that name,
-wherever it sits. Unset, it is `js-harness`, so another project's
+wherever it sits, with the worktrees Claude made in its `.claude/worktrees` that git no longer lists. Unset, it is `js-harness`, so another project's
 memories reach GitHub only once someone writes `"all"`. The first run after the scope changes
 takes the new export as it is, and drops from the clone what the narrower scope leaves out.
 
