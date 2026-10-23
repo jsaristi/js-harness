@@ -6,8 +6,9 @@
 // review given a prompt and no `--base` is a custom-target review: the user message is the prompt as
 // written, with no range in it (odd/tasks/codex-review-lean.md, "What Codex loads, and what `exec review`
 // accepts"). So a prompt that is to carry what the change is for must also name the range and the command
-// that shows it, which is what `reviewPrompt` does. `js-harness codex-review --prompt own` sends it. The
-// default is still `--base` with Codex's sentence: the comparison of the two ran on 2026-10-08, and this
+// that shows it, which is what `reviewPrompt` does. `js-harness codex-review --prompt own` sends it, and out
+// of a turn of the gate lock every review is asked with it. The default in a turn is still `--base` with
+// Codex's sentence: the comparison of the two ran on 2026-10-08, and this
 // prompt, with the feature document, found the same seven seeded defects at about the same cost
 // (odd/tasks/codex-review-lean.md, Progress), so nothing was gained by changing it.
 //
