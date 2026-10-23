@@ -168,7 +168,54 @@ Weights: monthly cost including the database and backups 0.25; ops burden 0.20; 
   vinext, in beta, for Next.js.
 - Keep the app private for free with Cloudflare Access (free under 50 users).
 
-## 5. Not verified, and contradictions
+## 5. Study C — DigitalOcean App Platform in detail
+
+Read by the lead on 2026-10-23 from DigitalOcean's pages. Study B's pick, and a candidate for the
+platform projects the harness may set up later (Sebastián, 2026-10-23: "nos sirve para cuando se haga
+un proyecto plataforma para el harnes").
+
+App instances (https://www.digitalocean.com/pricing/app-platform):
+
+| Plan | vCPU | RAM | Transfer | Monthly | Several containers |
+|---|---|---|---|---|---|
+| Shared (Fixed) | 1 | 512 MiB | 50 GiB | $5 | No: "a fixed CPU will limit you to one container instance only" |
+| Shared (Fixed) | 1 | 1 GiB | 100 GiB | $10 | No |
+| Shared | 1 | 1 GiB | 150 GiB | $12 | Yes |
+| Shared | 1 | 2 GiB | 200 GiB | $25 | Yes |
+| Shared | 2 | 4 GiB | 250 GiB | $50 | Yes |
+
+- Extra transfer $0.02/GiB; a dedicated egress IP $25 a month per app; a development database $7
+  (512 MiB); static sites free (3 apps).
+- Builds run apart from the instance: "8 CPU cores, 15 GiB of memory, and 24 GiB of disk space to each
+  build", and "Builds time out after 1 hour" (https://docs.digitalocean.com/products/app-platform/details/limits/).
+  A Next.js build does not need a bigger plan.
+- Limits from the same page: the local disk is ephemeral and capped at 4 GiB, and "App Platform does
+  not support volumes" (uploads go to Spaces or R2); uploads time out after 600 seconds; at most 250
+  containers per app, 100 with request-based autoscaling; cron jobs do not start by themselves; HTTP is
+  redirected to HTTPS but no HSTS header is set (set it in the app).
+- Regions: NYC, AMS, SFO, SGP, LON, FRA, TOR, BLR, SYD, ATL, RIC, MKC, MEM
+  (https://docs.digitalocean.com/products/app-platform/details/availability/).
+
+Managed PostgreSQL (https://www.digitalocean.com/pricing/managed-databases,
+https://docs.digitalocean.com/products/databases/postgresql/details/limits/):
+
+- Smallest plan $15.15: 1 GiB RAM, 1 vCPU, 10–30 GiB storage; 22 backend connections; PgBouncer pools
+  supported ("21 PgBouncer pools and up to 1,000 connections, depending on the plan size").
+- Daily backups and point-in-time restore "within the previous seven days"
+  (https://docs.digitalocean.com/products/databases/postgresql/details/features/); whether they are in
+  the $15.15 is not stated there.
+- In Atlanta (ATL1) Postgres has "Limited availability: Only some plans are available"; App Platform
+  and Spaces are available there (https://docs.digitalocean.com/platform/regional-availability/). If the
+  plan is missing in Atlanta, New York is 72 ms from Bogotá.
+- For a large platform: "Starting November 30, 2026 for all accounts (October 15, 2026 for new
+  accounts), new clusters can't use plans above 4 GiB RAM or add standby or read-only nodes" on the
+  Standard Edition. High availability then needs the Advanced Edition, whose price was not read.
+- Managed Valkey from $15 (1 GiB).
+
+Bills for the small internal tool: $5 app + $15.15 Postgres = $20.15 a month; with the 1 GiB fixed
+instance, $25.15. Start at 512 MiB, watch memory the first week, and move up only if it alerts.
+
+## 6. Not verified, and contradictions
 
 - Not verified: Akamai's backup prices above 4 GB, whether its VPC is free, its Bogotá distributed
   region; DigitalOcean's VPC MTU, load balancer price, whether Postgres backups are in the $15.15 and
