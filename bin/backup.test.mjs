@@ -59,6 +59,10 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
     pushUrls: [`https://github.com/${REPO}.git`],
     summaryRepo: null,
     summaryUrls: ['https://github.com/jsaristi/js-harness.git'],
+    // A repository of its own visibility, and the transcripts repositories by name: their bare folder and the push URL
+    // their clone reports (`withTranscripts`).
+    visibilityOf: {},
+    transcripts: {},
   };
   const deps = {
     home,
@@ -95,7 +99,25 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
       }
       if (cmd === 'engram' && args[0] === 'version') return { status: 0, stdout: 'engram 3.4.0\n', stderr: '' };
       if (cmd === 'gh' && args[1] === 'view') {
-        return state.visibility ? { status: 0, stdout: `${state.visibility}\n`, stderr: '' } : { status: 1, stdout: '', stderr: 'not found' };
+        const visibility = args[2] in state.visibilityOf ? state.visibilityOf[args[2]] : state.visibility;
+        return visibility ? { status: 0, stdout: `${visibility}\n`, stderr: '' } : { status: 1, stdout: '', stderr: 'not found' };
+      }
+      if (cmd === 'gh' && args[1] === 'create' && args[2] in state.transcripts) {
+        state.visibilityOf[args[2]] = 'PRIVATE';
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      // A transcripts clone: cloned from its bare folder, and asked its push URL and what origin holds as a real one.
+      const transcript = Object.entries(state.transcripts).find(([name, t]) => (args[0] === 'clone' && args.includes(`https://github.com/${name}.git`)) || (args[0] === '-C' && args[1] === t.clone));
+      if (cmd === 'git' && transcript) {
+        const [name, t] = transcript;
+        if (args[0] === 'clone') {
+          defaultRun('git', ['clone', '-q', t.bare, args[3]]);
+          defaultRun('git', ['-C', args[3], 'remote', 'set-url', 'origin', `https://github.com/${name}.git`]);
+          defaultRun('git', ['-C', args[3], 'remote', 'set-url', '--push', 'origin', t.bare]);
+          return { status: 0, stdout: '', stderr: '' };
+        }
+        if (args.includes('get-url') && args.includes('--push')) return { status: 0, stdout: `${t.pushUrls.join('\n')}\n`, stderr: '' };
+        if (args[2] === 'ls-remote') return defaultRun('git', ['-C', t.clone, 'ls-remote', t.bare, ...args.slice(4)], options);
       }
       if (cmd === 'gh' && args[1] === 'create') {
         state.visibility = 'PRIVATE';
@@ -1130,4 +1152,214 @@ test('backup status names the last success, the last failure and the commits to 
   assert.ok(deps.stdout.text.includes(`last failure: ${second}, refused: `), deps.stdout.text);
   assert.match(deps.stdout.text, /reads PUBLIC, not PRIVATE/);
   assert.match(deps.stdout.text, /to push: 1 commits/);
+});
+
+// ---- the transcripts backup (odd/tasks/transcripts-backup.md) ------------------------------------------------------
+
+const TREPO = 'jsaristi/js-harness-transcripts-1';
+
+/** A transcripts repository the fake knows by name: a bare folder in the scratch root, the clone `init` makes of it, and
+ * the push URL that clone reports. Also a transcript in the home. */
+function withTranscripts(ctx, name = TREPO) {
+  const bare = path.join(ctx.root, `${name.split('/')[1]}.git`);
+  defaultRun('git', ['init', '-q', '--bare', bare]);
+  const clone = path.join(ctx.paths.dir, 'transcripts', name.split('/')[1]);
+  ctx.state.transcripts[name] = { bare, clone, pushUrls: [`https://github.com/${name}.git`] };
+  ctx.state.visibilityOf[name] = null; // not created yet: init creates it
+  const session = path.join(ctx.home, '.claude', 'projects', 'D--p', 's1.jsonl');
+  if (!fs.existsSync(session)) fs.writeFileSync(session, '{"type":"user","text":"hola"}\n');
+  return { bare, clone, session };
+}
+
+test('backup init --transcripts-repo creates it private, refuses a public one and the memory repository, and clones it', async (t) => {
+  const ctx = setup(t);
+  const { clone } = withTranscripts(ctx);
+  const { deps, state, paths } = ctx;
+
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  assert.ok(state.calls.some((c) => c[0] === 'gh' && c[2] === 'create' && c[3] === TREPO && c.includes('--private')));
+  assert.ok(fs.existsSync(path.join(clone, '.git')));
+  const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
+  assert.deepEqual(config.transcripts.repos, [TREPO]);
+  assert.equal(config.repo, REPO, 'the memory backup keeps its repository');
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, 'a second init changes nothing');
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.config, 'utf8')).transcripts.repos, [TREPO]);
+
+  for (const [repo, reason] of [[REPO, /the memory backup's own repository/], ['jsaristi/js-harness', /public repository/]]) {
+    deps.stderr = sink();
+    assert.equal(await backupMain(['init', '--transcripts-repo', repo], deps), 1);
+    assert.match(deps.stderr.text, reason);
+  }
+  state.transcripts['jsaristi/open'] = { bare: ctx.bare, clone: path.join(paths.dir, 'transcripts', 'open'), pushUrls: [] };
+  state.visibilityOf['jsaristi/open'] = 'PUBLIC';
+  deps.stderr = sink();
+  assert.equal(await backupMain(['init', '--transcripts-repo', 'jsaristi/open'], deps), 1);
+  assert.match(deps.stderr.text, /reads PUBLIC, not PRIVATE/);
+  assert.ok(!fs.existsSync(path.join(paths.dir, 'transcripts', 'open')), 'nothing is cloned from a public repository');
+
+  deps.stderr = sink();
+  const calls = state.calls.length;
+  assert.equal(await backupMain(['init', '--transcripts-repo', 'someone/JS-harness-transcripts-1'], deps), 1);
+  assert.match(deps.stderr.text, /refused: someone\/JS-harness-transcripts-1 would share the clone of jsaristi\/js-harness-transcripts-1/);
+  assert.equal(state.calls.length, calls, 'refused before any gh or git call');
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.config, 'utf8')).transcripts.repos, [TREPO]);
+});
+
+test('backup run pushes the transcripts to their own repository once a day, and --transcripts runs them at once', async (t) => {
+  const ctx = setup(t);
+  const { bare: tbare, session } = withTranscripts(ctx);
+  const { deps, state, bare, paths } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.match(deps.stdout.text, /backup: transcripts: 1 files in 1 repositories, 1 changed, 1 pushed/);
+  const manifest = JSON.parse(remoteFile(tbare, 'manifest.json').stdout);
+  assert.deepEqual(manifest.files.map((f) => f.path), ['D--p/s1.jsonl']);
+  assert.equal(remoteFile(tbare, manifest.files[0].parts[0].path).stdout, fs.readFileSync(session, 'utf8'));
+  assert.ok(!JSON.parse(remoteFile(bare, 'manifest.json').stdout).files.some((f) => f.path.endsWith('.jsonl')), 'the memory backup holds no transcript');
+  assert.match(remoteFile(bare, 'RESTORE.md').stdout, new RegExp(`backup restore --transcripts https://github.com/${TREPO}.git`));
+  const recorded = JSON.parse(fs.readFileSync(paths.transcriptsLast, 'utf8'));
+  assert.equal(recorded.lastSuccess.at, new Date(state.now).toISOString());
+
+  fs.appendFileSync(session, '{"more":1}\n');
+  state.now += 2 * 60 * 60_000;
+  deps.stdout = sink();
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  assert.doesNotMatch(deps.stdout.text, /transcripts:/, 'not due within the day');
+  assert.equal(remoteCommits(tbare), 1);
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 0, deps.stderr.text);
+  assert.match(deps.stdout.text, /transcripts: 1 files in 1 repositories, 1 changed, 1 pushed/);
+  assert.equal(remoteCommits(tbare), 2);
+});
+
+test('the transcripts never go to a repository that does not read PRIVATE, and the memory backup goes on', async (t) => {
+  const ctx = setup(t);
+  const { bare: tbare } = withTranscripts(ctx);
+  const { deps, state, bare, paths } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  for (const visibility of ['PUBLIC', null]) {
+    state.visibilityOf[TREPO] = visibility;
+    state.now += 25 * 60 * 60_000;
+    deps.stderr = sink();
+    assert.equal(await backupMain(['run'], deps), 0, 'a transcripts refusal never fails the memory backup');
+    assert.match(deps.stderr.text, visibility ? /transcripts: refused: .* reads PUBLIC, not PRIVATE/ : /transcripts: refused: the visibility .* could not be read/);
+    assert.equal(remoteCommits(tbare), 0);
+    assert.ok(JSON.parse(fs.readFileSync(paths.transcriptsLast, 'utf8')).lastFailure.error.startsWith('refused'));
+    assert.match(backupHealth(ctx.home, state.now).fix.join('\n'), /transcripts: .*refused/);
+  }
+  assert.ok(remoteCommits(bare) >= 1);
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 1, 'asked for by name, a refusal is the exit');
+  state.transcripts[TREPO].pushUrls = ['https://github.com/jsaristi/js-harness.git'];
+  state.visibilityOf[TREPO] = 'PRIVATE';
+  deps.stderr = sink();
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 1);
+  assert.match(deps.stderr.text, /public repository/);
+  assert.equal(remoteCommits(tbare), 0);
+});
+
+test('a full transcripts repository takes no new transcript, and doctor, status and ready name the next one', async (t) => {
+  const ctx = setup(t);
+  const { bare: tbare } = withTranscripts(ctx);
+  const { deps, state, home } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  deps.transcriptsRollBytes = 0;
+  fs.writeFileSync(path.join(home, '.claude', 'projects', 'D--p', 's2.jsonl'), '{"new":1}\n');
+  deps.stdout = sink();
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 0, deps.stderr.text);
+  assert.match(deps.stdout.text, /1 new transcripts wait for the next repository: js-harness backup init --transcripts-repo jsaristi\/js-harness-transcripts-2/);
+  assert.ok(!JSON.parse(remoteFile(tbare, 'manifest.json').stdout).files.some((f) => f.path === 'D--p/s2.jsonl'));
+  assert.match(backupHealth(home, state.now).fix.join('\n'), /init --transcripts-repo jsaristi\/js-harness-transcripts-2/);
+  deps.stdout = sink();
+  await backupMain(['status'], deps);
+  assert.match(deps.stdout.text, /transcripts: jsaristi\/js-harness-transcripts-1, last success .*; full: init --transcripts-repo jsaristi\/js-harness-transcripts-2/);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /missing: 1 transcripts are in no backup/);
+
+  withTranscripts(ctx, 'jsaristi/js-harness-transcripts-2');
+  assert.equal(await backupMain(['init', '--transcripts-repo', 'jsaristi/js-harness-transcripts-2'], deps), 0, deps.stderr.text);
+  delete deps.transcriptsRollBytes;
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 0, deps.stderr.text);
+  const second = JSON.parse(remoteFile(state.transcripts['jsaristi/js-harness-transcripts-2'].bare, 'manifest.json').stdout);
+  assert.deepEqual(second.files.map((f) => f.path), ['D--p/s2.jsonl']);
+});
+
+test('backup ready and verify cover the transcripts, and restore puts them back byte for byte', async (t) => {
+  const ctx = setup(t);
+  const { bare: tbare, session } = withTranscripts(ctx);
+  const { deps, root } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  deps.stdout = sink();
+  await backupMain(['run'], deps);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 0, deps.stdout.text);
+  assert.doesNotMatch(deps.stdout.text, /not copied: Claude transcripts/);
+
+  const old = new Date(Date.now() - 60 * 60_000);
+  fs.appendFileSync(session, '{"later":1}\n');
+  fs.utimesSync(session, old, old);
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 1);
+  assert.match(deps.stdout.text, /missing: 1 transcripts changed since the last transcripts backup/);
+  fs.utimesSync(session, new Date(), new Date());
+  deps.stdout = sink();
+  assert.equal(await backupMain(['ready'], deps), 0, deps.stdout.text);
+  assert.match(deps.stdout.text, /note: 1 transcripts grew in the last 15 minutes/);
+
+  deps.stdout = sink();
+  assert.equal(await backupMain(['verify', '--transcripts', tbare], deps), 0, deps.stdout.text + deps.stderr.text);
+  assert.match(deps.stdout.text, /ok transcripts: 1 of 1 files byte for byte/);
+  const home = path.join(root, 'new-home');
+  deps.stdout = sink();
+  assert.equal(await backupMain(['restore', '--transcripts', tbare, '--home', home], deps), 0, deps.stderr.text);
+  const backed = JSON.parse(remoteFile(tbare, 'manifest.json').stdout).files[0];
+  assert.equal(fs.readFileSync(path.join(home, '.claude', 'projects', 'D--p', 's1.jsonl'), 'utf8'), remoteFile(tbare, backed.parts[0].path).stdout);
+  assert.match(deps.stdout.text, /transcripts: 1 restored/);
+});
+
+test('the hook starts a run when the transcripts are due, even with nothing else changed', async (t) => {
+  const ctx = setup(t);
+  withTranscripts(ctx);
+  const { deps, state, home } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  state.now += 2 * 60 * 60_000;
+  assert.equal(dueReason(home, state.now), 'nothing changed since the last backup');
+  state.now += 23 * 60 * 60_000;
+  assert.equal(dueReason(home, state.now), null);
+});
+
+test('while a transcripts run holds its lock, even hours into its pushes, the hook does not start another', async (t) => {
+  const ctx = setup(t);
+  withTranscripts(ctx);
+  const { deps, state, home, paths } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  state.now += 25 * 60 * 60_000;
+  fs.writeFileSync(paths.transcriptsLock, `${JSON.stringify({ pid: 4242, at: new Date(state.now - 3 * 60 * 60_000).toISOString() })}\n`);
+  assert.equal(dueReason(home, state.now), 'nothing changed since the last backup');
+  deps.stderr = sink();
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 1);
+  assert.match(deps.stderr.text, /backup: transcripts: a backup is already running \(pid 4242\)/);
+});
+
+test('the memory run and the transcripts run each record into a file only it writes', async (t) => {
+  const ctx = setup(t);
+  withTranscripts(ctx);
+  const { deps, paths } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const last = JSON.parse(fs.readFileSync(paths.last, 'utf8'));
+  assert.ok(last.lastSuccess, 'the memory run is recorded in last.json');
+  assert.equal(last.transcripts, undefined, 'and the transcripts run writes nothing there');
+  assert.ok(JSON.parse(fs.readFileSync(paths.transcriptsLast, 'utf8')).lastSuccess, 'it records in transcripts.json');
+  assert.deepEqual(fs.readdirSync(paths.dir).filter((name) => name.endsWith('.tmp') || name.endsWith('.lock')), [], 'no partial file or lock is left');
+});
+
+test('backup verify takes one source at a time and says so', async (t) => {
+  const { deps } = setup(t);
+  deps.stderr = sink();
+  assert.equal(await backupMain(['verify', '--from', 'a', '--summary', 'b'], deps), 2);
+  assert.match(deps.stderr.text, /backup verify: one of --from, --summary or --transcripts at a time/);
 });

@@ -1565,13 +1565,34 @@ and exits 1 while anything the backup is configured for has no copy off the mach
 count the last backup does not hold; and for each repository of `bundles`, no remote, commits or a
 stash entry in no bundle, a worktree's edits or the `.git/js-harness` records changed since the
 last backup, an untracked file too large to copy. What the backup never copies is a `not copied:`
-line with its size, and never fails it: the Claude transcripts and Claude Desktop's own data.
+line with its size, and never fails it: the Claude transcripts while no transcripts repository is
+named, and Claude Desktop's own data.
 
 ```console
 $ js-harness backup ready
 missing: D:/js-harness: stash@{1} (On feat/x: held out) is in no bundle
 not copied: Claude transcripts (C:\Users\me\.claude\projects\*\*.jsonl): 156 files, 1.1 GB
 backup ready: no, 1 things have no copy off this machine
+```
+
+The Claude transcripts go to private repositories of their own, so the memory backup stays small
+(`odd/tasks/transcripts-backup.md`). `backup init --transcripts-repo <owner/name>` creates one
+private, reads it PRIVATE and clones it; from then on `backup run` copies every
+`~/.claude/projects/**/*.jsonl` into it once a day, as text, after the memory backup, and pushes it
+after the same origin and PRIVATE checks (`backup run --transcripts` does it now). A transcript over
+40 MiB is cut by line into parts, so no file nears GitHub's 100 MiB limit and a long session that
+grows pushes only its new lines; the manifest holds each file's and each part's sha256, and a
+transcript Claude Code deletes stays in the backup. They are not blanked, since a restore puts them
+back byte-identical, so the PRIVATE check is their only guard. Once a repository's objects reach
+800 MB it takes no new transcript, and `backup run`, `status` and `doctor` name the next one to open
+with `init --transcripts-repo`. A transcripts failure is recorded and never fails the memory backup.
+With transcripts named, `ready` calls a transcript in no backup or changed since missing, and one that
+only grew in the last 15 minutes (a session running now) a note.
+
+```console
+$ node bin/js-harness.mjs backup verify --transcripts https://github.com/<owner>/<name>.git
+ok transcripts: 834 of 834 files byte for byte
+$ node bin/js-harness.mjs backup restore --transcripts https://github.com/<owner>/<name>.git
 ```
 
 While Engram is down, the memory stays readable. Every run also writes, from the export it
@@ -1611,7 +1632,7 @@ old config files in `~/.js-harness/restored-config` to compare by hand, and the 
 and records in `~/.js-harness/restored-bundles`, each with the line that puts it back (`git fetch`
 for a bundle, `git apply` for a patch, the folder to copy into `.git/js-harness`). `verify --from` restores
 into a scratch home and checks the four counts and every file byte for byte; `verify --summary`
-checks the public summary's sections and privacy. The private clone keeps every byte as written
+checks the public summary's sections and privacy; it takes one of `--from`, `--summary` or `--transcripts` at a time. The private clone keeps every byte as written
 (`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers in both hosts: when a
 backup is due (30 minutes since the last success, and Engram, a memory folder, the home, a plugin
 list or Claude Desktop's notes or presets changed since) it starts a run detached and returns; where `init` never ran it does nothing.

@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { collectFiles, parseStats, readJson, scopeArgs, walk } from './backup.mjs';
 import { bundleRefs, repoFiles, shortKey, stashesOf } from './backup-repos.mjs';
 import { recentInClone } from './backup-restore.mjs';
+import { transcriptsState } from './backup-transcripts.mjs';
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
@@ -20,8 +21,9 @@ export function humanSize(bytes) {
 /** What `backup ready` found: `missing`, each thing configured that has no copy off this machine; `notCopied`, what
  * the backup does not copy at all, with its size; and `notes`, what is worth saying and loses nothing. `git` runs git
  * with no optional lock, so not even git's own index refresh is written. `scope` is the backup's, as `backup run`
- * reads it. */
-export function readiness({ home, clone, config, scope, desktop, run, env = {} }) {
+ * reads it. `transcripts` are the clones of the transcripts repositories (odd/tasks/transcripts-backup.md, D6), none
+ * when they are not configured; `now` tells a session running now. */
+export function readiness({ home, clone, config, scope, desktop, run, env = {}, transcripts = [], now = Date.now() }) {
   const git = (cwd, args, options = {}) =>
     run('git', ['-C', cwd, ...args], { env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_OPTIONAL_LOCKS: '0' }, ...options });
   const missing = [];
@@ -39,7 +41,15 @@ export function readiness({ home, clone, config, scope, desktop, run, env = {} }
     else if (recent.differ.length) missing.push(`${recent.differ.length} readable fallback files differ from what the backup's export rebuilds: js-harness backup run rebuilds them`);
     if (recent.otherFormat.length) notes.push(`${recent.otherFormat.length} readable fallback files were built by another format; the next backup run rebuilds them`);
   }
-  return { missing, notCopied: notCopied(home, desktop), notes };
+  if (transcripts.length) {
+    const cloned = transcripts.filter((t) => fs.existsSync(path.join(t.dir, '.git')));
+    for (const t of transcripts.filter((c) => !cloned.includes(c))) missing.push(`there is no clone of ${t.name} at ${t.dir}: run js-harness backup init --transcripts-repo ${t.name}`);
+    for (const t of cloned) missing.push(...cloneState(git, t.dir));
+    const state = transcriptsState({ projects: path.join(home, '.claude', 'projects'), clones: cloned, now });
+    missing.push(...state.missing);
+    notes.push(...state.notes);
+  }
+  return { missing, notCopied: notCopied(home, desktop, transcripts.length > 0), notes };
 }
 
 /** The backup clone against its origin: never pushed, ahead, behind, or holding what no run committed. */
@@ -122,14 +132,17 @@ function repoState(git, source, manifest) {
   return found;
 }
 
-/** What the backup does not copy, by design until he decides: the Claude transcripts, and Claude Desktop's folder
- * besides its notes and presets. */
-function notCopied(home, desktop) {
+/** What the backup does not copy: the Claude transcripts while no transcripts repository is configured, and Claude
+ * Desktop's folder besides its notes and presets. */
+function notCopied(home, desktop, transcriptsCopied) {
   const projects = path.join(home, '.claude', 'projects');
-  const transcripts = walk(projects, (relative, isDir) => isDir && relative.includes('/'))
-    .filter((relative) => relative.split('/').length === 2 && relative.endsWith('.jsonl'))
-    .map((relative) => fs.statSync(path.join(projects, relative)).size);
-  const found = [{ what: `Claude transcripts (${path.join(projects, '*', '*.jsonl')})`, files: transcripts.length, bytes: transcripts.reduce((a, b) => a + b, 0) }];
+  const found = [];
+  if (!transcriptsCopied) {
+    const transcripts = walk(projects, (relative, isDir) => isDir && relative.includes('/'))
+      .filter((relative) => relative.split('/').length === 2 && relative.endsWith('.jsonl'))
+      .map((relative) => fs.statSync(path.join(projects, relative)).size);
+    found.push({ what: `Claude transcripts (${path.join(projects, '*', '*.jsonl')})`, files: transcripts.length, bytes: transcripts.reduce((a, b) => a + b, 0) });
+  }
   if (desktop && fs.existsSync(desktop)) {
     const sizes = walk(desktop, (relative) => relative === 'side-session-notes' || relative === 'ccd-session-presets.json').map((relative) => {
       try {

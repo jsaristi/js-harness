@@ -237,6 +237,7 @@ ways; Pregunta 19 chose "Los dos (Recommended)". A first copy was made by hand o
 - [x] The small backup gaps: every stash entry, worktree edits, the `.git/js-harness` records, Desktop notes and presets, the plugin lists
 - [x] The reinstall protocol, "Before a reinstall" in the orchestrator skill (his words, 2026-10-21: "Deja lo que tenga que quedar como protocolo armado")
 - [x] The readable fallback of Engram (Pregunta 45): `RECENT.md` and a file per project in the private repository, rebuilt at every run, and a session-start notice that sends a session to it when Engram lost its project; built and proven by a session that answered from it with Engram off (`odd/tasks/recent-memory.md`)
+- [x] The Claude transcripts backed up daily as text to private repositories of their own, split under GitHub's file limit, restored byte-identical (Pregunta 52; `odd/tasks/transcripts-backup.md`): 834 transcripts in `jsaristi/js-harness-transcripts-1`, verified byte for byte from GitHub on 2026-10-23
 - [ ] A from-zero rehearsal in a Hyper-V VM, the proof (Windows Sandbox cannot run WSL2 or winget). Later, only if it shows the need: a per-project import (engram exports per project, but `engram import` has no filter) and pinning the reviewed stack versions
 
 ### Onboarding
