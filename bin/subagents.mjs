@@ -9,46 +9,11 @@ import { spawnSync } from 'node:child_process';
 import { callsOf, countOf, dayOf, launchesOf, usageOf } from './lib/subagent-count.mjs';
 import { linesOf } from './lib/lines.mjs';
 import { mainCheckout, parseWorktreeList, projectSlug } from './lib/sessions.mjs';
-
-export const USAGE = 'Usage: js-harness subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
-// A day of this project's records is about 231 MB, every line of it read: a week is the most one run reads.
-const MAX_DAYS = 7;
-const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+import { parseDayArgs, shiftDay, zone } from './lib/record-days.mjs';
 
 class SubagentsArgError extends Error {}
 
-function parseArgs(argv) {
-  const parsed = { days: 1, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const token = argv[i];
-    const value = () => {
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) throw new SubagentsArgError(`${token} requires a value`);
-      i += 1;
-      return next;
-    };
-    if (token === '--day') {
-      parsed.day = value();
-      // A day that does not come back as itself (2026-02-30 is read as March 2nd) is no date.
-      const read = DAY_PATTERN.test(parsed.day) ? Date.parse(`${parsed.day}T00:00:00Z`) : NaN;
-      if (Number.isNaN(read) || new Date(read).toISOString().slice(0, 10) !== parsed.day) throw new SubagentsArgError('--day takes a date as YYYY-MM-DD');
-    } else if (token === '--days') {
-      const raw = value();
-      parsed.days = /^\d+$/.test(raw) ? Number(raw) : NaN;
-      if (!(parsed.days >= 1 && parsed.days <= MAX_DAYS)) throw new SubagentsArgError(`--days takes a whole number from 1 to ${MAX_DAYS}`);
-    } else if (token === '--json') {
-      parsed.json = true;
-    } else if (token === '--cwd') {
-      parsed.cwd = value();
-    } else {
-      throw new SubagentsArgError(`unknown argument: ${token}`);
-    }
-  }
-  return parsed;
-}
-
-/** `day` moved by `delta` days, both `YYYY-MM-DD`. */
-const shiftDay = (day, delta) => new Date(Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
+export const USAGE = 'Usage: js-harness subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 
 /** The records folders of this project: the main checkout's and each worktree's, as Claude Code names them
  * under `<config>/projects`, the ones that can be listed. */
@@ -144,7 +109,6 @@ export async function readRecords(folders, { since, inWindow }) {
 }
 
 const percent = (share) => (share === null ? '-' : `${Math.round(share * 100)}%`);
-const zone = (offset) => `UTC${offset < 0 ? '-' : '+'}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')}:${String(Math.abs(offset) % 60).padStart(2, '0')}`;
 
 function countLines(count, { from, to, offsetMinutes, folders, ms }) {
   const days = from === to ? `local day ${from}` : `local days ${from} to ${to}`;
@@ -174,8 +138,9 @@ export async function subagentsMain(argv, env = process.env, deps = {}) {
   } = deps;
   let parsed;
   try {
-    parsed = parseArgs(argv);
+    parsed = parseDayArgs(argv, SubagentsArgError);
   } catch (err) {
+    if (!(err instanceof SubagentsArgError)) throw err;
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
