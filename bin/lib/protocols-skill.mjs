@@ -44,7 +44,7 @@ Incident (2026-10-09): a session stopped and waited 17 hours for the user's yes 
 
 Incident (2026-10-07): a block meant to hold the user's answer was worded as an instruction ("run the lean review on Codex 0.160.1") and was read three times as a task for the user to run.
 
-- A reply ends in one of four states. Working: the user sends nothing; say what wakes you and what you report next. Decision: one question, never while work runs. Cut: what the user sends to open the next session. Finished: name the session to return to.
+- A reply ends in one of five states. Working: the user sends nothing; say what wakes you and what you report next. Decision: one question, never while work runs. Question: an open question of the conversation that the user answers in writing, not with buttons, asked on that line, so the session is taken as neither working nor finished. Cut: what the user sends to open the next session. Finished: name the session to return to.
 - Text the user copies sits in one code block that holds only that text, under what it is, where it goes and what sending it does; never an instruction to the user. Two such blocks are numbered in the order they are sent.
 - Before a decision or a cut, say what was done, what is next and why, and for which session.
 - Then the map: each phase's share and the total, from \`js-harness progress\`; if it fails, say so.
