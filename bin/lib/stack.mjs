@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { cmdWord, resolveStackPm } from './package-manager.mjs';
+import { resolveStackPm, shownWord } from './package-manager.mjs';
 import { readManifest } from './manifest.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
@@ -266,10 +266,11 @@ const ENGRAM_PLUGIN_UPDATE_FIX = ['claude plugin marketplace update engram', `cl
 
 /** The global install of `spec` as the machine's package manager runs it: `resolveStackPm` decides it, as `planStack` does,
  * so a pnpm machine is told `pnpm add -g` and never `npm` (the stack rule). npm keeps `i -g`, the line doctor always
- * printed. `env` is the environment doctor was given; without one, the process's. */
-function installLine(spec, env) {
+ * printed. `env` is the environment doctor was given, without one the process's; each word is quoted for `platform`,
+ * the one the line is run on. */
+function installLine(spec, { env, platform = process.platform }) {
   const pm = resolveStackPm(undefined, env ?? process.env);
-  return [...pm.words.map(cmdWord), pm.kind === 'pnpm' ? 'add' : 'i', '-g', spec].join(' ');
+  return [...pm.words, pm.kind === 'pnpm' ? 'add' : 'i', '-g', spec].map((word) => shownWord(word, platform)).join(' ');
 }
 
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
@@ -370,12 +371,12 @@ export const tools = [
     // `installed` and `upToDate` — that install is also how an outdated codegraph gets upgraded. `project`
     // carries the actual resolved root (`deps.project`, already resolved by `resolveProjectRoot`
     // before `probeStack` runs), not a literal `<root>` placeholder.
-    fix: ({ project, env }) => ({
-      installed: installLine('@colbymchenry/codegraph', env),
+    fix: ({ project, env, platform }) => ({
+      installed: installLine('@colbymchenry/codegraph', { env, platform }),
       claude: 'claude mcp add -s user codegraph -- codegraph serve --mcp',
       codex: 'codex mcp add codegraph -- codegraph serve --mcp',
       project: `gentle-ai codegraph init --cwd ${project || '<project root>'}`,
-      upToDate: installLine('@colbymchenry/codegraph', env),
+      upToDate: installLine('@colbymchenry/codegraph', { env, platform }),
     }),
   },
   {
@@ -428,10 +429,10 @@ export const tools = [
       codex: installed.state === 'missing' ? 'n/a' : codexLoginState(deps),
     }),
     project: () => 'n/a',
-    fix: ({ env }) => ({
-      installed: installLine('@openai/codex', env),
+    fix: ({ env, platform }) => ({
+      installed: installLine('@openai/codex', { env, platform }),
       codex: 'codex login',
-      upToDate: installLine('@openai/codex@latest', env),
+      upToDate: installLine('@openai/codex@latest', { env, platform }),
     }),
   },
 ];

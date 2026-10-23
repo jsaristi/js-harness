@@ -152,6 +152,10 @@ test('the codegraph and codex install lines run the machine\'s package manager, 
   const codex = findTool('codex').fix({ env: pnpm });
   assert.equal(codex.installed, 'pnpm add -g @openai/codex');
   assert.equal(codex.upToDate, 'pnpm add -g @openai/codex@latest');
+  // Codex on 46e3842..96de03d: a word is quoted for the platform the line is run on, never as cmd.exe quotes it.
+  const spaced = { JS_HARNESS_PM: '/opt/a&b/pnpm' };
+  assert.equal(findTool('codex').fix({ env: spaced, platform: 'linux' }).installed, "'/opt/a&b/pnpm' add -g @openai/codex");
+  assert.equal(findTool('codex').fix({ env: spaced, platform: 'win32' }).installed, '"/opt/a&b/pnpm" add -g @openai/codex');
   const codegraph = findTool('codegraph').fix({ env: pnpm, project: '/root' });
   assert.equal(codegraph.installed, 'pnpm add -g @colbymchenry/codegraph');
   assert.equal(codegraph.upToDate, 'pnpm add -g @colbymchenry/codegraph');
