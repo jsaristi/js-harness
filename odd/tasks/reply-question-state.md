@@ -34,9 +34,9 @@ Nothing: the state is his decision, already made; its label "Te pregunto" is the
 
 ## Tasks
 - [x] T1 (kind: build) The question state in the reply check and the wake check, tests first; the texts and the init
-  template name five
-- [x] T2 (kind: build) `rule:reply-four-states` says five states, through `js-harness rules change`
-- [ ] T3 (kind: verify) Gate, gentle-ai assessment, Codex review, pull request, ready notice
+  template name five (3c642629; the decision's refusal words kept in 2bbe12bf)
+- [x] T2 (kind: build) `rule:reply-four-states` says five states, through `js-harness rules change` (06c2d8e2)
+- [x] T3 (kind: verify) Gate, gentle-ai assessment, Codex review, pull request, ready notice (L4-L5)
 
 ## Log
 - L1 (2026-10-23) The lead's task: "Build proposal B, which Sebastián approved as Pregunta 48 ("Sí, sumalo" […]). Today a
@@ -50,3 +50,8 @@ Nothing: the state is his decision, already made; its label "Te pregunto" is the
 - L3 (2026-10-23) The source of the change: his tapped "Sí, sumalo" cannot be a quotation (the command refuses a tapped
   answer, whose text a session wrote), so the rule keeps its typed quotations and the tap is where he accepted the
   reading. AGENTS.md went to 1,507 estimated tokens with the state; the paragraph was tightened back to 1,499.
+- L4 (2026-10-23) Gate green on each commit (tests in WSL2). gentle-ai: dea129b..2bbe12b (3c642629, 06c2d8e2, 2bbe12bf)
+  assessed medium, review_due false (under_budget); no review due, none started. The Stop hook then offered the whole
+  branch: its read-only status was run and nothing started, as AGENTS.md asks. The differential check found that
+  3c642629 had reworded the refusal of a decision asked while work runs; 2bbe12bf restores it, pinned by a test.
+- L5 (2026-10-23) Codex: dea129b..2bbe12b, one part, correct at 0.94, no findings; recorded.
