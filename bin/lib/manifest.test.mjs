@@ -26,6 +26,7 @@ import {
   scheduledTaskAction,
   lookAtScheduledTask,
   runSchtasks,
+  writeManifestAtomic,
 } from './manifest.mjs';
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
@@ -3883,4 +3884,49 @@ test('the orchestrator skill gives the first lead its start and carries the onbo
   assert.ok(at(LEAD_TEACHING) > at('\n## The lead\n') && at(LEAD_TEACHING) < at('\n## The status report\n'));
   assert.ok(at(SESSION_TEACHING) > at('\n## A work session\n'));
   assert.equal(components[3].content('0.1.0'), text, 'Codex gets the same skill');
+});
+
+// The rename over the manifest is refused for a moment on Windows while another process (an antivirus, the indexer,
+// an editor) holds the target open: it is tried again before the write fails, and only there.
+test('writeManifestAtomic renames again while Windows holds the manifest, and leaves no temp file either way', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-manifest-rename-'));
+  try {
+    const target = path.join(dir, 'manifest.json');
+    fs.writeFileSync(target, '{"version":"0.1.0"}\n');
+    const holding = (times, code) => {
+      let calls = 0;
+      return {
+        calls: () => calls,
+        rename: (from, to) => {
+          calls += 1;
+          if (calls <= times) throw Object.assign(new Error(`${code}: resource busy`), { code });
+          fs.renameSync(from, to);
+        },
+      };
+    };
+    const temps = () => fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'));
+    const pauses = [];
+    const pause = (ms) => pauses.push(ms);
+
+    const brief = holding(2, 'EBUSY');
+    writeManifestAtomic(target, { version: '0.2.0' }, { rename: brief.rename, pause, platform: 'win32' });
+    assert.equal(brief.calls(), 3);
+    assert.equal(pauses.length, 2);
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, 'utf8')), { version: '0.2.0' });
+    assert.deepEqual(temps(), []);
+
+    const held = holding(Infinity, 'EPERM');
+    assert.throws(() => writeManifestAtomic(target, { version: '0.3.0' }, { rename: held.rename, pause, platform: 'win32' }), { code: 'EPERM' });
+    assert.equal(held.calls(), 3);
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, 'utf8')), { version: '0.2.0' });
+    assert.deepEqual(temps(), []);
+
+    // Elsewhere the same code is a refusal that stays: tried once.
+    const linux = holding(Infinity, 'EACCES');
+    assert.throws(() => writeManifestAtomic(target, { version: '0.4.0' }, { rename: linux.rename, pause, platform: 'linux' }), { code: 'EACCES' });
+    assert.equal(linux.calls(), 1);
+    assert.deepEqual(temps(), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

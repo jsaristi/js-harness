@@ -9,7 +9,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
-import { SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
+import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
 import {
@@ -295,7 +295,15 @@ export async function installMain(argv, env = process.env, deps = {}) {
   const version = currentVersion();
   // `sync`, not `install`: over an older manifest it also removes what is no longer shipped, which `install` alone
   // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
-  const manifest = sync(home, version, deps);
+  let manifest;
+  try {
+    manifest = sync(home, version, deps);
+  } catch (err) {
+    // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
@@ -440,7 +448,15 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   }
 
   const home = parsed.home;
-  const manifest = sync(home, version, deps);
+  let manifest;
+  try {
+    manifest = sync(home, version, deps);
+  } catch (err) {
+    // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
@@ -457,9 +473,16 @@ export async function syncMain(argv, env = process.env, deps = {}) {
  * for the machine one — each ignores what it does not use. A first word that is not a flag names a kind of
  * uninstall (`uninstallKind`). */
 export async function uninstallMain(argv, env = process.env, deps = {}) {
-  const [first, ...rest] = argv;
-  if (first !== undefined && !first.startsWith('--')) return uninstallKind(first, rest, env, deps);
-  return uninstallByFlags(argv, env, deps);
+  try {
+    const [first, ...rest] = argv;
+    if (first !== undefined && !first.startsWith('--')) return await uninstallKind(first, rest, env, deps);
+    return await uninstallByFlags(argv, env, deps);
+  } catch (err) {
+    // A machine manifest that does not parse: one line, and nothing was removed (`uninstall` reads it before any step).
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
 }
 
 /** `uninstall <kind>`: the flags the kind stands for, with `--home` (and `--cwd` for `project`). A flag that names a

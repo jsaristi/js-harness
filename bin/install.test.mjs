@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { installMain, syncMain, uninstallMain, currentVersion, shellWord, cmdExeWord, reportSyncProject } from './install.mjs';
 import { acceptSessionMessages, entryComponents, manifestPath, readManifest, recordOptionalFile, recordScheduledTask, recordStackRow, userSettingsPath } from './lib/manifest.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
@@ -46,6 +47,9 @@ function withProgram(dir) {
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cli-home-'));
 }
+
+/** The command a user runs, for the tests that spawn it. */
+const JS_HARNESS = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 
 /** What `git init` makes, made once and copied (`lib/git-fixture.testkit.mjs`): every empty repository here is the same. */
 const emptyRepo = repoTemplate((dir) => {
@@ -1743,6 +1747,81 @@ test('syncMain --cwd reports a malformed manifest, exit 1', async () => {
     assert.ok(errLines.some((l) => l.includes('is malformed')));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The machine manifest that does not parse: `uninstall --global` refuses it in one line that names the file, before
+// removing anything, so the user is told what to fix and nothing is guessed at (C-shared-1).
+test('uninstall --global refuses a machine manifest that is not valid JSON, in one line, and changes nothing', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = manifestPath(home);
+    fs.mkdirSync(path.dirname(manifest), { recursive: true });
+    fs.writeFileSync(manifest, '{', 'utf8');
+    const journal = journalPath(home, 'C--proj');
+    fs.mkdirSync(path.dirname(journal), { recursive: true });
+    fs.writeFileSync(journal, 'kept\n', 'utf8');
+
+    const run = spawnSync(process.execPath, [JS_HARNESS, 'uninstall', '--global'], {
+      encoding: 'utf8',
+      env: { ...process.env, JS_HARNESS_HOME: home, HOME: home, USERPROFILE: home },
+    });
+
+    assert.equal(run.status, 1, run.stderr);
+    assert.equal(run.stdout, '');
+    const lines = run.stderr.trimEnd().split(/\r?\n/);
+    assert.equal(lines.length, 1, run.stderr);
+    assert.ok(lines[0].includes(manifest), lines[0]);
+    assert.match(lines[0], /not valid JSON/);
+    assert.match(lines[0], /nothing was changed/);
+    assert.equal(fs.readFileSync(manifest, 'utf8'), '{');
+    assert.equal(fs.readFileSync(journal, 'utf8'), 'kept\n');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// `install` and `sync` run as a user runs them: a damaged machine manifest is named in one line, exit 1, and nothing is
+// written under the home but that file (C-shared-1). Both read the manifest before their first write.
+for (const args of [['install'], ['sync', '--global']]) {
+  test(`${args.join(' ')} names a machine manifest that is not valid JSON, in one line, and changes nothing`, () => {
+    const home = makeTmpHome();
+    try {
+      const manifest = manifestPath(home);
+      fs.mkdirSync(path.dirname(manifest), { recursive: true });
+      fs.writeFileSync(manifest, '{', 'utf8');
+
+      const run = spawnSync(process.execPath, [JS_HARNESS, ...args], {
+        encoding: 'utf8',
+        env: { ...process.env, JS_HARNESS_HOME: home, HOME: home, USERPROFILE: home },
+      });
+
+      assert.equal(run.status, 1, run.stderr);
+      assert.equal(run.stdout, '');
+      const lines = run.stderr.trimEnd().split(/\r?\n/);
+      assert.equal(lines.length, 1, run.stderr);
+      assert.ok(lines[0].includes(manifest), lines[0]);
+      assert.match(lines[0], /not valid JSON; nothing was changed$/);
+      assert.equal(fs.readFileSync(manifest, 'utf8'), '{');
+      assert.deepEqual(fs.readdirSync(home), ['.js-harness']);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+}
+
+// `writeManifest` writes through a temp file and a rename (C-shared-2): no temp file is left beside the manifest.
+test('a written machine manifest leaves no temp file beside it', async () => {
+  const home = makeTmpHome();
+  try {
+    const { code } = await captureConsole(() => installMain(['--home', home]));
+
+    assert.equal(code, 0);
+    const dir = path.dirname(manifestPath(home));
+    assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')), []);
+    assert.equal(readManifest(home).version, currentVersion());
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });
 

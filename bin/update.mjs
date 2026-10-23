@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { copyPackageManager, quoteForShell, runPm } from './lib/package-manager.mjs';
 import { currentVersion } from './install.mjs';
-import { installedVersion } from './lib/manifest.mjs';
+import { MalformedManifestError, installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
 import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, splitCommand, pmKind, installPlan, isNewer } from './lib/version.mjs';
 import { unknownArgument } from './lib/args.mjs';
@@ -345,7 +345,15 @@ function notInitializedMessage(cwd) {
 
 async function machineStatus(opts, env, spawn) {
   const installed = currentVersion();
-  const recorded = installedVersion(opts.home);
+  let recorded;
+  try {
+    recorded = installedVersion(opts.home);
+  } catch (err) {
+    // A machine manifest that does not parse: one line, nothing printed before it.
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
   const { latest, problem } = latestFor(opts);
 
   console.log(`installed package version: ${installed}`);
@@ -485,6 +493,15 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
     return 2;
   }
   const opts = parseArgs(argv, env);
+  // A machine manifest that does not parse is named before anything is installed: the copy is installed first, and the
+  // manifest is read only after it, so a damaged one is caught here, with nothing changed.
+  try {
+    installedVersion(opts.home);
+  } catch (err) {
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
   const { latest, problem } = latestFor(opts);
   if (problem) {
     console.error(problem);
