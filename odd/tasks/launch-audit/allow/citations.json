@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "no-such-file",
+    "location": "bin/codex-review.mjs:371",
+    "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
+  },
+  {
+    "kind": "no-such-file",
+    "location": "bin/codex-review.mjs:1874",
+    "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
+  },
+  {
+    "kind": "no-such-file",
+    "location": "bin/lib/codex-usage.mjs:168",
+    "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
+  },
+  {
+    "kind": "no-such-file",
+    "location": "bin/lib/codex-usage.mjs:174",
+    "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
+  },
+  {
+    "kind": "no-such-file",
+    "location": "bin/lib/codex-usage.mjs:174",
+    "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
+  }
+]
