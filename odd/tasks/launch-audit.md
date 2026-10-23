@@ -50,12 +50,12 @@ Launch means the 1.0.0 tag (`odd/tasks/release-095.md`, T4), which waits until h
 
 ## Tasks
 - [x] T1 (kind: docs) (S1-S3) Stage 0: the audit sha, this ledger, the imports verified. Route: inline.
-- [ ] T2 (kind: build) (S4) Stage 1: `scripts/inventory.mjs`, its test with negative fixtures, and `inventory.tsv`. Route: delegated writer (Writer trigger a: five units of several files each, launched together, disjoint files).
-- [ ] T3 (kind: build) (S5a) `scripts/audit-citations.mjs` and its test. Route: delegated writer (as T2).
-- [ ] T3b (kind: build) (S5b) `scripts/audit-flags.mjs` and its test. Route: delegated writer (as T2).
-- [ ] T3c (kind: build) (S5c) `scripts/audit-exports.mjs` and its test. Route: delegated writer (as T2).
-- [ ] T3d (kind: build) (S5d) `scripts/audit-expiry.mjs` and its test. Route: inline (a few dozen lines).
-- [ ] T3e (kind: build) (S5e) `scripts/audit-hygiene.mjs` and its test. Route: delegated writer (as T2).
+- [x] T2 (kind: build) (S4) Stage 1: `scripts/inventory.mjs`, its test with negative fixtures, and `inventory.tsv`. Route: delegated writer (Writer trigger a: five units of several files each, launched together, disjoint files). Commit `b94b6231`, its rows in the commit after.
+- [x] T3 (kind: build) (S5a) `scripts/audit-citations.mjs` and its test. Route: delegated writer (as T2). Commit `4352be68`.
+- [x] T3b (kind: build) (S5b) `scripts/audit-flags.mjs` and its test. Route: delegated writer (as T2). Commit `6775f03d`.
+- [x] T3c (kind: build) (S5c) `scripts/audit-exports.mjs` and its test. Route: delegated writer (as T2). Commit `a3d6a007`.
+- [x] T3d (kind: build) (S5d) `scripts/audit-expiry.mjs` and its test. Route: inline (a few dozen lines). Commit `b6dc5fd7`.
+- [x] T3e (kind: build) (S5e) `scripts/audit-hygiene.mjs` and its test. Route: delegated writer (as T2). Commit `ec06b9b5`.
 - [ ] T4 (kind: build) (S5) Stage 2: the deterministic findings fixed in slices, each with gentle-ai and Codex. Route: inline.
 - [ ] T5 (kind: verify) (S4, S5) The report that starts stages 3–5: counts per class and per finding kind. Route: inline.
 - [ ] T6 (kind: verify) (S6) Stage 3, the instruction audit (session 2). Route: delegated readers.
@@ -101,6 +101,18 @@ Each verified against the bytes at the audit sha on 2026-10-23.
 
 ## Findings
 Stage 2 onward; one row per finding, newest last.
+- M1. open, T4. `scripts/audit-citations.mjs`: 23 `no-such-commit` over five ids (`docs/ROADMAP.md` 11, `docs/SPEC.md` 8, `docs/todo.md` 3, `bin/lib/test-run-warning.mjs:4` 1): each is a transcript id ("the lead's transcript <id>"), which `bin/lib/citations.mjs` reads as a commit; the gate row has the same blind spot for new lines. Fix: the citation reader skips an id the word "transcript" names, and `bin/lib/test-run-warning.mjs:4` says "transcript".
+- M2. closed, allowed. Five `no-such-file` citations of Codex's own sources (`core/src/...rs`) at `bin/codex-review.mjs:371`, `:1874` and `bin/lib/codex-usage.mjs:168`, `:174`: allowed in `allow/citations.json` with why.
+- M3. open, T4. `scripts/audit-exports.mjs`: 40 `unused-export`, an export no other file imports (33 reported as used only inside their module; 7 as no importer at all, where the word count missed the inner use: codegraph shows one caller in the same file for `ticketSaid`, `PACE_PATHS`, `SUMMARY_DIR`, `QUIET_DAYS`). Fix: drop the keyword.
+- M4. carried to stage 4. 170 `test-only-export`, an export only tests import, most in `bin/lib/machine-busiest.mjs` (13), `bin/lib/manifest.mjs` (11), then `throughput`, `remote`, `onboard` (6 each). Not a defect by itself: each area's reader decides whether the seam is right (`node scripts/audit-exports.mjs` lists them).
+- M5. open, T4, and carried, his. His Windows account name: `README.md:1681-1689` shows his real home paths in an example of output (fix: a placeholder home). The history and the history-class files keep it, and only he decides on rewriting a public history.
+- M6. closed, allowed. `scripts/audit-hygiene.mjs` over 7,465 blobs: 25 `secret`, all fake values of tests (named `DUMMY`, `FAKE`, `sekrit`, sentinels, the key headers of a redaction test), 3 `email` (an SSH remote and two fixture addresses), 34 `personal-path` (placeholders, the CI runner, and M5). Every hit is still at HEAD: nothing lives only in the history.
+- M7. closed. `scripts/audit-expiry.mjs`: no review date has passed (2026-11-16, 2026-11-16, 2026-11-21). Protocols 1-3, 5 and 6 of `bin/lib/protocols-skill.mjs` carry no "Reviewed by" date: carried to stage 3 as an instruction question.
+- M8. open, T4. `scripts/audit-flags.mjs`: 13 `undocumented` flags a parser takes and no help names: `check --verify --quiet`, `stack --version`, `codex-review --session`, `merge-queue --state --base --limit --json`, `remote --root --log --claude --shell`, `sessions --context-limit`. Fix: name each in its help, or allow a hook-only flag with why.
+- M9. carried to stage 4. 97 flags `unprobed`: the command refuses before the sentinel (a value check such as `--wait x`, or usage only) or in its own wording (`loop`: "is not an option of loop run", 20 rows). Per command: loop 20, backup 15, throughput 13, sessions 9, permit 8, remote 7, merge-queue 7, guard 5, others 13. The convention `unknown argument: <token>` does not hold for `loop`; each area's reader checks its rows.
+- M10. closed, allowed. `init --transcripts-repo` `not-accepted`: backup's help names `backup init --transcripts-repo` and the probe read it as the command `init`.
+- M11. carried to stage 3. Values restated in prose instead of read from their rule (a scan of the rule values): `AGENTS.md:74` "near 88%" (his wording), `README.md:1381` and `bin/lib/test-run-warning.mjs:6` (gate-log-size), `bin/check.mjs:1605` (sensor-silence), `bin/check.mjs:1772` (gate-wait); and 31 in feature documents, which are history.
+- M12. closed. The reused gate rows on the whole tree at the audit: spec PASS (63 capabilities), budget PASS (1499 of 1500 tokens), rules check PASS.
 
 ## Log
 - L1. 2026-10-23, his request, S1 verbatim; the plan he approved is `launch-audit-plan-v2.md` in the lead's side-session notes, after two readers (Opus on its claims, Codex on its gaps). His decision on Codex, S2.
@@ -109,3 +121,4 @@ Stage 2 onward; one row per finding, newest last.
 - L4. 2026-10-23, DEP0190 test edits in progress in bin/update.test.mjs (one shell line, args []); bin/update.mjs:405 and :531 not changed yet; run node --test bin/update.test.mjs for RED, then change the two spawns, GREEN. Writers T2, T3b, T3c, T3e may still be running.
 - L5. 2026-10-23, DEP0190 fixed in bin/update.mjs (both spawns one line); bin/update.test.mjs GREEN; to commit on its own fix branch after the scripts slice.
 - L6. 2026-10-23, PR 516 landed as cc49add; feat/launch-audit-checks reset onto origin/main with the uncommitted work kept (no upstream: push with -u to its own name). Waiting on writers T2, T3b, T3c, T3e.
+- L7. 2026-10-23, stage 1-2 scripts committed on feat/launch-audit-checks, one commit per script; every check run on the real repository, its findings M1-M12, the allow-lists built with a why per entry. Next: the inventory rows, gentle-ai and Codex on the range, the PR; then the fix slice (M1, M3, M5, M8, I-HR-L48e DEP0190, I-HR-L48f the pre-push tag test).
