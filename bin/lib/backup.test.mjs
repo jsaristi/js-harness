@@ -159,6 +159,14 @@ test('scopeArgs and inScope read one scope value: "all" or one project name', ()
   assert.equal(inScope('D--js-harness--claude-worktrees-a', 'js-harness'), true);
   assert.equal(inScope('D--harness', 'js-harness'), false);
   assert.equal(inScope('D--js-harness-worktrees-a', 'js-harness'), false);
+  // A checkout below the drive root is in scope by the slugs of the paths git lists for it, never by a substring.
+  assert.equal(inScope('C--Users-ana-code-js-harness', 'js-harness'), false);
+  assert.equal(inScope('C--Users-ana-code-js-harness', 'js-harness', ['C:\\Users\\ana\\code\\js-harness']), true);
+  assert.equal(inScope('C--Users-ana-code-js-harness--claude-worktrees-x', 'js-harness', ['C:/Users/ana/code/js-harness']), true);
+  assert.equal(inScope('C--Users-ana-code-side', 'js-harness', ['C:/Users/ana/code/js-harness', 'C:/Users/ana/code/side']), true);
+  assert.equal(inScope('-home-ana-js-harness', 'js-harness', ['/home/ana/js-harness']), true);
+  assert.equal(inScope('D--js-harness', 'harness', ['C:/Users/ana/code/harness']), false);
+  assert.equal(inScope('C--Users-ana-code-js-harness-old', 'js-harness', ['C:/Users/ana/code/js-harness']), false);
   assert.throws(() => scopeArgs(''), /scope/);
 });
 

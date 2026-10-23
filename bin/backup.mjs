@@ -25,7 +25,7 @@ import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
 import { buildRecent } from './lib/backup-recent.mjs';
 import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore.mjs';
 import { humanSize, readiness } from './lib/backup-ready.mjs';
-import { bundleRefs, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
+import { bundleRefs, checkoutsOf, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
 import { fallbackNotice, projectOf, readStats, STATS_TIMEOUT_MS } from './lib/backup-fallback.mjs';
 import { copyTranscripts, restoreTranscripts, verifyTranscripts } from './lib/backup-transcripts.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
@@ -308,7 +308,8 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const recent = writeRecent(paths.clone);
   // RESTORE.md holds no time, so every run writes it: a clone made before a change of the steps gets them.
   fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo, transcriptsClones(paths, config)));
-  const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop });
+  const checkouts = checkoutsOf((cwd, args, options) => git(deps, cwd, args, options), bundleSources(config), scope);
+  const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop, checkouts });
   const bundles = bundleSources(config).map((source) => {
     const entry = bundleUnpushed(deps, source, paths.clone);
     const copied = copyRepoFiles(deps, source, paths.clone);
@@ -1047,6 +1048,7 @@ function initTranscripts(repo, deps) {
 }
 
 function initCommand(args, deps) {
+  if (refuseBareFlag(args, ['--summary-repo'], 'init', deps)) return 2;
   const t = args.indexOf('--transcripts-repo');
   if (t !== -1) {
     const repo = args[t + 1];
@@ -1072,9 +1074,8 @@ function initCommand(args, deps) {
   if (!Array.isArray(config.bundles)) config.bundles = deps.bundles ?? [];
   // The checkout whose main the public summary reads (D4), only when named: a push to a public repository cannot be
   // taken back, so it is never a default, and its first content is read first with `backup summary --summary-repo`.
-  const s = args.indexOf('--summary-repo');
-  if (s !== -1) {
-    const named = path.resolve(args[s + 1] ?? '');
+  if (args.includes('--summary-repo')) {
+    const named = path.resolve(valueOf(args, '--summary-repo'));
     const refused = summaryRefusal(deps, named);
     if (refused) {
       deps.stderr.write(`backup init: ${refused}\n`);

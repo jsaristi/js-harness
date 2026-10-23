@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { backupHealth, backupMain, backupPaths, bundleName, dueReason, BACKUP_EVERY_MINUTES, DEFAULT_SCOPE } from './backup.mjs';
 import { defaultRun } from './lib/backup.mjs';
 import { shortKey, UNTRACKED_MAX_BYTES } from './lib/backup-repos.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
 // asked. The clone's fetch URL names the private repository, its push URL the bare one, so the origin guard reads the
@@ -740,12 +741,37 @@ function snapshot(dir) {
   return out;
 }
 
+test('under a project scope, run copies the memory folders of the checkouts git lists for a bundled repository of that name', async (t) => {
+  const { root, home, deps, paths } = setup(t, { scope: 'js-harness' });
+  const source = sourceRepo(path.join(root, 'code', 'js-harness'));
+  const worktree = path.join(root, 'code', 'side');
+  spawnSync('git', ['-C', source, 'worktree', 'add', '-q', '-b', 'side', worktree], { env: GIT_ENV });
+  const other = sourceRepo(path.join(root, 'code', 'harness'));
+  for (const place of [source, worktree, other]) {
+    fs.mkdirSync(path.join(home, '.claude', 'projects', projectSlug(place), 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'projects', projectSlug(place), 'memory', 'MEMORY.md'), '- a note\n');
+  }
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [source, other], scope: 'js-harness' }));
+
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const copied = (place) => fs.existsSync(path.join(paths.clone, 'claude', 'projects', projectSlug(place), 'memory', 'MEMORY.md'));
+  assert.equal(copied(source), true, 'the checkout below the drive root');
+  assert.equal(copied(worktree), true, 'its worktree outside the checkout');
+  assert.equal(copied(other), false, 'a bundled repository of another name');
+  deps.stdout = sink();
+  await backupMain(['ready'], deps);
+  assert.doesNotMatch(deps.stdout.text, /files changed since the last backup/, 'ready reads the folders run copied');
+});
+
 test('backup ready names what has no copy off this machine, passes once a run copied it, and writes nothing', async (t) => {
   const { root, home, deps, paths, state } = setup(t);
   deps.desktop = path.join(root, 'desktop');
   fs.mkdirSync(path.join(deps.desktop, 'Cache'), { recursive: true });
   fs.writeFileSync(path.join(deps.desktop, 'Cache', 'blob'), Buffer.alloc(3 * 1024));
   fs.writeFileSync(path.join(home, '.claude', 'projects', 'D--p', 'chat.jsonl'), Buffer.alloc(2 * 1024));
+  // A subagent's transcript sits deeper, and the transcripts backup copies it as it copies the session's.
+  fs.mkdirSync(path.join(home, '.claude', 'projects', 'D--p', 'chat', 'subagents'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'projects', 'D--p', 'chat', 'subagents', 'agent-1.jsonl'), Buffer.alloc(1024));
   const source = pushedRepo(root, 'app');
   const g = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { env: GIT_ENV, encoding: 'utf8' });
   fs.writeFileSync(path.join(source, 'a.txt'), 'a');
@@ -762,7 +788,7 @@ test('backup ready names what has no copy off this machine, passes once a run co
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   deps.stdout = sink();
   assert.equal(await backupMain(['ready'], deps), 0, deps.stdout.text);
-  assert.match(deps.stdout.text, /not copied: Claude transcripts \(.*\): 1 files, 2 KB/);
+  assert.match(deps.stdout.text, /not copied: Claude transcripts \(.*\): 2 files, 3 KB/);
   assert.match(deps.stdout.text, /not copied: Claude Desktop data \(.*\), besides its notes and presets: 1 files, 3 KB/);
   assert.match(deps.stdout.text, /backup ready: yes/);
 
@@ -903,6 +929,18 @@ test('backup init seeds private-terms.txt from the other Engram projects, and ke
   fs.writeFileSync(path.join(paths.clone, 'private-terms.txt'), 'added by hand\n');
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
   assert.equal(fs.readFileSync(path.join(paths.clone, 'private-terms.txt'), 'utf8'), 'added by hand\n');
+});
+
+test('backup init refuses a --summary-repo with no value, as summary does, and records no summary repository', async (t) => {
+  const { paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const before = fs.readFileSync(paths.config, 'utf8');
+
+  assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo'], deps), 2);
+  assert.match(deps.stderr.text, /backup init: --summary-repo needs a value/);
+  assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo', '--transcripts-repo', 'a/b'], deps), 2, 'a flag is no value');
+  assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'the config is untouched');
+  assert.equal(fs.existsSync(paths.clone), false, 'and no clone is made');
 });
 
 /** A repository standing for the public one: a bare remote and a clone with a roadmap and one feature on main. */

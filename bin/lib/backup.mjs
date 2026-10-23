@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { windowsFolder } from './app-record.mjs';
+import { projectSlug } from './sessions.mjs';
 
 const REDACTED = '<redacted>';
 
@@ -77,18 +78,22 @@ export function scopeArgs(scope) {
 }
 
 /** Whether a Claude project folder belongs to the scope: under a project scope, the folder of a checkout whose last
- * path part is the project (`D--js-harness`) or of a worktree inside it (`D--js-harness--claude-worktrees-x`). */
-export function inScope(slug, scope) {
-  return scope === 'all' || slug.endsWith(`--${scope}`) || slug.includes(`--${scope}--`);
+ * path part is the project (`D--js-harness`) or of a worktree inside it (`D--js-harness--claude-worktrees-x`), and
+ * the folder of each path in `checkouts` (the checkout and worktrees git lists for the project, `checkoutsOf`) or of
+ * a worktree inside one. A checkout below the drive root is matched by its whole slug, never by a part of it: Claude
+ * turns every character but a letter or digit into `-`, so a part would let `harness` take `D--js-harness`. */
+export function inScope(slug, scope, checkouts = []) {
+  if (scope === 'all' || slug.endsWith(`--${scope}`) || slug.includes(`--${scope}--`)) return true;
+  return checkouts.some((place) => slug === projectSlug(place) || slug.startsWith(`${projectSlug(place)}--`));
 }
 
 /** The trees one backup mirrors: where each comes from under the home, where it goes in the clone, and what it skips. */
-function trees(home, scope, desktop) {
+function trees(home, scope, desktop, checkouts) {
   const projects = path.join(home, '.claude', 'projects');
   const memoryTrees = walk(projects, (relative, isDir) => isDir && relative.split('/').length === 2 && !relative.endsWith('/memory'))
     .filter((relative) => relative.split('/')[1] === 'memory')
     .map((relative) => relative.split('/')[0]);
-  const slugs = [...new Set(memoryTrees)].filter((slug) => inScope(slug, scope)).sort();
+  const slugs = [...new Set(memoryTrees)].filter((slug) => inScope(slug, scope, checkouts)).sort();
   return [
     ...slugs.map((slug) => ({
       from: path.join(projects, slug, 'memory'),
@@ -175,14 +180,15 @@ const MIRRORED = ['claude', 'js-harness-home', 'config'];
 /** Mirrors the Claude memory folders, the js-harness home and the config files into `dest`: each file copied with its sha256, a secret
  * value blanked and the file named with its kinds, and a file the clone holds under `claude/` or `js-harness-home/`
  * that the home no longer has removed, so the clone is the home as it is now. Under a project scope only that
- * project's memory folders are copied, and another project's copy left from a wider scope is removed. `desktop`,
+ * project's memory folders are copied (`checkouts` as `inScope` reads them), and another project's copy left from a
+ * wider scope is removed. `desktop`,
  * Claude Desktop's folder, adds its `DESKTOP_FILES`. The home is only read; with `write: false` nothing is written at
  * all, and the files are only listed as a run would copy them (`backup ready` compares them with the last backup). */
-export function collectFiles({ home, dest, scope = 'all', desktop, write = true }) {
+export function collectFiles({ home, dest, scope = 'all', desktop, checkouts = [], write = true }) {
   const files = [];
   const redacted = [];
   const kept = new Set();
-  for (const tree of trees(home, scope, desktop)) {
+  for (const tree of trees(home, scope, desktop, checkouts)) {
     for (const relative of treeFiles(tree)) {
       const target = relative ? `${tree.to}/${relative}` : tree.to;
       const source = relative ? path.join(tree.from, relative) : tree.from;

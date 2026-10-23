@@ -1527,7 +1527,9 @@ which hold a link to Codex's login.
 
 The scope is the `scope` field of `~/.js-harness/memory-backup/config.json`: `"all"` backs up
 every Engram project and every Claude memory folder, a project name only that project and the
-memory folders of its checkout and worktrees. Unset, it is `js-harness`, so another project's
+memory folders of its checkout and worktrees: a checkout named after the project at a drive root, or
+the checkout and worktrees git lists for a repository of `bundles` whose main checkout has that name,
+wherever it sits. Unset, it is `js-harness`, so another project's
 memories reach GitHub only once someone writes `"all"`. The first run after the scope changes
 takes the new export as it is, and drops from the clone what the narrower scope leaves out.
 
@@ -1571,7 +1573,7 @@ named, and Claude Desktop's own data.
 ```console
 $ js-harness backup ready
 missing: D:/js-harness: stash@{1} (On feat/x: held out) is in no bundle
-not copied: Claude transcripts (C:\Users\me\.claude\projects\*\*.jsonl): 156 files, 1.1 GB
+not copied: Claude transcripts (C:\Users\me\.claude\projects\**\*.jsonl): 156 files, 1.1 GB
 backup ready: no, 1 things have no copy off this machine
 ```
 

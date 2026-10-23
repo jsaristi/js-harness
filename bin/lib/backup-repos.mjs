@@ -41,6 +41,17 @@ function worktreesOf(git, source) {
     }));
 }
 
+/** The paths of the checkout and worktrees git lists for each repository of `sources` whose main checkout is named
+ * `scope` (its last path part), so a project scope reaches the memory folders of a checkout below the drive root.
+ * None under the `'all'` scope, which takes every folder, or for a source git cannot read. */
+export function checkoutsOf(git, sources, scope) {
+  if (scope === 'all') return [];
+  return sources.flatMap((source) => {
+    const listed = worktreesOf(git, source);
+    return listed.length && path.basename(listed[0].path) === scope ? listed.map((w) => w.path) : [];
+  });
+}
+
 /** The stash entries, newest first, as `{ sha, name, subject }`; none when there is no stash. */
 export function stashesOf(git, source) {
   const listed = git(source, ['log', '-g', '--format=%H %gs', 'refs/stash']);

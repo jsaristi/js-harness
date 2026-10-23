@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { collectFiles, parseStats, readJson, scopeArgs, walk } from './backup.mjs';
-import { bundleRefs, repoFiles, shortKey, stashesOf } from './backup-repos.mjs';
+import { bundleRefs, checkoutsOf, repoFiles, shortKey, stashesOf } from './backup-repos.mjs';
 import { recentInClone } from './backup-restore.mjs';
-import { transcriptsState } from './backup-transcripts.mjs';
+import { listTranscripts, transcriptsState } from './backup-transcripts.mjs';
 
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
@@ -32,7 +32,8 @@ export function readiness({ home, clone, config, scope, desktop, run, env = {}, 
   if (!manifest) missing.push(`the backup clone ${clone} holds no backup yet: run js-harness backup run`);
   missing.push(...cloneState(git, clone));
   if (manifest) {
-    missing.push(...homeState({ home, scope, desktop, manifest, run }));
+    const checkouts = checkoutsOf(git, Array.isArray(config.bundles) ? config.bundles : [], scope);
+    missing.push(...homeState({ home, scope, desktop, checkouts, manifest, run }));
     for (const source of Array.isArray(config.bundles) ? config.bundles : []) missing.push(...repoState(git, source, manifest));
     // The readable fallback (odd/tasks/recent-memory.md, D8), by count: a project's name can be a client's. Another
     // format loses nothing, since the export holds it all.
@@ -77,9 +78,9 @@ function cloneState(git, clone) {
 
 /** The memory, the home and the config against the last backup, by the same copy `backup run` makes, made without
  * writing; and Engram's counts against the ones the last backup recorded. */
-function homeState({ home, scope, desktop, manifest, run }) {
+function homeState({ home, scope, desktop, checkouts, manifest, run }) {
   const found = [];
-  const { files } = collectFiles({ home, scope, desktop, write: false });
+  const { files } = collectFiles({ home, scope, desktop, checkouts, write: false });
   const backed = new Map((manifest.files ?? []).map((f) => [f.path, f.sha256]));
   const changed = files.filter((f) => backed.get(f.path) !== f.sha256).map((f) => f.path);
   if (changed.length) found.push(`${changed.length} files changed since the last backup: ${listed(changed)}`);
@@ -138,10 +139,9 @@ function notCopied(home, desktop, transcriptsCopied) {
   const projects = path.join(home, '.claude', 'projects');
   const found = [];
   if (!transcriptsCopied) {
-    const transcripts = walk(projects, (relative, isDir) => isDir && relative.includes('/'))
-      .filter((relative) => relative.split('/').length === 2 && relative.endsWith('.jsonl'))
-      .map((relative) => fs.statSync(path.join(projects, relative)).size);
-    found.push({ what: `Claude transcripts (${path.join(projects, '*', '*.jsonl')})`, files: transcripts.length, bytes: transcripts.reduce((a, b) => a + b, 0) });
+    // Every transcript the transcripts backup would copy, a subagent's included, at any depth.
+    const transcripts = listTranscripts(projects).map((relative) => fs.statSync(path.join(projects, relative)).size);
+    found.push({ what: `Claude transcripts (${path.join(projects, '**', '*.jsonl')})`, files: transcripts.length, bytes: transcripts.reduce((a, b) => a + b, 0) });
   }
   if (desktop && fs.existsSync(desktop)) {
     const sizes = walk(desktop, (relative) => relative === 'side-session-notes' || relative === 'ccd-session-presets.json').map((relative) => {
