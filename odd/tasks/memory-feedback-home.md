@@ -162,3 +162,13 @@ he did not type; his exact words are in the rule sources):
 - L12 (2026-10-22) gentle-ai: b7eb9349..0ef3e980 (the twelve rule commits 259dec8b..b0aa1e41 and the document commits)
   assessed medium, review_due false (under_budget); no review due, none started. Codex on 1aafa5c..0ef3e98, 2 parts:
   "the patch is correct" (0.93 and 0.87), no findings, 197,246 input tokens; recorded. T4 done.
+- L13 (2026-10-22) PR 508 landed T2 and T4 (eb2ed9c4). The deletion list went to him through the lead, who reports he
+  approved five (Pregunta 47). Deleted: no-unread-flag-on-a-writing-command, proof-is-a-condition,
+  hours-are-read-not-guessed, heredoc-eats-backslashes (memory pass 20261023T034512749Z, verified). Kept:
+  conflict-merge-costs-review, which memory verify refused because its quotation and its lesson (check git merge-tree
+  before merging main, and on a conflict move the change instead) are in no home of the repository, and
+  one-sample-is-not-a-diagnosis, also in none. Both are agents' lessons, retyped project, so the guard does not read
+  them and no rule of his is left in memory. The list was wrong about these two: it said the repository carried them,
+  while group 1's map gave one-sample no home, and gave conflict-merge only the review-scope phrase of
+  bin/lib/codex-review-turns.mjs, not the merge-tree technique. Before a list of notes to delete is sent, run
+  its quotations against the homes, as `memory verify` will, so that the list is not wrong.
