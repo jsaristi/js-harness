@@ -284,3 +284,71 @@ test('--json prints one object with findings and allowed', () => {
   assert.equal(parsed.allowed, 0);
   assert.deepEqual(parsed.findings, [{ kind: 'unused-export', location: 'bin/a.mjs:1', detail: `unusedFn: ${NO_IMPORTER}` }]);
 });
+
+test('a .cjs module is scanned: each name of its module.exports is an export, and a createRequire destructure uses the names it reads', () => {
+  const dir = repo({
+    'bin/lib/tool.cjs': 'const helper = () => 1;\nconst other = () => 2;\nmodule.exports = {\n  helper,\n  other,\n  shown: 3,\n};\n',
+    'bin/a.mjs': "import { createRequire } from 'node:module';\nconst { helper } = createRequire(import.meta.url)('./lib/tool.cjs');\nconsole.log(helper);\n",
+  });
+  const result = run(dir);
+  assert.equal(result.status, 1, result.stderr);
+  assert.deepEqual(report(result).findings, [
+    unused('bin/lib/tool.cjs:5', 'other', NO_IMPORTER),
+    unused('bin/lib/tool.cjs:6', 'shown', NO_IMPORTER),
+  ]);
+  assert.equal(report(result).summary, '2 findings, 0 allowed');
+});
+
+test('a require bound to a name uses the members read through it, and a binding passed on whole uses every export', () => {
+  const tool = 'const one = () => 1;\nconst two = () => 2;\nmodule.exports = { one, two };\n';
+  const members = repo({
+    'bin/lib/tool.cjs': tool,
+    'bin/a.mjs': "import { createRequire } from 'node:module';\nconst tool = createRequire(import.meta.url)('./lib/tool.cjs');\nconsole.log(tool.one());\n",
+  });
+  assert.deepEqual(report(run(members)).findings, [unused('bin/lib/tool.cjs:3', 'two', NO_IMPORTER)]);
+  const whole = repo({
+    'bin/lib/tool.cjs': tool,
+    'bin/a.mjs': "import { createRequire } from 'node:module';\nconst tool = createRequire(import.meta.url)('./lib/tool.cjs');\nconsole.log(Object.keys(tool));\n",
+  });
+  const result = run(whole);
+  assert.equal(result.status, 0, result.stdout);
+  assert.equal(report(result).summary, '0 findings, 0 allowed');
+});
+
+test('a renamed destructure reads the export it names, and a rest element reads every export', () => {
+  const tool = 'const one = () => 1;\nconst two = () => 2;\nmodule.exports = { one, two };\n';
+  const renamed = repo({
+    'bin/lib/tool.cjs': tool,
+    'bin/a.mjs': "import { createRequire } from 'node:module';\nconst { one: uno } = createRequire(import.meta.url)('./lib/tool.cjs');\nconsole.log(uno());\n",
+  });
+  assert.deepEqual(report(run(renamed)).findings, [unused('bin/lib/tool.cjs:3', 'two', NO_IMPORTER)]);
+  const rest = repo({
+    'bin/lib/tool.cjs': tool,
+    'bin/a.mjs': "import { createRequire } from 'node:module';\nconst { one, ...others } = createRequire(import.meta.url)('./lib/tool.cjs');\nconsole.log(one(), others);\n",
+  });
+  assert.equal(report(run(rest)).summary, '0 findings, 0 allowed');
+});
+
+test('a .cjs test file that loads a module through require is a test importer, as a .mjs test file is', () => {
+  const dir = repo({
+    'bin/lib/tool.cjs': 'const one = () => 1;\nmodule.exports = { one };\n',
+    'bin/lib/tool.test.cjs': "const { one } = require('./tool.cjs');\nconsole.log(one());\n",
+  });
+  assert.deepEqual(report(run(dir)).findings, [
+    { kind: 'test-only-export', location: 'bin/lib/tool.cjs:2', detail: 'one: imported only by test files: bin/lib/tool.test.cjs' },
+  ]);
+});
+
+test('a default import of a .cjs module reads the members used through it, and the whole object reads every export', () => {
+  const tool = 'const one = () => 1;\nconst two = () => 2;\nmodule.exports = { one, two };\n';
+  const members = repo({
+    'bin/lib/tool.cjs': tool,
+    'bin/a.mjs': "import tool from './lib/tool.cjs';\nconsole.log(tool.one());\n",
+  });
+  assert.deepEqual(report(run(members)).findings, [unused('bin/lib/tool.cjs:3', 'two', NO_IMPORTER)]);
+  const whole = repo({
+    'bin/lib/tool.cjs': tool,
+    'bin/a.mjs': "import tool from './lib/tool.cjs';\nconsole.log(Object.keys(tool));\n",
+  });
+  assert.equal(report(run(whole)).summary, '0 findings, 0 allowed');
+});
