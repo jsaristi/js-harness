@@ -2645,12 +2645,14 @@ export const VERBOSE_ENV = 'JS_HARNESS_CHECK_VERBOSE';
 /** The one line a gate that passes prints in place of its rows, unless `--verbose` asks for them: a passing
  * commit printed dozens of lines, the name of every contract among them (finding 5 of JH 43,
  * odd/tasks/quiet-gate.md). It counts the rows, says how many only inform, and carries the verdict of the
- * `review` row, which a commit shows so that nobody has to remember to ask (`checkReview`). */
+ * `review` row, which a commit shows so that nobody has to remember to ask (`checkReview`), and says when an inner check
+ * ran no sensor, so a `JS_HARNESS_CHECK_INNER` left set in a shell never passes for a gate. */
 export function passLine(rows) {
   const info = rows.filter((row) => row.info).length;
   const review = rows.find((row) => row.name === 'review');
+  const inner = rows.find((row) => row.inner === true);
   const counted = `${rows.length} row${rows.length === 1 ? '' : 's'} passed${info > 0 ? `, ${info} of them INFO` : ''}`;
-  return `PASS  check  ${counted}; --verbose prints each${review ? `; review: ${review.detail}` : ''}`;
+  return `PASS  check  ${counted}; --verbose prints each${review ? `; review: ${review.detail}` : ''}${inner ? `; sensors: ${inner.detail}` : ''}`;
 }
 
 function formatRow(row) {
@@ -2735,6 +2737,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     stopped = sensed.some((row) => row.stopped === true);
     // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
     if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi, git: deps.git }));
+  } else if (!push) {
+    rows.push({ name: 'inner', pass: true, info: true, inner: true, detail: 'none ran, an inner check (JS_HARNESS_CHECK_INNER=1)' });
   }
   // How much code waits for a Codex review, said at every commit and failing none: the row that fails is the
   // push's. It reads commits and records, never the working tree, so the inner run prints it as well.

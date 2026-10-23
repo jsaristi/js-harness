@@ -39,7 +39,9 @@ test('a gate that passes prints one line, the PASS of check with the count of it
     const { code, lines } = await run(['--cwd', dir]);
     assert.equal(code, 0);
     assert.equal(lines.length, 1, lines.join('\n'));
-    assert.match(lines[0], /^PASS {2}check {2}\d+ rows passed(, \d+ of them INFO)?; --verbose prints each$/);
+    assert.match(lines[0], /^PASS {2}check {2}\d+ rows passed(, \d+ of them INFO)?; --verbose prints each; sensors: none ran, /);
+    // The inner check runs no test, lint or typecheck: its PASS says so, so a variable left set is never read as a gate.
+    assert.match(lines[0], /; sensors: none ran, an inner check \(JS_HARNESS_CHECK_INNER=1\)$/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -94,6 +96,8 @@ test('the one line carries the verdict of the review row, which a commit shows s
   ];
   assert.equal(passLine(rows), 'PASS  check  3 rows passed, 2 of them INFO; --verbose prints each; review: high risk, 3 paths, 442 lines: review due (high_risk)');
   assert.equal(passLine(rows.slice(0, 1)), 'PASS  check  1 row passed; --verbose prints each');
+  const inner = { name: 'inner', pass: true, info: true, inner: true, detail: 'none ran, an inner check (JS_HARNESS_CHECK_INNER=1)' };
+  assert.equal(passLine([rows[0], inner]), 'PASS  check  2 rows passed, 1 of them INFO; --verbose prints each; sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)');
 });
 
 test('the merge door still prints its rows when it passes, since merge-queue reads its INFO rows', async () => {

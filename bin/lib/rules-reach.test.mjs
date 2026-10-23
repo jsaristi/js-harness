@@ -284,3 +284,16 @@ test('the command answers in the hooks contract, and exits 0 on empty input, on 
     m.done();
   }
 });
+
+test('the command records what a session was told under JS_HARNESS_HOME when it is set, as every home of the harness does', async () => {
+  const m = machine({ refs: { 'origin/HEAD': [pause], BASE: [pause] }, base: 'BASE' });
+  try {
+    const io = { env: { JS_HARNESS_HOME: m.home }, git: m.git, stdin: () => JSON.stringify(m.input('UserPromptSubmit')), stdout: () => {}, stderr: () => {} };
+    assert.equal(await rulesHookMain([], io), 0);
+    assert.ok(fs.existsSync(m.seen()), 'the record is in the set home, not the real one');
+    const empty = { ...io, env: { JS_HARNESS_HOME: '' }, home: m.home };
+    assert.equal(await rulesHookMain([], empty), 0, 'an empty JS_HARNESS_HOME is no home, and a given home still wins');
+  } finally {
+    m.done();
+  }
+});

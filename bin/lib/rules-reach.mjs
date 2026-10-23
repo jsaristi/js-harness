@@ -236,7 +236,9 @@ function runGit(args, top) {
 /** `js-harness rules --hook`: reads the hook input, prints the notice in the hooks contract when there is one, and
  * exits 0 whatever happens, a fault going to standard error and never into the context. */
 export async function rulesHookMain(argv, {
-  home = os.homedir(),
+  env = process.env,
+  // Every home of the harness honours JS_HARNESS_HOME, uninstall included; an empty one is no home.
+  home = env.JS_HARNESS_HOME || os.homedir(),
   git = runGit,
   now = Date.now(),
   stdin = () => (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8')),
