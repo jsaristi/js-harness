@@ -148,6 +148,12 @@ test('a blob over 2 MB is skipped and counted without being read', (t) => {
   assert.deepEqual(lines(result), ['1 blobs read, 1 skipped (binary or over 2 MB)', '0 findings, 0 allowed']);
 });
 
+test('an npm access token is found, and an npm_ word of another length is not', () => {
+  const npmToken = 'npm' + '_' + 'Ab3'.repeat(12);
+  assert.deepEqual(scanLine(`//registry.npmjs.org/:_authToken=${npmToken}`).filter((hit) => hit.kind === 'secret').map((hit) => hit.text), [npmToken]);
+  assert.deepEqual(scanLine(`npm_${'a'.repeat(35)} and npm_config_cache`).filter((hit) => hit.kind === 'secret'), []);
+});
+
 test('the current OpenAI key forms and a JSON credential are found', () => {
   for (const key of ['sk-' + 'proj-' + 'Ab1_'.repeat(12), 'sk-' + 'svcacct-' + 'Cd2-'.repeat(12)]) {
     assert.deepEqual(scanLine(`key ${key} here`).filter((hit) => hit.kind === 'secret').map((hit) => hit.text), [key]);
