@@ -22,8 +22,8 @@ import { closingState, replyConfig, replyRefusal } from './lib/reply.mjs';
 
 const USAGE = 'Usage: js-harness reply --hook\n'
   + '  reads a Stop payload on standard input; where the nearest harness.json holds a "reply" key, turns the stop back\n'
-  + '  when the reply does not close with exactly one state (working, decision, cut, finished, in the labels the key\n'
-  + '  names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
+  + '  when the reply does not close with exactly one state (working, decision, question, cut, finished, in the labels\n'
+  + '  the key names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
   + '  nothing in its background to wake it; writes nothing and always exits 0\n';
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that

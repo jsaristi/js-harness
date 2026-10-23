@@ -8,6 +8,8 @@
 // its replies in Spanish declares the Spanish ones. What each state needs, from `AGENTS.md`:
 //   - working: what wakes the session, written after the label on its line;
 //   - decision: never while background work runs (the host's count of running tasks);
+//   - question: an open question the user answers in writing, not with the question tool's buttons, written after
+//     the label on its line; never while background work runs, like a decision, since both wait on the user;
 //   - cut: one fenced block of what the user sends, under the three labels (what it is, where it goes, what sending it
 //     does), each once;
 //   - finished: the session to return to, written after the label on its line.
@@ -15,7 +17,7 @@
 
 /** The labels a project gets with `"reply": true`. */
 export const DEFAULT_REPLY = Object.freeze({
-  states: Object.freeze({ working: 'Working', decision: 'Decision', cut: 'Cut', finished: 'Finished' }),
+  states: Object.freeze({ working: 'Working', decision: 'Decision', question: 'Question', cut: 'Cut', finished: 'Finished' }),
   labels: Object.freeze({ what: 'What it is', where: 'Where it goes', effect: 'What sending it does' }),
 });
 
@@ -106,10 +108,11 @@ function linesOf(text) {
   return { lines, fenced, blocks };
 }
 
-/** The shape every refusal ends with: the four states and what each needs, in the project's labels. */
+/** The shape every refusal ends with: the five states and what each needs, in the project's labels. */
 function shapeOf({ states, labels }) {
   return `End the reply with one line that starts with one of: ${states.working} (say what wakes you), `
     + `${states.decision} (never while background work runs; the question itself goes through the question tool), `
+    + `${states.question} (an open question the user answers in writing, asked on that line; never while background work runs), `
     + `${states.cut} (one code block of only what the user sends, under the lines ${labels.what}:, ${labels.where}: and ${labels.effect}:), `
     + `${states.finished} (name the session to return to). Your reply is already shown: write the close again in your next words.`;
 }
@@ -131,8 +134,8 @@ function closesOf(lines, fenced, { states, labels }) {
   return { found, labelLines };
 }
 
-/** The state the reply `text` closes with in the project's labels of `config` (`working`, `decision`, `cut` or
- * `finished`), or `null` when it has none or more than one. */
+/** The state the reply `text` closes with in the project's labels of `config` (`working`, `decision`, `question`,
+ * `cut` or `finished`), or `null` when it has none or more than one. */
 export function closingState(text, config) {
   const { lines, fenced } = linesOf(String(text ?? ''));
   const { found } = closesOf(lines, fenced, config);
@@ -164,8 +167,9 @@ export function replyRefusal(text, config, { running = 0 } = {}) {
   }
   if (state === 'working' && rest === '') return turned(`"${states.working}" says nothing after it: say on that line what wakes you`);
   if (state === 'finished' && rest === '') return turned(`"${states.finished}" says nothing after it: name on that line the session to return to`);
-  if (state === 'decision' && running > 0) {
-    return turned(`"${states.decision}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a decision is never asked while work runs; wait for it, or close with ${states.working}`);
+  if (state === 'question' && rest === '') return turned(`"${states.question}" says nothing after it: write on that line what you ask`);
+  if ((state === 'decision' || state === 'question') && running > 0) {
+    return turned(`"${states[state]}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a question is never asked while work runs; wait for it, or close with ${states.working}`);
   }
   if (state === 'cut') return cutRefusal({ labels, labelLines, blocks, turned });
   return null;

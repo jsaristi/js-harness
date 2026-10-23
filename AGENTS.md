@@ -74,15 +74,14 @@ when a feature closes, a PR merges or a phase starts. He never compacts by hand,
 near 88% of its window a session writes its state to the feature document and keeps working,
 the host compacts it by itself, and it resumes from the summary checked against that document,
 repeating any open question. A session that stops instead gets its next prompt from the
-orchestrator, never from him. End each reply with one state:
-working (he sends nothing; say what wakes you), decision (never while work runs), cut, or
+orchestrator, never from him. End each reply with one state: working (he sends nothing; say
+what wakes you), decision (never while work runs), question (he answers in writing), cut, or
 finished (name the session to return to). A planned step he would only say yes to is no
-decision: state its cost and go on. A decision is asked by the orchestrator, with the question
-tool; a cut carries what he sends, in one code block of only that text, under what it is, where
-it goes, what sending it does: two blocks sent out of order cost a session. Before it, say what
-was done, what is next and why,
-and for which session: he runs several. Then the map: each roadmap phase's percentage and the
-total, from `js-harness progress`; if it fails, say so.
+decision: state its cost and go on. The orchestrator asks a decision with the question tool;
+a cut carries what he sends, in one code block of only that text, under what it is, where
+it goes, what sending it does: two blocks out of order cost a session. Before it, say what was
+done, what is next and why, and for which session: he runs several. Then the map: each phase's
+share and the total, from `js-harness progress`; if it fails, say so.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.

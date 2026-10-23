@@ -1268,7 +1268,7 @@ test('after a second init, only an AGENTS.md that is the candidate template may 
 });
 
 // The step `template-lines` (odd/tasks/rule-hierarchy.md, T12): the AGENTS.md the installed `init` wrote is the
-// candidate's template, with the sections T9 gave it and the four states, in at most half of the budget.
+// candidate's template, with the sections T9 gave it and the five states, in at most half of the budget.
 const TEMPLATE = [
   '# p',
   '',
@@ -1276,8 +1276,8 @@ const TEMPLATE = [
   'Every claim is checked.',
   '',
   '## Working with the owner',
-  'A reply ends with one of four states: working,',
-  'decision, cut, or finished.',
+  'A reply ends with one of five states: working,',
+  'decision, question, cut, or finished.',
   '',
 ].join('\n');
 const TEMPLATE_RIGHT = { agentsText: TEMPLATE, template: TEMPLATE, tokens: 600, budget: 1500 };
@@ -1296,11 +1296,13 @@ test('templateLinesProblem names a project with no AGENTS.md, and one whose AGEN
   assert.match(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: `${TEMPLATE}more\n` }), /^the AGENTS\.md js-harness init wrote is not this candidate's template/);
 });
 
-test('templateLinesProblem names a missing section, the missing four states, and a template over half the budget', () => {
+test('templateLinesProblem names a missing section, the missing five states, and a template over half the budget', () => {
   const without = TEMPLATE.replace('## Working with the owner\n', '');
   assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: without, template: without }), 'the template js-harness init wrote has no section "Working with the owner"');
-  const stateless = TEMPLATE.replace('one of four states', 'a state');
-  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: stateless, template: stateless }), 'the template js-harness init wrote does not say that a reply ends with one of four states');
+  const stateless = TEMPLATE.replace('one of five states', 'a state');
+  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: stateless, template: stateless }), 'the template js-harness init wrote does not say that a reply ends with one of five states');
+  const four = TEMPLATE.replace('one of five states', 'one of four states');
+  assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: four, template: four }), 'the template js-harness init wrote does not say that a reply ends with one of five states', 'a template of the four states before the question is out of date');
   assert.equal(
     templateLinesProblem({ ...TEMPLATE_RIGHT, tokens: 751 }),
     'the template js-harness init wrote is 751 estimated tokens, over 750, half of agents-budget: a project keeps less than half for its own lines',

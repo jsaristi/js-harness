@@ -107,8 +107,8 @@ export function wakeWarning(payload, state, io) {
   if (!Array.isArray(payload?.background_tasks)) return null;
   if (payload.background_tasks.some((task) => task?.status === 'running')) return null;
   if (Array.isArray(payload.session_crons) && payload.session_crons.length > 0) return null;
-  // A decision is asked of the person in the chat, whose answer is what wakes the session.
-  if (state === 'decision') return null;
+  // A decision or an open question is asked of the person in the chat, whose answer is what wakes the session.
+  if (state === 'decision' || state === 'question') return null;
   if (typeof payload.transcript_path !== 'string' || payload.transcript_path === '') return null;
 
   const marks = transcriptMarks(io.readFile(payload.transcript_path));

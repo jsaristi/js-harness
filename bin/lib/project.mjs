@@ -425,9 +425,10 @@ first passes two readers that did not write it: one attacks its claims, one look
 missing. The owner gets the improved version, with what each reader changed and what stays
 unguaranteed.
 
-A reply ends with one of four states: working (the owner sends nothing; say what wakes the work),
-decision (one question for the owner, never while work runs), cut (a new session, with the text to
-send it), or finished (name where to return).
+A reply ends with one of five states: working (the owner sends nothing; say what wakes the work),
+decision (one question for the owner, never while work runs), question (an open question the owner
+answers in writing), cut (a new session, with the text to send it), or finished (name where to
+return).
 `;
 }
 

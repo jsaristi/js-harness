@@ -1440,7 +1440,8 @@ it acts only in a project whose nearest `harness.json` holds a `reply` key, and 
 everywhere else. There it reads the reply that ends the turn and turns the stop back, with the
 hooks contract's `decision: "block"` and the shape to follow, when the reply does not close with
 exactly one state line: working (with what wakes the session on that line), decision (never while
-a background task runs), cut (one code block of what the user sends, under the three labels what
+a background task runs), question (an open question the user answers in writing, not with
+buttons, asked on that line and never while a background task runs), cut (one code block of what the user sends, under the three labels what
 it is, where it goes and what sending it does, each once) or finished (with the session to return
 to on that line). A block under those labels in any other state is turned back too: a decision is
 asked with the question tool. A state line is a line that starts with a state's label once its
@@ -1449,10 +1450,10 @@ markdown is taken off, followed by the end of the line or a mark such as a dash 
 with its word (`Working on the docs`), is none.
 
 `init` writes `"reply": true` in a new project's `harness.json`; `false` turns the check off.
-`"reply": true` takes the English labels (`Working`, `Decision`, `Cut`, `Finished`; `What it is`,
-`Where it goes`, `What sending it does`). An object names the project's own, each over the
-English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión", "cut":
-"Corte", "finished": "Terminado"}, "labels": {"what": "Qué es", "where": "Dónde", "effect":
+`"reply": true` takes the English labels (`Working`, `Decision`, `Question`, `Cut`, `Finished`;
+`What it is`, `Where it goes`, `What sending it does`). An object names the project's own, each
+over the English one: `{"states": {"working": "Sigo solo", "decision": "Necesito tu decisión",
+"question": "Te pregunto", "cut": "Corte", "finished": "Terminado"}, "labels": {"what": "Qué es", "where": "Dónde", "effect":
 "Qué pasa"}}`. A key it cannot read, or a
 `harness.json` that is not JSON, is said on standard error and checks nothing. A reply is
 already shown when a `Stop` hook runs, so the session writes its close again in its next words.
