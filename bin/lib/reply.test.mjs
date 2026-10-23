@@ -132,8 +132,9 @@ test('a question closes a reply that leaves the user an open question to answer 
 
 test('a question while background work runs is turned back, like a decision', () => {
   const text = 'Hecho.\n\nTe pregunto: ¿qué nombre lleva el proyecto?';
-  assert.match(refusal(text, { running: 1 }), /background/);
+  assert.match(refusal(text, { running: 1 }), /"Te pregunto" while 1 background task runs: a question is never asked while work runs/);
   assert.equal(refusal(text, { running: 0 }), null);
+  assert.match(refusal('Hecho.\n\nNecesito tu decisión: el orquestador te la pregunta.', { running: 1 }), /a decision is never asked while work runs/, 'the decision keeps its words');
 });
 
 // --- the block he sends belongs to a cut ---

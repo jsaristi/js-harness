@@ -169,7 +169,7 @@ export function replyRefusal(text, config, { running = 0 } = {}) {
   if (state === 'finished' && rest === '') return turned(`"${states.finished}" says nothing after it: name on that line the session to return to`);
   if (state === 'question' && rest === '') return turned(`"${states.question}" says nothing after it: write on that line what you ask`);
   if ((state === 'decision' || state === 'question') && running > 0) {
-    return turned(`"${states[state]}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a question is never asked while work runs; wait for it, or close with ${states.working}`);
+    return turned(`"${states[state]}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a ${state} is never asked while work runs; wait for it, or close with ${states.working}`);
   }
   if (state === 'cut') return cutRefusal({ labels, labelLines, blocks, turned });
   return null;
