@@ -112,7 +112,7 @@ test('the onboard help and onboard\'s comment name the same exit 1 causes, and a
   const causes = 'a template\'s file exists or a link is in the way, the project has a plan of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs';
   assert.match(run(['--help']).stdout, new RegExp(`^ {2}onboard\\s+.*Exit 0, 1 when check finds something, ${causes}; 2 for a usage error\\.$`, 'm'));
   const onboardSource = fs.readFileSync(fileURLToPath(new URL('./onboard.mjs', import.meta.url)), 'utf8').replace(/\r?\n \* /g, ' ');
-  assert.ok(onboardSource.includes(`1 when the check finds something, ${causes}, or 2 for an argument it does not take.`));
+  assert.ok(onboardSource.includes(`1 when the check finds something, ${causes}, or 2 for an argument it does not take or a kind or an area that is not one.`));
 });
 
 test('unknown command exits 2', () => {

@@ -339,7 +339,8 @@ function template(root, name, write, { stdout, stderr }) {
   return 0;
 }
 
-/** What `profile` prints, as `{ lines }`, or `{ error }`: a usage error that names what is missing. With no kind
+/** What `profile` prints, as `{ lines }`, or `{ error }` that names what is missing, with `usage: true` when it is a
+ * value typed on the command line (a kind or an area that is not one), a usage error. With no kind
  * named, `--area` and `--checklist` read `Kind`, and `--checklist` `Size`, from the onboarding document's
  * `## Setup`, so the session never retypes them (D9). */
 function profileOutput(root, { kind, area, checklist, size }) {
@@ -349,7 +350,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
   let kinds;
   if (kind) {
     kinds = parseKind(kind);
-    if (kinds.error) return kinds;
+    if (kinds.error) return { error: kinds.error, usage: true };
   } else {
     if (document === null) return { error: `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform` };
     if (!setup.Kind && checklist && !size && !setup.Size) {
@@ -364,7 +365,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
     const lines = areaLines(advised, area);
     if (lines) return { lines };
     const name = area.startsWith('A:') ? area : `A:${area}`;
-    return { error: `${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas` };
+    return { error: `${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas`, usage: true };
   }
   if (!checklist) return { lines: kindLines(advised, kinds.label) };
   let chosen = size;
@@ -384,7 +385,7 @@ function profile(root, args, { stdout, stderr }) {
   const result = profileOutput(root, args);
   if (result.error) {
     stderr(result.error);
-    return 1;
+    return result.usage ? 2 : 1;
   }
   stdout(result.lines.join('\n'));
   return 0;
@@ -392,7 +393,7 @@ function profile(root, args, { stdout, stderr }) {
 
 /** Exit 0, or 1 when the check finds something, a template's file exists or a link is in the way, the project has a plan
  * of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs, or 2
- * for an argument it does not take. */
+ * for an argument it does not take or a kind or an area that is not one. */
 export async function onboardMain(argv, env = process.env, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
   const args = parseArgs(argv, cwd);
   if (args.error) {
