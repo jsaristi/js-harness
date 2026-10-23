@@ -1,0 +1,7 @@
+[
+  {
+    "kind": "not-accepted",
+    "location": "init --transcripts-repo",
+    "why": "backup's help names the flag in prose about init's choice, not as a flag of init"
+  }
+]
