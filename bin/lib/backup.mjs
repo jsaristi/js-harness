@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { windowsFolder } from './app-record.mjs';
 
-export const REDACTED = '<redacted>';
+const REDACTED = '<redacted>';
 
 /** The secrets a file may hold, each with the name a manifest gives it and the pattern of its value. The value is
  * blanked in the copy, private repository or not: a private repository is one leaked token or one visibility flip
@@ -240,11 +240,11 @@ export function defaultRun(cmd, args, options = {}) {
 }
 
 /** A project is checked on its own only from this many observations: under it a cleanup and a wipe look alike. */
-export const PROJECT_GUARD_MIN = 20;
+const PROJECT_GUARD_MIN = 20;
 
 /** The projects of `before` that held at least `PROJECT_GUARD_MIN` observations and keep less than nine tenths of them in
  * `after`, with both counts: under scope `all` a whole project can be wiped while the totals lose less than a tenth. */
-export function shrunkProjects(before, after) {
+function shrunkProjects(before, after) {
   const tally = (data) => {
     const counts = new Map();
     for (const o of Array.isArray(data?.observations) ? data.observations : []) counts.set(o.project, (counts.get(o.project) ?? 0) + 1);

@@ -402,7 +402,8 @@ function pathCopyRefusal(answered, version) {
 /** What the `js-harness` the shell finds first answers to `--version`, asked through the same shell the sync
  * would run it through, or '' when it does not answer. Nothing is written by the question. */
 function pathCopyVersion(spawn) {
-  const asked = spawn('js-harness', ['--version'], { shell: true, encoding: 'utf8' });
+  // One line and no argument array beside `shell: true`, which Node deprecates (DEP0190).
+  const asked = spawn('js-harness --version', [], { shell: true, encoding: 'utf8' });
   return asked.status === 0 ? String(asked.stdout ?? '').trim() : '';
 }
 
@@ -528,7 +529,7 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
     ? spawn(process.execPath, [bin, 'sync', '--home', opts.home, '--global'], {
         encoding: 'utf8',
       })
-    : spawn('js-harness', ['sync', '--home', quoteForShell(opts.home, platform), '--global'], {
+    : spawn(`js-harness sync --home ${quoteForShell(opts.home, platform)} --global`, [], {
         shell: true,
         encoding: 'utf8',
       });

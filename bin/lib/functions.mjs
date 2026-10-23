@@ -6,7 +6,7 @@
 
 /** What the Codex review is where a project says nothing. One constant, because it is Sebastián's to
  * choose (odd/tasks/on-demand-functions.md, "What is his to decide", question 2). */
-export const CODEX_REVIEW_DEFAULT = 'auto';
+const CODEX_REVIEW_DEFAULT = 'auto';
 
 /** Each switch: the values it takes, the one it has when the project declares none (`fallback`), and the
  * one it is read as when what is declared cannot be read (`strict`): on, since a switch that cannot be

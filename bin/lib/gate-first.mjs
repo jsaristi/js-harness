@@ -27,7 +27,7 @@ export const GATE_FIRST_MAX_MINUTES = 60;
 
 /** How many tickets may be open at once: one for a fix that unblocks, one for the batch run on main. A
  * third would make "first" mean little. */
-export const GATE_FIRST_OPEN = 2;
+const GATE_FIRST_OPEN = 2;
 
 const TICKET_VERSION = 1;
 /** What a ticket's id is: eight hex characters, which is also its file's name. */
@@ -128,7 +128,7 @@ function sweepExpired(home, { now, io }) {
 /** The kinds of line a ticket leaves in the machine's gate log (./gate-log.mjs), one for each thing that
  * happens to it: issued, claimed by a gate, gone by its expiry, cancelled, or left unclaimed by a gate because
  * its file was held. */
-export const TICKET_EVENTS = ['first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'first-unclaimed'];
+const TICKET_EVENTS = ['first-issued', 'first-claimed', 'first-expired', 'first-cancelled', 'first-unclaimed'];
 
 /** Writes the line of `kind` for `ticket` in the gate log of `home`, with `extra` (the gate that claimed it,
  * and the gates it passed). Its id is the ticket's. A tree or an issuer the ticket does not name is left
@@ -154,7 +154,7 @@ export function logTicket(home, kind, ticket, extra = {}, { append = appendGateE
 }
 
 /** A ticket's words, for a message: its id, its session and why. */
-export const ticketSaid = (ticket) => `${ticket.id} (session ${ticket.session}${ticket.tree ? `, tree ${ticket.tree}` : ''}: ${ticket.reason}; until ${ticket.until})`;
+const ticketSaid = (ticket) => `${ticket.id} (session ${ticket.session}${ticket.tree ? `, tree ${ticket.tree}` : ''}: ${ticket.reason}; until ${ticket.until})`;
 
 /** The name a ticket has while its issuer counts the others (`issueTicket`): no gate claims it, and
  * `readTickets` does not list it. */

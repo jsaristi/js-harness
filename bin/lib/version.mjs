@@ -61,7 +61,7 @@ export function tagSpec(repo, tag) {
 }
 
 /** Whether a spec `tagSpec` could have made: one a package manager fetches with git, not a tarball's path. */
-export function isGitSpec(spec) {
+function isGitSpec(spec) {
   return /^(github:|git\+|git:\/\/)/.test(spec);
 }
 

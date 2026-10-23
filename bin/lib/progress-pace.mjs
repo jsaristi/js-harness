@@ -9,7 +9,7 @@ import { parseFeature, parseRoadmap } from './progress.mjs';
 export const PACE_DAYS = 14;
 
 /** What git reads: the roadmap and every feature document, the same files `progress` reads. */
-export const PACE_PATHS = ['docs/ROADMAP.md', ':(glob)odd/tasks/*.md'];
+const PACE_PATHS = ['docs/ROADMAP.md', ':(glob)odd/tasks/*.md'];
 
 // The first byte of a commit's line in the log, which no line of a diff can start with: its lines start with
 // a space, `+`, `-`, `\`, `@` or a header word.

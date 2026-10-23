@@ -88,7 +88,7 @@ export function writeRecord(file, record, { exclusive = false } = {}) {
 /** A lock older than this was left by a session that died holding it. The longest hold is a --restart whose
  * stop finds a survivor: thirteen looks at the process table, each a PowerShell run capped at 60 s on Windows
  * (bin/lib/process-tree.mjs), so 780 s at the very worst; a hold of seconds is the rule. */
-export const LOCK_STALE_MS = 15 * 60000;
+const LOCK_STALE_MS = 15 * 60000;
 const LOCK_TRY_MS = 250;
 const LOCK_TRIES = 600;
 /** What Windows may answer for a lock that is there, or being deleted, or open in a scanner: try again. */
@@ -218,7 +218,7 @@ export function survivorsOf(targets, snapshot) {
 /** One line of `/proc/<pid>/stat` as `{ pid, ppid, createdAt, name }`, `createdAt` being the start time in clock
  * ticks since boot: a number that orders processes as their creation does, which is all `selectDescendants` asks.
  * A zombie (state Z) has exited and is left out. */
-export function parseProcStat(text) {
+function parseProcStat(text) {
   const open = text.indexOf('(');
   const close = text.lastIndexOf(')');
   if (open < 0 || close < open) return null;

@@ -8,7 +8,7 @@ import { checkCodexReviews } from '../check.mjs';
 /** The milliseconds git or gh is given for one answer before it is stopped. A gh that hangs on the network or
  * on a credential helper would otherwise hold the gate before any bound of its own applies (Codex,
  * 2026-10-14); stopped, it is an answer that could not be had, which refuses nothing. */
-export const ANSWER_TIMEOUT_MS = 10_000;
+const ANSWER_TIMEOUT_MS = 10_000;
 
 /** `run`, a spawnSync, with every call given `ANSWER_TIMEOUT_MS`. */
 const bounded = (run) => (command, args, options) => run(command, args, { ...options, timeout: ANSWER_TIMEOUT_MS });

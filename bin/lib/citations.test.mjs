@@ -16,6 +16,11 @@ test('a citation is a code span: a repository path with a line or a range, or a 
   assert.deepEqual(citationsIn('`bin/check.mjs` `check` `D:\\x\\y.mjs:3` `https://a.b/c.md:2` `deadbeef` `1234567` bin/check.mjs:3 3ed5955'), []);
 });
 
+test('an id the word "transcript" names is a transcript, not a commit', () => {
+  assert.deepEqual(citationsIn('"Sí" (the lead\'s transcript `e152c9d8`, line 9), his words (Transcript  `130317af`)'), []);
+  assert.deepEqual(citationsIn('the transcript, then `d3f6ac1`'), [{ kind: 'commit', text: 'd3f6ac1', id: 'd3f6ac1' }]);
+});
+
 test('added lines are read from a diff with no context, with their file and new line number', () => {
   const diff = [
     'diff --git a/odd/tasks/a.md b/odd/tasks/a.md',

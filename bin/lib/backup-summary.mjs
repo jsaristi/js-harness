@@ -5,7 +5,7 @@ import { parseFeature, parseRoadmap } from './progress.mjs';
 import { redactSecrets } from './backup.mjs';
 
 /** How many decisions the summary lists, newest first. */
-export const DECISION_LIMIT = 30;
+const DECISION_LIMIT = 30;
 
 const percent = (done, total) => (total === 0 ? '—' : `${Math.round((done / total) * 100)}%`);
 

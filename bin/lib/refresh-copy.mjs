@@ -19,7 +19,7 @@ import { installCopy, pnpmBinDir, pnpmRunning } from '../update.mjs';
  * that exits non-zero, or a shim the prune finds broken). The land's own exit stands in the printed record. */
 export const REFRESH_FAILED = 6;
 /** The settings backups kept: the newest this many, the older ones removed by the run that writes a newer one. */
-export const KEEP_SETTINGS_BACKUPS = 5;
+const KEEP_SETTINGS_BACKUPS = 5;
 /** Tries of the install, each verified; a pause before each try after the first, as update-copy.sh waited 20 seconds. */
 const TRIES = 3;
 const TRY_PAUSE_MS = 20_000;

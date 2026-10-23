@@ -9,17 +9,20 @@ const PATH_CITATION = /^((?:[\w.-]+\/)*[\w-][\w.-]*\.[A-Za-z0-9]+):(\d+)(?:-(\d+
 // A short or full commit id: hexadecimal, 7 to 40 characters, with at least one digit and one letter
 // so that neither a word nor a number is taken for one.
 const COMMIT_CITATION = /^(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}$/;
+// A session's transcript has a hexadecimal id too, and the documents name it "transcript `<id>`": no commit.
+const TRANSCRIPT_BEFORE = /\btranscript\s*$/i;
 
 /** The citations in one line of Markdown: each code span that is a path with a line (`kind: 'path'`, with `path`,
  * `line` and `end`, the last line of a range or the line itself) or a commit id (`kind: 'commit'`, with `id`). */
 export function citationsIn(text) {
   const found = [];
-  for (const [, span] of text.matchAll(/`([^`\n]+)`/g)) {
+  for (const match of text.matchAll(/`([^`\n]+)`/g)) {
+    const span = match[1];
     const path = PATH_CITATION.exec(span);
     if (path) {
       const line = Number(path[2]);
       found.push({ kind: 'path', text: span, path: path[1], line, end: path[3] === undefined ? line : Number(path[3]) });
-    } else if (COMMIT_CITATION.test(span)) {
+    } else if (COMMIT_CITATION.test(span) && !TRANSCRIPT_BEFORE.test(text.slice(0, match.index))) {
       found.push({ kind: 'commit', text: span, id: span });
     }
   }
