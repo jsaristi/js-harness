@@ -203,8 +203,11 @@ export async function wakeMain(
   const record = readNotices(harnessHome, slug);
   // The newest opening the title names, by its whole title or its code and role (`findOpenings`), read by the
   // command `sessions --opening` takes; a title that command cannot take whole is named by the session's own.
+  let openingsUnread = null;
   const openingOf = (title) => {
-    const [newest] = findOpenings(harnessHome, slug, title).openings;
+    const found = findOpenings(harnessHome, slug, title);
+    if (found.unavailable !== undefined) openingsUnread ??= `the openings folder ${found.dir} (${found.unavailable})`;
+    const [newest] = found.openings;
     return newest === undefined ? null : (openingCommand(newest.title) ?? openingCommand(title));
   };
   const plan = wakePlan({ bootAt, transcripts, readings: record.readings, openingOf });
@@ -221,6 +224,17 @@ export async function wakeMain(
     stdout(`  tell it: ${wakeText(one, bootAt)}`);
   }
   stdout('');
+  // A record or an openings folder that is there and cannot be read is no empty one. The list above still
+  // stands, since it is what the boot left to read; no note is written, because a second run would read the
+  // record as holding none of this boot's notes and write them again.
+  const unread = [
+    record.unavailable ? `the record ${record.path} (${record.unavailable})` : null,
+    openingsUnread,
+  ].filter(Boolean);
+  if (unread.length > 0) {
+    stderr(`js-harness wake: could not read ${unread.join(' and ')}, so no note is recorded.`);
+    return 1;
+  }
   if (!parsed.notify) {
     stdout('no note recorded: run with --notify to leave each session its note.');
     return 0;

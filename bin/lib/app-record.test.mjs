@@ -116,6 +116,22 @@ test('appSessions is an empty map when the app has no session folder', () => {
   assert.equal(lib.appSessions(null, fakeFs({})).size, 0);
 });
 
+test('a folder or a registry file that is there and cannot be read is told to unreadable; a missing or unparsable one is not', () => {
+  const told = [];
+  const unreadable = (where, code) => told.push([where, code]);
+  const denied = (code) => Object.assign(new Error(code), { code });
+  const files = fakeFs(Object.fromEntries([[nodePath.join(ACCOUNT, 'scheduled-tasks.json'), '{ broken']]));
+  const lockedFolder = { ...files, readdir: (dir) => { if (dir === ACCOUNT) throw denied('EACCES'); return files.readdir(dir); } };
+  lib.appSessions(ROOT, { ...lockedFolder, unreadable });
+  assert.deepEqual(told, [[ACCOUNT, 'EACCES']]);
+  told.length = 0;
+  lib.scheduledRegistry(ROOT, { ...files, unreadable });
+  assert.deepEqual(told, [], 'an unparsable registry is no failure, and a missing session file neither');
+  const lockedFile = { ...files, readFile: (file) => { if (file.endsWith('scheduled-tasks.json')) throw denied('EPERM'); return files.readFile(file); } };
+  assert.deepEqual(lib.scheduledRegistry(ROOT, { ...lockedFile, unreadable }), { found: false, tasks: [] });
+  assert.deepEqual(told, [[nodePath.join(ACCOUNT, 'scheduled-tasks.json'), 'EPERM']]);
+});
+
 // --- scheduledTasks ---
 
 test('scheduledTasks lists each task of the scheduled-tasks file as its id, cwd and enabled flag', () => {

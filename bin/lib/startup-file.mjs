@@ -5,8 +5,8 @@
 // Why. Anything js-harness writes outside a repository is recorded so it can be undone exactly (AGENTS.md):
 // the predecessor stack needed four hand-written purge scripts. A file in the Startup folder runs at every
 // login, so one no record names would outlive every uninstall. The rules are those `remote start --at-login`
-// keeps for its launcher (bin/remote.mjs, `planLauncher`, `writeLauncher`, `disableLauncher`), which still
-// has its own copy of them.
+// keeps for its launcher (bin/remote.mjs, `planLauncher`, `writeLauncher`, `disableLauncher`), which reads them
+// from this file too.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,7 +27,7 @@ export function startupLocation(env, name) {
 
 /** What is at `file` and what the machine manifest records for it: `{ bytes, record, ours }`, `ours` when the
  * file is, byte for byte, what js-harness recorded writing. Throws when either cannot be read. */
-function lookAt(home, file) {
+export function lookAt(home, file) {
   let bytes = null;
   try {
     bytes = fs.readFileSync(file);

@@ -45,18 +45,22 @@ const mentionsPath = (text, root) => {
   return new RegExp(`${escaped}(?![a-z0-9_.-])`).test(comparable(text));
 };
 
-const listingOf = (readdir, dir) => {
+/** The names in `dir`; a folder that is missing has none. One there that cannot be listed is told to `unreadable`. */
+const listingOf = (readdir, dir, unreadable) => {
   try {
     return readdir(dir);
-  } catch {
+  } catch (err) {
+    if (err.code !== 'ENOENT') unreadable(dir, err.code ?? err.message);
     return [];
   }
 };
 
-const textOf = (readFile, file) => {
+/** The text of `file`; a file that is missing is null. One there that cannot be read is told to `unreadable`. */
+const textOf = (readFile, file, unreadable) => {
   try {
     return readFile(file);
-  } catch {
+  } catch (err) {
+    if (err.code !== 'ENOENT') unreadable(file, err.code ?? err.message);
     return null;
   }
 };
@@ -70,17 +74,23 @@ function itemsOf(root, { claudeHome, appRootPath, hours, now, tmpdir, harnessHom
   const items = [];
   const fail = (what) => items.push({ level: 'FAIL', what });
   const info = (what) => items.push({ level: 'INFO', what });
+  // A location that is there and cannot be read is a failure line, never taken as empty: what it holds is not known.
+  // Each is named once, though the app's records are read more than once.
+  const unreadable = new Map();
+  const noteUnreadable = (location, reason) => {
+    if (!unreadable.has(location)) unreadable.set(location, reason);
+  };
 
   // The scheduled tasks: the app's registry of them, and the folders the app keeps for each one. With no
   // registry, the folders' own SKILL.md is all there is to say whether a task runs in this project.
   const scheduledRoot = path.join(claudeHome, 'scheduled-tasks');
-  const folders = listingOf(io.readdir, scheduledRoot);
-  const registry = scheduledRegistry(appRootPath, { readdir: io.readdir, readFile: io.readFile });
+  const folders = listingOf(io.readdir, scheduledRoot, noteUnreadable);
+  const registry = scheduledRegistry(appRootPath, { readdir: io.readdir, readFile: io.readFile, unreadable: noteUnreadable });
   const { tasks } = registry;
   if (!registry.found) {
     for (const id of folders) {
       const file = path.join(scheduledRoot, id, 'SKILL.md');
-      const text = textOf(io.readFile, file);
+      const text = textOf(io.readFile, file, noteUnreadable);
       if (text !== null && mentionsPath(text, root)) fail(`${file} names this project's path, and with no registry it is not known whether a scheduled task still runs here`);
     }
   } else {
@@ -117,7 +127,7 @@ function itemsOf(root, { claudeHome, appRootPath, hours, now, tmpdir, harnessHom
     if (seen.unlisted !== undefined && seen.unlisted !== 'ENOENT') {
       fail(`the sessions folder ${projectDir} could not be listed (${seen.unlisted}): the sessions of this project are not known`);
     } else if (seen.unlisted === undefined) {
-      const app = appSessions(appRootPath, { readdir: io.readdir, readFile: io.readFile });
+      const app = appSessions(appRootPath, { readdir: io.readdir, readFile: io.readFile, unreadable: noteUnreadable });
       // The board's rows say which transcripts are in the window; each of those is judged by its own app record. A
       // row takes its `where` from its latest member alone, so an archived latest member would hide an older one.
       const inWindow = new Set(rosterOf(seen.sessions, { since: seen.since, app }).rows.flatMap((row) => row.transcripts.map((transcript) => transcript.id)));
@@ -140,11 +150,12 @@ function itemsOf(root, { claudeHome, appRootPath, hours, now, tmpdir, harnessHom
 
   // The app's own records: a scheduled session of this project that is not archived, named by its title and id.
   // This is the whole check of `--records-only`, and the full command adds the records no transcript row covers.
-  const records = appSessions(appRootPath, { readdir: io.readdir, readFile: io.readFile });
+  const records = appSessions(appRootPath, { readdir: io.readdir, readFile: io.readFile, unreadable: noteUnreadable });
   for (const [sessionId, record] of records) {
     if (covered.has(sessionId) || record.archived || record.scheduledTaskId === null || !isWithin(record.cwd, root)) continue;
     fail(`${record.title ?? 'a session with no title'} (${sessionId}): opened by a scheduled task, in Routines`);
   }
+  for (const [location, reason] of unreadable) fail(`${location} could not be read (${reason}): what it holds is not known`);
   return items;
 }
 

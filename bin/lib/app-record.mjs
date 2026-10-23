@@ -1,5 +1,7 @@
 // The desktop app's own records: which folder a session sits in, and the scheduled tasks. The files are undocumented,
-// so they are read as optional: a folder that is missing and a file that cannot be read or parsed yield nothing.
+// so they are read as optional: a folder or file that is missing, or a file that does not parse, yields nothing.
+// One that is there and cannot be read is no empty one: its path and error code go to the `unreadable` callback the
+// caller gives, which names it as a failure (`unseen`); without one, it yields nothing as well.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -34,17 +36,29 @@ export function windowsFolder(old, local, readdir = fs.readdirSync) {
   return moved.length === 1 ? path.join(base, moved[0]) : old;
 }
 
-const listing = (readdir, dir) => {
+/** The names in `dir`; a folder that is missing, or that cannot be listed, has none. `unreadable(dir, code)` is told of
+ * the one that is there and cannot be listed. */
+const listing = (readdir, dir, unreadable) => {
   try {
     return readdir(dir);
-  } catch {
+  } catch (err) {
+    if (err.code !== 'ENOENT') unreadable?.(dir, err.code ?? err.message);
     return [];
   }
 };
 
-const jsonOf = (readFile, file) => {
+/** The object in the JSON `file`, or null when it is missing, cannot be read, or is no object. `unreadable(file, code)` is
+ * told of a file that is there and cannot be read, not of one that does not parse. */
+const jsonOf = (readFile, file, unreadable) => {
+  let text;
   try {
-    const data = JSON.parse(readFile(file));
+    text = readFile(file);
+  } catch (err) {
+    if (err.code !== 'ENOENT') unreadable?.(file, err.code ?? err.message);
+    return null;
+  }
+  try {
+    const data = JSON.parse(text);
     return isObject(data) ? data : null;
   } catch {
     return null;
@@ -52,21 +66,21 @@ const jsonOf = (readFile, file) => {
 };
 
 /** The `<account>/<org>` folders under the app's `claude-code-sessions` folder, each as its full path. */
-function orgFolders(root, readdir) {
+function orgFolders(root, readdir, unreadable) {
   if (!root) return [];
   const base = path.join(root, 'claude-code-sessions');
-  return listing(readdir, base).flatMap((account) => listing(readdir, path.join(base, account)).map((org) => path.join(base, account, org)));
+  return listing(readdir, base, unreadable).flatMap((account) => listing(readdir, path.join(base, account), unreadable).map((org) => path.join(base, account, org)));
 }
 
 /** The app's session records by `cliSessionId`: `{ where, effort, scheduledTaskId, archived, title, cwd }`, `cwd` the
  * folder the session runs in (null when the record names none). `where` is
  * `'archived'` when the app archived it, `'routines'` when a scheduled task opened it, else `'sessions'`. */
-export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8'), unreadable } = {}) {
   const sessions = new Map();
-  for (const folder of orgFolders(root, readdir)) {
-    for (const name of listing(readdir, folder)) {
+  for (const folder of orgFolders(root, readdir, unreadable)) {
+    for (const name of listing(readdir, folder, unreadable)) {
       if (!/^local_.*\.json$/.test(name)) continue;
-      const data = jsonOf(readFile, path.join(folder, name));
+      const data = jsonOf(readFile, path.join(folder, name), unreadable);
       if (typeof data?.cliSessionId !== 'string') continue;
       const scheduledTaskId = typeof data.scheduledTaskId === 'string' && data.scheduledTaskId !== '' ? data.scheduledTaskId : null;
       const archived = data.isArchived === true;
@@ -86,12 +100,12 @@ export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) 
 /** The app's scheduled-task registry: `{ found, tasks }`. `found` is whether a registry file (`scheduled-tasks.json`)
  * of some account and org parses to an object that holds a task list, an empty one included; `tasks` are every such
  * file's tasks as `{ id, cwd, enabled }`. A missing or unparsable file is no registry, so `found` says nothing of
- * its tasks: the caller decides what that is. */
-export function scheduledRegistry(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+ * its tasks: the caller decides what that is; one that cannot be read is told to `unreadable`, as `appSessions`. */
+export function scheduledRegistry(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8'), unreadable } = {}) {
   let found = false;
   const tasks = [];
-  for (const folder of orgFolders(root, readdir)) {
-    const data = jsonOf(readFile, path.join(folder, 'scheduled-tasks.json'));
+  for (const folder of orgFolders(root, readdir, unreadable)) {
+    const data = jsonOf(readFile, path.join(folder, 'scheduled-tasks.json'), unreadable);
     if (!Array.isArray(data?.scheduledTasks)) continue;
     found = true;
     for (const task of data.scheduledTasks.filter(isObject)) tasks.push({ id: task.id, cwd: task.cwd, enabled: task.enabled === true });

@@ -1104,7 +1104,8 @@ What the desktop app opened for this project out of his sidebar: an enabled sche
 folder is this project (the app runs it in Routines), and a session a schedule opened that sits in
 Routines and is not archived. Each one to clear is named as `FAIL`, and the command exits 1. A
 disabled task, a leftover scheduled-task folder, and a session a command opened (`js-harness remote`)
-are `INFO`. It only reads; `doctor` reports the same count as its `unseen` row. `--records-only` reads
+are `INFO`. A location it cannot read (a folder or file that is there and fails to open, not a missing
+one) is a `FAIL` too, since what it holds is then not known. It only reads; `doctor` reports the same count as its `unseen` row. `--records-only` reads
 the app's session records and no transcript, which is the fast path `doctor` uses at each session start.
 `--hours <n>` sets how far back the sessions are read: 168 (a week) by default. `--json` prints the items.
 
@@ -1273,7 +1274,9 @@ prints its stored opening and the `js-harness wait` calls the boot killed. With 
 leaves each session whose title names a role a note, which the inbox hook tells it on its next
 tool call: its waits are gone, read the opening, re-arm only its declared waits. The
 orchestrator gets the list of sessions to wake with `send_message`, since no command can put a
-prompt into an idle session. A second run after the same boot records nothing.
+prompt into an idle session. A second run after the same boot records nothing. A channel record or
+openings folder that is there and cannot be read makes `wake` exit 1: it still lists the sessions, says on
+standard error which one it could not read, and records nothing, since an empty read would write the notes again.
 
 ```console
 $ js-harness wake --notify

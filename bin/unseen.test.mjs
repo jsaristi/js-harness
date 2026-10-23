@@ -28,6 +28,8 @@ function machine() {
   fs.mkdirSync(home, { recursive: true });
   return {
     claude,
+    records,
+    projectDir,
     home,
     env: { APPDATA: appData, JS_HARNESS_HOME: home },
     tasks(list) {
@@ -363,6 +365,58 @@ test('the full command names a scheduled record that no transcript row covers, o
     assert.equal(r.out.split('\n').filter((line) => line.includes(SESSION)).length, 1, r.out);
     assert.match(r.out, /^FAIL {2}Uncovered \(2b2b2b2b-1111-4222-8333-444455556666\): opened by a scheduled task, in Routines$/m);
     assert.equal(r.out.split('\n').at(-1), 'unseen: 2 to clear');
+  } finally {
+    m.remove();
+  }
+});
+
+/** A `readdir` that refuses the folders named, as a folder the account may not read does. */
+const denying = (...dirs) => (dir) => {
+  if (dirs.includes(dir)) throw Object.assign(new Error(`EACCES: permission denied, scandir '${dir}'`), { code: 'EACCES' });
+  return fs.readdirSync(dir);
+};
+
+/** A `readFile` that refuses the files whose path ends as given, as a file the account may not read does. */
+const refusing = (ending) => (file) => {
+  if (file.endsWith(ending)) throw Object.assign(new Error(`EACCES: permission denied, open '${file}'`), { code: 'EACCES' });
+  return fs.readFileSync(file, 'utf8');
+};
+
+test('a sessions folder that cannot be listed is a failure line with its reason, and exits 1', async () => {
+  const m = machine();
+  try {
+    const r = await unseen(m, [], { readdir: denying(m.projectDir) });
+    assert.equal(r.code, 1, r.out + r.err);
+    assert.match(r.out, /^FAIL {2}the sessions folder .* could not be listed \(EACCES\)/m);
+    assert.equal(r.out.split('\n').at(-1), 'unseen: 1 to clear');
+  } finally {
+    m.remove();
+  }
+});
+
+test('a location it cannot read is a failure line, never a pass: the scheduled-tasks folder, the records folder, a registry, a task file', async () => {
+  const m = machine();
+  try {
+    const folder = await unseen(m, [], { readdir: denying(path.join(m.claude, 'scheduled-tasks')) });
+    assert.equal(folder.code, 1, folder.out + folder.err);
+    assert.match(folder.out, /^FAIL {2}.*scheduled-tasks.* could not be read \(EACCES\)/m);
+    assert.equal(folder.out.split('\n').at(-1), 'unseen: 1 to clear');
+
+    const records = await unseen(m, [], { readdir: denying(m.records) });
+    assert.equal(records.code, 1, records.out + records.err);
+    assert.match(records.out, /^FAIL {2}.*claude-code-sessions.* could not be read \(EACCES\)/m);
+
+    m.tasks([]);
+    const registry = await unseen(m, [], { readFile: refusing('scheduled-tasks.json') });
+    assert.equal(registry.code, 1, registry.out + registry.err);
+    assert.match(registry.out, /^FAIL {2}.*scheduled-tasks\.json could not be read \(EACCES\)/m);
+
+    // With no registry, the folder's SKILL.md is all there is to read.
+    fs.rmSync(path.join(m.records, 'scheduled-tasks.json'));
+    m.skill('jh-old', 'Work in D:\\js-harness');
+    const task = await unseen(m, [], { readFile: refusing('SKILL.md') });
+    assert.equal(task.code, 1, task.out + task.err);
+    assert.match(task.out, /^FAIL {2}.*SKILL\.md could not be read \(EACCES\)/m);
   } finally {
     m.remove();
   }

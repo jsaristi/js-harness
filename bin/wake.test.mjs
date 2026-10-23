@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readNotices, writeOpening } from './lib/channel.mjs';
+import { openingsDir, readNotices, recordPath, writeOpening } from './lib/channel.mjs';
 import { readManifest } from './lib/manifest.mjs';
 import { remoteId } from './lib/remote.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -88,6 +88,26 @@ test('a wait written on several lines does not stop --notify, and every note is 
   assert.equal(await main('--notify'), 0);
   const toFive = readNotices(home, slug).notices.find((one) => one.to.number === 5);
   assert.ok(toFive.text.includes('cd /d/project ; js-harness wait --pr 7'), toFive.text);
+});
+
+test('wake says what it could not read and records nothing, but still lists the sessions: a record or an openings folder that is there and cannot be read', async () => {
+  const { main, out, err, home, slug } = fixture();
+  // A folder where the record file is: reading it fails, and so does a write to it.
+  fs.mkdirSync(recordPath(home, slug), { recursive: true });
+  assert.equal(await main('--notify'), 1);
+  assert.match(err.join('\n'), /js-harness wake: could not read the record .*, so no note is recorded\./);
+  assert.match(out.join('\n'), /^The machine booted at .* open before it/m);
+  assert.doesNotMatch(out.join('\n'), /notes? recorded in/);
+  fs.rmSync(recordPath(home, slug), { recursive: true });
+  // An openings folder that is a file: no opening can be read from it, so no note is written.
+  fs.rmSync(openingsDir(home, slug), { recursive: true });
+  fs.writeFileSync(openingsDir(home, slug), 'not a folder');
+  err.length = 0;
+  out.length = 0;
+  assert.equal(await main('--notify'), 1);
+  assert.match(err.join('\n'), /js-harness wake: could not read the openings folder .*, so no note is recorded\./);
+  assert.match(out.join('\n'), /^The machine booted at /m);
+  assert.equal(readNotices(home, slug).notices.length, 0);
 });
 
 test('a list of sessions too long for one notice keeps the command that prints them all, and says how many it left out', async () => {
