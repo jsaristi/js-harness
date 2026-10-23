@@ -8,3 +8,5 @@ evals/tasks/** text=auto eol=lf
 # wrong in seven places on purpose. They are data: the one review that read them found nothing in them.
 evals/results/** -codex-review
 evals/review/seeded/** -codex-review
+# The launch audit's inventory and allow-lists are data the audit scripts read, not code.
+odd/tasks/launch-audit/** -codex-review
