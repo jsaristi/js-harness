@@ -183,6 +183,9 @@ test('a flag after the last alternative of a usage belongs to it, and a bare nam
     ['sessions', [], '--address'],
     ['stack', ['install'], '--tool'],
   ]);
+  // A command named inside parentheses names nothing past its closing one: --every is the wait's.
+  const example = flagsOnLine('of a lease (js-harness permit lease) and --every plus 5 minutes', 'wait', ['permit', 'wait']);
+  assert.deepEqual(example.map(({ command, sub, flag }) => [command, sub, flag]), [['wait', [], '--every']]);
 });
 
 test('a bare probe of a flag that another place names under a sub word joins that probe', () => {
@@ -213,6 +216,9 @@ test('the parser literals are the case labels, comparisons, startsWith prefixes 
     "const KNOWN = new Set(['--epsilon', '--zeta']);",
     "spawnSync('git', ['--no-pager', 'log']);",
     "parseArgs(argv, ['--eta']);",
+    "const named = (ref) => Boolean(git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]));",
+    "const states = IDS.map((id) => probe(id, ['--version']));",
+    "const listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open']));",
   ].join('\n');
   assert.deepEqual(parserFlags(source), [
     { flag: '--alpha', line: 2 },

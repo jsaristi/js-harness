@@ -190,6 +190,25 @@ test('an import in a comment, or inside a string, is not counted', () => {
   assert.deepEqual(report(result).findings, [unused('bin/h.mjs:1', 'commented', NO_IMPORTER)]);
 });
 
+test('a quote or backtick inside a regex literal opens no string, and a division is no regex', () => {
+  const dir = repo({
+    'bin/r.mjs': [
+      'const SPAN = /`([^`\\n]+)`/g;',
+      "const QUOTES = (text) => text.replace(/[\"']/g, '');",
+      'export function afterRegex() {}',
+      'const half = 4 / 2; const third = half / 3;',
+      "export const afterDivision = '`';",
+      '',
+    ].join('\n'),
+  });
+  const result = run(dir);
+  assert.equal(result.status, 1);
+  assert.deepEqual(report(result).findings, [
+    unused('bin/r.mjs:3', 'afterRegex', NO_IMPORTER),
+    unused('bin/r.mjs:5', 'afterDivision', NO_IMPORTER),
+  ]);
+});
+
 test('export lists, aliases and destructuring declare one export per name', () => {
   const dir = repo({
     'bin/list.mjs': [

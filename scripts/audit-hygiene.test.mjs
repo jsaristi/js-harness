@@ -148,6 +148,29 @@ test('a blob over 2 MB is skipped and counted without being read', (t) => {
   assert.deepEqual(lines(result), ['1 blobs read, 1 skipped (binary or over 2 MB)', '0 findings, 0 allowed']);
 });
 
+test('the current OpenAI key forms and a JSON credential are found', () => {
+  for (const key of ['sk-' + 'proj-' + 'Ab1_'.repeat(12), 'sk-' + 'svcacct-' + 'Cd2-'.repeat(12)]) {
+    assert.deepEqual(scanLine(`key ${key} here`).filter((hit) => hit.kind === 'secret').map((hit) => hit.text), [key]);
+  }
+  const json = '{"pass' + 'word":"hunter2hunter2"}';
+  assert.deepEqual(scanLine(json).map((hit) => hit.kind), ['secret']);
+});
+
+test('the default allow-list is not scanned, so an entry nothing else holds is stale', (t) => {
+  const dir = makeRepo(t);
+  const allowDir = path.join(dir, 'odd', 'tasks', 'launch-audit', 'allow');
+  fs.mkdirSync(allowDir, { recursive: true });
+  const entry = { kind: 'email', location: 'ana@corp.io', why: 'gone from every other file' };
+  commit(dir, { 'odd/tasks/launch-audit/allow/hygiene.json': JSON.stringify([entry]), 'a.txt': 'clean\n' });
+  const result = audit(dir);
+  assert.equal(result.status, 1, result.stderr);
+  assert.deepEqual(lines(result), [
+    'stale-allow  ana@corp.io  no email finding matches this allow entry',
+    '1 blobs read, 0 skipped (binary or over 2 MB)',
+    '1 findings, 0 allowed',
+  ]);
+});
+
 test('an allow entry matching a finding counts it as allowed and exits 0', (t) => {
   const dir = makeRepo(t);
   commit(dir, { 'a.txt': `${TOKEN}\n` });

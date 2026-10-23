@@ -92,6 +92,21 @@ test('--json prints the findings and the allowed count as one object', () => {
   });
 });
 
+test('an allow-list named and missing, or not an array of entries, exits 2', () => {
+  withRepo({ 'bin/p.mjs': '// Reviewed by 2026-01-01.\n' }, (root) => {
+    let result = run(root, '--today', '2026-10-23', '--allow', path.join(root, 'none.json'));
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /^cannot read the allow-list .*none\.json/);
+    const allow = path.join(root, 'allow.json');
+    for (const text of ['{ not json', '{"kind":"expired"}', '[{"kind":"expired","location":"bin/p.mjs:1"}]']) {
+      fs.writeFileSync(allow, text);
+      result = run(root, '--today', '2026-10-23', '--allow', allow);
+      assert.equal(result.status, 2, text);
+      assert.match(result.stderr, /^the allow-list .*allow\.json is not a JSON array of \{ kind, location, why \}/, text);
+    }
+  });
+});
+
 test('an unknown argument and a malformed --today exit 2', () => {
   let result = spawnSync(process.execPath, [SCRIPT, '--nope'], { encoding: 'utf8' });
   assert.equal(result.status, 2);

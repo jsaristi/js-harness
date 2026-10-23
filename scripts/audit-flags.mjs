@@ -61,7 +61,11 @@ const LITERALS = [
   /\.startsWith\(\s*(['"`])(--[a-z][a-z0-9-]*)=?\1/g,
 ];
 const LIST = /\[([^[\]]*)\]/g;
-const LIST_HEAD = /parse|flag|option|known|\b(Set|Map)\(|valid|allow|switch|value|bool/i;
+// `new Set(` and `new Map(`, not `.map(`; `bool`, not `Boolean(`, which wraps any call.
+const LIST_HEAD = /parse|flag|option|known|new (?:Set|Map)\(|valid|allow|switch|value|bool(?!ean\()/i;
+// A quoted item that is no flag: such a list holds another program's arguments (`['rev-parse', '--verify']`).
+const QUOTED_ITEM = /(['"`])([^'"`]*)\1/g;
+const holdsNonFlag = (items) => [...items.matchAll(QUOTED_ITEM)].some((item) => !item[2].startsWith('--'));
 const LIST_TAIL = /^\s*\.(includes|has)\(/;
 const QUOTED_FLAG = /(['"`])(--[a-z][a-z0-9-]*)\1/g;
 
@@ -157,7 +161,12 @@ export function flagsOnLine(line, fallback, commands) {
     const direct = names.filter((named) => named.index < at).at(-1);
     const chained = direct !== undefined && names.some((named) => named.index + named[0].length <= direct.index && gap(named, direct));
     const adjacent = direct !== undefined && !direct[1] && !chained && /^\s*$/.test(line.slice(direct.index + direct[0].length, at));
-    const mention = mentions.filter((named) => named.index < at).at(-1);
+    // A mention a parenthesis closes before the flag, as in `(js-harness permit lease) and --every`, names an example.
+    const open = (named) => {
+      const between = line.slice(named.index, at);
+      return between.split(')').length <= between.split('(').length;
+    };
+    const mention = mentions.filter((named) => named.index < at && open(named)).at(-1);
     const listed = adjacent && fallback !== null && direct[2] !== fallback && /^\s*$/.test(line.slice(0, direct.index));
     let command = fallback;
     let sub = [];
@@ -279,6 +288,7 @@ export function parserFlags(source) {
     const lineStart = source.lastIndexOf('\n', list.index) + 1;
     const tail = source.slice(list.index + list[0].length, list.index + list[0].length + 16);
     if (!LIST_HEAD.test(source.slice(lineStart, list.index)) && !LIST_TAIL.test(tail)) continue;
+    if (holdsNonFlag(list[1])) continue;
     for (const item of list[1].matchAll(QUOTED_FLAG)) found.push({ flag: item[2], index: list.index + 1 + item.index });
   }
   found.sort((a, b) => a.index - b.index);

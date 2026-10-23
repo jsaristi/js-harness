@@ -75,6 +75,27 @@ export function applyAllow(findings, allow) {
   return { findings: [...kept, ...stale], allowed: findings.length - kept.length };
 }
 
+/** The allow-list of `file` as `{ entries }`, or `{ error }`: a missing default is an empty list, but a file named on
+ * the command line must be there, and any list must be an array of `{ kind, location, why }` strings, since one read
+ * wrong would hide nothing and pass. */
+function readAllow(file, named) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT' && !named) return { entries: [] };
+    return { error: `cannot read the allow-list ${file}: ${err.code ?? err.message}` };
+  }
+  let entries;
+  try {
+    entries = JSON.parse(text);
+  } catch {
+    entries = null;
+  }
+  const shaped = Array.isArray(entries) && entries.every((entry) => entry && ['kind', 'location', 'why'].every((key) => typeof entry[key] === 'string'));
+  return shaped ? { entries } : { error: `the allow-list ${file} is not a JSON array of { kind, location, why }` };
+}
+
 const localDate = (now = new Date()) => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
 function main(argv) {
@@ -97,8 +118,12 @@ function main(argv) {
     .filter((file) => file.endsWith('.mjs') && !/\.test(kit)?\.mjs$/.test(file))
     .map((file) => ({ path: file, text: fs.readFileSync(path.join(root, file), 'utf8') }));
   const allowFile = parsed.allow ? path.resolve(cwd, parsed.allow) : path.join(root, 'odd/tasks/launch-audit/allow/expiry.json');
-  const allow = fs.existsSync(allowFile) ? JSON.parse(fs.readFileSync(allowFile, 'utf8')) : [];
-  const { findings, allowed } = applyAllow(expiryFindings(files, parsed.today ?? localDate()), allow);
+  const allow = readAllow(allowFile, parsed.allow !== null);
+  if (allow.error) {
+    process.stderr.write(`${allow.error}\n`);
+    return 2;
+  }
+  const { findings, allowed } = applyAllow(expiryFindings(files, parsed.today ?? localDate()), allow.entries);
   if (parsed.json) process.stdout.write(`${JSON.stringify({ findings, allowed })}\n`);
   else {
     for (const { kind, location, detail } of findings) process.stdout.write(`${kind}  ${location}  ${detail}\n`);

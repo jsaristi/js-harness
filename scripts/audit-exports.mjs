@@ -104,11 +104,43 @@ export function maskSource(source) {
       const { close, end } = stringEnd(source, at);
       blank(at + 1, close, masked);
       at = end;
+    } else if (char === '/' && opensRegex(code, at)) {
+      // A regex literal: a quote or a backtick in it opens no string, which would mask the code after it.
+      const close = regexEnd(source, at);
+      blank(at + 1, close, masked);
+      at = close + 1;
     } else {
       at += 1;
     }
   }
   return { code: code.join(''), masked: masked.join('') };
+}
+
+// Whether the `/` at `at` opens a regex literal rather than divides: it does where an operand is expected, after
+// an operator, an opening bracket, a comma or the start, or after a keyword such as `return`. `code` has the
+// comments already blanked, so the token before it is read from code.
+function opensRegex(code, at) {
+  let before = at - 1;
+  while (before >= 0 && /\s/.test(code[before])) before -= 1;
+  if (before < 0) return true;
+  if ('(,=:[!&|?{};+-*%<>~^'.includes(code[before])) return true;
+  const word = /[A-Za-z_$][\w$]*$/.exec(code.slice(Math.max(0, before - 11), before + 1))?.[0];
+  return ['return', 'typeof', 'case', 'in', 'of', 'delete', 'void', 'throw', 'new', 'yield', 'await'].includes(word);
+}
+
+// Where the regex literal opened at `start` closes: its next `/` that is neither escaped nor in a character class,
+// or its line's end when it is not closed.
+function regexEnd(source, start) {
+  let inClass = false;
+  for (let at = start + 1; at < source.length; at += 1) {
+    const char = source[at];
+    if (char === '\\') at += 1;
+    else if (char === '\n') return at;
+    else if (char === '[') inClass = true;
+    else if (char === ']') inClass = false;
+    else if (char === '/' && !inClass) return at;
+  }
+  return source.length;
 }
 
 // Where the string opened at `start` closes, and where scanning goes on from. A quote string ends at its line's

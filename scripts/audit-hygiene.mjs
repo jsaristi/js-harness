@@ -37,12 +37,14 @@ const TOKEN_SHAPES = [
   /github_pat_[A-Za-z0-9_]{20,}/g,
   /sk-ant-[A-Za-z0-9_-]{20,}/g,
   /sk-[A-Za-z0-9]{32,}/g,
+  /sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}/g,
   /AKIA[0-9A-Z]{16}/g,
   /xox[baprs]-[A-Za-z0-9-]{10,}/g,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
 ];
-// A password-like assignment whose quoted value is long enough to be one; the value is checked apart.
-const ASSIGNMENT = /(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['"]([^'"\s]{12,})['"]/gi;
+// A password-like assignment whose quoted value is long enough to be one; the value is checked apart. The name may
+// be quoted, as a JSON property is.
+const ASSIGNMENT = /(?:password|passwd|secret|token|api[_-]?key)['"]?\s*[:=]\s*['"]([^'"\s]{12,})['"]/gi;
 const EMAIL = /[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g;
 // A home folder: a Windows drive path, or a macOS or Linux one whose name ends in a slash. The lookbehind keeps a
 // drive path from being reported again by the Unix form.
@@ -233,8 +235,10 @@ function streamBlobs(cwd, shas, onBlob) {
  * Scans every blob of the history at `cwd`: `{ hits, read, skipped }`, where hits are the findings per distinct
  * kind and matched text, each with the blobs holding it and the first place it sits (and the first at HEAD).
  */
-export async function scanHistory(cwd) {
-  const objects = parseObjects(git(cwd, ['rev-list', '--objects', '--all']));
+export async function scanHistory(cwd, { skip = null } = {}) {
+  // `skip` is the allow-list's path in the repository: its entries quote the values they allow, so read as a blob
+  // each would find itself and never go stale.
+  const objects = parseObjects(git(cwd, ['rev-list', '--objects', '--all'])).filter((object) => object.path !== skip);
   const info = parseObjectInfo(git(cwd, ['cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)'],
     objects.map((object) => `${object.sha}\n`).join('')));
   const head = headBlobs(cwd);
@@ -331,7 +335,9 @@ export async function main(argv) {
   try {
     const allowFile = options.allow === null ? path.join(cwd, DEFAULT_ALLOW) : path.resolve(options.allow);
     allow = readAllowList(allowFile, options.allow !== null);
-    scan = await scanHistory(cwd);
+    const top = git(cwd, ['rev-parse', '--show-toplevel']).trim();
+    const skip = path.relative(top, allowFile).split(path.sep).join('/');
+    scan = await scanHistory(cwd, { skip: skip.startsWith('..') || path.isAbsolute(skip) ? null : skip });
   } catch (error) {
     console.error(`audit-hygiene: ${error.message}`);
     return 2;
