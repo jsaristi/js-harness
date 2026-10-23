@@ -55,7 +55,6 @@ const LEGACY = {
   'merge-queue': 'prints only the usage',
   guard: 'prints only the usage',
   reply: 'prints only the usage',
-  backup: 'ignores the flag: `backup status --no-such-flag` exits 1, not initialised',
 };
 
 /** The commands `js-harness --help` lists, in its order: the first word of each line under "Commands:". */
