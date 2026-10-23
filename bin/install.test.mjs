@@ -963,7 +963,8 @@ test('uninstallMain --global --everything removes no program when the copy that 
     const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath }));
     assert.equal(code, 0);
     assert.ok(outLines.includes(`kept the js-harness program: this one is a dependency of ${project}, not a global install`), outLines.join('\n'));
-    assert.deepEqual(calls.filter((call) => call.cmd === 'pnpm' || call.cmd === 'npm'), []);
+    // npm runs as this node and its npm-cli.js, so a call of process.execPath is an npm run too.
+    assert.deepEqual(calls.filter((call) => call.cmd === 'pnpm' || call.cmd === 'npm' || call.cmd === process.execPath), []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
