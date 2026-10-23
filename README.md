@@ -1622,7 +1622,7 @@ old config files in `~/.js-harness/restored-config` to compare by hand, and the 
 and records in `~/.js-harness/restored-bundles`, each with the line that puts it back (`git fetch`
 for a bundle, `git apply` for a patch, the folder to copy into `.git/js-harness`). `verify --from` restores
 into a scratch home and checks the four counts and every file byte for byte; `verify --summary`
-checks the public summary's sections and privacy. The private clone keeps every byte as written
+checks the public summary's sections and privacy; it takes one of `--from`, `--summary` or `--transcripts` at a time. The private clone keeps every byte as written
 (`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers in both hosts: when a
 backup is due (30 minutes since the last success, and Engram, a memory folder, the home, a plugin
 list or Claude Desktop's notes or presets changed since) it starts a run detached and returns; where `init` never ran it does nothing.

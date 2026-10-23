@@ -110,8 +110,9 @@ export const TRANSCRIPTS_STALE_HOURS = 48;
 export const TRANSCRIPTS_ROLL_BYTES = 800 * 1024 * 1024;
 /** The longest a transcripts push may take: the first is about 430 MB. */
 export const TRANSCRIPTS_PUSH_TIMEOUT_MS = 60 * 60_000;
-/** A transcripts lock older than this was left by a run that died; one push may take an hour. */
-export const TRANSCRIPTS_LOCK_STALE_MINUTES = 120;
+/** A transcripts lock older than this was left by a run that died. A live run can take three hour-long git steps per
+ * repository (a push, a rebase after a rejected one, the push again), and two repositories after a rollover. */
+export const TRANSCRIPTS_LOCK_STALE_MINUTES = 8 * 60;
 
 /** Where the backup keeps its state under a home. */
 export function backupPaths(home) {
@@ -493,16 +494,26 @@ function transcriptsStep(deps, paths, force) {
   const config = readJson(paths.config);
   if (!transcriptsClones(paths, config).length) return true;
   if (!force && !transcriptsDue(config, readJson(paths.last), deps.now())) return true;
-  const { mine, refusal } = takeLock(paths.transcriptsLock, deps.now(), TRANSCRIPTS_LOCK_STALE_MINUTES);
-  if (refusal) {
-    deps.stderr.write(`backup: transcripts: ${refusal}\n`);
-    return !force;
-  }
   const note = (entry) => {
     const last = readJson(paths.last) ?? {};
     writeJson(paths.last, { ...last, transcripts: { ...(last.transcripts ?? {}), ...entry } });
   };
   const at = () => new Date(deps.now()).toISOString();
+  let taken;
+  try {
+    taken = takeLock(paths.transcriptsLock, deps.now(), TRANSCRIPTS_LOCK_STALE_MINUTES);
+  } catch (error) {
+    // Recorded, so the hook does not find them due again at its next stop.
+    note({ lastFailure: { at: at(), error: error.message } });
+    deps.stderr.write(`backup: transcripts: ${error.message}
+`);
+    return false;
+  }
+  const { mine, refusal } = taken;
+  if (refusal) {
+    deps.stderr.write(`backup: transcripts: ${refusal}\n`);
+    return !force;
+  }
   try {
     const outcome = runTranscripts(deps, paths, config);
     note({ lastSuccess: { at: at(), files: outcome.files, pushed: outcome.pushed }, rollover: outcome.rollover });
@@ -595,13 +606,13 @@ function summaryCommand(args, deps) {
 
 /** A local folder holding `marker`: `from` itself when it does, else a shallow clone of it (a URL, or a bare
  * repository) in a scratch folder that `done` removes. */
-function localCopy(deps, from, marker, branch) {
+function localCopy(deps, from, marker, branch, timeout = PUSH_TIMEOUT_MS) {
   if (fs.existsSync(path.join(from, marker))) return { dir: from, done: () => {} };
   const scratch = fs.mkdtempSync(path.join(deps.tmp ?? os.tmpdir(), 'backup-from-'));
   const dir = path.join(scratch, 'clone');
   const cloned = deps.run('git', ['clone', '-q', from, dir, '--depth=1', ...(branch ? [`--branch=${branch}`] : []), '--config', 'core.longpaths=true'], {
     env: { ...deps.env, ...NO_PROMPT },
-    timeout: PUSH_TIMEOUT_MS,
+    timeout,
   });
   const done = () => fs.rmSync(scratch, { recursive: true, force: true });
   if (cloned.status !== 0) {
@@ -654,9 +665,10 @@ function restoreCommand(args, deps) {
       source = localCopy(deps, from, 'manifest.json');
       restoreBackup({ from: source.dir, home: path.resolve(home), merge: args.includes('--merge'), map, run: deps.run, env: deps.env, stdout: deps.stdout });
       source.done();
+      source = null;
     }
     if (transcripts) {
-      source = localCopy(deps, transcripts, 'manifest.json');
+      source = localCopy(deps, transcripts, 'manifest.json', undefined, TRANSCRIPTS_PUSH_TIMEOUT_MS);
       restoreTranscripts({ from: source.dir, home: path.resolve(home), stdout: deps.stdout });
     }
     return 0;
@@ -685,7 +697,7 @@ function verifyCommand(args, deps) {
   try {
     let result;
     if (transcripts) {
-      source = localCopy(deps, transcripts, 'manifest.json');
+      source = localCopy(deps, transcripts, 'manifest.json', undefined, TRANSCRIPTS_PUSH_TIMEOUT_MS);
       result = verifyTranscripts(source.dir);
     } else if (from) {
       source = localCopy(deps, from, 'manifest.json');
@@ -852,8 +864,10 @@ export function dueReason(home, now, desktop) {
   const last = readJson(paths.last);
   const success = Date.parse(last?.lastSuccess?.at ?? '') || 0;
   if (now - success < BACKUP_EVERY_MINUTES * 60_000) return 'backed up less than 30 minutes ago';
-  // The transcripts change at every turn and count for nothing below, so their day alone makes a run due.
-  if (transcriptsDue(readJson(paths.config), last, now)) return null;
+  // The transcripts change at every turn and count for nothing below, so their day alone makes a run due, unless a
+  // transcripts run holds their lock: a first push can take an hour, and records nothing until it ends.
+  const pushing = lockTime(paths.transcriptsLock);
+  if (!(pushing && now - pushing.at < TRANSCRIPTS_LOCK_STALE_MINUTES * 60_000) && transcriptsDue(readJson(paths.config), last, now)) return null;
   // A clone without the readable fallback (the first run after it shipped, or a run that died half-way) is due at once.
   const fallbackMissing = !fs.existsSync(path.join(paths.clone, 'RECENT.md')) || !Array.isArray(readJson(path.join(paths.clone, 'manifest.json'))?.recent);
   if (success && !fallbackMissing && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';

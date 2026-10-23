@@ -1322,3 +1322,24 @@ test('the hook starts a run when the transcripts are due, even with nothing else
   state.now += 23 * 60 * 60_000;
   assert.equal(dueReason(home, state.now), null);
 });
+
+test('while a transcripts run holds its lock, even hours into its pushes, the hook does not start another', async (t) => {
+  const ctx = setup(t);
+  withTranscripts(ctx);
+  const { deps, state, home, paths } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  state.now += 25 * 60 * 60_000;
+  fs.writeFileSync(paths.transcriptsLock, `${JSON.stringify({ pid: 4242, at: new Date(state.now - 3 * 60 * 60_000).toISOString() })}\n`);
+  assert.equal(dueReason(home, state.now), 'nothing changed since the last backup');
+  deps.stderr = sink();
+  assert.equal(await backupMain(['run', '--transcripts'], deps), 1);
+  assert.match(deps.stderr.text, /backup: transcripts: a backup is already running \(pid 4242\)/);
+});
+
+test('backup verify takes one source at a time and says so', async (t) => {
+  const { deps } = setup(t);
+  deps.stderr = sink();
+  assert.equal(await backupMain(['verify', '--from', 'a', '--summary', 'b'], deps), 2);
+  assert.match(deps.stderr.text, /backup verify: one of --from, --summary or --transcripts at a time/);
+});

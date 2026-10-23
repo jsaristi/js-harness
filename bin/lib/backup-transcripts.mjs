@@ -132,9 +132,24 @@ export function copyTranscripts({ projects, clones, partMax = PART_MAX_BYTES, li
   return { waiting, refused, changed };
 }
 
-/** A manifest's file rejoined from its parts in `dir`, or why it cannot be: a part missing or not its sha256, or the
- * whole not the file's. */
+/** Whether a manifest's relative path leaves the folder it is read against: absolute, on a drive, or through `..`. A
+ * manifest comes from a repository, so a tampered one must not make a restore write or read outside its folders. */
+function leaves(relative) {
+  return typeof relative !== 'string' || path.isAbsolute(relative) || /^[a-zA-Z]:/.test(relative) || relative.split(/[\/]/).includes('..');
+}
+
+/** Why a manifest entry's paths cannot be used, or null. */
+function pathRefusal(entry) {
+  if (leaves(entry.path)) return 'its path leaves the projects folder';
+  const outside = (entry.parts ?? []).find((part) => leaves(part.path));
+  return outside ? `its part ${outside.path} leaves the clone` : null;
+}
+
+/** A manifest's file rejoined from its parts in `dir`, or why it cannot be: a path that leaves its folder, a part
+ * missing or not its sha256, or the whole not the file's. */
 function rejoin(dir, entry) {
+  const refusal = pathRefusal(entry);
+  if (refusal) return { reason: refusal };
   const parts = [];
   for (const part of entry.parts ?? []) {
     const where = path.join(dir, part.path);
@@ -173,6 +188,8 @@ export function restoreTranscripts({ from, home, stdout }) {
   const projects = path.join(home, '.claude', 'projects');
   let restored = 0;
   for (const entry of manifest.files) {
+    const refusal = pathRefusal(entry);
+    if (refusal) throw new Error(`${entry.path}: ${refusal}`);
     const target = path.join(projects, ...entry.path.split('/'));
     if (fs.existsSync(target)) {
       stdout.write(`kept: ${entry.path}, a live file is never written over\n`);
@@ -205,10 +222,14 @@ export function transcriptsState({ projects, clones, now }) {
       unheld += 1;
       continue;
     }
+    // Hashing every transcript is seconds of reading: a file with its entry's size and time is taken as unchanged. The
+    // entry keeps whole milliseconds, and a time set through utimes can land a hair under one.
+    const stat = fs.statSync(source);
+    if (stat.size === entry.bytes && entry.modified && Math.abs(stat.mtimeMs - Date.parse(entry.modified)) < 1) continue;
     const buffer = fs.readFileSync(source);
     if (sha256(buffer) === entry.sha256) continue;
     const grew = buffer.length > entry.bytes && sha256(buffer.subarray(0, entry.bytes)) === entry.sha256;
-    if (grew && now - fs.statSync(source).mtimeMs < LIVE_MINUTES * 60_000) live += 1;
+    if (grew && now - stat.mtimeMs < LIVE_MINUTES * 60_000) live += 1;
     else changed += 1;
   }
   const missing = [];

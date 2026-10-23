@@ -209,3 +209,39 @@ test('transcriptsState: missing for a new or rewritten file, a note for a live s
   assert.match(state.missing.join('\n'), /1 transcripts are in no backup/);
   assert.match(state.missing.join('\n'), /2 transcripts changed since the last transcripts backup/);
 });
+
+test('transcriptsState does not read again a file whose size and time are its entry\'s', (t) => {
+  const { projects, clone } = fixture(t);
+  copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 });
+  const file = path.join(projects, 'D--p', 'small.jsonl');
+  const entry = JSON.parse(fs.readFileSync(path.join(clone, 'manifest.json'), 'utf8')).files.find((f) => f.path === 'D--p/small.jsonl');
+  fs.writeFileSync(file, Buffer.alloc(entry.bytes, 'x'));
+  fs.utimesSync(file, new Date(entry.modified), new Date(entry.modified));
+  assert.deepEqual(transcriptsState({ projects, clones: [{ name: 'r1', dir: clone }], now: Date.now() }), { missing: [], notes: [] });
+});
+
+test('a manifest path that leaves the projects folder or the clone is refused by verify and restore', (t) => {
+  const { root, projects, clone } = fixture(t);
+  copyTranscripts({ projects, clones: [{ name: 'r1', dir: clone }], partMax: 1000 });
+  const manifestFile = path.join(clone, 'manifest.json');
+  const original = fs.readFileSync(manifestFile, 'utf8');
+  const out = { text: '', write(chunk) { this.text += chunk; } };
+  const tamper = (change) => {
+    const manifest = JSON.parse(original);
+    change(manifest.files.find((f) => f.path === 'D--p/small.jsonl'));
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  };
+  for (const [change, reason] of [
+    [(entry) => { entry.path = '../../escaped.jsonl'; }, /\.\.\/\.\.\/escaped\.jsonl: its path leaves the projects folder/],
+    [(entry) => { entry.parts[0].path = '../outside.txt'; }, /D--p\/small\.jsonl: its part \.\.\/outside\.txt leaves the clone/],
+  ]) {
+    tamper(change);
+    const checked = verifyTranscripts(clone);
+    assert.equal(checked.ok, false);
+    assert.match(checked.lines.join('\n'), reason);
+    const home = path.join(root, 'home');
+    assert.throws(() => restoreTranscripts({ from: clone, home, stdout: out }), reason);
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+  assert.equal(fs.existsSync(path.join(root, 'escaped.jsonl')), false);
+});
