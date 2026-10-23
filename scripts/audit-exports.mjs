@@ -3,10 +3,14 @@
 //
 //   node scripts/audit-exports.mjs [--allow <file>] [--json] [--cwd <repo>]
 //
-// The modules checked are the tracked `bin/**/*.mjs` that are not `*.test.mjs` or `*.testkit.mjs`. Their exports
-// are `export function`, `async function`, `function*`, `class`, `const`, `let` and `var` (each name of a
+// The modules checked are the tracked `bin/**/*.mjs` and `bin/**/*.cjs` that are not `*.test.mjs` or `*.testkit.mjs`.
+// Their exports are `export function`, `async function`, `function*`, `class`, `const`, `let` and `var` (each name of a
 // destructuring or comma list), `export default`, `export { a, b as c }` (the exported names) and `export ... from`
-// re-exports. The importers are every tracked `.mjs` file of the repository (bin, scripts, evals). `export * from`
+// re-exports. A `.cjs` module's exports are the keys of `module.exports = { a, b: c }` and each `exports.x =` or
+// `module.exports.x =`; a `require('<spec>')` or `createRequire(<url>)('<spec>')` uses the names of the destructuring
+// declaration in front of it, the members read through a binding (`const t = require(...)` reads `t.x`), and every
+// export when the binding is used whole. A table of `.cjs` names is not read: only `.mjs` modules are listed in one.
+// The importers are every tracked `.mjs` and `.cjs` file of the repository (bin, scripts, evals). `export * from`
 // and `export * as ns from` use every export of their source, as does a namespace import (`import * as ns`).
 // Named imports use the exported names (`{ a as b }` uses `a`, `import x from` uses `default`); a bare
 // `import '<spec>'` uses nothing; `import('<literal>')` uses every export of its module.
@@ -55,6 +59,13 @@ const IDENTIFIER = /^[\w$]+$/;
 // the specifier, the last character of the match.
 const IMPORT = /(?<![\w$.])import\s*(?:([\w$]+)\s*(?:,\s*)?)?(?:\{([^}]*)\}|\*\s*as\s+([\w$]+))?\s*(?:from\s*)?(['"])/g;
 const DYNAMIC = /(?<![\w$.])import\s*\(\s*/g;
+// A CommonJS module (`.cjs`): its export object, its `exports.name =` assignments, and a load with `require` or with
+// `createRequire(<url>)`. A destructuring declaration in front of a load names the exports it reads (`const { a } = `).
+const CJS_LIST = /(?<![\w$.])module\.exports\s*=\s*\{/g;
+const CJS_DOTTED = /(?<![\w$.])(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
+const CJS_REQUIRE = /(?<![\w$.])(?:require|createRequire\s*\([^()]*\)\s*)\(\s*(['"])/g;
+const CJS_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*$/;
+const CJS_BINDING = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*$/;
 const EXPORT = /(?<![\w$.])export\s+/g;
 const RELATIVE_LITERAL = /(['"`])(\.{1,2}\/[^'"`\n]*\.mjs)\1/g;
 // The forms that follow `export`, each read from the position after it with a sticky regex.
@@ -69,12 +80,21 @@ const DECLARATION_EXPORT = /(?:const|let|var)\s+/y;
 const CONTINUES = /[,=+*%&|?:.!<>([{/-]/;
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const isCandidate = (file) => /^bin\/(?:.+\/)?[^/]+\.mjs$/.test(file) && !TEST_FILE.test(file);
+const isCandidate = (file) => /^bin\/(?:.+\/)?[^/]+\.(?:mjs|cjs)$/.test(file) && !TEST_FILE.test(file);
 // A relative specifier resolved against the importing file; `node:` and bare specifiers are null.
 const resolveSpec = (file, spec) => (/^\.\.?\//.test(spec) ? path.posix.join(path.posix.dirname(file), spec) : null);
 // A template's pattern as a regex: each `*` stands for one folder entry's name, which never has a slash.
 const globOf = (pattern) => new RegExp(`^${pattern.split('*').map(escapeRegex).join('[^/]*')}$`);
 const quoteOf = (match) => match.index + match[0].length - 1;
+// The index of the `}` that closes the `{` at `open`, counting only braces.
+const closeOf = (masked, open) => {
+  let depth = 0;
+  for (let at = open; at < masked.length; at += 1) {
+    if (masked[at] === '{') depth += 1;
+    else if (masked[at] === '}' && (depth -= 1) === 0) return at;
+  }
+  return masked.length;
+};
 
 /** `code` is the source with its comments blanked, and `masked` is that with the contents of its strings blanked
  * too (the quotes stay). Both are as long as the source, and every line break stays, so one offset reads the same
@@ -227,6 +247,19 @@ function importedNames(defaultName, list) {
   return names;
 }
 
+// The names a module reads through a binding of its whole exports: `tracer.name` reads `name`. The binding's own
+// declaration is its one bare use; any other bare use (passed on, spread, or listed) reads every export, so null.
+function memberNames(masked, binding) {
+  const names = [];
+  let bare = 0;
+  const pattern = new RegExp(`(?<![\\w$.])${escapeRegex(binding)}(?![\\w$])(?:\\s*\\.\\s*([A-Za-z_$][\\w$]*))?`, 'g');
+  for (const match of masked.matchAll(pattern)) {
+    if (match[1] === undefined) bare += 1;
+    else names.push(match[1]);
+  }
+  return bare > 1 ? null : names;
+}
+
 // Each word count in `text` where `word` is a name and not a property or an object key.
 function countWord(text, word) {
   const pattern = new RegExp(`(?<![\\w$.])${escapeRegex(word)}(?![\\w$])(?!\\s*:(?!:))`, 'g');
@@ -266,6 +299,14 @@ export function scanModule(file, source) {
     const target = resolveSpec(file, specAt(quoteOf(match)));
     if (match[3] !== undefined) addUse(target, null);
     else addUse(target, importedNames(match[1], match[2]));
+  }
+
+  for (const match of masked.matchAll(CJS_REQUIRE)) {
+    const target = resolveSpec(file, specAt(quoteOf(match)));
+    const before = masked.slice(Math.max(0, match.index - 300), match.index);
+    const destructured = CJS_DESTRUCTURE.exec(before);
+    const bound = CJS_BINDING.exec(before);
+    addUse(target, destructured ? importedNames(undefined, destructured[1]) : bound ? memberNames(masked, bound[1]) : null);
   }
 
   for (const match of masked.matchAll(DYNAMIC)) {
@@ -319,6 +360,28 @@ export function scanModule(file, source) {
       declared.push({ name: found[1], line, local: found[1] });
     } else if (stickyAt(DECLARATION_EXPORT, at)) {
       for (const name of bindingNames(masked, DECLARATION_EXPORT.lastIndex)) declared.push({ name, line, local: name });
+    }
+  }
+
+  if (file.endsWith('.cjs')) {
+    for (const match of masked.matchAll(CJS_LIST)) {
+      const open = match.index + match[0].length - 1;
+      const close = closeOf(masked, open);
+      listRanges.push([open, close + 1]);
+      let at = open + 1;
+      for (const part of splitTop(masked.slice(open + 1, close), ',')) {
+        const start = at;
+        at += part.length + 1;
+        const [key, ...value] = part.trim().split(':');
+        const name = key.trim();
+        if (!IDENTIFIER.test(name)) continue;
+        // `a` binds its own name; `a: b` binds `b`; `a: 3` binds nothing.
+        const bound = value.length === 0 ? name : value.join(':').trim();
+        declared.push({ name, line: lineAt(start + part.indexOf(name)), local: IDENTIFIER.test(bound) ? bound : null });
+      }
+    }
+    for (const match of masked.matchAll(CJS_DOTTED)) {
+      declared.push({ name: match[1], line: lineAt(match.index), local: match[1] });
     }
   }
 
@@ -421,7 +484,7 @@ function readSources(cwd) {
   if (git.error || git.status !== 0) throw new Error(`not a git repository: ${cwd}`);
   const sources = {};
   for (const file of git.stdout.split('\0')) {
-    if (file.endsWith('.mjs')) sources[file] = fs.readFileSync(path.join(cwd, file), 'utf8');
+    if (file.endsWith('.mjs') || file.endsWith('.cjs')) sources[file] = fs.readFileSync(path.join(cwd, file), 'utf8');
   }
   return sources;
 }
