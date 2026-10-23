@@ -462,6 +462,43 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
   }
 });
 
+test('tuiMain takes an empty JS_HARNESS_HOME as no home: the install goes to the user\'s home folder, and the folder the menu runs in stays empty', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const spawn = () => ({ status: 0, stdout: '', stderr: '' });
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-emptyhome-'));
+  const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-workdir-'));
+  const original = process.cwd();
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  process.chdir(workdir);
+  try {
+    const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: '' }, spawn, { stdin, stdout });
+    await flush();
+    for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
+    stdin.emit('data', '\r'); // run it
+    await flush();
+    stdin.emit('data', 'q');
+    const code = await done;
+
+    assert.equal(code, 0);
+    assert.ok(
+      fs.existsSync(path.join(home, '.js-harness', 'manifest.json')),
+      'install bound by the TUI should have written into the home folder',
+    );
+    assert.deepEqual(fs.readdirSync(workdir), [], 'nothing is written in the folder the menu runs in');
+  } finally {
+    process.chdir(original);
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
 // Redraw in place: bytes measured 2026-09-26 on Windows (PowerShell 7.6 -> cmd -> node, raw mode):
 // down = ESC [ B, up = ESC [ A, Enter = \r.
 const noCommands = {

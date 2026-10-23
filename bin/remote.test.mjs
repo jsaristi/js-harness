@@ -718,6 +718,30 @@ test('a relative home is resolved against the folder the command runs in, before
   }
 });
 
+test('an empty JS_HARNESS_HOME is no home: the state and the log are under the user\'s home folder, and the folder the command runs in stays empty', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const workdir = tempDir();
+  const original = process.cwd();
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  process.chdir(workdir);
+  try {
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root], { JS_HARNESS_HOME: '' }, world.deps), 0, world.err());
+    assert.deepEqual(fs.readdirSync(workdir), [], 'nothing is written in the folder the command runs in');
+    assert.equal(readState(home, root).logPath, logPathOf(home, root), 'the record is under the user\'s home folder');
+    assert.ok(world.out().includes(logPathOf(home, root)), world.out());
+  } finally {
+    process.chdir(original);
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 /** Whether a state file was written: a folder put where it goes (to make the write fail) is not one. */
 const recorded = (home, root) => fs.existsSync(statePath(home, root)) && fs.statSync(statePath(home, root)).isFile();
 
