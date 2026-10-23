@@ -1352,7 +1352,10 @@ Two blocks were given in one reply, he sent them out of order, and it cost a ses
 - Seen: 2026-10-07 — AGENTS.md:81-82 — "two, sent out of order, once cost a session"; 2026-10-07 is
   the day of that record (the sentence, commit `9c9b00d`), and the incident itself is not later than
   it and is in no record read
-- Control: line — AGENTS.md — "two blocks sent out of order cost a session" — since 2026-10-15
+- Control: line — AGENTS.md — "two blocks out of order cost a session" — since 2026-10-23
+- Was: line — AGENTS.md — "two blocks sent out of order cost a session" — replaced on 2026-10-23:
+  the line was reworded and no longer held that phrase, so the control read as lost (launch audit,
+  C-d-8)
 - Was: line — AGENTS.md — "Otherwise one block: two, sent out of order, once" — replaced on
   2026-10-16: the sentence was reworded on `main` on 2026-10-15 (pull request 239), where a cut
   carries what he sends in one code block of only that text
