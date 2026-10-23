@@ -291,9 +291,30 @@ test('the command records what a session was told under JS_HARNESS_HOME when it 
     const io = { env: { JS_HARNESS_HOME: m.home }, git: m.git, stdin: () => JSON.stringify(m.input('UserPromptSubmit')), stdout: () => {}, stderr: () => {} };
     assert.equal(await rulesHookMain([], io), 0);
     assert.ok(fs.existsSync(m.seen()), 'the record is in the set home, not the real one');
-    const empty = { ...io, env: { JS_HARNESS_HOME: '' }, home: m.home };
-    assert.equal(await rulesHookMain([], empty), 0, 'an empty JS_HARNESS_HOME is no home, and a given home still wins');
+    const given = { ...io, env: { JS_HARNESS_HOME: path.join(m.home, 'not-this-one') }, home: m.home };
+    fs.rmSync(m.seen());
+    assert.equal(await rulesHookMain([], given), 0);
+    assert.ok(fs.existsSync(m.seen()), 'a given home wins over JS_HARNESS_HOME');
   } finally {
+    m.done();
+  }
+});
+
+test('an empty JS_HARNESS_HOME is no home: the command records under the user\'s home', async () => {
+  const m = machine({ refs: { 'origin/HEAD': [pause], BASE: [pause] }, base: 'BASE' });
+  // os.homedir() reads HOME, or USERPROFILE on Windows, when it is called: both name the scratch home here.
+  const kept = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  try {
+    process.env.HOME = m.home;
+    process.env.USERPROFILE = m.home;
+    const io = { env: { JS_HARNESS_HOME: '' }, git: m.git, stdin: () => JSON.stringify(m.input('UserPromptSubmit')), stdout: () => {}, stderr: () => {} };
+    assert.equal(await rulesHookMain([], io), 0);
+    assert.ok(fs.existsSync(m.seen()), 'the record is under the user\'s home, not in a folder named by an empty string');
+  } finally {
+    for (const [name, value] of Object.entries(kept)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     m.done();
   }
 });
