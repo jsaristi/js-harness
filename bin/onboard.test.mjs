@@ -396,16 +396,16 @@ test('profile --checklist adds the areas of the document\'s - Areas: line to its
   });
   const bad = (areas) => project(t, { [ONBOARDING_PATH]: SETUP('- Kind: static-site', '- Size: small (L3)', `- Areas: ${areas}`) });
   assert.deepEqual(await onboard(bad('answer-engines'), 'profile', '--checklist', 'advice'), {
-    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas is "answer-engines": write +<area> (L<n>), one per area the owner asked for, joined by commas`,
+    code: 1, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas is "answer-engines": write +<area> (L<n>), one per area the owner asked for, joined by commas`,
   });
   assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'advice'), {
-    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas names A:auth, which is not an area of static-site; js-harness onboard profile static-site lists its areas`,
+    code: 1, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas names A:auth, which is not an area of static-site; js-harness onboard profile static-site lists its areas`,
   });
   // The bar does not read Areas, so a bad line there does not stop it.
   assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'bar'), { code: 0, out: checklistLines(site, 'bar', 'small').join('\n'), err: '' });
 });
 
-test('profile names what is missing when it cannot tell the kind, the size or the area, exit 2', async (t) => {
+test('profile names what is missing when it cannot tell the kind, the size or the area, exit 1', async (t) => {
   const bare = project(t);
   const cases = [
     [bare, ['profile', '--checklist', 'advice'], `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform`],
@@ -418,7 +418,7 @@ test('profile names what is missing when it cannot tell the kind, the size or th
     [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: platform', '- Size: medium') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH}, ## Setup: Size is medium, not small or large`],
   ];
   for (const [root, argv, err] of cases) {
-    assert.deepEqual(await onboard(root, ...argv), { code: 2, out: '', err }, argv.join(' '));
+    assert.deepEqual(await onboard(root, ...argv), { code: 1, out: '', err }, argv.join(' '));
   }
 });
 

@@ -384,14 +384,15 @@ function profile(root, args, { stdout, stderr }) {
   const result = profileOutput(root, args);
   if (result.error) {
     stderr(result.error);
-    return 2;
+    return 1;
   }
   stdout(result.lines.join('\n'));
   return 0;
 }
 
-/** Exit 0, or 1 when the check finds something, a template's file exists or this is no initialized project, or 2 for
- * an argument it does not take. */
+/** Exit 0, or 1 when the check finds something, a template's file exists or a link is in the way, the project has a plan
+ * of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs, or 2
+ * for an argument it does not take. */
 export async function onboardMain(argv, env = process.env, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
   const args = parseArgs(argv, cwd);
   if (args.error) {
