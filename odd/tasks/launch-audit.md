@@ -99,6 +99,7 @@ Each verified against the bytes at the audit sha on 2026-10-23.
 - Closed, the quoted text no longer stands: I-SW-A1-13 (`AGENTS.md`), I-SW-CD-15, CD-18, CD-19, CD-27, CD-28, CD-40, CD-41 (`cross-session-prompts.md`), CD-38 (`MEMORY.md`), CD-26, CD-33 (`notify-when-done.md`), CD-13, CD-14, CD-32, CD-36 (`one-prompt-per-reply.md`), CD-9, CD-16, CD-24 (`orchestrator-autonomy-charter.md`).
 - Closed, the file is gone: I-SW-CD-23, CD-29, CD-30, CD-31 (`main-session-orchestrates.md`), CD-7, CD-35 (`merge-from-chat.md`), CD-42 (`subagent-effort-high.md`), CD-20 (`work-continuously.md`), I-SW-B-25 (`D:\js-harness-worktrees\subagent-model-routing`).
 - Not checked: I-SW-CD-43, the orchestrator's relief file, line 4 (a dated record of the lead's).
+- Stage 6, refusals slice (branch fix/audit-refusals, commits cbe2b0bf..c622d050: shoulds C-d-9, C-d-12): gentle-ai approved cbe2b0bf..430b7739 (high, item 3; review-0ffeae283cee0a2b acknowledged), its warning that two refusals were unpinned refuted (throughput.test.mjs pins exit 1 for both); c622d050, the usage clause the Opus verifier found overstated, assessed medium, review not due (under_budget); Codex: correct (0.98, then 0.99 on c622d050). The Opus verifier met both rows, with a 22-call differential probe against the base. Advisories left: throughput reviewed still exits 2 for a day not settled (at the base too); the loop table test checks nothing ran through the absent home, not a spawn stub.
 
 ## Findings
 Stage 2 onward; one row per finding, newest last.
