@@ -136,7 +136,10 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
         return defaultRun('git', ['-C', paths.clone, 'ls-remote', bare, ...args.slice(4)], options);
       }
       if (cmd === 'git' && args[0] === 'clone' && args[2] === `https://github.com/${REPO}.git`) {
+        // A clone of the github URL keeps that URL as its origin, as setup does; only the push goes to the bare folder.
         defaultRun('git', ['clone', '-q', bare, args[3]]);
+        defaultRun('git', ['-C', args[3], 'remote', 'set-url', 'origin', `https://github.com/${REPO}.git`]);
+        defaultRun('git', ['-C', args[3], 'remote', 'set-url', '--push', 'origin', bare]);
         return { status: 0, stdout: '', stderr: '' };
       }
       return defaultRun(cmd, args, options);
@@ -970,6 +973,48 @@ test('backup init refuses a --summary-repo with no value, as summary does, and r
   assert.equal(await backupMain(['init', '--repo', REPO, '--summary-repo', '--transcripts-repo', 'a/b'], deps), 2, 'a flag is no value');
   assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'the config is untouched');
   assert.equal(fs.existsSync(paths.clone), false, 'and no clone is made');
+});
+
+test('backup init refuses an existing clone whose origin is another repository, and records nothing', async (t) => {
+  const { paths, deps } = setup(t);
+  const before = fs.readFileSync(paths.config, 'utf8');
+
+  assert.equal(await backupMain(['init', '--repo', 'other/x'], deps), 1);
+  assert.match(deps.stderr.text, /the clone's remote is jsaristi\/js-harness-memory, not other\/x/);
+  assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'the config still names the repository the clone is of');
+});
+
+test('every backup subcommand refuses an unknown flag with a usage error, and keeps the flags it takes', async (t) => {
+  const { paths, deps } = setup(t);
+  const before = fs.readFileSync(paths.config, 'utf8');
+  const typos = [
+    ['run', '--no-such-flag'],
+    ['status', '--no-such-flag'],
+    ['ready', '--no-such-flag'],
+    ['summary', '--no-such-flag'],
+    ['init', '--repo', REPO, '--no-such-flag'],
+    ['restore', '--from', 'x', '--no-such-flag'],
+    ['verify', '--from', 'x', '--no-such-flag'],
+    ['--hook', '--no-such-flag'],
+    ['--session-start', '--no-such-flag'],
+  ];
+  for (const args of typos) {
+    deps.stderr = sink();
+    assert.equal(await backupMain(args, deps), 2, args.join(' '));
+    assert.match(deps.stderr.text, /unknown argument: --no-such-flag/, args.join(' '));
+  }
+  assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'a refused init changes nothing');
+
+  deps.stderr = sink();
+  assert.equal(await backupMain(['run', '--allow-shrink'], deps), 0, deps.stderr.text);
+});
+
+test('the usage says what deleting the backup folder does not undo', async (t) => {
+  const { deps } = setup(t);
+
+  assert.equal(await backupMain(['--help'], deps), 0);
+  assert.doesNotMatch(deps.stdout.text, /undoes everything/);
+  assert.match(deps.stdout.text, /Deleting that folder[\s\S]*restore-progress\.json/);
 });
 
 /** A repository standing for the public one: a bare remote and a clone with a roadmap and one feature on main. */

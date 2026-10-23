@@ -84,13 +84,13 @@ export function restoreBackup({ from, home, merge = false, map = {}, run = defau
       if (!held) {
         throw new Error(
           `could not read how many observations the Engram in ${dataDir} holds (${(stats.stderr || stats.stdout).trim() || 'no counts'}): ` +
-            'refused, so a restore never doubles them (--merge adds the backup to them)',
+            'refused, so a restore never doubles them (--merge adds only what Engram lacks)',
         );
       }
       if (held.observations > 0) {
         throw new Error(
           `the Engram in ${dataDir} already holds ${held.observations} observations: refused, so a restore never doubles them ` +
-            '(--merge adds the backup to them)',
+            '(--merge adds only what Engram lacks)',
         );
       }
     }

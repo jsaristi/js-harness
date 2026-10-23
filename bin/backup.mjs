@@ -29,6 +29,7 @@ import { bundleRefs, checkoutsOf, pathKey, repoFiles, shortKey, unpushedCount, w
 import { fallbackNotice, projectOf, readStats, STATS_TIMEOUT_MS } from './lib/backup-fallback.mjs';
 import { copyTranscripts, restoreTranscripts, verifyTranscripts } from './lib/backup-transcripts.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
+import { unknownArgument } from './lib/args.mjs';
 
 const USAGE = [
   'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook | --session-start>',
@@ -84,7 +85,9 @@ const USAGE = [
   '  --session-start  The SessionStart hook install registers: reads the hook input, and when Engram holds less than nine',
   "    tenths of what the last backup held of the session's project (or does not answer within 3 seconds) it tells the",
   "    session to read that project's file in recent/ and how to restore Engram. Silent otherwise; always exits 0.",
-  '  Its state lives in ~/.js-harness/memory-backup; deleting that folder undoes everything here but the repository.',
+  '  Its state lives in ~/.js-harness/memory-backup. Deleting that folder removes the clones on this machine and their records,',
+  '    not what they pushed (the private repositories and the memory-summary branch) nor what restore wrote in ~/.js-harness',
+  '    (restored-config, restored-bundles, restore-progress.json).',
 ].join('\n');
 
 /** How long after a success the hook waits before it backs up again. */
@@ -1018,9 +1021,11 @@ function privateClone(deps, repo, dir, description) {
     if (made.status !== 0) return `gh repo create failed: ${(made.stderr || made.stdout).trim()}`;
     visibility = view();
   }
-  const refusal = pushRefusal({ urls: [url], repo, visibility: visibility.stdout.trim() || null });
+  const visible = visibility.stdout.trim() || null;
+  const refusal = pushRefusal({ urls: [url], repo, visibility: visible });
   if (refusal) return refusal;
-  if (fs.existsSync(path.join(dir, '.git'))) return null;
+  // A clone already there is kept only when its own origin is this repository: init must not report another's as this one.
+  if (fs.existsSync(path.join(dir, '.git'))) return pushRefusal({ urls: originUrls(deps, dir), repo, visibility: visible });
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   // Long paths on: a transcript's stored path can pass Windows' 260 characters under the home.
   const cloned = deps.run('git', ['clone', '-q', url, dir, '--config', 'core.longpaths=true'], { env: { ...deps.env, ...NO_PROMPT } });
@@ -1137,8 +1142,27 @@ function defaultDeps() {
   };
 }
 
+// The flags each subcommand takes: `valued` ones take the next token as their value. A token none of them takes is
+// refused with exit 2, so a mistyped flag never runs the command with its defaults.
+const FLAGS = {
+  run: { bare: ['--allow-shrink', '--adopt', '--transcripts'] },
+  status: {},
+  ready: {},
+  summary: { valued: ['--summary-repo'] },
+  init: { valued: ['--repo', '--summary-repo', '--transcripts-repo'] },
+  restore: { valued: ['--from', '--home', '--map', '--transcripts'], bare: ['--merge'] },
+  verify: { valued: ['--from', '--summary', '--transcripts'] },
+  '--hook': {},
+  '--session-start': {},
+};
+
 export async function backupMain(args, deps = defaultDeps()) {
   const [sub, ...rest] = args;
+  const unknown = Object.hasOwn(FLAGS, sub) ? unknownArgument(rest, FLAGS[sub]) : null;
+  if (unknown !== null) {
+    deps.stderr.write(`backup ${sub}: unknown argument: ${unknown}\n`);
+    return 2;
+  }
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
   if (sub === 'ready') return readyCommand(deps);
