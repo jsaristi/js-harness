@@ -27,11 +27,12 @@ import { restoreBackup, verifyBackup, verifySummary } from './lib/backup-restore
 import { humanSize, readiness } from './lib/backup-ready.mjs';
 import { bundleRefs, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
 import { fallbackNotice, projectOf, readStats, STATS_TIMEOUT_MS } from './lib/backup-fallback.mjs';
+import { copyTranscripts, restoreTranscripts, verifyTranscripts } from './lib/backup-transcripts.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
 
 const USAGE = [
   'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook | --session-start>',
-  '  run [--allow-shrink] [--adopt]  Back up now: the Engram export and the Claude memory folders of the scope, the',
+  '  run [--allow-shrink] [--adopt] [--transcripts]  Back up now: the Engram export and the Claude memory folders of the scope, the',
   '    js-harness home, reference copies of the config, the plugin lists and Claude Desktop\'s notes and presets, and for',
   '    each repository of config.json\'s `bundles` a bundle of what no remote holds (every stash entry included), a',
   '    patch of each worktree\'s uncommitted edits with its untracked files, and the records in its .git/js-harness;',
@@ -41,14 +42,19 @@ const USAGE = [
   '    the drop is meant), a clone whose fetch or push URL is not the configured repository on github.com, and a',
   '    repository that does not read PRIVATE just before the push. --adopt takes over a backup another machine made',
   '    (the first run after a reinstall). Once a day it also pushes the public summary to the memory-summary branch;',
-  '    a summary that cannot be pushed is recorded and never fails the backup.',
+  '    a summary that cannot be pushed is recorded and never fails the backup. Once a day, when init --transcripts-repo',
+  '    named one, it then copies every ~/.claude/projects/**/*.jsonl as text into the transcripts repositories, a file',
+  '    over 40 MiB cut by line into parts, and pushes them after the same checks; a transcripts failure is recorded and',
+  '    never fails the backup. --transcripts runs them now, and then their failure is the exit.',
   '  status  The last run, the last success, the last failure and why, and the commits still to push.',
   '  ready  Whether this machine can be wiped: a `missing:` line for each thing the backup is configured for that has',
   '    no copy off it (the clone ahead of origin or never pushed, a file or an Engram count the last backup does not',
   '    hold, and for each repository of `bundles` no remote, commits or a stash entry in no bundle, a worktree\'s edits',
   '    or its .git/js-harness records changed since, an untracked file too large to copy), and a `not copied:` line',
-  '    with the size of what the backup never copies (Claude transcripts, Claude Desktop data). It writes nothing and',
-  '    exits 1 while anything is missing.',
+  '    with the size of what the backup never copies (Claude transcripts while no transcripts repository is named,',
+  '    Claude Desktop data). With transcripts named, a transcript in no backup or changed since is missing, and one',
+  '    that only grew in the last 15 minutes, a session running now, is a note. It writes nothing and exits 1 while',
+  '    anything is missing.',
   '  summary [--summary-repo <dir>]  Print the public summary as the next run would push it: the roadmap and feature documents on the',
   "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
   '    private-terms.txt.',
@@ -56,6 +62,9 @@ const USAGE = [
   '    reads PRIVATE, clone it, write RESTORE.md and seed private-terms.txt. The summary repository is the checkout',
   '    named, and only then, since a public push cannot be taken back; every URL of its origin must be',
   '    jsaristi/js-harness on github.com.',
+  '  init --transcripts-repo <owner/name>  The same for a repository of the Claude transcripts, apart from the memory',
+  "    backup's: created private, read PRIVATE, cloned, and added to config.json's transcripts.repos. The last one",
+  '    named takes new transcripts; once its objects reach 800 MB, `backup run` names the next to open.',
   '  restore --from <dir|git url> [--home <dir>] [--merge] [--map <old path>=<new path>]...  Put a backup into a home:',
   '    Engram imported (refused when that Engram already holds observations, unless --merge), the memory folders',
   '    (--map for a project now at another path), ~/.js-harness without its install manifest, the config files in',
@@ -63,10 +72,14 @@ const USAGE = [
   '    ~/.js-harness/restored-bundles with the line that uses each. A',
   '    live file is never written over, and a restore run again skips the import it already did. The home is this',
   "    user's unless --home names another.",
+  '  restore --transcripts <dir|git url> [--home <dir>]  Rejoin the transcripts of one transcripts repository into',
+  '    ~/.claude/projects, each checked against its sha256; a live file is never written over.',
   '  verify --from <dir|git url>  Restore into a scratch home, which it then removes, and check the four counts',
   '    against the backup and the live Engram it recorded, and every file byte for byte.',
   '  verify --summary <dir|git url>  Check the memory-summary branch: its four sections, and no line the privacy',
   "    check would drop, with the clone's private-terms.txt when there is one.",
+  '  verify --transcripts <dir|git url>  Rejoin every transcript of a transcripts repository in memory and check each',
+  '    part and each whole file against its sha256.',
   '  --hook  The Stop hook install registers: when a backup is due it starts `backup run` detached, and returns at once.',
   '  --session-start  The SessionStart hook install registers: reads the hook input, and when Engram holds less than nine',
   "    tenths of what the last backup held of the session's project (or does not answer within 3 seconds) it tells the",
@@ -88,6 +101,18 @@ export const SUMMARY_EVERY_HOURS = 24;
 /** The public repository's branch that holds the summary, one file in one commit. */
 export const SUMMARY_BRANCH = 'memory-summary';
 
+/** How often `backup run` backs up the Claude transcripts (odd/tasks/transcripts-backup.md, D3), pushed or not. */
+export const TRANSCRIPTS_EVERY_HOURS = 24;
+/** How long without a transcripts success before `doctor` calls them stopped: a day's run, and a day of slack. */
+export const TRANSCRIPTS_STALE_HOURS = 48;
+/** A transcripts repository whose objects reach this takes no new transcript (D4): GitHub warns past 1 GB, and the
+ * transcripts it already holds keep growing in it. */
+export const TRANSCRIPTS_ROLL_BYTES = 800 * 1024 * 1024;
+/** The longest a transcripts push may take: the first is about 430 MB. */
+export const TRANSCRIPTS_PUSH_TIMEOUT_MS = 60 * 60_000;
+/** A transcripts lock older than this was left by a run that died; one push may take an hour. */
+export const TRANSCRIPTS_LOCK_STALE_MINUTES = 120;
+
 /** Where the backup keeps its state under a home. */
 export function backupPaths(home) {
   const dir = path.join(home, '.js-harness', 'memory-backup');
@@ -97,7 +122,21 @@ export function backupPaths(home) {
     config: path.join(dir, 'config.json'),
     last: path.join(dir, 'last.json'),
     lock: path.join(dir, 'lock'),
+    transcripts: path.join(dir, 'transcripts'),
+    transcriptsLock: path.join(dir, 'transcripts.lock'),
   };
+}
+
+/** The clones of the transcripts repositories of config.json (D4), oldest first: the last one takes new transcripts. */
+export function transcriptsClones(paths, config) {
+  const repos = Array.isArray(config?.transcripts?.repos) ? config.transcripts.repos : [];
+  return repos.map((repo) => ({ name: repo, dir: path.join(paths.transcripts, repo.split('/')[1]) }));
+}
+
+/** The repository after `repo` in its series: its trailing number plus one, or `-2` after a name with none. */
+export function nextTranscriptsRepo(repo) {
+  const match = /^(.*?)-(\d+)$/.exec(repo);
+  return match ? `${match[1]}-${Number(match[2]) + 1}` : `${repo}-2`;
 }
 
 const NO_PROMPT = { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' };
@@ -122,34 +161,34 @@ function lockTime(file) {
   }
 }
 
-/** Takes the lock by creating its file exclusively, so two hooks at once cannot both hold it; returns what it wrote,
- * the proof of holding it, or why not: a live run holds it. A lock older than `LOCK_STALE_MINUTES` is taken over. */
-function takeLock(paths, now) {
+/** Takes the lock `lock` by creating its file exclusively, so two hooks at once cannot both hold it; returns what it
+ * wrote, the proof of holding it, or why not: a live run holds it. A lock older than `staleMinutes` is taken over. */
+function takeLock(lock, now, staleMinutes = LOCK_STALE_MINUTES) {
   const mine = `${JSON.stringify({ pid: process.pid, at: new Date(now).toISOString() })}\n`;
-  fs.mkdirSync(paths.dir, { recursive: true });
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      fs.writeFileSync(paths.lock, mine, { flag: 'wx' });
+      fs.writeFileSync(lock, mine, { flag: 'wx' });
       return { mine };
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
     }
-    const held = lockTime(paths.lock);
-    if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return { refusal: `a backup is already running (pid ${held.pid})` };
-    fs.rmSync(paths.lock, { force: true });
+    const held = lockTime(lock);
+    if (held && now - held.at < staleMinutes * 60_000) return { refusal: `a backup is already running (pid ${held.pid})` };
+    fs.rmSync(lock, { force: true });
   }
   return { refusal: 'a backup is already running (it took the stale lock first)' };
 }
 
 /** Removes the lock only while it is still the one this run wrote: a run that outlived its lock leaves the new one. */
-function releaseLock(paths, mine) {
+function releaseLock(lock, mine) {
   let held;
   try {
-    held = fs.readFileSync(paths.lock, 'utf8');
+    held = fs.readFileSync(lock, 'utf8');
   } catch {
     return;
   }
-  if (held === mine) fs.rmSync(paths.lock, { force: true });
+  if (held === mine) fs.rmSync(lock, { force: true });
 }
 
 /** The git repositories whose unpushed commits are bundled (D1): config.json's `bundles`, none when it names none.
@@ -246,7 +285,7 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   // Only now, from the export the shrink guard accepted: a wiped Engram never reaches the readable fallback either.
   const recent = writeRecent(paths.clone);
   // RESTORE.md holds no time, so every run writes it: a clone made before a change of the steps gets them.
-  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo));
+  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo, transcriptsClones(paths, config)));
   const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop });
   const bundles = bundleSources(config).map((source) => {
     const entry = bundleUnpushed(deps, source, paths.clone);
@@ -372,7 +411,7 @@ function pushSummary(deps, paths, config) {
 
 /** Pushes the clone when it holds commits its remote does not, after the guard: origin and visibility (D2). A push the
  * remote rejects fetches and rebases once. Returns the number of commits pushed. */
-function pushClone(deps, clone, repo) {
+function pushClone(deps, clone, repo, timeout = PUSH_TIMEOUT_MS) {
   const ahead = git(deps, clone, ['rev-list', '--count', '@{u}..HEAD']);
   // A clone of an empty repository has no upstream yet: everything it holds is to push.
   const owed = ahead.status === 0 ? Number(ahead.stdout.trim()) : Number(git(deps, clone, ['rev-list', '--count', 'HEAD']).stdout.trim());
@@ -381,10 +420,10 @@ function pushClone(deps, clone, repo) {
   const visibility = deps.run('gh', ['repo', 'view', repo, '--json', 'visibility', '-q', '.visibility']);
   const refusal = pushRefusal({ urls, repo, visibility: visibility.status === 0 ? visibility.stdout.trim() : null });
   if (refusal) throw new Error(refusal);
-  const push = () => git(deps, clone, ['push', '-q', '-u', 'origin', 'HEAD'], { timeout: PUSH_TIMEOUT_MS });
+  const push = () => git(deps, clone, ['push', '-q', '-u', 'origin', 'HEAD'], { timeout });
   let result = push();
   if (result.status !== 0 && /rejected|fetch first|non-fast-forward/.test(result.stderr)) {
-    const rebased = git(deps, clone, ['pull', '-q', '--rebase', 'origin', 'HEAD'], { timeout: PUSH_TIMEOUT_MS });
+    const rebased = git(deps, clone, ['pull', '-q', '--rebase', 'origin', 'HEAD'], { timeout });
     if (rebased.status !== 0) {
       git(deps, clone, ['rebase', '--abort']);
       throw new Error(`the push was rejected and the rebase failed: ${rebased.stderr.trim()}`);
@@ -405,9 +444,93 @@ function record(paths, now, outcome) {
   return next;
 }
 
+/** The bytes of a clone's objects, loose and packed, from `git count-objects -v`: close to what GitHub stores. */
+function objectBytes(deps, dir) {
+  const counted = git(deps, dir, ['count-objects', '-v']);
+  if (counted.status !== 0) throw new Error(`git count-objects failed in ${dir}: ${counted.stderr.trim()}`);
+  const kib = (key) => Number(new RegExp(`^${key}: (\\d+)$`, 'm').exec(counted.stdout)?.[1] ?? 0);
+  return (kib('size') + kib('size-pack')) * 1024;
+}
+
+/** Whether the transcripts are configured and their last attempt, pushed or not, is a day old (D3). */
+function transcriptsDue(config, last, now) {
+  if (!config?.transcripts?.repos?.length) return false;
+  const t = last?.transcripts ?? {};
+  const tried = Math.max(Date.parse(t.lastSuccess?.at ?? '') || 0, Date.parse(t.lastFailure?.at ?? '') || 0);
+  return now - tried >= TRANSCRIPTS_EVERY_HOURS * 60 * 60_000;
+}
+
+/** One transcripts backup (D1-D4): copies every transcript into its clone, commits and pushes each clone through
+ * `pushClone`, so each push is checked PRIVATE first. The last clone takes no new transcript once it is full, and the
+ * outcome names the repository to open next. */
+function runTranscripts(deps, paths, config) {
+  const clones = transcriptsClones(paths, config);
+  for (const clone of clones) {
+    if (!fs.existsSync(path.join(clone.dir, '.git'))) throw new Error(`no clone of ${clone.name} at ${clone.dir}: run js-harness backup init --transcripts-repo ${clone.name}`);
+  }
+  const roll = deps.transcriptsRollBytes ?? TRANSCRIPTS_ROLL_BYTES;
+  const active = clones.at(-1);
+  const copied = copyTranscripts({ projects: path.join(deps.home, '.claude', 'projects'), clones, full: objectBytes(deps, active.dir) >= roll });
+  let pushed = 0;
+  let files = 0;
+  for (const clone of clones) {
+    files += readJson(path.join(clone.dir, 'manifest.json'))?.files?.length ?? 0;
+    const added = git(deps, clone.dir, ['-c', 'core.longpaths=true', 'add', '-A']);
+    if (added.status !== 0) throw new Error(`git add failed in ${clone.dir}: ${(added.stderr || added.stdout).trim()}`);
+    if (git(deps, clone.dir, ['status', '--porcelain']).stdout.trim()) {
+      const made = git(deps, clone.dir, ['commit', '-q', '-m', `transcripts: ${copied.changed} changed`]);
+      if (made.status !== 0) throw new Error(`git commit failed in ${clone.dir}: ${(made.stderr || made.stdout).trim()}`);
+    }
+    pushed += pushClone(deps, clone.dir, clone.name, TRANSCRIPTS_PUSH_TIMEOUT_MS);
+  }
+  const rollover = copied.waiting.length || objectBytes(deps, active.dir) >= roll ? nextTranscriptsRepo(active.name) : null;
+  return { files, repos: clones.length, changed: copied.changed, pushed, waiting: copied.waiting.length, refused: copied.refused, rollover };
+}
+
+/** The transcripts step of `backup run`, under its own lock: when due or `force`d, runs them and records the outcome in
+ * last.json's `transcripts`. Returns false only when it failed. */
+function transcriptsStep(deps, paths, force) {
+  const config = readJson(paths.config);
+  if (!transcriptsClones(paths, config).length) return true;
+  if (!force && !transcriptsDue(config, readJson(paths.last), deps.now())) return true;
+  const { mine, refusal } = takeLock(paths.transcriptsLock, deps.now(), TRANSCRIPTS_LOCK_STALE_MINUTES);
+  if (refusal) {
+    deps.stderr.write(`backup: transcripts: ${refusal}\n`);
+    return !force;
+  }
+  const note = (entry) => {
+    const last = readJson(paths.last) ?? {};
+    writeJson(paths.last, { ...last, transcripts: { ...(last.transcripts ?? {}), ...entry } });
+  };
+  const at = () => new Date(deps.now()).toISOString();
+  try {
+    const outcome = runTranscripts(deps, paths, config);
+    note({ lastSuccess: { at: at(), files: outcome.files, pushed: outcome.pushed }, rollover: outcome.rollover });
+    deps.stdout.write(`backup: transcripts: ${outcome.files} files in ${outcome.repos} repositories, ${outcome.changed} changed, ${outcome.pushed} pushed\n`);
+    if (outcome.waiting) deps.stdout.write(`backup: transcripts: ${outcome.waiting} new transcripts wait for the next repository: js-harness backup init --transcripts-repo ${outcome.rollover}\n`);
+    else if (outcome.rollover) deps.stdout.write(`backup: transcripts: the repository is full; open the next: js-harness backup init --transcripts-repo ${outcome.rollover}\n`);
+    for (const r of outcome.refused) deps.stdout.write(`backup: transcripts: ${r.path} not copied: ${r.reason}\n`);
+    return true;
+  } catch (error) {
+    note({ lastFailure: { at: at(), error: error.message } });
+    deps.stderr.write(`backup: transcripts: ${error.message}\n`);
+    return false;
+  } finally {
+    releaseLock(paths.transcriptsLock, mine);
+  }
+}
+
 function runCommand(args, deps) {
   const paths = backupPaths(deps.home);
-  const { mine, refusal } = takeLock(paths, deps.now());
+  const status = runMemory(args, deps, paths);
+  // After the memory backup and outside its lock: a first transcripts push may take an hour. A transcripts failure is
+  // the exit only when they were asked for by name.
+  const transcripts = transcriptsStep(deps, paths, args.includes('--transcripts'));
+  return status || (transcripts || !args.includes('--transcripts') ? 0 : 1);
+}
+
+function runMemory(args, deps, paths) {
+  const { mine, refusal } = takeLock(paths.lock, deps.now());
   if (refusal) {
     deps.stderr.write(`backup: ${refusal}\n`);
     return 1;
@@ -431,7 +554,7 @@ function runCommand(args, deps) {
     deps.stderr.write(`backup: ${error.message}\n`);
     return 1;
   } finally {
-    releaseLock(paths, mine);
+    releaseLock(paths.lock, mine);
   }
 }
 
@@ -476,7 +599,7 @@ function localCopy(deps, from, marker, branch) {
   if (fs.existsSync(path.join(from, marker))) return { dir: from, done: () => {} };
   const scratch = fs.mkdtempSync(path.join(deps.tmp ?? os.tmpdir(), 'backup-from-'));
   const dir = path.join(scratch, 'clone');
-  const cloned = deps.run('git', ['clone', '-q', from, dir, '--depth=1', ...(branch ? [`--branch=${branch}`] : [])], {
+  const cloned = deps.run('git', ['clone', '-q', from, dir, '--depth=1', ...(branch ? [`--branch=${branch}`] : []), '--config', 'core.longpaths=true'], {
     env: { ...deps.env, ...NO_PROMPT },
     timeout: PUSH_TIMEOUT_MS,
   });
@@ -503,13 +626,14 @@ function refuseBareFlag(args, flags, command, deps) {
 }
 
 function restoreCommand(args, deps) {
-  if (refuseBareFlag(args, ['--from', '--home'], 'restore', deps)) return 2;
+  if (refuseBareFlag(args, ['--from', '--home', '--transcripts'], 'restore', deps)) return 2;
   const from = valueOf(args, '--from');
+  const transcripts = valueOf(args, '--transcripts');
   // The home defaults to this user's: a documented `--home %USERPROFILE%` reaches PowerShell
   // unexpanded and would restore into a folder named after the literal text.
   const home = valueOf(args, '--home') ?? deps.home;
-  if (!from || !home) {
-    deps.stderr.write('backup restore: --from <dir|git url> is required (--home <dir> defaults to this user\'s home)\n');
+  if ((!from && !transcripts) || !home) {
+    deps.stderr.write('backup restore: --from <dir|git url> or --transcripts <dir|git url> is required (--home <dir> defaults to this user\'s home)\n');
     return 2;
   }
   if (/%[^%\s]+%|^\$/.test(home)) {
@@ -526,8 +650,15 @@ function restoreCommand(args, deps) {
   const map = Object.fromEntries(maps.map((value) => [value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1)]));
   let source;
   try {
-    source = localCopy(deps, from, 'manifest.json');
-    restoreBackup({ from: source.dir, home: path.resolve(home), merge: args.includes('--merge'), map, run: deps.run, env: deps.env, stdout: deps.stdout });
+    if (from) {
+      source = localCopy(deps, from, 'manifest.json');
+      restoreBackup({ from: source.dir, home: path.resolve(home), merge: args.includes('--merge'), map, run: deps.run, env: deps.env, stdout: deps.stdout });
+      source.done();
+    }
+    if (transcripts) {
+      source = localCopy(deps, transcripts, 'manifest.json');
+      restoreTranscripts({ from: source.dir, home: path.resolve(home), stdout: deps.stdout });
+    }
     return 0;
   } catch (error) {
     deps.stderr.write(`backup restore: ${error.message}\n`);
@@ -538,17 +669,25 @@ function restoreCommand(args, deps) {
 }
 
 function verifyCommand(args, deps) {
-  if (refuseBareFlag(args, ['--from', '--summary'], 'verify', deps)) return 2;
+  if (refuseBareFlag(args, ['--from', '--summary', '--transcripts'], 'verify', deps)) return 2;
   const from = valueOf(args, '--from');
   const summary = valueOf(args, '--summary');
-  if (!from && !summary) {
-    deps.stderr.write('backup verify: --from <dir|git url> or --summary <dir|git url> is required\n');
+  const transcripts = valueOf(args, '--transcripts');
+  if (!from && !summary && !transcripts) {
+    deps.stderr.write('backup verify: --from <dir|git url>, --summary <dir|git url> or --transcripts <dir|git url> is required\n');
+    return 2;
+  }
+  if ([from, summary, transcripts].filter(Boolean).length > 1) {
+    deps.stderr.write('backup verify: one of --from, --summary or --transcripts at a time\n');
     return 2;
   }
   let source;
   try {
     let result;
-    if (from) {
+    if (transcripts) {
+      source = localCopy(deps, transcripts, 'manifest.json');
+      result = verifyTranscripts(source.dir);
+    } else if (from) {
       source = localCopy(deps, from, 'manifest.json');
       result = verifyBackup({ from: source.dir, run: deps.run, env: deps.env, tmp: deps.tmp });
     } else {
@@ -584,6 +723,8 @@ function readyCommand(deps) {
     desktop: deps.desktop,
     run: deps.run,
     env: deps.env,
+    transcripts: transcriptsClones(paths, config),
+    now: deps.now(),
   });
   const lines = [
     ...missing.map((thing) => `missing: ${thing}`),
@@ -612,11 +753,28 @@ export function backupHealth(home, now) {
   const failedSince = last.lastFailure && Date.parse(last.lastFailure.at) > success;
   const cloneGone = !fs.existsSync(path.join(paths.clone, '.git'));
   const noRecent = !cloneGone && success > 0 && !fs.existsSync(path.join(paths.clone, 'RECENT.md'));
-  if (now - success < BACKUP_STALE_HOURS * 60 * 60_000 && !failedSince && !cloneGone && !noRecent) return { state: 'ok', fix: [] };
-  const failure = failedSince ? `; last failure ${last.lastFailure.at}: ${last.lastFailure.error}` : '';
-  const gone = cloneGone ? `; the clone ${paths.clone} is gone` : '';
-  const recent = noRecent ? '; no RECENT.md in the clone, so Engram has no readable fallback' : '';
-  return { state: 'stale', fix: [`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}${gone}${recent}: run js-harness backup status`] };
+  const fix = [];
+  if (!(now - success < BACKUP_STALE_HOURS * 60 * 60_000 && !failedSince && !cloneGone && !noRecent)) {
+    const failure = failedSince ? `; last failure ${last.lastFailure.at}: ${last.lastFailure.error}` : '';
+    const gone = cloneGone ? `; the clone ${paths.clone} is gone` : '';
+    const recent = noRecent ? '; no RECENT.md in the clone, so Engram has no readable fallback' : '';
+    fix.push(`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}${gone}${recent}: run js-harness backup status`);
+  }
+  const transcripts = transcriptsHealth(readJson(paths.config), last.transcripts ?? {}, now);
+  if (transcripts) fix.push(transcripts);
+  return fix.length ? { state: 'stale', fix } : { state: 'ok', fix };
+}
+
+/** The transcripts' line of the backup row (odd/tasks/transcripts-backup.md, D6), or null while they are healthy or not
+ * configured: no success in two days, a failure after the last success, or a full repository. */
+function transcriptsHealth(config, t, now) {
+  if (!config?.transcripts?.repos?.length) return null;
+  const success = Date.parse(t.lastSuccess?.at ?? '') || 0;
+  const failedSince = t.lastFailure && Date.parse(t.lastFailure.at) > success;
+  if (now - success < TRANSCRIPTS_STALE_HOURS * 60 * 60_000 && !failedSince && !t.rollover) return null;
+  const failure = failedSince ? `; last failure ${t.lastFailure.at}: ${t.lastFailure.error}` : '';
+  const full = t.rollover ? `; the last repository is full: run js-harness backup init --transcripts-repo ${t.rollover}` : '';
+  return `memory backup, transcripts: last success ${t.lastSuccess?.at ?? 'never'}${failure}${full}: run js-harness backup status`;
 }
 
 function statusCommand(deps) {
@@ -644,6 +802,14 @@ function statusCommand(deps) {
     const current = last.summaryError && !(Date.parse(last.lastSummary?.at ?? '') > Date.parse(last.summaryError.at));
     const refused = current ? `; last refused ${last.summaryError.at}, ${last.summaryError.error}` : '';
     lines.push(`summary: ${pushed}${refused}`);
+  }
+  const clones = transcriptsClones(paths, config);
+  if (clones.length) {
+    const t = last.transcripts ?? {};
+    const success = t.lastSuccess ? `last success ${t.lastSuccess.at}, ${t.lastSuccess.files} files` : 'last success never';
+    const failed = t.lastFailure && !(Date.parse(t.lastSuccess?.at ?? '') > Date.parse(t.lastFailure.at)) ? `; last failure ${t.lastFailure.at}, ${t.lastFailure.error}` : '';
+    const full = t.rollover ? `; full: init --transcripts-repo ${t.rollover}` : '';
+    lines.push(`transcripts: ${clones.map((c) => c.name).join(', ')}, ${success}${failed}${full}`);
   }
   deps.stdout.write(`${lines.join('\n')}\n`);
   return 0;
@@ -683,8 +849,11 @@ export function dueReason(home, now, desktop) {
   if (!fs.existsSync(path.join(paths.clone, '.git'))) return 'not initialised';
   const held = lockTime(paths.lock);
   if (held && now - held.at < LOCK_STALE_MINUTES * 60_000) return 'a run holds the lock';
-  const success = Date.parse(readJson(paths.last)?.lastSuccess?.at ?? '') || 0;
+  const last = readJson(paths.last);
+  const success = Date.parse(last?.lastSuccess?.at ?? '') || 0;
   if (now - success < BACKUP_EVERY_MINUTES * 60_000) return 'backed up less than 30 minutes ago';
+  // The transcripts change at every turn and count for nothing below, so their day alone makes a run due.
+  if (transcriptsDue(readJson(paths.config), last, now)) return null;
   // A clone without the readable fallback (the first run after it shipped, or a run that died half-way) is due at once.
   const fallbackMissing = !fs.existsSync(path.join(paths.clone, 'RECENT.md')) || !Array.isArray(readJson(path.join(paths.clone, 'manifest.json'))?.recent);
   if (success && !fallbackMissing && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';
@@ -752,8 +921,15 @@ function sessionStartCommand(deps) {
 }
 
 /** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. */
-function restoreSteps(repo) {
+function restoreSteps(repo, transcripts = []) {
   const url = `https://github.com/${repo}.git`;
+  // The transcripts repositories (odd/tasks/transcripts-backup.md, D6), one line each, oldest first.
+  const transcriptLines = transcripts.length
+    ? [
+      '   Then the Claude transcripts, from each of their private repositories (none writes over a live file):',
+      ...transcripts.map((t) => `   \`node bin/js-harness.mjs backup restore --transcripts https://github.com/${t.name}.git\``),
+    ]
+    : [];
   return [
     '# Restoring the memory after a reinstall',
     '',
@@ -771,6 +947,7 @@ function restoreSteps(repo) {
     '   It restores into this user\'s home (`--home <dir>` names another): it imports Engram, puts back the',
     '   memory folders and ~/.js-harness, and leaves the old config files in',
     '   ~/.js-harness/restored-config to compare by hand. It prints the line that fetches unpushed commits.',
+    ...transcriptLines,
     `5. \`node bin/js-harness.mjs backup verify --from ${url}\` restores again into a scratch home and checks it.`,
     '6. `node bin/js-harness.mjs install`.',
     `7. \`node bin/js-harness.mjs backup init --repo ${repo}\` and \`node bin/js-harness.mjs backup run --adopt\`: this`,
@@ -781,7 +958,64 @@ function restoreSteps(repo) {
   ].join('\n');
 }
 
+/** Makes `repo` a private repository with a clone at `dir`: creates it private when it does not exist, reads its
+ * visibility back, and clones it only when it reads PRIVATE. Returns why not, or null. The public repository is refused
+ * before anything is asked of GitHub. */
+function privateClone(deps, repo, dir, description) {
+  const url = `https://github.com/${repo}.git`;
+  if (repo.toLowerCase() === PUBLIC_REPO) return pushRefusal({ urls: [url], repo, visibility: null });
+  const view = () => deps.run('gh', ['repo', 'view', repo, '--json', 'visibility', '-q', '.visibility']);
+  let visibility = view();
+  if (visibility.status !== 0) {
+    const made = deps.run('gh', ['repo', 'create', repo, '--private', '--description', description]);
+    if (made.status !== 0) return `gh repo create failed: ${(made.stderr || made.stdout).trim()}`;
+    visibility = view();
+  }
+  const refusal = pushRefusal({ urls: [url], repo, visibility: visibility.stdout.trim() || null });
+  if (refusal) return refusal;
+  if (fs.existsSync(path.join(dir, '.git'))) return null;
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  // Long paths on: a transcript's stored path can pass Windows' 260 characters under the home.
+  const cloned = deps.run('git', ['clone', '-q', url, dir, '--config', 'core.longpaths=true'], { env: { ...deps.env, ...NO_PROMPT } });
+  return cloned.status === 0 ? null : `git clone failed: ${cloned.stderr.trim()}`;
+}
+
+/** `backup init --transcripts-repo <owner/name>` (odd/tasks/transcripts-backup.md, D4): adds a private repository for
+ * the transcripts, after the memory backup's, to config.json's `transcripts.repos`, and clones it. The last one named
+ * takes the new transcripts. */
+function initTranscripts(repo, deps) {
+  const paths = backupPaths(deps.home);
+  const config = readJson(paths.config);
+  if (!config?.repo) {
+    deps.stderr.write('backup init: the memory backup is not initialised: run js-harness backup init --repo <owner/name> first\n');
+    return 1;
+  }
+  if (repo.toLowerCase() === config.repo.toLowerCase()) {
+    deps.stderr.write(`backup init: refused: ${repo} is the memory backup's own repository, and the transcripts go to one of their own\n`);
+    return 1;
+  }
+  const clone = path.join(paths.transcripts, repo.split('/')[1]);
+  const refusal = privateClone(deps, repo, clone, 'js-harness Claude transcripts backup (private)');
+  if (refusal) {
+    deps.stderr.write(`backup init: ${refusal}\n`);
+    return 1;
+  }
+  const repos = transcriptsClones(paths, config).map((c) => c.name);
+  if (!repos.includes(repo)) writeJson(paths.config, { ...config, transcripts: { ...(config.transcripts ?? {}), repos: [...repos, repo] } });
+  deps.stdout.write(`backup: ${repo} reads PRIVATE; transcripts clone in ${clone}\n`);
+  return 0;
+}
+
 function initCommand(args, deps) {
+  const t = args.indexOf('--transcripts-repo');
+  if (t !== -1) {
+    const repo = args[t + 1];
+    if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
+      deps.stderr.write('backup init: --transcripts-repo <owner/name> needs a value\n');
+      return 2;
+    }
+    return initTranscripts(repo, deps);
+  }
   const i = args.indexOf('--repo');
   const repo = i === -1 ? undefined : args[i + 1];
   if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
@@ -789,28 +1023,10 @@ function initCommand(args, deps) {
     return 2;
   }
   const paths = backupPaths(deps.home);
-  const view = () => deps.run('gh', ['repo', 'view', repo, '--json', 'visibility', '-q', '.visibility']);
-  let visibility = view();
-  if (visibility.status !== 0) {
-    const made = deps.run('gh', ['repo', 'create', repo, '--private', '--description', 'js-harness memory backup (private)']);
-    if (made.status !== 0) {
-      deps.stderr.write(`backup init: gh repo create failed: ${(made.stderr || made.stdout).trim()}\n`);
-      return 1;
-    }
-    visibility = view();
-  }
-  const refusal = pushRefusal({ urls: [`https://github.com/${repo}.git`], repo, visibility: visibility.stdout.trim() || null });
+  const refusal = privateClone(deps, repo, paths.clone, 'js-harness memory backup (private)');
   if (refusal) {
     deps.stderr.write(`backup init: ${refusal}\n`);
     return 1;
-  }
-  if (!fs.existsSync(path.join(paths.clone, '.git'))) {
-    fs.mkdirSync(paths.dir, { recursive: true });
-    const cloned = deps.run('git', ['clone', '-q', `https://github.com/${repo}.git`, paths.clone], { env: { ...deps.env, ...NO_PROMPT } });
-    if (cloned.status !== 0) {
-      deps.stderr.write(`backup init: git clone failed: ${cloned.stderr.trim()}\n`);
-      return 1;
-    }
   }
   const config = { ...(readJson(paths.config) ?? {}), repo };
   if (!Array.isArray(config.bundles)) config.bundles = deps.bundles ?? [];
@@ -827,7 +1043,7 @@ function initCommand(args, deps) {
     config.summaryRepo = named;
   }
   writeJson(paths.config, config);
-  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(repo));
+  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(repo, transcriptsClones(paths, config)));
   // The terms the public summary must never name (D4), kept in the private clone so a restore brings them back.
   const termsFile = path.join(paths.clone, 'private-terms.txt');
   if (!fs.existsSync(termsFile)) {
