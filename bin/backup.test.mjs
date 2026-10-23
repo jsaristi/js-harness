@@ -1344,6 +1344,22 @@ test('while a transcripts run holds its lock, even hours into its pushes, the ho
   assert.match(deps.stderr.text, /backup: transcripts: a backup is already running \(pid 4242\)/);
 });
 
+test('last.json is updated under its own lock, keeps both runs\' records, and a lock a dead run left is taken over', async (t) => {
+  const ctx = setup(t);
+  withTranscripts(ctx);
+  const { deps, paths } = ctx;
+  assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
+  const lock = `${paths.last}.lock`;
+  fs.writeFileSync(lock, '4242\n');
+  const old = new Date(Date.now() - 5 * 60_000);
+  fs.utimesSync(lock, old, old);
+  assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
+  const last = JSON.parse(fs.readFileSync(paths.last, 'utf8'));
+  assert.ok(last.lastSuccess, 'the memory run is recorded');
+  assert.ok(last.transcripts?.lastSuccess, 'and so is the transcripts run');
+  assert.deepEqual(fs.readdirSync(paths.dir).filter((name) => name.startsWith('last.json.')), [], 'no lock or partial file is left');
+});
+
 test('backup verify takes one source at a time and says so', async (t) => {
   const { deps } = setup(t);
   deps.stderr = sink();

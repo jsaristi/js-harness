@@ -146,13 +146,61 @@ function git(deps, cwd, args, options = {}) {
   return deps.run('git', ['-C', cwd, ...args], { env: { ...deps.env, ...NO_PROMPT }, ...options });
 }
 
-// Written whole and renamed into place: a transcripts run and a memory run each update last.json while the other may
-// read it, and a read must never see it half written.
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+// Written whole and renamed into place, so a read never sees it half written. On Windows a rename over a file another
+// process holds open (a run reading it, a scanner) can fail for a moment, so it is tried again before it fails.
 function writeJson(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const partial = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(partial, `${JSON.stringify(data, null, 2)}\n`);
-  fs.renameSync(partial, file);
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        fs.renameSync(partial, file);
+        return;
+      } catch (error) {
+        if (attempt >= 5 || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error;
+        pause(50 * attempt);
+      }
+    }
+  } finally {
+    fs.rmSync(partial, { force: true });
+  }
+}
+
+/** A last.json lock older than this was left by a run that died: an update holds it for a read and a write. */
+const LAST_LOCK_STALE_MS = 30_000;
+
+/** Reads last.json, applies `change` to it and writes the result, under `last.json.lock`: the memory run and the
+ * transcripts run update it under their own locks, and neither may lose the other's record. Returns what it wrote. */
+function updateLast(paths, change) {
+  const lock = `${paths.last}.lock`;
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  for (let waited = 0; ; waited += 25) {
+    try {
+      fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    let age;
+    try {
+      age = Date.now() - fs.statSync(lock).mtimeMs;
+    } catch {
+      continue;
+    }
+    if (age > LAST_LOCK_STALE_MS) fs.rmSync(lock, { force: true });
+    else if (waited >= 10_000) throw new Error(`${paths.last} stayed locked for 10 seconds (${lock})`);
+    else pause(25);
+  }
+  try {
+    const next = change(readJson(paths.last) ?? {});
+    writeJson(paths.last, next);
+    return next;
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
 }
 
 /** When a lock was taken: the time it records, or, while its writer has not written it yet, the file's own time. */
@@ -367,7 +415,7 @@ function summaryRefusal(deps, dir) {
 }
 
 function noteSummary(paths, entry) {
-  writeJson(paths.last, { ...(readJson(paths.last) ?? {}), ...entry });
+  updateLast(paths, (last) => ({ ...last, ...entry }));
 }
 
 /** Refreshes the `memory-summary` branch of the public repository (D4) at most once a day: fetches main, builds the
@@ -440,13 +488,13 @@ function pushClone(deps, clone, repo, timeout = PUSH_TIMEOUT_MS) {
 }
 
 function record(paths, now, outcome) {
-  const last = readJson(paths.last) ?? {};
   const at = new Date(now).toISOString();
-  const next = { ...last, lastRun: at };
-  if (outcome.error) next.lastFailure = { at, error: outcome.error, ...(outcome.projects ? { projects: outcome.projects } : {}) };
-  else next.lastSuccess = { at, ...outcome };
-  writeJson(paths.last, next);
-  return next;
+  return updateLast(paths, (last) => {
+    const next = { ...last, lastRun: at };
+    if (outcome.error) next.lastFailure = { at, error: outcome.error, ...(outcome.projects ? { projects: outcome.projects } : {}) };
+    else next.lastSuccess = { at, ...outcome };
+    return next;
+  });
 }
 
 /** The bytes of a clone's objects, loose and packed, from `git count-objects -v`: close to what GitHub stores. */
@@ -499,8 +547,7 @@ function transcriptsStep(deps, paths, force) {
   if (!transcriptsClones(paths, config).length) return true;
   if (!force && !transcriptsDue(config, readJson(paths.last), deps.now())) return true;
   const note = (entry) => {
-    const last = readJson(paths.last) ?? {};
-    writeJson(paths.last, { ...last, transcripts: { ...(last.transcripts ?? {}), ...entry } });
+    updateLast(paths, (last) => ({ ...last, transcripts: { ...(last.transcripts ?? {}), ...entry } }));
   };
   const at = () => new Date(deps.now()).toISOString();
   let taken;
