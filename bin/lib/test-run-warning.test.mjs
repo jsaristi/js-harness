@@ -73,7 +73,14 @@ test('npm test reads the words npm hands its script, its aliases, and the packag
     // The value of an option of npm's own is npm's, not a word it hands the script (gentle-ai on the guard slice).
     assert.equal(testRunFiles('npm test --loglevel silent', project), 0);
     assert.equal(testRunFiles('npm --loglevel silent test a.mjs', project), 1);
-    assert.equal(testRunFiles('npm test -w pkg', project), 0);
+    assert.equal(testRunFiles('npm test --omit dev --node-options --max-old-space-size=99', project), 0);
+    assert.equal(testRunFiles('npm test -- --tag x a.mjs', project), 2, 'after -- every word is the script\'s, and node reads --tag as its own');
+    // A workspace runs its own test script: read from its folder when the name is one, and no claim when it is not.
+    fs.mkdirSync(path.join(noTest, 'pkg'));
+    fs.writeFileSync(path.join(noTest, 'pkg', 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+    assert.equal(testRunFiles('npm test -w pkg', noTest), 0);
+    assert.equal(testRunFiles('npm test --workspace=pkg a.mjs', noTest), 1);
+    assert.equal(testRunFiles('npm test -w named-elsewhere', project), null);
   } finally {
     for (const dir of [project, other, noTest]) fs.rmSync(dir, { recursive: true, force: true });
   }

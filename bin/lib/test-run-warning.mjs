@@ -183,16 +183,18 @@ function programAt(words) {
 const NPM_TEST = new Set(['test', 'tst', 't']);
 const NPM_RUN = new Set(['run', 'run-script', 'rum', 'urn']);
 /** npm's options that take the next word as their value, which is npm's and never a word handed to the script. */
-const NPM_VALUED = new Set(['--loglevel', '--workspace', '-w', '--userconfig', '--cache', '--registry', '--script-shell', '--tag']);
+const NPM_VALUED = new Set(['--loglevel', '--userconfig', '--globalconfig', '--cache', '--registry', '--script-shell', '--tag', '--include', '--omit', '--otp', '--node-options', '--before']);
 
 /** The commands `npm test` or `npm run test` runs, as the sensors resolve them (bin/check.mjs, `testsCommand`): the
  * `test` script of the package.json in `cwd`, or in the folder `--prefix` names, whose last command takes the
  * words npm hands it, its positional words and those after `--`, as its files; `null` for any other words, and `[]`
  * where the folder names no test script. npm's other options are its own and are read past, with the value of those
- * that take one (`NPM_VALUED`); a workspace (`-w`) is read as the folder's own script. */
+ * that take one (`NPM_VALUED`). A workspace (`-w`, `--workspace`) runs its own script: the one of the folder it
+ * names, and `null` for a name that is no folder of a package. */
 function npmTestCommands(words, cwd) {
   if (!NPM.test(words[0]?.text ?? '')) return null;
   let dir = cwd;
+  let workspace = null;
   const positional = [];
   let index = 1;
   for (; index < words.length && words[index].text !== '--'; index += 1) {
@@ -201,11 +203,21 @@ function npmTestCommands(words, cwd) {
       index += 1;
       dir = path.resolve(cwd, words[index]?.text ?? '');
     } else if (text.startsWith('--prefix=')) dir = path.resolve(cwd, text.slice('--prefix='.length));
+    else if (text === '-w' || text === '--workspace') {
+      index += 1;
+      workspace = words[index]?.text ?? '';
+    } else if (text.startsWith('--workspace=')) workspace = text.slice('--workspace='.length);
     else if (NPM_VALUED.has(text)) index += 1;
     else if (!text.startsWith('-')) positional.push(words[index]);
   }
   const verb = NPM_RUN.has(positional[0]?.text) ? 1 : 0;
   if (verb === 1 ? positional[1]?.text !== 'test' : !NPM_TEST.has(positional[0]?.text)) return null;
+  if (workspace !== null) {
+    // A workspace named by its folder runs that folder's script; one named by its package name is not resolved here.
+    const folder = path.resolve(dir, workspace);
+    if (!fs.existsSync(path.join(folder, 'package.json'))) return null;
+    dir = folder;
+  }
   let script;
   try {
     script = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))?.scripts?.test;
