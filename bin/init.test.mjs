@@ -99,6 +99,7 @@ test('initMain on a fresh repo writes the four actions and exits 0', async () =>
     assert.match(stdout, /wrote harness\.json/);
     assert.match(stdout, /wrote AGENTS\.md/);
     assert.match(stdout, /wrote .*pre-commit/);
+    assert.match(stdout, /^excluded \.atl\/ in \.git\/info\/exclude$/m);
     assert.match(stdout, /manifest: /);
     assert.ok(stdout.endsWith('next: in a Claude Code or Codex session, run js-harness onboard\n'), stdout);
     assert.ok(fs.existsSync(path.join(root, 'harness.json')));

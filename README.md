@@ -112,7 +112,11 @@ each feature, such as install's hook lines or check's rows, is shown in part and
 
 Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the declared sensors
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
-runs it, so a red check means the commit is not ready yet. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+runs it, so a red check means the commit is not ready yet. A gate that passes prints one line,
+`PASS  check  <n> rows passed`, with the review's verdict where it was assessed; a gate that fails
+prints every row. `--verbose` prints every row of a passing gate too, and so does
+`JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
+`--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's CircleCI run of the merge queue's candidates sets 2.
@@ -214,11 +218,15 @@ wrote AGENTS.md
 wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
 ran codegraph init
+excluded .atl/ in .git/info/exclude
 manifest: my-project\.git\js-harness\manifest.json
 next: in a Claude Code or Codex session, run js-harness onboard
 ```
 
-The last line appears only while the project has no `docs/ROADMAP.md`. The example is a project with code. What `init` adds beyond the first four files follows the
+The last line appears only while the project has no `docs/ROADMAP.md`. The `excluded` line keeps
+gentle-ai's `.atl/` folder out of what git calls untracked, in this clone only; it is not written
+when a line there already excludes `.atl`, and `uninstall` takes back exactly the line `init`
+added. The example is a project with code. What `init` adds beyond the first four files follows the
 switches in `harness.json` `"functions"` (`js-harness functions` shows each one and why): the
 pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map's `codegraph init`
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code

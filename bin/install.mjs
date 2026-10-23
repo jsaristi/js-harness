@@ -308,6 +308,9 @@ function logSyncProjectAction(action) {
     case 'wrote':
       console.log(`wrote ${action.path}`);
       break;
+    case 'excluded':
+      console.log(`excluded ${action.line} in ${action.path}`);
+      break;
     case 'ran':
       console.log(`ran ${action.path}`);
       break;

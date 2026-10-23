@@ -1527,7 +1527,7 @@ async function runCheck(argv, deps = {}) {
     errOutput += `${line}\n`;
   };
   try {
-    const code = await main(argv, { JS_HARNESS_CHECK_INNER: '1' }, deps);
+    const code = await main(argv, { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_CHECK_VERBOSE: '1' }, deps);
     return { code, output, errOutput };
   } finally {
     console.log = log;

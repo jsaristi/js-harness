@@ -16,12 +16,17 @@ import { sha256 } from './manifest.mjs';
 import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
+import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
 
-/** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what a
- * copy older than the switches cannot undo (its `settings`); such a copy deletes a manifest it does not
- * understand and leaves the keys behind, which is why a copy that reads a format greater than its own
- * undoes nothing. A copy already installed that knows no format cannot be made to refuse. */
-export const MANIFEST_FORMAT = 1;
+/** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what an
+ * older copy cannot undo: format 1 its `settings`, which a copy older than the switches does not know, and
+ * format 2 its `exclude`, the line of `.atl/` (./project-exclude.mjs). Such a copy deletes a manifest it does not
+ * understand and leaves the rest behind, which is why a copy that reads a format greater than its own undoes
+ * nothing. A copy already installed that knows no format cannot be made to refuse. */
+export const MANIFEST_FORMAT = 2;
+
+/** The format `manifest` needs for what it holds (`MANIFEST_FORMAT`), or `undefined` where any copy reads it. */
+const formatFor = (manifest) => (manifest.exclude ? 2 : manifest.settings ? 1 : undefined);
 
 /** Resolves the git top-level of `cwd`, or `null` outside a git repository (missing `git`, a
  * non-zero exit, or any thrown spawn error all count as "not a repo" here). Callers must check
@@ -337,6 +342,19 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
   const isWorkingTree = containingRealBase === realRoot;
   const viaLink = outside && !lexicalOutside;
   return { real, outside, occupied, isWorkingTree, viaLink, base: containingRealBase };
+}
+
+/** The clone's exclude file as git names it, `{ file }`, or `{ file, reason }` where it is not to be written: a link on
+ * its way, or a real path outside the working tree and git dirs, would send the line to another file (Codex P2 on
+ * dea129b..118f479). `file` is null where git names none. */
+function excludeFile(root, spawn) {
+  const file = resolveGitPath(root, 'info/exclude', spawn);
+  if (!file) return { file: null, reason: 'git did not name the exclude file' };
+  const gitBases = gitDirs(root, spawn);
+  const realBases = [fs.realpathSync(root), safeRealpath(gitBases.gitDir), safeRealpath(gitBases.commonGitDir)].filter(Boolean);
+  const { real, hadSymlink } = realish(file, realBases);
+  if (hadSymlink || containingBase(real, realBases) === null) return { file, reason: 'a link is in its path or it is outside the repository; left as it is' };
+  return { file };
 }
 
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
@@ -883,6 +901,8 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
   const reportedDirs = [];
   let codegraphCreatedThisRun = false;
   let settingsRecords = [];
+  let exclude = null;
+  let excludePath = null;
 
   try {
     const actions = [];
@@ -969,6 +989,15 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       actions.push(...applied.actions);
     }
 
+    // `.atl/` left out of what git calls untracked, in this clone's exclude file (./project-exclude.mjs).
+    const target = excludeFile(root, spawn);
+    if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
+    if (target.file && !target.reason) {
+      excludePath = target.file;
+      exclude = addExclude(excludePath, { writeFile });
+      if (exclude) actions.push({ kind: 'excluded', path: notRemovedLabel(root, excludePath), line: EXCLUDED });
+    }
+
     const dirs = reportedDirs.map(({ absolute, isWorkingTree }) => manifestEntry(root, absolute, isWorkingTree));
 
     const manifest = {
@@ -985,7 +1014,9 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       codegraph: codegraphManifest,
       dirs,
     };
-    if (settingsRecords.length > 0) Object.assign(manifest, { format: MANIFEST_FORMAT, settings: settingsRecords });
+    if (settingsRecords.length > 0) manifest.settings = settingsRecords;
+    if (exclude) manifest.exclude = exclude;
+    if (formatFor(manifest)) manifest.format = formatFor(manifest);
 
     // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: `manifestFilePath` is guaranteed
     // absent here — `initProject` already refused to reach `writeProject` at all when it exists
@@ -1019,6 +1050,13 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       }
     }
     undoSettingsOnRollback(root, settingsRecords, notRemoved);
+    if (exclude) {
+      try {
+        undoExclude(excludePath, exclude);
+      } catch {
+        notRemoved.push(`${EXCLUDED} in ${notRemovedLabel(root, excludePath)}`);
+      }
+    }
     throw new InitWriteError(err.message, notRemoved);
   }
 }
@@ -1248,6 +1286,8 @@ function isValidManifestShape(manifest, root, gitBases) {
     if (manifest.format === undefined || !Array.isArray(manifest.settings)) return false;
     if (!manifest.settings.every(isValidSettingsRecord)) return false;
   }
+  // The line of `.atl/`, with the format that says a copy knows it; its file is asked of git again, never read from here.
+  if (manifest.exclude !== undefined && !(manifest.format >= 2 && isValidExcludeRecord(manifest.exclude))) return false;
   return true;
 }
 
@@ -1493,6 +1533,20 @@ export function uninstallProject(cwd, deps = {}) {
   for (const action of settings.actions) {
     if (action.kind === 'failed') notRemoved.push(action.path);
     actions.push(action);
+  }
+
+  // The line of `.atl/` init added to this clone's exclude file, in the file git names now.
+  if (manifest.exclude) {
+    const target = excludeFile(root, spawn);
+    const label = `${EXCLUDED} from ${target.file ? notRemovedLabel(root, target.file) : 'info/exclude'}`;
+    try {
+      if (target.reason) throw new Error(target.reason);
+      const undone = undoExclude(target.file, manifest.exclude, { rm });
+      actions.push({ kind: undone === 'removed' ? 'removed' : 'alreadyGone', path: label });
+    } catch (err) {
+      notRemoved.push(label);
+      actions.push({ kind: 'failed', path: label, reason: err.message });
+    }
   }
 
   if (manifest.codegraph?.createdDir === true) {
@@ -1759,16 +1813,14 @@ function syncPrePush(root, manifest, gitBases, wanted, { spawn, writeFile, rm, c
   }
 }
 
-/** The manifest's `settings`, with the format that a copy reading them must know; both go when no key is
- * left, so a manifest with nothing of the switches stays one that any copy reads. */
+/** The manifest's `settings`, with the format that a copy reading it must know (`formatFor`); both go when no key is
+ * left and nothing else needs the format, so a manifest with nothing of the switches stays one that any copy reads. */
 function setSettings(manifest, records) {
-  if (records.length > 0) {
-    manifest.format = MANIFEST_FORMAT;
-    manifest.settings = records;
-  } else {
-    delete manifest.format;
-    delete manifest.settings;
-  }
+  if (records.length > 0) manifest.settings = records;
+  else delete manifest.settings;
+  const format = formatFor(manifest);
+  if (format) manifest.format = format;
+  else delete manifest.format;
 }
 
 /** A declared `off` takes the index away, only when the manifest says the harness made it. */

@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { applyProjectFunctions, initProject, projectLocation, syncProject, uninstallProject, InitWriteError } from './project.mjs';
+import { applyProjectFunctions, initProject, projectLocation, syncProject, uninstallProject, InitWriteError, MANIFEST_FORMAT } from './project.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
 
 // Every git call here is real, so none may read the host's config or, under a hook, the repository being
@@ -80,7 +80,8 @@ test('init in a project with no program makes no index, says why, and turns the 
     enabledPlugins: { 'typescript-lsp@claude-plugins-official': false },
   });
   assert.deepEqual(manifest(root).codegraph, { createdDir: false, status: 'off' });
-  assert.equal(manifest(root).format, 1);
+  // Format 2: the manifest records the line of .atl/ as well (bin/lib/project-exclude.mjs).
+  assert.equal(manifest(root).format, 2);
   assert.deepEqual(manifest(root).settings.map((record) => record.key), ['paste', 'languageServer']);
 });
 
@@ -139,12 +140,12 @@ test('uninstall keeps a key somebody changed since it was written', (t) => {
 test('uninstall and sync refuse a manifest of a newer format and touch nothing', (t) => {
   const root = repo(t, { 'bin/a.mjs': '' });
   initProject(root, '0.1.0', deps());
-  const written = { ...manifest(root), format: 2 };
+  const written = { ...manifest(root), format: MANIFEST_FORMAT + 1 };
   fs.writeFileSync(manifestPath(root), JSON.stringify(written));
   const before = fs.readFileSync(settingsPath(root), 'utf8');
 
   for (const result of [uninstallProject(root, deps()), syncProject(root, '0.1.0', deps())]) {
-    assert.deepEqual(result, { code: 1, newerManifest: true, manifestPath: result.manifestPath, format: 2, version: '0.1.0' });
+    assert.deepEqual(result, { code: 1, newerManifest: true, manifestPath: result.manifestPath, format: MANIFEST_FORMAT + 1, version: '0.1.0' });
   }
   assert.equal(fs.readFileSync(settingsPath(root), 'utf8'), before);
   assert.ok(fs.existsSync(path.join(root, 'harness.json')));
@@ -154,8 +155,9 @@ test('uninstall and sync refuse a manifest of a newer format and touch nothing',
 test('a manifest that holds settings without a format, or a record of another key, is malformed', (t) => {
   const root = repo(t, { 'bin/a.mjs': '' });
   initProject(root, '0.1.0', deps());
-  const { format, ...withoutFormat } = manifest(root);
-  assert.equal(format, 1);
+  // Without the line of .atl/ too, which needs the format as well, so the settings alone are judged.
+  const { format, exclude, ...withoutFormat } = manifest(root);
+  assert.equal(format, 2);
   fs.writeFileSync(manifestPath(root), JSON.stringify(withoutFormat));
   assert.equal(uninstallProject(root, deps()).malformedManifest, true);
 
@@ -180,7 +182,8 @@ test('sync follows a switch changed in harness.json: a key no longer wanted is t
   syncProject(root, '0.1.0', deps());
   assert.equal(fs.existsSync(path.join(root, '.claude')), false);
   assert.equal(manifest(root).settings, undefined);
-  assert.equal(manifest(root).format, undefined);
+  // The format stays for the line of .atl/, which the manifest still records.
+  assert.equal(manifest(root).format, 2);
   assert.equal(syncProject(root, '0.1.0', deps()).upToDate, true);
 });
 

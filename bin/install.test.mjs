@@ -1759,7 +1759,7 @@ test('syncMain and uninstallMain --cwd refuse a project manifest of a newer form
       const { code, errLines } = await captureConsole(main);
       assert.equal(code, 1);
       assert.ok(
-        errLines.some((l) => l.includes('in format 99, and this copy reads format 1') && l.includes('run that version of js-harness')),
+        errLines.some((l) => l.includes('in format 99, and this copy reads format 2') && l.includes('run that version of js-harness')),
         errLines.join('\n'),
       );
     }
