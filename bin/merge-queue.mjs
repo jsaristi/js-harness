@@ -821,6 +821,15 @@ function copyFiles(dir, folder = '') {
   });
 }
 
+/**
+ * The bin/ files package.json `files` leaves out of an installed copy: the globs of its `!bin/` negations. A path
+ * main holds that such a glob matches is no stale path when the copy lacks it. The test in merge-queue.test.mjs reads
+ * package.json and fails if the two disagree.
+ */
+export const UNSHIPPED_GLOBS = ['*.test.mjs', '*.testkit.mjs'];
+const unshipped = (repoPath) =>
+  UNSHIPPED_GLOBS.some((glob) => new RegExp(`(^|/)${glob.replace(/\./g, '\\.').replace(/\*/g, '[^/]*')}$`).test(repoPath));
+
 /** The git blob id of `bytes`, as `git hash-object` gives it: the sha1 of `blob <length>`, a NUL and the bytes. */
 const blobId = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 
@@ -866,7 +875,7 @@ export function staleBin(self, main, gitIn) {
     const theirs = gitIn('show', `${main}:${repoPath}`);
     if (theirs.ok && mine !== theirs.out.replace(/\r\n/g, '\n')) stale.push(repoPath);
   }
-  for (const repoPath of onMain.keys()) if (!copied.has(repoPath)) stale.push(repoPath);
+  for (const repoPath of onMain.keys()) if (!copied.has(repoPath) && !unshipped(repoPath)) stale.push(repoPath);
   return stale.sort();
 }
 

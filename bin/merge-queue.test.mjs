@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
+import * as queue from './merge-queue.mjs';
 import { circleciState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
 import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
@@ -1545,6 +1546,27 @@ test('the land guard judges a file stored with CRLF in origin/main by its conten
   const calls = [];
   assert.deepEqual(staleBin(self, 'HEAD', countedGit(root, calls)), []);
   assert.equal(calls.length, 2, `ls-tree and one show of the CRLF blob: ${JSON.stringify(calls)}`);
+});
+
+// Blocker 1 (Codex P1, the Opus verifier): an installed copy holds what package.json `files` ships, and `files` leaves the tests out,
+// so a bin/ path main holds and the copy lacks is stale only when the package ships it.
+test('the paths the guard leaves out of a copy are the ones package.json `files` negates under bin/: UNSHIPPED_GLOBS and its !bin/**/ entries agree', () => {
+  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.ok(pkg.files.includes('bin/'), 'package.json ships bin/');
+  const negated = pkg.files.filter((entry) => entry.startsWith('!bin/**/')).map((entry) => entry.slice('!bin/**/'.length));
+  assert.deepEqual([...queue.UNSHIPPED_GLOBS].sort(), negated.sort());
+});
+
+test('the land guard does not call stale a test file of main that a copy lacks, since package.json `files` leaves tests out (blocker 1)', () => {
+  const { self, dir, root } = guardedBinRepo({ ...MODULES, 'x.test.mjs': 'export const t = 1;\n', 'x.testkit.mjs': 'export const k = 1;\n' });
+  writeCopy(dir, MODULES);
+  assert.deepEqual(staleBin(self, 'HEAD', countedGit(root, [])), []);
+});
+
+test('the land guard still calls stale a shipped bin/ file of main that a copy lacks (blocker 1)', () => {
+  const { self, dir, root } = guardedBinRepo({ ...MODULES, 'y.mjs': 'export const y = 1;\n' });
+  writeCopy(dir, MODULES);
+  assert.deepEqual(staleBin(self, 'HEAD', countedGit(root, [])), ['bin/y.mjs']);
 });
 
 // After a land, the worktree of each landed pull request goes when nothing in it can be lost (odd/tasks/land-unattended.md,
