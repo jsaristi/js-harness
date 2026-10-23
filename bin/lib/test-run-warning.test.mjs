@@ -16,6 +16,12 @@ const free = () => null;
 // No test reads this machine's gate log either: a file the log never timed is one no gate ran alone.
 const untimed = () => undefined;
 const warned = (what) => `node --test of ${what} starts outside a turn while the gate of D:\\js-harness-worktrees\\other holds the machine's gate lock: both share the cores and miss their bounds; run it with js-harness gate -- <command>, or one file at a time`;
+// A folder whose package.json has these scripts, for a command that resolves an npm script there.
+const scratchProject = (scripts) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-npm-test-'));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts }));
+  return dir;
+};
 
 test('testRunFiles counts the files of a node --test run as a command of its own, and is null for any other command', () => {
   assert.equal(testRunFiles('node --test'), 0);
@@ -23,9 +29,41 @@ test('testRunFiles counts the files of a node --test run as a command of its own
   assert.equal(testRunFiles('node --test bin/a.test.mjs bin/b.test.mjs'), 2);
   assert.equal(testRunFiles('node --test --test-name-pattern "two words" --test-reporter=tap bin/a.test.mjs'), 1);
   assert.equal(testRunFiles('cd D:/x && "C:\\Program Files\\nodejs\\node.exe" --test a.mjs b.mjs c.mjs'), 3);
-  assert.equal(testRunFiles('npm test'), null);
   assert.equal(testRunFiles('echo node --test a b'), null);
   assert.equal(testRunFiles('node bin/check.mjs'), null);
+});
+
+// C-b-23: `npm test` runs the `test` script of the folder, as the sensors resolve it (bin/check.mjs, testsCommand).
+test('npm test runs the test script of its folder: the whole suite, or the files after --; npm run check is no run', () => {
+  const project = scratchProject({ test: 'node --test', check: 'node bin/check.mjs' });
+  try {
+    assert.equal(testRunFiles('npm test', project), 0);
+    assert.equal(testRunFiles('npm run test', project), 0);
+    assert.equal(testRunFiles('npm test -- a.mjs b.mjs', project), 2);
+    assert.equal(testRunFiles('npm run check', project), null);
+    assert.equal(testRunFiles('npm install', project), null);
+    assert.equal(testRunWarning('npm test', { env: {}, holder: held, fileSeconds: untimed, cwd: project }), warned('every test file'));
+    assert.equal(testRunWarning('npm run check', { env: {}, holder: held, fileSeconds: untimed, cwd: project }), null);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+  const noTest = scratchProject({ lint: 'node lint.mjs' });
+  try {
+    assert.equal(testRunFiles('npm test', noTest), null);
+  } finally {
+    fs.rmSync(noTest, { recursive: true, force: true });
+  }
+});
+
+// C-b-22: the words before the program (`NAME=value`, `env` and its options) are no part of the run.
+test('a node --test behind environment words is still a run: NAME=value and env with its options are read past', () => {
+  for (const command of ['FOO=1 node --test', 'env FOO=1 node --test', 'env -i node --test', 'env -u FOO node --test', 'FOO=1 env BAR=2 node --test', 'env -- FOO=1 node --test', 'sh -c "FOO=1 node --test"']) {
+    assert.equal(testRunFiles(command), 0, command);
+  }
+  assert.equal(testRunFiles('env FOO=1 node --test a.mjs b.mjs'), 2);
+  assert.equal(testRunWarning('env FOO=1 node --test a.mjs b.mjs', { env: {}, holder: held, fileSeconds: untimed }), warned('2 test files'));
+  assert.equal(testRunFiles('env FOO=1 js-harness gate -- node --test a.mjs b.mjs'), null);
+  assert.equal(testRunFiles('env FOO=1 ls a.mjs b.mjs'), null);
 });
 
 test('testRunWarning warns for node --test of several files or of all while the lock is held outside a turn', () => {
