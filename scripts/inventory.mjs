@@ -181,7 +181,8 @@ function repositoryRoot(cwd) {
 
 // The lines of an inventory: the header test, then each row with its line number and its tab-separated fields.
 function parse(text) {
-  const lines = text.split('\n');
+  // A checkout with core.autocrlf gives the file CRLF line ends; its rows are the same.
+  const lines = text.split(/\r?\n/);
   if (lines.at(-1) === '') lines.pop();
   return {
     headerOk: lines[0] === HEADER,

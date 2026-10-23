@@ -145,6 +145,16 @@ test('a correct inventory exits 0 and prints the counts per class and per area',
   ].join('\n'));
 });
 
+test('an inventory checked out with CRLF line ends reads as the same rows', () => {
+  const root = repo({ 'a.md': 'a\n', 'odd/x.md': 'x\n' });
+  inventory(root, [HEADER, 'a.md\tlive\te\tkept', 'odd/x.md\thistory\t-\t']);
+  fs.writeFileSync(path.join(root, INV), read(root).replace(/\n/g, '\r\n'));
+  const result = run(root);
+  assert.equal(result.status, 0, result.stdout);
+  assert.deepEqual(findingsOf(result.stdout), []);
+  assert.match(result.stdout, /^class live {2}1 rows, 1 with a verdict$/m);
+});
+
 test('--json prints the findings and the counts as one object', () => {
   const root = repo({ 'a.md': 'a\n', 'odd/x.md': 'x\n' });
   inventory(root, [HEADER, 'a.md\tlive\te\tkept', 'odd/x.md\thistory\t-\t']);
