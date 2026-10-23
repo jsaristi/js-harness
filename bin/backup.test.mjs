@@ -1218,8 +1218,8 @@ test('backup run pushes the transcripts to their own repository once a day, and 
   assert.equal(remoteFile(tbare, manifest.files[0].parts[0].path).stdout, fs.readFileSync(session, 'utf8'));
   assert.ok(!JSON.parse(remoteFile(bare, 'manifest.json').stdout).files.some((f) => f.path.endsWith('.jsonl')), 'the memory backup holds no transcript');
   assert.match(remoteFile(bare, 'RESTORE.md').stdout, new RegExp(`backup restore --transcripts https://github.com/${TREPO}.git`));
-  const last = JSON.parse(fs.readFileSync(paths.last, 'utf8'));
-  assert.equal(last.transcripts.lastSuccess.at, new Date(state.now).toISOString());
+  const recorded = JSON.parse(fs.readFileSync(paths.transcriptsLast, 'utf8'));
+  assert.equal(recorded.lastSuccess.at, new Date(state.now).toISOString());
 
   fs.appendFileSync(session, '{"more":1}\n');
   state.now += 2 * 60 * 60_000;
@@ -1244,7 +1244,7 @@ test('the transcripts never go to a repository that does not read PRIVATE, and t
     assert.equal(await backupMain(['run'], deps), 0, 'a transcripts refusal never fails the memory backup');
     assert.match(deps.stderr.text, visibility ? /transcripts: refused: .* reads PUBLIC, not PRIVATE/ : /transcripts: refused: the visibility .* could not be read/);
     assert.equal(remoteCommits(tbare), 0);
-    assert.ok(JSON.parse(fs.readFileSync(paths.last, 'utf8')).transcripts.lastFailure.error.startsWith('refused'));
+    assert.ok(JSON.parse(fs.readFileSync(paths.transcriptsLast, 'utf8')).lastFailure.error.startsWith('refused'));
     assert.match(backupHealth(ctx.home, state.now).fix.join('\n'), /transcripts: .*refused/);
   }
   assert.ok(remoteCommits(bare) >= 1);
@@ -1344,20 +1344,17 @@ test('while a transcripts run holds its lock, even hours into its pushes, the ho
   assert.match(deps.stderr.text, /backup: transcripts: a backup is already running \(pid 4242\)/);
 });
 
-test('last.json is updated under its own lock, keeps both runs\' records, and a lock a dead run left is taken over', async (t) => {
+test('the memory run and the transcripts run each record into a file only it writes', async (t) => {
   const ctx = setup(t);
   withTranscripts(ctx);
   const { deps, paths } = ctx;
   assert.equal(await backupMain(['init', '--transcripts-repo', TREPO], deps), 0, deps.stderr.text);
-  const lock = `${paths.last}.lock`;
-  fs.writeFileSync(lock, '4242\n');
-  const old = new Date(Date.now() - 5 * 60_000);
-  fs.utimesSync(lock, old, old);
   assert.equal(await backupMain(['run'], deps), 0, deps.stderr.text);
   const last = JSON.parse(fs.readFileSync(paths.last, 'utf8'));
-  assert.ok(last.lastSuccess, 'the memory run is recorded');
-  assert.ok(last.transcripts?.lastSuccess, 'and so is the transcripts run');
-  assert.deepEqual(fs.readdirSync(paths.dir).filter((name) => name.startsWith('last.json.')), [], 'no lock or partial file is left');
+  assert.ok(last.lastSuccess, 'the memory run is recorded in last.json');
+  assert.equal(last.transcripts, undefined, 'and the transcripts run writes nothing there');
+  assert.ok(JSON.parse(fs.readFileSync(paths.transcriptsLast, 'utf8')).lastSuccess, 'it records in transcripts.json');
+  assert.deepEqual(fs.readdirSync(paths.dir).filter((name) => name.endsWith('.tmp') || name.endsWith('.lock')), [], 'no partial file or lock is left');
 });
 
 test('backup verify takes one source at a time and says so', async (t) => {

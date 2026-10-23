@@ -125,6 +125,9 @@ export function backupPaths(home) {
     lock: path.join(dir, 'lock'),
     transcripts: path.join(dir, 'transcripts'),
     transcriptsLock: path.join(dir, 'transcripts.lock'),
+    // The transcripts run's own record, beside last.json: only the transcripts run writes it, under its lock, while a
+    // memory run may write last.json, so neither can lose the other's record.
+    transcriptsLast: path.join(dir, 'transcripts.json'),
   };
 }
 
@@ -166,40 +169,6 @@ function writeJson(file, data) {
     }
   } finally {
     fs.rmSync(partial, { force: true });
-  }
-}
-
-/** A last.json lock older than this was left by a run that died: an update holds it for a read and a write. */
-const LAST_LOCK_STALE_MS = 30_000;
-
-/** Reads last.json, applies `change` to it and writes the result, under `last.json.lock`: the memory run and the
- * transcripts run update it under their own locks, and neither may lose the other's record. Returns what it wrote. */
-function updateLast(paths, change) {
-  const lock = `${paths.last}.lock`;
-  fs.mkdirSync(path.dirname(lock), { recursive: true });
-  for (let waited = 0; ; waited += 25) {
-    try {
-      fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
-      break;
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-    }
-    let age;
-    try {
-      age = Date.now() - fs.statSync(lock).mtimeMs;
-    } catch {
-      continue;
-    }
-    if (age > LAST_LOCK_STALE_MS) fs.rmSync(lock, { force: true });
-    else if (waited >= 10_000) throw new Error(`${paths.last} stayed locked for 10 seconds (${lock})`);
-    else pause(25);
-  }
-  try {
-    const next = change(readJson(paths.last) ?? {});
-    writeJson(paths.last, next);
-    return next;
-  } finally {
-    fs.rmSync(lock, { force: true });
   }
 }
 
@@ -415,7 +384,7 @@ function summaryRefusal(deps, dir) {
 }
 
 function noteSummary(paths, entry) {
-  updateLast(paths, (last) => ({ ...last, ...entry }));
+  writeJson(paths.last, { ...(readJson(paths.last) ?? {}), ...entry });
 }
 
 /** Refreshes the `memory-summary` branch of the public repository (D4) at most once a day: fetches main, builds the
@@ -488,13 +457,13 @@ function pushClone(deps, clone, repo, timeout = PUSH_TIMEOUT_MS) {
 }
 
 function record(paths, now, outcome) {
+  const last = readJson(paths.last) ?? {};
   const at = new Date(now).toISOString();
-  return updateLast(paths, (last) => {
-    const next = { ...last, lastRun: at };
-    if (outcome.error) next.lastFailure = { at, error: outcome.error, ...(outcome.projects ? { projects: outcome.projects } : {}) };
-    else next.lastSuccess = { at, ...outcome };
-    return next;
-  });
+  const next = { ...last, lastRun: at };
+  if (outcome.error) next.lastFailure = { at, error: outcome.error, ...(outcome.projects ? { projects: outcome.projects } : {}) };
+  else next.lastSuccess = { at, ...outcome };
+  writeJson(paths.last, next);
+  return next;
 }
 
 /** The bytes of a clone's objects, loose and packed, from `git count-objects -v`: close to what GitHub stores. */
@@ -505,11 +474,11 @@ function objectBytes(deps, dir) {
   return (kib('size') + kib('size-pack')) * 1024;
 }
 
-/** Whether the transcripts are configured and their last attempt, pushed or not, is a day old (D3). */
-function transcriptsDue(config, last, now) {
+/** Whether the transcripts are configured and their last attempt, pushed or not, is a day old (D3); `t` is their own
+ * record, transcripts.json. */
+function transcriptsDue(config, t, now) {
   if (!config?.transcripts?.repos?.length) return false;
-  const t = last?.transcripts ?? {};
-  const tried = Math.max(Date.parse(t.lastSuccess?.at ?? '') || 0, Date.parse(t.lastFailure?.at ?? '') || 0);
+  const tried = Math.max(Date.parse(t?.lastSuccess?.at ?? '') || 0, Date.parse(t?.lastFailure?.at ?? '') || 0);
   return now - tried >= TRANSCRIPTS_EVERY_HOURS * 60 * 60_000;
 }
 
@@ -541,13 +510,13 @@ function runTranscripts(deps, paths, config) {
 }
 
 /** The transcripts step of `backup run`, under its own lock: when due or `force`d, runs them and records the outcome in
- * last.json's `transcripts`. Returns false only when it failed. */
+ * transcripts.json. Returns false only when it failed. */
 function transcriptsStep(deps, paths, force) {
   const config = readJson(paths.config);
   if (!transcriptsClones(paths, config).length) return true;
-  if (!force && !transcriptsDue(config, readJson(paths.last), deps.now())) return true;
+  if (!force && !transcriptsDue(config, readJson(paths.transcriptsLast), deps.now())) return true;
   const note = (entry) => {
-    updateLast(paths, (last) => ({ ...last, transcripts: { ...(last.transcripts ?? {}), ...entry } }));
+    writeJson(paths.transcriptsLast, { ...(readJson(paths.transcriptsLast) ?? {}), ...entry });
   };
   const at = () => new Date(deps.now()).toISOString();
   let taken;
@@ -823,7 +792,7 @@ export function backupHealth(home, now) {
     const recent = noRecent ? '; no RECENT.md in the clone, so Engram has no readable fallback' : '';
     fix.push(`memory backup: last success ${last.lastSuccess?.at ?? 'never'}${failure}${gone}${recent}: run js-harness backup status`);
   }
-  const transcripts = transcriptsHealth(readJson(paths.config), last.transcripts ?? {}, now);
+  const transcripts = transcriptsHealth(readJson(paths.config), readJson(paths.transcriptsLast) ?? {}, now);
   if (transcripts) fix.push(transcripts);
   return fix.length ? { state: 'stale', fix } : { state: 'ok', fix };
 }
@@ -868,7 +837,7 @@ function statusCommand(deps) {
   }
   const clones = transcriptsClones(paths, config);
   if (clones.length) {
-    const t = last.transcripts ?? {};
+    const t = readJson(paths.transcriptsLast) ?? {};
     const success = t.lastSuccess ? `last success ${t.lastSuccess.at}, ${t.lastSuccess.files} files` : 'last success never';
     const failed = t.lastFailure && !(Date.parse(t.lastSuccess?.at ?? '') > Date.parse(t.lastFailure.at)) ? `; last failure ${t.lastFailure.at}, ${t.lastFailure.error}` : '';
     const full = t.rollover ? `; full: init --transcripts-repo ${t.rollover}` : '';
@@ -918,7 +887,7 @@ export function dueReason(home, now, desktop) {
   // The transcripts change at every turn and count for nothing below, so their day alone makes a run due, unless a
   // transcripts run holds their lock: a first push can take an hour, and records nothing until it ends.
   const pushing = lockTime(paths.transcriptsLock);
-  if (!(pushing && now - pushing.at < TRANSCRIPTS_LOCK_STALE_MINUTES * 60_000) && transcriptsDue(readJson(paths.config), last, now)) return null;
+  if (!(pushing && now - pushing.at < TRANSCRIPTS_LOCK_STALE_MINUTES * 60_000) && transcriptsDue(readJson(paths.config), readJson(paths.transcriptsLast), now)) return null;
   // A clone without the readable fallback (the first run after it shipped, or a run that died half-way) is due at once.
   const fallbackMissing = !fs.existsSync(path.join(paths.clone, 'RECENT.md')) || !Array.isArray(readJson(path.join(paths.clone, 'manifest.json'))?.recent);
   if (success && !fallbackMissing && newestChange(home, desktop) <= success && !copiedSourceGone(home, paths.clone, desktop)) return 'nothing changed since the last backup';
