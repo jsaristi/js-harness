@@ -90,6 +90,16 @@ test('a deleted ref (local sha all zeros) is not checked', { skip }, () => {
   assert.deepEqual(result.calls, [`--push --remote origin --head ${B}`]);
 });
 
+test('a version tag is checked with --ref <the tag>, and another tag without it', { skip }, () => {
+  const root = makeRepo();
+  const result = runHook(root, `refs/tags/v1.0.0 ${A} refs/tags/v1.0.0 ${ZEROS}\nrefs/tags/proof ${B} refs/tags/proof ${ZEROS}\n`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.calls, [
+    `--push --remote origin --head ${A} --ref refs/tags/v1.0.0`,
+    `--push --remote origin --head ${B}`,
+  ]);
+});
+
 test('a push of only deletes runs no check and passes', { skip }, () => {
   const root = makeRepo();
   const result = runHook(root, `(delete) ${ZEROS} refs/heads/gone ${A}\n`);
