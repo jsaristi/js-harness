@@ -61,7 +61,13 @@ function readManifest(stateDir, stamp) {
   if (!isStamp(stamp)) throw new PassError(`${stamp} is not a pass stamp`);
   const text = readOrNull(path.join(snapshotDir(stateDir, stamp), 'manifest.json'));
   if (text === null) throw new PassError(`no snapshot ${stamp}`);
-  const manifest = JSON.parse(text.toString('utf8'));
+  let manifest;
+  try {
+    manifest = JSON.parse(text.toString('utf8'));
+  } catch {
+    throw new PassError(`snapshot ${stamp} is damaged: its manifest.json does not parse`);
+  }
+  if (!Array.isArray(manifest?.writeSet)) throw new PassError(`snapshot ${stamp} is damaged: its manifest.json names no write set`);
   // The manifest is a file of the state folder, but its write set names files of the memory folder to remove or overwrite.
   for (const name of manifest.writeSet) assertNote(name);
   return manifest;

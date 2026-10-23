@@ -515,3 +515,21 @@ test('an after-index that holds U+FFFD but is not the text of the index the pass
     });
   }
 });
+
+test('verify and undo refuse a snapshot manifest that does not parse or names no write set as damaged, with a PassError', () => {
+  withPass({ 'MEMORY.md': '- [a](a.md) — a\n' }, ({ folder, stateDir }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    const manifest = path.join(stateDir, 'snapshots', stamp, 'manifest.json');
+    const kept = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    for (const [text, why] of [
+      ['{ not json', 'its manifest.json does not parse'],
+      [JSON.stringify({ ...kept, writeSet: undefined }), 'its manifest.json names no write set'],
+      [JSON.stringify({ ...kept, writeSet: 'MEMORY.md' }), 'its manifest.json names no write set'],
+    ]) {
+      fs.writeFileSync(manifest, text);
+      const named = (err) => err instanceof PassError && err.message === `snapshot ${stamp} is damaged: ${why}`;
+      assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW + 1 }), named, text);
+      assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW + 1 }), named, text);
+    }
+  });
+});

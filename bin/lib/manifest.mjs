@@ -951,11 +951,15 @@ export function installedVersion(home) {
  * byte is written — `fs.writeSync`'s buffer form returns however many bytes it actually wrote,
  * which is not guaranteed to be all of them in one call (T3b item 4, Codex P2: the single-shot
  * `write(fd, content)` this used to be trusted a short write never happens, the same assumption
- * `fs.writeFileSync` itself does *not* make internally). */
+ * `fs.writeFileSync` itself does *not* make internally).
+ *
+ * The rename (`deps.rename`, default `fs.renameSync`) is tried again while Windows holds the target open
+ * (`renameHeld`); `deps.pause` and `deps.platform` are its seams. */
 export function writeManifestAtomic(target, data, deps = {}) {
   const open = deps.open ?? ((p) => fs.openSync(p, 'wx'));
   const write = deps.write ?? ((fd, buffer, offset, length, position) => fs.writeSync(fd, buffer, offset, length, position));
   const close = deps.close ?? ((fd) => fs.closeSync(fd));
+  const rename = deps.rename ?? fs.renameSync;
 
   const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   const buffer = Buffer.from(JSON.stringify(data, null, 2) + '\n', 'utf8');
@@ -987,7 +991,7 @@ export function writeManifestAtomic(target, data, deps = {}) {
   }
 
   try {
-    fs.renameSync(tmp, target);
+    renameHeld(tmp, target, rename, deps.pause ?? sleepSync, deps.platform ?? process.platform);
   } catch (err) {
     try {
       fs.rmSync(tmp, { force: true });
@@ -997,6 +1001,30 @@ export function writeManifestAtomic(target, data, deps = {}) {
     throw err;
   }
 }
+
+/** The codes of a rename Windows refuses for a moment while another process (an antivirus, the indexer, an editor)
+ * holds the file open, as `claimTicket` of bin/lib/gate-first.mjs meets them. Elsewhere they are a refusal that
+ * stays, so they are tried once. */
+const HELD = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const HELD_TRIES = 3;
+const HELD_PAUSE_MS = 25;
+
+/** Renames `from` to `to`, trying again after `pause` while the file is held on Windows; throws the last error. */
+function renameHeld(from, to, rename, pause, platform) {
+  const tries = platform === 'win32' ? HELD_TRIES : 1;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      rename(from, to);
+      return;
+    } catch (err) {
+      if (!HELD.has(err?.code) || attempt === tries) throw err;
+      pause(HELD_PAUSE_MS);
+    }
+  }
+}
+
+/** Blocks for `ms`: the write is synchronous, and a hold lasts milliseconds. */
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 function writeManifest(home, manifest) {
   const file = manifestPath(home);
