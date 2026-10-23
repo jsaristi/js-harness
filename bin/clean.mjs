@@ -13,7 +13,8 @@ export const USAGE = [
   '       js-harness clean --log [--json] [--home <path>]',
   '',
   'With no flags it lists each known kind of regenerable leftover (why it is safe to delete, each item with its',
-  'size) and a total, and deletes nothing. --apply scans again and deletes only the kinds you confirm: in a terminal',
+  'size) and a total, and deletes nothing; where ~/.js-harness exists it also writes the sizes to clean.json, which the',
+  'clean row of doctor reads. --apply scans again and deletes only the kinds you confirm: in a terminal',
   'it asks y/N per kind; without one it deletes only the kinds named with --kind, and with none named it deletes',
   'nothing (exit 1). Each deletion is appended to ~/.js-harness/clean-log.jsonl, which --log prints. --measure writes',
   'the sizes for the clean row of doctor and deletes nothing. Package caches are cleaned only by their own tools.',
@@ -46,6 +47,7 @@ function parseArgs(argv, env, deps) {
   };
   if (kinds.length > 0 && !args.apply) throw new CleanArgError('--kind goes with --apply');
   if ([args.apply, args.measure, args.log].filter(Boolean).length > 1) throw new CleanArgError('--apply, --measure and --log go one at a time');
+  if (args.json && (args.apply || args.measure)) throw new CleanArgError('--json goes with the listing or --log, not with --apply or --measure');
   return args;
 }
 
@@ -147,7 +149,7 @@ export async function cleanMain(argv, env = process.env, deps = {}) {
     return apply(args, scanDeps, { interactive, ask: deps.ask ?? askOnTerminal, log, error, now });
   }
   const kinds = scan(scanDeps);
-  writeMeasure(args.home, kinds, now());
+  writeMeasure(args.home, kinds, now(), { onlyIfHome: true });
   if (args.json) {
     const known = kinds.filter((kind) => !kind.upTo).reduce((sum, kind) => sum + kind.bytes, 0);
     log(JSON.stringify({ total: known, kinds }, null, 2));
