@@ -233,7 +233,7 @@ function install() {
     }
     return wrapped;
   };
-  const READS = ['readFileSync', 'readFile', 'openSync', 'open', 'createReadStream', 'statSync', 'lstatSync', 'stat', 'lstat', 'existsSync', 'exists', 'accessSync', 'access', 'realpathSync', 'realpath', 'readlinkSync', 'readlink', 'copyFileSync', 'copyFile', 'cpSync', 'cp'];
+  const READS = ['readFileSync', 'readFile', 'openSync', 'open', 'createReadStream', 'statSync', 'lstatSync', 'stat', 'lstat', 'existsSync', 'exists', 'accessSync', 'access', 'realpathSync', 'realpath', 'readlinkSync', 'readlink', 'copyFileSync', 'copyFile', 'cpSync', 'cp', 'openAsBlob'];
   const LISTS = ['readdirSync', 'readdir', 'opendirSync', 'opendir'];
   for (const name of READS) fs[name] = wrap(fs[name]);
   for (const name of LISTS) fs[name] = wrap(fs[name], true);
