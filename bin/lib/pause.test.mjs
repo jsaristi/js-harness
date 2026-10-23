@@ -598,6 +598,15 @@ test('configuredWindow: a value that is not a whole positive number, or a file t
   assert.equal(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '' }, ...places }), null);
 }));
 
+test('configuredWindow: the environment takes the k and M suffixes Claude Code 2.1.304 accepts, and no other', inHome((home) => {
+  const places = settingsIn(home, { user: { autoCompactWindow: 350000 } });
+  assert.deepEqual(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '200k' }, ...places }), { window: 200000, source: 'CLAUDE_CODE_AUTO_COMPACT_WINDOW' });
+  assert.equal(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '1M' }, ...places }).window, 1000000);
+  for (const value of ['200K', '1m', '1.5M', 'k', '200kb']) {
+    assert.equal(configuredWindow({ env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: value }, ...places }).window, 350000, value);
+  }
+}));
+
 test('configuredWindow: no project folder reads the environment and the user settings only, and nothing throws', inHome((home) => {
   const { claudeHome } = settingsIn(home, { user: { autoCompactWindow: 350000 } });
   assert.equal(configuredWindow({ env: {}, claudeHome, projectDir: null }).window, 350000);

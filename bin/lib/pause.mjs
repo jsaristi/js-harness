@@ -53,7 +53,10 @@ const windowOf = (value) => (Number.isInteger(value) && value > 0 ? value : null
  * autoCompactWindow setting)"). A place that is missing, does not parse or gives another value is passed over, and
  * nothing throws. */
 export function configuredWindow({ env = {}, claudeHome = null, projectDir = null, fileSystem = fs } = {}) {
-  const variable = typeof env?.[WINDOW_VARIABLE] === 'string' && /^\d+$/.test(env[WINDOW_VARIABLE]) ? windowOf(Number(env[WINDOW_VARIABLE])) : null;
+  // The variable takes a `k` or `M` suffix since Claude Code 2.1.304 ("now accepts `k` and `M` suffixes"); other
+  // spellings are passed over, since the host would not read them as that window either.
+  const written = typeof env?.[WINDOW_VARIABLE] === 'string' ? /^(\d+)(k|M)?$/.exec(env[WINDOW_VARIABLE]) : null;
+  const variable = written ? windowOf(Number(written[1]) * ({ k: 1000, M: 1000000 }[written[2]] ?? 1)) : null;
   if (variable !== null) return { window: variable, source: WINDOW_VARIABLE };
   const files = [
     ...(typeof projectDir === 'string' ? [path.join(projectDir, '.claude', 'settings.local.json'), path.join(projectDir, '.claude', 'settings.json')] : []),
