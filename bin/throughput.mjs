@@ -78,7 +78,7 @@ export const USAGE = [
   '    it found candidates, in <home>/.js-harness/throughput/<project>/outcomes.jsonl. The day must have settled.',
   '  shipped: records that <item> shipped on --day (default today), so its re-measure falls due.',
   '  Exit 1: snapshot refused what the day or its copies are (not settled, kept already, a copy dated after now,',
-  '    a gate log it cannot read), and nothing is kept. Exit 2: a usage error, and nothing is done.',
+  '    a gate log that exists but cannot be read), and nothing is kept. Exit 2: a usage error, and nothing is done.',
 ].join('\n');
 
 class ThroughputArgError extends Error {}
