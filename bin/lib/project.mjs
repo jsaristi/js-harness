@@ -344,6 +344,19 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
   return { real, outside, occupied, isWorkingTree, viaLink, base: containingRealBase };
 }
 
+/** The clone's exclude file as git names it, `{ file }`, or `{ file, reason }` where it is not to be written: a link on
+ * its way, or a real path outside the working tree and git dirs, would send the line to another file (Codex P2 on
+ * dea129b..118f479). `file` is null where git names none. */
+function excludeFile(root, spawn) {
+  const file = resolveGitPath(root, 'info/exclude', spawn);
+  if (!file) return { file: null, reason: 'git did not name the exclude file' };
+  const gitBases = gitDirs(root, spawn);
+  const realBases = [fs.realpathSync(root), safeRealpath(gitBases.gitDir), safeRealpath(gitBases.commonGitDir)].filter(Boolean);
+  const { real, hadSymlink } = realish(file, realBases);
+  if (hadSymlink || containingBase(real, realBases) === null) return { file, reason: 'a link is in its path or it is outside the repository; left as it is' };
+  return { file };
+}
+
 /** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
  * file loads on every turn — see "T2 design"), titled with the project's own folder name. Placeholder
  * prompts are left in angle brackets for the project to fill in. The harness's lines are in their marked block. */
@@ -976,8 +989,10 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     }
 
     // `.atl/` left out of what git calls untracked, in this clone's exclude file (./project-exclude.mjs).
-    excludePath = resolveGitPath(root, 'info/exclude', spawn);
-    if (excludePath) {
+    const target = excludeFile(root, spawn);
+    if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
+    if (target.file && !target.reason) {
+      excludePath = target.file;
       exclude = addExclude(excludePath, { writeFile });
       if (exclude) actions.push({ kind: 'excluded', path: notRemovedLabel(root, excludePath), line: EXCLUDED });
     }
@@ -1521,11 +1536,11 @@ export function uninstallProject(cwd, deps = {}) {
 
   // The line of `.atl/` init added to this clone's exclude file, in the file git names now.
   if (manifest.exclude) {
-    const excludePath = resolveGitPath(root, 'info/exclude', spawn);
-    const label = `${EXCLUDED} from ${excludePath ? notRemovedLabel(root, excludePath) : 'info/exclude'}`;
+    const target = excludeFile(root, spawn);
+    const label = `${EXCLUDED} from ${target.file ? notRemovedLabel(root, target.file) : 'info/exclude'}`;
     try {
-      if (!excludePath) throw new Error('git did not name the exclude file');
-      const undone = undoExclude(excludePath, manifest.exclude, { rm });
+      if (target.reason) throw new Error(target.reason);
+      const undone = undoExclude(target.file, manifest.exclude, { rm });
       actions.push({ kind: undone === 'removed' ? 'removed' : 'alreadyGone', path: label });
     } catch (err) {
       notRemoved.push(label);

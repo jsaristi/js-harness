@@ -175,3 +175,56 @@ test('undoExclude never takes a longer line that ends in .atl/ for its own', () 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('init adds the line where a later !.atl/ would leave .atl untracked, since git follows the last line that matches', () => {
+  const dir = makeRepo(`${EXCLUDED}\n!${EXCLUDED}\n`);
+  try {
+    const result = initProject(dir, '0.1.0');
+    assert.equal(result.code, 0);
+    assert.equal(read(excludeOf(dir)), `${EXCLUDED}\n!${EXCLUDED}\n${EXCLUDED}\n`);
+    assert.ok(ignoresAtl(dir));
+    uninstallProject(dir);
+    assert.equal(read(excludeOf(dir)), `${EXCLUDED}\n!${EXCLUDED}\n`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Replaces the clone's `.git/info` by a link to a folder outside it, whose exclude file holds `text`. */
+function linkInfoOutside(dir, text) {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-exclude-outside-'));
+  fs.writeFileSync(path.join(outside, 'exclude'), text);
+  fs.rmSync(path.join(dir, '.git', 'info'), { recursive: true, force: true });
+  fs.symlinkSync(outside, path.join(dir, '.git', 'info'), 'junction');
+  return outside;
+}
+
+test('uninstall leaves an exclude file a link now sends outside the clone, and says it did not take the line back', () => {
+  const dir = makeRepo('# mine\n');
+  let outside;
+  try {
+    assert.equal(initProject(dir, '0.1.0').code, 0);
+    outside = linkInfoOutside(dir, `# theirs\n${EXCLUDED}\n`);
+    const result = uninstallProject(dir);
+    assert.equal(read(path.join(outside, 'exclude')), `# theirs\n${EXCLUDED}\n`);
+    assert.ok(result.actions.some((action) => action.kind === 'failed' && action.path.startsWith(EXCLUDED) && /link/.test(action.reason)));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (outside) fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('init writes no line through a link that sends the exclude file outside the clone, and says it kept it', () => {
+  const dir = makeRepo('# mine\n');
+  const outside = linkInfoOutside(dir, '# theirs\n');
+  try {
+    const result = initProject(dir, '0.1.0');
+    assert.equal(result.code, 0);
+    assert.equal(read(path.join(outside, 'exclude')), '# theirs\n');
+    assert.equal(manifestOf(result).exclude, undefined);
+    assert.ok(result.actions.some((action) => action.kind === 'kept' && /link/.test(action.reason)));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});

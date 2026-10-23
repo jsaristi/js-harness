@@ -12,6 +12,16 @@ export const EXCLUDED = '.atl/';
 /** The spellings of a line that already leaves `.atl/` out, so none is added beside it. */
 const SAME = new Set(['.atl/', '.atl', '/.atl/', '/.atl']);
 
+/** Whether the lines of `text` leave `.atl/` out: git follows the last line that matches, so a `!.atl/` after one of
+ * `SAME` brings it back (Codex P2 on dea129b..118f479). */
+const leavesOut = (text) => {
+  const last = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .findLast((line) => SAME.has(line.replace(/^!/, '')));
+  return last !== undefined && !last.startsWith('!');
+};
+
 const readOrNull = (file) => {
   try {
     return fs.readFileSync(file, 'utf8');
@@ -22,11 +32,11 @@ const readOrNull = (file) => {
 };
 
 /** Adds `EXCLUDED` to the exclude file `file` once: the record to keep in the manifest, `{ line, separator,
- * createdFile, createdDir }`, or `null` where a line already leaves `.atl` out, nothing being written.
+ * createdFile, createdDir }`, or `null` where its lines already leave `.atl` out, nothing being written.
  * `separator` says a line break was put before the line, to end a last line that had none. */
 export function addExclude(file, { writeFile = fs.writeFileSync, mkdir = fs.mkdirSync } = {}) {
   const text = readOrNull(file);
-  if (text !== null && text.split(/\r?\n/).some((line) => SAME.has(line.trim()))) return null;
+  if (text !== null && leavesOut(text)) return null;
   const createdDir = text === null && !fs.existsSync(path.dirname(file));
   if (createdDir) mkdir(path.dirname(file), { recursive: true });
   const separator = text !== null && text !== '' && !text.endsWith('\n');
