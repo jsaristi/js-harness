@@ -81,8 +81,33 @@ test('npm test reads the words npm hands its script, its aliases, and the packag
     assert.equal(testRunFiles('npm test -w pkg', noTest), 0);
     assert.equal(testRunFiles('npm test --workspace=pkg a.mjs', noTest), 1);
     assert.equal(testRunFiles('npm test -w named-elsewhere', project), null);
+    assert.equal(testRunFiles('npm test -w', noTest), null, 'a workspace flag with no name runs no script here');
   } finally {
     for (const dir of [project, other, noTest]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Codex on the workspace fix: npm runs the script of every workspace named, and a file of a workspace's script is
+// that workspace's, so the gate log is asked of it from the folder the command runs in.
+test('npm test runs every workspace it names, and times a file of one from its own folder', () => {
+  const root = scratchProject({ lint: 'node lint.mjs' });
+  for (const [name, test] of [['lint', 'node lint.mjs'], ['suite', 'node --test'], ['slow', 'node --test slow.test.mjs']]) {
+    fs.mkdirSync(path.join(root, 'packages', name), { recursive: true });
+    fs.writeFileSync(path.join(root, 'packages', name, 'package.json'), JSON.stringify({ scripts: { test } }));
+  }
+  try {
+    assert.equal(testRunFiles('npm test -w packages/suite -w packages/lint', root), 0);
+    assert.equal(testRunFiles('npm test -w packages/lint', root), null);
+    const asked = [];
+    const fileSeconds = (file) => {
+      asked.push(file);
+      return 600;
+    };
+    const said = testRunWarning('npm test -w packages/slow', { env: {}, holder: held, fileSeconds, cwd: root });
+    assert.deepEqual(asked, ['packages/slow/slow.test.mjs']);
+    assert.match(said, /^node --test of packages\/slow\/slow\.test\.mjs, which the gate log timed at 600 s,/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

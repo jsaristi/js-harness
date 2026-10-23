@@ -189,12 +189,13 @@ const NPM_VALUED = new Set(['--loglevel', '--userconfig', '--globalconfig', '--c
  * `test` script of the package.json in `cwd`, or in the folder `--prefix` names, whose last command takes the
  * words npm hands it, its positional words and those after `--`, as its files; `null` for any other words, and `[]`
  * where the folder names no test script. npm's other options are its own and are read past, with the value of those
- * that take one (`NPM_VALUED`). A workspace (`-w`, `--workspace`) runs its own script: the one of the folder it
- * names, and `null` for a name that is no folder of a package. */
-function npmTestCommands(words, cwd) {
+ * that take one (`NPM_VALUED`). Each workspace named (`-w`, `--workspace`) runs its own script, the one of the
+ * folder it names; a name that is no folder of a package is not resolved here. Each run is `{ commands, dir }`, `dir`
+ * the folder its script runs in. */
+function npmTestRuns(words, cwd) {
   if (!NPM.test(words[0]?.text ?? '')) return null;
   let dir = cwd;
-  let workspace = null;
+  const workspaces = [];
   const positional = [];
   let index = 1;
   for (; index < words.length && words[index].text !== '--'; index += 1) {
@@ -205,30 +206,28 @@ function npmTestCommands(words, cwd) {
     } else if (text.startsWith('--prefix=')) dir = path.resolve(cwd, text.slice('--prefix='.length));
     else if (text === '-w' || text === '--workspace') {
       index += 1;
-      workspace = words[index]?.text ?? '';
-    } else if (text.startsWith('--workspace=')) workspace = text.slice('--workspace='.length);
+      workspaces.push(words[index]?.text ?? '');
+    } else if (text.startsWith('--workspace=')) workspaces.push(text.slice('--workspace='.length));
     else if (NPM_VALUED.has(text)) index += 1;
     else if (!text.startsWith('-')) positional.push(words[index]);
   }
   const verb = NPM_RUN.has(positional[0]?.text) ? 1 : 0;
   if (verb === 1 ? positional[1]?.text !== 'test' : !NPM_TEST.has(positional[0]?.text)) return null;
-  if (workspace !== null) {
-    // A workspace named by its folder runs that folder's script; one named by its package name is not resolved here.
-    const folder = path.resolve(dir, workspace);
-    if (!fs.existsSync(path.join(folder, 'package.json'))) return null;
-    dir = folder;
-  }
-  let script;
-  try {
-    script = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))?.scripts?.test;
-  } catch (err) {
-    script = undefined;
-  }
-  if (typeof script !== 'string') return [];
-  const commands = commandsOf(script);
   const handed = [...positional.slice(verb + 1), ...words.slice(index + 1)];
-  if (handed.length > 0 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...handed];
-  return commands;
+  const folders = workspaces.length === 0
+    ? [dir]
+    : workspaces.filter((name) => name !== '').map((name) => path.resolve(dir, name)).filter((folder) => fs.existsSync(path.join(folder, 'package.json')));
+  return folders.map((folder) => {
+    let script;
+    try {
+      script = JSON.parse(fs.readFileSync(path.join(folder, 'package.json'), 'utf8'))?.scripts?.test;
+    } catch (err) {
+      script = undefined;
+    }
+    const commands = typeof script === 'string' ? commandsOf(script) : [];
+    if (handed.length > 0 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...handed];
+    return { commands, dir: folder };
+  });
 }
 
 /** The command line a shell's `-c` runs, for words that start with a shell (`sh`, `bash`, `dash`, `zsh`), or `null`
@@ -265,8 +264,15 @@ function scan(words, depth = 0, cwd = process.cwd()) {
     const script = shellScript(rest);
     return script === null ? null : firstRun(commandsOf(script), depth + 1, cwd);
   }
-  const npm = npmTestCommands(rest, cwd);
-  if (npm !== null) return firstRun(npm, depth + 1, cwd);
+  const npm = npmTestRuns(rest, cwd);
+  if (npm !== null) {
+    for (const { commands, dir } of npm) {
+      const found = firstRun(commands, depth + 1, dir);
+      // A file of the script is the folder's: whole here, so the gate log is asked of it from the command's own.
+      if (found !== null) return { ...found, names: found.names.map((name) => path.resolve(dir, name)) };
+    }
+    return null;
+  }
   return filesOf(rest);
 }
 
