@@ -21,6 +21,7 @@ const AT = '2026-01-01T10:00:00.000Z';
 const NOW = Date.parse('2026-01-01T12:00:00.000Z');
 const writtenAt = (file, minutes) => fs.utimesSync(file, new Date(NOW - minutes * 60000), new Date(NOW - minutes * 60000));
 const FIRST = 'js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.';
+const CLEARED = 'js-harness resume: this session was just cleared: the host started it again with a new transcript. What follows is read from files; the conversation before the clear is not in it.';
 const READ = 'Read "Next step" in that document, and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
 const PARTS_TRUST = 'Trust them over the summary. Then repeat to the user any question that is still open.';
 // The parts of the machine's default feature document (`makeMachine`), as the hook names them (odd/tasks/resume-open-task.md, S6).
@@ -96,6 +97,8 @@ async function runHook(machine, input, { git = fakeGit(machine), argv = ['--hook
     readStdin: () => input,
     stdinIsTTY: false,
     now: () => NOW,
+    // The desktop app's record of the session, which a start reads for a clear: none here unless a test gives one.
+    readApp: () => new Map(),
     ...deps,
   });
   return { code, lines: out.join('\n').split('\n').filter((line, index, all) => !(all.length === 1 && line === '')), stderr: err.join('\n'), calls: git.calls };
@@ -435,9 +438,9 @@ test('the hook prints nothing in a project that did not opt in, and looks at not
   assert.deepEqual((await runHook(machine, hookInput(machine, { cwd: bare }))).lines, []);
 }));
 
-test('the hook speaks only after a compaction: any other start of a session, and anything that is not its input, prints nothing', withMachine(async (machine) => {
+test('the hook speaks after a compaction or a clear, and not after a resume, a fork or an input of another kind: those print nothing', withMachine(async (machine) => {
   titled(machine);
-  for (const source of ['startup', 'resume', 'clear', 'fork', undefined, 7]) {
+  for (const source of ['resume', 'fork', undefined, 7]) {
     assert.deepEqual((await runHook(machine, hookInput(machine, { source }))).lines, [], String(source));
   }
   // An input that is not read at all is said on standard error: the test after the next one.
@@ -452,6 +455,59 @@ test('the hook speaks only after a compaction: any other start of a session, and
     throw new Error('standard input must not be read from a terminal');
   };
   assert.deepEqual((await runHook(machine, '', { stdinIsTTY: true, readStdin: neverRead })).lines, []);
+}));
+
+test('after a clear the hook prints the cleared line, the title, the opening and the feature document, and no line of the compaction', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const opening = opened(machine).path;
+  const { code, lines, stderr } = await runHook(machine, hookInput(machine, { source: 'clear', session_title: TITLE }));
+  assert.deepEqual([code, stderr], [0, '']);
+  assert.deepEqual(lines, [
+    CLEARED,
+    `Session: "${TITLE}" (the title the host gave the hook)`,
+    `Opening: ${opening}  (print it: js-harness sessions --opening '${TITLE}')`,
+    `Feature document: ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}  (branch feat/channel, in the worktree this session's last notice was written from)`,
+    ...PARTS,
+  ]);
+  assert.doesNotMatch(lines.join('\n'), /compact|notify --to|the pause|Before this/, 'a clear has no compaction, no stretch before it and no notice to the orchestrator of one');
+}));
+
+test('a start is read as a clear only when the app\'s record of the session names the session it was cleared from; then it speaks the cleared line', withMachine(async (machine) => {
+  titled(machine);
+  notified(machine);
+  const prior = 'bbbbbbbb-2222-4222-8222-222222222222';
+  const asClear = await runHook(machine, hookInput(machine, { source: 'clear', session_title: TITLE }));
+  const cleared = await runHook(machine, hookInput(machine, { source: 'startup', session_title: TITLE }), { readApp: () => new Map([[SESSION, { priorCliSessionIds: [prior] }]]) });
+  assert.equal(cleared.lines[0], CLEARED);
+  assert.deepEqual(cleared.lines, asClear.lines, 'the same lines as a clear');
+  // A record with no prior id, a record of another session, and no record at all: each starts as the host says, silently.
+  const silent = [
+    () => new Map([[SESSION, { priorCliSessionIds: [] }]]),
+    () => new Map([['cccccccc-3333-4333-8333-333333333333', { priorCliSessionIds: [prior] }]]),
+    () => new Map(),
+  ];
+  for (const readApp of silent) {
+    assert.deepEqual((await runHook(machine, hookInput(machine, { source: 'startup' }), { readApp })).lines, []);
+  }
+  // The record is read for a start only: a compaction or a resume does not look at the app.
+  let looked = 0;
+  const readApp = () => {
+    looked += 1;
+    return new Map();
+  };
+  await runHook(machine, hookInput(machine, { source: 'compact' }), { readApp });
+  await runHook(machine, hookInput(machine, { source: 'resume' }), { readApp });
+  assert.equal(looked, 0);
+}));
+
+test('a sub-agent\'s clear, or its start after a clear, prints nothing: the hook speaks to the session', withMachine(async (machine) => {
+  titled(machine);
+  const readApp = () => new Map([[SESSION, { priorCliSessionIds: ['bbbbbbbb-2222-4222-8222-222222222222'] }]]);
+  for (const source of ['clear', 'startup']) {
+    assert.deepEqual((await runHook(machine, hookInput(machine, { source, agent_id: 'a1' }), { readApp })).lines, [], source);
+    assert.equal((await runHook(machine, hookInput(machine, { source, agent_id: '' }), { readApp })).lines[0], CLEARED, `${source}: an empty agent id is the session's own`);
+  }
 }));
 
 test('in hook mode an input that was not read is said on standard error, and nothing is printed; a pause run says nothing', withMachine(async (machine) => {

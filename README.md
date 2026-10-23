@@ -304,8 +304,8 @@ $ js-harness install
 installed js-harness 0.9.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
+registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
+registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
 registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)
@@ -1342,9 +1342,12 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 
 ### js-harness resume
 
-The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
+The hook that runs after a compaction or a clear, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
-document it works on and what to read there, so nobody pastes a resume prompt. For one document
+document it works on and what to read there, so nobody pastes a resume prompt. After a clear it
+prints the same lines under a first line that says the session was cleared, with none of the
+compaction's: the desktop app starts a cleared session as `startup`, and the hook speaks on that
+start only when the app's record of the session names the session it was cleared from. For one document
 it names the lines to read, not the whole file: its resume sections ("Next step", "State for a
 resume"), the open task the first of them names first, that task's specs and its last log entries,
 each range with its size. It writes
