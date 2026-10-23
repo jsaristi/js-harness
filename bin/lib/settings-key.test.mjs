@@ -31,7 +31,7 @@ test('a key in a file that does not exist creates the folder and the file, and r
     state: 'written',
     record: { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 },
   });
-  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}');
+  assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}\n');
 });
 
 test('a key in a file that exists is merged beside what is there, in the file own indent and line endings', (t) => {
@@ -47,19 +47,18 @@ test('a key in a file that exists is merged beside what is there, in the file ow
   );
 });
 
-// The manifest writes the same object as settings-key does; the bytes must match, so an uninstall that puts a file back
-// reads it the way the other writer left it. A file that exists keeps its indent, line endings and final newline.
-for (const before of [null, '{\r\n\t"effortLevel": "high"\r\n}\r\n']) {
-  test(`a key settings-key writes is byte-identical to the manifest's write of the same object, for ${before === null ? 'a file that does not exist' : 'a file that exists'}`, (t) => {
+// The manifest writes the same object as settings-key does: a file that exists keeps its indent, line endings and final
+// newline under both writers. A file settings-key creates keeps its final newline, as it always had (the Opus verifier of
+// the shared-helpers slice: no file is written by both, so a new file's bytes need not change).
+for (const before of ['{\r\n\t"effortLevel": "high"\r\n}\r\n', '{\n  "effortLevel": "high"\n}']) {
+  test(`a key settings-key writes is byte-identical to the manifest's write of the same object, for a file that exists (${JSON.stringify(before.slice(-3))})`, (t) => {
     const home = project(t);
     const manifestFile = userSettingsPath(home);
     const keyFile = settingsFile(project(t));
-    if (before !== null) {
-      fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
-      fs.writeFileSync(manifestFile, before);
-      fs.mkdirSync(path.dirname(keyFile), { recursive: true });
-      fs.writeFileSync(keyFile, before);
-    }
+    fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
+    fs.writeFileSync(manifestFile, before);
+    fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+    fs.writeFileSync(keyFile, before);
     assert.equal(acceptSessionMessages(home, { record: () => {} }).status, 'written');
     assert.equal(applySettingsKey(keyFile, ['crossSessionInbound'], 'accept').state, 'written');
     assert.equal(fs.readFileSync(keyFile, 'utf8'), fs.readFileSync(manifestFile, 'utf8'));

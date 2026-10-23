@@ -6,6 +6,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NEW_SETTINGS_STYLE, detectIndent, serializeJson } from './manifest.mjs';
 
+// A file this module creates: the manifest's new-file style, with the final newline these files have always had.
+const NEW_FILE = { ...NEW_SETTINGS_STYLE, trailingNewline: true };
+
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** `data` as the text of a file that looked like `raw`: its indent, its line endings, and a newline at the
@@ -90,7 +93,7 @@ export function applySettingsKey(file, pointer, value, earlier = []) {
 
   const madeDir = !fs.existsSync(path.dirname(file));
   if (madeDir) fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, read.absent ? serializeJson(data, NEW_SETTINGS_STYLE) : textLike(read.raw, data));
+  fs.writeFileSync(file, read.absent ? serializeJson(data, NEW_FILE) : textLike(read.raw, data));
   return {
     state: 'written',
     record: {

@@ -1123,9 +1123,10 @@ export function userSettingsPath(home) {
   return path.join(home, '.claude', 'settings.json');
 }
 
-/** The style of a JSON settings file the harness creates: two spaces, LF, and no newline at the end. A file that exists
- * is written back in its own style (`detectIndent`, its line endings, its final newline). */
-export const NEW_SETTINGS_STYLE = { trailingNewline: false, useCRLF: false, indent: 2 };
+/** The style of a JSON settings file the machine manifest creates: two spaces, LF, and no newline at the end (settings-key
+ * adds one to the files it creates). A file that exists is written back in its own style (`detectIndent`, its line
+ * endings, its final newline). Frozen, since every missing file shares it. */
+export const NEW_SETTINGS_STYLE = Object.freeze({ trailingNewline: false, useCRLF: false, indent: 2 });
 
 /** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
  * was; a missing file is an empty object written in `NEW_SETTINGS_STYLE`. Throws with the reason a file cannot be taken. */

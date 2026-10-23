@@ -560,6 +560,16 @@ test('a dry run of a turn to refuse fetches nothing, so no ref moves, and says t
   assert.deepEqual(snapshot(repo), before);
 });
 
+test('a dry run refused for its count also says the count read the local origin/main, not a fetched one', async () => {
+  const repo = repository({ list: SCANNED, files: { 'docs/FAILURES.md': REGISTER, 'docs/ROADMAP.md': '# Roadmap\nThe gate may wait 60 minutes.\n' } });
+  const asked = [];
+  const before = snapshot(repo);
+  const dry = await change(repo, ['gate-wait', '--dry-run'], { set: { row: { refuses: TODAY } }, source: DESIGN }, { run: fetching(FETCHED, asked) });
+  assert.equal(dry.code, 1);
+  assert.match(dry.err, /"gate-wait" has 1 finding in origin\/main's texts in force: .* \(not fetched: the count reads origin\/main as this clone holds it; a real change fetches it first\)/);
+  assert.deepEqual([asked, snapshot(repo)], [[], before]);
+});
+
 test('the switch back from refuses fetches nothing, writes the reason, and its relief line names the failure', async () => {
   const repo = repository({ list: REFUSING, files: { 'docs/FAILURES.md': REGISTER } });
   const asked = [];

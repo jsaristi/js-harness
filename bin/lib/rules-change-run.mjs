@@ -12,6 +12,8 @@ import { parseRegister } from './failures.mjs';
 import { checkRules } from './rules-check.mjs';
 import { countFindings, isTextInForce } from './rules-scan.mjs';
 import { RuleChangeError, changedList, sourceOf } from './rules-change.mjs';
+
+const NOT_FETCHED = 'not fetched: the count reads origin/main as this clone holds it; a real change fetches it first';
 import { renderList, writeRules } from './rules.mjs';
 
 const DATA = 'bin/lib/rules-data.mjs';
@@ -208,7 +210,15 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       return countFindings([rule], mainTexts).counts[rule.id] ?? 0;
     };
 
-    const { list, rule, what } = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today, failures, countOf });
+    let changed;
+    try {
+      changed = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today, failures, countOf });
+    } catch (error) {
+      // A dry run fetched nothing, so a refusal it reaches may rest on an old origin/main: it says so, as its output does.
+      if (error instanceof RuleChangeError && refusing && dryRun) throw new RuleChangeError(`${error.message} (${NOT_FETCHED})`);
+      throw error;
+    }
+    const { list, rule, what } = changed;
     if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${branch}`);
     if (isAgents(before?.path) || isAgents(rule.path)) {
       throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
@@ -284,7 +294,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       stdout(JSON.stringify(list.find((item) => item.id === id), null, 2));
       stdout(`Source: ${formOnly ? "kept, the rule's own: " : ''}${JSON.stringify(stored, null, 2)}`);
       stdout(`Relief line: ${line}`);
-      if (refusing) stdout('not fetched: the count reads origin/main as this clone holds it; a real change fetches it first');
+      if (refusing) stdout(NOT_FETCHED);
       if (countLine !== null) stdout(countLine);
       stdout(memory);
       stdout(COST);
