@@ -1,5 +1,7 @@
 # Hooks run under sh, so they keep LF endings even where core.autocrlf checks out CRLF.
 .githooks/* text eol=lf
+# The package's bin/ runs under node and sh by its shebang, so a CRLF checkout would name `node\r` and `pnpm pack` refuses it.
+bin/** text eol=lf
 # Eval task fixtures must be the same bytes on every machine, and this one checks out CRLF (core.autocrlf=true).
 # `text=auto`, not `text`: a binary fixture file keeps its bytes, and only what Git detects as text is converted.
 evals/tasks/** text=auto eol=lf

@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion, nextVersion } from './lib.mjs';
 
 function assertThat(condition, message) {
@@ -14,7 +15,7 @@ function assertThat(condition, message) {
 
 /** npm's --prefix global-install layout differs: Windows puts modules directly under the prefix,
  * everywhere else under prefix/lib. */
-function installedBinPath(prefix, platform = os.platform()) {
+export function installedBinPath(prefix, platform = os.platform()) {
   return platform === 'win32'
     ? path.join(prefix, 'node_modules', 'js-harness', 'bin', 'js-harness.mjs')
     : path.join(prefix, 'lib', 'node_modules', 'js-harness', 'bin', 'js-harness.mjs');
@@ -125,4 +126,7 @@ function main() {
   console.log('It never touched your real home or your real global npm install.');
 }
 
-main();
+// Compare real paths, as the `bin/` commands do, so the file can be imported without building a sandbox.
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
+  main();
+}

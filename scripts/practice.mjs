@@ -176,6 +176,10 @@ const withOutput = (result) => ({ ...result, output: `${result.stdout ?? ''}${re
 
 const git = (ctx, cwd, ...args) => withOutput(run('git', args, childOptions(ctx, cwd)));
 
+/** The identity of the project's one commit, named on the command line so `setup` never depends on the machine's
+ * (release-proof names its own the same way: `GIT_IDENTITY` in scripts/release-proof.mjs). */
+const GIT_IDENTITY = ['-c', 'user.name=practice', '-c', 'user.email=practice@example.invalid'];
+
 /** `git commit` with the gate's rows in its output: a gate that passes prints one line unless it is asked for every
  * row, which a hook, run without flags, is asked by JS_HARNESS_CHECK_VERBOSE (odd/tasks/quiet-gate.md). The steps
  * read those rows as the proof that the hook ran each one. */
@@ -482,7 +486,7 @@ const STEPS = {
     try {
       fs.writeFileSync(path.join(project, MODULE), MODULE_BROKEN);
       expectOk(git(ctx, project, 'add', '--', MODULE), 'git add');
-      result = git(ctx, project, 'commit', '-m', 'practice: a commit that must be refused');
+      result = git(ctx, project, ...GIT_IDENTITY, 'commit', '-m', 'practice: a commit that must be refused');
     } finally {
       // Whatever happened, the module and the index go back to the commit the step started from, so a
       // failure here does not leave a broken module staged for the next run.
@@ -541,7 +545,7 @@ const STEPS = {
       try {
         fs.writeFileSync(path.join(project, file), text);
         expectOk(git(ctx, project, 'add', '--', file), 'git add');
-        result = git(ctx, project, 'commit', '-m', `practice: a commit that ${what}`);
+        result = git(ctx, project, ...GIT_IDENTITY, 'commit', '-m', `practice: a commit that ${what}`);
       } finally {
         restored = git(ctx, project, 'checkout', before, '--', file);
       }
@@ -593,7 +597,7 @@ const STEPS = {
     let templated = '';
     if (differs !== '') {
       expectOk(git(ctx, project, 'add', '--', 'AGENTS.md'), 'git add AGENTS.md');
-      const committed = git(ctx, project, 'commit', '-m', "practice: AGENTS.md of the candidate's template");
+      const committed = git(ctx, project, ...GIT_IDENTITY, 'commit', '-m', "practice: AGENTS.md of the candidate's template");
       assertThat(!committed.error && committed.status === 0, `the commit of the candidate's AGENTS.md template did not pass: ${ended(committed)}\n${tail(committed.output)}`);
       templated = `; AGENTS.md took this candidate's template and was committed as ${short(head(ctx))}`;
     }
@@ -853,7 +857,7 @@ function setup(root) {
     for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(layout.project, name), content);
     expectOk(git(ctx, layout.project, 'init', '-b', 'main'), 'git init');
     expectOk(git(ctx, layout.project, 'add', '--', ...Object.keys(files)), 'git add');
-    expectOk(git(ctx, layout.project, 'commit', '-m', 'practice: a small project to receive js-harness'), 'git commit');
+    expectOk(git(ctx, layout.project, ...GIT_IDENTITY, 'commit', '-m', 'practice: a small project to receive js-harness'), 'git commit');
 
     for (const seed of hostSeeds(layout.home)) {
       fs.mkdirSync(path.dirname(seed.path), { recursive: true });
