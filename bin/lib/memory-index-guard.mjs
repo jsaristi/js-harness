@@ -6,7 +6,7 @@
 
 /** The host's own figure for an index line (the `consolidate-memory` skill: "under ~150 chars"): a constant with
  * one home, not a rule. Counted in code points. */
-export const INDEX_LINE_CHARS = 150;
+const INDEX_LINE_CHARS = 150;
 
 const MEMORY_FILE = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/]memory[\\/]([^\\/]+)$/i;
 
@@ -40,7 +40,7 @@ export function memoryNoteType(text) {
 }
 
 /** Whether `filePath` is a project's memory index, `MEMORY.md` of its memory folder. */
-export function isMemoryIndex(filePath, configDir) {
+function isMemoryIndex(filePath, configDir) {
   return memoryFileOf(filePath, configDir)?.toLowerCase() === 'memory.md';
 }
 

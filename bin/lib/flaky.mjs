@@ -155,7 +155,7 @@ export function judgeRerun(rerun, entries, today) {
 
 /** The text of the ledger under `cwd`, or `null` when there is none: a file that is not there (`ENOENT`, or
  * `ENOTDIR` where `docs` is a file). One that is there and cannot be read throws, so a gate does not hide it. */
-export function readLedgerText(cwd, readFile = (file) => fs.readFileSync(file, 'utf8')) {
+function readLedgerText(cwd, readFile = (file) => fs.readFileSync(file, 'utf8')) {
   try {
     return readFile(path.join(cwd, ...LEDGER.split('/')));
   } catch (err) {

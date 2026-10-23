@@ -8,13 +8,13 @@ import { createHash } from 'node:crypto';
 export const RECENT_FORMAT = 1;
 /** The observation types a file keeps (D2): what was decided, built, fixed or learned. Passive captures, session
  * summaries (the state, D3) and untyped notes are out. */
-export const IMPORTANT_TYPES = new Set(['decision', 'architecture', 'bugfix', 'discovery', 'pattern', 'config', 'preference', 'feedback', 'reference', 'learning']);
+const IMPORTANT_TYPES = new Set(['decision', 'architecture', 'bugfix', 'discovery', 'pattern', 'config', 'preference', 'feedback', 'reference', 'learning']);
 /** How many entries a project file holds (S3). */
-export const RECENT_LIMIT = 100;
+const RECENT_LIMIT = 100;
 /** How many of them decisions and architecture may take before the other types (D4). */
-export const DECISION_SLOTS = 70;
+const DECISION_SLOTS = 70;
 /** How many session summaries the state section prints (D3). */
-export const STATE_SUMMARIES = 3;
+const STATE_SUMMARIES = 3;
 
 const WEIGHTED = new Set(['decision', 'architecture']);
 const timeOf = (o) => String(o.updated_at ?? o.created_at ?? '');

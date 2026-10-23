@@ -16,7 +16,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // scratch folder must be before it counts as left behind rather than in use.
 export const CLEAN_EVERY_DAYS = 7;
 export const CLEAN_THRESHOLD_BYTES = 2 * 1024 ** 3;
-export const SCRATCH_AGE_DAYS = 3;
+const SCRATCH_AGE_DAYS = 3;
 // A measure that started this recently is still running (or died): another session start does not start a second.
 const STARTED_FRESH_MS = 60 * 60 * 1000;
 // The name a folder is renamed to before it is removed, so a removal that stops halfway is found again by the scan.
@@ -41,7 +41,7 @@ export const KIND_IDS = [
  * through a shell as one line; the arguments are fixed literals of this file. The scan and the clean both run in the
  * home, because pnpm names the store of the drive it runs on. Never throws: a tool that is not there is an `error` on
  * the result. */
-export function defaultRun(command, args, { platform = process.platform, timeout = QUERY_TIMEOUT_MS, cwd } = {}) {
+function defaultRun(command, args, { platform = process.platform, timeout = QUERY_TIMEOUT_MS, cwd } = {}) {
   const shell = platform === 'win32';
   const [file, argv] = shell ? [[command, ...args].join(' '), []] : [command, args];
   try {
@@ -61,7 +61,7 @@ function answer(run, command, args) {
 /** `{ bytes, newest, linkedWorktree }` of a file or folder: its size with everything under it, the newest time of
  * anything in it, and whether it holds a `.git` (a clone, or a linked worktree of a repository elsewhere). Links are not
  * followed; what cannot be read counts as nothing. */
-export function measureTree(target) {
+function measureTree(target) {
   const total = { bytes: 0, newest: 0, linkedWorktree: false };
   const stack = [target];
   while (stack.length > 0) {

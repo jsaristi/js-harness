@@ -12,13 +12,13 @@ import { components, entryComponents } from './manifest.mjs';
 export const SPEC_PATH = 'docs/SPEC.md';
 
 /** The fields of a capability, in the order the specification writes them. */
-export const FIELDS = Object.freeze(['Problem', 'Requirement', 'Reason', 'Proof', 'Discarded', 'Today']);
+const FIELDS = Object.freeze(['Problem', 'Requirement', 'Reason', 'Proof', 'Discarded', 'Today']);
 
 /** The files the harness writes outside a repository that no manifest entry stands for: the manifest
  * itself, and the user's settings, where `acceptSessionMessages` sets one key. The skills and hook
  * entries are claimed by their ids. Files whose names a command chooses at run time (a launcher of
  * `remote`, the channel record) are not listed: the check proves what can be enumerated. */
-export const HOME_FILES = Object.freeze(['~/.js-harness/manifest.json', '~/.claude/settings.json']);
+const HOME_FILES = Object.freeze(['~/.js-harness/manifest.json', '~/.claude/settings.json']);
 
 const HARNESS_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const FIELD_START = /^\*\*([A-Z][a-z]+):\*\*\s?(.*)$/;

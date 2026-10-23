@@ -7,11 +7,11 @@ import path from 'node:path';
 
 /** The minutes a worktree's index must have stood still before the worktree is removed: a session that staged
  * something a moment ago may be about to commit there. */
-export const IDLE_MINUTES = 10;
+const IDLE_MINUTES = 10;
 
 /** `git worktree list --porcelain` as `{ path, head, branch, locked, prunable }` entries, the main worktree first;
  * `branch` is the short name, `null` for a detached head. */
-export function worktreesOf(porcelain) {
+function worktreesOf(porcelain) {
   return porcelain.replace(/\r\n/g, '\n').split('\n\n').map((block) => block.split('\n').filter(Boolean)).filter((lines) => lines.length > 0).map((lines) => {
     const value = (key) => lines.find((line) => line === key || line.startsWith(`${key} `))?.slice(key.length + 1) ?? null;
     const branch = value('branch');
@@ -72,7 +72,7 @@ export function removableWorktrees({ cwd, base, branches = null, gitIn, now = Da
 }
 
 /** How long one git call of `worktreesInMain` may run before it is killed. */
-export const GIT_TIMEOUT_MS = 20_000;
+const GIT_TIMEOUT_MS = 20_000;
 
 /** The worktrees `removableWorktrees` gives against origin/main as this clone last fetched it, whatever landed their
  * branches, or `null` when git cannot say: what `doctor` counts, with no fetch of its own (T10). Each git call is

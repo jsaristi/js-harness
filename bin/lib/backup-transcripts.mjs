@@ -13,7 +13,7 @@ export const GITHUB_FILE_LIMIT = 100 * 1024 * 1024;
  * new lines of a long session, not the whole of it. */
 export const PART_MAX_BYTES = 40 * 1024 * 1024;
 /** A transcript that only grew since the backup and changed this recently belongs to a session running now. */
-export const LIVE_MINUTES = 15;
+const LIVE_MINUTES = 15;
 
 const MANIFEST = 'manifest.json';
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');

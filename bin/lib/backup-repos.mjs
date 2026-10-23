@@ -27,7 +27,7 @@ const pathHash = (place) => createHash('sha256').update(path.resolve(place).toLo
 
 /** The worktrees of a repository, the main checkout first: its path, its HEAD, and whether git calls it prunable
  * (its folder is gone). */
-export function worktreesOf(git, source) {
+function worktreesOf(git, source) {
   const listed = git(source, ['worktree', 'list', '--porcelain']);
   if (listed.status !== 0) return [];
   return listed.stdout

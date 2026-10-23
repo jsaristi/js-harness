@@ -40,7 +40,7 @@ const REQUIRED_LIST = `${REQUIRED_TOPICS.slice(0, -1).join(', ')} and ${REQUIRED
 export const SUMMARY_LINE = '- [ ] S Summary given and deepening questions answered';
 
 /** The stages a finding sends the work back to, by number (D2). */
-export const STAGES = {
+const STAGES = {
   1: 'Read',
   2: 'Conversation and advice',
   3: 'Pre-plan',
@@ -619,7 +619,7 @@ function recordFindings(task, { id, unchecked, stage, files, current, compare, l
 }
 
 /** The onboarding's tasks by ID, each with `text`, its whole item, continuation lines included. */
-export function onboardingTasks(onboarding) {
+function onboardingTasks(onboarding) {
   const lines = onboarding.replace(/\r\n/g, '\n').split('\n');
   return new Map(tasksOf(onboarding).map((task) => [task.id, { ...task, text: lines.slice(task.start - 1, task.end).join('\n') }]));
 }

@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { titleSlug } from './channel.mjs';
 
 /** The folder of the summaries, relative to the repository's root. */
-export const SUMMARY_DIR = 'docs/sessions';
+const SUMMARY_DIR = 'docs/sessions';
 
 /** The sections of a summary, in order, each with what it holds: the placeholder the template prints under it. */
 const SECTIONS = [

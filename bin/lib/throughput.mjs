@@ -600,10 +600,10 @@ export function throughputRows(days) {
 export const COMPARE_DAYS = ruleValue('throughput-compare-days', 'days');
 
 /** Days after the last review the next is due once the review has gone quiet (the rule throughput-quiet-days). */
-export const QUIET_DAYS = ruleValue('throughput-quiet-days', 'days');
+const QUIET_DAYS = ruleValue('throughput-quiet-days', 'days');
 
 /** Reviews in a row that found nothing to make the review weekly (the rule throughput-quiet-runs). */
-export const QUIET_RUNS = ruleValue('throughput-quiet-runs', 'reviews');
+const QUIET_RUNS = ruleValue('throughput-quiet-runs', 'reviews');
 
 /** The day `n` days after `day` (before it when `n` is negative). */
 export const addDays = (day, n) => utcDay(dayBounds(day).from + n * DAY_MS);

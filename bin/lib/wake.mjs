@@ -96,7 +96,7 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
 
 /** A command line as one line: a notice holds no line break (`newNotice`), and the shell runs a command
  * written on several lines as its lines joined by `;`, so that is how they are told. */
-export function oneLineCommand(command) {
+function oneLineCommand(command) {
   return command.split(/[\r\n]+/).map((line) => line.trim()).filter((line) => line !== '').join(' ; ');
 }
 

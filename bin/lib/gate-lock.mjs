@@ -64,7 +64,7 @@ export const GATE_BEAT_MS = 5_000;
 /** A holder that has not beaten for this long died. Twelve beats: a timer that late is no timer. */
 export const GATE_STALE_MS = 60_000;
 /** How often a waiting gate looks again. */
-export const GATE_POLL_MS = 2_000;
+const GATE_POLL_MS = 2_000;
 /** How long a gate that waits lets the lock go without changing hands before it gives up on it: the bound
  * of a wait, which counts from the last time the lock changed hands and not from the arrival
  * (`takeGateLock`). The minutes are the declared rule's (`gate-wait` in ./rules-data.mjs). */

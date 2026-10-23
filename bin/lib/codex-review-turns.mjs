@@ -108,7 +108,7 @@ const TURN_WORKTREE = /^review-turn-(\d+)-(\d+)$/;
 export const TURN_WORKTREE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Whether the process `pid` is running here: a signal 0 tests it and sends nothing. */
-export function processRunning(pid) {
+function processRunning(pid) {
   try {
     process.kill(pid, 0);
     return true;
