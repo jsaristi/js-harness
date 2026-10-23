@@ -32,7 +32,7 @@ export function readiness({ home, clone, config, scope, desktop, run, env = {}, 
   if (!manifest) missing.push(`the backup clone ${clone} holds no backup yet: run js-harness backup run`);
   missing.push(...cloneState(git, clone));
   if (manifest) {
-    const checkouts = checkoutsOf(git, Array.isArray(config.bundles) ? config.bundles : [], scope);
+    const { paths: checkouts } = checkoutsOf(git, Array.isArray(config.bundles) ? config.bundles : [], scope);
     missing.push(...homeState({ home, scope, desktop, checkouts, manifest, run }));
     for (const source of Array.isArray(config.bundles) ? config.bundles : []) missing.push(...repoState(git, source, manifest));
     // The readable fallback (odd/tasks/recent-memory.md, D8), by count: a project's name can be a client's. Another

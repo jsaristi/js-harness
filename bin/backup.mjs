@@ -213,6 +213,15 @@ function releaseLock(lock, mine) {
   if (held === mine) fs.rmSync(lock, { force: true });
 }
 
+/** The Claude project folders the clone holds a copy of, by name: a name is its own slug, so `inScope` takes it. */
+function clonedSlugs(clone) {
+  try {
+    return fs.readdirSync(path.join(clone, 'claude', 'projects'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
 /** The git repositories whose unpushed commits are bundled (D1): config.json's `bundles`, none when it names none.
  * `init` seeds the list once, with this machine's js-harness checkout when there is one (`defaultDeps().bundles`). */
 function bundleSources(config) {
@@ -308,7 +317,10 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   const recent = writeRecent(paths.clone);
   // RESTORE.md holds no time, so every run writes it: a clone made before a change of the steps gets them.
   fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo, transcriptsClones(paths, config)));
-  const checkouts = checkoutsOf((cwd, args, options) => git(deps, cwd, args, options), bundleSources(config), scope);
+  const found = checkoutsOf((cwd, args, options) => git(deps, cwd, args, options), bundleSources(config), scope);
+  // A repository git cannot read this time (a drive not mounted, a folder moved) lists no checkout, and the mirror would
+  // drop the copies the last run made of its memory folders: under the same scope, every folder the clone holds stays.
+  const checkouts = [...found.paths, ...(found.unreadable.length && previous?.scope === scope ? clonedSlugs(paths.clone) : [])];
   const { files, redacted } = collectFiles({ home: deps.home, dest: paths.clone, scope, desktop: deps.desktop, checkouts });
   const bundles = bundleSources(config).map((source) => {
     const entry = bundleUnpushed(deps, source, paths.clone);

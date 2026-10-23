@@ -761,6 +761,13 @@ test('under a project scope, run copies the memory folders of the checkouts git 
   deps.stdout = sink();
   await backupMain(['ready'], deps);
   assert.doesNotMatch(deps.stdout.text, /files changed since the last backup/, 'ready reads the folders run copied');
+
+  // A run while git cannot read the repository (a drive not mounted, a folder moved) keeps the copies the last run made.
+  fs.renameSync(source, `${source}-away`);
+  await backupMain(['run'], deps);
+  assert.equal(copied(source), true, 'the checkout copy stays while git cannot read it');
+  assert.equal(copied(worktree), true, 'and so does its worktree outside it');
+  assert.equal(copied(other), false);
 });
 
 test('backup ready names what has no copy off this machine, passes once a run copied it, and writes nothing', async (t) => {
