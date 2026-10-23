@@ -10,7 +10,8 @@
 // `unknown argument: <token>` before it does any work (bin/conventions-arguments.test.mjs), so the probe never runs the
 // command. A refusal naming the flag as unknown is `not-accepted`. The parser took the flag when a refusal names the
 // sentinel in any wording, names the flag as the subject of its value message (`--since takes a day as YYYY-MM-DD: x`),
-// or names the value the probe gave; a flag the parser says needs a value is probed once more with one. Anything else
+// or prints the value the probe gave `x` in a sentence that names the flag (backup, which names no flag, prints it in its
+// own message); a flag the parser says needs a value is probed once more with one. Anything else
 // is `unprobed`, with the first line of stderr as the detail.
 //
 // backup does not refuse an argument it does not know, so its probes rely on the empty home they run in: a probe
@@ -297,6 +298,20 @@ const SUBJECT = (flag) => new RegExp(`(?:^|: )${flag}(?![\\w-])`);
 const WORDING = /\b(?:takes|requires|needs|is required)\b/;
 // The token a refusal names: `unknown argument: <token>`, or `<token> is not an option of` (or `is no argument of`).
 const REFUSED = /unknown argument:? ([^\s;(]+)|(\S+) (?:is not an option of|is no argument of)/;
+// The probe's value `x` as a word of its own: not a path segment (`/x/`) and not a placeholder (`<x>`).
+const VALUE_X = /(?<![\w\-/\\<])x(?![\w\-/\\>])/;
+// backup refuses no argument it does not know (the header says so), so its own message that prints the value the probe gave
+// (`backup restore: git clone x failed`) is the only evidence that the value was taken.
+const VALUE_ONLY = new Set(['backup']);
+
+/** Whether a refusal line holds the probe's value `x`: in a sentence that names the probed flag (`--day is not a day: x`),
+ * or, for a command that names no flag, in its own message (`backup restore: ...`). */
+function namesValue(probe, line) {
+  if (!VALUE_X.test(line)) return false;
+  const flagged = line.split(/(?<=[.!?;])\s+/).some((sentence) => WORD(probe.flag).test(sentence) && VALUE_X.test(sentence));
+  const own = VALUE_ONLY.has(probe.command) && new RegExp(`^(?:js-harness )?${[probe.command, ...probe.sub].join(' ')}:`).test(line);
+  return flagged || own;
+}
 
 /** Whether a refusal says the flag needs a value: `js-harness backup verify: --from needs a value`. */
 export function needsValue(stderr, flag) {
@@ -305,8 +320,9 @@ export function needsValue(stderr, flag) {
 
 /** The finding of one probe's result, or null when the parser took the flag. A refusal that names the flag as unknown is
  * not-accepted. Otherwise the parser took the flag when the refusal names the sentinel (any wording), names the flag as the
- * subject of its value message (`--since takes a day as YYYY-MM-DD: x`), or names the value the probe gave, which the flag
- * consumed. `probe.value` is the value the attempt gave, so a bare probe's `x` is a sub word, not a value. */
+ * subject of its value message (`--since takes a day as YYYY-MM-DD: x`), or prints the value the probe gave, which the flag
+ * consumed, in a sentence that names the flag. A lone `x` elsewhere (a path segment, a usage `<x>`) is no value. `probe.value`
+ * is the value the attempt gave, so a bare probe's `x` is a sub word, not a value. */
 export function classifyProbe(probe, result) {
   const lines = (result.stderr ?? '').split(/\r?\n/);
   if (result.error) return { kind: 'unprobed', detail: String(result.error.code ?? result.error.message) };
@@ -318,7 +334,7 @@ export function classifyProbe(probe, result) {
     || (result.status !== 0 && (
       lines.some((line) => WORD(SENTINEL).test(line))
       || lines.some((line) => SUBJECT(probe.flag).test(line) && WORDING.test(line))
-      || (probe.value !== 'none' && lines.some((line) => WORD('x').test(line)))
+      || (probe.value !== 'none' && lines.some((line) => namesValue(probe, line)))
     ));
   if (taken) return null;
   const first = lines.find((line) => line.trim() !== '');

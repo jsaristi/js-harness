@@ -152,6 +152,7 @@ test('an npm access token is found, and an npm_ word of another length is not', 
   const npmToken = 'npm' + '_' + 'Ab3'.repeat(12);
   assert.deepEqual(scanLine(`//registry.npmjs.org/:_authToken=${npmToken}`).filter((hit) => hit.kind === 'secret').map((hit) => hit.text), [npmToken]);
   assert.deepEqual(scanLine(`npm_${'a'.repeat(35)} and npm_config_cache`).filter((hit) => hit.kind === 'secret'), []);
+  assert.deepEqual(scanLine(`npm_${'a'.repeat(37)} and x_npm_${'a'.repeat(36)}`).filter((hit) => hit.kind === 'secret'), []);
 });
 
 test('the current OpenAI key forms and a JSON credential are found', () => {

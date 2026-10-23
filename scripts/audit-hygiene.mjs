@@ -35,8 +35,9 @@ const KIND_ORDER = ['secret', 'email', 'personal-path', 'stale-allow'];
 const TOKEN_SHAPES = [
   /gh[pousr]_[A-Za-z0-9]{36,}/g,
   /github_pat_[A-Za-z0-9_]{20,}/g,
-  // An npm access token: a developer's login in a committed .npmrc is the case this guards.
-  /npm_[A-Za-z0-9]{36}/g,
+  // An npm access token: a developer's login in a committed .npmrc is the case this guards. Exactly 36 characters, and
+  // not a slice of a longer word.
+  /(?<![A-Za-z0-9_])npm_[A-Za-z0-9]{36}(?![A-Za-z0-9_])/g,
   /sk-ant-[A-Za-z0-9_-]{20,}/g,
   /sk-[A-Za-z0-9]{32,}/g,
   /sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}/g,

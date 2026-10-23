@@ -461,3 +461,10 @@ test('the backup probes stop before any action in an empty home: run finds no co
   assert.equal(init.status, 2, init.stderr);
   assert.match(init.stderr, /--repo <owner\/name> is required/);
 });
+
+test('a refusal that prints a lone x unrelated to the probed flag is unprobed, and an x in its flag sentence is the value taken', () => {
+  const probe = { command: 'throughput', sub: [], flag: '--day', value: 'space', places: ['help'] };
+  const unrelated = 'cannot read /home/x/.js-harness/log: no such file\nusage: js-harness throughput <x>\n';
+  assert.deepEqual(classifyProbe(probe, refused(unrelated, 1)), { kind: 'unprobed', detail: 'cannot read /home/x/.js-harness/log: no such file' });
+  assert.equal(classifyProbe(probe, refused('js-harness throughput: --day is not a day: x\n', 1)), null);
+});
