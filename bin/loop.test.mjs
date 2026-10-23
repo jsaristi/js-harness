@@ -356,3 +356,34 @@ test('a real loop: run in the background, status sees it alive, stop leaves no p
   if (child.exitCode === null && child.signalCode === null) await new Promise((resolve) => child.once('exit', resolve));
   assert.equal(fs.existsSync(p.record('sleeper')), false);
 });
+
+// C-d-9: each parse refusal is a usage error that names its cause and starts nothing (the value checks of --quiet,
+// --max, --every and --for are pinned through --stall in loop-bodies.test.mjs).
+test('loop refuses a malformed call with exit 2, the cause named, and nothing run', async () => {
+  const command = ['--', process.execPath, '-e', ''];
+  for (const [argv, said] of [
+    [[], /a subcommand is required: run, status, stop, heartbeat or channel-watch/],
+    [['walk'], /unknown subcommand: walk/],
+    [['status', '--purpose', 'x'], /--purpose is not an option of loop status/],
+    [['run', 'keeper', '--purpose'], /--purpose requires a value/],
+    [['status', 'keeper'], /unexpected argument: keeper/],
+    [['run', 'one', 'two', '--purpose', 'p', '--until', 'u', ...command], /loop run takes one name/],
+    [['stop'], /loop stop takes one name/],
+    [['run', 'Keeper', '--purpose', 'p', '--until', 'u', ...command], /a loop's name is lower case letters, digits and dashes: Keeper/],
+    [['run', 'keeper', '--take-over', '--purpose', 'p', '--until', 'u', ...command], /--take-over goes with --restart/],
+    [['run', 'keeper', '--until', 'u', ...command], /--purpose is required: what the loop is for/],
+    [['run', 'keeper', '--purpose', 'p', ...command], /--until is required: what ends the loop/],
+    [['run', 'keeper', '--purpose', 'p', '--until', 'u'], /the command goes after --/],
+  ]) {
+    const p = place();
+    try {
+      const { state, deps } = world(p);
+      assert.equal(await loopMain(argv, {}, deps), 2, argv.join(' '));
+      assert.match(state.err.join('\n'), said, argv.join(' '));
+      assert.equal(state.kills.length, 0);
+      assert.equal(fs.existsSync(path.join(p.home, '.js-harness')), false, argv.join(' '));
+    } finally {
+      fs.rmSync(p.root, { recursive: true, force: true });
+    }
+  }
+});

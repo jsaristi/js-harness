@@ -165,7 +165,7 @@ test('snapshot keeps a closed day once, and the table then reads the day from it
 test('snapshot refuses a day that is not over yet', async () => {
   const home = makeHome(GATES);
   const { code, stderr } = await run(['snapshot', '--day', '2026-10-17'], { home });
-  assert.equal(code, 2);
+  assert.equal(code, 1);
   assert.match(stderr, /settles at 2026-10-18T01:00:00.000Z/);
 });
 
@@ -187,7 +187,8 @@ test('status names each day since the first one kept that has none, and exits 1'
 test('a day is kept only once its last gates can have ended: two gate-max after its midnight', async () => {
   const home = makeHome(GATES);
   const early = await run(['snapshot', '--day', '2026-10-16'], { home, now: Date.parse('2026-10-17T00:30:00Z') });
-  assert.equal(early.code, 2);
+  // A refusal of state, not of the call: exit 2 is the usage's, a usage error (C-d-12).
+  assert.equal(early.code, 1);
   assert.match(early.stderr, /settles at 2026-10-17T01:00:00.000Z/);
 });
 
@@ -339,7 +340,7 @@ test('--copied-at says when a copy was made, for one that kept its source\'s mod
   assert.equal((await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved, '--copied-at', 'yesterday'], { home })).code, 2);
   // A copy is not made later than now: a future time would settle a day no copy holds whole.
   const future = await run(['snapshot', '--day', '2026-10-16', '--gate-log', preserved, '--copied-at', '2026-10-17T03:01:00Z'], { home });
-  assert.equal(future.code, 2);
+  assert.equal(future.code, 1);
   assert.match(future.stderr, /--copied-at 2026-10-17T03:01:00.000Z is after now/);
 });
 

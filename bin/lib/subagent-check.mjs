@@ -138,18 +138,16 @@ export function subagentRowLines(result, expected) {
   if (result.unknownEffort > 0) parts.push(`${result.unknownEffort} at an unknown effort`);
 
   // Launches of role other are not compared, so no claim covers them: they are named apart (Codex, 2026-10-15).
-  const unexamined = result.other > 0 ? `; ${result.other} not compared (role other)` : '';
+  // A role with no rule in force and no effort rule is not compared either (C-b-24): it is named too, so the
+  // all-on-the-rules claim covers only what was compared.
+  const idle = ['writer', 'reader'].filter((side) => result.byRole[side].launches > 0 && modelRule(rules[`${side}Model`]) === null && effort === null);
+  const unexamined = [
+    ...(result.other > 0 ? [`${result.other} not compared (role other)`] : []),
+    ...idle.map((side) => `${result.byRole[side].launches} ${side} ${result.byRole[side].launches === 1 ? 'launch' : 'launches'} not compared (no rule in force)`),
+  ].map((text) => `; ${text}`).join('');
   let detail;
   if (parts.length > 0) {
     detail = `${count}: ${parts.join(', ')}${unexamined}`;
-  } else if (result.other > 0) {
-    const checked = [];
-    if ((result.byRole.writer.launches > 0 && modelRule(rules.writerModel) !== null)
-      || (result.byRole.reader.launches > 0 && modelRule(rules.readerModel) !== null)) {
-      checked.push("on the rules' models");
-    }
-    if (effort !== null) checked.push(`at ${effort}`);
-    detail = `${count}, the ${result.compared} compared all ${checked.join(' and ')}${unexamined}`;
   } else {
     const checked = [];
     if ((result.byRole.writer.launches > 0 && modelRule(rules.writerModel) !== null)
@@ -157,7 +155,8 @@ export function subagentRowLines(result, expected) {
       checked.push("on the rules' models");
     }
     if (effort !== null) checked.push(`at ${effort}`);
-    detail = `${count}, all ${checked.join(' and ')}`;
+    const scope = unexamined === '' ? 'all' : `the ${result.compared} compared all`;
+    detail = `${count}, ${scope} ${checked.join(' and ')}${unexamined}`;
   }
 
   const lines = [];

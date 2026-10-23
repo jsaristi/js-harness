@@ -114,7 +114,9 @@ Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the decl
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
 runs it, so a red check means the commit is not ready yet. A gate that passes prints one line,
 `PASS  check  <n> rows passed`, with the review's verdict where it was assessed; a gate that fails
-prints every row. `--verbose` prints every row of a passing gate too, and so does
+prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_INNER=1` and runs no
+sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
+so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
 `JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
 `--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
@@ -1662,7 +1664,9 @@ kept), the desktop app's old Code tab CLIs (the highest is kept), Codex's market
 `tmp.*` or `js-harness-*` test scratch in the temp folder once untouched for 3 days (a scratch
 folder holding a linked git worktree is kept), and the npm, pnpm, Go and uv caches when their tool
 answers. With no flags it lists each kind, why it is safe to delete, each item with its size, and a
-total, and deletes nothing.
+total, and deletes nothing. Where `~/.js-harness` exists, the listing also writes the sizes to
+`clean.json`, as `--measure` does; without that folder it writes nothing. `--json` goes with the
+listing or `--log`; with `--apply` or `--measure` it is a usage error (exit 2).
 
 `clean --apply` scans again and deletes only the kinds you confirm: in a terminal it asks y/N per
 kind; without one it deletes only the kinds named with `--kind <id>`, and with none named it
@@ -1678,7 +1682,7 @@ anything inside a git worktree, and anything the scan of the same run did not fi
 The smart part runs from `doctor`: when the last measure is 7 days old or missing, doctor and its
 session-start hook start `clean --measure` detached (measuring takes about half a minute on a
 machine with these caches, more than the hook's 10 seconds) and return. The measure writes
-`~/.js-harness/clean.json` and deletes nothing. Once its total reaches 2 GB, the `clean` row of
+`~/.js-harness/clean.json` where `~/.js-harness` exists, and deletes nothing. Once its total reaches 2 GB, the `clean` row of
 doctor is a gap that recommends `js-harness clean`, and the hook's notice names the size, once per
 measure. `JS_HARNESS_CLEAN_MEASURE=off` turns the background measure off.
 

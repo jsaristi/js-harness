@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONTRACT_TEMPLATE, commandsIn, isContract, parseContract, validateContract, doneWhen, tasksOf, taskModes, modeLine } from './contract.mjs';
+import { taskId } from './sessions.mjs';
 
 /** A complete contract; each test breaks one thing in it. */
 const GOOD = [
@@ -291,11 +292,9 @@ test('a task runs over its wrapped lines and stops at the first line that leaves
 });
 
 test('the task ID is read as the session board reads it', () => {
-  // The board's `taskId` (bin/lib/sessions.mjs) is not exported; its pattern is copied here and held alike.
-  const board = /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/;
   for (const text of ['T1 x', 'T16b: y', 'JH13 z', 'T1', 'Tx no', '12 no', 'T1· no']) {
     const step = `- [ ] ${text}`;
-    assert.equal(tasksOf(step)[0]?.id ?? null, board.exec(text)?.[1] ?? null, text);
+    assert.equal(tasksOf(step)[0]?.id ?? null, taskId(text), text);
   }
 });
 

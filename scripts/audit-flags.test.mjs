@@ -452,14 +452,16 @@ test('the flags written in an alternatives group of the usage line are subcomman
   assert.deepEqual(subcommandFlags('Usage: js-harness guard --hook\n'), []);
 });
 
-test('the backup probes stop before any action in an empty home: run finds no config, and init names its refusal before a repository is read', () => {
+// Since backup refuses an argument it does not know (launch audit C-backup-12), each probe stops at its parse: the
+// probe's extra words are refused before any config or repository is read.
+test('the backup probes stop before any action in an empty home: each subcommand refuses the probe\'s extra words at its parse', () => {
   const dispatcher = path.join(REPO_ROOT, 'bin', 'js-harness.mjs');
   const run = isolated(dispatcher, ['backup', 'run', '--allow-shrink', 'x', SENTINEL]);
-  assert.equal(run.status, 1, run.stderr);
-  assert.match(run.stderr, /not initialised/);
+  assert.equal(run.status, 2, run.stderr);
+  assert.match(run.stderr, /^js-harness backup run: unknown argument: x$|^backup run: unknown argument: x$/m);
   const init = isolated(dispatcher, ['backup', 'init', '--repo', 'x', SENTINEL]);
   assert.equal(init.status, 2, init.stderr);
-  assert.match(init.stderr, /--repo <owner\/name> is required/);
+  assert.match(init.stderr, new RegExp(`backup init: unknown argument: ${SENTINEL}`));
 });
 
 test('a refusal that prints a lone x unrelated to the probed flag is unprobed, and an x in its flag sentence is the value taken', () => {

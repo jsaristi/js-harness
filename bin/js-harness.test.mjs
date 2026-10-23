@@ -104,6 +104,17 @@ test('the merge-queue help says a candidate of documents alone runs no suite on 
   assert.match(run(['--help']).stdout, /merge-queue .*A candidate whose every changed path is a document main's harness\.json declares runs no suite on this machine, and CircleCI's run is its test\./);
 });
 
+test('the backup help says run exports the js-harness project unless the scope of its config is all (launch audit C-backup-3)', () => {
+  assert.match(run(['--help']).stdout, /^ {2}backup\s+.*backup run exports Engram \(the js-harness project unless the scope in its config is all\), copies/m);
+});
+
+test('the onboard help and onboard\'s comment name the same exit 1 causes, and a profile error is one of them (launch audit C-onboard-1)', () => {
+  const causes = 'a template\'s file exists or a link is in the way, the project has a plan of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs';
+  assert.match(run(['--help']).stdout, new RegExp(`^ {2}onboard\\s+.*Exit 0, 1 when check finds something, ${causes}; 2 for a usage error\\.$`, 'm'));
+  const onboardSource = fs.readFileSync(fileURLToPath(new URL('./onboard.mjs', import.meta.url)), 'utf8').replace(/\r?\n \* /g, ' ');
+  assert.ok(onboardSource.includes(`1 when the check finds something, ${causes}, or 2 for an argument it does not take or a kind or an area that is not one.`));
+});
+
 test('unknown command exits 2', () => {
   const result = run(['bogus']);
   assert.equal(result.status, 2);

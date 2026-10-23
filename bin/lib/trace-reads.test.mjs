@@ -120,6 +120,29 @@ test('each seam is seen: fs.promises, a dynamic import, a stat through fs/promis
   }
 });
 
+test('a file read through fs.openAsBlob is a read of the trace, and its blob still holds the content (C-shared-11)', () => {
+  const { root, traces, done } = project({
+    'package.json': '{"type":"module"}',
+    'test/blob.test.mjs': [
+      "import { test } from 'node:test';",
+      "import fs from 'node:fs';",
+      "test('blob', async () => {",
+      "  const blob = await fs.openAsBlob('fixtures/blob.txt');",
+      "  if ((await blob.text()) !== 'blob') throw new Error('the blob holds the file');",
+      "});",
+    ].join('\n'),
+    'fixtures/blob.txt': 'blob',
+  });
+  try {
+    const result = runTests(root, traces, ['test/blob.test.mjs']);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const { reads } = readTrace(traces, 'test/blob.test.mjs');
+    assert.equal(reads['fixtures/blob.txt'], hashOf(path.join(root, 'fixtures/blob.txt')), 'fs.openAsBlob');
+  } finally {
+    done();
+  }
+});
+
 // Reads no trace can follow make a test untraced, so it always runs (Codex, 2026-10-14, four P2): a home file
 // named by a URL, a recursive listing (its listing hash holds the first level only), an import that did not
 // resolve (a module that appears later changes the test), and a shell string that does more than start node.

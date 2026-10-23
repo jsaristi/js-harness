@@ -300,8 +300,9 @@ const WORDING = /\b(?:takes|requires|needs|is required)\b/;
 const REFUSED = /unknown argument:? ([^\s;(]+)|(\S+) (?:is not an option of|is no argument of)/;
 // The probe's value `x` as a word of its own: not a path segment (`/x/`) and not a placeholder (`<x>`).
 const VALUE_X = /(?<![\w\-/\\<])x(?![\w\-/\\>])/;
-// backup refuses no argument it does not know (the header says so), so its own message that prints the value the probe gave
-// (`backup restore: git clone x failed`) is the only evidence that the value was taken.
+// backup's own message that prints the value the probe gave (`backup restore: git clone x failed`) is evidence that the value
+// was taken. It refused no argument it did not know before launch audit C-backup-12; it does now, and that refusal names
+// the leftover word the probe gave, so a flag it parsed is still read as taken.
 const VALUE_ONLY = new Set(['backup']);
 
 /** Whether a refusal line holds the probe's value `x`: in a sentence that names the probed flag (`--day is not a day: x`),

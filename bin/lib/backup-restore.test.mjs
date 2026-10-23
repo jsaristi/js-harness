@@ -96,7 +96,7 @@ test('restore refuses when it cannot read how much the Engram holds, unless --me
   const engram = fakeEngram();
   const run = (cmd, args, options) => (args[0] === 'stats' ? { status: 1, stdout: '', stderr: 'database is locked' } : engram.run(cmd, args, options));
 
-  assert.throws(() => restoreBackup({ from, home, run, env: {}, stdout: sink() }), /could not read how many observations.*database is locked/);
+  assert.throws(() => restoreBackup({ from, home, run, env: {}, stdout: sink() }), /could not read how many observations.*database is locked.*--merge adds only what Engram lacks/);
   assert.equal(engram.calls.some((c) => c.args[0] === 'import'), false, 'nothing is imported when the occupancy is unknown');
   restoreBackup({ from, home, merge: true, run, env: {}, stdout: sink() });
   assert.ok(engram.calls.some((c) => c.args[0] === 'import'), '--merge does not need the count');
@@ -209,7 +209,7 @@ test('restore refuses a home whose Engram already holds observations, unless --m
   fs.mkdirSync(path.join(home, '.engram'), { recursive: true });
   fs.writeFileSync(path.join(home, '.engram', 'db.json'), JSON.stringify({ sessions: [], observations: [{ id: 'x' }, { id: 'y' }], prompts: [], relations: [] }));
 
-  assert.throws(() => restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() }), /already holds 2 observations.*--merge/);
+  assert.throws(() => restoreBackup({ from, home, run: engram.run, env: {}, stdout: sink() }), /already holds 2 observations.*--merge adds only what Engram lacks/);
   restoreBackup({ from, home, merge: true, run: engram.run, env: {}, stdout: sink() });
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.engram', 'db.json'), 'utf8')).observations.length, 5);
   restoreBackup({ from, home, merge: true, run: engram.run, env: {}, stdout: sink() });
