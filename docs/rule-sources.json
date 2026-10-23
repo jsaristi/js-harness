@@ -3,6 +3,99 @@
     "kind": "design",
     "path": "docs/ROADMAP.md"
   },
+  "announce-finished": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "avisame cuando haya terminado todo ya que en la aplicacion de teléfono de Claude no puedo ver los procesos que se estan ejecutando por debajo",
+        "date": "2026-09-28",
+        "session": "c7e6d7d5-78c6-4c97-aa4b-04cd19bcabc9",
+        "line": 1314
+      },
+      {
+        "quote": "siempre quiero que me avises cuando se haya terminado una sesion para yo saber a donde tengo que retornar",
+        "date": "2026-10-07",
+        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
+        "line": 1070
+      },
+      {
+        "quote": "siempre que este muy pendiente del % de contexto",
+        "date": "2026-10-07",
+        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
+        "line": 1070
+      },
+      {
+        "quote": "no quiero que el modelo corte siempre a los 70% sino que termine y termine bien ya si roza el limite ahi si lo paramos y compactamos",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 700
+      },
+      {
+        "quote": "al 85% pausamos no detenemos y miramos si falta poco para poder terminar bien o sino para compactar y continuar post-compactacion",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 757
+      },
+      {
+        "quote": "y no queda con unas reglas viejas y otras nuevas, eso debe quedar super prohibido por que es la peor practica que podemos hacer",
+        "date": "2026-10-11",
+        "session": "7d2ae675-4bf2-4657-aff5-cde2477a4bee",
+        "line": 1745
+      },
+      {
+        "quote": "tengamos alguna mecanismo que cuando lo haga te informe para que no nos pase esto de que crees algo que la sesion no esta haciendo",
+        "date": "2026-10-12",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 2008
+      }
+    ],
+    "reading": "He cannot see background work from the phone, so a stretch or session that ends says so and which session to return to. Each session watches its context share and reports it; it does not cut early at a fixed share but finishes well, pausing near the limit (rule:context-pause) and resuming after the compaction, which it tells the lead in one line (bin/resume.mjs). He never compacts by hand (odd/tasks/no-manual-compact.md). A rule has one home: text it superseded is removed, never left beside the new one (bin/lib/protocols-skill.mjs, \"One home.\").",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
+  "ask-before-away": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "siempre que te avise que me vaya a ausentar pideme lo que necesitas o lo que crees que vas a necesitar para que puedas trabajar por una horas sin problema y asi avancemos, la idea de esto es añadirlo al harness para que se vuelva aun mas inteligente",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 576
+      },
+      {
+        "quote": "si te he dicho que te voy a dejar solo o me voy a ausentar, no repitas y repitas los mismos comando y prompts hasta que yo diga que regrese o veas que te he hablado para que no desperdiciemos tokens necesarios",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 3332
+      }
+    ],
+    "reading": "When he says he is leaving, the lead asks in that reply for everything it needs or expects to need to work for hours without him; while he is away it repeats no command, prompt or block, holding each once until he says he is back or is seen to have written, so no tokens are spent on repeats.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
+  "background-task-declared": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "colocaste un timer por si el gate linux no funcionaba pero nunca explicaste para que era osea en la ejecucion ni cuando se debia terminar y ahora que sabemos que el gate linux funciona, no se desactivaste ni desmontaste el timer",
+        "date": "2026-10-14",
+        "session": "ffe99ebf-72fb-48da-a79b-e7db21a20b3f",
+        "line": 4215
+      }
+    ],
+    "reading": "A timer, wait or watch a session starts in the background says what it is for and what ends it, and when its condition resolves another way it is stopped in that same step, every process it started with it.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "ci-gate-bound": {
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"
@@ -122,6 +215,65 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "lead-charter": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "listo te apruebo todo",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 2200
+      },
+      {
+        "quote": "te apruebo todo lo que me pides",
+        "date": "2026-10-11",
+        "session": "7d2ae675-4bf2-4657-aff5-cde2477a4bee",
+        "line": 1360
+      },
+      {
+        "quote": "todas las sesiones deben ser concientes del contexto para que despues no vaya a cortar el contexto a la mitad y dejar todo corto o mal hecho",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 2200
+      },
+      {
+        "quote": "nunca parar por parar compactar",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 2200
+      },
+      {
+        "quote": "necesito que tu orquestador y las sesiones sean mas autonomas y trabajen mas de seguido sin interrupciones, por favor implementalo y dale la informacion para que no paren tanto y avancemos mas",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 1112
+      },
+      {
+        "quote": "fusioná vos el código y dá vos el visto bueno de las etapas",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 1403
+      },
+      {
+        "quote": "Pero necesito que solo puedas abrir sesiones",
+        "date": "2026-10-15",
+        "session": "987548fe-5062-4dd4-9b92-7a246494198f",
+        "line": 687
+      },
+      {
+        "quote": "Tu puedes abrir cualquier sesion y hacer lo que necesites con ella para que me pides permiso?",
+        "date": "2026-10-15",
+        "session": "220663e4-8fae-47cd-92f0-0f2014761721",
+        "line": 3081
+      }
+    ],
+    "reading": "He approved the charter the lead proposed (\"listo te apruebo todo\", \"te apruebo todo lo que me pides\"): the lead does alone, and tells him after, which feature starts next within the order, up to three work sessions, plan steps and notices, pushes and pull requests once the gate and both reviews are green, and merges by the rules, code included (\"fusioná vos el código\"); it opens, wakes and acts on sessions without asking him. What stays his is asked one at a time and never while work runs: spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or its order, a new protocol (odd/tasks/session-channel.md, \"The charter: more autonomy\"). His condition on it: every session watches its context and cuts only at the end of a task, never just to cut, and work goes on without stopping for what is not his (bin/lib/protocols-skill.mjs, \"A cut comes at the end of a task\", \"Decide everything else, say what it costs, and go on.\"). The Codex cost parts are rule:codex-review-rate and its neighbours.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "memory-feedback-home": {
     "kind": "design",
     "path": "odd/tasks/memory-feedback-home.md"
@@ -133,6 +285,29 @@
   "memory-pass-days": {
     "kind": "design",
     "path": "odd/tasks/memory-hygiene.md"
+  },
+  "mistake-report": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "tiendes a decirme que fue el error, pero necesito que me digas tambien como lo vas a solucionar actualmente y como vamos a hacer para que eso no vuelva a pasar y como se va a integrar",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 669
+      },
+      {
+        "quote": "y ademas de debe a futuro comprobar que esto no vuelva a fallar",
+        "date": "2026-10-10",
+        "session": "4f1042aa-ecf3-41d0-844c-5d763a4aaa6b",
+        "line": 1283
+      }
+    ],
+    "reading": "A report of a mistake says what it was, how it is being fixed now, what stops it from happening again, how that enters the harness, and how it will be proven later that it has not come back. The protocols skill's section on reporting a mistake carries it.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
   },
   "person-present": {
     "kind": "design",
@@ -176,6 +351,94 @@
     "checked": {
       "date": "2026-10-14",
       "by": "session"
+    }
+  },
+  "recap-effort-line": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "siempre dime en que modo de esfuerzo debemos trabajar dependiendo de lo que hagamos",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 2037
+      },
+      {
+        "quote": "me gusta mucho que apliquemos lo de los ahorros",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 1798
+      }
+    ],
+    "reading": "The lead always says which effort mode the work calls for, by its kind; its recap carries one line a session with its state and that mode. The effort values are rule:session-effort, rule:subagent-effort and rule:subagent-writer-model. The savings he approved: a writer never waits for the gate and gets a narrow piece (odd/tasks/gate-turn.md).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
+  "reply-four-states": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Sí, usá ese formato y cementalo en el harness",
+        "date": "2026-10-07",
+        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
+        "line": 1418
+      },
+      {
+        "quote": "siempre estandariza la forma de entegarme el siguiente prompt para que siempre salga de la forma que se permite copiar facilmente",
+        "date": "2026-10-03",
+        "session": "4ed4b90f-9757-44ee-8777-f6f3c61f781b",
+        "line": 468
+      },
+      {
+        "quote": "estas metiendo el dale: en el promtp",
+        "date": "2026-10-03",
+        "session": "4ed4b90f-9757-44ee-8777-f6f3c61f781b",
+        "line": 670
+      },
+      {
+        "quote": "si el siguiente promptes si, por favor sigue trabajando osea no pares, solo para si es una decision que debo tomar",
+        "date": "2026-10-07",
+        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
+        "line": 2830
+      },
+      {
+        "quote": "quiero que se me pregunte lo minimo posible osea no quiero reponder mas \"Si\" si la sesion sabe exactamente lo que se tiene que hacer",
+        "date": "2026-10-10",
+        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
+        "line": 475
+      },
+      {
+        "quote": "me dices que diga si pero no me explicas antes exactamente a lo que esoty diciendo si",
+        "date": "2026-10-08",
+        "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
+        "line": 492
+      },
+      {
+        "quote": "quiero que la proxima vez seas mas claro detallado pero conciso para poder tomar rapido una solucion",
+        "date": "2026-10-08",
+        "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
+        "line": 525
+      },
+      {
+        "quote": "el que es todavia me queda muy confuso puede por favor mejorarlo por que no entiendo",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 3072
+      },
+      {
+        "quote": "Pero esta bien las 33 preguntas, pero me gusta mas que sea hablado y como guiado",
+        "date": "2026-10-20",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 9112
+      }
+    ],
+    "reading": "He approved the closing format and asked it cemented: a reply ends in one of four states (working, decision, cut, finished); text he copies sits in one code block holding only his answer, never an instruction to him; a step whose only answer is yes is not asked but done, its cost said; a question is one decision, never while work runs, explained first in everyday words (what a yes covers, what it does not authorize, the other option) so he can decide quickly, talked through and guided rather than a list. Where questions reach him is rule:questions-one-place; what a question opens with is rule:question-context.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
     }
   },
   "report-table": {
@@ -297,6 +560,53 @@
       "by": "session"
     }
   },
+  "rules-live-in-the-harness": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "todo lo que estamos implementando es para el harnes y estamos haciendo doogfooding",
+        "date": "2026-10-07",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 7178
+      },
+      {
+        "quote": "todo lo que queda en memoria se olvida, siempre pero SIEMPRe y ten en cuenta esta directiva, TODO debe quedar guardado y cementado en el harness osea en la documentacion pero tambien en los archivos donde debe ir para que el harness funcione bien aqui y en cualquier otra parte que se instale",
+        "date": "2026-10-08",
+        "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
+        "line": 555
+      },
+      {
+        "quote": "Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
+        "date": "2026-10-09",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 11284
+      },
+      {
+        "quote": "la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones",
+        "date": "2026-10-09",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 11284
+      },
+      {
+        "quote": "Me gusta lo que estas haciendo de medir todo, sobre todo ahora, ver y analizar problemas o cosas a mejorar con todo hasta en esta misma sesion y las otras sesiones y la comunicaciones todo para que mejoremos el harness",
+        "date": "2026-10-10",
+        "session": "4a8db1c5-ba2e-4c72-86b0-1a75ff29bee5",
+        "line": 1315
+      },
+      {
+        "quote": "este harnes tiene prohibido que utilicemos Claude.md solo Agents.md",
+        "date": "2026-10-15",
+        "session": "987548fe-5062-4dd4-9b92-7a246494198f",
+        "line": 1270
+      }
+    ],
+    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness; and the harness never uses CLAUDE.md, only AGENTS.md (odd/tasks/memory-hygiene.md). The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "sensor-silence": {
     "kind": "design",
     "path": "odd/tasks/first-version.md"
@@ -322,6 +632,35 @@
       "by": "session"
     }
   },
+  "session-housekeeping": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Siempre recuerdame cual sesion archivar o cual esta parada",
+        "date": "2026-10-11",
+        "session": "130317af-a818-419c-a3de-3a21335db0a8",
+        "line": 3332
+      },
+      {
+        "quote": "Quiero que cuando necesites archivar una sesion la archives incluso cuando tu hagas tu reemplazo creando una nueva sesion, archives las antiguas y las sesiones que ya acabaron su trabajo",
+        "date": "2026-10-15",
+        "session": "987548fe-5062-4dd4-9b92-7a246494198f",
+        "line": 455
+      },
+      {
+        "quote": "me gustaria que hicieramos al menos una recopilacion para que cuando se haga por lo menos las sesiones que hay expliquen o hagan un resumen",
+        "date": "2026-10-13",
+        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
+        "line": 14037
+      }
+    ],
+    "reading": "Every recap of the lead names, by title, the sessions to archive and the stopped ones with what each waits for; the lead archives the sessions that finished their work, and its own predecessor when it replaces itself, without asking; a session that finishes says so first and leaves a summary the lead reads before archiving it. What waits for him in a session is said only after reading that session at that moment (rule:session-stall).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
+  },
   "session-model": {
     "kind": "words",
     "quotes": [
@@ -337,6 +676,71 @@
     "checked": {
       "date": "2026-10-12",
       "by": "session"
+    }
+  },
+  "session-prompts": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Respecto al prompt que me envio la sesion remote, como hacemos para sincronizar mejor esto?",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1835
+      },
+      {
+        "quote": "Sí, dejá escrita en la memoria la regla de sincronización",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1872
+      },
+      {
+        "quote": "como hacemos para que la proxima vez el te pueda enviar el mensaje directamente, hay forma que tu te puedas comunicar directamente las sesiones contigo y tu con las sesiones en tiempo real?",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 569
+      },
+      {
+        "quote": "Listo añadamos esta funcionalidad al harnes para que yo no tenga que estar enviando de aqui para alla prompts",
+        "date": "2026-10-09",
+        "session": "1cca9aae-c791-46e2-8b21-4f51f4019602",
+        "line": 637
+      },
+      {
+        "quote": "ya te habia dicho que habia autonomia como hacemos para que esto no pase",
+        "date": "2026-10-10",
+        "session": "1d16beeb-2d72-477a-a009-e1945f5e6d39",
+        "line": 449
+      },
+      {
+        "quote": "quiero que siempre lo hagas cuando estemos utilizando 2 sesiones o varias y cuando tengamos unas pausadas osea que cuando se remifique por alguna razon la principal se quede orquestando las otras para seguir en orden y no se vuelva un desorden o nos perdamos del camino",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1395
+      },
+      {
+        "quote": "pero quiero que lo añadamos al harness",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 2439
+      },
+      {
+        "quote": "el ya me envio el siguiente prompt pero esta ejecutando 2 terminales, por que cuando revisese tambien mira eso por que creo que das por hecho que ya termino",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 1964
+      },
+      {
+        "quote": "pero la sesion me da una prompt para seguir y tu me das otros, osea la idea de orquestar es ver por donde van pero cada sesion tiene independencia por que o sino tuvieras que tener todo el contexto que le estamos haciendo o el prompt de inicio de sesion no esta bien con su contexto",
+        "date": "2026-10-06",
+        "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
+        "line": 2220
+      }
+    ],
+    "reading": "He asked that sessions stop needing him to carry prompts between them: they talk through the channel (js-harness notify), and a notice is a session's claim, never his word (odd/tasks/session-channel.md). Each session gives prompts only for itself and names the session a prompt is for in its first line; the lead never writes another session's prompts, since each owns its work and context; when work branches, the main session stays orchestrating the others in order. A session is not finished while background work it started still runs, even with its next prompt written. An opening is one short line of his own, and pasted text is not his word (docs/SPEC.md).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
     }
   },
   "session-stall": {
@@ -387,6 +791,23 @@
     "checked": {
       "date": "2026-10-15",
       "by": "session"
+    }
+  },
+  "status-report": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "debe haber un protocolo asi que cuando te diga como vamos o que tanto hemos hecho etc tu contestes la informacion desde la ultima vez bien detallado no solo como me respondiste de que vamos bien, dime que me propones",
+        "date": "2026-10-20",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 8945
+      }
+    ],
+    "reading": "When he asks how it goes or how much is done, the lead answers with everything since the last report, in detail: what landed in plain words, each session's state, his decisions, the map per phase with what is left, what waits on him and what it proposes; never only that all goes well. The orchestrator skill's \"The status report\" carries it, with its tables (rule:report-table).",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
     }
   },
   "subagent-effort": {
@@ -469,6 +890,29 @@
   "wait-for": {
     "kind": "design",
     "path": "odd/tasks/session-channel.md"
+  },
+  "wording-is-the-need": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "No me tomes literal lo que digo, por favor quiero que me guies muy bien en como deberia ser osea cual es la mejor forma?",
+        "date": "2026-10-08",
+        "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
+        "line": 937
+      },
+      {
+        "quote": "recuerda no seguirme al pie de la letra lo que digo osea, siempre analiza lo que digo, entiendelo y hazme una recomendacion de como seria mejor, esto lo tenemos que meter al harnes para que todo lo que proponga lo discutamos con criterio.",
+        "date": "2026-10-10",
+        "session": "4a8db1c5-ba2e-4c72-86b0-1a75ff29bee5",
+        "line": 599
+      }
+    ],
+    "reading": "His words are not to be taken literally: the agent analyses what he says, understands the need, and recommends the best way to meet it, saying what it would do differently from his words and why, so every proposal is discussed with judgment. The template init writes (bin/lib/project.mjs) carries it to every project.",
+    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "checked": {
+      "date": "2026-10-22",
+      "by": "command"
+    }
   },
   "work-sessions": {
     "kind": "words",

@@ -17,6 +17,38 @@ export const RULES = [
     ]
   },
   {
+    "id": "announce-finished",
+    "subject": "a session says when it finished and where to return, watches its context, and a rule has one home",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "when a stretch or a session ends, that it ended and which session to return to.",
+      "The user never compacts a session by hand, present or away"
+    ]
+  },
+  {
+    "id": "ask-before-away",
+    "subject": "before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Before the user leaves, ask in that reply for everything the stretch will need",
+      "While the user is away, a block that waits for them is given once and held until they say they are back"
+    ]
+  },
+  {
+    "id": "background-task-declared",
+    "subject": "a background task says what it is for and what ends it, and is stopped when its condition resolves",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it"
+    ]
+  },
+  {
     "id": "ci-gate-bound",
     "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
     "owner": "project",
@@ -162,6 +194,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "lead-charter",
+    "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "merge pull requests by the rules below",
+      "Within it you open the next feature's work session"
+    ]
+  },
+  {
     "id": "memory-feedback-home",
     "subject": "where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise",
     "owner": "project",
@@ -184,6 +227,17 @@ export const RULES = [
     "since": "2026-10-17",
     "value": 7,
     "unit": "days"
+  },
+  {
+    "id": "mistake-report",
+    "subject": "a mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "What stops it from happening again: a check before a line, a line before a protocol.",
+      "How it will be proven later that it has not come back"
+    ]
   },
   {
     "id": "person-present",
@@ -216,6 +270,28 @@ export const RULES = [
     "phrases": [
       "Every question of the project reaches the user in one place",
       "Ask the user nothing while an orchestrator holds its role"
+    ]
+  },
+  {
+    "id": "recap-effort-line",
+    "subject": "the lead's recap names each session's effort mode for its kind of work, and why",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "one line a session: its state, the effort mode its kind of work calls for and why;"
+    ]
+  },
+  {
+    "id": "reply-four-states",
+    "subject": "a reply ends in one of four states, and a question is his decision alone, explained before it is asked",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "A reply ends in one of four states.",
+      "One decision a question, one question at a time, never while work runs.",
+      "Before the question, say what a yes covers in everyday words"
     ]
   },
   {
@@ -322,6 +398,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "rules-live-in-the-harness",
+    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "A rule is recorded only where something acts on it",
+      "A memory note is never its home."
+    ]
+  },
+  {
     "id": "sensor-silence",
     "subject": "how long one sensor of the gate may write nothing before it is stopped and the commit refused",
     "owner": "project",
@@ -361,6 +448,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "session-housekeeping",
+    "subject": "each recap names the sessions to archive and the stopped ones, and the lead archives finished sessions without asking",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "by title, the sessions to archive and the ones stopped, with what each waits for",
+      "then archive the session with the host's tool to archive sessions, without asking"
+    ]
+  },
+  {
     "id": "session-model",
     "subject": "the model a session runs on",
     "owner": "sebastian",
@@ -369,6 +467,17 @@ export const RULES = [
     "value": "claude-opus-5-5",
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
+    ]
+  },
+  {
+    "id": "session-prompts",
+    "subject": "sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Give prompts only for yourself. A prompt meant for another session names that session in its first line.",
+      "You never write another session's prompts: each session owns its work and holds its context."
     ]
   },
   {
@@ -396,6 +505,17 @@ export const RULES = [
     "since": "2026-10-15",
     "value": "start_session",
     "failure": "session-opened-unseen"
+  },
+  {
+    "id": "status-report",
+    "subject": "asked how the work goes, the lead reports everything since the last report, in detail",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "When the user asks how the work is going, how much is done, or what you have done",
+      "the answer is a report of everything since the last report, in detail: never a line that all goes well."
+    ]
   },
   {
     "id": "subagent-effort",
@@ -489,6 +609,17 @@ export const RULES = [
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bwait\\b.{0,50}(?<![-\\w])(?:for|up to|at most|gives up after)\\s+{amount}",
       "^(?!.*\\bruleValue\\()\\s*wait\\s.*--for minutes\\W{0,3}{amount}"
+    ]
+  },
+  {
+    "id": "wording-is-the-need",
+    "subject": "his wording is the need, not the specification: the agent recommends what is best and says where it differs",
+    "owner": "sebastian",
+    "since": "2026-10-22",
+    "path": "bin/lib/project.mjs",
+    "phrases": [
+      "The owner's wording is the need, not the specification",
+      "what would be done differently from their words and why"
     ]
   },
   {

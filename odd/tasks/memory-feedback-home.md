@@ -51,9 +51,56 @@ Deleting any memory note: one list, sent through the lead.
 
 ## Tasks
 - [x] T1 (kind: build) S2: the guard, test first; the rule memory-feedback-home declared with `js-harness rules change` (73f61b9f, fix 3a5bd482)
-- [ ] T2 (kind: build) S3: the move pass over the feedback notes
-- [ ] T3 (kind: docs) S4: help text, README/GUIDE, roadmap
-- [ ] T4 (kind: verify) S4: gentle-ai review and Codex review of the slice
+- [x] T2 (kind: build) S3: the move pass over the feedback notes (259dec8b..b0aa1e41, one commit a rule; memory pass 20261022T233738619Z)
+- [x] T3 (kind: docs) S4: help text, README/GUIDE, roadmap (help and README with T1; roadmap F4 item ticked with T2)
+- [x] T4 (kind: verify) S4: gentle-ai review and Codex review of the slice (T1: L5, L6; T2: L12)
+
+## Moved out of memory
+T2 shrank each feedback note of the memory folder that holds a rule of his to a pointer: the rules declared by this
+pass (rule:lead-charter, rule:status-report, rule:session-prompts, rule:wording-is-the-need, rule:mistake-report,
+rule:background-task-declared, rule:session-housekeeping, rule:rules-live-in-the-harness, rule:ask-before-away,
+rule:reply-four-states, rule:announce-finished, rule:recap-effort-line) carry his typed words in
+docs/rule-sources.json, and a reading that names every other home. What the notes held beyond that is kept here.
+
+Parts with no typed line of his on disk, so not declared as rules of his:
+- An AGENTS.md change that implements a correction he ordered, green on the gate, Codex and GitHub and within
+  rule:agents-budget, merges without asking him; he is told after with the link and his ordering line. His answer was
+  a tapped option, b878a67f line 4678 (2026-10-14).
+- The one free Codex rate-limit reset credit is used only when a needed review is blocked by the five-hour limit and
+  the normal reset is hours away, told to him after. A tapped option, not found on disk.
+- While he is away the lead and sessions are as autonomous as possible; a decision truly his reaches his phone through
+  the question tool (rule:questions-one-place). His words of 2026-10-17 are quoted below; no transcript holds them.
+- Review consent is pre-granted: AGENTS.md, "Working with Sebastián", carries it. His words are a typed answer inside a
+  question, b3813f13 line 1174 (2026-09-27), which a rule's source does not take.
+- "Take the recommended answer while he is away" cited transcript e152c9d8, which is no longer on disk, and it
+  contradicts AGENTS.md (product choices are his), so it is not carried.
+- No turn ends waiting while he is away: the agents' own rule after the stall of 2026-10-14, carried by the
+  orchestrator skill ("Before the user leaves, check and say").
+- The lead sets each session's effort with the app's tool: his words are queued messages, 130317af lines 3668 and
+  3680; odd/tasks/effort-by-task.md carries it.
+- A recap comes before a decision or a cut: bin/lib/protocols-skill.mjs carries it; his words of 2026-10-04 are not
+  on disk.
+- He does not want the current session erased, "si pero me borraria esta sesion? o la sobreescribiria? por que no
+  quiero eso" (4ed4b90f line 1163): a cut never offers /new or /clear. Since he never compacts by hand
+  (odd/tasks/no-manual-compact.md), no cut hands him a command at all. The note that held it,
+  phone-cannot-open-local-session, is retyped as a reference note of this machine's facts.
+
+Quotations of the notes, verbatim as the notes held them (some are the notes' retyping of his words, with accents
+he did not type; his exact words are in the rule sources):
+- ask-before-he-leaves: "necesitas que te abra otra sesion por si algo?"; "Siempre recuerda que cuando me vaya a dormir siempre pedirme lo que necesites ... como eso de la compactacion y de abrir mas sesiones ... necesito que seas mas inteligente y revises todo"; "While he is away no session (lead included) ends a turn waiting for a message, his /compact or an event; each arms a declared background wait for what it waits on, and the lead keeps a heartbeat"; "Once Sebastián says he is away, do not repeat the same decision block, prompt or command on each wake; say it once and hold it until he says he is back or writes again"; "Qué es / Dónde / Qué pasa"; "a block he has not used is repeated whole"; "te voy a dejar solo unas 10 horas asi que continua, no me preguntes nada continua tu solo todo"
+- background-tasks-declare-and-dismount: "On this Windows machine TaskStop of a background task kills the shell but leaves its node child (e.g. a queued ) running"
+- cross-session-prompts: "para la sesión de remote-live"; "I am waiting for Sebastián on X"; "When work branches into two or more sessions, or some are paused, the main session keeps orchestrating the others so the order is not lost"; "quiero que siempre lo hagas cuando estemos utilizando 2 sesiones o varias y cuando tengamos unas pausadas, o sea que cuando se ramifique por alguna razón la principal se quede orquestando las otras para seguir en orden y no se vuelva un desorden o nos perdamos del camino"; "la sesión me da un prompt para seguir y tú me das otros, o sea la idea de orquestar es ver por dónde van pero cada sesión tiene independencia, porque si no tuvieras que tener todo el contexto ... o el prompt de inicio de sesión no está bien con su contexto"
+- dogfooding-rules-go-in-the-harness: "todo lo que estamos implementando es para el harness y estamos haciendo dogfooding"; "todo lo que queda en memoria se olvida, siempre pero SIEMPRE ... TODO debe quedar guardado y cementado en el harness, o sea en la documentación pero también en los archivos donde debe ir para que el harness funcione bien aquí y en cualquier otra parte que se instale"; "Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como funcionaria con otros proyectos"; "no tengo problema en aumentar el plan y tener varios planes maximos"
+- effort-by-kind-of-work: "ya sabes siempre debes manejar el esfuerzo para que tengamos la mejor eficiencia en el USO"; "Every Agent tool call passes effort \"; "explicitly; the parameter exists since Claude Code 2.1.292 and works in the desktop app"; "mira que las sesiones anidadas se abrieron en esfuerzo Max ... tu siempre como orquestador debes controlar todo, fue por eso que gastamos tanto uso"
+- guide-not-literal: "AGENTS como orquestador de las reglas principales"; "con protocolos"; "what he asked"; "No me tomes literal lo que digo, por favor quiero que me guíes muy bien en cómo debería ser, o sea, ¿cuál es la mejor forma?"
+- mistake-report-four-parts: "y ademas se debe a futuro comprobar que esto no vuelva a fallar"; "we will watch for it"; "I will remember next time"; "fue mi error"
+- notify-when-done: "Contexto: 62%"; "no hya regla del 73% es regla del 85 pero si quieres coloca la compactacion en 96% que la regla sea la regla del 90% y cementemosla asi"; "from about 70% propose the cut"; "no quiero que el modelo corte siempre a los 70% sino que termine y termine bien ya si roza el limite ahi si lo paramos y compactamos ... siento que depronto el modelo se detiene antes y me gusta que haga bien el trabajo"
+- one-prompt-per-reply: "permiso para gastar 1 revisión de Codex"; "acá, en este chat"; "yo corro todo; vos no ejecutás nada"; "Sí: corré la revisión lean en Codex 0.160.1"; "¿cómo así me pedís correr algo en Codex?"; "Tu turno: enviá esto"; "si el siguiente prompt es sí, seguí trabajando, no pares, solo pará si es una decisión que debo tomar"; "slices apilados a main"; "cadena sobre la rama"; "me dices que diga si pero no me explicas antes exactamente a lo que estoy diciendo si"; "quiero que la próxima vez seas más claro, detallado pero conciso para poder tomar rápido una solución y recuerda que todas estas decisiones siempre tocan el harness"; "a commit is running"; "tu sí anterior sigue valiendo para X; lo que cambió es Y"; "exactly one prompt"; "Qué es / Dónde / Qué pasa"; "Before the next prompt, always give Sebastián a short plain recap — what was done, what comes next, and why"
+- orchestrator-autonomy-charter: "abrilas vos cuando yo te lo pida"; "abrí JH 7 en la barra"; "¿Dejás que el lead aterrice código en main con merge-queue --land sin preguntarte cada vez, una vez que gentle-ai, Codex y la suite den verde?"; "Sí, solo si traba"; "His standing rule (2026-10-14): an AGENTS.md change that implements a correction he ordered, green on gate, Codex and GitHub and inside the 1,500-token budget, merges without asking him; he is told after, with the link and his ordering line"; "Sí, para correcciones ordenadas (Recomendada)"; "sessions and the orchestrator work without stopping; stop for Sebastián only for the seven things that are his, and name which one before asking"; "Recuerda que de igual forma yo tengo las sesiones en el celular a pesar que no este en el pc, asi que si necesitas puede pedirmelo para que me llegue la notificacion al celular pero TIENES QUE SER LO MAS INDEPENDIENTE Y AUTONOMO POSIBLE POR QUE NUNCA VA A SER LO MISMO YO ESTA PRESENTE EN EL PC QUE CUANDO TE DEJO SOLO Y ESTOY EN LA CALLE CON EL CELULAR"
+- questions-with-buttons: "Para que no se me pase ninguna"; "So none is missed"; "had not just written"; "He has just written"; "todas las preguntas de todas las sesiones me las haces aca ... te pasa la pregunta aca y yo te la respondo aqui y le pasas la informacion. SIEMPRE debe ser asi"; "a question waits, write and I put it"; "a question to Sebastián is asked with AskUserQuestion (tappable options, recommended first, \"; "), one a call; the fenced block is the fallback; the full record is questions-with-buttons"
+- review-consent-pregranted: "siempre deja que Gentle AI revise"; "nothing persisted, never latched"
+- session-housekeeping-reminder: "y JH6 en que esfuerzo?"; "no entiendo que hay que hacer en el jh8"; "no running Claude Code process"; "The lead archives sessions itself, without asking: the old lead after a handover, and any session whose work is fully finished"
+- status-report-protocol: "debe haber un protocolo asi que cuando te diga como vamos ... tu contestes la informacion desde la ultima vez bien detallado"
 
 ## Log
 - L1 (2026-10-22) The brief from the lead (JH ORQ), verbatim in its task part: "In D:\js-harness, make it impossible
@@ -97,3 +144,21 @@ Deleting any memory note: one list, sent through the lead.
   landed, from L7's plan.
 - L9 (2026-10-22) gentle-ai: 73f61b9f..3a5bd482 (the fix of L5's findings) assessed medium by the commit's gate,
   review_due false (under_budget, 102 lines); no review due, none started. Codex covered it (L6).
+- L10 (2026-10-22) PR 505 landed T1. rule:question-context landed on main b7eb9349 (PR 507), so T2 starts on the
+  branch rule/memory-feedback-move from it. The four stopped explorers (groups 1, 3, 4, 5) were resumed; their maps
+  land in the session's scratchpad as map-g1.json, map-g3.json, map-g4.json, map-g5.json, beside group 2's
+  (also copied to the lead's side-session-notes folder). Next: L7's plan.
+- L11 (2026-10-22) T2 done on rule/memory-feedback-move. Twelve rules of his declared with `rules change`, one commit
+  each (259dec8b..b0aa1e41), each holding every typed quote the explorers verified for its note and a reading that
+  names the note's other homes; notes whose rule was already declared name it (double-review, questions-one-place,
+  question-context). What the notes held beyond the declared rules is in "Moved out of memory" above. Memory pass
+  20261022T233738619Z: 14 notes shrunk to pointers naming `rule:<id>`, review-consent-pregranted to a pointer quoting
+  AGENTS.md, and 7 notes holding no rule of his retyped (6 agents' lessons to project, the phone note to reference);
+  `memory verify` passed and `guard --memory` on the folder exits 0 from this branch ("every feedback note names its
+  home (16 feedback notes)"). Until this branch lands, main's copy declares none of the twelve ids, so `guard
+  --memory` run from main fails: it should land promptly. Deletion candidates for the lead: the six retyped lessons
+  (one-sample-is-not-a-diagnosis, conflict-merge-costs-review, no-unread-flag-on-a-writing-command,
+  proof-is-a-condition, hours-are-read-not-guessed, heredoc-eats-backslashes). Next: T4.
+- L12 (2026-10-22) gentle-ai: b7eb9349..0ef3e980 (the twelve rule commits 259dec8b..b0aa1e41 and the document commits)
+  assessed medium, review_due false (under_budget); no review due, none started. Codex on 1aafa5c..0ef3e98, 2 parts:
+  "the patch is correct" (0.93 and 0.87), no findings, 197,246 input tokens; recorded. T4 done.

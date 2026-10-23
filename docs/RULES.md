@@ -3,9 +3,24 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `22989f29e2b1`. In force: 45 (20 of Sebastián, 25 of the project). Retired: 0.
+Hash `31101d30f875`. In force: 57 (32 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
+
+### announce-finished
+A session says when it finished and where to return, watches its context, and a rule has one home: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
+
+### ask-before-away
+Before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing: "- Before the user leaves, ask in that reply for everything the stretch will need: the decisions in the queue, the sessions to open and their permission mode, what the machine and the plan's limits allow."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
+
+### background-task-declared
+A background task says what it is for and what ends it, and is stopped when its condition resolves: "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-14, checked by the command on 2026-10-22.
 
 ### codex-review-floor
 The most input tokens a Codex review may cost however small its commit: 300,000 input tokens a review.
@@ -36,6 +51,16 @@ A design before it is built, and what reaches the user to decide, passes two rea
 - Looked at again on 2026-11-16.
 - Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
 
+### lead-charter
+What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, checked by the command on 2026-10-22.
+
+### mistake-report
+A mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later: "What stops it from happening again: a check before a line, a line before a protocol."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-10, 2026-10-10, checked by the command on 2026-10-22.
+
 ### question-context
 Every question to the user opens with what it is for: the work it serves and what its answer changes: "- Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes."
 - Home: `bin/lib/manifest.mjs`.
@@ -45,6 +70,16 @@ Every question to the user opens with what it is for: the work it serves and wha
 Every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-14. Row: reports. Source: his words of 2026-10-13, 2026-10-13, checked by a session on 2026-10-14.
+
+### recap-effort-line
+The lead's recap names each session's effort mode for its kind of work, and why: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
+
+### reply-four-states
+A reply ends in one of four states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of four states."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-22.
 
 ### report-table
 When the user asks what was done, the lead's status report shows each section that holds items as a table: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
@@ -72,17 +107,32 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 - Read by: `bin/check.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
+### rules-live-in-the-harness
+A rule he gives is cemented in the harness where something acts on it, never only in memory: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`AGENTS.md\`, a protocol."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, checked by the command on 2026-10-22.
+
 ### session-effort
 The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
 
+### session-housekeeping
+Each recap names the sessions to archive and the stopped ones, and the lead archives finished sessions without asking: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-15, 2026-10-13, checked by the command on 2026-10-22.
+
 ### session-model
 The model a session runs on: claude-opus-5-5.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/rules.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+
+### session-prompts
+Sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order: "## A work session - Give prompts only for yourself. A prompt meant for another session names that session in its first line."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-06, 2026-10-06, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-06, 2026-10-06, 2026-10-06, 2026-10-06, checked by the command on 2026-10-22.
 
 ### session-title
 The shape of the title of a session started with start_session: <code> is the project's own identifier, declared in harness.json "code", and the number is the next free one of that code, as js-harness sessions --next-number prints it (a new lead takes ORQ for the number): <code> <n> · <purpose>, <code> from harness.json "code".
@@ -95,6 +145,11 @@ The one way a session opens another in this repository, so that it is a row in h
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-10-15, 2026-10-15, checked by a session on 2026-10-15.
+
+### status-report
+Asked how the work goes, the lead reports everything since the last report, in detail: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-22.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.
@@ -115,6 +170,11 @@ The model of a sub-agent that writes scoped code, in this repository: claude-hai
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
+
+### wording-is-the-need
+His wording is the need, not the specification: the agent recommends what is best and says where it differs: "The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded."
+- Home: `bin/lib/project.mjs`.
+- Since 2026-10-22. Row: reports. Source: his words of 2026-10-08, 2026-10-10, checked by the command on 2026-10-22.
 
 ### work-sessions
 The most work sessions open at one time: 3 sessions.
