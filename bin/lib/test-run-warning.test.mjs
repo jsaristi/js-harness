@@ -75,45 +75,34 @@ test('npm test reads the words npm hands its script, its aliases, and the packag
     assert.equal(testRunFiles('npm --loglevel silent test a.mjs', project), 1);
     assert.equal(testRunFiles('npm test --omit dev --node-options --max-old-space-size=99', project), 0);
     assert.equal(testRunFiles('npm test -- --tag x a.mjs', project), 2, 'after -- every word is the script\'s, and node reads --tag as its own');
-    // A workspace runs its own test script: read from its folder when the name is one, and no claim when it is not.
-    fs.mkdirSync(path.join(noTest, 'pkg'));
-    fs.writeFileSync(path.join(noTest, 'pkg', 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
-    assert.equal(testRunFiles('npm test -w pkg', noTest), 0);
-    assert.equal(testRunFiles('npm test --workspace=pkg a.mjs', noTest), 1);
-    assert.equal(testRunFiles('npm test -w named-elsewhere', project), null);
-    assert.equal(testRunFiles('npm test -w', noTest), null, 'a workspace flag with no name runs no script here');
+    // npm's workspaces (one named, every one, the root beside them) are not resolved here: such a run is taken for
+    // every test file, so no suite of a workspace passes beside a held gate (Codex, five rounds on the guard slice).
+    for (const command of ['npm test -w pkg', 'npm test --workspace=pkg a.mjs', 'npm test -w', 'npm test --workspaces', 'npm test -ws', 'npm test -w pkg --include-workspace-root']) {
+      assert.equal(testRunFiles(command, noTest), 0, command);
+    }
   } finally {
     for (const dir of [project, other, noTest]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-// Codex on the workspace fix: npm runs the script of every workspace named, and a file of a workspace's script is
-// that workspace's, so the gate log is asked of it from the folder the command runs in.
-test('npm test runs every workspace it names, and times a file of one from its own folder', () => {
-  const root = scratchProject({ lint: 'node lint.mjs' });
-  for (const [name, test] of [['lint', 'node lint.mjs'], ['suite', 'node --test'], ['slow', 'node --test slow.test.mjs'], ['one', 'node --test a.test.mjs']]) {
-    fs.mkdirSync(path.join(root, 'packages', name), { recursive: true });
-    fs.writeFileSync(path.join(root, 'packages', name, 'package.json'), JSON.stringify({ scripts: { test } }));
-  }
+// A file of a script `--prefix` names is that folder's, and the gate log is asked of it from the command's own folder.
+test('npm test times a file of its script from the folder the command runs in', () => {
+  const root = scratchProject({ test: 'node --test' });
+  fs.mkdirSync(path.join(root, 'slow'));
+  fs.writeFileSync(path.join(root, 'slow', 'package.json'), JSON.stringify({ scripts: { test: 'node --test slow.test.mjs' } }));
   try {
-    assert.equal(testRunFiles('npm test -w packages/suite -w packages/lint', root), 0);
-    assert.equal(testRunFiles('npm test -w packages/lint', root), null);
-    // A light run in one workspace hides no suite in another: the runs of every workspace are one run.
-    assert.equal(testRunFiles('npm test -w packages/one -w packages/suite', root), 0);
-    assert.equal(testRunFiles('npm test -w packages/one -w packages/slow', root), 2);
     const asked = [];
     const fileSeconds = (file) => {
       asked.push(file);
       return 600;
     };
-    const said = testRunWarning('npm test -w packages/slow', { env: {}, holder: held, fileSeconds, cwd: root });
-    assert.deepEqual(asked, ['packages/slow/slow.test.mjs']);
-    assert.match(said, /^node --test of packages\/slow\/slow\.test\.mjs, which the gate log timed at 600 s,/);
-    // With no workspace, a file is named from the folder as before.
-    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+    const said = testRunWarning('npm test --prefix slow', { env: {}, holder: held, fileSeconds, cwd: root });
+    assert.deepEqual(asked, ['slow/slow.test.mjs']);
+    assert.match(said, /^node --test of slow\/slow\.test\.mjs, which the gate log timed at 600 s,/);
     asked.length = 0;
     testRunWarning('npm test a.test.mjs', { env: {}, holder: held, fileSeconds, cwd: root });
     assert.deepEqual(asked, ['a.test.mjs']);
+    assert.equal(testRunWarning('npm test -w slow', { env: {}, holder: held, fileSeconds, cwd: root }), warned('every test file'));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -183,19 +183,21 @@ function programAt(words) {
 const NPM_TEST = new Set(['test', 'tst', 't']);
 const NPM_RUN = new Set(['run', 'run-script', 'rum', 'urn']);
 /** npm's options that take the next word as their value, which is npm's and never a word handed to the script. */
+const NPM_WORKSPACE = /^(-w|-ws|--workspace|--workspaces|--include-workspace-root)(=.*)?$/;
 const NPM_VALUED = new Set(['--loglevel', '--userconfig', '--globalconfig', '--cache', '--registry', '--script-shell', '--tag', '--include', '--omit', '--otp', '--node-options', '--before']);
 
 /** The commands `npm test` or `npm run test` runs, as the sensors resolve them (bin/check.mjs, `testsCommand`): the
  * `test` script of the package.json in `cwd`, or in the folder `--prefix` names, whose last command takes the
  * words npm hands it, its positional words and those after `--`, as its files; `null` for any other words, and `[]`
  * where the folder names no test script. npm's other options are its own and are read past, with the value of those
- * that take one (`NPM_VALUED`). Each workspace named (`-w`, `--workspace`) runs its own script, the one of the
- * folder it names; a name that is no folder of a package is not resolved here. Each run is `{ commands, dir }`, `dir`
- * the folder its script runs in. */
-function npmTestRuns(words, cwd) {
+ * that take one (`NPM_VALUED`). npm's workspaces (`-w`, `--workspace`, `--workspaces`, `-ws`,
+ * `--include-workspace-root`) run scripts of other folders, which are not resolved here: such a command is
+ * `{ every: true }`, a run of every test file, so none passes beside a held gate. Else the run is `{ commands, dir }`,
+ * `dir` the folder its script runs in. */
+function npmTestRun(words, cwd) {
   if (!NPM.test(words[0]?.text ?? '')) return null;
   let dir = cwd;
-  const workspaces = [];
+  let workspaces = false;
   const positional = [];
   let index = 1;
   for (; index < words.length && words[index].text !== '--'; index += 1) {
@@ -204,30 +206,25 @@ function npmTestRuns(words, cwd) {
       index += 1;
       dir = path.resolve(cwd, words[index]?.text ?? '');
     } else if (text.startsWith('--prefix=')) dir = path.resolve(cwd, text.slice('--prefix='.length));
-    else if (text === '-w' || text === '--workspace') {
-      index += 1;
-      workspaces.push(words[index]?.text ?? '');
-    } else if (text.startsWith('--workspace=')) workspaces.push(text.slice('--workspace='.length));
-    else if (NPM_VALUED.has(text)) index += 1;
+    else if (NPM_WORKSPACE.test(text)) {
+      workspaces = true;
+      if (text === '-w' || text === '--workspace') index += 1;
+    } else if (NPM_VALUED.has(text)) index += 1;
     else if (!text.startsWith('-')) positional.push(words[index]);
   }
   const verb = NPM_RUN.has(positional[0]?.text) ? 1 : 0;
   if (verb === 1 ? positional[1]?.text !== 'test' : !NPM_TEST.has(positional[0]?.text)) return null;
+  if (workspaces) return { every: true };
+  let script;
+  try {
+    script = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))?.scripts?.test;
+  } catch (err) {
+    script = undefined;
+  }
+  const commands = typeof script === 'string' ? commandsOf(script) : [];
   const handed = [...positional.slice(verb + 1), ...words.slice(index + 1)];
-  const folders = workspaces.length === 0
-    ? [dir]
-    : workspaces.filter((name) => name !== '').map((name) => path.resolve(dir, name)).filter((folder) => fs.existsSync(path.join(folder, 'package.json')));
-  return folders.map((folder) => {
-    let script;
-    try {
-      script = JSON.parse(fs.readFileSync(path.join(folder, 'package.json'), 'utf8'))?.scripts?.test;
-    } catch (err) {
-      script = undefined;
-    }
-    const commands = typeof script === 'string' ? commandsOf(script) : [];
-    if (handed.length > 0 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...handed];
-    return { commands, dir: folder };
-  });
+  if (handed.length > 0 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...handed];
+  return { commands, dir };
 }
 
 /** The command line a shell's `-c` runs, for words that start with a shell (`sh`, `bash`, `dash`, `zsh`), or `null`
@@ -264,20 +261,12 @@ function scan(words, depth = 0, cwd = process.cwd()) {
     const script = shellScript(rest);
     return script === null ? null : firstRun(commandsOf(script), depth + 1, cwd);
   }
-  const npm = npmTestRuns(rest, cwd);
+  const npm = npmTestRun(rest, cwd);
+  if (npm?.every) return { files: 0, names: [] };
   if (npm !== null) {
-    // npm runs the script of every workspace named, one after another: their runs are judged as one, every test file
-    // where one runs them all. A file of a script is its folder's: whole here, so the gate log is asked of it from the
-    // command's own folder (`fileKey`).
-    const runs = npm.map(({ commands, dir }) => {
-      const found = firstRun(commands, depth + 1, dir);
-      return found === null ? null : { ...found, names: found.names.map((name) => path.resolve(dir, name)) };
-    }).filter((run) => run !== null);
-    if (runs.length <= 1) return runs[0] ?? null;
-    return {
-      files: runs.some((run) => run.files === 0) ? 0 : runs.reduce((sum, run) => sum + run.files, 0),
-      names: runs.flatMap((run) => run.names),
-    };
+    const found = firstRun(npm.commands, depth + 1, npm.dir);
+    // A file of the script is its folder's: whole here, so the gate log is asked of it from the command's own (`fileKey`).
+    return found === null ? null : { ...found, names: found.names.map((name) => path.resolve(npm.dir, name)) };
   }
   return filesOf(rest);
 }
