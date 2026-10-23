@@ -15,6 +15,7 @@ import {
   commandsFromHelp,
   entryFiles,
   flagsOnLine,
+  isolated,
   markdownLines,
   parserFlags,
   probesOf,
@@ -357,4 +358,25 @@ test('--json prints one object with findings and allowed, each finding with kind
     for (const finding of json.findings) assert.deepEqual(Object.keys(finding), ['kind', 'location', 'detail']);
     assert.equal(typeof json.allowed, 'number');
   });
+});
+
+test('every home folder of the isolated probe exists, so a probe that makes a temp folder does not fail with ENOENT', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-flags-probe-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const probe = path.join(dir, 'probe.mjs');
+  fs.writeFileSync(probe, `import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const root = path.dirname(process.cwd());
+const homes = Object.entries(process.env).filter(([, value]) => value.startsWith(root + path.sep));
+const missing = homes.filter(([, value]) => !fs.statSync(value, { throwIfNoEntry: false })?.isDirectory()).map(([name]) => name);
+const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-from-'));
+fs.rmSync(folder, { recursive: true });
+console.log(JSON.stringify({ names: homes.map(([name]) => name), missing }));
+`);
+  const result = isolated(probe, []);
+  assert.equal(result.status, 0, result.stderr);
+  const { names, missing } = JSON.parse(result.stdout);
+  assert.ok(names.includes('HOME') && names.includes('TEMP') && names.includes('TMP'), result.stdout);
+  assert.deepEqual(missing, []);
 });

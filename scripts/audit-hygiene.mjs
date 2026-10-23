@@ -315,7 +315,7 @@ export function readAllowList(file, required) {
   } catch (error) {
     throw new Error(`allow list ${file} is not JSON: ${error.message}`);
   }
-  if (!Array.isArray(entries) || entries.some((entry) => typeof entry?.kind !== 'string' || typeof entry?.location !== 'string')) {
+  if (!Array.isArray(entries) || entries.some((entry) => ['kind', 'location', 'why'].some((key) => typeof entry?.[key] !== 'string'))) {
     throw new Error(`allow list ${file} must be an array of { kind, location, why }`);
   }
   return entries;

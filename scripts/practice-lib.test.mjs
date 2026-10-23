@@ -1333,3 +1333,15 @@ test('a status line for a path init did not record stays expected, and a manifes
   assert.deepEqual(uninstallExpected(before, 'not json'), [' D AGENTS.md', ' D harness.json', '?? docs/FAILURES.md']);
   assert.deepEqual(uninstallExpected(before, undefined), [' D AGENTS.md', ' D harness.json', '?? docs/FAILURES.md']);
 });
+
+// The step project-uninstall failed on HEAD because `init` created .claude/settings.local.json (recorded under `settings`,
+// not `files`), and uninstall removes it with its folder, so the status must not still expect `?? .claude/`.
+test('after uninstall, a settings file init created and its created folder are gone, and a settings file it did not create is still expected', () => {
+  const settings = (createdFile, createdDir) => ({
+    path: '.claude/settings.local.json', key: 'paste', pointer: ['paste'], value: true, createdFile, createdDir, createdContainers: 0,
+  });
+  const manifest = (...records) => JSON.stringify({ files: [], dirs: [], settings: records });
+  assert.deepEqual(uninstallExpected(['?? .claude/', '?? scratch.txt'], manifest(settings(true, true))), [' D AGENTS.md', ' D harness.json', '?? scratch.txt']);
+  assert.deepEqual(uninstallExpected(['?? .claude/settings.local.json', '?? scratch.txt'], manifest(settings(true, false))), [' D AGENTS.md', ' D harness.json', '?? scratch.txt']);
+  assert.deepEqual(uninstallExpected(['?? .claude/', '?? scratch.txt'], manifest(settings(false, false))), [' D AGENTS.md', ' D harness.json', '?? .claude/', '?? scratch.txt']);
+});

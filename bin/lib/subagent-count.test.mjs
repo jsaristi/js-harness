@@ -206,6 +206,17 @@ test('dayOf reads the local day at the given offset, so evening work stays on it
   assert.equal(dayOf('not a time', BOGOTA), null);
 });
 
+test('dayOf and launchesOf take the offset of each timestamp, given as a function, and still a number (Codex, 2026-10-15)', () => {
+  // UTC-5 until the clock change of 2026-03-08, UTC-4 after it. 04:30Z on the 16th is 23:30 of the 15th in winter.
+  const offsetAt = (timestamp) => (timestamp < '2026-03-08T07:00:00.000Z' ? -300 : -240);
+  assert.equal(dayOf('2026-01-16T04:30:00Z', offsetAt), '2026-01-15');
+  assert.equal(dayOf('2026-07-16T04:30:00Z', offsetAt), '2026-07-16');
+  assert.equal(dayOf('2026-01-16T04:30:00Z', BOGOTA), '2026-01-15');
+  const record = { session: 's', agentId: 'late', meta: {}, entries: [answer('m1', { at: '2026-01-16T04:30:00Z' })] };
+  const [launch] = launchesOf([record], { from: '2026-01-15', to: '2026-01-15', offsetMinutes: offsetAt });
+  assert.deepEqual([launch.agentId, launch.started, launch.usage.messages], ['late', true, 1]);
+});
+
 test('callsOf keeps the model and effort each Agent or Task call asked for, null when not passed', () => {
   const calls = callsOf([
     launch('t1', { description: 'Write x', model: 'haiku', effort: 'high' }),
