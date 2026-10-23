@@ -308,5 +308,15 @@
     "kind": "personal-path",
     "location": "C:\\\\Users\\\\him",
     "why": "a placeholder home of a test fixture or a document example (scripts/stack-scratch.test.mjs@bfea2f43:24)"
+  },
+  {
+    "kind": "secret",
+    "location": "token\":\"SENTINEL-DUMMY-LOGIN\"",
+    "why": "a sentinel value of a test fixture, not a credential (evals/codex-configs.test.mjs:50), found once JSON property names were read"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:/Users/Ana",
+    "why": "a placeholder home of a test fixture (scripts/audit-hygiene.test.mjs)"
   }
 ]

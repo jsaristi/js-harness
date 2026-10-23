@@ -3,5 +3,35 @@
     "kind": "not-accepted",
     "location": "init --transcripts-repo",
     "why": "backup's help names the flag in prose about init's choice, not as a flag of init"
+  },
+  {
+    "kind": "undocumented",
+    "location": "codex-review --session",
+    "why": "compatibility: still read so old command lines naming `--session lean` do not break, and it changes nothing (codex-review.mjs:271-280)"
+  },
+  {
+    "kind": "undocumented",
+    "location": "remote --root",
+    "why": "a flag of the internal `remote supervise` that remote spawns itself (remote.mjs:986, :1211), not one a person types"
+  },
+  {
+    "kind": "undocumented",
+    "location": "remote --log",
+    "why": "a flag of the internal `remote supervise` that remote spawns itself (remote.mjs:986, :1211), not one a person types"
+  },
+  {
+    "kind": "undocumented",
+    "location": "remote --claude",
+    "why": "a flag of the internal `remote supervise` that remote spawns itself (remote.mjs:986, :1211), not one a person types"
+  },
+  {
+    "kind": "undocumented",
+    "location": "remote --shell",
+    "why": "a flag of the internal `remote supervise` that remote spawns itself (remote.mjs:986, :1211), not one a person types"
+  },
+  {
+    "kind": "undocumented",
+    "location": "sessions --context-limit",
+    "why": "compatibility: a removed flag kept only to refuse with what replaced it (sessions.mjs:191-195)"
   }
 ]
