@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
-import { circleciState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, tellLeftOut } from './merge-queue.mjs';
+import { circleciState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
 import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
@@ -1442,18 +1442,26 @@ test('a bisected red keeps what the shortest red candidate said and failed, not 
 
 // T7 (odd/tasks/land-unattended.md, L17): a land run from a merge-queue that is not origin/main's would run code
 // main no longer has, as the lead's lands did from a stale checkout.
-function guardedRepo(mainText) {
+/** A queue repository whose origin/main holds the bin/ files `files` names, and a folder of its own that is the running copy's bin/:
+ * `{ root, origin, dir, self }`, with self the merge-queue.mjs in it. The copy is written by `writeCopy`. */
+function guardedBinRepo(files) {
   const made = makeQueueRepo();
   const { root } = made;
   git(root, 'checkout', '--quiet', '--detach', 'origin/main');
-  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'bin', 'merge-queue.mjs'), mainText, 'utf8');
+  writeCopy(path.join(root, 'bin'), files);
   git(root, 'add', '.');
-  git(root, 'commit', '--quiet', '-m', 'the queue on main');
+  git(root, 'commit', '--quiet', '-m', 'the queue and its modules on main');
   git(root, 'push', '--quiet', 'origin', 'HEAD:main');
-  const self = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-self-')), 'merge-queue.mjs');
-  return { ...made, self };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-self-'));
+  return { ...made, dir, self: path.join(dir, 'merge-queue.mjs') };
 }
+function writeCopy(dir, files) {
+  for (const [name, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+    fs.writeFileSync(path.join(dir, name), text, 'utf8');
+  }
+}
+const guardedRepo = (mainText) => guardedBinRepo({ 'merge-queue.mjs': mainText });
 
 test('--land stops before it builds anything when the merge-queue it runs from is not origin/main\'s (odd/tasks/land-unattended.md, T7)', async () => {
   const { root, origin, self } = guardedRepo('export const queue = 2;\n');
@@ -1463,7 +1471,7 @@ test('--land stops before it builds anything when the merge-queue it runs from i
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
-  assert.equal(out.at(-1), `merge-queue: ${self} is not origin/main's bin/merge-queue.mjs: a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
+  assert.equal(out.at(-1), `merge-queue: ${self} is not origin/main's bin/ (differs: bin/merge-queue.mjs): a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
   assert.equal(git(origin, 'rev-parse', 'main'), main);
   assert.ok(!calls.some((line) => line.startsWith('git push')), calls.join('\n'));
 });
@@ -1475,6 +1483,68 @@ test('the land guard reads a merge-queue with Windows line ends as origin/main\'
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
+});
+
+// C-b-5 (odd/tasks/launch-audit/triage.md): every bin/ file the running copy holds is compared, not only the merge-queue,
+// because a stale check.mjs or lib module lands as readily as a stale queue, and an installed copy has no checkout to ask.
+const MODULES = { 'merge-queue.mjs': 'export const queue = 2;\n', 'check.mjs': 'export const check = 2;\n', 'gate.mjs': 'export const gate = 2;\n', 'lib/refresh-copy.mjs': 'export const copy = 2;\n', 'lib/worktrees.mjs': 'export const trees = 2;\n' };
+
+test('the land guard passes when every bin/ file the running copy holds is origin/main\'s, subfolders and Windows line ends aside (C-b-5)', async () => {
+  const { root, origin, self, dir } = guardedBinRepo(MODULES);
+  writeCopy(dir, { ...MODULES, 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'].replace('\n', '\r\n') });
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+});
+
+test('the land guard refuses a stale bin/ module the running copy holds, names the differing paths (a few, then a count), and pushes nothing (C-b-5)', async () => {
+  const { root, origin, self, dir } = guardedBinRepo(MODULES);
+  const stale = Object.fromEntries(Object.keys(MODULES).map((name) => [name, `export const old = 1; // ${name}\n`]));
+  writeCopy(dir, { ...stale, 'merge-queue.mjs': MODULES['merge-queue.mjs'] });
+  const main = git(origin, 'rev-parse', 'main');
+  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(out.at(-1), `merge-queue: ${self} is not origin/main's bin/ (differs: bin/check.mjs, bin/gate.mjs, bin/lib/refresh-copy.mjs and 1 more): a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.ok(!calls.some((line) => line.startsWith('git push')), calls.join('\n'));
+});
+
+test('the land guard refuses a bin/ file origin/main holds that the running copy lacks, and one the copy holds that main does not (C-b-5)', async () => {
+  const { root, origin, self, dir } = guardedBinRepo({ ...MODULES, 'lib/new.mjs': 'export const added = 1;\n' });
+  writeCopy(dir, { 'merge-queue.mjs': MODULES['merge-queue.mjs'], 'check.mjs': MODULES['check.mjs'], 'gate.mjs': MODULES['gate.mjs'], 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'], 'lib/worktrees.mjs': MODULES['lib/worktrees.mjs'], 'removed.mjs': 'export const gone = 1;\n' });
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const out = [];
+  const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 1, out.join('\n'));
+  assert.ok(out.at(-1).includes('(differs: bin/lib/new.mjs, bin/removed.mjs)'), out.join('\n'));
+});
+
+// The fast path of the guard (C-b-5, rework): one `git ls-tree` gives each bin/ path's blob id, and a copy file whose id matches
+// is the same file with no more git call. A git call is counted through the seam `staleBin` is given.
+const countedGit = (root, calls) => (...args) => {
+  calls.push(args);
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  return { ok: result.status === 0, out: String(result.stdout ?? '') };
+};
+
+test('the land guard makes one git call when every bin/ file the running copy holds is origin/main\'s (C-b-5, fast path)', () => {
+  const { root, self, dir } = guardedBinRepo(MODULES);
+  writeCopy(dir, MODULES);
+  const calls = [];
+  assert.deepEqual(staleBin(self, 'HEAD', countedGit(root, calls)), []);
+  assert.equal(calls.length, 1, JSON.stringify(calls));
+});
+
+test('the land guard judges a file stored with CRLF in origin/main by its content, so an LF copy of it passes (C-b-5, fast path)', () => {
+  const stored = { ...MODULES, 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'].replace('\n', '\r\n') };
+  const { root, self, dir } = guardedBinRepo(stored);
+  writeCopy(dir, MODULES);
+  const calls = [];
+  assert.deepEqual(staleBin(self, 'HEAD', countedGit(root, calls)), []);
+  assert.equal(calls.length, 2, `ls-tree and one show of the CRLF blob: ${JSON.stringify(calls)}`);
 });
 
 // After a land, the worktree of each landed pull request goes when nothing in it can be lost (odd/tasks/land-unattended.md,

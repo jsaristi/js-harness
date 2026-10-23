@@ -136,18 +136,20 @@ export function pruneStalePnpm({ binDir, now = Date.now, isPnpmRunning, fsys = f
     if (!name.startsWith('.pnpm-bin-backup-') || young(entry)) continue;
     if (gone(entry)) backups += 1;
   }
-  // Every shim must still reach its target after the pass.
+  // Every shim must still reach its target after the pass. A .cmd names it with backslashes; the POSIX shim, a script with no
+  // extension, with forward slashes, as npm and pnpm write it on Linux and macOS (C-b-32).
   const broken = [];
   for (const name of names(binDir)) {
-    if (!name.endsWith('.cmd')) continue;
+    const cmd = name.endsWith('.cmd');
+    if (!cmd && path.extname(name) !== '') continue;
     let text;
     try {
       text = fsys.readFileSync(path.join(binDir, name), 'utf8');
     } catch {
       continue;
     }
-    const target = /global\\v11\\[^"]+/.exec(text)?.[0];
-    if (target && !fsys.existsSync(path.join(home, target.replace(/\\/g, '/')))) broken.push(path.basename(name, '.cmd'));
+    const target = cmd ? /global\\v11\\[^"]+/.exec(text)?.[0].replace(/\\/g, '/') : /global\/v11\/[^"'\s]+/.exec(text)?.[0];
+    if (target && !fsys.existsSync(path.join(home, target))) broken.push(path.basename(name, '.cmd'));
   }
   return { removed, backups, kept, broken };
 }

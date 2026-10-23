@@ -40,6 +40,10 @@ import { ruleValue } from './lib/rules.mjs';
  * `gate-max` (bin/lib/rules-data.mjs). */
 export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 
+/** How often a gate that waits for the machine's lock asks again whether a push has become due (C-b-29). Each ask runs
+ * git, and gh when commits wait to be pushed, so it is not asked at every poll of the lock. */
+export const PUSH_RECHECK_MS = 30_000;
+
 // The last line says what the two flags of a wait mean, in the words of `check`, which takes them alike:
 // `--wait` is not a bound on the whole of a wait.
 export const USAGE = [
@@ -357,7 +361,8 @@ function gateFirstMain(argv, env) {
  * `deps.busiest` (for the look for what loads the machine), `deps.watchBusiest` (for the watch of who spends
  * the processor over the command), `deps.launchers` (`{ read, alive }`, for the look
  * at what started this gate, ./lib/launcher.mjs), `deps.gateLog` (for what the record is
- * written with: `{ append, now, id }`, each optional) and `deps.cwd` are replaceable, and so is
+ * written with: `{ append, now, id }`, each optional), `deps.now` (the clock of the re-check of a push while a gate waits)
+ * and `deps.cwd` are replaceable, and so is
  * `deps.platform`, the system whose shell the command line is written for: a test asks for the command
  * line of another system and stands in for what would run it. */
 export async function gateMain(argv, env = process.env, deps = {}) {
@@ -489,14 +494,19 @@ export async function gateMain(argv, env = process.env, deps = {}) {
     return logged({ lock: 'parent', waitedMs: 0, waitedFor: [] }, env);
   }
 
+  // The refusal of a turn for a push that waits: nothing ran, and the push goes first. Said on arrival, and when a push
+  // becomes due while this gate waits (C-b-29).
+  const pushFirst = (waiting, waitedMs, waitedFor) => {
+    const { branch, count, pullRequest } = waiting;
+    console.error(`gate: nothing ran: ${branch} has ${count} commit${count === 1 ? '' : 's'} that a push takes now (${count === 1 ? 'its gate' : 'their gate'} passed and the pre-push check of the Codex records accepts the head), and pull request #${pullRequest} is open: push in the same step the last check passed, then ask for a turn`);
+    console.error(`gate: ${waiting.command}`);
+    record?.refused({ reason: 'push waits', waitedMs, waitedFor });
+  };
   // A push that waits goes first: it needs no turn, and a merge waits for it (S1). Asked only here, where a
   // turn would be taken: inside a gate or in the turn of its starter no turn is waited for.
   const waiting = isPushOrMerge(commandLine) ? null : (deps.pushWaiting ?? pushWaiting)(path.resolve(cwd), { gh: deps.gh });
   if (waiting) {
-    const { branch, count, pullRequest } = waiting;
-    console.error(`gate: nothing ran: ${branch} has ${count} commit${count === 1 ? '' : 's'} that a push takes now (${count === 1 ? 'its gate' : 'their gate'} passed and the pre-push check of the Codex records accepts the head), and pull request #${pullRequest} is open: push in the same step the last check passed, then ask for a turn`);
-    console.error(`gate: ${waiting.command}`);
-    record?.refused({ reason: 'push waits', waitedMs: 0, waitedFor: [] });
+    pushFirst(waiting, 0, []);
     return GATE_NOT_RUN;
   }
 
@@ -509,9 +519,19 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   // is not asked, the launcher having started this gate a moment ago.
   const launcher = deps.launchers ?? { ...startLaunchers({ ppid: STARTED_BY }), alive: launchersAlive, eager: true };
   let launchers = launcher.eager ? launcher.read() : null;
+  // A push that becomes due while this gate waits goes first as well (C-b-29): the gate gives up its place, as when its
+  // launcher ends, and `pushDue` names the push for the refusal. Asked again every PUSH_RECHECK_MS, counted from the arrival.
+  const clock = deps.now ?? Date.now;
+  const recheck = isPushOrMerge(commandLine) ? null : { next: clock() + PUSH_RECHECK_MS };
+  let pushDue = null;
   const stillWanted = () => {
     looks += 1;
     if (looks === 1) return true;
+    if (recheck && clock() >= recheck.next) {
+      recheck.next = clock() + PUSH_RECHECK_MS;
+      pushDue = (deps.pushWaiting ?? pushWaiting)(path.resolve(cwd), { gh: deps.gh });
+      if (pushDue) return false;
+    }
     launchers ??= launcher.read();
     return launchers === null || launcher.alive(launchers);
   };
@@ -527,6 +547,10 @@ export async function gateMain(argv, env = process.env, deps = {}) {
   launcher.stop?.();
   const { waitedMs, waitedFor } = turn;
   if (turn.refused) {
+    if (pushDue) {
+      pushFirst(pushDue, waitedMs, waitedFor);
+      return GATE_NOT_RUN;
+    }
     console.error(`gate: nothing ran: ${turn.refused}`);
     record?.refused({ reason: turn.reason, waitedMs, waitedFor });
     return GATE_NOT_RUN;

@@ -6,6 +6,7 @@
 // review record (`checkCodexReviews`), and it merges into the candidate so far with no conflict. `--dry-run`
 // builds and prints the candidate; `--land` tests it and moves main to it (`landCandidate`).
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -811,6 +812,64 @@ function versionAt(sha, cwd, run) {
   }
 }
 
+/** The files under `dir`, as paths relative to it with forward slashes. */
+function copyFiles(dir, folder = '') {
+  return fs.readdirSync(path.join(dir, folder), { withFileTypes: true }).flatMap((entry) => {
+    const rel = folder ? `${folder}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return copyFiles(dir, rel);
+    return entry.isFile() ? [rel] : [];
+  });
+}
+
+/** The git blob id of `bytes`, as `git hash-object` gives it: the sha1 of `blob <length>`, a NUL and the bytes. */
+const blobId = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+
+/**
+ * The bin/ paths the running copy and `main` do not agree on (sorted). One `git ls-tree` gives the blob id of each bin/ path of
+ * `main`, and a file of the copy whose id is that one is the same file, with no more git call. The bytes are hashed with line ends
+ * as LF, which is how a checkout on this machine holds them, so a blob stored with CRLF misses at the first look and is judged
+ * further: `git show main:<path>` with line ends aside, as before. A path on one side only is stale. The running copy's bin/ is the
+ * folder of `self`. An unreadable file is not proven different, and an unreadable listing refuses nothing, as before the guard;
+ * a main without bin/merge-queue.mjs holds no queue to guard, so nothing is compared.
+ */
+export function staleBin(self, main, gitIn) {
+  const dir = path.dirname(self);
+  const listed = gitIn('ls-tree', '-r', main, '--', 'bin');
+  if (!listed.ok) return [];
+  const onMain = new Map();
+  for (const line of listed.out.split('\n')) {
+    const entry = /^\S+ \S+ ([0-9a-f]+)\t(.+)$/.exec(line);
+    if (entry) onMain.set(entry[2], entry[1]);
+  }
+  if (!onMain.has('bin/merge-queue.mjs')) return [];
+  let local;
+  try {
+    local = copyFiles(dir);
+  } catch {
+    return [];
+  }
+  const copied = new Set(local.map((rel) => `bin/${rel}`));
+  const stale = [];
+  for (const rel of local) {
+    const repoPath = `bin/${rel}`;
+    if (!onMain.has(repoPath)) {
+      stale.push(repoPath);
+      continue;
+    }
+    let mine = null;
+    try {
+      mine = fs.readFileSync(path.join(dir, rel)).toString('utf8').replace(/\r\n/g, '\n');
+    } catch {
+      continue;
+    }
+    if (blobId(Buffer.from(mine, 'utf8')) === onMain.get(repoPath)) continue;
+    const theirs = gitIn('show', `${main}:${repoPath}`);
+    if (theirs.ok && mine !== theirs.out.replace(/\r\n/g, '\n')) stale.push(repoPath);
+  }
+  for (const repoPath of onMain.keys()) if (!copied.has(repoPath)) stale.push(repoPath);
+  return stale.sort();
+}
+
 async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
   const cwd = args.cwd;
   const fail = (line) => {
@@ -830,16 +889,10 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
   // checkout's, so D and B2 never ran (odd/tasks/land-unattended.md, L17). Only where main holds the queue: a
   // project that runs the installed harness has none of its own. Line ends do not count.
   if (args.land) {
-    const own = (text) => text.replace(/\r\n/g, '\n');
-    const onMain = gitIn(cwd, 'show', `${main}:bin/merge-queue.mjs`);
-    let mine = null;
-    try {
-      mine = fs.readFileSync(self, 'utf8');
-    } catch {
-      // Unreadable is not proven different: the land goes on, as it did before the guard.
-    }
-    if (onMain.ok && mine !== null && own(mine) !== own(onMain.out)) {
-      return fail(`${self} is not origin/main's bin/merge-queue.mjs: a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
+    const stale = staleBin(self, main, (...gitArgs) => gitIn(cwd, ...gitArgs));
+    if (stale.length) {
+      const named = stale.slice(0, 3).join(', ') + (stale.length > 3 ? ` and ${stale.length - 3} more` : '');
+      return fail(`${self} is not origin/main's bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
     }
   }
   const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
