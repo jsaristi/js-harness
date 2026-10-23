@@ -288,3 +288,17 @@ test('a board read waits for another gate: js-harness sessions is refused while 
   assert.equal(testRunWarning('js-harness sessions', { env: { JS_HARNESS_GATE_HELD: '1' }, holder: held, cwd: process.cwd() }), null);
   assert.equal(testRunWarning('js-harness gate -- js-harness sessions', { env: {}, holder: held, cwd: process.cwd() }), null);
 });
+
+// Codex and gentle-ai on b2c6ba8..100331f: a board read hidden behind a shell or wsl.exe is one, and a word that only
+// names the script, a one-entry flag in any of its forms, or the help is none.
+test('a board read is found behind sh -c and wsl.exe, and an echo, --help or --opening=<title> is no board read', () => {
+  const warn = (command, holder = held) => testRunWarning(command, { env: {}, holder, cwd: process.cwd() });
+  for (const command of ['sh -c "js-harness sessions --watch"', 'bash -lc "cd x && js-harness sessions"', 'wsl.exe -- js-harness sessions', 'node bin/js-harness.mjs sessions --json']) {
+    assert.match(warn(command) ?? '', /^js-harness sessions reads the board outside a turn/, command);
+  }
+  for (const command of ['echo bin/js-harness.mjs sessions', 'js-harness sessions --help', 'js-harness sessions -h', 'js-harness sessions --opening=Audit', 'js-harness sessions --peek "Audit"', 'js-harness sessions --measures', 'node bin/js-harness.mjs sessions --peek "Audit"', 'sh -c "js-harness sessions --quote x"']) {
+    assert.equal(warn(command), null, command);
+  }
+  const batch = () => ({ cwd: 'D:\\js-harness-worktrees\\evals', batch: true });
+  assert.equal(warn('js-harness sessions --watch', batch), 'js-harness sessions reads the board outside a turn while the eval batch of D:\\js-harness-worktrees\\evals runs: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>');
+});

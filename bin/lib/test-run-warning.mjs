@@ -286,18 +286,29 @@ function testRunOf(command, cwd) {
 
 const HARNESS = /(^|[\\/])js-harness(\.cmd|\.ps1)?$/i;
 const HARNESS_SCRIPT = /(^|[\\/])js-harness\.mjs$/i;
-// A sessions call that prints one entry, not the board (bin/sessions.mjs).
-const ONE_ENTRY = new Set(['--opening', '--quote', '--address', '--peek', '--measures', '--next-number']);
+// A sessions call that prints one entry or the help, not the board (bin/sessions.mjs).
+const ONE_ENTRY = new Set(['--opening', '--quote', '--address', '--peek', '--measures', '--next-number', '--help', '-h']);
 
 /** Whether `command` reads the session board (`js-harness sessions`, `--watch` too) outside `js-harness gate`: a
  * read of the board is heavy enough to slow a gate (docs/FAILURES.md, board-read-loads-gate). */
 export function boardReadOf(command) {
-  return commandsOf(command).some((words) => {
-    const rest = words.slice(programAt(words));
-    if (rest.length === 0 || gateWraps(rest) !== null) return false;
-    const at = HARNESS.test(rest[0].text) ? 1 : HARNESS_SCRIPT.test(rest[1]?.text ?? '') ? 2 : -1;
-    return at !== -1 && rest[at]?.text === 'sessions' && !rest.slice(at + 1).some((word) => ONE_ENTRY.has(word.text));
-  });
+  return commandsOf(command).some((words) => boardRead(words));
+}
+
+/** Whether `words` read the board, looking through `wsl.exe` and `sh -c` as `scan` does for a test run. */
+function boardRead(words, depth = 0) {
+  const rest = words.slice(programAt(words));
+  if (rest.length === 0 || depth > 4 || gateWraps(rest) !== null) return false;
+  if (WSL.test(rest[0].text)) {
+    const split = rest.findIndex((word) => ['--', '-e', '--exec'].includes(word.text));
+    return split !== -1 && boardRead(rest.slice(split + 1), depth + 1);
+  }
+  if (SHELL.test(rest[0].text)) {
+    const script = shellScript(rest);
+    return script !== null && commandsOf(script).some((inner) => boardRead(inner, depth + 1));
+  }
+  const at = HARNESS.test(rest[0].text) ? 1 : isNode(rest[0]) && HARNESS_SCRIPT.test(rest[1]?.text ?? '') ? 2 : -1;
+  return at !== -1 && rest[at]?.text === 'sessions' && !rest.slice(at + 1).some((word) => ONE_ENTRY.has(word.text.split('=')[0]));
 }
 
 /** The warning for `command`, or `null`: one line, when the command runs, outside `js-harness gate --`, a
