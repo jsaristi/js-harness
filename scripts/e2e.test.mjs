@@ -8,10 +8,28 @@ import os from 'node:os';
 import path from 'node:path';
 import { upgradePm } from './e2e.mjs';
 
-const WIN_NODE = 'C:\Program Files\nodejs\node.exe';
-const WIN_NPM = 'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js';
+const WIN_NODE = String.raw`C:\Program Files\nodejs\node.exe`;
+const WIN_NPM = String.raw`C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js`;
+// The wrapper sits in a temp folder, which can itself hold a space (a profile named "John Doe"): there the tests that
+// write one are skipped, and the refusal is proven with a folder named on purpose.
+const TMP_HAS_SPACE = /\s/.test(os.tmpdir()) && 'the temp folder holds a space, so no wrapper can be written in it';
 
-test('the --pm of upgrade is one word when node sits under a path with a space', () => {
+test('the fixture paths are real Windows paths, with their backslashes', () => {
+  assert.equal(WIN_NODE.split('\\').length, 4, WIN_NODE);
+  assert.equal(/[\n\b]/.test(WIN_NPM), false, 'no escape sequence turned a backslash into a control character');
+});
+
+test('the --pm of upgrade is node and the npm CLI, two words and no wrapper, when neither path holds a space', () => {
+  const dir = path.join(os.tmpdir(), 'a folder that is never written');
+  assert.equal(upgradePm(dir, String.raw`C:\nvm4w\nodejs\node.exe`, String.raw`C:\nvm4w\nodejs\npm-cli.js`, 'win32'), String.raw`C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\npm-cli.js`);
+  assert.equal(fs.existsSync(dir), false, 'no wrapper was written');
+});
+
+test('a wrapper that would sit in a folder with a space, for a node path with one, is refused by name', () => {
+  assert.throws(() => upgradePm(path.join(os.tmpdir(), 'John Doe'), WIN_NODE, WIN_NPM, 'win32'), /a path with a space, which upgrade cannot hold/);
+});
+
+test('the --pm of upgrade is one word when node sits under a path with a space', { skip: TMP_HAS_SPACE }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-e2e-pm-'));
   try {
     const pm = upgradePm(dir, WIN_NODE, WIN_NPM, 'win32');
@@ -25,7 +43,7 @@ test('the --pm of upgrade is one word when node sits under a path with a space',
   }
 });
 
-test('the posix wrapper runs node and the npm CLI by their quoted paths and forwards the arguments', () => {
+test('the posix wrapper runs node and the npm CLI by their quoted paths and forwards the arguments', { skip: TMP_HAS_SPACE }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-e2e-pm-'));
   try {
     const pm = upgradePm(dir, '/opt/node dir/bin/node', '/opt/node dir/lib/npm-cli.js', 'linux');

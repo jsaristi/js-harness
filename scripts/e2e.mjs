@@ -21,10 +21,11 @@ function assertThat(condition, message) {
 }
 
 /** The `--pm` of the upgrade step: node and the npm CLI run through this same node, the real npm CLI and never a PATH
- * `npm`. `upgrade` splits its `--pm` on whitespace (bin/update.mjs), so a path of node or of the npm CLI that holds a
- * space (C:\Program Files\nodejs, the Windows default) cannot be named on the line. They are named, quoted, inside a
+ * `npm`. `upgrade` splits its `--pm` on whitespace (bin/update.mjs), so the two paths are the value as they are when
+ * neither holds a space. When one does (C:\Program Files\nodejs, the Windows default) they are named, quoted, inside a
  * wrapper script in `dir`, and the value is the wrapper's path, which must hold no space (tui-walk does the same). */
 export function upgradePm(dir, execPath, npmCli, platform = process.platform) {
+  if (!/\s/.test(execPath) && !/\s/.test(npmCli)) return `${execPath} ${npmCli}`;
   const file = path.join(dir, platform === 'win32' ? 'npm-e2e.cmd' : 'npm-e2e');
   if (/\s/.test(file)) throw new Error(`the --pm wrapper would sit in ${dir}, a path with a space, which upgrade cannot hold`);
   const content = platform === 'win32' ? `@"${execPath}" "${npmCli}" %*\r\n` : `#!/bin/sh\nexec "${execPath}" "${npmCli}" "$@"\n`;

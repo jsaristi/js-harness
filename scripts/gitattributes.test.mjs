@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { REPO_ROOT } from './lib.mjs';
 
-test('every file under bin/ is checked out with LF, whatever core.autocrlf says', () => {
+// The attribute, not the bytes: a tree checked out as CRLF before the rule keeps its bytes until it is checked out again.
+test('every file under bin/ has the eol=lf attribute, so a checkout writes it with LF whatever core.autocrlf says', () => {
   const out = execFileSync('git', ['check-attr', 'eol', '--', 'bin/js-harness.mjs', 'bin/lib/manifest.mjs', 'bin/check.test.mjs'], { cwd: REPO_ROOT, encoding: 'utf8' });
   assert.deepEqual(out.trim().split(/\r?\n/), [
     'bin/js-harness.mjs: eol: lf',
