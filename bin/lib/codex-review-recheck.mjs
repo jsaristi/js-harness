@@ -18,8 +18,8 @@
 // - A second recheck of the same findings is refused before anything runs: from the head of a recheck that
 //   left one open, and from the head of a review whose findings were already rechecked (`--again` included).
 //   What is still open becomes a follow-up task (`secondRecheckRefused`). A range whose every code commit
-//   has a record is then recorded as a skip; one that holds code no record covers is reviewed from the
-//   nearest commit behind it that starts a review, with `--again`, so that no skip leaves new code unread.
+//   has a record needs nothing more; one that holds code no record covers is reviewed from the nearest
+//   commit behind it that starts a review, with `--again`, so that no skip leaves new code unread.
 //
 // Its limit: new code committed in the same range as a correction is read as a follow-up, not reviewed;
 // only a blocking finding stops it. A session that wants new work reviewed in full commits the correction
@@ -248,8 +248,10 @@ export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFro
   const first = open === null ? 'the counts of the first were not kept' : open === 0 ? 'the first found every one fixed' : `the first left ${open === 1 ? '1 finding' : `${open} findings`} not fixed or blocking`;
   const refused = `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
   const task = 'Record a follow-up task for what is still open in the feature document';
+  // Every code commit has a record: there is nothing to review and no skip to record, which would name a covered
+  // range as unreviewed (codex-review.mjs, the skip), so none is advised.
   if (Array.isArray(uncovered) && uncovered.length === 0) {
-    return `${refused}${task}, then record this range as a skip: \`codex-review --base ${base} --unavailable "second recheck refused: <task>"\`.`;
+    return `${refused}${task}. Every code commit of this range has a record already, so no review or skip is recorded for it.`;
   }
   const held =
     uncovered === null

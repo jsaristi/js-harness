@@ -76,15 +76,16 @@
 // the attempts whose rendered review is not passed through either. An effort the file does not name is not
 // held against a review.
 //
-// What a review is asked is chosen with `--prompt`. `codex`, the default, is
-// `--base <merge-base>` with the sentence Codex writes itself. `own` is this command's prompt
+// What a review is asked is chosen with `--prompt`. `codex` is
+// `--base <merge-base>` with the sentence Codex writes itself, the default in a turn of the gate lock; out of
+// one every review is asked with `own` (`OWN_OUT_OF_TURN`). `own` is this command's prompt
 // (`bin/lib/codex-review-prompt.mjs`): it names the committed range and the command that shows it, and with
 // `--doc <feature document>` carries that document's Goal and Done when, to judge the change against.
 // `--base` and a prompt exclude each other on Codex's command line, so under `own` there is no `--base`
 // there, and the prompt goes in on stdin (`-`): it has newlines, and may hold quotes, `%` and `&`, none of
 // which the one command line `cmd.exe` runs on Windows can carry. Codex's rubric applies under either, so
-// the answer is read the same way. `codex` stays the default: in the comparison the two found the same at
-// about the same cost (odd/tasks/codex-review-lean.md, Progress, 2026-10-08).
+// the answer is read the same way. `codex` stays the default in a turn: in the comparison the two found the
+// same at about the same cost (odd/tasks/codex-review-lean.md, Progress, 2026-10-08).
 //
 // A range too large for one session is reviewed in parts. The model reads the
 // diff through a tool whose output is bounded, so on a large range some changed lines are never shown and
@@ -220,6 +221,7 @@ export const USAGE =
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
   `--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than ${MAX_PARTS_WITHOUT_FLAG} parts is not started without --max-parts <n>.\n` +
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
+  '`--prompt codex` is the default in a turn of the gate lock; out of one, a run by hand, every review is asked with `own`, and the command says so when `codex` was given.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
   'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.';
 
@@ -1413,8 +1415,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // starts at the first parent of the merge and reads what was written in it (`mergeStart`).
     const atMerge = mergeStart(root, { given, tip: head, spawn, where });
     if (atMerge !== null) {
-      merge = { side: atMerge.side, branch: atMerge.branch, auto: atMerge.auto };
-      log(mergeReviewSaid({ head, ...merge, stacked: atMerge.stacked === true }));
+      // A skip reads nothing, so it says of no merge that what was written in it is read, and its record claims no remerge-diff.
+      if (args.unavailable === undefined) {
+        merge = { side: atMerge.side, branch: atMerge.branch, auto: atMerge.auto };
+        log(mergeReviewSaid({ head, ...merge, stacked: atMerge.stacked === true }));
+      }
       base = atMerge.from;
       return atMerge.from;
     }
