@@ -609,7 +609,7 @@ function isOnlyOurPointerPaths(value, pointers) {
  * JSON (no newlines besides, at most, one trailing one) and must stay compact; a tab or space run
  * right after the first real newline becomes the indent unit; anything else (a multi-line document
  * with no indented line, which should not normally happen) falls back to the historical default. */
-function detectIndent(raw) {
+export function detectIndent(raw) {
   const body = raw.replace(/\r?\n$/, '');
   if (!body.includes('\n')) return null;
   const match = /\n([\t ]+)\S/.exec(body);
@@ -617,7 +617,9 @@ function detectIndent(raw) {
   return match[1].includes('\t') ? '\t' : match[1].length;
 }
 
-function serializeJson(data, { trailingNewline, useCRLF, indent }) {
+/** The text of a JSON settings file: `data` in the given indent (`null` for one line), with the line endings and the
+ * final newline asked for. Settings-key writes its files with it too, so the two writers agree byte for byte. */
+export function serializeJson(data, { trailingNewline, useCRLF, indent }) {
   let text = indent === null ? JSON.stringify(data) : JSON.stringify(data, null, indent);
   if (trailingNewline) text += '\n';
   if (useCRLF) text = text.replace(/\n/g, '\r\n');
@@ -1121,8 +1123,13 @@ export function userSettingsPath(home) {
   return path.join(home, '.claude', 'settings.json');
 }
 
+/** The style of a JSON settings file the machine manifest creates: two spaces, LF, and no newline at the end (settings-key
+ * adds one to the files it creates). A file that exists is written back in its own style (`detectIndent`, its line
+ * endings, its final newline). Frozen, since every missing file shares it. */
+export const NEW_SETTINGS_STYLE = Object.freeze({ trailingNewline: false, useCRLF: false, indent: 2 });
+
 /** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
- * was; a missing file is an empty object written with two spaces. Throws with the reason a file cannot be taken. */
+ * was; a missing file is an empty object written in `NEW_SETTINGS_STYLE`. Throws with the reason a file cannot be taken. */
 function readSettings(target) {
   const existed = fs.existsSync(target);
   const raw = existed ? fs.readFileSync(target, 'utf8') : '{}';
@@ -1133,7 +1140,7 @@ function readSettings(target) {
     throw new Error('malformed JSON');
   }
   if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a JSON object');
-  return { data, existed, raw, style: { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: existed ? detectIndent(raw) : 2 } };
+  return { data, existed, raw, style: existed ? { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: detectIndent(raw) } : NEW_SETTINGS_STYLE };
 }
 
 /** Sets `SESSION_MESSAGES` in the user settings and records it in the manifest's `settings` array as `{ path, key,
