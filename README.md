@@ -114,7 +114,9 @@ Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the decl
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
 runs it, so a red check means the commit is not ready yet. A gate that passes prints one line,
 `PASS  check  <n> rows passed`, with the review's verdict where it was assessed; a gate that fails
-prints every row. `--verbose` prints every row of a passing gate too, and so does
+prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_INNER=1` and runs no
+sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
+so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
 `JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
 `--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files

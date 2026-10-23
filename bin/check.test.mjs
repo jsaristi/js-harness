@@ -4046,7 +4046,7 @@ test('a push and the inner check are as they were beside a failing static row: n
   const inner = afterStaticRows();
   const within = await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, inner.deps);
   assert.equal(within.code, 1);
-  assert.deepEqual(namesOf(within.output), [...STATIC_ROWS, 'codex-review']);
+  assert.deepEqual(namesOf(within.output), [...STATIC_ROWS, 'inner', 'codex-review']);
   assert.equal(rowsOf(within.output)[0], BUDGET_FAILS);
   assert.deepEqual({ ...inner.asked, git: inner.asked.git.length > 0 }, { ...NOTHING_ASKED, git: true });
 
