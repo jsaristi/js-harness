@@ -477,7 +477,8 @@ const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep, copyPath } = {}) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
-  // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
+  // which writes nothing, refuses only a value flag with no value and otherwise keeps the lenient parse
+  // (T1 of odd/tasks/commands-and-doctor.md).
   const refused = refusal(argv, ['--home', '--repo', '--source', '--prefix', '--pm']);
   if (refused !== null) {
     console.error(`${refused}\n\n${UPGRADE_USAGE}`);

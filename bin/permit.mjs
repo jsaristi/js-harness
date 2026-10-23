@@ -154,8 +154,10 @@ async function hook(deps) {
 /** A usage error of one subcommand's arguments: its message says which token, and the usage follows, exit 2. */
 class PermitArgError extends Error {}
 
-/** Refuses the first token of `args` that the flags `known` do not name (bin/lib/args.mjs). */
+/** Refuses a value flag of `known` given with no value, then the first token of `args` that the flags `known` do not
+ * name (bin/lib/args.mjs), so `--session --bogus` names the missing value, as `update` does. */
 function refuseUnknown(args, known) {
+  for (const flag of known.valued ?? []) valueOf(args, flag);
   const unknown = unknownArgument(args, known);
   if (unknown !== null) throw new PermitArgError(`unknown argument: ${unknown}`);
 }

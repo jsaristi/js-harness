@@ -489,7 +489,6 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     return i !== -1 ? argv[i + 1] : undefined;
   };
   // An empty JS_HARNESS_HOME is no home, as for the other commands: taken as it is it would name the folder the menu runs in.
-  // An empty JS_HARNESS_HOME is no home, as for the other commands: taken as it is it would name the folder the menu runs in.
   const home = get('--home') ?? (env.JS_HARNESS_HOME || os.homedir());
   const cwd = get('--cwd') ?? process.cwd();
   const installedVersion = currentVersion();

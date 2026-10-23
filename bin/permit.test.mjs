@@ -214,6 +214,9 @@ test('lease refuses a mistyped flag, a flag given where its value belongs, and a
   assert.equal(taken.code, 2);
   assert.equal(taken.out, '');
   assert.match(taken.err, /^js-harness permit: --session requires a value\n/);
+  const unknownAfter = await run(machine, ['lease', '--session', '--bogus']);
+  assert.equal(unknownAfter.code, 2);
+  assert.match(unknownAfter.err, /^js-harness permit: --session requires a value\n/, 'the missing value is named before the flag after it');
   const minutes = await run(machine, ['lease', '--session', LEAD, '--minutes']);
   assert.equal(minutes.code, 2);
   assert.match(minutes.err, /^js-harness permit: --minutes requires a value\n/);
@@ -265,6 +268,9 @@ test('allow takes no reason and a verdict takes one id: a typed reason is refuse
       const noReason = await run(machine, ['deny', id, '--reason'], LEAD_ENV);
       assert.equal(noReason.code, 2);
       assert.match(noReason.err, /^js-harness permit: --reason requires a value\n/);
+      const flagReason = await run(machine, ['deny', id, '--reason', '--no-verify skips the hook'], LEAD_ENV);
+      assert.equal(flagReason.code, 2);
+      assert.match(flagReason.err, /^js-harness permit: --reason requires a value\n/);
       assert.equal((await run(machine, ['deny', id, '--reason', 'its work merged in PR 305'], LEAD_ENV)).code, 0);
     },
   });
