@@ -77,7 +77,8 @@ export const USAGE = [
   '  reviewed: records a review of the days up to --day, or the re-measure of what shipped on --shipped, and whether',
   '    it found candidates, in <home>/.js-harness/throughput/<project>/outcomes.jsonl. The day must have settled.',
   '  shipped: records that <item> shipped on --day (default today), so its re-measure falls due.',
-  '  Exit 2: a usage error, and nothing is done.',
+  '  Exit 1: snapshot refused what the day or its copies are (not settled, kept already, a copy dated after now,',
+  '    a gate log it cannot read), and nothing is kept. Exit 2: a usage error, and nothing is done.',
 ].join('\n');
 
 class ThroughputArgError extends Error {}
@@ -489,12 +490,12 @@ function snapshot(ctx, flags) {
   const settles = settlesAt(day);
   if (settles > ctx.now()) {
     ctx.err(`js-harness throughput: ${day} settles at ${new Date(settles).toISOString()}: only a day whose gates have ended is kept`);
-    return 2;
+    return 1;
   }
   // A copy made after now would vouch for gates no copy can hold yet, and settle a day it has only in part.
   if (flags['copied-at'] !== undefined && flags['copied-at'] > ctx.now()) {
     ctx.err(`js-harness throughput: --copied-at ${new Date(flags['copied-at']).toISOString()} is after now (${new Date(ctx.now()).toISOString()}): a copy is made by then`);
-    return 2;
+    return 1;
   }
   // A copy named that is not there would read as a log with no gate, which a kept day must never be written from.
   for (const copy of flags['gate-log'] ?? []) {
