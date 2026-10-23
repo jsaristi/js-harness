@@ -1382,7 +1382,7 @@ inside double quotes, which bash runs as commands; a recursive `rm` or an `rmdir
 folder at its top, which the host holds for the user even in bypass mode, with where to put such a folder
 instead (below the project's worktrees folder, or the session's scratchpad); a gentle-ai review
 (`assess`, `status` or `start`) whose `--base-ref` is off its head's first-parent line; a heavy `node --test` outside a gate turn while
-another gate holds the machine's lock or an eval batch runs, heavy being several files, or one file
+another gate holds the machine's lock or an eval batch runs, heavy being several files, the whole suite (`node --test`, or `npm test` as the `test` script of the folder, or of the one `--prefix` names, runs it with the words npm hands it; `npm run check` is no run of the suite), or one file
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
 while its trials run, and `uninstall` removes that folder with the lock's); and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
