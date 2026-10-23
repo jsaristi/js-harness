@@ -272,3 +272,19 @@ test('an eval batch shows itself to the guard as a gate holder does: several fil
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// board-read-loads-gate (docs/FAILURES.md): a read of the board is heavy enough to slow a gate.
+test('a board read waits for another gate: js-harness sessions is refused while the lock is held, free otherwise', () => {
+  const board = `js-harness sessions reads the board outside a turn while the gate of D:\\js-harness-worktrees\\other holds the machine's gate lock: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>`;
+  for (const command of ['js-harness sessions', 'js-harness sessions --watch', 'js-harness sessions --json', 'node bin/js-harness.mjs sessions', 'cd x && js-harness sessions --watch --interval 60']) {
+    assert.equal(testRunWarning(command, { env: {}, holder: held, cwd: process.cwd() }), board, command);
+  }
+  // A read of one entry is no board read.
+  for (const command of ['js-harness sessions --opening "Audit"', 'js-harness sessions --quote x', 'js-harness sessions --address "Audit"', 'js-harness sessions --next-number', 'js-harness status']) {
+    assert.equal(testRunWarning(command, { env: {}, holder: held, cwd: process.cwd() }), null, command);
+  }
+  // With no lock held, and for the gate's own turn, the board is free.
+  assert.equal(testRunWarning('js-harness sessions', { env: {}, holder: () => null, cwd: process.cwd() }), null);
+  assert.equal(testRunWarning('js-harness sessions', { env: { JS_HARNESS_GATE_HELD: '1' }, holder: held, cwd: process.cwd() }), null);
+  assert.equal(testRunWarning('js-harness gate -- js-harness sessions', { env: {}, holder: held, cwd: process.cwd() }), null);
+});
