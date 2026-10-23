@@ -1916,8 +1916,8 @@ test('agentsTemplate carries the lines that hold in any project', () => {
   // Item 4: every claim is one of three; a report from elsewhere is a claim.
   assert.match(text, /Every claim is checked \(with its evidence\), assumed, or not known\./);
   assert.match(text, /What another session, a sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it\. What is passed on says what failed and what was not checked, "nothing" when that is true\./);
-  // Item 6: a reply ends with one of four states.
-  assert.match(text, /A reply ends with one of four states: working \(the owner sends nothing; say what wakes the work\), decision \(one question for the owner, never while work runs\), cut \(a new session, with the text to send it\), or finished \(name where to return\)\./);
+  // Item 6: a reply ends with one of five states.
+  assert.match(text, /A reply ends with one of five states: working \(the owner sends nothing; say what wakes the work\), decision \(one question for the owner, never while work runs\), question \(an open question the owner answers in writing\), cut \(a new session, with the text to send it\), or finished \(name where to return\)\./);
   // Items 5, 7 and 8 are rules for building the harness and stay in its own AGENTS.md only.
   assert.doesNotMatch(text, /One session, one feature|consent|judged twice/i);
 });

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `31101d30f875`. In force: 57 (32 of Sebastián, 25 of the project). Retired: 0.
+Hash `28ad681548ff`. In force: 57 (32 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -77,9 +77,9 @@ The lead's recap names each session's effort mode for its kind of work, and why:
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
 
 ### reply-four-states
-A reply ends in one of four states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of four states."
+A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-22.
+- Since 2026-10-23. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-23.
 
 ### report-table
 When the user asks what was done, the lead's status report shows each section that holds items as a table: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."

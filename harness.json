@@ -15,6 +15,7 @@
     "states": {
       "working": "Sigo solo",
       "decision": "Necesito tu decisión",
+      "question": "Te pregunto",
       "cut": "Corte",
       "finished": "Terminado"
     },

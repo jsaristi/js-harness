@@ -552,7 +552,7 @@ export const TEMPLATE_SECTIONS = Object.freeze(['What good looks like', 'Working
 /** What is wrong with the AGENTS.md the installed `init` wrote, or `null` (odd/tasks/rule-hierarchy.md, T12).
  * `agentsText` is the file, or nothing; `template` is `agentsTemplate` of the candidate's source, so the two match only
  * when the copy installed is the candidate. The file must hold each of `TEMPLATE_SECTIONS` as a `## ` heading and the
- * line of the four states (read with the wrapping undone), and `tokens`, its estimated size, must be at most half of
+ * line of the five states (read with the wrapping undone), and `tokens`, its estimated size, must be at most half of
  * `budget` (agents-budget), so that a project keeps the other half for its own lines. */
 export function templateLinesProblem({ agentsText, template, tokens, budget }) {
   if (agentsText === undefined) return 'the project has no AGENTS.md after js-harness init';
@@ -561,7 +561,7 @@ export function templateLinesProblem({ agentsText, template, tokens, budget }) {
   for (const section of TEMPLATE_SECTIONS) {
     if (!headings.includes(`## ${section}`)) return `the template js-harness init wrote has no section "${section}"`;
   }
-  if (!agentsText.replace(/\s+/g, ' ').includes('A reply ends with one of four states')) return 'the template js-harness init wrote does not say that a reply ends with one of four states';
+  if (!agentsText.replace(/\s+/g, ' ').includes('A reply ends with one of five states')) return 'the template js-harness init wrote does not say that a reply ends with one of five states';
   const half = budget / 2;
   if (tokens > half) return `the template js-harness init wrote is ${tokens} estimated tokens, over ${half}, half of agents-budget: a project keeps less than half for its own lines`;
   return null;

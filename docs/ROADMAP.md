@@ -663,7 +663,7 @@ whatever the other open sessions hold only in their conversations. Missing from 
 - His wording is the need, not the specification (name the problem behind it, recommend the
   best design): memory only. For `AGENTS.md` here and for the template; it holds in any
   project.
-- How a reply closes (the four states): in `AGENTS.md` here, not installed. For the
+- How a reply closes (the reply states): in `AGENTS.md` here, not installed. For the
   template, with the check "Session signals" of Next already asks for.
 - How he is reported to (what needs him, what runs alone, what was done, everyday words):
   this file and memory. For the orchestrator skill, with the session channel.
@@ -1226,10 +1226,16 @@ reasons, is under [Session channel](#session-channel). Also open:
    The format of the first is decided (Sebastián, 2026-10-07, "usá ese formato y cementalo en
    el harness"), after a block worded as an instruction ("run the lean review on Codex
    0.160.1") was read three times as a task for him to do in Codex. Every reply closes with
-   one state of four:
+   one state of five (four until 2026-10-23):
    - working: he sends nothing; the reply says what wakes the agent and what it reports next.
      No block.
    - decision: the work waits on him. One block.
+   - question: an open question of the conversation that he answers in writing, not with
+     buttons; the reply asks it on the state's line, so the session is taken as neither
+     working nor finished. No block. Added by Sebastián on 2026-10-23 (Pregunta 48, "Sí,
+     sumalo"), proposal B of JH 43's finding 8: an onboarding session that waited for his
+     written answer had no state to say so and closed as working
+     (odd/tasks/reply-question-state.md).
    - cut: a new session, one block. He never compacts by hand, present or away (his words of
      2026-10-15, odd/tasks/no-manual-compact.md S1): near 88% a session writes its state and
      keeps working, the host compacts it by itself, and a session that stops gets its next
@@ -1254,7 +1260,7 @@ reasons, is under [Session channel](#session-channel). Also open:
    cannot be undone.
 
    Where it lives: `AGENTS.md`, "Working with Sebastián". Still to build, in T2 of the rule
-   hierarchy: a check that refuses a reply that closes with none of the four states, so the
+   hierarchy: a check that refuses a reply that closes with none of the states, so the
    rule stops depending on the agent reading prose.
 
 ## Stack doctor notes

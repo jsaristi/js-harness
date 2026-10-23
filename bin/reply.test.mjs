@@ -9,7 +9,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 // handed in, so no test touches a real project: `files` maps a path to its text, and a path it does not hold
 // reads as missing.
 const PROJECT = path.resolve('/work/project');
-const SPANISH = { states: { working: 'Sigo solo', decision: 'Necesito tu decisión', cut: 'Corte', finished: 'Terminado' }, labels: { what: 'Qué es', where: 'Dónde', effect: 'Qué pasa' } };
+const SPANISH = { states: { working: 'Sigo solo', decision: 'Necesito tu decisión', question: 'Te pregunto', cut: 'Corte', finished: 'Terminado' }, labels: { what: 'Qué es', where: 'Dónde', effect: 'Qué pasa' } };
 const ON = { [path.join(PROJECT, 'harness.json')]: JSON.stringify({ documents: ['docs/'], reply: SPANISH }) };
 
 async function hook(payload, { files = ON, argv = ['--hook'], raw } = {}) {
@@ -225,9 +225,11 @@ test('only a work session is warned: the orchestrator, another title and an unti
   assert.match(phone.answer.reason, WARNING, 'a session opened from the phone has no title in its transcript: the opening it read names it');
 });
 
-test('a decision close, a stop already turned back and Codex are not warned', async () => {
+test('a decision or a question close, a stop already turned back and Codex are not warned', async () => {
   const decision = await wakeHook({ payload: { last_assistant_message: 'Hecho.\n\nNecesito tu decisión: el orquestador te la pregunta.' } });
   assert.deepEqual(decision.answer, {});
+  const question = await wakeHook({ payload: { last_assistant_message: 'Hecho.\n\nTe pregunto: ¿el proyecto es una biblioteca?' } });
+  assert.deepEqual(question.answer, {}, 'his written answer is what wakes the session');
   const again = await wakeHook({ payload: { stop_hook_active: true } });
   assert.deepEqual(again.answer, {});
   const codex = await wakeHook({ payload: { background_tasks: undefined, session_crons: undefined } });

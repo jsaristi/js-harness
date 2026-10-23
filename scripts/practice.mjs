@@ -604,7 +604,7 @@ const STEPS = {
     const tokens = estimateTokens(template);
     const problem = templateLinesProblem({ agentsText, template, tokens, budget: TOKEN_BUDGET });
     assertThat(problem === null, problem);
-    return `the AGENTS.md js-harness init wrote in ${project} is this candidate's template: it holds the sections ${TEMPLATE_SECTIONS.map((section) => `"${section}"`).join(' and ')} and the four states, in ${tokens} estimated tokens of the ${TOKEN_BUDGET / 2} it may take`;
+    return `the AGENTS.md js-harness init wrote in ${project} is this candidate's template: it holds the sections ${TEMPLATE_SECTIONS.map((section) => `"${section}"`).join(' and ')} and the five states, in ${tokens} estimated tokens of the ${TOKEN_BUDGET / 2} it may take`;
   },
 
   'global-uninstall': (ctx) => {

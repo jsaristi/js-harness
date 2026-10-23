@@ -5,7 +5,7 @@ import { DEFAULT_REPLY, replyConfig, replyRefusal } from './reply.mjs';
 // The labels this repository's own replies use (odd/tasks/rule-hierarchy.md, C1): the tests read them as a project
 // that names its states in Spanish would declare them.
 const SPANISH = {
-  states: { working: 'Sigo solo', decision: 'Necesito tu decisión', cut: 'Corte', finished: 'Terminado' },
+  states: { working: 'Sigo solo', decision: 'Necesito tu decisión', question: 'Te pregunto', cut: 'Corte', finished: 'Terminado' },
   labels: { what: 'Qué es', where: 'Dónde', effect: 'Qué pasa' },
 };
 const config = replyConfig({ reply: SPANISH });
@@ -24,7 +24,7 @@ test('a project with no reply key, or with it false, has no reply check', () => 
 test('reply true takes the English labels; an object overrides each label it names and keeps the rest', () => {
   assert.deepEqual(replyConfig({ reply: true }), DEFAULT_REPLY);
   assert.deepEqual(DEFAULT_REPLY, {
-    states: { working: 'Working', decision: 'Decision', cut: 'Cut', finished: 'Finished' },
+    states: { working: 'Working', decision: 'Decision', question: 'Question', cut: 'Cut', finished: 'Finished' },
     labels: { what: 'What it is', where: 'Where it goes', effect: 'What sending it does' },
   });
   assert.deepEqual(config, SPANISH);
@@ -53,11 +53,12 @@ test('a reply that ends with one state line, with what follows the label, passes
   assert.equal(refusal('Hecho.\n\n- Necesito tu decisión: el orquestador te la pregunta con botones.'), null);
 });
 
-test('a reply with no state line is turned back with the four labels and what each needs', () => {
+test('a reply with no state line is turned back with the five labels and what each needs', () => {
   const reason = refusal('Merged pull request 12. Next I write the docs.');
   assert.match(reason, /no state/);
-  for (const label of ['Sigo solo', 'Necesito tu decisión', 'Corte', 'Terminado']) assert.ok(reason.includes(label), label);
+  for (const label of ['Sigo solo', 'Necesito tu decisión', 'Te pregunto', 'Corte', 'Terminado']) assert.ok(reason.includes(label), label);
   assert.match(reason, /what wakes you/);
+  assert.match(reason, /answers in writing/);
   assert.match(reason, /session to return to/);
 });
 
@@ -121,6 +122,21 @@ test('a decision while background work runs is turned back; with nothing running
   assert.equal(refusal('Hecho.\n\nSigo solo: espero el gate.', { running: 3 }), null, 'working is the state that has work running');
 });
 
+// --- an open question he answers in writing ---
+
+test('a question closes a reply that leaves the user an open question to answer in writing, asked on its line', () => {
+  assert.equal(refusal('Leí tu respuesta.\n\n**Te pregunto:** ¿el proyecto es una biblioteca o una aplicación?'), null);
+  assert.equal(replyRefusal('Done.\n\nQuestion: is the project a library or an application?', replyConfig({ reply: true })), null);
+  assert.match(refusal('Hecho.\n\n**Te pregunto**'), /what you ask/, 'the question is written on its line');
+});
+
+test('a question while background work runs is turned back, like a decision', () => {
+  const text = 'Hecho.\n\nTe pregunto: ¿qué nombre lleva el proyecto?';
+  assert.match(refusal(text, { running: 1 }), /"Te pregunto" while 1 background task runs: a question is never asked while work runs/);
+  assert.equal(refusal(text, { running: 0 }), null);
+  assert.match(refusal('Hecho.\n\nNecesito tu decisión: el orquestador te la pregunta.', { running: 1 }), /a decision is never asked while work runs/, 'the decision keeps its words');
+});
+
 // --- the block he sends belongs to a cut ---
 
 const CUT = [
@@ -162,6 +178,6 @@ test('the labels of a block outside a cut are turned back: a decision is asked w
 test('the English defaults work the same way', () => {
   const english = replyConfig({ reply: true });
   assert.equal(replyRefusal('Done.\n\n**Working** — the gate wakes me.', english), null);
-  assert.match(replyRefusal('Done.', english), /Working.*Decision.*Cut.*Finished/s);
+  assert.match(replyRefusal('Done.', english), /Working.*Decision.*Question.*Cut.*Finished/s);
   assert.equal(replyRefusal('Done.\n\nCut\nWhat it is: the opening.\nWhere it goes: a new session.\nWhat sending it does: starts T1.\n\n```\nStart T1.\n```', english), null);
 });
