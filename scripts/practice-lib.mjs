@@ -526,7 +526,8 @@ export function secondInitProblem(porcelainText, agentsText, template) {
 
 /** The sorted `git status --porcelain` lines the practice project should show after `uninstall`, from the lines it
  * showed before (`before`) and the text of the manifest `init` wrote (`manifestText`, read before uninstall removes
- * it): every untracked path the manifest records as written (`files`, `dirs`) is gone, and so is `.codegraph/`;
+ * it): every untracked path the manifest records as written (`files`, `dirs`) is gone, and so is `.codegraph/`, and a
+ * settings file init created (`settings`, `createdFile`) with its folder when init created that too (`createdDir`);
  * `harness.json` and `AGENTS.md`, which `init` wrote and the step `commit-passes` committed, show as deleted. The list
  * is read from the manifest, so a file `init` begins to write is expected to go without this step being told. A
  * manifest that cannot be read takes nothing away but `.codegraph/`, and the step then names what differs. */
@@ -540,6 +541,12 @@ export function uninstallExpected(before, manifestText) {
   const recorded = new Set(['.codegraph']);
   for (const entry of [...(Array.isArray(manifest.files) ? manifest.files : []), ...(Array.isArray(manifest.dirs) ? manifest.dirs : [])]) {
     if (typeof entry?.path === 'string' && !entry.gitDir) recorded.add(entry.path.replace(/\/+$/, ''));
+  }
+  // A settings file init created is removed with its folder when init created that too (B1).
+  for (const entry of Array.isArray(manifest.settings) ? manifest.settings : []) {
+    if (typeof entry?.path !== 'string' || entry.createdFile !== true) continue;
+    recorded.add(entry.path);
+    if (entry.createdDir === true) recorded.add(entry.path.replace(/\/[^/]*$/, ''));
   }
   const gone = (line) => line.startsWith('?? ') && recorded.has(line.slice(3).replace(/\/+$/, ''));
   return [...before.filter((line) => !gone(line)), ' D AGENTS.md', ' D harness.json'].sort();

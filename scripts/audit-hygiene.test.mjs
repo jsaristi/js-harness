@@ -230,6 +230,18 @@ test('an explicit allow file that does not exist exits 2', (t) => {
   assert.match(result.stderr, /^audit-hygiene: allow list not found: /m);
 });
 
+test('an allow entry without a why exits 2 and hides nothing', (t) => {
+  const dir = makeRepo(t);
+  commit(dir, { 'ok.txt': 'clean\n' });
+  const allow = path.join(dir, '..', `nowhy-${process.pid}-${Date.now()}.json`);
+  fs.writeFileSync(allow, JSON.stringify([{ kind: 'email', location: 'a@b.co' }]));
+  t.after(() => fs.rmSync(allow, { force: true }));
+  const result = audit(dir, '--allow', allow);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /^audit-hygiene: allow list .* must be an array of \{ kind, location, why \}$/m);
+});
+
 test('parseArgs names an unknown argument and takes the flags it knows', () => {
   assert.equal(parseArgs(['--bogus']).error, 'unknown argument: --bogus');
   assert.equal(parseArgs(['--allow']).error, '--allow takes a value');

@@ -382,7 +382,10 @@ export function isolated(script, args) {
     fs.mkdirSync(cwd);
     const env = { PATH: path.dirname(process.execPath), GIT_CEILING_DIRECTORIES: root };
     if (process.env.SYSTEMROOT) env.SYSTEMROOT = process.env.SYSTEMROOT;
-    for (const name of HOME_VARIABLES) env[name] = path.join(root, name.toLowerCase());
+    for (const name of HOME_VARIABLES) {
+      env[name] = path.join(root, name.toLowerCase());
+      fs.mkdirSync(env[name]);
+    }
     const result = spawnSync(process.execPath, [script, ...args], {
       cwd, env, encoding: 'utf8', input: '', timeout: TIMEOUT_MS, windowsHide: true,
     });
