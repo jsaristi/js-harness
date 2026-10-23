@@ -12,8 +12,8 @@ matters, who holds it, and where it was seen.
 ## Faster
 
 - A test on the real timer failed a gate of a commit that touched only documents:
-  `bin/lib/remote.test.mjs:923`, "a server that never exits has its log trimmed while it runs, on the
-  real timer, and keeps writing whole lines after each trim" (assertion at line 953), in WSL2 at 05:39
+  `bin/lib/remote.test.mjs`, "a server that never exits has its log trimmed while it runs, on the
+  real timer, and keeps writing whole lines after each trim", in WSL2 at 05:39
   on 2026-10-14, two minutes after the same test passed in the gate before it. Seen by JH 8; whose: the
   owner of `remote`. A documents-only commit would not run it at all once the documents skip lands
   (JH 8, next).

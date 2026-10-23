@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -388,6 +389,48 @@ test('lockLine of a lock released between the refused write and its reading says
   assert.match(lockLine('/state', null), /released just now; run this again/);
 });
 
+test('verify and undo refuse a stamp that is not the shape a pass writes, before they read any snapshot', () => {
+  withPass({ 'MEMORY.md': '- [a](a.md) — a\n' }, ({ folder, stateDir }) => {
+    planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    for (const stamp of ['../../outside', '20260101T000000000']) {
+      const named = (err) => err instanceof PassError && err.message === `${stamp} is not a pass stamp`;
+      assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW }), named, stamp);
+      assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW }), named, stamp);
+    }
+  });
+});
+
+test('verify and undo refuse a snapshot whose write set names a file outside the memory folder, and that file survives', () => {
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-pass-traversal-'));
+  try {
+    const folder = path.join(top, 'project', 'memory');
+    const stateDir = path.join(top, 'state');
+    const victim = path.join(top, 'victim.txt');
+    const index = '- [a](a.md) — a\n';
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, 'MEMORY.md'), index);
+    fs.writeFileSync(path.join(folder, 'a.md'), note('user', 'a'));
+    fs.writeFileSync(victim, 'not a note of the memory folder\n');
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    // A planted manifest: its write set names the victim, and its after-state records the victim as the pass's own
+    // file, so an undo that trusted the write set would remove it.
+    const dir = path.join(stateDir, 'snapshots', stamp);
+    const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ stamp, at: new Date(NOW).toISOString(), folder, writeSet: ['../../victim.txt'], before: {} }));
+    fs.writeFileSync(path.join(dir, 'after.json'), JSON.stringify({ 'MEMORY.md': sha(index), '../../victim.txt': sha('not a note of the memory folder\n') }));
+    fs.writeFileSync(path.join(dir, 'after-index.txt'), index);
+
+    const named = (err) => err instanceof PassError && err.message === 'not a note of the memory folder: ../../victim.txt';
+    assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW + 1 }), named);
+    assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW + 1 }), named);
+    assert.equal(fs.readFileSync(victim, 'utf8'), 'not a note of the memory folder\n');
+    assert.equal(fs.readFileSync(path.join(folder, 'MEMORY.md'), 'utf8'), index);
+    assert.ok(!fs.readFileSync(path.join(stateDir, 'journal.jsonl'), 'utf8').includes('"kind":"undo"'));
+  } finally {
+    fs.rmSync(top, { recursive: true, force: true });
+  }
+});
+
 test('an undo from a snapshot whose after-index is gone is refused as damaged, before it writes anything', () => {
   withPass({ 'MEMORY.md': '- [A](a.md) — a long line\n', 'a.md': note('user', 'a') }, ({ folder, stateDir, read, write }) => {
     const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
@@ -471,4 +514,22 @@ test('an after-index that holds U+FFFD but is not the text of the index the pass
       assert.deepEqual(fs.readFileSync(path.join(folder, 'MEMORY.md')), NOT_UTF8, how);
     });
   }
+});
+
+test('verify and undo refuse a snapshot manifest that does not parse or names no write set as damaged, with a PassError', () => {
+  withPass({ 'MEMORY.md': '- [a](a.md) — a\n' }, ({ folder, stateDir }) => {
+    const { stamp } = planPass({ folder, stateDir, writeSet: ['MEMORY.md'], now: NOW });
+    const manifest = path.join(stateDir, 'snapshots', stamp, 'manifest.json');
+    const kept = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    for (const [text, why] of [
+      ['{ not json', 'its manifest.json does not parse'],
+      [JSON.stringify({ ...kept, writeSet: undefined }), 'its manifest.json names no write set'],
+      [JSON.stringify({ ...kept, writeSet: 'MEMORY.md' }), 'its manifest.json names no write set'],
+    ]) {
+      fs.writeFileSync(manifest, text);
+      const named = (err) => err instanceof PassError && err.message === `snapshot ${stamp} is damaged: ${why}`;
+      assert.throws(() => undoPass({ folder, stateDir, stamp, now: NOW + 1 }), named, text);
+      assert.throws(() => verifyPass({ folder, stateDir, stamp, homes: '', now: NOW + 1 }), named, text);
+    }
+  });
 });

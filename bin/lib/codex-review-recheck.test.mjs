@@ -177,7 +177,11 @@ test('the refusal of a second recheck says why and what to record instead', () =
   const said = secondRecheckRefused({ of: C, open: 2, base: 'origin/main' });
   assert.match(said, /^A second recheck of the findings of the review that ended at ccccccc is not run: the first left 2 findings not fixed or blocking\. Nothing was started or recorded\./);
   assert.ok(said.includes('Record a follow-up task'), said);
-  assert.ok(said.includes('`codex-review --base origin/main --unavailable "second recheck refused: <task>"`'), said);
+  // Every code commit of the range has a record already: a skip would record nothing without `--again`, and with it
+  // would say a covered range was not reviewed (codex-review.mjs, the skip). So the refusal advises none.
+  assert.ok(said.includes('Every code commit of this range has a record already'), said);
+  assert.ok(!said.includes('--unavailable'), said);
+  assert.ok(!said.includes('--again'), said);
   assert.match(secondRecheckRefused({ of: C, open: 0, base: 'x' }), /not run: the first found every one fixed\./);
   assert.match(secondRecheckRefused({ of: C, open: null, base: 'x' }), /not run: the counts of the first were not kept\./);
 });

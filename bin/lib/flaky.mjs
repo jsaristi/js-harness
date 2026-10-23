@@ -110,7 +110,7 @@ export function parseLedger(markdown) {
 /** The `flaky` row of the gate, as a list: empty when there is no ledger (`text` null), so a project that
  * keeps none sees no row. It fails for what the ledger alone shows, and for an entry whose file is no test
  * of the repository (`testFiles`) or whose failure is not in docs/FAILURES.md (`failureIds`, null when the
- * register cannot be read, and then not asked). An expired entry fails nothing: it is listed, and its file
+ * register cannot be read or does not parse whole, and then not asked). An expired entry fails nothing: it is listed, and its file
  * blocks again at the rerun. */
 export function ledgerRow(text, { testFiles, failureIds, today }) {
   if (text === null) return [];
@@ -187,9 +187,12 @@ export function checkLedger(cwd, { readFile = (file) => fs.readFileSync(file, 'u
     return [{ name: 'flaky', pass: false, detail: `cannot read ${LEDGER}: ${err.code ?? err.message}` }];
   }
   if (text === null) return [];
+  // Asked only of a register that parses whole: the entries of a damaged one are not all of them, so an id missing
+  // from them is not unknown (the `failures` row reports the damage, as project-rules-read does).
   let failureIds = null;
   try {
-    failureIds = parseRegister(readFile(path.join(cwd, 'docs', 'FAILURES.md'))).entries.map((one) => one.id);
+    const register = parseRegister(readFile(path.join(cwd, 'docs', 'FAILURES.md')));
+    if (register.errors.length === 0) failureIds = register.entries.map((one) => one.id);
   } catch {
     failureIds = null;
   }

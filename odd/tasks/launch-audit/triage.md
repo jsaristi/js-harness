@@ -1,0 +1,189 @@
+Launch audit triage of stages 3-5, read at `41070e0ef167643ce29f10ae71cfe494d0ed6fa7`: 223 rows; 148 triaged (blocker 14, should 67, nit 67; 18 of them in the running fix slice); 75 skipped (his 49, not defects 16, instruction rows awaiting a home 10).
+
+Rules applied: a refuter's amended sentence wins over the reader's text. Blocker means wrong behavior that acts on the wrong target or reports a false success, data loss or escape from a folder, a crash on the undo path, or a contradiction a model will act on. Should means a real defect or gap that is not a blocker. Nit means style, wording that misleads no one, or a test seam's name. Groups are fix slices of about 400 changed lines or less, and each owns its files. `README.md` and `docs/SPEC.md` are the exception: they are shared by section, and each row names the section it changes. A group listed later that shares a code file with an earlier one runs after it.
+
+## Blocker
+- C-a-1. `upgrade --home` with no path falls back to the real home, and `--prefix --home X` installs with the prefix `--home`: a silent action on the wrong folder. Files: bin/update.mjs, bin/update.test.mjs. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-b-1. `permit lease --of` takes a 40-minute lease instead of ending it, so a typo does the opposite of what was asked, on the relay that gates permission verdicts. Files: bin/permit.mjs, bin/permit.test.mjs. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-b-2. `permit lease --session --take-over` writes a lease for the session "--take-over" and takes the relay over, so a flag becomes the credential. Files: bin/permit.mjs, bin/permit.test.mjs. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-b-40. This row duplicates C-b-1/C-b-2 (refuter: kind duplicate) and keeps their severity: permit runs past an unknown flag with exit 0. Files: bin/permit.mjs, bin/permit.test.mjs. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-c-2. With an empty `JS_HARNESS_HOME`, `remote` and `tui` write state, log, lock and marker files into the working repository, an escape from the home folder. Files: bin/remote.mjs, bin/tui.mjs, bin/remote.test.mjs, bin/tui.test.mjs. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-shared-1. A malformed machine manifest crashes `uninstall --global` (and `status --global`, `upgrade`) with a raw stack, which is a crash on the undo path. Files: bin/lib/manifest.mjs, bin/update.mjs, bin/install.mjs, tests. Group: S0 fix-slice (in fix slice). Risk: item 1.
+- C-shared-2. `writeManifest` writes the undo record in place, so a crash or a full disk mid-write loses the record that uninstall needs. Files: bin/lib/manifest.mjs, bin/lib/project.mjs (helper reuse), tests. Group: S0 fix-slice (in fix slice). Risk: item 1.
+- C-d-1. `memory undo` follows a planted manifest outside `snapshots/` and deletes files its writeSet names outside the memory folder (refuter reproduced deleting `$T/victim.txt`). Files: bin/lib/memory-pass.mjs, bin/memory.mjs, tests. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-d-2. A raw ENOENT crash on the undo path, reachable only through C-d-1's traversal and fixed by its stamp check. Files: bin/lib/memory-pass.mjs, tests. Group: S0 fix-slice (in fix slice). Risk: item 2.
+- C-backup-1. Under the default scope every checkout below a drive's top folder (most users) is silently left out of the memory backup, and `ready` does not flag it: data loss after a wipe; per the refuter, the fix must compare git-listed checkout slugs, because the suffix fix would send another project's memory to GitHub. Files: bin/lib/backup.mjs, bin/lib/backup.test.mjs. Group: S1 backup-data. Risk: item 2.
+- C-backup-10. `backup ready`, the check before a reinstall, does not count subagent transcripts below depth 2 (694 files, 698 MB on this machine), so it can report ready while they are uncopied: data loss on the wipe path. Files: bin/lib/backup-ready.mjs, bin/lib/backup-ready.test.mjs. Group: S1 backup-data.
+- C-backup-4. A bare `backup init --summary-repo` records the working folder as the summary repository with exit 0, so later runs write the memory summary into whatever repository that is. Files: bin/backup.mjs, bin/backup.test.mjs. Group: S2 backup-cli. Risk: item 2.
+- C-b-25. `JS_HARNESS_CHECK_INNER=1`, which every sensor's child inherits, makes the single gate print PASS with no lock and no sensor run: a false success on the gate. Files: bin/check.mjs, bin/check.test.mjs. Group: S3 check-gate. Risk: item 2.
+- C-b-35. The rules hook writes `rules-seen/` under the real home even when `JS_HARNESS_HOME` is set, and uninstall leaves it behind: an escape from the declared home with no undo record. Files: bin/lib/rules-reach.mjs, bin/lib/rules-reach.test.mjs. Group: S4 homes-resume. Risk: item 2.
+
+## Should
+- C-a-2. Test gap that pins C-a-1, with no wrong behavior of its own. Files: bin/update.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-a-8. `functions --cwd` takes a following flag as its path, but it refuses loudly (no such directory) and writes nothing. Files: bin/functions.mjs, bin/functions.test.mjs. Group: S0 fix-slice (in fix slice). Risk: item 3.
+- C-c-1. `sessions --peek` swallows the next token, so a stray flag is accepted or a value is misread; the command is read-only. Files: bin/sessions.mjs, bin/sessions.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-shared-3. Test gap for C-shared-1 at status --global, upgrade, install, sync and uninstall --global (per the refuter, the menu and doctor are already pinned). Files: bin/update.test.mjs, bin/install.test.mjs, bin/lib/manifest.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-shared-6. `addedLines` drops an added line that starts with `++ ` and misfiles the lines after it, so the gate's citation and tick rows read the wrong file; the input is rare. Files: bin/lib/citations.mjs, bin/lib/citations.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-d-3. `subagents` cuts days with today's offset, so the days across a clock change are off by an hour in a report. Files: bin/subagents.mjs, bin/subagents.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-e-2. audit-hygiene accepts an allow entry with no `why`, against the ledger rule its siblings enforce. Files: scripts/audit-hygiene.mjs, scripts/audit-hygiene.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-e-3. audit-flags never creates the home folders it points to, so probes die with ENOENT and are reported unprobed. Files: scripts/audit-flags.mjs, scripts/audit-flags.test.mjs. Group: S0 fix-slice (in fix slice).
+- B1. The practice journey fails on its own expectation at `project-uninstall` and skips six steps, so the release rehearsal proves nothing past that point. Files: scripts/practice-lib.mjs, scripts/practice-lib.test.mjs. Group: S0 fix-slice (in fix slice).
+- C-backup-2. Test gap that would have caught C-backup-1 (nested and POSIX slugs). Files: bin/lib/backup.test.mjs. Group: S1 backup-data.
+- C-backup-5. `backup init --repo` over a clone of another repository reports success, and the mismatch surfaces at the next push, which refuses loudly. Files: bin/backup.mjs, bin/backup.test.mjs. Group: S2 backup-cli.
+- C-backup-12. No backup subcommand refuses an unknown flag, so a typo runs with defaults. Files: bin/backup.mjs, bin/backup.test.mjs. Group: S2 backup-cli. Risk: item 3.
+- C-backup-7. The usage's undo sentence ("deleting that folder undoes everything") is false: the summary branch, the transcripts repositories and the restore files survive, against the repo's exact-undo rule. Files: bin/backup.mjs. Group: S2 backup-cli.
+- C-backup-9. Restore's refusal says `--merge` adds the backup, while the measured behavior and the fallback text say it adds only what Engram lacks; the wording can deter the restore the skill prescribes. Files: bin/lib/backup-restore.mjs. Group: S2 backup-cli.
+- C-b-16. `check` accepts and ignores another mode's flags (`check --head nosuchrev` prints PASS); per the refuter, `--remote` stays legal without `--push`. Files: bin/check.mjs, bin/check.test.mjs. Group: S3 check-gate. Risk: item 3.
+- C-b-19. README never names the harness.json keys (`documents`, `documentSensors`, `exactTests`) whose bad value fails the gate. Files: README.md (check section). Group: S3 check-gate.
+- C-b-21. The payload row misses the PostToolUse, SubagentStart and PreToolUse hooks that inject context, so the fixed-load measure undercounts. Files: bin/lib/payload.mjs, bin/lib/payload.test.mjs. Group: S3 check-gate.
+- C-b-28. The `spec` row passes a Proof whose test file was deleted; nothing is missing today. Files: bin/lib/spec.mjs, bin/lib/spec.test.mjs. Group: S3 check-gate.
+- C-c-3. With `CLAUDE_CONFIG_DIR` set, the memory folder is looked up under `<home>/.claude`, so the hygiene notice never fires; per the refuter, the fix belongs in the shared `memoryLocation`, which `js-harness memory` also uses. Files: bin/lib/memory-hygiene.mjs, bin/resume.mjs, tests. Group: S4 homes-resume. Risk: item 3.
+- C-c-5. A cleared session gets no resume lines; per the refuter this is an unmet spec item, already decided at harness-review L12: matcher `compact|clear|startup`, speaking on `startup` only with `priorCliSessionIds`. Files: bin/lib/manifest.mjs (:416), bin/resume.mjs, tests. Group: S4 homes-resume. Risk: item 3.
+- C-b-8. A `--unavailable` skip at a merge prints the merge message and records `diff: "remerge"` for a review that read nothing, so the record misstates itself. Files: bin/codex-review.mjs, bin/codex-review.test.mjs. Group: S5 codex-review.
+- C-b-9. Test gap behind C-b-8: no test runs `--unavailable` at a merge head. Files: bin/codex-review.test.mjs. Group: S5 codex-review.
+- C-b-10. When every commit is covered, the second-recheck refusal advises a skip that records nothing. Files: bin/lib/codex-review-recheck.mjs, its test. Group: S5 codex-review.
+- C-b-11. The same refusal sends a policy refusal to `--unavailable`, which the help reserves for a machine where Codex cannot run, and a model acting on it records a misleading skip that the pre-push coverage guard accepts. Files: bin/lib/codex-review-recheck.mjs, bin/codex-review.mjs, tests. Group: S5 codex-review. Risk: item 2.
+- C-b-12. Outside a gate turn, `--prompt codex` is silently replaced by `own`, and two comments still say `codex` is the default, so the help misleads every manual run. Files: bin/codex-review.mjs, bin/lib/codex-review-prompt.mjs. Group: S5 codex-review.
+- C-b-22. The guard's heavy-test check misses `FOO=1 node --test` and `env ... node --test`, so that run is not refused beside a held lock. Files: bin/lib/test-run-warning.mjs, bin/lib/test-run-warning.test.mjs. Group: S6 guard-tests. Risk: item 2.
+- C-b-23. The guard passes `npm test`, which runs the whole suite (per the refuter, `npm run check` waits under the lock and is fine). Files: bin/lib/test-run-warning.mjs, bin/lib/test-run-warning.test.mjs. Group: S6 guard-tests. Risk: item 2.
+- C-b-33. SPEC's guard requirement omits two refusals the code makes and two modules the hook loads. Files: docs/SPEC.md (guard section). Group: S6 guard-tests.
+- C-b-5. The land's stale-code guard compares only `bin/merge-queue.mjs`, so stale `check.mjs` or lib modules can land; per the refuter, the fix compares every `bin/**` file by content with `git show`, because an installed copy has no checkout. Files: bin/merge-queue.mjs, bin/merge-queue.test.mjs. Group: S7 gate-queue. Risk: item 2.
+- C-b-29. `gate` checks for a waiting push only on arrival, so a push that becomes due during the wait is jumped. Files: bin/gate.mjs, bin/gate.test.mjs. Group: S7 gate-queue. Risk: item 4.
+- C-b-32. On Linux and macOS the refresh prune never finds a broken shim (it reads only `.cmd` files with backslashes). Files: bin/lib/refresh-copy.mjs, bin/lib/refresh-copy.test.mjs. Group: S7 gate-queue.
+- C-c-4. `wake` reads an unreadable record as empty, so its "second run records nothing" guard fails and the notice is written again. Files: bin/wake.mjs, bin/wake.test.mjs. Group: S8 channel.
+- C-c-6. `unseen` passes when it cannot read a location, while SPEC says that is a failure line. Files: bin/unseen.mjs, bin/lib/app-record.mjs, tests. Group: S8 channel.
+- C-c-7. The one unreadable-location failure `unseen` codes has no test. Files: bin/unseen.test.mjs. Group: S8 channel.
+- C-c-9. `remote` keeps its own copy of the Startup-file location helpers, and uninstall depends on those agreeing. Files: bin/remote.mjs, bin/lib/startup-file.mjs. Group: S8 channel.
+- C-d-4. `subagents` and `audit` duplicate the parser and day helpers, which is how the DST fix reached only one of them (C-d-3). Files: bin/subagents.mjs, bin/audit.mjs, a new bin/lib module, tests. Group: S9 days-ids.
+- C-d-19. contract and pace read task IDs with different grammars (`C3` against only `T`), so pace miscounts a checklist that contract accepts; per the refuter, the grammars to compare are in sessions.mjs and pace. Files: bin/lib/progress-pace.mjs, bin/lib/contract.mjs, bin/lib/sessions.mjs (taskId export), tests. Group: S9 days-ids.
+- C-b-24. The `subagents` row says every launch ran on the rules' models even when one role was never compared. Files: bin/lib/subagent-check.mjs, its test. Group: S9 days-ids.
+- C-d-9. `loop`'s parse refusals have no test (per the refuter, the value checks are pinned already). Files: bin/loop.test.mjs. Group: S10 refusals.
+- C-d-12. `throughput snapshot` exits 2, documented as a usage error, for refusals of state. Files: bin/throughput.mjs, bin/throughput.test.mjs. Group: S10 refusals. Risk: item 3.
+- C-e-4. The flag probe misreads refusals worded differently ("needs a value", "is not an option of"), which inflates M9 with false unprobed rows. Files: scripts/audit-flags.mjs, scripts/audit-flags.test.mjs. Group: S11 audit-scripts.
+- C-backup-13. The probe needs subcommand-aware placement and a valid value to reach backup's flags. Files: scripts/audit-flags.mjs, scripts/audit-flags.test.mjs. Group: S11 audit-scripts.
+- C-e-5. audit-exports never scans the shipped `.cjs` modules that S5c covers. Files: scripts/audit-exports.mjs, scripts/audit-exports.test.mjs. Group: S11 audit-scripts.
+- C-e-13. The secret scan has no npm token shape; per the refuter the risk is a developer's token in a committed `.npmrc`, so this is lower than a publish risk. Files: scripts/audit-hygiene.mjs, scripts/audit-hygiene.test.mjs. Group: S11 audit-scripts. Risk: item 2.
+- C-e-1. engines promises Node 22, but CI runs only 24.21.0, so the untraced branch for Node 22.0-22.14 is never run. Files: .github/workflows/gate.yml, .circleci/config.yml or package.json (engines). Group: S12 release-scripts. Risk: item 3.
+- C-e-6. e2e's `--pm` breaks when node sits under a path with a space, which is the Windows default; it was not reproduced. Files: scripts/e2e.mjs. Group: S12 release-scripts.
+- C-e-8. Four manual proof scripts have no test of their pure parts (per the refuter, tui-walk is reachable from task contracts). Files: scripts/{tui-walk,sandbox,e2e,release-proof}.test.mjs (new). Group: S12 release-scripts.
+- B9. `practice setup` fails on a machine with no git identity, while release-proof brings its own. Files: scripts/practice.mjs, scripts/practice.test.mjs. Group: S12 release-scripts.
+- B10. With no `eol` for `bin/**`, a pack from a CRLF checkout ships a `node\r` shebang and `pnpm pack` refuses. Files: .gitattributes. Group: S12 release-scripts. Risk: item 5.
+- C-a-5. SPEC says every switch takes on, off or auto, but `codeMap` refuses `on` (README is right). Files: docs/SPEC.md (functions section). Group: S13 install-cli.
+- B3. `uninstall --global --everything` runs the PATH `npm`, which fails on a pnpm wrapper and keeps the program.; the failure is safe (exit 1) but breaks the repo's own PATH-npm rule. Files: bin/install.mjs, bin/lib/package-manager.mjs, tests. Group: S13 install-cli. Risk: item 3.
+- C-clean-1. Plain `clean` writes `clean.json` and creates `~/.js-harness` when it is absent, a write that the help does not name and that no install recorded. Files: bin/clean.mjs, bin/clean.test.mjs, README.md (clean section). Group: S14 small-areas.
+- C-clean-2. `--json` is silently ignored with `--apply` or `--measure` in a deleting command, while other combinations are refused. Files: bin/clean.mjs, bin/clean.test.mjs. Group: S14 small-areas. Risk: item 3.
+- C-onboard-1. The dispatcher and onboard give different exit-1 causes, and a profile error exits 2, which is reserved for usage errors. Files: bin/onboard.mjs, bin/js-harness.mjs (:13), tests. Group: S14 small-areas. Risk: item 3.
+- C-stack-1. Doctor's fix lines tell a pnpm machine to `npm i -g`, the command the stack rule forbids, and a model runs those lines; per the refuter, `planStack` is unaffected. Files: bin/lib/stack.mjs, bin/lib/stack.test.mjs. Group: S14 small-areas.
+- C-backup-3. The dispatcher help says `backup run` exports every project, but the default is js-harness only, so users misjudge what is backed up. Files: bin/js-harness.mjs (:48). Group: S14 small-areas.
+- C-shared-12. settings-key re-implements the manifest's indent and serialization for the same host files, so the two can drift on a file that uninstall restores. Files: bin/lib/settings-key.mjs, bin/lib/manifest.mjs. Group: S15 shared-helpers. Risk: item 3.
+- C-shared-14. The session-id pattern is copied three times, and rules-change-run accepts ids the others reject; which shape is right is the lead's call. Files: bin/lib/pause.mjs, bin/lib/inbox.mjs, bin/lib/rules-reach.mjs, bin/lib/rules-change-run.mjs. Group: S15 shared-helpers. Risk: item 2.
+- C-b-36. `rules change --dry-run` is said to write nothing, but it runs `git fetch` and moves `origin/main`. Files: bin/lib/rules-change-run.mjs, README.md (rules section). Group: S15 shared-helpers.
+- C-shared-7. flaky treats a register's partial entries as the full id set, so it reports a valid id as unknown when the register has a parse error. Files: bin/lib/flaky.mjs, its test. Group: S16 shared-tests.
+- C-shared-11. Per the refuter, only `fs.openAsBlob` escapes the read tracer, so exact test selection can skip a test that reads through it; nothing uses it today. Files: bin/lib/trace-reads.cjs, its test. Group: S16 shared-tests.
+- C-shared-16. web-block has no test, and windows-args (cmd.exe quoting) has no positive quoting case. Files: bin/lib/web-block.test.mjs, bin/lib/windows-args.test.mjs (new). Group: S16 shared-tests.
+- C-d-8. `failures check --settled`, a SPEC Proof, exits 1 at HEAD for two causes: one control phrase drifted from AGENTS.md:82, and board-read-loads-gate, was seen again after its control and needs a new dated control. Files: docs/FAILURES.md. Group: S18 docs.
+- C-e-9. Live docs cite `path:line` locations that now hold other code (ROADMAP :1062, :1186, todo :15). Files: docs/ROADMAP.md, docs/todo.md. Group: S18 docs.
+- B5. The ROADMAP says no release is tagged while four are, and a session starts at the ROADMAP. Files: docs/ROADMAP.md (:49). Group: S18 docs.
+- B4. Nothing proves Codex runs the harness's hooks or records trust for them; the probe needs one Codex session, which is a spend and his go-ahead. Files: none until the probe (then bin/lib/manifest.mjs if trust must be written). Group: P probes.
+- B8. `doctor --hook` took 4.2-8.5 s of its 10 s timeout under load.; one loaded sample is no diagnosis, so measure on a quiet machine first. Files: bin/doctor.mjs or bin/lib/manifest.mjs (hook timeout). Group: P probes. Risk: item 3.
+
+## Nit
+- C-backup-8. The usage says status prints "the last run", which it does not. Files: bin/backup.mjs. Group: S2 backup-cli.
+- C-backup-11. Status says "no upstream yet" when the clone itself is missing. Files: bin/backup.mjs. Group: S2 backup-cli.
+- C-b-17. The README example of plain `check` shows rows that only `--verbose` prints. Files: README.md (check section). Group: S3 check-gate.
+- C-b-18. `check --help` names flags it never explains. Files: bin/check.mjs. Group: S3 check-gate.
+- C-b-27. `checkExactCount` rows lack `info: true` and print as PASS. Files: bin/check.mjs. Group: S3 check-gate.
+- C-c-14. `resume`'s help says it always exits 0, but a usage error exits 2 (deliberately). Files: bin/resume.mjs. Group: S4 homes-resume.
+- C-b-42. `rules --hook` refuses in its own wording rather than `unknown argument: <token>`. Files: bin/lib/rules-reach.mjs. Group: S4 homes-resume.
+- C-d-5. The 150-character index limit and the rule types are each declared twice, with equal values today. Files: bin/lib/memory-hygiene.mjs, bin/lib/memory-index-guard.mjs, bin/lib/memory-rules.mjs. Group: S4 homes-resume.
+- C-d-11. A comment points `lockLine`'s twin at manifest.mjs, but it lives in install.mjs. Files: bin/lib/memory-pass.mjs. Group: S4 homes-resume.
+- C-b-13. The codex-review help omits `--doc`, `--part-lines`, `--fresh`, `--keep-home` and the two-turn merge cut. Files: bin/codex-review.mjs. Group: S5 codex-review.
+- C-b-14. The timeout message names the constant, not the injected bound. Files: bin/codex-review.mjs. Group: S5 codex-review.
+- C-b-15. The remerge error names a `git diff` that was not run. Files: bin/codex-review.mjs. Group: S5 codex-review.
+- C-b-38. Three dead test-only exports in codex-review-runs (per the refuter, `heldInProcess` is a documented seam). Files: bin/lib/codex-review-runs.mjs, its test. Group: S5 codex-review.
+- C-b-7. A merge-queue test's name says "refuses for now". Files: bin/merge-queue.test.mjs. Group: S7 gate-queue.
+- C-b-26. Two gate-wsl comments describe a discarded design. Files: bin/lib/gate-wsl.mjs. Group: S7 gate-queue.
+- C-b-30. README restates gate's 30-minute bound instead of naming `rule:gate-max`; the value is correct today. Files: README.md (gate section). Group: S7 gate-queue.
+- C-b-31. `gate --help` lists `first`, `log --last`, `--home` and `--cwd` without explaining them. Files: bin/gate.mjs. Group: S7 gate-queue.
+- C-c-8. `tuiMain`'s flag parser is reachable only from tests; name it a test seam or inject the values. Files: bin/tui.mjs. Group: S8 channel.
+- C-c-10. wake's Startup launcher text mirrors remote's login launcher. Files: bin/wake.mjs, bin/lib/remote.mjs, bin/lib/startup-file.mjs. Group: S8 channel.
+- C-c-11. A README example omits the question state. Files: README.md (reply section). Group: S8 channel.
+- C-c-12. README says only a decision close is exempt from the wake warning, but a question close is exempt too (per the refuter, SPEC needs no change). Files: README.md (reply section). Group: S8 channel.
+- C-c-13. notify's help gives two lists of exit-1 causes. Files: bin/notify.mjs. Group: S8 channel.
+- C-c-16. `reply --hook <extra>` prints the usage without naming the bad token. Files: bin/reply.mjs. Group: S8 channel.
+- C-shared-17. `scheduledTasks` is a dead test-only export. Files: bin/lib/app-record.mjs. Group: S8 channel.
+- C-d-6. The failures refusal says "twelve" literally instead of reading `control-phrase-min`; the value matches today. Files: bin/lib/failures.mjs. Group: S9 days-ids.
+- C-d-17. `parseSteps` is dead apart from its tests. Files: bin/lib/progress.mjs, bin/lib/progress.test.mjs. Group: S9 days-ids.
+- C-d-7. The throughput usage and README restate two rule values as words; they match today. Files: bin/throughput.mjs, README.md (throughput section). Group: S10 refusals.
+- C-d-13. `loop` refuses with "is not an option of" instead of `unknown argument:`. Files: bin/loop.mjs, bin/conventions-arguments.test.mjs. Group: S10 refusals.
+- C-d-14. `throughput` has the same refusal wording. Files: bin/throughput.mjs, bin/conventions-arguments.test.mjs. Group: S10 refusals.
+- C-d-15. `windows-daily` has the same refusal wording. Files: bin/windows-daily.mjs, bin/conventions-arguments.test.mjs. Group: S10 refusals.
+- C-e-7. sandbox re-implements `globalPackageDir`. Files: scripts/sandbox.mjs. Group: S11 audit-scripts.
+- C-e-12. audit-hygiene's header says four kinds and names three. Files: scripts/audit-hygiene.mjs. Group: S11 audit-scripts.
+- C-e-15. 64 export keywords in scripts/ and evals/ are imported by nothing; the lead chooses between dropping them and leaving them out of S5c. Files: scripts/*.mjs, evals/*.mjs. Group: S11 audit-scripts.
+- C-e-14. No test ties the workflows' node-version to the CircleCI image; they match today. Files: scripts/github-workflows.test.mjs. Group: S12 release-scripts.
+- C-a-4. The test title "exits 0 even on unusable arguments" pins only a missing value; the exit-2 test waits on his C-a-3. Files: bin/doctor-hook.test.mjs. Group: S13 install-cli.
+- C-a-6. `status` accepts and advertises `--pm` and `--prefix` and never reads them. Files: bin/update.mjs, bin/update.test.mjs. Group: S13 install-cli. Risk: item 3.
+- C-a-7. `init --home` is parsed and unused, and its comment names a missing `parseHome`. Files: bin/init.mjs. Group: S13 install-cli. Risk: item 3.
+- C-a-9. A stale comment says update "keeps the lenient parse". Files: bin/update.mjs. Group: S13 install-cli.
+- C-a-10. Doc comments in install.mjs are detached from their functions. Files: bin/install.mjs. Group: S13 install-cli.
+- C-a-11. A doc comment names the row `gentle-ai-update`, but its id is `gentle-ai-sync`. Files: bin/lib/gentle-ai-update.mjs. Group: S13 install-cli.
+- B11. `sync --global` prints "registered hook entry" 18 times for entries already present. Files: bin/install.mjs. Group: S13 install-cli.
+- C-onboard-2. Stacked JSDoc blocks misname a function. Files: bin/lib/onboard.mjs. Group: S14 small-areas.
+- C-report-1. One README sentence omits that merges start at the recorded commit; the README says so twenty lines earlier. Files: README.md (report section). Group: S14 small-areas.
+- C-report-2. A stale duplicate JSDoc line. Files: bin/report.mjs. Group: S14 small-areas.
+- C-stack-2. The lib/stack.mjs header still calls `outdated` T2's job. Files: bin/lib/stack.mjs. Group: S14 small-areas.
+- C-shared-4. `recordOptionalFile`'s list of manifest readers is wrong (two missing, one key misdescribed). Files: bin/lib/manifest.mjs. Group: S15 shared-helpers.
+- C-shared-10. The `NOTICE_KINDS` comment omits `ready`. Files: bin/lib/channel.mjs. Group: S15 shared-helpers.
+- C-shared-13. `endsUnterminated` is defined three times. Files: bin/lib/channel.mjs, bin/lib/codex-reviews.mjs, bin/lib/gate-log.mjs. Group: S15 shared-helpers.
+- C-shared-15. pause and inbox duplicate the tail size and the atomic state writer. Files: bin/lib/pause.mjs, bin/lib/inbox.mjs. Group: S15 shared-helpers.
+- C-shared-8. The conventions-voice comment claims all shipped text avoids "the owner", but the profiles say it, and narrowing the comment is a nit while rewording the profiles would be shipped prompt text. Files: bin/conventions-voice.test.mjs. Group: S16 shared-tests.
+- C-shared-9. The process.exit convention skips `.cjs`, where the one correct exit lives; the fix reads `.cjs` with a named exemption. Files: bin/conventions-errors.test.mjs. Group: S16 shared-tests.
+- C-shared-21. `identifyProcesses` is a dead test-only export (per the refuter, the other four are used). Files: bin/lib/process-tree.mjs. Group: S16 shared-tests.
+- C-shared-22. `shapeFindings` is a dead test-only export. Files: bin/lib/profiles.mjs. Group: S16 shared-tests.
+- C-shared-26. `ROLES` is a dead test-only export. Files: bin/lib/subagent-count.mjs. Group: S16 shared-tests.
+- C-shared-27. `readTrace` and three re-exports are dead in the `.mjs` wrapper. Files: bin/lib/trace-reads.mjs. Group: S16 shared-tests.
+- C-shared-29. `ratchet.mjs` is a test helper that ships, so rename it `ratchet.testkit.mjs`. Files: bin/lib/ratchet.mjs, bin/conventions-*.test.mjs, bin/lib/ratchet.test.mjs. Group: S16 shared-tests. Risk: item 3.
+- N28. The orchestrator skill restates rule wait-for as "8 hours"; the interpolated text stays byte-identical. Files: bin/lib/manifest.mjs. Group: S17 skill-values. Risk: item 3.
+- N29. The skills restate permit's 9.5 and 40 minutes and the 150 characters as literals; the interpolated text stays byte-identical. Files: bin/lib/manifest.mjs, bin/permit.mjs (export the constants). Group: S17 skill-values. Risk: item 3.
+- B6. README says the home keeps empty `.claude/` and `.codex/` after uninstall, but both are removed. Files: README.md (Install, :63). Group: S18 docs.
+- B7. The README install example is cut without "…". Files: README.md (:302-319). Group: S18 docs.
+- C-e-11. Per the refuter, add docs/model-effort.md to S4a's history list. Files: odd/tasks/launch-audit.md (S4a). Group: S18 docs.
+- B15. A stale practice-project worktree has a dangling `.git`; remove it after checking that nothing is unsaved. Files: none (machine). Group: H housekeeping.
+- B16. The orca worktree `copepod` is merged and 2741 commits behind. Files: none (machine). Group: H housekeeping.
+- B17. The orca worktree `medaka` is in the same state. Files: none (machine). Group: H housekeeping.
+- B19. The `session-board` worktree is merged; look at its untracked `Microsoft/` first. Files: none (machine). Group: H housekeeping.
+- B20. The merged branch `feat/subagent-model-routing` is still in the clone. Files: none (machine). Group: H housekeeping.
+- B21. The merged branch `feat/gate-log` is still in the clone. Files: none (machine). Group: H housekeeping.
+
+## Skipped
+- His rows (49): N1, N2, N3, N4, N6, N7, N8, N12, N13, N14, N17, N18, N19, N20, N21, N22, N23, N26, N33, N35, N36, N37, N38, N39, N40, N41, N42, N43, N44, N46, N48, N49, N50, N51, C-a-3, C-b-3, C-b-4, C-b-6, C-b-20, C-b-34, C-b-37, C-backup-6, C-shared-5, B2, B12, B13, B14, B18, B22.
+- Not defects (16): N25 (history), N27 (wrong), C-a-12 (seam), C-a-13 (seam), C-a-14 (no-row), C-b-39 (seam), C-b-41 (no-defect), C-c-17 (wrong), C-c-18 (wrong), C-c-19 (seam), C-d-16 (wrong), C-d-18 (wrong), C-backup-14 (seam), C-clean-3 (seam), C-onboard-3 (seam), C-stack-3 (seam). N27, C-c-17 and C-d-16 still name optional probe and scan fixes (narrower rules-scan patterns; key flags by the command that reads them; pass a valid value), and C-b-41 names an allow-list of four foreign flags in scripts/audit-flags.mjs.
+- Instruction rows awaiting a home (10): N9, N10, N16, N24, N30, N31, N32, N34, N45, N47. N32 comes first when a home is chosen: in the `ok` state the Engram fallback notice tells a model that Engram "is not working", and a model acts on that text.
+
+## Counts
+- Severity: blocker 14, should 67, nit 67 (148 triaged; 18 in the running fix slice: blocker 9, should 9).
+- Skipped: 75 (his 49, not defects 16, instruction rows 10). Total 223 = stage 3's 48 + stage 4's 153 + stage 5's 22.
+- By group, in the order to fix them:
+  - S0 fix-slice (running): 18 (blocker 9, should 9).
+  - S1 backup-data: 3 (blocker 2, should 1).
+  - S2 backup-cli: 7 (blocker 1, should 4, nit 2).
+  - S3 check-gate: 8 (blocker 1, should 4, nit 3).
+  - S4 homes-resume: 7 (blocker 1, should 2, nit 4).
+  - S6 guard-tests: 3 (should 3).
+  - S5 codex-review: 9 (should 5, nit 4).
+  - S7 gate-queue: 7 (should 3, nit 4).
+  - S13 install-cli: 9 (should 2, nit 7).
+  - S8 channel: 11 (should 4, nit 7).
+  - S14 small-areas: 9 (should 5, nit 4).
+  - S9 days-ids: 5 (should 3, nit 2).
+  - S10 refusals: 6 (should 2, nit 4).
+  - S15 shared-helpers: 7 (should 3, nit 4).
+  - S16 shared-tests: 10 (should 3, nit 7).
+  - S11 audit-scripts: 7 (should 4, nit 3).
+  - S12 release-scripts: 6 (should 5, nit 1).
+  - S18 docs: 6 (should 3, nit 3).
+  - S17 skill-values: 2 (nit 2).
+  - P probes: 2 (should 2; B4 needs his yes to a spend).
+  - H housekeeping: 6 (nit 6; no repository file).
+- Ordering constraints: S13, S4, S15 and S17 share bin/update.mjs, bin/install.mjs, bin/lib/manifest.mjs or bin/permit.mjs with S0, so they run after S0. S8 shares bin/remote.mjs and bin/tui.mjs with S0. S9 shares bin/subagents.mjs with S0. S11 shares scripts/audit-flags.mjs and scripts/audit-hygiene.mjs with S0. S15 shares bin/lib/rules-reach.mjs and bin/lib/manifest.mjs with S4.

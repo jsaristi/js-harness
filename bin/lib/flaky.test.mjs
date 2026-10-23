@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
-import { failedTestFiles, judgeRerun, ledgerRow, localDay, parseLedger } from './flaky.mjs';
+import { checkLedger, failedTestFiles, judgeRerun, ledgerRow, localDay, parseLedger } from './flaky.mjs';
 
 const FILES = ['bin/a.test.mjs', 'bin/b.test.mjs', 'evals/suite.test.mjs'];
 
@@ -152,4 +155,38 @@ test('a failure in a file that cannot be rerun safely, or in no test file of the
 
 test('a failed test the summary lists with no location means no rerun at all, since a rerun of the others could hide it', () => {
   assert.deepEqual(failedTestFiles(`${SPEC}\n\n✖ a test with no location (1ms)\n  Error: boom`, FILES), []);
+});
+
+// The gate reads the ledger and the register of a repository (`checkLedger`), so these run on one of its own.
+const REGISTER = (...lines) => ['# Failures', '', '## Classes', '', '- `machine` — load or leftovers: processes, folders, locks', '', '## Entries', '', ...lines].join('\n');
+const SEEN = '- Seen: 2026-10-11 — relief file, line 224 — a gate at 1,188 s of 1,200';
+
+/** The rows the gate gives a repository with one test file, a ledger `ledgerText` and a register `register`. */
+function gateRows(ledgerText, register) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-flaky-'));
+  try {
+    fs.mkdirSync(path.join(root, 'bin'));
+    fs.writeFileSync(path.join(root, 'bin', 'a.test.mjs'), '');
+    fs.mkdirSync(path.join(root, 'docs'));
+    fs.writeFileSync(path.join(root, 'docs', 'FLAKY.md'), ledgerText);
+    fs.writeFileSync(path.join(root, 'docs', 'FAILURES.md'), register);
+    return checkLedger(root, { today: '2026-10-15' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test('a register that does not parse whole names no id unknown: the entries it loses are not read as missing (C-shared-7)', () => {
+  // The fence left open under the first entry swallows every entry after it, so good-entry is in the file but not in the read.
+  const register = REGISTER('### broken-one', 'What happened.', '```', '- Class: machine', '', '### good-entry', 'What happened, in a sentence.', '- Class: machine', SEEN, '');
+  const rows = gateRows(ledger(entry('bin/a.test.mjs', { failure: 'good-entry' })), register);
+  assert.deepEqual(rows, [{ name: 'flaky', pass: true, detail: 'docs/FLAKY.md quarantines 1 test file, 1 of them current; an expired entry no longer counts, so its file blocks again', lines: [] }]);
+});
+
+test('a whole register still names an id it lacks, so the gate fails the ledger row', () => {
+  const register = REGISTER('### good-entry', 'What happened, in a sentence.', '- Class: machine', SEEN, '');
+  const rows = gateRows(ledger(entry('bin/a.test.mjs', { failure: 'never-recorded' })), register);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].pass, false);
+  assert.deepEqual(rows[0].lines, ['bin/a.test.mjs: no entry "never-recorded" in docs/FAILURES.md']);
 });

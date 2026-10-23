@@ -1468,6 +1468,8 @@ test('--session current is a usage error since the session was removed: exit 2 w
 
 // The last line of the usage: a run pays for no review twice, the flag that reviews again on purpose, and a
 // merge of the default branch read by what was written in it.
+const PROMPT_DEFAULT_SAID =
+  '`--prompt codex` is the default in a turn of the gate lock; out of one, a run by hand, every review is asked with `own`, and the command says so when `codex` was given.';
 const STARTS_WHERE_RECORDS_END =
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
   'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.';
@@ -1486,6 +1488,7 @@ test(`the usage names no session: its flags are those of a review, and its secon
   assert.deepEqual(more, [
     '--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
+    PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
   ]);
   assert.ok(loads.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`), loads);
@@ -5467,6 +5470,18 @@ test('a merge that took one side whole is no code commit and starts no review, a
   assert.match(result.out, /a Codex review record already covers/);
 });
 
+test('a skip at a merge of the default branch reads nothing: it says no merge is read by what was written in it, and its record claims no remerge-diff (C-b-8, C-b-9)', async () => {
+  const { root, mine, main, head } = makeResolvedMergeRepo();
+  const fake = fakeCodex('');
+  const result = await run(['--base', main, '--unavailable', 'probe skip', '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(result.err, '');
+  assert.equal(fake.calls.length, 0, 'no Codex was launched');
+  assert.equal(result.out.includes(mergeReviewSaid({ head, side: main, branch: 'origin/main' })), false, result.out);
+  assert.deepEqual(result.out.split('\n').filter(Boolean), [`Recorded an unavailable Codex review (probe skip) of ${rangeOf(mine, head)} in ${codexReviewsPath(root)}.`]);
+  assert.deepEqual(readCodexReviews(root).at(-1), skippedRecord(mine, head, 'probe skip'));
+});
+
 test('the diff of a merge review is a diff of the automatic merge and the merge, which shows no signature, whatever the configuration says (Codex, 2026-10-14)', () => {
   const [head, auto] = ['b'.repeat(40), 'd'.repeat(40)];
   const args = rangeDiff({ from: 'a'.repeat(40), head, merge: { side: 'c'.repeat(40), branch: 'origin/main', auto } }, ['--numstat'], ['m.txt']);
@@ -6395,6 +6410,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
       `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
     '--plan prints what the run would start, what it is estimated to send, how close that estimate came on the last reviews recorded here and, where the project declares the allowance of a review, whether that is inside it, and starts nothing; a run of more than 6 parts is not started without --max-parts <n>.',
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
+    PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
   ]);
   const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
@@ -6854,14 +6870,15 @@ test('a second recheck of the same findings is refused before anything runs, and
   const { root, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
-  // The recheck's own range again: every code commit of it has a record, so the skip is what is left.
+  // The recheck's own range again: every code commit of it has a record, so there is nothing to review, and no skip is advised.
   const records = readCodexReviews(root).length;
   const runs = readCodexReviewRuns(root).length;
   const fake = fakeCodex(reviewed(root, head));
   const again = await run(['--base', head, '--again', '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
   assert.equal(again.code, 1, again.out);
   assert.ok(again.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run: the first left 1 finding not fixed or blocking.`), again.err);
-  assert.ok(again.err.includes(`\`codex-review --base ${head} --unavailable "second recheck refused: <task>"\``), again.err);
+  assert.ok(again.err.includes('Every code commit of this range has a record already, so no review or skip is recorded for it.'), again.err);
+  assert.equal(again.err.includes('--unavailable'), false, again.err);
   assert.equal(fake.calls.length, 0, 'no Codex was launched');
   assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records, runs]);
   assert.equal(git(root, 'rev-parse', 'HEAD'), fixed);

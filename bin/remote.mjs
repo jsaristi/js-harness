@@ -87,7 +87,7 @@ function parseArgs(argv, env) {
     subcommand,
     cwd: values['--cwd'] ?? process.cwd(),
     // Absolute from here on: the supervisor runs in the repository, where a relative home would be another folder.
-    home: path.resolve(values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir()),
+    home: path.resolve(values['--home'] ?? (env.JS_HARNESS_HOME || os.homedir())),
     name,
     spawnMode,
     permissionMode,

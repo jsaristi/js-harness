@@ -114,7 +114,9 @@ Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the decl
 (tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
 runs it, so a red check means the commit is not ready yet. A gate that passes prints one line,
 `PASS  check  <n> rows passed`, with the review's verdict where it was assessed; a gate that fails
-prints every row. `--verbose` prints every row of a passing gate too, and so does
+prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_INNER=1` and runs no
+sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
+so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
 `JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
 `--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
@@ -304,8 +306,8 @@ $ js-harness install
 installed js-harness 0.9.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact)
-registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact)
+registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
+registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
 registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)
@@ -454,7 +456,8 @@ pin and running version: match
 Says whether a newer release exists: the newest `vX.Y.Z` tag of the repository, read with
 `git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
 another repository). Releases are tagged from v0.9.0; where the repository holds no tag it says
-that and how to get the newest copy. When the tags cannot be listed it says why and exits 1.
+that and how to get the newest copy. When the tags cannot be listed it says why and exits 1. A value
+flag with no value, or followed by another flag, exits 2 with `<flag> requires a value`.
 
 ```console
 $ js-harness update
@@ -467,7 +470,7 @@ Installs the newer release with the package manager, then syncs the home with th
 installed: the repository at its newest tag (`github:jsaristi/js-harness#vX.Y.Z`; `--repo <url or
 folder>` names another repository), or the newest tarball of `--source <dir>`, a folder of `npm pack`
 tarballs, which wins when named and needs no credential. With no release tagged it installs nothing and exits 1; no package registry is ever
-asked.
+asked. A value flag with no value, or followed by another flag, exits 2 with `<flag> requires a value`, before anything is installed.
 
 The package manager is `--pm <command>`, else `JS_HARNESS_PM`, else the one that installed the copy
 running now: `pnpm` for a copy in pnpm's global folder, `npm` otherwise. The menu's Upgrade passes
@@ -835,7 +838,8 @@ when a declaration, its source, a reader or `docs/RULES.md` is wrong; `rules ren
 `docs/RULES.md`. `rules applied` says what each model alias gave in the records of the last seven
 days. `rules change <id>` is the one command that changes a rule of the harness: in its own checkout,
 on a `rule/` branch, it takes the change as JSON on standard input and writes the declaration, its
-source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing, and
+source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing (it
+fetches nothing either: a turn to refuse counts on the `origin/main` this clone holds, and says so), and
 `--check-source` checks a stored source against its transcript again.
 
 ```console
@@ -1038,7 +1042,7 @@ pre-push check, and the keys of `.claude/settings.local.json`, each recorded in 
 so `uninstall` undoes it. It needs no pin. `js-harness functions set <name> <value>` writes one
 switch into `harness.json` and applies it: `codeMap` takes `auto`, `on-demand`, `always` or `off`;
 `languageServer` and `codexReview` take `auto`, `on` or `off`. `--json` prints the list and `--cwd
-<path>` names another project.
+<path>` names another project. A `--cwd` with no path, or followed by another flag, exits 2 with `--cwd requires a value`.
 
 ### js-harness remote
 
@@ -1265,6 +1269,10 @@ only with `--take-over`, as a new orchestrator does. Requests, verdicts,
 the lease and `log.jsonl`, one line per outcome, live under `~/.js-harness/channel/permits/<project>/`, which
 `uninstall` removes with the channel.
 
+Every `permit` subcommand checks each token before it acts: a flag it does not take is refused with
+`unknown argument: <token>`, a value flag with no value (or one followed by another flag) with `<flag> requires a
+value`, and either exits 2 with nothing written. So `permit lease --of` is refused rather than taking a lease.
+
 ### js-harness wake
 
 A boot kills every background command of every session, and the transcripts do not say so: a
@@ -1340,9 +1348,12 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 
 ### js-harness resume
 
-The hook that runs after a compaction, which `install` registers for Claude Code and Codex.
+The hook that runs after a compaction or a clear, which `install` registers for Claude Code and Codex.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
-document it works on and what to read there, so nobody pastes a resume prompt. For one document
+document it works on and what to read there, so nobody pastes a resume prompt. After a clear it
+prints the same lines under a first line that says the session was cleared, with none of the
+compaction's: the desktop app starts a cleared session as `startup`, and the hook speaks on that
+start only when the app's record of the session names the session it was cleared from. For one document
 it names the lines to read, not the whole file: its resume sections ("Next step", "State for a
 resume"), the open task the first of them names first, that task's specs and its last log entries,
 each range with its size. It writes
@@ -1380,9 +1391,11 @@ inside double quotes, which bash runs as commands; a recursive `rm` or an `rmdir
 folder at its top, which the host holds for the user even in bypass mode, with where to put such a folder
 instead (below the project's worktrees folder, or the session's scratchpad); a gentle-ai review
 (`assess`, `status` or `start`) whose `--base-ref` is off its head's first-parent line; a heavy `node --test` outside a gate turn while
-another gate holds the machine's lock or an eval batch runs, heavy being several files, or one file
+another gate holds the machine's lock or an eval batch runs, heavy being several files, the whole suite (`node --test`, or `npm test` as the `test` script of the folder, or of the one `--prefix` names, runs it with the words npm hands it; `npm run check` is no run of the suite), or one file
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
-while its trials run, and `uninstall` removes that folder with the lock's); and a `Write` or `Edit` that puts a line
+while its trials run, and `uninstall` removes that folder with the lock's); a `js-harness sessions` read of the
+board, `--watch` too, in the same case, because a board read slows that gate (one entry, such as `--opening`, is
+free); and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
 which every session reads on every turn; a `Write` or `Edit` that leaves a note of a project's memory folder whose
@@ -1530,7 +1543,9 @@ which hold a link to Codex's login.
 
 The scope is the `scope` field of `~/.js-harness/memory-backup/config.json`: `"all"` backs up
 every Engram project and every Claude memory folder, a project name only that project and the
-memory folders of its checkout and worktrees. Unset, it is `js-harness`, so another project's
+memory folders of its checkout and worktrees: a checkout named after the project at a drive root, or
+the checkout and worktrees git lists for a repository of `bundles` whose main checkout has that name,
+wherever it sits, with the worktrees Claude made in its `.claude/worktrees` that git no longer lists. Unset, it is `js-harness`, so another project's
 memories reach GitHub only once someone writes `"all"`. The first run after the scope changes
 takes the new export as it is, and drops from the clone what the narrower scope leaves out.
 
@@ -1574,7 +1589,7 @@ named, and Claude Desktop's own data.
 ```console
 $ js-harness backup ready
 missing: D:/js-harness: stash@{1} (On feat/x: held out) is in no bundle
-not copied: Claude transcripts (C:\Users\me\.claude\projects\*\*.jsonl): 156 files, 1.1 GB
+not copied: Claude transcripts (C:\Users\me\.claude\projects\**\*.jsonl): 156 files, 1.1 GB
 backup ready: no, 1 things have no copy off this machine
 ```
 
@@ -1658,7 +1673,9 @@ kept), the desktop app's old Code tab CLIs (the highest is kept), Codex's market
 `tmp.*` or `js-harness-*` test scratch in the temp folder once untouched for 3 days (a scratch
 folder holding a linked git worktree is kept), and the npm, pnpm, Go and uv caches when their tool
 answers. With no flags it lists each kind, why it is safe to delete, each item with its size, and a
-total, and deletes nothing.
+total, and deletes nothing. Where `~/.js-harness` exists, the listing also writes the sizes to
+`clean.json`, as `--measure` does; without that folder it writes nothing. `--json` goes with the
+listing or `--log`; with `--apply` or `--measure` it is a usage error (exit 2).
 
 `clean --apply` scans again and deletes only the kinds you confirm: in a terminal it asks y/N per
 kind; without one it deletes only the kinds named with `--kind <id>`, and with none named it
@@ -1674,7 +1691,7 @@ anything inside a git worktree, and anything the scan of the same run did not fi
 The smart part runs from `doctor`: when the last measure is 7 days old or missing, doctor and its
 session-start hook start `clean --measure` detached (measuring takes about half a minute on a
 machine with these caches, more than the hook's 10 seconds) and return. The measure writes
-`~/.js-harness/clean.json` and deletes nothing. Once its total reaches 2 GB, the `clean` row of
+`~/.js-harness/clean.json` where `~/.js-harness` exists, and deletes nothing. Once its total reaches 2 GB, the `clean` row of
 doctor is a gap that recommends `js-harness clean`, and the hook's notice names the size, once per
 measure. `JS_HARNESS_CLEAN_MEASURE=off` turns the background measure off.
 

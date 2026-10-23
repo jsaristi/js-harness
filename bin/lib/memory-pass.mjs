@@ -46,10 +46,31 @@ function appendJournal(stateDir, entry) {
 const lockFile = (stateDir) => path.join(stateDir, 'lock');
 const snapshotDir = (stateDir, stamp) => path.join(stateDir, 'snapshots', stamp);
 
+/** Whether `value` has the shape `planPass` writes for a stamp. Only that shape may name a folder of the snapshots. */
+export const isStamp = (value) => typeof value === 'string' && /^\d{8}T\d{9}Z$/.test(value);
+
+/** Refuses a name that is not a `.md` file directly in the memory folder: what `planPass` records, and what undo and
+ * verify join to the folder, so a `../` name would reach a file outside it. */
+function assertNote(name) {
+  if (name !== path.basename(name) || name.startsWith('.') || !name.endsWith('.md')) {
+    throw new PassError(`not a note of the memory folder: ${name}`);
+  }
+}
+
 function readManifest(stateDir, stamp) {
+  if (!isStamp(stamp)) throw new PassError(`${stamp} is not a pass stamp`);
   const text = readOrNull(path.join(snapshotDir(stateDir, stamp), 'manifest.json'));
   if (text === null) throw new PassError(`no snapshot ${stamp}`);
-  return JSON.parse(text.toString('utf8'));
+  let manifest;
+  try {
+    manifest = JSON.parse(text.toString('utf8'));
+  } catch {
+    throw new PassError(`snapshot ${stamp} is damaged: its manifest.json does not parse`);
+  }
+  if (!Array.isArray(manifest?.writeSet)) throw new PassError(`snapshot ${stamp} is damaged: its manifest.json names no write set`);
+  // The manifest is a file of the state folder, but its write set names files of the memory folder to remove or overwrite.
+  for (const name of manifest.writeSet) assertNote(name);
+  return manifest;
 }
 
 /** The stamp of the pass that holds the lock, or `null` when none does. A lock that does not parse, or names no
@@ -91,7 +112,7 @@ export function readLock(stateDir) {
     parsed = null;
   }
   // Only the shape `planPass` writes is a stamp: anything else could name a path out of the snapshots.
-  const stamp = typeof parsed?.stamp === 'string' && /^\d{8}T\d{9}Z$/.test(parsed.stamp) ? parsed.stamp : null;
+  const stamp = isStamp(parsed?.stamp) ? parsed.stamp : null;
   const pid = Number.isInteger(parsed?.pid) ? parsed.pid : null;
   const manifest = stamp !== null && fs.existsSync(path.join(snapshotDir(stateDir, stamp), 'manifest.json'));
   return { stamp, pid, manifest };
@@ -135,11 +156,7 @@ export function extractQuotes(text) {
  * directly in the folder; snapshots every file of the folder with its hash; records the write set; keeps
  * the ten newest snapshots. Returns `{ stamp }`. */
 export function planPass({ folder, stateDir, writeSet, now }) {
-  for (const name of writeSet) {
-    if (name !== path.basename(name) || name.startsWith('.') || !name.endsWith('.md')) {
-      throw new PassError(`not a note of the memory folder: ${name}`);
-    }
-  }
+  for (const name of writeSet) assertNote(name);
   fs.mkdirSync(stateDir, { recursive: true });
   const stamp = new Date(now).toISOString().replace(/[-:.]/g, '');
   try {

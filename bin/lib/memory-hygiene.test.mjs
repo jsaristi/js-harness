@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dueNotice, hygieneDir, hygieneState, INDEX_BYTES, LINE_CHARS, PASS_DAYS, purgeMarker, readJournal, readMemory } from './memory-hygiene.mjs';
+import { dueNotice, hygieneDir, hygieneState, INDEX_BYTES, LINE_CHARS, memoryLocation, PASS_DAYS, purgeMarker, readJournal, readMemory } from './memory-hygiene.mjs';
 import { RULES } from './rules-data.mjs';
 import { ruleValue } from './rules.mjs';
 
@@ -200,4 +200,21 @@ test('the budgets are the rules memory-index-bytes and memory-pass-days, read fr
 
 test('the exported budgets are the declared rules', () => {
   assert.deepEqual([INDEX_BYTES, PASS_DAYS], [ruleValue('memory-index-bytes', 'bytes'), ruleValue('memory-pass-days', 'days')]);
+});
+
+// The folder a host's memory is in is the Claude config folder's, which `CLAUDE_CONFIG_DIR` may move: `memory status`
+// and the hook's notice must look where the host writes, so both read it from here (odd/tasks/launch-audit/c.md, C-c-3).
+test('memoryLocation looks under CLAUDE_CONFIG_DIR when the host sets it, and under the home\'s .claude when it does not', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-memory-home-'));
+  try {
+    const claude = path.join(home, 'moved-claude');
+    const project = path.join(home, 'proj');
+    const noGit = () => ({ status: 128, stdout: '', stderr: 'not a repository' });
+    const { slug, folder } = memoryLocation({ home, project, run: noGit, env: { CLAUDE_CONFIG_DIR: claude } });
+    assert.equal(folder, path.join(claude, 'projects', slug, 'memory'));
+    assert.equal(memoryLocation({ home, project, run: noGit, env: {} }).folder, path.join(home, '.claude', 'projects', slug, 'memory'));
+    assert.equal(memoryLocation({ home, project, run: noGit, env: { CLAUDE_CONFIG_DIR: '' } }).folder, path.join(home, '.claude', 'projects', slug, 'memory'), 'an empty variable is unset');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

@@ -117,8 +117,10 @@ one runs.
   `js-harness sessions` once while another session's gate ran
 - Seen: 2026-10-15 — odd/tasks/future-model-protocol.md, L17 — JH 14 chained a board read after a
   test file's output while the gate of another worktree ran; it passed 120 s and was stopped
-- Control: protocol — bin/lib/manifest.mjs — "a whole test suite, a measure, a read of the board and
-  a sub-agent that runs tests wait for the gate to end" — since 2026-10-14
+- Control: check — bin/lib/test-run-warning.test.mjs — "a board read waits for another gate" — since 2026-10-23
+- Was: protocol — bin/lib/manifest.mjs — "a whole test suite, a measure, a read of the board and
+  a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
+  it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
 
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was
@@ -1352,7 +1354,10 @@ Two blocks were given in one reply, he sent them out of order, and it cost a ses
 - Seen: 2026-10-07 — AGENTS.md:81-82 — "two, sent out of order, once cost a session"; 2026-10-07 is
   the day of that record (the sentence, commit `9c9b00d`), and the incident itself is not later than
   it and is in no record read
-- Control: line — AGENTS.md — "two blocks sent out of order cost a session" — since 2026-10-15
+- Control: line — AGENTS.md — "two blocks out of order cost a session" — since 2026-10-23
+- Was: line — AGENTS.md — "two blocks sent out of order cost a session" — replaced on 2026-10-23:
+  the line was reworded and no longer held that phrase, so the control read as lost (launch audit,
+  C-d-8)
 - Was: line — AGENTS.md — "Otherwise one block: two, sent out of order, once" — replaced on
   2026-10-16: the sentence was reworded on `main` on 2026-10-15 (pull request 239), where a cut
   carries what he sends in one code block of only that text

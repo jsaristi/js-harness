@@ -11,47 +11,12 @@ import { auditEntries } from './lib/audit.mjs';
 import { linesOf } from './lib/lines.mjs';
 import { DEFAULT_CONTEXT_WINDOW } from './lib/sessions.mjs';
 import { dayOf } from './lib/subagent-count.mjs';
+import { parseDayArgs, shiftDay, zone } from './lib/record-days.mjs';
+
+class AuditArgError extends Error {}
 import { recordFolders } from './subagents.mjs';
 
 export const USAGE = 'Usage: js-harness audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
-// A day of this project's records is about 231 MB, every line of it read: a week is the most one run reads.
-const MAX_DAYS = 7;
-const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-class AuditArgError extends Error {}
-
-function parseArgs(argv) {
-  const parsed = { days: 1, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const token = argv[i];
-    const value = () => {
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) throw new AuditArgError(`${token} requires a value`);
-      i += 1;
-      return next;
-    };
-    if (token === '--day') {
-      parsed.day = value();
-      // A day that does not come back as itself (2026-02-30 is read as March 2nd) is no date.
-      const read = DAY_PATTERN.test(parsed.day) ? Date.parse(`${parsed.day}T00:00:00Z`) : NaN;
-      if (Number.isNaN(read) || new Date(read).toISOString().slice(0, 10) !== parsed.day) throw new AuditArgError('--day takes a date as YYYY-MM-DD');
-    } else if (token === '--days') {
-      const raw = value();
-      parsed.days = /^\d+$/.test(raw) ? Number(raw) : NaN;
-      if (!(parsed.days >= 1 && parsed.days <= MAX_DAYS)) throw new AuditArgError(`--days takes a whole number from 1 to ${MAX_DAYS}`);
-    } else if (token === '--json') {
-      parsed.json = true;
-    } else if (token === '--cwd') {
-      parsed.cwd = value();
-    } else {
-      throw new AuditArgError(`unknown argument: ${token}`);
-    }
-  }
-  return parsed;
-}
-
-/** `day` moved by `delta` days, both `YYYY-MM-DD`. */
-const shiftDay = (day, delta) => new Date(Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
 
 /** The audit of the transcript `file`: its title and what `auditEntries` counts in its entries inside the window.
  * Streamed, and only the lines that can hold a reply or the title are parsed: a transcript runs to hundreds of
@@ -98,8 +63,6 @@ function recentTranscripts(dir, since) {
     });
 }
 
-const zone = (offset) => `UTC${offset < 0 ? '-' : '+'}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')}:${String(Math.abs(offset) % 60).padStart(2, '0')}`;
-
 function auditLines(sessions, { from, to, offsetMinutes, folders, ms }) {
   const days = from === to ? `local day ${from}` : `local days ${from} to ${to}`;
   const lines = [`Audit, ${days} (${zone(offsetMinutes)}), ${folders} record folder${folders === 1 ? '' : 's'}: the hours messages stamp and the context shares sessions state, each against its transcript`];
@@ -135,8 +98,9 @@ export async function auditMain(argv, env = process.env, deps = {}) {
   } = deps;
   let parsed;
   try {
-    parsed = parseArgs(argv);
+    parsed = parseDayArgs(argv, AuditArgError);
   } catch (err) {
+    if (!(err instanceof AuditArgError)) throw err;
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }

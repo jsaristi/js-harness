@@ -41,6 +41,21 @@ function worktreesOf(git, source) {
     }));
 }
 
+/** The paths of the checkout and worktrees git lists for each repository of `sources` whose main checkout is named
+ * `scope` (its last path part), so a project scope reaches the memory folders of a checkout below the drive root, and
+ * every source git cannot read now (`unreadable`): its name may be a linked worktree's, so whether it is the scope's
+ * repository is not known until git reads it again. Neither under the `'all'` scope, which takes every folder. */
+export function checkoutsOf(git, sources, scope) {
+  const paths = [];
+  const unreadable = [];
+  for (const source of scope === 'all' ? [] : sources) {
+    const listed = worktreesOf(git, source);
+    if (!listed.length) unreadable.push(source);
+    else if (path.basename(listed[0].path) === scope) paths.push(...listed.map((w) => w.path));
+  }
+  return { paths, unreadable };
+}
+
 /** The stash entries, newest first, as `{ sha, name, subject }`; none when there is no stash. */
 export function stashesOf(git, source) {
   const listed = git(source, ['log', '-g', '--format=%H %gs', 'refs/stash']);

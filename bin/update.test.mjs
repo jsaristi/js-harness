@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { install, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { staleManifestMessage } from './lib/project.mjs';
 import { currentVersion } from './install.mjs';
@@ -1285,6 +1286,32 @@ test('updateMain refuses flags it does not know and still takes --home, --repo a
   assert.equal(taken.code, 0, taken.err);
 });
 
+// odd/tasks/launch-audit/a.md C-a-1, C-a-2: a value flag with no value, or followed by another flag, took that flag
+// as its value (`--repo --home X` made the repository `--home`) or was ignored (`update --source`).
+test('update and upgrade refuse a value flag with no value, or followed by another flag, before anything runs', async () => {
+  const home = makeTmpDir('js-harness-value-home-');
+  try {
+    const cases = [
+      [updateMain, ['--home'], /^--home requires a value\n\nUsage: js-harness update /],
+      [updateMain, ['--repo', '--home', home], /^--repo requires a value\n\nUsage: js-harness update /],
+      [updateMain, ['--source'], /^--source requires a value\n\nUsage: js-harness update /],
+      [upgradeMain, ['--home'], /^--home requires a value\n\nUsage: js-harness upgrade /],
+      [upgradeMain, ['--prefix', '--home', home], /^--prefix requires a value\n\nUsage: js-harness upgrade /],
+      [upgradeMain, ['--pm'], /^--pm requires a value\n\nUsage: js-harness upgrade /],
+    ];
+    for (const [main, argv, message] of cases) {
+      const calls = [];
+      const { code, out, err } = await runCommand(main, argv, {}, pathCopyAnswers(NEWER, calls));
+      assert.equal(code, 2, argv.join(' '));
+      assert.equal(out, '', argv.join(' '));
+      assert.match(err, message, argv.join(' '));
+      assert.equal(calls.length, 0, `${argv.join(' ')} started a process`);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('status never prints the bytes of a malformed harness.json (terminal escapes included)', async () => {
   const root = makeProject({ version: '1.0.0' });
   const home = makeTmpDir('js-harness-status-home-');
@@ -1309,4 +1336,40 @@ test('updateMain refuses an argument it does not know, --help included, and look
     assert.match(err, /unknown argument/);
     assert.match(err, /Usage: js-harness update/);
   }
+});
+
+// The machine manifest that does not parse, run as a user runs the command: one line on stderr that names the file,
+// exit 1, nothing on stdout, and nothing written under the home but the damaged file (C-shared-1).
+const JS_HARNESS = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
+
+function damagedHomeRun(args) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-damaged-home-'));
+  try {
+    const manifest = path.join(home, '.js-harness', 'manifest.json');
+    fs.mkdirSync(path.dirname(manifest), { recursive: true });
+    fs.writeFileSync(manifest, '{', 'utf8');
+    const run = spawnSync(process.execPath, [JS_HARNESS, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, JS_HARNESS_HOME: home, HOME: home, USERPROFILE: home },
+    });
+    assert.equal(run.status, 1, run.stderr);
+    assert.equal(run.stdout, '');
+    const lines = run.stderr.trimEnd().split(/\r?\n/);
+    assert.equal(lines.length, 1, run.stderr);
+    assert.ok(lines[0].includes(manifest), lines[0]);
+    assert.match(lines[0], /not valid JSON; nothing was changed$/);
+    assert.equal(fs.readFileSync(manifest, 'utf8'), '{');
+    assert.deepEqual(fs.readdirSync(home), ['.js-harness']);
+    assert.deepEqual(fs.readdirSync(path.dirname(manifest)), ['manifest.json']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('status --global names a machine manifest that is not valid JSON, in one line, and changes nothing', () => {
+  damagedHomeRun(['status', '--global']);
+});
+
+test('upgrade names a machine manifest that is not valid JSON before it installs anything', () => {
+  damagedHomeRun(['upgrade']);
 });

@@ -72,9 +72,11 @@ function orgFolders(root, readdir, unreadable) {
   return listing(readdir, base, unreadable).flatMap((account) => listing(readdir, path.join(base, account), unreadable).map((org) => path.join(base, account, org)));
 }
 
-/** The app's session records by `cliSessionId`: `{ where, effort, scheduledTaskId, archived, title, cwd }`, `cwd` the
- * folder the session runs in (null when the record names none). `where` is
- * `'archived'` when the app archived it, `'routines'` when a scheduled task opened it, else `'sessions'`. */
+/** The app's session records by `cliSessionId`: `{ where, effort, scheduledTaskId, archived, title, cwd, priorCliSessionIds }`,
+ * `cwd` the folder the session runs in (null when the record names none). `where` is
+ * `'archived'` when the app archived it, `'routines'` when a scheduled task opened it, else `'sessions'`.
+ * `priorCliSessionIds` are the CLI session ids the app had given this session before a clear, so a session started
+ * again by a clear is one the record names them for; `[]` when the field is absent or is not a list of strings. */
 export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) => fs.readFileSync(file, 'utf8'), unreadable } = {}) {
   const sessions = new Map();
   for (const folder of orgFolders(root, readdir, unreadable)) {
@@ -91,6 +93,7 @@ export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) 
         archived,
         title: typeof data.title === 'string' ? data.title : null,
         cwd: typeof data.cwd === 'string' && data.cwd !== '' ? data.cwd : null,
+        priorCliSessionIds: Array.isArray(data.priorCliSessionIds) && data.priorCliSessionIds.every((id) => typeof id === 'string') ? data.priorCliSessionIds : [],
       });
     }
   }

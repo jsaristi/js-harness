@@ -41,7 +41,7 @@ test('notes of type feedback and project are the gap, one line each; user and re
     m.note('link.md', 'name: link\nmetadata:\n  type: reference');
     fs.writeFileSync(path.join(m.memory, 'MEMORY.md'), '- [Rule](rule-b.md) — type: feedback\n');
     fs.writeFileSync(path.join(m.memory, 'notes.txt'), 'type: feedback');
-    const state = memoryRulesState({ home: m.home, project: m.project, spawn: noGit });
+    const state = memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} });
     assert.deepEqual(state, { claude: 'stale', codex: 'n/a', lines: ['decision-a.md (project)', 'rule-b.md (feedback)'] });
   } finally {
     m.done();
@@ -51,13 +51,13 @@ test('notes of type feedback and project are the gap, one line each; user and re
 test('no such note is ok, no memory folder is n/a, and a folder that cannot be read is unknown', () => {
   const m = machine();
   try {
-    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit }), { claude: 'n/a', codex: 'n/a', lines: [] });
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} }), { claude: 'n/a', codex: 'n/a', lines: [] });
     m.note('who.md', 'name: who\ntype: user');
-    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit }), { claude: 'ok', codex: 'n/a', lines: [] });
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} }), { claude: 'ok', codex: 'n/a', lines: [] });
     const boom = () => {
       throw new Error('made up');
     };
-    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: boom }), { claude: 'unknown', codex: 'n/a', lines: [] });
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: boom, env: {} }), { claude: 'unknown', codex: 'n/a', lines: [] });
   } finally {
     m.done();
   }
@@ -70,7 +70,7 @@ test('from a linked worktree the notes are the main checkout\'s, where Claude Co
     const worktree = path.join(path.dirname(m.project), 'worktrees', 'feature');
     const common = path.join(m.project, '.git');
     const git = (command, args) => (args.includes('--git-common-dir') ? { status: 0, stdout: `${common}\n`, stderr: '' } : noGit());
-    assert.deepEqual(memoryRulesState({ home: m.home, project: worktree, spawn: git }).lines, ['rule.md (feedback)']);
+    assert.deepEqual(memoryRulesState({ home: m.home, project: worktree, spawn: git, env: {} }).lines, ['rule.md (feedback)']);
   } finally {
     m.done();
   }
@@ -81,4 +81,20 @@ test('the fix names the protocol and the order of places, then the deletion of t
   assert.ok(MEMORY_RULES_FIX.includes(`"${PROTOCOLS[3]}" of the js-harness-protocols skill`), MEMORY_RULES_FIX);
   assert.doesNotMatch(MEMORY_RULES_FIX, /recording a new rule/);
   assert.match(MEMORY_RULES_FIX, /delete the note/);
+});
+
+// Launch audit C-c-3: doctor's memory-rules row reads the folder the host writes, under CLAUDE_CONFIG_DIR when it is set.
+test('the memory folder is read under CLAUDE_CONFIG_DIR when the host sets it', () => {
+  const m = machine();
+  try {
+    const config = path.join(m.home, 'config');
+    const memory = path.join(config, 'projects', projectSlug(m.project), 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'rule.md'), '---\nname: rule\ntype: feedback\n---\n');
+    const env = { CLAUDE_CONFIG_DIR: config };
+    assert.deepEqual(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env }).lines, ['rule.md (feedback)']);
+    assert.equal(memoryRulesState({ home: m.home, project: m.project, spawn: noGit, env: {} }).claude, 'n/a');
+  } finally {
+    m.done();
+  }
 });

@@ -130,7 +130,7 @@ test('a launch carried over from the day before is not counted at all', () => {
   assert.equal(result.other, 0);
 });
 
-test('a null expectation is skipped and the row says nothing about it', () => {
+test('a null expectation is skipped, and the row names its role as not compared', () => {
   const expected = { writerModel: null, readerModel: RULES.readerModel, effort: null };
   const launches = [
     launch({ role: 'writer', modelRan: 'claude-sonnet-5-5', effortRan: 'low' }),
@@ -143,7 +143,7 @@ test('a null expectation is skipped and the row says nothing about it', () => {
   assert.equal(result.unknownEffort, 0);
   assert.deepEqual(result.byRole.writer.offModel, []);
   assert.deepEqual(subagentRowLines(result, expected), {
-    detail: '2 launches today: 1 on a model off the rules',
+    detail: '2 launches today: 1 on a model off the rules; 1 writer launch not compared (no rule in force)',
     lines: ['reader: 1 of 1 ran on claude-opus-5-0 (subagent-reader-model gives sonnet)'],
   });
 });
@@ -210,4 +210,14 @@ test('an other launch is named as not compared and kept out of the all-on-the-ru
   const launches = [launch({ role: 'writer' }), launch({ role: 'other', modelRan: 'claude-sonnet-5-5', effortRan: 'low' })];
   const { detail } = subagentRowLines(compareLaunches(launches, RULES), RULES);
   assert.match(detail, /^2 launches today, the 1 compared all on the rules' models and at high; 1 not compared \(role other\)$/);
+});
+
+// A writer with no rule in force is not compared, so the row names its launch apart and the all-on-the-rules claim
+// covers the reader alone (C-b-24).
+test('a writer with no rule is named as not compared, and the all-on-the-rules claim covers only what was compared', () => {
+  const launches = [launch({ role: 'writer', modelRan: 'claude-opus-5-5' }), launch({ role: 'explorer', modelRan: 'claude-sonnet-5-5' })];
+  const expected = { writerModel: null, readerModel: RULES.readerModel, effort: null };
+  const result = compareLaunches(launches, expected);
+  assert.equal(result.compared, 1);
+  assert.equal(subagentRowLines(result, expected).detail, "2 launches today, the 1 compared all on the rules' models; 1 writer launch not compared (no rule in force)");
 });

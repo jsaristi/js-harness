@@ -40,7 +40,17 @@ test('clean with no flags lists each kind with its reason, items, sizes and a to
   assert.match(out, /^Total: /m);
   assert.match(out, /js-harness clean --apply/);
   assert.deepEqual(names(setup.releases), before);
-  assert.ok(fs.existsSync(path.join(setup.home, '.js-harness', 'clean.json')), 'the list is also a measure');
+});
+
+test('clean with no flags records the sizes only where the harness home already is, and says so in the help', async (t) => {
+  const setup = fixture(t);
+  await clean([], setup);
+  assert.equal(fs.existsSync(path.join(setup.home, '.js-harness')), false, 'the listing creates no home');
+  fs.mkdirSync(path.join(setup.home, '.js-harness'), { recursive: true });
+  const { code } = await clean([], setup);
+  assert.equal(code, 0);
+  assert.ok(fs.existsSync(path.join(setup.home, '.js-harness', 'clean.json')), 'the listing records the sizes once the home exists');
+  assert.match(USAGE, /clean\.json/);
 });
 
 test('clean --json prints the kinds as data', async (t) => {
@@ -110,6 +120,20 @@ test('clean --measure writes the measure and deletes nothing', async (t) => {
   const measure = JSON.parse(fs.readFileSync(path.join(setup.home, '.js-harness', 'clean.json'), 'utf8'));
   assert.ok(measure.total > 0);
   assert.equal(names(setup.releases).length, 4);
+});
+
+test('clean --json goes with the listing or --log only: with --apply or --measure it is a usage error and runs nothing', async (t) => {
+  const setup = fixture(t);
+  fs.mkdirSync(path.join(setup.home, '.js-harness'), { recursive: true });
+  for (const argv of [['--json', '--apply', '--kind', 'codex-releases'], ['--apply', '--json', '--kind', 'codex-releases'], ['--json', '--measure']]) {
+    const { code, err, out } = await clean(argv, setup);
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(err, /Usage: js-harness clean/);
+    assert.equal(out, '', argv.join(' '));
+  }
+  assert.equal(names(setup.releases).length, 4);
+  assert.equal(fs.existsSync(path.join(setup.home, '.js-harness', 'clean-log.jsonl')), false);
+  assert.equal(fs.existsSync(path.join(setup.home, '.js-harness', 'clean.json')), false);
 });
 
 test('clean --measure writes nothing when the harness home is gone', async (t) => {

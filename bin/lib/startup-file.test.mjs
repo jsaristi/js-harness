@@ -92,3 +92,14 @@ test('a file the manifest cannot record is removed again, and the refusal says s
   assert.match(result.refusal, /could not be recorded in the machine manifest \(disk full\), so the file written was removed again/);
   assert.equal(fs.existsSync(file), false);
 });
+
+// The Opus verifier of slice B: a caller that wraps the error of a malformed manifest goes on after it (remote stop
+// --at-login stops the server), so its text names the file and claims nothing of what was or was not changed.
+test('a machine manifest that does not parse is named, and its error claims nothing of what the caller changes', () => {
+  const { env, home } = places();
+  fs.mkdirSync(path.join(home, '.js-harness'));
+  fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), '{');
+  const { refusal } = removeStartupFile({ env, home, name: 'js-harness-wake-x.cmd' });
+  assert.match(refusal, /manifest\.json is not valid JSON\)$/);
+  assert.doesNotMatch(refusal, /nothing was changed/);
+});

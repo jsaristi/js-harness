@@ -160,6 +160,72 @@ export function timedSeconds(events, file, { project, projectOf = repositoryOf }
 const WSL = /(^|[\\/])wsl(\.exe)?$/i;
 const SHELL = /(^|[\\/])(sh|bash|dash|zsh)(\.exe)?$/i;
 const KEYWORDS = new Set(['do', 'then', 'else', 'elif', '!', 'time', '{']);
+const NPM = /(^|[\\/])npm(\.cmd|\.exe)?$/i;
+// The words before a program that set its environment: `NAME=value`, and `env` with the options that take a value.
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const ENV_VALUED = new Set(['-u', '--unset', '-C', '--chdir']);
+
+/** The index of the word a command runs at: past the keywords, the `NAME=value` words and `env` with its options
+ * that come before it, so `FOO=1 env node --test` runs `node`. */
+function programAt(words) {
+  let at = 0;
+  for (;;) {
+    const text = words[at]?.text ?? '';
+    if (KEYWORDS.has(text) || ASSIGNMENT.test(text)) at += 1;
+    else if (text === 'env') {
+      at += 1;
+      while (words[at]?.text.startsWith('-')) at += ENV_VALUED.has(words[at].text) ? 2 : 1;
+    } else return at;
+  }
+}
+
+/** npm's names of its `test` command, and of the command that runs a script by its name. */
+const NPM_TEST = new Set(['test', 'tst', 't']);
+const NPM_RUN = new Set(['run', 'run-script', 'rum', 'urn']);
+/** npm's options that take the next word as their value, which is npm's and never a word handed to the script. */
+const NPM_WORKSPACE = /^(-w|-ws|--workspace|--workspaces|--include-workspace-root)(=.*)?$/;
+const NPM_VALUED = new Set(['--loglevel', '--userconfig', '--globalconfig', '--cache', '--registry', '--script-shell', '--tag', '--include', '--omit', '--otp', '--node-options', '--before']);
+
+/** The commands `npm test` or `npm run test` runs, as the sensors resolve them (bin/check.mjs, `testsCommand`): the
+ * `test` script of the package.json in `cwd`, or in the folder `--prefix` names, whose last command takes the
+ * words npm hands it, its positional words and those after `--`, as its files; `null` for any other words, and `[]`
+ * where the folder names no test script. npm's other options are its own and are read past, with the value of those
+ * that take one (`NPM_VALUED`). npm's workspaces (`-w`, `--workspace`, `--workspaces`, `-ws`,
+ * `--include-workspace-root`) run scripts of other folders, which are not resolved here: such a command is
+ * `{ every: true }`, a run of every test file, so none passes beside a held gate. Else the run is `{ commands, dir }`,
+ * `dir` the folder its script runs in. */
+function npmTestRun(words, cwd) {
+  if (!NPM.test(words[0]?.text ?? '')) return null;
+  let dir = cwd;
+  let workspaces = false;
+  const positional = [];
+  let index = 1;
+  for (; index < words.length && words[index].text !== '--'; index += 1) {
+    const text = words[index].text;
+    if (text === '--prefix') {
+      index += 1;
+      dir = path.resolve(cwd, words[index]?.text ?? '');
+    } else if (text.startsWith('--prefix=')) dir = path.resolve(cwd, text.slice('--prefix='.length));
+    else if (NPM_WORKSPACE.test(text)) {
+      workspaces = true;
+      if (text === '-w' || text === '--workspace') index += 1;
+    } else if (NPM_VALUED.has(text)) index += 1;
+    else if (!text.startsWith('-')) positional.push(words[index]);
+  }
+  const verb = NPM_RUN.has(positional[0]?.text) ? 1 : 0;
+  if (verb === 1 ? positional[1]?.text !== 'test' : !NPM_TEST.has(positional[0]?.text)) return null;
+  if (workspaces) return { every: true };
+  let script;
+  try {
+    script = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))?.scripts?.test;
+  } catch (err) {
+    script = undefined;
+  }
+  const commands = typeof script === 'string' ? commandsOf(script) : [];
+  const handed = [...positional.slice(verb + 1), ...words.slice(index + 1)];
+  if (handed.length > 0 && commands.length > 0) commands[commands.length - 1] = [...commands[commands.length - 1], ...handed];
+  return { commands, dir };
+}
 
 /** The command line a shell's `-c` runs, for words that start with a shell (`sh`, `bash`, `dash`, `zsh`), or `null`
  * for any other words or a shell with no `-c`. `-c` counts among the shell's options only, before a script or a
@@ -173,43 +239,76 @@ export function shellScript(words) {
   return flag === -1 || words[flag + 1] === undefined ? null : words[flag + 1].text;
 }
 
-/** The files the first `node --test` that `words` runs names (see `filesOf`), looking through `wsl.exe` and
- * `sh -c`, or `null` where there is none. A script a shell runs is not read. */
-function scan(words, depth = 0) {
-  let at = 0;
-  while (at < words.length && KEYWORDS.has(words[at].text)) at += 1;
-  const rest = words.slice(at);
+/** The files the first `node --test` of `commands` names (see `scan`), or `null` where there is none. */
+function firstRun(commands, depth, cwd) {
+  for (const inner of commands) {
+    const found = scan(inner, depth, cwd);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/** The files the first `node --test` that `words` runs names (see `filesOf`), looking through `wsl.exe`, `sh -c`
+ * and `npm test` (the test script of `cwd`), or `null` where there is none. A script a shell runs is not read. */
+function scan(words, depth = 0, cwd = process.cwd()) {
+  const rest = words.slice(programAt(words));
   if (rest.length === 0 || depth > 4 || gateWraps(rest) !== null) return null;
   if (WSL.test(rest[0].text)) {
     const split = rest.findIndex((word) => ['--', '-e', '--exec'].includes(word.text));
-    return split === -1 ? null : scan(rest.slice(split + 1), depth + 1);
+    return split === -1 ? null : scan(rest.slice(split + 1), depth + 1, cwd);
   }
   if (SHELL.test(rest[0].text)) {
     const script = shellScript(rest);
-    if (script === null) return null;
-    for (const inner of commandsOf(script)) {
-      const found = scan(inner, depth + 1);
-      if (found !== null) return found;
-    }
-    return null;
+    return script === null ? null : firstRun(commandsOf(script), depth + 1, cwd);
+  }
+  const npm = npmTestRun(rest, cwd);
+  if (npm?.every) return { files: 0, names: [] };
+  if (npm !== null) {
+    const found = firstRun(npm.commands, depth + 1, npm.dir);
+    // A file of the script is its folder's: whole here, so the gate log is asked of it from the command's own (`fileKey`).
+    return found === null ? null : { ...found, names: found.names.map((name) => path.resolve(npm.dir, name)) };
   }
   return filesOf(rest);
 }
 
 /** How many files the first `node --test` of `command` that runs outside `js-harness gate` names (see
- * `filesOf`), or `null` where there is none: a run that `js-harness gate --` wraps is in a turn. */
-export function testRunFiles(command) {
-  return testRunOf(command)?.files ?? null;
+ * `filesOf`), or `null` where there is none: a run that `js-harness gate --` wraps is in a turn. `cwd` is the
+ * folder the command runs in, whose package.json names the test script of `npm test`. */
+export function testRunFiles(command, cwd = process.cwd()) {
+  return testRunOf(command, cwd)?.files ?? null;
 }
 
 /** The files of the first `node --test` of `command` that runs outside `js-harness gate`, as `filesOf` gives
  * them, or `null` where there is none. */
-function testRunOf(command) {
-  for (const words of commandsOf(command)) {
-    const run = scan(words);
-    if (run !== null) return run;
+function testRunOf(command, cwd) {
+  return firstRun(commandsOf(command), 0, cwd);
+}
+
+const HARNESS = /(^|[\\/])js-harness(\.cmd|\.ps1)?$/i;
+const HARNESS_SCRIPT = /(^|[\\/])js-harness\.mjs$/i;
+// A sessions call that prints one entry or the help, not the board (bin/sessions.mjs).
+const ONE_ENTRY = new Set(['--opening', '--quote', '--address', '--peek', '--measures', '--next-number', '--help', '-h']);
+
+/** Whether `command` reads the session board (`js-harness sessions`, `--watch` too) outside `js-harness gate`: a
+ * read of the board is heavy enough to slow a gate (docs/FAILURES.md, board-read-loads-gate). */
+export function boardReadOf(command) {
+  return commandsOf(command).some((words) => boardRead(words));
+}
+
+/** Whether `words` read the board, looking through `wsl.exe` and `sh -c` as `scan` does for a test run. */
+function boardRead(words, depth = 0) {
+  const rest = words.slice(programAt(words));
+  if (rest.length === 0 || depth > 4 || gateWraps(rest) !== null) return false;
+  if (WSL.test(rest[0].text)) {
+    const split = rest.findIndex((word) => ['--', '-e', '--exec'].includes(word.text));
+    return split !== -1 && boardRead(rest.slice(split + 1), depth + 1);
   }
-  return null;
+  if (SHELL.test(rest[0].text)) {
+    const script = shellScript(rest);
+    return script !== null && commandsOf(script).some((inner) => boardRead(inner, depth + 1));
+  }
+  const at = HARNESS.test(rest[0].text) ? 1 : isNode(rest[0]) && HARNESS_SCRIPT.test(rest[1]?.text ?? '') ? 2 : -1;
+  return at !== -1 && rest[at]?.text === 'sessions' && !rest.slice(at + 1).some((word) => ONE_ENTRY.has(word.text.split('=')[0]));
 }
 
 /** The warning for `command`, or `null`: one line, when the command runs, outside `js-harness gate --`, a
@@ -231,11 +330,18 @@ export function testRunWarning(command, {
     return project === null ? undefined : timedSeconds(readGateLog(home).events, file, { project });
   },
 } = {}) {
-  const run = testRunOf(command);
-  if (run === null) return null;
+  const board = boardReadOf(command);
+  const run = board ? null : testRunOf(command, cwd);
+  if (run === null && !board) return null;
   if (env.JS_HARNESS_GATE_HELD === '1' || env.JS_HARNESS_CHECK_INNER === '1') return null;
   const held = holder();
   if (!held) return null;
+  if (board) {
+    // A gate does not wait for an eval batch (bin/gate.mjs reads no batch mark), so beside a batch the only way is to wait.
+    if (held.batch) return `js-harness sessions reads the board outside a turn while the eval batch of ${held.cwd} runs: a board read slows it; wait for the batch to end`;
+    const whose = held.cwd ? `the gate of ${held.cwd}` : 'another gate';
+    return `js-harness sessions reads the board outside a turn while ${whose} holds the machine's gate lock: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>`;
+  }
   let what;
   if (run.files === 1) {
     const file = fileKey(run.names[0], cwd);

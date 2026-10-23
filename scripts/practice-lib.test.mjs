@@ -827,7 +827,7 @@ const hostFile = (...groups) => JSON.stringify({ hooks: { SessionStart: groups }
 const hooksFile = (postToolUse, ...groups) => JSON.stringify({ hooks: { SessionStart: groups, PostToolUse: postToolUse } }, null, 4);
 const seeded = group('startup|resume|clear|compact', SEEDED);
 const doctor = group('startup|resume', 'js-harness doctor --hook');
-const resume = group('compact', 'js-harness resume --hook');
+const resume = group('compact|clear|startup', 'js-harness resume --hook');
 const PAUSE = 'js-harness resume --pause || exit 0';
 const pause = group(undefined, PAUSE);
 const RULES_HOOK = 'js-harness rules --hook || exit 0';
@@ -850,13 +850,13 @@ test('hostHooksProblem finds none in a Claude Code file right after install: the
 });
 
 test('hostHooksProblem says what it expected and what it found: an entry missing, written twice, with another matcher or command, or out of place', () => {
-  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact), then "' + FALLBACK + '" (matcher startup|resume|clear|compact); found: ';
+  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact|clear|startup), then "' + FALLBACK + '" (matcher startup|resume|clear|compact); found: ';
   const found = (...groups) => hostHooksProblem(hostFile(...groups), SEEDED, 'codex');
   // What `install` wrote before the resume hook: the doctor's entry alone.
   assert.equal(found(seeded, doctor), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact) | "js-harness doctor --hook" (matcher startup|resume)`);
   assert.equal(found(seeded), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact)`);
   // A second install that wrote an entry again.
-  assert.ok(found(seeded, doctor, resume, resume).endsWith('| "js-harness resume --hook" (matcher compact) | "js-harness resume --hook" (matcher compact)'));
+  assert.ok(found(seeded, doctor, resume, resume).endsWith('| "js-harness resume --hook" (matcher compact|clear|startup) | "js-harness resume --hook" (matcher compact|clear|startup)'));
   assert.ok(found(seeded, doctor, doctor, resume) !== null);
   // The right command under the wrong matcher, and the other way round: each entry is its matcher and its command.
   assert.ok(found(seeded, doctor, group('startup|resume', 'js-harness resume --hook')).endsWith('| "js-harness resume --hook" (matcher startup|resume)'));

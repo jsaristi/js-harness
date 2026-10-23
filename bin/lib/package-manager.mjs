@@ -1,7 +1,10 @@
 // The package manager as js-harness starts it: on Windows through one cmd.exe line (`runPm`), and read from where the
 // running copy lies when nothing names it (`copyPackageManager`). Shared by `upgrade` (bin/update.mjs) and the full
 // uninstall (bin/install.mjs), which must both reach the manager that installed this copy.
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { pmKind, splitCommand } from './version.mjs';
 
 /** Quotes a value for a shell command line built by joining tokens with spaces (see `shell: true`
  * in `child_process.spawn`, which does not escape array elements on its own). Simple, not
@@ -89,4 +92,15 @@ export function shownWord(word, platform) {
 export function checkoutOf(copyPath) {
   const dir = path.dirname(path.normalize(copyPath));
   return path.basename(dir) === 'bin' ? path.dirname(dir) : dir;
+}
+
+/** The package manager of the installs, resolved as `upgrade` resolves it: `--pm`, else `JS_HARNESS_PM`, else the one
+ * that installed the running copy. Never read from the word `npm` on the path, which may run pnpm (odd/tasks/stack-install.md, D6).
+ * A command line is split into its words, unless the whole line names a file: a path with a space in it stays one word
+ * (Codex on 12e46c4..6a2b0ad). `exists` is the seam that looks. */
+export function resolveStackPm(pm, env, copyPath = fileURLToPath(import.meta.url), exists = fs.existsSync) {
+  const command = pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
+  const line = command.trim();
+  const words = /\s/.test(line) && exists(line) ? [line] : splitCommand(line);
+  return { words, kind: pmKind(words) };
 }

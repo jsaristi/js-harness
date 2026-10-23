@@ -26,6 +26,7 @@ import {
   scheduledTaskAction,
   lookAtScheduledTask,
   runSchtasks,
+  writeManifestAtomic,
 } from './manifest.mjs';
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
@@ -1240,7 +1241,7 @@ test('entryComponents declare the resume hook for Claude and Codex: a SessionSta
   assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
   assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
   const entry = claudeResume.entry();
-  assert.deepEqual(entry, { matcher: 'compact', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] });
+  assert.deepEqual(entry, { matcher: 'compact|clear|startup', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] });
   assert.deepEqual(codexResume.entry(), entry);
 });
 
@@ -1538,12 +1539,12 @@ test('an update from an install made before the resume hook adds its entry, and 
       const older = install(home, '0.1.0');
       for (const file of [claudeHook.target(home), codexHook.target(home)]) {
         const data = readJson(file);
-        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact' && !isRulesEntry(entry) && !isFallbackEntry(entry));
+        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact|clear|startup' && !isRulesEntry(entry) && !isFallbackEntry(entry));
         delete data.hooks.UserPromptSubmit;
         delete data.hooks.SubagentStart;
         fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
       }
-      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact' && !isRulesEntry(record.entry) && !isFallbackEntry(record.entry)) }, null, 2), 'utf8');
+      fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact|clear|startup' && !isRulesEntry(record.entry) && !isFallbackEntry(record.entry)) }, null, 2), 'utf8');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? [claudeHook.entry()] : [unrelated, claudeHook.entry()]);
 
       const manifest = sync(home, '0.2.0');
@@ -1559,14 +1560,41 @@ test('an update from an install made before the resume hook adds its entry, and 
   }
 });
 
+test('an install that wrote the resume hook under the matcher compact is updated in place: sync leaves one entry, under the new matcher, and uninstall takes it out', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const target = claudeHook.target(home);
+    const resumeOf = (entry) => entry?.hooks?.[0]?.command === 'js-harness resume --hook';
+    // The older release's file and record: the same entry under the matcher `compact`.
+    const older = { matcher: 'compact', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] };
+    const data = readJson(target);
+    data.hooks.SessionStart = data.hooks.SessionStart.map((entry) => (resumeOf(entry) ? older : entry));
+    fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    const recorded = readJson(manifestPath(home));
+    recorded.entries = recorded.entries.map((record) => (record.path === target && resumeOf(record.entry) ? { ...record, entry: older, sha256: sha256(JSON.stringify(older)) } : record));
+    fs.writeFileSync(manifestPath(home), `${JSON.stringify(recorded, null, 2)}\n`, 'utf8');
+
+    const replaced = { matcher: 'compact|clear|startup', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] };
+    const manifest = sync(home, '0.2.0');
+    assert.deepEqual(readJson(target).hooks.SessionStart.filter(resumeOf), [replaced], 'one entry, under the new matcher');
+    assert.deepEqual(manifest.entries.filter((record) => record.path === target && resumeOf(record.entry)).map((record) => record.entry), [replaced]);
+
+    uninstall(home);
+    assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry, the resume hook\'s included');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall removes the entry that is still there when the user removed the other, and says which file kept one', () => {
   const home = makeTmpHome();
   try {
     install(home, '0.1.0');
     const target = claudeHook.target(home);
     // The user took the resume hook out by hand and put a hook of their own in the file; the pause, web failure, guard and share hooks are still there.
-    const theirs = { matcher: 'compact', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
-    const sessionStart = ourClaudeStart().map((entry) => (entry.matcher === 'compact' ? theirs : entry));
+    const theirs = { matcher: 'compact|clear|startup', hooks: [{ type: 'command', command: 'user command', timeout: 1 }] };
+    const sessionStart = ourClaudeStart().map((entry) => (entry.matcher === 'compact|clear|startup' ? theirs : entry));
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { ...ourSettings().hooks, SessionStart: sessionStart } }, null, 2)}\n`, 'utf8');
     const result = uninstall(home);
     // Every entry of ours in the file goes but the resume hook's, which the user replaced: one is kept.
@@ -2277,7 +2305,7 @@ test('the two SessionStart entries of ours come out in either order, and their l
       // uninstall takes the records in the order they are listed: for the other order, the two SessionStart records swap places.
       const entries = [...manifest.entries];
       const doctorAt = entries.findIndex((e) => e.path === target && e.entry.matcher === 'startup|resume');
-      const resumeAt = entries.findIndex((e) => e.path === target && e.entry.matcher === 'compact');
+      const resumeAt = entries.findIndex((e) => e.path === target && e.entry.matcher === 'compact|clear|startup');
       if (reversed) [entries[doctorAt], entries[resumeAt]] = [entries[resumeAt], entries[doctorAt]];
       fs.writeFileSync(manifestPath(home), JSON.stringify({ ...manifest, entries }, null, 2), 'utf8');
 
@@ -3883,4 +3911,49 @@ test('the orchestrator skill gives the first lead its start and carries the onbo
   assert.ok(at(LEAD_TEACHING) > at('\n## The lead\n') && at(LEAD_TEACHING) < at('\n## The status report\n'));
   assert.ok(at(SESSION_TEACHING) > at('\n## A work session\n'));
   assert.equal(components[3].content('0.1.0'), text, 'Codex gets the same skill');
+});
+
+// The rename over the manifest is refused for a moment on Windows while another process (an antivirus, the indexer,
+// an editor) holds the target open: it is tried again before the write fails, and only there.
+test('writeManifestAtomic renames again while Windows holds the manifest, and leaves no temp file either way', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-manifest-rename-'));
+  try {
+    const target = path.join(dir, 'manifest.json');
+    fs.writeFileSync(target, '{"version":"0.1.0"}\n');
+    const holding = (times, code) => {
+      let calls = 0;
+      return {
+        calls: () => calls,
+        rename: (from, to) => {
+          calls += 1;
+          if (calls <= times) throw Object.assign(new Error(`${code}: resource busy`), { code });
+          fs.renameSync(from, to);
+        },
+      };
+    };
+    const temps = () => fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'));
+    const pauses = [];
+    const pause = (ms) => pauses.push(ms);
+
+    const brief = holding(2, 'EBUSY');
+    writeManifestAtomic(target, { version: '0.2.0' }, { rename: brief.rename, pause, platform: 'win32' });
+    assert.equal(brief.calls(), 3);
+    assert.equal(pauses.length, 2);
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, 'utf8')), { version: '0.2.0' });
+    assert.deepEqual(temps(), []);
+
+    const held = holding(Infinity, 'EPERM');
+    assert.throws(() => writeManifestAtomic(target, { version: '0.3.0' }, { rename: held.rename, pause, platform: 'win32' }), { code: 'EPERM' });
+    assert.equal(held.calls(), 3);
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, 'utf8')), { version: '0.2.0' });
+    assert.deepEqual(temps(), []);
+
+    // Elsewhere the same code is a refusal that stays: tried once.
+    const linux = holding(Infinity, 'EACCES');
+    assert.throws(() => writeManifestAtomic(target, { version: '0.4.0' }, { rename: linux.rename, pause, platform: 'linux' }), { code: 'EACCES' });
+    assert.equal(linux.calls(), 1);
+    assert.deepEqual(temps(), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

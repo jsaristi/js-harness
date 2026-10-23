@@ -5,7 +5,7 @@
 //
 // The repository is public on GitHub, so every blob ever pushed can be read, whether a later commit deleted it or
 // not. This reads each blob of `git rev-list --objects --all` once, line by line, and reports four kinds: `secret`
-// (the shapes of GitHub, OpenAI, Anthropic, AWS and Slack tokens, private key headers, and a password-like
+// (the shapes of GitHub, npm, OpenAI, Anthropic, AWS and Slack tokens, private key headers, and a password-like
 // assignment with a real-looking value), `email` (an address other than the noreply and reserved ones) and
 // `personal-path` (an absolute path into a person's home). One finding is one distinct matched text. Its detail
 // names the first place it sits, and says `at HEAD` when a blob of the current tree holds it, `history only` when
@@ -35,6 +35,9 @@ const KIND_ORDER = ['secret', 'email', 'personal-path', 'stale-allow'];
 const TOKEN_SHAPES = [
   /gh[pousr]_[A-Za-z0-9]{36,}/g,
   /github_pat_[A-Za-z0-9_]{20,}/g,
+  // An npm access token: a developer's login in a committed .npmrc is the case this guards. Exactly 36 characters, and
+  // not a slice of a longer word.
+  /(?<![A-Za-z0-9_])npm_[A-Za-z0-9]{36}(?![A-Za-z0-9_])/g,
   /sk-ant-[A-Za-z0-9_-]{20,}/g,
   /sk-[A-Za-z0-9]{32,}/g,
   /sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}/g,

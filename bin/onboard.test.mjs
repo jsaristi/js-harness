@@ -396,29 +396,29 @@ test('profile --checklist adds the areas of the document\'s - Areas: line to its
   });
   const bad = (areas) => project(t, { [ONBOARDING_PATH]: SETUP('- Kind: static-site', '- Size: small (L3)', `- Areas: ${areas}`) });
   assert.deepEqual(await onboard(bad('answer-engines'), 'profile', '--checklist', 'advice'), {
-    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas is "answer-engines": write +<area> (L<n>), one per area the owner asked for, joined by commas`,
+    code: 1, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas is "answer-engines": write +<area> (L<n>), one per area the owner asked for, joined by commas`,
   });
   assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'advice'), {
-    code: 2, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas names A:auth, which is not an area of static-site; js-harness onboard profile static-site lists its areas`,
+    code: 1, out: '', err: `${ONBOARDING_PATH}, ## Setup: Areas names A:auth, which is not an area of static-site; js-harness onboard profile static-site lists its areas`,
   });
   // The bar does not read Areas, so a bad line there does not stop it.
   assert.deepEqual(await onboard(bad('+auth (L9)'), 'profile', '--checklist', 'bar'), { code: 0, out: checklistLines(site, 'bar', 'small').join('\n'), err: '' });
 });
 
-test('profile names what is missing when it cannot tell the kind, the size or the area, exit 2', async (t) => {
+test('profile names what is missing when it cannot tell the kind, the size or the area, exit 1; a value typed wrong is a usage error, exit 2', async (t) => {
   const bare = project(t);
   const cases = [
     [bare, ['profile', '--checklist', 'advice'], `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform`],
     [bare, ['profile', 'platform', '--checklist', 'advice'], `--checklist needs the size: pass --size small|large, or write - Size: under ## Setup in ${ONBOARDING_PATH}`],
-    [bare, ['profile', 'shop'], 'shop is not a kind of the profiles; js-harness onboard profile lists them'],
-    [bare, ['profile', 'static-site', '--area', 'A:auth'], 'A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas'],
+    [bare, ['profile', 'shop'], 'shop is not a kind of the profiles; js-harness onboard profile lists them', 2],
+    [bare, ['profile', 'static-site', '--area', 'A:auth'], 'A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas', 2],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Size: large (L5)') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH} has no - Kind: line under ## Setup: name a kind, or write it there`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Teaching: on (L2)') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH} has no - Kind: and no - Size: line under ## Setup: name a kind and --size, or write both there`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: shop') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH}, ## Setup: shop is not a kind of the profiles; js-harness onboard profile lists them`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: platform', '- Size: medium') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH}, ## Setup: Size is medium, not small or large`],
   ];
-  for (const [root, argv, err] of cases) {
-    assert.deepEqual(await onboard(root, ...argv), { code: 2, out: '', err }, argv.join(' '));
+  for (const [root, argv, err, code = 1] of cases) {
+    assert.deepEqual(await onboard(root, ...argv), { code, out: '', err }, argv.join(' '));
   }
 });
 

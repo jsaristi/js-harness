@@ -885,8 +885,9 @@ function gitCount(run, cwd, args, parse = printedCount) {
 
 const PENDING_LENGTH = 40;
 
-/** The id that starts a task's text (`T5`, `T3b`), or `null` when it has none. */
-const taskId = (text) => /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/.exec(text)?.[1] ?? null;
+/** The id that starts a task's text (`T5`, `T3b`), or `null` when it has none. The one task-ID grammar: pace and
+ * contract read IDs with it too. */
+export const taskId = (text) => /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/.exec(text)?.[1] ?? null;
 
 /** One feature document as a plan: `{ path, title, done, total, pending, tasks, nextStep }`. Title and
  * checkboxes are `parseFeature`'s (bin/lib/progress.mjs), so the board counts what `js-harness progress`

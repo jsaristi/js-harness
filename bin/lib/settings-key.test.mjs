@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { applySettingsKey, undoSettingsKey } from './settings-key.mjs';
+import { acceptSessionMessages, userSettingsPath } from './manifest.mjs';
 
 const PASTE = ['env', 'CODEGRAPH_NO_PROMPT_HOOK'];
 const PLUGIN = ['enabledPlugins', 'typescript-lsp@claude-plugins-official'];
@@ -45,6 +46,24 @@ test('a key in a file that exists is merged beside what is there, in the file ow
     '{\r\n\t"effortLevel": "high",\r\n\t"enabledPlugins": {\r\n\t\t"typescript-lsp@claude-plugins-official": false\r\n\t}\r\n}\r\n',
   );
 });
+
+// The manifest writes the same object as settings-key does: a file that exists keeps its indent, line endings and final
+// newline under both writers. A file settings-key creates keeps its final newline, as it always had (the Opus verifier of
+// the shared-helpers slice: no file is written by both, so a new file's bytes need not change).
+for (const before of ['{\r\n\t"effortLevel": "high"\r\n}\r\n', '{\n  "effortLevel": "high"\n}']) {
+  test(`a key settings-key writes is byte-identical to the manifest's write of the same object, for a file that exists (${JSON.stringify(before.slice(-3))})`, (t) => {
+    const home = project(t);
+    const manifestFile = userSettingsPath(home);
+    const keyFile = settingsFile(project(t));
+    fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
+    fs.writeFileSync(manifestFile, before);
+    fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+    fs.writeFileSync(keyFile, before);
+    assert.equal(acceptSessionMessages(home, { record: () => {} }).status, 'written');
+    assert.equal(applySettingsKey(keyFile, ['crossSessionInbound'], 'accept').state, 'written');
+    assert.equal(fs.readFileSync(keyFile, 'utf8'), fs.readFileSync(manifestFile, 'utf8'));
+  });
+}
 
 test('a key under an object that is already there creates no container', (t) => {
   const root = withSettings(t, '{\n  "env": {\n    "OTHER": "x"\n  }\n}');

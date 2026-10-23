@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { copyPackageManager, quoteForShell, runPm } from './lib/package-manager.mjs';
 import { currentVersion } from './install.mjs';
-import { installedVersion } from './lib/manifest.mjs';
+import { MalformedManifestError, installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
 import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, splitCommand, pmKind, installPlan, isNewer } from './lib/version.mjs';
 import { unknownArgument } from './lib/args.mjs';
@@ -18,6 +18,18 @@ import { unknownArgument } from './lib/args.mjs';
 const PKG_NAME = 'js-harness';
 export const UPDATE_USAGE = 'Usage: js-harness update [--home <path>] [--repo <url or folder>] [--source <dir>]';
 export const UPGRADE_USAGE = 'Usage: js-harness upgrade [--home <path>] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
+
+/** Why `argv` is refused before anything runs, or null: a value flag of `valued` with no value (it is last, or the
+ * next token is another flag, which `requireValue` of `init` reads the same way), else the first token no flag takes. */
+function refusal(argv, valued) {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (!valued.includes(argv[i])) continue;
+    if (argv[i + 1] === undefined || argv[i + 1].startsWith('--')) return `${argv[i]} requires a value`;
+    i += 1;
+  }
+  const unknown = unknownArgument(argv, { valued });
+  return unknown === null ? null : `unknown argument: ${unknown}`;
+}
 
 function parseArgs(argv, env) {
   const get = (flag) => {
@@ -333,7 +345,15 @@ function notInitializedMessage(cwd) {
 
 async function machineStatus(opts, env, spawn) {
   const installed = currentVersion();
-  const recorded = installedVersion(opts.home);
+  let recorded;
+  try {
+    recorded = installedVersion(opts.home);
+  } catch (err) {
+    // A machine manifest that does not parse: one line, nothing printed before it.
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
   const { latest, problem } = latestFor(opts);
 
   console.log(`installed package version: ${installed}`);
@@ -353,9 +373,9 @@ async function machineStatus(opts, env, spawn) {
 
 export async function updateMain(argv, env = process.env, spawn = spawnSync) {
   // A flag it does not know is refused before anything is looked up: `update --help` ran a real lookup (user-guide S3).
-  const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source'] });
-  if (unknown !== null) {
-    console.error(`unknown argument: ${unknown}\n\n${UPDATE_USAGE}`);
+  const refused = refusal(argv, ['--home', '--repo', '--source']);
+  if (refused !== null) {
+    console.error(`${refused}\n\n${UPDATE_USAGE}`);
     return 2;
   }
   const opts = parseArgs(argv, env);
@@ -465,13 +485,23 @@ const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep, copyPath } = {}) {
   // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
-  // which writes nothing, keeps the lenient parse (T1 of odd/tasks/commands-and-doctor.md).
-  const unknown = unknownArgument(argv, { valued: ['--home', '--repo', '--source', '--prefix', '--pm'] });
-  if (unknown !== null) {
-    console.error(`unknown argument: ${unknown}\n\n${UPGRADE_USAGE}`);
+  // which writes nothing, refuses only a value flag with no value and otherwise keeps the lenient parse
+  // (T1 of odd/tasks/commands-and-doctor.md).
+  const refused = refusal(argv, ['--home', '--repo', '--source', '--prefix', '--pm']);
+  if (refused !== null) {
+    console.error(`${refused}\n\n${UPGRADE_USAGE}`);
     return 2;
   }
   const opts = parseArgs(argv, env);
+  // A machine manifest that does not parse is named before anything is installed: the copy is installed first, and the
+  // manifest is read only after it, so a damaged one is caught here, with nothing changed.
+  try {
+    installedVersion(opts.home);
+  } catch (err) {
+    if (!(err instanceof MalformedManifestError)) throw err;
+    console.error(err.refusal);
+    return 1;
+  }
   const { latest, problem } = latestFor(opts);
   if (problem) {
     console.error(problem);

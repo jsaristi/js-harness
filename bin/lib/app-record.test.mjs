@@ -83,8 +83,8 @@ test('appSessions maps each session record by its cliSessionId to where it sits:
     record('local_3.json', { cliSessionId: 'c-plain', isArchived: false, scheduledTaskId: '' }),
   ]));
   const sessions = lib.appSessions(ROOT, root);
-  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null });
-  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null });
+  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null, priorCliSessionIds: [] });
+  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null, priorCliSessionIds: [] });
   assert.equal(sessions.get('c-plain').where, 'sessions', 'an empty scheduledTaskId is no routine');
 });
 
@@ -98,6 +98,20 @@ test('appSessions carries each record\'s cwd: the folder the session runs in, or
   assert.equal(sessions.get('c-here').cwd, 'D:\\harness');
   assert.equal(sessions.get('c-empty').cwd, null);
   assert.equal(sessions.get('c-number').cwd, null);
+});
+
+test('appSessions gives each record the ids it was cleared from, as priorCliSessionIds: [] when the field is absent or is not a list of strings', () => {
+  const root = fakeFs(Object.fromEntries([
+    record('local_1.json', { cliSessionId: 'c-cleared', priorCliSessionIds: ['c-before', 'c-earlier'] }),
+    record('local_2.json', { cliSessionId: 'c-absent' }),
+    record('local_3.json', { cliSessionId: 'c-text', priorCliSessionIds: 'c-before' }),
+    record('local_4.json', { cliSessionId: 'c-mixed', priorCliSessionIds: ['c-before', 7] }),
+  ]));
+  const sessions = lib.appSessions(ROOT, root);
+  assert.deepEqual(sessions.get('c-cleared').priorCliSessionIds, ['c-before', 'c-earlier']);
+  assert.deepEqual(sessions.get('c-absent').priorCliSessionIds, []);
+  assert.deepEqual(sessions.get('c-text').priorCliSessionIds, []);
+  assert.deepEqual(sessions.get('c-mixed').priorCliSessionIds, []);
 });
 
 test('appSessions skips a file that is not JSON or has no cliSessionId, and reads no other file of the folder', () => {
