@@ -225,8 +225,9 @@ next: in a Claude Code or Codex session, run js-harness onboard
 
 The last line appears only while the project has no `docs/ROADMAP.md`. The `excluded` line keeps
 gentle-ai's `.atl/` folder out of what git calls untracked, in this clone only; it is not written
-when a line there already excludes `.atl`, and `uninstall` takes back exactly the line `init`
-added. The example is a project with code. What `init` adds beyond the first four files follows the
+when the lines there already exclude `.atl`, and `uninstall` takes back exactly the line `init`
+added. A project set up before `init` wrote it gets the same line, recorded the same way, from its
+next `js-harness sync`. The example is a project with code. What `init` adds beyond the first four files follows the
 switches in `harness.json` `"functions"` (`js-harness functions` shows each one and why): the
 pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map's `codegraph init`
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code

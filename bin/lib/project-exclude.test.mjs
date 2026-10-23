@@ -228,3 +228,80 @@ test('init writes no line through a link that sends the exclude file outside the
     fs.rmSync(outside, { recursive: true, force: true });
   }
 });
+
+/** A project as `init` left it before the exclude line: no line in the exclude file, no record, no format. */
+function initializedBefore(dir) {
+  const result = initProject(dir, '0.1.0');
+  const { exclude, format, ...manifest } = manifestOf(result);
+  // A manifest with keys of the settings was format 1 then.
+  fs.writeFileSync(result.manifestPath, JSON.stringify(manifest.settings ? { ...manifest, format: 1 } : manifest));
+  undoExclude(excludeOf(dir), exclude);
+  return result;
+}
+
+test('sync adds the line to a project initialized before it, once, and uninstall takes it back', () => {
+  const dir = makeRepo('# mine\n');
+  try {
+    const result = initializedBefore(dir);
+    assert.equal(read(excludeOf(dir)), '# mine\n');
+    const synced = syncProject(dir, '0.1.0');
+    assert.equal(synced.code, 0);
+    assert.ok(synced.actions.some((action) => action.kind === 'excluded' && action.path === '.git/info/exclude'));
+    assert.equal(read(excludeOf(dir)), `# mine\n${EXCLUDED}\n`);
+    assert.deepEqual([manifestOf(result).format, manifestOf(result).exclude?.line], [2, EXCLUDED]);
+    assert.ok(ignoresAtl(dir));
+    const again = syncProject(dir, '0.1.0');
+    assert.equal(again.upToDate, true);
+    assert.deepEqual(lines(dir), [EXCLUDED]);
+    assert.equal(uninstallProject(dir).code, 0);
+    assert.equal(read(excludeOf(dir)), '# mine\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('sync adds no line beside one that already leaves .atl out, records none, and stays up to date', () => {
+  const dir = makeRepo('# mine\n');
+  try {
+    const result = initializedBefore(dir);
+    fs.writeFileSync(excludeOf(dir), '# mine\n/.atl\n');
+    const synced = syncProject(dir, '0.1.0');
+    assert.equal(synced.upToDate, true);
+    assert.equal(manifestOf(result).exclude, undefined);
+    assert.equal(uninstallProject(dir).code, 0);
+    assert.equal(read(excludeOf(dir)), '# mine\n/.atl\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('sync takes the line back when the manifest cannot be written', () => {
+  const dir = makeRepo('# mine\n');
+  try {
+    initializedBefore(dir);
+    const open = () => {
+      throw new Error('disk full');
+    };
+    assert.throws(() => syncProject(dir, '0.1.0', { open }), /disk full/);
+    assert.equal(read(excludeOf(dir)), '# mine\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('sync writes no line through a link that sends the exclude file outside the clone, and says it kept it', () => {
+  const dir = makeRepo('# mine\n');
+  let outside;
+  try {
+    const result = initializedBefore(dir);
+    outside = linkInfoOutside(dir, '# theirs\n');
+    const synced = syncProject(dir, '0.1.0');
+    assert.equal(synced.code, 0);
+    assert.equal(read(path.join(outside, 'exclude')), '# theirs\n');
+    assert.equal(manifestOf(result).exclude, undefined);
+    assert.ok(synced.actions.some((action) => action.kind === 'kept' && /link/.test(action.reason)));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (outside) fs.rmSync(outside, { recursive: true, force: true });
+  }
+});

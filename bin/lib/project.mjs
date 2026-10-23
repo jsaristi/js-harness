@@ -1693,8 +1693,8 @@ function readRecorded(root, manifestFilePath, spawn) {
 }
 
 /** What `sync` and `functions apply` change in a clone, recorded in `manifest`: with `sync`, the version
- * that ran and a recorded pre-commit gate that is gone; for both, what the switches ask (the push check, the
- * index, the keys of the settings). */
+ * that ran, a recorded pre-commit gate that is gone and the `.atl/` exclude line of a clone set up before `init`
+ * added it; for both, what the switches ask (the push check, the index, the keys of the settings). */
 function updateRecorded(root, manifest, gitBases, steps) {
   const { sync, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps } = steps;
   const next = JSON.parse(JSON.stringify(manifest));
@@ -1704,6 +1704,7 @@ function updateRecorded(root, manifest, gitBases, steps) {
   let codegraphCreatedThisRun = false;
   let manifestChanged = false;
   let writtenSettings = [];
+  let excludeAdded = null;
 
   try {
     if (sync && next.version !== version) {
@@ -1739,6 +1740,19 @@ function updateRecorded(root, manifest, gitBases, steps) {
       actions.push(...applied.actions);
       setSettings(next, applied.records);
     }
+    // A clone `init` set up before it wrote the `.atl/` line gets it here, recorded as `init` records it; a record
+    // already there is left alone, so a line somebody took out stays out (odd/tasks/sync-exclude.md).
+    if (sync && !next.exclude) {
+      const target = excludeFile(root, spawn);
+      if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
+      const record = target.file && !target.reason ? addExclude(target.file, { writeFile }) : null;
+      if (record) {
+        excludeAdded = { file: target.file, record };
+        next.exclude = record;
+        next.format = formatFor(next);
+        actions.push({ kind: 'excluded', path: notRemovedLabel(root, target.file), line: EXCLUDED });
+      }
+    }
     manifestChanged = JSON.stringify(next) !== JSON.stringify(manifest);
     if (manifestChanged) {
       mkdirTracked(path.dirname(manifestFilePath), root, createdDirs);
@@ -1747,6 +1761,13 @@ function updateRecorded(root, manifest, gitBases, steps) {
   } catch (err) {
     const notRemoved = rollback(root, createdPaths, createdDirs, rm);
     undoSettingsOnRollback(root, writtenSettings, notRemoved);
+    if (excludeAdded) {
+      try {
+        undoExclude(excludeAdded.file, excludeAdded.record);
+      } catch {
+        notRemoved.push(`${EXCLUDED} in ${notRemovedLabel(root, excludeAdded.file)}`);
+      }
+    }
     // codegraph only runs when `.codegraph/` is absent, so one it made is this run's alone, whatever
     // the old manifest says about an earlier directory (T4b, Codex P2).
     if (codegraphCreatedThisRun) {
