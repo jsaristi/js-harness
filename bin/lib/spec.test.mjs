@@ -80,6 +80,21 @@ test('a proof of node -e is not a finding: the module it imports inside the quot
   assert.deepEqual(findings, []);
 });
 
+// A file is read wherever it stands in the command, quoted or not, after any option.
+test('a quoted proof file that does not exist is a finding: its quotes are not part of its name', () => {
+  for (const proof of ['`node --test "bin/lib/replies.test.mjs"`', "`node --test 'bin/lib/replies.test.mjs'`"]) {
+    const { findings } = specFindings(spec(capability('The reply check', { Proof: proof })), plain);
+    assert.deepEqual(findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist'], proof);
+  }
+});
+
+test('a proof file after an option that takes no value is read: -- and --test-only are no value-taking options', () => {
+  for (const proof of ['`node --test -- bin/lib/replies.test.mjs`', '`node --test --test-only bin/lib/replies.test.mjs`']) {
+    const { findings } = specFindings(spec(capability('The reply check', { Proof: proof })), plain);
+    assert.deepEqual(findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist'], proof);
+  }
+});
+
 test('a proof whose --ref takes a tag name is not a finding: refs/tags/v1.0.0 is no file', () => {
   const { findings } = specFindings(spec(capability('The reply check', { Proof: '`js-harness check --push --ref refs/tags/v1.0.0`' })), plain);
   assert.deepEqual(findings, []);

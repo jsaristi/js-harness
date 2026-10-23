@@ -76,19 +76,13 @@ const ticked = (text) => [...(text ?? '').matchAll(/`([^`]+)`/g)].map((match) =>
 
 // A word that is a plain relative path to a `.mjs`, `.js` or `.md` file, with an optional `:line` or `:from-to`.
 const PROOF_FILE = /^([\w.-]+(?:\/[\w.-]+)*\.(?:mjs|js|md))(?::\d+(?:-\d+)?)?$/;
-// Options that take no value, so the word after one may be a file (`node --test bin/x.test.mjs`). Any other option
-// without an `=` takes the word after it as its value, which is not read as a file.
-const NO_VALUE_OPTIONS = ['--test', '--check', '--watch', '--silent'];
 
-/** The files of the repository a proof command runs, read from each backticked command: a word that is a plain
- * relative path to a `.mjs`, `.js` or `.md` file (`PROOF_FILE`), and not the value of an option (`--ref refs/tags/x`,
- * `--test-name-pattern "a/b"`). A URL, a git range and code inside quotes name no file, and are not read. */
+/** The files of the repository a proof command runs, read from each backticked command: every word that, without one
+ * pair of quotes around it, is a plain relative path to a `.mjs`, `.js` or `.md` file (`PROOF_FILE`), wherever it
+ * stands. A URL, a git range, a ref, a pattern and code name no such path, so none of them is read as a file. */
 function proofFiles(command) {
-  const words = command.split(/\s+/);
-  return words.flatMap((word, i) => {
-    const option = words[i - 1];
-    const isValue = option !== undefined && option.startsWith('-') && !option.includes('=') && !NO_VALUE_OPTIONS.includes(option);
-    const match = isValue ? null : PROOF_FILE.exec(word);
+  return command.split(/\s+/).flatMap((word) => {
+    const match = PROOF_FILE.exec(word.replace(/^(["'])(.*)\1$/, '$2'));
     return match ? [match[1]] : [];
   });
 }
