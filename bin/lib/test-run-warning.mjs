@@ -266,12 +266,18 @@ function scan(words, depth = 0, cwd = process.cwd()) {
   }
   const npm = npmTestRuns(rest, cwd);
   if (npm !== null) {
-    for (const { commands, dir } of npm) {
+    // npm runs the script of every workspace named, one after another: their runs are judged as one, every test file
+    // where one runs them all. A file of a script is its folder's: whole here, so the gate log is asked of it from the
+    // command's own folder (`fileKey`).
+    const runs = npm.map(({ commands, dir }) => {
       const found = firstRun(commands, depth + 1, dir);
-      // A file of the script is the folder's: whole here, so the gate log is asked of it from the command's own.
-      if (found !== null) return { ...found, names: found.names.map((name) => path.resolve(dir, name)) };
-    }
-    return null;
+      return found === null ? null : { ...found, names: found.names.map((name) => path.resolve(dir, name)) };
+    }).filter((run) => run !== null);
+    if (runs.length <= 1) return runs[0] ?? null;
+    return {
+      files: runs.some((run) => run.files === 0) ? 0 : runs.reduce((sum, run) => sum + run.files, 0),
+      names: runs.flatMap((run) => run.names),
+    };
   }
   return filesOf(rest);
 }

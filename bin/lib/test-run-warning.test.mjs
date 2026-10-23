@@ -91,13 +91,16 @@ test('npm test reads the words npm hands its script, its aliases, and the packag
 // that workspace's, so the gate log is asked of it from the folder the command runs in.
 test('npm test runs every workspace it names, and times a file of one from its own folder', () => {
   const root = scratchProject({ lint: 'node lint.mjs' });
-  for (const [name, test] of [['lint', 'node lint.mjs'], ['suite', 'node --test'], ['slow', 'node --test slow.test.mjs']]) {
+  for (const [name, test] of [['lint', 'node lint.mjs'], ['suite', 'node --test'], ['slow', 'node --test slow.test.mjs'], ['one', 'node --test a.test.mjs']]) {
     fs.mkdirSync(path.join(root, 'packages', name), { recursive: true });
     fs.writeFileSync(path.join(root, 'packages', name, 'package.json'), JSON.stringify({ scripts: { test } }));
   }
   try {
     assert.equal(testRunFiles('npm test -w packages/suite -w packages/lint', root), 0);
     assert.equal(testRunFiles('npm test -w packages/lint', root), null);
+    // A light run in one workspace hides no suite in another: the runs of every workspace are one run.
+    assert.equal(testRunFiles('npm test -w packages/one -w packages/suite', root), 0);
+    assert.equal(testRunFiles('npm test -w packages/one -w packages/slow', root), 2);
     const asked = [];
     const fileSeconds = (file) => {
       asked.push(file);
@@ -106,6 +109,11 @@ test('npm test runs every workspace it names, and times a file of one from its o
     const said = testRunWarning('npm test -w packages/slow', { env: {}, holder: held, fileSeconds, cwd: root });
     assert.deepEqual(asked, ['packages/slow/slow.test.mjs']);
     assert.match(said, /^node --test of packages\/slow\/slow\.test\.mjs, which the gate log timed at 600 s,/);
+    // With no workspace, a file is named from the folder as before.
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+    asked.length = 0;
+    testRunWarning('npm test a.test.mjs', { env: {}, holder: held, fileSeconds, cwd: root });
+    assert.deepEqual(asked, ['a.test.mjs']);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
