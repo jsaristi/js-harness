@@ -995,8 +995,6 @@ test('every backup subcommand refuses an unknown flag with a usage error, and ke
     ['init', '--repo', REPO, '--no-such-flag'],
     ['restore', '--from', 'x', '--no-such-flag'],
     ['verify', '--from', 'x', '--no-such-flag'],
-    ['--hook', '--no-such-flag'],
-    ['--session-start', '--no-such-flag'],
   ];
   for (const args of typos) {
     deps.stderr = sink();
@@ -1007,6 +1005,10 @@ test('every backup subcommand refuses an unknown flag with a usage error, and ke
 
   deps.stderr = sink();
   assert.equal(await backupMain(['run', '--allow-shrink'], deps), 0, deps.stderr.text);
+  // The host's entry point keeps its promise to exit 0 (gentle-ai on 46e3842..5067fdd): a refusal there would read as a
+  // broken hook, so it is not gated.
+  deps.stderr = sink();
+  assert.equal(await backupMain(['--session-start', '--no-such-flag'], deps), 0, deps.stderr.text);
 });
 
 test('the usage says what deleting the backup folder does not undo', async (t) => {

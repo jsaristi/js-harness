@@ -1143,7 +1143,8 @@ function defaultDeps() {
 }
 
 // The flags each subcommand takes: `valued` ones take the next token as their value. A token none of them takes is
-// refused with exit 2, so a mistyped flag never runs the command with its defaults.
+// refused with exit 2, so a mistyped flag never runs the command with its defaults. The hooks' entry points (`--hook`,
+// `--session-start`) are not here: the host runs them, and they always exit 0.
 const FLAGS = {
   run: { bare: ['--allow-shrink', '--adopt', '--transcripts'] },
   status: {},
@@ -1152,8 +1153,6 @@ const FLAGS = {
   init: { valued: ['--repo', '--summary-repo', '--transcripts-repo'] },
   restore: { valued: ['--from', '--home', '--map', '--transcripts'], bare: ['--merge'] },
   verify: { valued: ['--from', '--summary', '--transcripts'] },
-  '--hook': {},
-  '--session-start': {},
 };
 
 export async function backupMain(args, deps = defaultDeps()) {
