@@ -2541,9 +2541,10 @@ export async function checkSubagents(cwd, env, { homedir = os.homedir, now = Dat
 }
 
 export const USAGE = [
-  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] | js-harness check --push [--head <rev>] [--remote <name>] [--ref <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
+  'Usage: js-harness check [--cwd <path>] [--home <path>] [--remote <name>] [--wait <minutes> | --no-wait] [--first <reason>] [--subagents] [--verbose] | js-harness check --push [--head <rev>] [--remote <name>] [--ref <name>] [--cwd <path>] | js-harness check --door --base <rev> [--branch <name>] [--cwd <path>]',
   GATE_WAIT_USAGE,
   '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',
+  '       --verbose: prints every row of a gate that passes, which otherwise prints one line (PASS check, with the review\'s verdict); a failing gate prints every row either way. JS_HARNESS_CHECK_VERBOSE=1 asks the same, for a hook that runs check without flags (odd/tasks/quiet-gate.md)',
   '       --door --base <rev> [--branch <name>]: runs only the rule rows over the lines <rev>..HEAD brings, judged by the running list, and the failures row, and exits 1 when one refuses (the merge door of merge-queue, odd/tasks/rule-hierarchy.md); --branch names the pull request\'s branch, which may change bin/lib/rules-data.mjs only when it is a rule/ branch',
 ].join('\n');
 
@@ -2578,7 +2579,7 @@ export function parseGateWait(argv) {
 }
 
 const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--ref', '--wait', '--first', '--base', '--branch'];
-const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door'];
+const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door', '--verbose'];
 // The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
 // `--door` uses none of them, so one of them with it is refused rather than ignored.
 const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote', '--home'];
@@ -2626,6 +2627,7 @@ function parseArgs(argv, env) {
     home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
     push: argv.includes('--push'),
     subagents: argv.includes('--subagents'),
+    verbose: argv.includes('--verbose'),
     head: get('--head') ?? 'HEAD',
     remote: get('--remote') ?? 'origin',
     noWait,
@@ -2634,6 +2636,21 @@ function parseArgs(argv, env) {
     base,
     branch,
   };
+}
+
+/** Set to `1` by a hook or a script that runs `check` and wants every row of a gate that passes, as `--verbose`
+ * asks: a hook passes no flags. */
+export const VERBOSE_ENV = 'JS_HARNESS_CHECK_VERBOSE';
+
+/** The one line a gate that passes prints in place of its rows, unless `--verbose` asks for them: a passing
+ * commit printed dozens of lines, the name of every contract among them (finding 5 of JH 43,
+ * odd/tasks/quiet-gate.md). It counts the rows, says how many only inform, and carries the verdict of the
+ * `review` row, which a commit shows so that nobody has to remember to ask (`checkReview`). */
+export function passLine(rows) {
+  const info = rows.filter((row) => row.info).length;
+  const review = rows.find((row) => row.name === 'review');
+  const counted = `${rows.length} row${rows.length === 1 ? '' : 's'} passed${info > 0 ? `, ${info} of them INFO` : ''}`;
+  return `PASS  check  ${counted}; --verbose prints each${review ? `; review: ${review.detail}` : ''}`;
 }
 
 function formatRow(row) {
@@ -2729,6 +2746,12 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // The sub-agents row runs only when asked (`--subagents`), since it reads a day of records, which a plain gate never does.
   if (!push && parsed.subagents) rows.push(await checkSubagents(cwd, env, deps));
 
+  // A gate that passes says so in one line (`passLine`); one that fails prints every row, as a push and the door always do.
+  const passed = rows.every((row) => row.pass);
+  if (!push && passed && !parsed.verbose && env[VERBOSE_ENV] !== '1') {
+    console.log(passLine(rows));
+    return 0;
+  }
   for (const row of rows) {
     console.log(formatRow(row));
   }
@@ -2736,7 +2759,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     if (row.output) console.log(`\n${row.output}`);
   }
 
-  return rows.every((row) => row.pass) ? 0 : 1;
+  return passed ? 0 : 1;
 }
 
 /** Ends the process with `code` once what was printed to each of `streams` has been handed to the system,

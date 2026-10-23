@@ -176,6 +176,11 @@ const withOutput = (result) => ({ ...result, output: `${result.stdout ?? ''}${re
 
 const git = (ctx, cwd, ...args) => withOutput(run('git', args, childOptions(ctx, cwd)));
 
+/** `git commit` with the gate's rows in its output: a gate that passes prints one line unless it is asked for every
+ * row, which a hook, run without flags, is asked by JS_HARNESS_CHECK_VERBOSE (odd/tasks/quiet-gate.md). The steps
+ * read those rows as the proof that the hook ran each one. */
+const commitWithRows = (ctx, cwd, ...args) => git({ ...ctx, env: { ...ctx.env, JS_HARNESS_CHECK_VERBOSE: '1' } }, cwd, 'commit', ...args);
+
 /** One command of the installed candidate, with the practice project as its cwd. It is run through this
  * same node and the installed entry file, so no step depends on how a shell finds the command; the one
  * place PATH has to find it is the hook, under `git commit`. */
@@ -456,7 +461,7 @@ const STEPS = {
     // Explicit paths, never `-A`: the index of codegraph (`.codegraph/`) must not be committed.
     expectOk(git(ctx, project, 'add', '--', RUN_LOG, 'harness.json', 'AGENTS.md'), 'git add');
     const before = head(ctx);
-    const result = git(ctx, project, 'commit', '-m', `practice: run of js-harness ${commit}`);
+    const result = commitWithRows(ctx, project, '-m', `practice: run of js-harness ${commit}`);
     assertThat(!result.error && result.status === 0, `the commit did not pass: ${ended(result)}`);
     const after = head(ctx);
     assertThat(after !== before, `git commit exited 0 but HEAD is still ${short(before)}`);
@@ -509,7 +514,7 @@ const STEPS = {
     expectOk(git(ctx, project, 'add', '--', ...paths), 'git add');
     const stale = paths.filter((file) => porcelain(ctx, '--', file) !== '');
     if (stale.length > 0) {
-      const committed = git(ctx, project, 'commit', '-m', "practice: the project's own rules");
+      const committed = commitWithRows(ctx, project, '-m', "practice: the project's own rules");
       assertThat(!committed.error && committed.status === 0, `the commit of the project's own rules did not pass: ${ended(committed)}`);
       assertThat(hasRow(committed.output, 'PASS', 'rules'), `the commit of the project's own rules passed, but its output shows no PASS rules row:\n${tail(committed.output)}`);
       said.push(`committed ${stale.join(', ')}; the hook printed:\n${checkRows(committed.output).join('\n')}`);

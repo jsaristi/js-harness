@@ -1008,8 +1008,10 @@ async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
     errOutput += `${line}\n`;
   };
   const ownHome = argv.includes('--home') || env.JS_HARNESS_HOME !== undefined ? null : makeTmpDir();
+  // Every row, as a gate printed them before it was quiet: these tests read the rows (check-quiet.test.mjs reads the one line).
+  const verbose = { JS_HARNESS_CHECK_VERBOSE: '1', ...env };
   try {
-    const code = await main(argv, ownHome ? { ...env, JS_HARNESS_HOME: ownHome } : env, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], watchBusiest: watchedNobody, ...deps });
+    const code = await main(argv, ownHome ? { ...verbose, JS_HARNESS_HOME: ownHome } : verbose, { sampleLoad: async () => QUIET_LOAD, busiest: async () => [], watchBusiest: watchedNobody, ...deps });
     return { code, output, errOutput };
   } finally {
     console.log = originalLog;
@@ -2253,7 +2255,7 @@ test('main errors with usage on stderr, exits 2 and runs no row for a --wait it 
     assert.match(errOutput, /Usage: js-harness check .*\[--wait <minutes> \| --no-wait\]/);
     // And what the two flags mean, since a bound that counts from the last change of hands is not what
     // "--wait <minutes>" says by itself.
-    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n {7}--door --base <rev> \[--branch <name>\]: runs only the rule rows over the lines <rev>\.\.HEAD brings, judged by the running list, and the failures row, and exits 1 when one refuses \(the merge door of merge-queue, odd\/tasks\/rule-hierarchy\.md\); --branch names the pull request's branch, which may change bin\/lib\/rules-data\.mjs only when it is a rule\/ branch\n$/);
+    assert.match(errOutput, /\n {7}--wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it \(60 when not given\); --no-wait: refuse at once instead of waiting\n {7}--first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator's batch run on main \(odd\/tasks\/gate-first\.md\)\n {7}--verbose: prints every row of a gate that passes, which otherwise prints one line \(PASS check, with the review's verdict\); a failing gate prints every row either way\. JS_HARNESS_CHECK_VERBOSE=1 asks the same, for a hook that runs check without flags \(odd\/tasks\/quiet-gate\.md\)\n {7}--door --base <rev> \[--branch <name>\]: runs only the rule rows over the lines <rev>\.\.HEAD brings, judged by the running list, and the failures row, and exits 1 when one refuses \(the merge door of merge-queue, odd\/tasks\/rule-hierarchy\.md\); --branch names the pull request's branch, which may change bin\/lib\/rules-data\.mjs only when it is a rule\/ branch\n$/);
   }
 });
 
@@ -2335,7 +2337,7 @@ test('two check processes that share a home run their sensors one after the othe
   const noPrograms = path.join(home, 'no-programs');
   fs.mkdirSync(noPrograms);
   const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_log', 'node_test_context', 'path'];
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), PATH: noPrograms, JS_HARNESS_GATE_LOAD: 'off' };
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !dropped.includes(key.toLowerCase()))), PATH: noPrograms, JS_HARNESS_GATE_LOAD: 'off', JS_HARNESS_CHECK_VERBOSE: '1' };
   // They run a copy of `bin/` in a temporary folder. Started from this checkout's own `bin/check.mjs`,
   // they would read on the session board as two gates of this worktree at once, at every run of the suite
   // (`watchedGates` in lib/sessions.mjs leaves out a gate whose folder is no worktree of the project).
@@ -2857,7 +2859,7 @@ test('check refuses an argument it does not know: exit 2 with the usage, no row 
       [['-h'], '-h'],
       [['help'], 'help'],
       [['--pus'], '--pus'],
-      [['--cwd', dir, '--home', home, '--verbose'], '--verbose'],
+      [['--cwd', dir, '--home', home, '--quiet'], '--quiet'],
       [['--push', 'origin'], 'origin'],
       [['--no-wait', '--cwd', dir, 'now'], 'now'],
     ];
@@ -4656,7 +4658,7 @@ function hookedRepo() {
   // The switch of the gate log is dropped instead: a gate that runs this file with its log off would keep
   // the hook's gate from writing the log of the home these tests read.
   const dropped = ['js_harness_check_inner', 'js_harness_gate_held', 'js_harness_gate_log', 'node_test_context'];
-  const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home, JS_HARNESS_GATE_LOAD: 'off' };
+  const env = { ...Object.fromEntries(Object.entries(gitEnv()).filter(([key]) => !dropped.includes(key.toLowerCase()))), JS_HARNESS_HOME: home, JS_HARNESS_GATE_LOAD: 'off', JS_HARNESS_CHECK_VERBOSE: '1' };
   const commit = (cwd, ...args) => {
     const result = spawnSync('git', [...commitAs, '-m', 'change', ...args], { cwd, env, encoding: 'utf8' });
     return { status: result.status, said: `${result.stdout}${result.stderr}`.replace(/\r\n/g, '\n') };
