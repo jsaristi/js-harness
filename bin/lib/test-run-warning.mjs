@@ -1,7 +1,7 @@
 // The warning for a whole test run started beside a gate: a `node --test` of several files run by hand while
 // another gate holds the machine's lock shares its cores, and both miss their time bounds with every test
 // green. On the night of 2026-10-14 JH 9 and JH 10 each started one. `js-harness guard --hook` (JH 15's)
-// calls this for a Bash command and, by his decision (`ffe99ebf` line 5718), refuses the call with the line
+// calls this for a Bash command and, by his decision (transcript `ffe99ebf`, line 5718), refuses the call with the line
 // it answers (odd/tasks/test-run-warning.md). Since first-version T6a a heavy run is refused whatever its size:
 // one file the gate log timed over a minute counts as several, and an eval batch's mark counts as a holder.
 import fs from 'node:fs';
