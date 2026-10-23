@@ -70,6 +70,22 @@ export function npmPrefixOf(root) {
   return path.basename(above) === 'lib' ? path.dirname(above) : above;
 }
 
+/** Where the npm CLI beside the node at `execPath` lives: `<node dir>/node_modules/npm/bin/npm-cli.js` on Windows, under
+ * `<prefix>/lib/node_modules` elsewhere. The one place this is worked out; `scripts/lib.mjs` reads it from here. */
+export function npmCliPath(execPath = process.execPath, platform = process.platform) {
+  const nodeDir = path.dirname(execPath);
+  const modules = platform === 'win32' ? path.join(nodeDir, 'node_modules') : path.join(path.dirname(nodeDir), 'lib', 'node_modules');
+  return path.join(modules, 'npm', 'bin', 'npm-cli.js');
+}
+
+/** The npm CLI beside the node that runs js-harness (`npmCliPath`), or `null` where that file is not there. Run through
+ * this node it bypasses a PATH `npm` that may be a shim, as pnpm's is on a machine where pnpm installed js-harness
+ * (behavior.md, B3). */
+export function npmCliOf(execPath = process.execPath, platform = process.platform, exists = fs.existsSync) {
+  const cli = npmCliPath(execPath, platform);
+  return exists(cli) ? cli : null;
+}
+
 /** The project whose dependency the copy whose file is `copyPath` is, or `null` for a global install; asked of a copy
  * outside pnpm's global folder. The project is the folder above its first `node_modules`: a pnpm project's copy lies
  * in `node_modules/.pnpm/...`, and a project, or npx's cache, keeps a package.json there; a global prefix keeps none. */
