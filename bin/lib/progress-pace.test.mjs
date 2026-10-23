@@ -17,6 +17,11 @@ test('a task is matched by its leading ID, with or without bold, so one reworded
   assert.deepEqual(compareSteps([step('T2 | build | pending')], [step('T2 | build it | done', true)]), { closed: 1, reopened: 0, added: 0, removed: 0 });
 });
 
+// The ID grammar of the session board and of contract (`taskId`, bin/lib/sessions.mjs): `C3` is an ID, as `T3` is.
+test('a task whose ID is a letter prefix other than T, as the board reads it, is matched by that ID (C-d-19)', () => {
+  assert.deepEqual(compareSteps([step('C3 a')], [step('C3 a, reworded', true)]), { closed: 1, reopened: 0, added: 0, removed: 0 });
+});
+
 test('a task without an ID is matched by its exact text: reworded, it is removed and added', () => {
   assert.deepEqual(compareSteps([step('write the docs')], [step('write the docs', true)]), { closed: 1, reopened: 0, added: 0, removed: 0 });
   assert.deepEqual(compareSteps([step('write the docs')], [step('write the help', true)]), { closed: 1, reopened: 0, added: 1, removed: 1 });

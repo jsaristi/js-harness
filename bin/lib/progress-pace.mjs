@@ -4,6 +4,7 @@
 // odd/tasks/*.md are compared before and after it, with the parsers `progress` counts with, so a task counts
 // here exactly as it counts on the map. Zero dependencies, no I/O: git's output comes in, data goes out.
 import { parseFeature, parseRoadmap } from './progress.mjs';
+import { taskId } from './sessions.mjs';
 
 /** How many days `--pace` reads when it is not told. */
 export const PACE_DAYS = 14;
@@ -115,9 +116,10 @@ export function stepsOf(path, markdown) {
   return parseFeature(markdown, path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '')).steps;
 }
 
-// A task's leading ID, `T3` or `T5b`, bold or not; `null` for a task without one.
-const LEADING_ID = /^\**(T\d+[a-z]*)(?![\w])/i;
-const idOf = (text) => text.match(LEADING_ID)?.[1].toUpperCase() ?? null;
+// A task's leading ID, read by the grammar the session board and contract read (`taskId`, bin/lib/sessions.mjs).
+// A bold ID (`**T5b**`) is read without its marks, as pace always read it; `null` for a task without one.
+const BOLD_ID = /^\*\*(.+?)\*\*/;
+const idOf = (text) => taskId(text.replace(BOLD_ID, '$1'))?.toUpperCase() ?? null;
 
 /** What changed between the steps of one file `before` and `after` a commit: `{ closed, reopened, added,
  * removed }`. A task is matched by its leading ID when both sides have one, in order, and otherwise by its exact
