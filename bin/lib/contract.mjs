@@ -3,6 +3,7 @@
 // rejects a contract `/goal` could not drive — see odd/tasks/task-contract.md. No fs here: every
 // function takes markdown text, so the tests use inline fixture strings.
 import { tokenize } from './progress.mjs';
+import { taskId } from './sessions.mjs';
 
 export const CONTRACT_TEMPLATE = `## Goal
 <one sentence: the outcome, not the steps>
@@ -175,8 +176,6 @@ const TASK_KINDS = ['design', 'build', 'verify', 'docs'];
 
 // A checklist line: its box, then the rest of its first line.
 const TASK_LINE_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/;
-// A task's ID, as the session board reads it (`taskId` of bin/lib/sessions.mjs); a test holds the two alike.
-const TASK_ID_PATTERN = /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/;
 const KIND_PATTERN = /\(kind:\s*([^)]*?)\s*\)/;
 
 /** Every checklist line that opens with a task ID, outside fences: `{ id, kind, done, line }` in document
@@ -187,7 +186,7 @@ export function tasksOf(markdown) {
   tokens.forEach((token, index) => {
     if (token.fence || token.heading) return;
     const step = token.line.match(TASK_LINE_PATTERN);
-    const id = step && TASK_ID_PATTERN.exec(step[2])?.[1];
+    const id = step && taskId(step[2]);
     if (!id) return;
     const kind = KIND_PATTERN.exec(step[2])?.[1] ?? null;
     // `tokenize` gives one token a line, so a token's index plus one is its line (the resume hook names it).
