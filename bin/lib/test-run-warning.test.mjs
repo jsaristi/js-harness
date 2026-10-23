@@ -70,6 +70,10 @@ test('npm test reads the words npm hands its script, its aliases, and the packag
     assert.equal(testRunFiles(`npm test --prefix ${other}`, noTest), 0);
     assert.equal(testRunFiles(`npm --prefix=${other} test a.mjs`, noTest), 1);
     assert.equal(testRunFiles(`npm --prefix ${noTest} test`, project), null);
+    // The value of an option of npm's own is npm's, not a word it hands the script (gentle-ai on the guard slice).
+    assert.equal(testRunFiles('npm test --loglevel silent', project), 0);
+    assert.equal(testRunFiles('npm --loglevel silent test a.mjs', project), 1);
+    assert.equal(testRunFiles('npm test -w pkg', project), 0);
   } finally {
     for (const dir of [project, other, noTest]) fs.rmSync(dir, { recursive: true, force: true });
   }

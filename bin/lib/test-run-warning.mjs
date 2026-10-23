@@ -182,11 +182,14 @@ function programAt(words) {
 /** npm's names of its `test` command, and of the command that runs a script by its name. */
 const NPM_TEST = new Set(['test', 'tst', 't']);
 const NPM_RUN = new Set(['run', 'run-script', 'rum', 'urn']);
+/** npm's options that take the next word as their value, which is npm's and never a word handed to the script. */
+const NPM_VALUED = new Set(['--loglevel', '--workspace', '-w', '--userconfig', '--cache', '--registry', '--script-shell', '--tag']);
 
 /** The commands `npm test` or `npm run test` runs, as the sensors resolve them (bin/check.mjs, `testsCommand`): the
  * `test` script of the package.json in `cwd`, or in the folder `--prefix` names, whose last command takes the
  * words npm hands it, its positional words and those after `--`, as its files; `null` for any other words, and `[]`
- * where the folder names no test script. npm's other options are its own and are read past. */
+ * where the folder names no test script. npm's other options are its own and are read past, with the value of those
+ * that take one (`NPM_VALUED`); a workspace (`-w`) is read as the folder's own script. */
 function npmTestCommands(words, cwd) {
   if (!NPM.test(words[0]?.text ?? '')) return null;
   let dir = cwd;
@@ -198,6 +201,7 @@ function npmTestCommands(words, cwd) {
       index += 1;
       dir = path.resolve(cwd, words[index]?.text ?? '');
     } else if (text.startsWith('--prefix=')) dir = path.resolve(cwd, text.slice('--prefix='.length));
+    else if (NPM_VALUED.has(text)) index += 1;
     else if (!text.startsWith('-')) positional.push(words[index]);
   }
   const verb = NPM_RUN.has(positional[0]?.text) ? 1 : 0;
