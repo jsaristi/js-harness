@@ -74,13 +74,23 @@ export function parseSpec(markdown) {
 /** The text in backticks of a field. */
 const ticked = (text) => [...(text ?? '').matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
 
-/** The files of the repository a proof command runs: its words that name a script or a test file, a `.mjs`, `.js` or
- * `.md` file or a path with a `/`, and no option. `path:line` is read as its path, as a today item is. */
+// A word that is a plain relative path to a `.mjs`, `.js` or `.md` file, with an optional `:line` or `:from-to`.
+const PROOF_FILE = /^([\w.-]+(?:\/[\w.-]+)*\.(?:mjs|js|md))(?::\d+(?:-\d+)?)?$/;
+// Options that take no value, so the word after one may be a file (`node --test bin/x.test.mjs`). Any other option
+// without an `=` takes the word after it as its value, which is not read as a file.
+const NO_VALUE_OPTIONS = ['--test', '--check', '--watch', '--silent'];
+
+/** The files of the repository a proof command runs, read from each backticked command: a word that is a plain
+ * relative path to a `.mjs`, `.js` or `.md` file (`PROOF_FILE`), and not the value of an option (`--ref refs/tags/x`,
+ * `--test-name-pattern "a/b"`). A URL, a git range and code inside quotes name no file, and are not read. */
 function proofFiles(command) {
-  return command
-    .split(/\s+/)
-    .filter((word) => !word.startsWith('-') && (/\.(mjs|js|md)$/.test(word) || word.includes('/')))
-    .map((word) => word.replace(/:\d+(-\d+)?$/, ''));
+  const words = command.split(/\s+/);
+  return words.flatMap((word, i) => {
+    const option = words[i - 1];
+    const isValue = option !== undefined && option.startsWith('-') && !option.includes('=') && !NO_VALUE_OPTIONS.includes(option);
+    const match = isValue ? null : PROOF_FILE.exec(word);
+    return match ? [match[1]] : [];
+  });
 }
 
 /** What one item of a today line is: a command, a manifest id, a home path or a file of the repository. */

@@ -41,8 +41,8 @@ model does not pay for the same lesson twice; and **Today**, the files, commands
 (`js-harness <name>`), manifest entries and files under the home that hold it now.
 
 The `spec` row of `js-harness check` holds this file to that shape at every commit: it fails
-when a capability lacks a field or a proof command, when a file its Today line names does not
-exist, and when a command of the dispatcher, an entry the manifest installs or a file the
+when a capability lacks a field or a proof command, when a test file its Proof names does not
+exist, when a file its Today line names does not exist, and when a command of the dispatcher, an entry the manifest installs or a file the
 harness writes under the home is claimed by no capability. It proves that every piece is named
 and provable, not that its reason is well told; that part stays with review.
 

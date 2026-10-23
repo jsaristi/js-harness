@@ -5762,6 +5762,15 @@ test('check --push leaves a ref that is not a v* tag unchecked against the versi
   }
 });
 
+test('check --head with no value says so first, as --remote does, before it says --head goes with --push', async () => {
+  for (const [argv, message] of [[['--head'], '--head requires a value'], [['--head', '--push'], '--head requires a value'], [['--remote'], '--remote requires a value']]) {
+    const { code, output, errOutput } = await runCheck(argv, {}, {});
+    assert.equal(code, 2, argv.join(' '));
+    assert.equal(errOutput.split('\n')[0], message, argv.join(' '));
+    assert.equal(output, '');
+  }
+});
+
 test('check --ref goes with --push, and is a usage error without it', async () => {
   const { code, errOutput } = await runCheck(['--ref', 'refs/tags/v1.0.0'], {}, {});
   assert.deepEqual([code, errOutput.split('\n')[0]], [2, '--ref goes with --push']);
@@ -5787,15 +5796,22 @@ test('a flag of another mode is a usage error, not ignored: --head without --pus
     }
     // Each mode keeps the flags it takes: --remote is shared by the gate and the push, and --head, --remote and
     // --ref go with the push, --base and --branch with the door. None of them is a usage error.
+    // A gate takes the machine's lock and writes its log in its home, so each gate or push runs in a home of its own.
+    // The door runs no gate and refuses `--home`, so it takes none.
+    const home = makeTmpDir();
     const taken = [
-      ['--remote', 'origin', '--cwd', dir],
-      ['--push', '--head', 'HEAD', '--remote', 'origin', '--cwd', dir],
+      ['--remote', 'origin', '--cwd', dir, '--home', home],
+      ['--push', '--head', 'HEAD', '--remote', 'origin', '--cwd', dir, '--home', home],
       ['--door', '--base', 'HEAD', '--branch', 'feat/x', '--cwd', dir],
     ];
-    for (const argv of taken) {
-      const { code, errOutput } = await runCheck(argv, {}, {});
-      assert.notEqual(code, 2, `${argv.join(' ')}: ${errOutput}`);
-      assert.doesNotMatch(errOutput, /Usage: js-harness check/, argv.join(' '));
+    try {
+      for (const argv of taken) {
+        const { code, errOutput } = await runCheck(argv, {}, {});
+        assert.notEqual(code, 2, `${argv.join(' ')}: ${errOutput}`);
+        assert.doesNotMatch(errOutput, /Usage: js-harness check/, argv.join(' '));
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

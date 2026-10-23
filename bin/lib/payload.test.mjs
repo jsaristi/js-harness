@@ -272,7 +272,7 @@ test('malformed hooks.json yields no Codex hooks, without throwing', () => {
 
 // --- hook order and event filtering ---
 
-test('hooks are listed in configured order, only for UserPromptSubmit and SessionStart', () => {
+test('hooks are listed in configured order, and a Stop hook is not read', () => {
   withFixture((home, cwd) => {
     write(
       path.join(home, '.claude', 'settings.json'),

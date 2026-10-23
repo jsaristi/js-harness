@@ -118,7 +118,8 @@ prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_I
 sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
 so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
 `JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
-`--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+`--door` print their rows either way. `--head` goes only with `--push`, and `--push` refuses `--first`,
+`--subagents`, `--wait`, `--no-wait` and `--verbose`, as a usage error. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's CircleCI run of the merge queue's candidates sets 2.

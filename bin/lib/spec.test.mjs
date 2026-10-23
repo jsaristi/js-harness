@@ -24,7 +24,7 @@ function spec(...entries) {
   return ['# The specification', '', 'The problem and the bet.', '', '## Capabilities', '', ...entries.flat()].join('\n');
 }
 
-const files = new Set(['bin/lib/reply.mjs', 'bin/lib/reply.test.mjs', 'bin/reply.mjs', 'docs/SPEC.md']);
+const files = new Set(['bin/lib/reply.mjs', 'bin/lib/reply.test.mjs', 'bin/reply.mjs', 'docs/SPEC.md', 'x.test.mjs']);
 const exists = (file) => files.has(file);
 /** What a project's own specification is held to: no list of the harness's commands or entries. */
 const plain = { exists };
@@ -57,6 +57,32 @@ test('a test file the proof names that does not exist is a finding, as a today f
   assert.deepEqual(kept.findings, []);
   const gone = specFindings(spec(capability('The reply check', { Proof: '`node --test bin/lib/replies.test.mjs`' })), plain);
   assert.deepEqual(gone.findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist']);
+});
+
+// A proof's words that are no file of the repository are not findings: a URL, a git range, the value of an option, code.
+test('a proof that fetches a URL is not a finding: its path is no file of the repository', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`curl https://example.com/x`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof that names a git range is not a finding: origin/main..HEAD is no file', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`git log origin/main..HEAD`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof whose option takes a value with a slash is not a finding: "a/b" after --test-name-pattern is no file', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`node --test x.test.mjs --test-name-pattern "a/b"`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof of node -e is not a finding: the module it imports inside the quoted code is not a file of the command', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`node -e "import(\'./x.mjs\')"`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof whose --ref takes a tag name is not a finding: refs/tags/v1.0.0 is no file', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`js-harness check --push --ref refs/tags/v1.0.0`' })), plain);
+  assert.deepEqual(findings, []);
 });
 
 test('a file the today line names that does not exist is a finding; a path:line is read as its path', () => {
