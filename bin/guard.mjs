@@ -17,7 +17,8 @@
 //     (`driveRootRemovalRefusal`; odd/tasks/held-sessions.md, T4); then a gentle-ai review
 //     given a `--base-ref` its head does not contain (`reviewBaseRefusal`; odd/tasks/gate-wait.md, T11); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
-//     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8).
+//     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8), and a `js-harness sessions` read of
+//     the board (`--watch` too) in the same case (docs/FAILURES.md, board-read-loads-gate).
 //   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
 //     call leaves (read from disk for an Edit) and only when the call brings it
 //     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
@@ -46,7 +47,7 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  the rules declare it), a start_session titled otherwise than <code> <n> · <purpose>, naming the next free\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
-  + '  does, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files while another gate holds the lock, and\n'
+  + '  does, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md), that leaves a feedback note\n'
   + '  of a memory folder naming no home of its rule in the repository (where the rules declare memory-feedback-home),\n'
   + '  or that puts a line in a Markdown\n'
