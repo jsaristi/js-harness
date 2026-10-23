@@ -284,6 +284,33 @@ function testRunOf(command, cwd) {
   return firstRun(commandsOf(command), 0, cwd);
 }
 
+const HARNESS = /(^|[\\/])js-harness(\.cmd|\.ps1)?$/i;
+const HARNESS_SCRIPT = /(^|[\\/])js-harness\.mjs$/i;
+// A sessions call that prints one entry or the help, not the board (bin/sessions.mjs).
+const ONE_ENTRY = new Set(['--opening', '--quote', '--address', '--peek', '--measures', '--next-number', '--help', '-h']);
+
+/** Whether `command` reads the session board (`js-harness sessions`, `--watch` too) outside `js-harness gate`: a
+ * read of the board is heavy enough to slow a gate (docs/FAILURES.md, board-read-loads-gate). */
+export function boardReadOf(command) {
+  return commandsOf(command).some((words) => boardRead(words));
+}
+
+/** Whether `words` read the board, looking through `wsl.exe` and `sh -c` as `scan` does for a test run. */
+function boardRead(words, depth = 0) {
+  const rest = words.slice(programAt(words));
+  if (rest.length === 0 || depth > 4 || gateWraps(rest) !== null) return false;
+  if (WSL.test(rest[0].text)) {
+    const split = rest.findIndex((word) => ['--', '-e', '--exec'].includes(word.text));
+    return split !== -1 && boardRead(rest.slice(split + 1), depth + 1);
+  }
+  if (SHELL.test(rest[0].text)) {
+    const script = shellScript(rest);
+    return script !== null && commandsOf(script).some((inner) => boardRead(inner, depth + 1));
+  }
+  const at = HARNESS.test(rest[0].text) ? 1 : isNode(rest[0]) && HARNESS_SCRIPT.test(rest[1]?.text ?? '') ? 2 : -1;
+  return at !== -1 && rest[at]?.text === 'sessions' && !rest.slice(at + 1).some((word) => ONE_ENTRY.has(word.text.split('=')[0]));
+}
+
 /** The warning for `command`, or `null`: one line, when the command runs, outside `js-harness gate --`, a
  * heavy `node --test` (of two or more files, of a wildcard or of none, every test file; or of one file the gate
  * log timed over `HEAVY_FILE_SECONDS`); is not inside a turn already (`JS_HARNESS_GATE_HELD=1`, or
@@ -303,11 +330,18 @@ export function testRunWarning(command, {
     return project === null ? undefined : timedSeconds(readGateLog(home).events, file, { project });
   },
 } = {}) {
-  const run = testRunOf(command, cwd);
-  if (run === null) return null;
+  const board = boardReadOf(command);
+  const run = board ? null : testRunOf(command, cwd);
+  if (run === null && !board) return null;
   if (env.JS_HARNESS_GATE_HELD === '1' || env.JS_HARNESS_CHECK_INNER === '1') return null;
   const held = holder();
   if (!held) return null;
+  if (board) {
+    // A gate does not wait for an eval batch (bin/gate.mjs reads no batch mark), so beside a batch the only way is to wait.
+    if (held.batch) return `js-harness sessions reads the board outside a turn while the eval batch of ${held.cwd} runs: a board read slows it; wait for the batch to end`;
+    const whose = held.cwd ? `the gate of ${held.cwd}` : 'another gate';
+    return `js-harness sessions reads the board outside a turn while ${whose} holds the machine's gate lock: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>`;
+  }
   let what;
   if (run.files === 1) {
     const file = fileKey(run.names[0], cwd);

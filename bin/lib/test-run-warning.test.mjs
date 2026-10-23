@@ -272,3 +272,33 @@ test('an eval batch shows itself to the guard as a gate holder does: several fil
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// board-read-loads-gate (docs/FAILURES.md): a read of the board is heavy enough to slow a gate.
+test('a board read waits for another gate: js-harness sessions is refused while the lock is held, free otherwise', () => {
+  const board = `js-harness sessions reads the board outside a turn while the gate of D:\\js-harness-worktrees\\other holds the machine's gate lock: a board read slows that gate; wait for it to end, or run it with js-harness gate -- <command>`;
+  for (const command of ['js-harness sessions', 'js-harness sessions --watch', 'js-harness sessions --json', 'node bin/js-harness.mjs sessions', 'cd x && js-harness sessions --watch --interval 60']) {
+    assert.equal(testRunWarning(command, { env: {}, holder: held, cwd: process.cwd() }), board, command);
+  }
+  // A read of one entry is no board read.
+  for (const command of ['js-harness sessions --opening "Audit"', 'js-harness sessions --quote x', 'js-harness sessions --address "Audit"', 'js-harness sessions --next-number', 'js-harness status']) {
+    assert.equal(testRunWarning(command, { env: {}, holder: held, cwd: process.cwd() }), null, command);
+  }
+  // With no lock held, and for the gate's own turn, the board is free.
+  assert.equal(testRunWarning('js-harness sessions', { env: {}, holder: () => null, cwd: process.cwd() }), null);
+  assert.equal(testRunWarning('js-harness sessions', { env: { JS_HARNESS_GATE_HELD: '1' }, holder: held, cwd: process.cwd() }), null);
+  assert.equal(testRunWarning('js-harness gate -- js-harness sessions', { env: {}, holder: held, cwd: process.cwd() }), null);
+});
+
+// Codex and gentle-ai on b2c6ba8..100331f: a board read hidden behind a shell or wsl.exe is one, and a word that only
+// names the script, a one-entry flag in any of its forms, or the help is none.
+test('a board read is found behind sh -c and wsl.exe, and an echo, --help or --opening=<title> is no board read', () => {
+  const warn = (command, holder = held) => testRunWarning(command, { env: {}, holder, cwd: process.cwd() });
+  for (const command of ['sh -c "js-harness sessions --watch"', 'bash -lc "cd x && js-harness sessions"', 'wsl.exe -- js-harness sessions', 'node bin/js-harness.mjs sessions --json']) {
+    assert.match(warn(command) ?? '', /^js-harness sessions reads the board outside a turn/, command);
+  }
+  for (const command of ['echo bin/js-harness.mjs sessions', 'js-harness sessions --help', 'js-harness sessions -h', 'js-harness sessions --opening=Audit', 'js-harness sessions --peek "Audit"', 'js-harness sessions --measures', 'node bin/js-harness.mjs sessions --peek "Audit"', 'sh -c "js-harness sessions --quote x"']) {
+    assert.equal(warn(command), null, command);
+  }
+  const batch = () => ({ cwd: 'D:\\js-harness-worktrees\\evals', batch: true });
+  assert.equal(warn('js-harness sessions --watch', batch), 'js-harness sessions reads the board outside a turn while the eval batch of D:\\js-harness-worktrees\\evals runs: a board read slows it; wait for the batch to end');
+});

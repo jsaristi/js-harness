@@ -117,8 +117,10 @@ one runs.
   `js-harness sessions` once while another session's gate ran
 - Seen: 2026-10-15 — odd/tasks/future-model-protocol.md, L17 — JH 14 chained a board read after a
   test file's output while the gate of another worktree ran; it passed 120 s and was stopped
-- Control: protocol — bin/lib/manifest.mjs — "a whole test suite, a measure, a read of the board and
-  a sub-agent that runs tests wait for the gate to end" — since 2026-10-14
+- Control: check — bin/lib/test-run-warning.test.mjs — "a board read waits for another gate" — since 2026-10-23
+- Was: protocol — bin/lib/manifest.mjs — "a whole test suite, a measure, a read of the board and
+  a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
+  it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
 
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was

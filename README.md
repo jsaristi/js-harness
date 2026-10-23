@@ -1386,7 +1386,9 @@ instead (below the project's worktrees folder, or the session's scratchpad); a g
 (`assess`, `status` or `start`) whose `--base-ref` is off its head's first-parent line; a heavy `node --test` outside a gate turn while
 another gate holds the machine's lock or an eval batch runs, heavy being several files, the whole suite (`node --test`, or `npm test` as the `test` script of the folder, or of the one `--prefix` names, runs it with the words npm hands it; `npm run check` is no run of the suite), or one file
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
-while its trials run, and `uninstall` removes that folder with the lock's); and a `Write` or `Edit` that puts a line
+while its trials run, and `uninstall` removes that folder with the lock's); a `js-harness sessions` read of the
+board, `--watch` too, in the same case, because a board read slows that gate (one entry, such as `--opening`, is
+free); and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
 which every session reads on every turn; a `Write` or `Edit` that leaves a note of a project's memory folder whose
