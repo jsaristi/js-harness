@@ -16,11 +16,14 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { unknownArgument } from './lib/args.mjs';
 import { appendNotice, channelDir, newNotice } from './lib/channel.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 export const USAGE = 'Usage: js-harness permit --hook | lease [--session <id>] [--minutes <n>] [--take-over] | lease --off | list [--json]\n'
   + '       | allow <id> | deny <id> --reason <text>\n'
+  + '  Every flag is checked: a token a subcommand does not take, or a value flag with no value, is refused with exit 2\n'
+  + '  before anything is written.\n'
   + '  --hook   the PermissionRequest hook install registers: while a lead holds the relay, a card of another session\n'
   + '           is told to the orchestrator and waits up to 9.5 minutes for its verdict; with none it reaches the user\n'
   + '  lease    the lead holds the relay for --minutes (default 40) as --session, or as the running session; --off ends it;\n'
@@ -148,9 +151,47 @@ async function hook(deps) {
   }
 }
 
-function optionValue(args, name) {
-  const at = args.indexOf(name);
-  return at === -1 ? undefined : args[at + 1];
+/** A usage error of one subcommand's arguments: its message says which token, and the usage follows, exit 2. */
+class PermitArgError extends Error {}
+
+/** Refuses the first token of `args` that the flags `known` do not name (bin/lib/args.mjs). */
+function refuseUnknown(args, known) {
+  const unknown = unknownArgument(args, known);
+  if (unknown !== null) throw new PermitArgError(`unknown argument: ${unknown}`);
+}
+
+/** The value of `flag`, or undefined when it is not given. A value is never a flag: a missing one, or a flag, is refused. */
+function valueOf(args, flag) {
+  const at = args.indexOf(flag);
+  if (at === -1) return undefined;
+  const value = args[at + 1];
+  if (value === undefined || value.startsWith('--')) throw new PermitArgError(`${flag} requires a value`);
+  return value;
+}
+
+/** The arguments of `lease`: `--off` ends the lease and takes no other flag; otherwise `--session`, `--minutes`, `--take-over`. */
+function leaseArgs(args) {
+  if (args.includes('--off')) {
+    refuseUnknown(args, { bare: ['--off', '--take-over'] });
+    return { off: true, takeOver: args.includes('--take-over') };
+  }
+  refuseUnknown(args, { valued: ['--session', '--minutes'], bare: ['--take-over'] });
+  return { off: false, session: valueOf(args, '--session'), minutes: valueOf(args, '--minutes'), takeOver: args.includes('--take-over') };
+}
+
+/** The arguments of `list`: `--json` and nothing else. */
+function listArgs(args) {
+  refuseUnknown(args, { bare: ['--json'] });
+  return { json: args.includes('--json') };
+}
+
+/** The arguments of `allow <id>` and `deny <id> --reason <text>`: one id, and for a denial its reason. */
+function verdictArgs(behavior, args) {
+  const valued = behavior === 'deny' ? ['--reason'] : [];
+  refuseUnknown(args, { valued, positional: true });
+  const words = args.filter((token, i) => !token.startsWith('-') && !(i > 0 && valued.includes(args[i - 1])));
+  if (words.length > 1) throw new PermitArgError(`unknown argument: ${words[1]}`);
+  return { id: words[0], reason: valueOf(args, '--reason') };
 }
 
 /**
@@ -170,23 +211,23 @@ export function renewOwnLease({ home, cwd, session, now, everySeconds, projectRo
   return { renewed: true, until };
 }
 
-function lease(args, deps, dir) {
+function lease(options, deps, dir) {
   // A lease another session holds is not replaced or ended by mistake: only with --take-over, as a new lead would.
   const held = heldLease(dir, deps.now());
   const caller = deps.env.CLAUDE_CODE_SESSION_ID;
-  const takeOver = args.includes('--take-over');
+  const takeOver = options.takeOver;
   const refuse = () => {
     deps.stderr(`js-harness permit: ${short(held.session)} holds the relay until ${held.until}; a lead taking it over passes --take-over\n`);
     return 1;
   };
-  if (args.includes('--off')) {
+  if (options.off) {
     if (held !== null && held.session !== caller && !takeOver) return refuse();
     fs.rmSync(path.join(dir, 'lease.json'), { force: true });
     deps.stdout('js-harness permit: the relay is off: cards reach the user\n');
     return 0;
   }
-  const session = optionValue(args, '--session') ?? deps.env.CLAUDE_CODE_SESSION_ID;
-  const minutes = Number(optionValue(args, '--minutes') ?? LEASE_MINUTES);
+  const session = options.session ?? deps.env.CLAUDE_CODE_SESSION_ID;
+  const minutes = Number(options.minutes ?? LEASE_MINUTES);
   if (typeof session !== 'string' || session === '' || !(minutes > 0)) {
     deps.stderr(`js-harness permit: lease needs the lead's session: --session <id>, or run it from that session\n${USAGE}`);
     return 2;
@@ -198,11 +239,11 @@ function lease(args, deps, dir) {
   return 0;
 }
 
-function list(args, deps, dir) {
+function list(options, deps, dir) {
   const now = deps.now();
   const held = heldLease(dir, now);
   const pending = pendingOf(dir, now);
-  if (args.includes('--json')) {
+  if (options.json) {
     deps.stdout(`${JSON.stringify({ lease: held, pending: pending.map((item) => ({ ...item, waitsUntil: new Date(Date.parse(item.at) + WAIT_MS).toISOString() })) })}\n`);
     return 0;
   }
@@ -215,10 +256,9 @@ function list(args, deps, dir) {
   return 0;
 }
 
-function verdict(behavior, args, deps, dir) {
-  const id = args[0];
-  const reason = optionValue(args, '--reason');
-  if (typeof id !== 'string' || id.startsWith('--') || (behavior === 'deny' && (typeof reason !== 'string' || reason.trim() === ''))) {
+function verdict(behavior, options, deps, dir) {
+  const { id, reason } = options;
+  if (typeof id !== 'string' || (behavior === 'deny' && (typeof reason !== 'string' || reason.trim() === ''))) {
     deps.stderr(`js-harness permit: ${behavior} <id>${behavior === 'deny' ? ' --reason <text>: a denial says why, and the session reads it' : ''}\n${USAGE}`);
     return 2;
   }
@@ -271,6 +311,26 @@ export async function permitMain(argv, {
 } = {}) {
   const deps = { env, home, cwd, projectRoot, readStdin, stdout, stderr, now, sleep };
   const [command, ...args] = argv;
+  // Each subcommand's arguments are walked before anything runs or is written: a token it does not take is a usage error.
+  const walk = {
+    '--hook': () => refuseUnknown(args, {}),
+    lease: () => leaseArgs(args),
+    list: () => listArgs(args),
+    allow: () => verdictArgs('allow', args),
+    deny: () => verdictArgs('deny', args),
+  };
+  if (!Object.hasOwn(walk, command)) {
+    stderr(USAGE);
+    return 2;
+  }
+  let options;
+  try {
+    options = walk[command]();
+  } catch (err) {
+    if (!(err instanceof PermitArgError)) throw err;
+    stderr(`js-harness permit: ${err.message}\n${USAGE}`);
+    return 2;
+  }
   if (command === '--hook') {
     // A hook never fails the host: whatever goes wrong, the card reaches the user as it always did.
     try {
@@ -281,9 +341,7 @@ export async function permitMain(argv, {
     return 0;
   }
   const dir = () => permitsDir(home, projectSlug(projectRoot(cwd)));
-  if (command === 'lease') return lease(args, deps, dir());
-  if (command === 'list') return list(args, deps, dir());
-  if (command === 'allow' || command === 'deny') return verdict(command, args, deps, dir());
-  stderr(USAGE);
-  return 2;
+  if (command === 'lease') return lease(options, deps, dir());
+  if (command === 'list') return list(options, deps, dir());
+  return verdict(command, options, deps, dir());
 }

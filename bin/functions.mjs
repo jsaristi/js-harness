@@ -26,7 +26,10 @@ function parseArgs(argv, cwd) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--json') parsed.json = true;
-    else if (arg === '--cwd' && argv[index + 1]) parsed.cwd = path.resolve(argv[(index += 1)]);
+    else if (arg === '--cwd') {
+      if (!argv[index + 1] || argv[index + 1].startsWith('--')) return { error: '--cwd requires a value' };
+      parsed.cwd = path.resolve(argv[(index += 1)]);
+    }
     else if (!arg.startsWith('-')) parsed.words.push(arg);
     else return { error: `unknown argument: ${arg}` };
   }
