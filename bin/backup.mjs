@@ -1018,6 +1018,13 @@ function withoutCredentials(text) {
   return url.toString();
 }
 
+/** `value` as one literal argument of a line pasted into bash or PowerShell: single quotes, inside which neither expands
+ * `$`, a backtick or a space. Null for a value a single quote cannot hold (a quote PowerShell reads as one, or a line
+ * break), so the caller writes an instruction instead of a command that would run something else. */
+function literalArgument(value) {
+  return /['‘’‚‛\r\n]/.test(value) ? null : `'${value}'`;
+}
+
 /** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. `checkouts`
  * are the bundled repositories (`bundleCheckouts`): RESTORE.md clones each into the path it had, since the Claude memory
  * folder is named after that path. Nothing is named but what the config and the origins hold, never a path of the owner's. */
@@ -1028,10 +1035,13 @@ function restoreSteps(repo, transcripts = [], checkouts = []) {
   const cloneLines = checkouts.length
     ? [
       '3. Clone each repository the backup bundles into the path it had, since the Claude memory folder is named after that path:',
-      ...checkouts.map((c) => (c.origin
-        // Quoted, so a path with a space (C:\Users\First Last) stays one argument, as the restore's own lines quote theirs.
-        ? `   \`git clone "${c.origin}" "${c.path}"\``
-        : `   Clone it from wherever the project lives into \`${c.path}\` (it has no origin, or git cannot read it).`)),
+      ...checkouts.map((c) => {
+        if (!c.origin) return `   Clone it from wherever the project lives into \`${c.path}\` (it has no origin, or git cannot read it).`;
+        const origin = literalArgument(c.origin);
+        const dir = literalArgument(c.path);
+        if (origin && dir) return `   \`git clone -- ${origin} ${dir}\``;
+        return `   Clone ${c.origin} into the folder ${c.path} (a quote in one of them keeps this from being a command to paste).`;
+      }),
       '   If a checkout lives elsewhere now, add `--map <old path>=<new path>` for it to the next step.',
     ]
     : [

@@ -1018,7 +1018,7 @@ test('backup init on a fresh config seeds the bundle with the checkout it runs i
   const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
   assert.deepEqual(config.bundles, [dir], 'the root of the checkout the folder is in, not the folder init ran in');
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
-  assert.ok(restore.includes(`git clone "https://github.com/someone/their-project.git" "${dir}"`), 'the clone step fetches the origin into that path');
+  assert.ok(restore.includes(`git clone -- 'https://github.com/someone/their-project.git' '${dir}'`), 'the clone step fetches the origin into that path');
   assertNoOwnerText(restore);
 });
 
@@ -1098,7 +1098,7 @@ test('backup init on a checkout with no origin tells RESTORE.md to clone it from
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
   assert.ok(restore.includes(recordedPath(checkout)), 'the path is still named');
   assert.ok(restore.includes('wherever the project lives'), 'and the clone says where from');
-  assert.ok(!restore.includes('git clone https://'), 'no URL is made up for a checkout that has none');
+  assert.ok(!restore.includes('git clone'), 'no URL is made up for a checkout that has none');
 });
 
 test('backup init on an existing config keeps its bundles and its other keys, and only records the checkout', async (t) => {
@@ -1129,7 +1129,7 @@ test('backup init on an existing config with an empty bundle list seeds it with 
 });
 
 // Codex review of 7ab507d, P2: a checkout under C:\Users\First Last must stay one argument of the clone line.
-test('RESTORE.md quotes the origin and the path of each clone line, so a path with a space stays one argument', async (t) => {
+test('RESTORE.md single-quotes the origin and the path of each clone line, so a path with a space stays one argument', async (t) => {
   const { root, paths, deps } = setup(t);
   const checkout = checkoutRepo(root, 'with space', 'https://github.com/someone/their-project.git');
   deps.cwd = () => checkout;
@@ -1137,7 +1137,24 @@ test('RESTORE.md quotes the origin and the path of each clone line, so a path wi
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
 
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
-  assert.ok(restore.includes(`\`git clone "https://github.com/someone/their-project.git" "${recordedPath(checkout)}"\``), restore);
+  assert.ok(restore.includes(`\`git clone -- 'https://github.com/someone/their-project.git' '${recordedPath(checkout)}'\``), restore);
+});
+
+// Codex recheck of 4d71270, P2: double quotes still expand $ and backticks in bash and PowerShell. Single quotes are
+// literal in both; a value one cannot hold is written as an instruction, never as a command that would run otherwise.
+test('RESTORE.md writes each clone argument literally: single quotes for $ and backticks, no command for a quote', async (t) => {
+  const { root, paths, deps } = setup(t);
+  const odd = checkoutRepo(root, 'its $HOME `x`', 'https://github.com/someone/a$b.git');
+  const quoted = checkoutRepo(root, 'o\'brien', 'https://github.com/someone/q.git');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [odd, quoted] }));
+  deps.cwd = () => root;
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(`\`git clone -- 'https://github.com/someone/a$b.git' '${recordedPath(odd)}'\``), restore);
+  assert.ok(!restore.includes(`git clone -- 'https://github.com/someone/q.git'`), 'no command for a path a quote would end');
+  assert.ok(restore.includes(`https://github.com/someone/q.git`) && restore.includes(recordedPath(quoted)), restore);
 });
 
 test('backup init --checkout resolves a relative path from the folder init runs in', async (t) => {
@@ -1184,7 +1201,7 @@ test('an old config whose bundles name a checkout, with no recorded checkout, wr
 
   assert.deepEqual(JSON.parse(fs.readFileSync(paths.config, 'utf8')).bundles, [old], 'the list is left as it is');
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
-  assert.ok(restore.includes(`git clone "https://github.com/someone/old.git" "${old}"`), 'the path it already bundles is the one named');
+  assert.ok(restore.includes(`git clone -- 'https://github.com/someone/old.git' '${old}'`), 'the path it already bundles is the one named');
 });
 
 test('RESTORE.md holds no token of an https origin: the credential is stripped before the file is written', async (t) => {
@@ -1198,7 +1215,7 @@ test('RESTORE.md holds no token of an https origin: the credential is stripped b
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
   assert.ok(!restore.includes('ghp_TokenForTest123'), 'the token text is absent from the file');
   assert.ok(!restore.includes('user:'), 'and so is the user part of the userinfo');
-  assert.ok(restore.includes(`git clone "https://github.com/someone/their-project.git" "${checkout}"`), 'the same URL without it');
+  assert.ok(restore.includes(`git clone -- 'https://github.com/someone/their-project.git' '${checkout}'`), 'the same URL without it');
 });
 
 test('RESTORE.md keeps an ssh origin\'s user and strips its password', async (t) => {
@@ -1211,7 +1228,7 @@ test('RESTORE.md keeps an ssh origin\'s user and strips its password', async (t)
 
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
   assert.ok(!restore.includes('hunter2Pass'), 'the password is absent from the file');
-  assert.ok(restore.includes(`git clone "ssh://me@example.com/someone/x.git" "${checkout}"`), 'the user stays');
+  assert.ok(restore.includes(`git clone -- 'ssh://me@example.com/someone/x.git' '${checkout}'`), 'the user stays');
 });
 
 test('RESTORE.md writes an scp-like origin, git@host:path, exactly as git holds it', async (t) => {
@@ -1223,7 +1240,7 @@ test('RESTORE.md writes an scp-like origin, git@host:path, exactly as git holds 
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
 
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
-  assert.ok(restore.includes(`git clone "git@example.com:someone/x.git" "${checkout}"`));
+  assert.ok(restore.includes(`git clone -- 'git@example.com:someone/x.git' '${checkout}'`));
 });
 
 test('every backup subcommand refuses an unknown flag with a usage error, and keeps the flags it takes', async (t) => {

@@ -1585,7 +1585,8 @@ names. The checkout it bundles is the git repository the folder `init` runs in, 
 A config with no `bundles` list yet, or an empty one, takes the checkout `init` runs in; a list
 that names a checkout is left as it is, and `--checkout` adds its checkout to it when no entry is the same folder, saying so. Each
 bundled repository gets a clone line in `RESTORE.md` with its `origin` (read when the file is
-written, its credential removed), or the instruction to clone it from wherever the project lives
+written, its credential removed), each argument single-quoted so bash and PowerShell read it as it
+is, and an instruction in place of the command when a quote in it would end the quoting; or the instruction to clone it from wherever the project lives
 when it has none. With no checkout, nothing is bundled and `init` says so: run
 `init --repo <owner/name> --checkout <path>` from a checkout to add one. The summary reads the checkout `--summary-repo <dir>` names, and only then (a public push cannot be taken back; `backup summary --summary-repo <dir>`
 shows it first);
