@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appFolders } from './host-update.mjs';
 import { compareSemver } from './version.mjs';
+import { homeIsSet } from './home.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Assumptions of S10, his to confirm: how often the measure runs, the total that makes the row a gap, and how old a
@@ -476,7 +477,7 @@ export function startMeasure(home) {
  * `--home` or `JS_HARNESS_HOME` is a fixture or a practice home, and the measure walks the machine's temp folder and runs
  * its tools; `JS_HARNESS_CLEAN_MEASURE=off` turns it off for anyone who wants no measure in the background. */
 export function backgroundMeasure(env = process.env, argv = []) {
-  if (env.JS_HARNESS_CLEAN_MEASURE === 'off' || env.JS_HARNESS_HOME || argv.includes('--home')) return null;
+  if (env.JS_HARNESS_CLEAN_MEASURE === 'off' || homeIsSet(env) || argv.includes('--home')) return null;
   return startMeasure;
 }
 

@@ -45,6 +45,7 @@ import {
   throughputRows,
   utcDay,
 } from './lib/throughput.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 
@@ -714,7 +715,7 @@ export async function throughputMain(
     return 2;
   }
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
-  const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
+  const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
   const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, readLands, readReviews, out: stdout, err: stderr };

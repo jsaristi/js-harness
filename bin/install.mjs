@@ -23,6 +23,7 @@ import {
   howToPinClause,
 } from './lib/project.mjs';
 import { DEFAULT_REPO, INSTALL_NEWEST, tagSpec } from './lib/version.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
 export const UNINSTALL_USAGE = [
@@ -61,7 +62,7 @@ function parseInstallArgs(argv, env) {
     home = requireScopeValue(argv, i, token);
     i++;
   }
-  return { home: home ?? env.JS_HARNESS_HOME ?? os.homedir(), acceptMessages };
+  return { home: harnessHome({ given: home, env, homedir: os.homedir }), acceptMessages };
 }
 
 /** What `install --accept-session-messages` did to Claude Code's `crossSessionInbound`, said in one line, and the
@@ -178,7 +179,7 @@ function parseScopeArgs(argv, env) {
   return {
     cwd: cwd ?? process.cwd(),
     cwdExplicit: cwd !== undefined,
-    home: home ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: home, env, homedir: os.homedir }),
     global,
   };
 }

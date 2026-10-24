@@ -7,6 +7,7 @@ import path from 'node:path';
 import { currentVersion } from './install.mjs';
 import { ROADMAP_PATH } from './lib/onboard.mjs';
 import { initProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
 
@@ -40,7 +41,7 @@ function parseArgs(argv, env) {
     cwd: cwd ?? process.cwd(),
     // `--home`/JS_HARNESS_HOME precedence matches install.mjs's parseInstallArgs, even though init writes
     // nothing under home — kept for consistency with the other commands (see "T2 design").
-    home: home ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: home, env, homedir: os.homedir }),
   };
 }
 

@@ -2222,3 +2222,23 @@ test('uninstall machine keeps the record of a tool that answers but cannot be re
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('install takes an empty JS_HARNESS_HOME as unset: it installs under the user home, never the working directory', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-install-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
+  try {
+    const run = spawnSync(process.execPath, [JS_HARNESS, 'install'], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
+    });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(fs.existsSync(path.join(work, '.claude')), false);
+    assert.equal(fs.existsSync(path.join(work, '.js-harness')), false);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness', 'manifest.json')), true);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

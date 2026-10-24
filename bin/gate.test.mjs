@@ -1935,3 +1935,21 @@ test('gate usage explains every flag and form it names, not only --wait and --ma
   // The limits it states are the ones gate-first enforces, not a copy that can drift from them.
   assert.match(GATE_USAGE, new RegExp(`; ${GATE_FIRST_OPEN} are open at most, each for ${GATE_FIRST_MAX_MINUTES} minutes at most `));
 });
+
+test('gate takes an empty JS_HARNESS_HOME as unset: its lock and log stay out of the working directory', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-gate-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
+  try {
+    const run = spawnSync(process.execPath, [dispatcher, 'gate', '--no-wait', '--', 'node', '-e', '0'], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
+    });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(fs.existsSync(path.join(work, '.js-harness')), false);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

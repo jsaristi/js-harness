@@ -1386,3 +1386,22 @@ test('status --global names a machine manifest that is not valid JSON, in one li
 test('upgrade names a machine manifest that is not valid JSON before it installs anything', () => {
   damagedHomeRun(['upgrade']);
 });
+
+test('status --global takes an empty JS_HARNESS_HOME as unset: it reads the manifest of the user home', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-status-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
+  const bin = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  try {
+    const setup = spawnSync(process.execPath, [bin, 'install'], { cwd: work, encoding: 'utf8', env: { ...env, JS_HARNESS_HOME: home } });
+    assert.equal(setup.status, 0, setup.stderr);
+
+    const run = spawnSync(process.execPath, [bin, 'status', '--global'], { cwd: work, encoding: 'utf8', env: { ...env, JS_HARNESS_HOME: '' } });
+
+    assert.doesNotMatch(run.stdout, /manifest version: \(not installed\)/, run.stdout);
+    assert.match(run.stdout, /manifest version: \d/);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

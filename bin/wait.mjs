@@ -13,6 +13,7 @@ import { readNotices, senderOf } from './lib/channel.mjs';
 import { mainCheckout, projectDirsOf, projectSlug, roleNamed, roleOfTitle } from './lib/sessions.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { renewOwnLease } from './permit.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 /** How often a wait checks, and how long it waits, when --every and --for do not say: the declared rules
  * `wait-every` and `wait-for` (bin/lib/rules-data.mjs). */
@@ -271,7 +272,7 @@ export async function waitMain(
   }
 
   const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
-  const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
+  const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const seconds = parsed.every ?? WAIT_EVERY_SECONDS;
   const minutes = parsed.minutes ?? WAIT_FOR_MINUTES;
   const started = now();

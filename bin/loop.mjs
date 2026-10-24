@@ -27,6 +27,7 @@ import { gateLogDir } from './lib/gate-log.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { readStalled } from './lib/stall.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness loop run <name> --purpose "<text>" --until "<end condition>" [--owner <session id>] [--restart [--take-over]] -- <command> [args]',
@@ -572,7 +573,7 @@ export async function loopMain(
     return 2;
   }
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
-  const home = path.resolve(defaultCwd, parsed.flags.home ?? (env.JS_HARNESS_HOME || homedir()));
+  const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const slug = projectSlug(mainCheckout(run, cwd));
   const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run, windowsDaily, throughputTick };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));

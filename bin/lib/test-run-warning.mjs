@@ -10,6 +10,7 @@ import path from 'node:path';
 import { readBatch } from './batch-mark.mjs';
 import { readGateHolder } from './gate-lock.mjs';
 import { GATE_COMMAND_MAX, gatesOf, readGateLog } from './gate-log.mjs';
+import { harnessHome } from './home.mjs';
 
 /** A test file a gate ran alone for longer than this, by the gate log, is heavy: run beside a gate, it counts
  * as several files. Two such files ran beside gates past the protocol line, of 65 to 200 s, and one made a gate
@@ -321,7 +322,7 @@ function boardRead(words, depth = 0) {
  * home of both (`JS_HARNESS_HOME`, else the user's), and `deps.cwd` the folder the command runs in. */
 export function testRunWarning(command, {
   env = process.env,
-  home = env.JS_HARNESS_HOME || os.homedir(),
+  home = harnessHome({ env, homedir: os.homedir }),
   cwd = process.cwd(),
   holder = () => readGateHolder(home) ?? readBatch(home),
   // Only gates of this repository time its files: the gate log is the machine's (Codex, 2026-10-16).

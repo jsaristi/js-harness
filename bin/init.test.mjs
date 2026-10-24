@@ -385,3 +385,20 @@ test('initMain reports a codegraph failure on stderr and still exits 0', async (
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// Not a RED test: init never reads its home (initProject takes none), so an empty JS_HARNESS_HOME was never
+// able to move a file. This pins that the empty value still sets a project up, so the shared home reads keep it so.
+test('init takes an empty JS_HARNESS_HOME as unset and still sets the project up', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-init-'));
+  try {
+    assert.equal(spawnSync('git', ['init', '-q'], { cwd: root }).status, 0);
+    const spawn = (cmd, args, opts) => (cmd === 'git' ? spawnSync('git', args, opts) : { status: 0, stdout: '', stderr: '' });
+
+    const code = await initMain(['--cwd', root], { JS_HARNESS_HOME: '' }, { spawn, platform: 'linux' });
+
+    assert.equal(code, 0);
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

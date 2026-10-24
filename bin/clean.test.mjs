@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cleanMain, USAGE } from './clean.mjs';
@@ -155,4 +156,22 @@ test('a kind named twice is deleted once, and the run exits 0', async (t) => {
   assert.equal(code, 0);
   const log = await clean(['--log', '--json'], setup);
   assert.deepEqual(JSON.parse(log.out).map((entry) => entry.result), ['deleted', 'deleted']);
+});
+
+test('clean takes an empty JS_HARNESS_HOME as unset: its log is read from the user home, not the working directory', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-clean-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
+  try {
+    const run = spawnSync(process.execPath, [BIN, 'clean', '--log'], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
+    });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.ok(run.stdout.includes(path.join(home, '.js-harness', 'clean-log.jsonl')), run.stdout);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

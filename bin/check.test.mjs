@@ -1077,6 +1077,27 @@ test('main prefers --home over env.JS_HARNESS_HOME when both are given', async (
   }
 });
 
+test('check takes an empty JS_HARNESS_HOME as unset: the global CLAUDE.md is read from the user home, not the working directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-check-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'a'.repeat(40)); // 10 tokens
+
+    const run = spawnSync(process.execPath, [fileURLToPath(new URL('./js-harness.mjs', import.meta.url)), 'check', '--cwd', dir, '--verbose'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
+    });
+
+    assert.match(run.stdout, /global CLAUDE\.md +10\s/, run.stdout);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // --- a flag missing its value, or immediately followed by another flag, is a usage error ---
 
 test('main errors with usage on stderr and exits 2 when --cwd is the last argument', async () => {

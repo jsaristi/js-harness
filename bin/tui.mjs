@@ -16,6 +16,7 @@ import { resolveStackPm, stackInstallMain } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack } from './lib/stack-install.mjs';
 import { resolveProjectRoot } from './lib/stack.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
@@ -490,7 +491,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     return i !== -1 ? argv[i + 1] : undefined;
   };
   // An empty JS_HARNESS_HOME is no home, as for the other commands: taken as it is it would name the folder the menu runs in.
-  const home = get('--home') ?? (env.JS_HARNESS_HOME || os.homedir());
+  const home = harnessHome({ given: get('--home'), env, homedir: os.homedir });
   const cwd = get('--cwd') ?? process.cwd();
   const installedVersion = currentVersion();
   const { fetch: fetchImpl = fetch, now } = io;

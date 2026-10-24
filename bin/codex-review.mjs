@@ -190,6 +190,7 @@ import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { unknownArgument } from './lib/args.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
 // (odd/tasks/codex-review-cost.md): the one model a review runs on, at `high`, in place of the `medium` he
@@ -1854,10 +1855,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         return { exit: 1 };
       }
       try {
-        // `||`, not `??`: an empty `--home` or `JS_HARNESS_HOME` is unset, and the next source is asked.
+        // An empty `--home` or `JS_HARNESS_HOME` is unset, and the next source is asked.
         // Resolved as it is, an empty path is the working directory, and the lean home, with its link to
         // the login, would be made there.
-        const homes = leanHomesDir(path.resolve(args.home || env.JS_HARNESS_HOME || homedir()));
+        const homes = leanHomesDir(harnessHome({ given: args.home, env, homedir }));
         // What a killed run left, or a kept one. Twice the timeout: no review that is still running is
         // that old. Once a run, before its first session: the parts of a range may together take longer
         // than that, and a later part must not remove the home `--keep-home` kept for an earlier one.

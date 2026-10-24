@@ -19,6 +19,7 @@ import path from 'node:path';
 import { unknownArgument } from './lib/args.mjs';
 import { appendNotice, channelDir, newNotice } from './lib/channel.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = 'Usage: js-harness permit --hook | lease [--session <id>] [--minutes <n>] [--take-over] | lease --off | list [--json]\n'
   + '       | allow <id> | deny <id> --reason <text>\n'
@@ -303,7 +304,7 @@ function gitProjectRoot(cwd) {
 
 export async function permitMain(argv, {
   env = process.env,
-  home = env.JS_HARNESS_HOME || os.homedir(),
+  home = harnessHome({ env, homedir: os.homedir }),
   cwd = process.cwd(),
   projectRoot = gitProjectRoot,
   readStdin = () => fs.readFileSync(0, 'utf8'),

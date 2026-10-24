@@ -32,6 +32,7 @@ import { GATE_FIRST_MAX_MINUTES, GATE_FIRST_OPEN, GateFirstError, TICKET_ID, can
 import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 /** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
  * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
@@ -157,7 +158,7 @@ function parseArgs(argv, env, defaultCwd) {
   const command = argv.slice(split + 1);
   if (command.length === 0) throw new GateArgError('no command after --');
   const maxMinutes = paths.max === undefined ? GATE_MAX_MINUTES : Number(paths.max);
-  return { cwd: paths.cwd ?? defaultCwd, home: paths.home ?? env.JS_HARNESS_HOME ?? os.homedir(), noWait, waitMinutes, maxMinutes, ready: paths.ready ?? null, command };
+  return { cwd: paths.cwd ?? defaultCwd, home: harnessHome({ given: paths.home, env, cwd: defaultCwd, homedir: os.homedir }), noWait, waitMinutes, maxMinutes, ready: paths.ready ?? null, command };
 }
 
 /** What comes after `gate log`, walked as `parseArgs` walks what comes before `--`: `{ home, last }`. */
@@ -173,7 +174,7 @@ function parseLogArgs(argv, env) {
   }
   const last = given['--last'] ?? String(GATE_LOG_LAST);
   if (!/^[1-9]\d*$/.test(last)) throw new GateArgError(`--last takes a number of gates from 1, not "${last}"`);
-  return { home: given['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(), last: Number(last) };
+  return { home: harnessHome({ given: given['--home'], env, homedir: os.homedir }), last: Number(last) };
 }
 
 /** `js-harness gate log`: prints the last gates of the machine's gate log on stdout, one a line and the
@@ -219,7 +220,7 @@ function parseFirstArgs(argv, env) {
     if (value === undefined || value.startsWith('--')) throw new GateArgError(`${token} requires a value`);
     given[token] = value;
   }
-  const home = given['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir();
+  const home = harnessHome({ given: given['--home'], env, homedir: os.homedir });
   const others = Object.keys(given).filter((flag) => flag !== '--home');
   if ('--cancel' in given) {
     if (others.length > 1) throw new GateArgError('--cancel takes no other flag but --home');

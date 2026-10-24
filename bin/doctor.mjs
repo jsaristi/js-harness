@@ -26,6 +26,7 @@ import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gent
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -54,7 +55,7 @@ function parseArgs(argv, env) {
     return i !== -1 ? requireValue(argv, i, flag) : undefined;
   };
   return {
-    home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: get('--home'), env, homedir: os.homedir }),
     cwd: get('--cwd') ?? process.cwd(),
     json: argv.includes('--json'),
     offline: argv.includes('--offline'),

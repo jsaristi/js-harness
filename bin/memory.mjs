@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { hygieneState, INDEX_BYTES, journalPath, LINE_CHARS, memoryLocation, NOTE_BYTES, PASS_DAYS, readJournal, readMemory } from './lib/memory-hygiene.mjs';
 import { isStamp, PassError, planPass, undoPass, verifyPass } from './lib/memory-pass.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = `Usage: js-harness memory status [--json] [--history] [--cwd <path>] [--home <path>]
        js-harness memory plan <note>... [--cwd <path>] [--home <path>]
@@ -163,7 +164,7 @@ export async function memoryMain(
   const { subcommand, args, flags } = parsed;
   // The home every other command reads: `--home`, else `JS_HARNESS_HOME`, else the OS home; an empty
   // `JS_HARNESS_HOME` counts as unset.
-  const home = path.resolve(flags.home ?? (env.JS_HARNESS_HOME || defaultHome));
+  const home = harnessHome({ given: flags.home, env, homedir: () => defaultHome });
   const project = path.resolve(flags.cwd ?? defaultCwd);
   const { slug, folder } = memoryLocation({ home, project, run });
   const stateDir = path.dirname(journalPath(home, slug));

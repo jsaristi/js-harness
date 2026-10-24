@@ -16,6 +16,7 @@ import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-fu
 import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
 import { probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export { resolveStackPm };
 
@@ -48,7 +49,7 @@ function parseArgs(argv, env) {
     return value;
   };
   return {
-    home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: get('--home'), env, homedir: os.homedir }),
     cwd: get('--cwd') ?? process.cwd(),
     pm: get('--pm'),
     json: argv.includes('--json'),
@@ -141,7 +142,7 @@ function parseInstallArgs(argv, env) {
   const yes = argv.includes('--yes');
   if (yes && tools.length === 0) throw new StackArgError('--yes runs only the tools --tool names: name each one the person said yes to');
   return {
-    home: values('--home')[0] ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: values('--home')[0], env, homedir: os.homedir }),
     cwd: values('--cwd')[0] ?? process.cwd(),
     pm: values('--pm')[0],
     prefix: values('--prefix')[0] ?? null,

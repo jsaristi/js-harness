@@ -15,6 +15,7 @@ import { appRoot, appSessions, scheduledRegistry } from './lib/app-record.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, mainCheckout, projectSlug, rosterOf, sessionFacts, shareOf } from './lib/sessions.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { readSessionsWindow } from './sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = 'Usage: js-harness unseen [--hours <n>] [--claude-home <path>] [--records-only] [--json]';
 const KNOWN = { valued: ['--hours', '--claude-home'], bare: ['--json', '--records-only'] };
@@ -187,7 +188,7 @@ export async function unseenToClear(cwd, options = {}) {
     ...options,
     claudeHome: env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'),
     appRootPath: appRoot(env, platform, homedir()),
-    harnessHome: env.JS_HARNESS_HOME || homedir(),
+    harnessHome: harnessHome({ env, homedir }),
     recordsOnly: true,
   });
   return items.filter((item) => item.level === 'FAIL').map((item) => item.what);
@@ -244,7 +245,7 @@ export async function unseenMain(argv, {
     hours: parsed.hours,
     now,
     tmpdir,
-    harnessHome: env.JS_HARNESS_HOME || homedir(),
+    harnessHome: harnessHome({ env, homedir }),
     recordsOnly: parsed.recordsOnly,
     readFile,
     readdir,
