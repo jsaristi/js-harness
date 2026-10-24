@@ -32,9 +32,7 @@ contract goal <doc>` prints the `/goal` condition that runs them.
 ## What good looks like
 
 A behavior change arrives with the test that proves it, written first. A claim about this repo
-carries its evidence — `path:line` for code, the command and its output for behavior — because
-reports are only useful if they are true. A claim that something is absent names the search that
-proves it and why that search could have found it.
+carries its evidence, as `js-harness-protocols` section 6 says.
 
 Anything the harness writes outside this repo, such as a host's config or a project's files, is
 recorded so it can be undone exactly: by `uninstall`, by deleting one file, or by git. The
@@ -48,17 +46,17 @@ would bring back the doctrine this rebuild exists to shrink.
 ## Working with Sebastián
 
 He decides spend, anything irreversible, and product choices; ask those one at a time and wait.
-Review is not one of them: he has pre-granted gentle-ai review consent for every candidate here,
-so when `gentle-ai review start` returns its consent envelope, run the `granted` invocation
-without asking. The review itself always runs; only the question is skipped, because his answer
-is always yes and the question only stalls the work. If the envelope has no `granted` choice or
-does not parse, ask him instead. A candidate is a work-unit commit or a slice, never the whole
-branch: when the Stop hook offers the branch, run its read-only status and start nothing, because
-with consent pre-granted nothing would stop a review that size. After gentle-ai approves a slice
-with code, Codex reviews the same range with `js-harness codex-review --base <boundary>`, which
-records the review; the pre-push hook refuses a branch whose code commits no record covers. Treat
-its findings like gentle-ai's. If Codex cannot run, report that and record the skip with
-`--unavailable <reason>`.
+Review is not one of them: the consent he granted for every candidate here is his standing
+selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
+invocation without asking. Consent stays his and the review always runs; only the question is
+skipped, because his answer is always yes and the question only stalls the work. If the envelope
+has no `granted` choice or does not parse, ask him instead. A candidate is a work-unit commit or a
+slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the branch, run its read-only status and
+start nothing, because with consent pre-granted nothing would stop a review that size. Every slice
+with code goes through Codex, whether or not gentle-ai reviewed it: `js-harness codex-review --base
+<boundary>` records the review, and the pre-push hook refuses a branch whose code commits no record
+covers. Treat its findings like gentle-ai's. If Codex cannot run, report that and record the skip
+with `--unavailable <reason>`.
 
 Everything else, keep moving: name the next few units of work and do them without stopping to
 report between them. Reports open with a short plain summary and close with a recap of
@@ -74,11 +72,10 @@ when a feature closes, a PR merges or a phase starts. He never compacts by hand,
 near `rule:context-pause` of its window a session writes its state to the feature document and keeps working,
 the host compacts it by itself, and it resumes from the summary checked against that document,
 repeating any open question. A session that stops instead gets its next prompt from the
-orchestrator, never from him. End each reply with one state: working (he sends nothing; say
-what wakes you), decision (never while work runs), question (he answers in writing), cut, or
-finished (name the session to return to). A planned step he would only say yes to is no
-decision: state its cost and go on. The orchestrator asks a decision with the question tool;
-a cut carries what he sends, in one code block of only that text, under what it is, where
+orchestrator, never from him. End each reply in one of the five states of `js-harness-protocols`
+section 2. A planned step he would only say yes to is decided and its cost said, as its section 1
+says. The orchestrator asks a decision with the question tool (`js-harness-orchestrator`); a cut
+carries what he sends, in one code block of only that text, under what it is, where
 it goes, what sending it does: two blocks out of order cost a session. Before it, say what was
 done, what is next and why, and for which session: he runs several. Then the map: each phase's
 share and the total, from `js-harness progress`; if it fails, say so.

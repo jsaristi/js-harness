@@ -419,10 +419,9 @@ that was not checked; what is passed on is complete and true; and each mistake l
 the smallest kind that does the job. A rule is not recorded until it has its place in a check, a
 line of this file or a protocol.
 
-A behavior change arrives with the test that proves it, written first; a finding, with the
-evidence that proves it. A claim about this project carries its evidence.
-Where the Codex review is off (\`js-harness functions\`), gentle-ai reviews every change of medium
-or high risk.
+A finding arrives with the evidence that proves it. A claim about this project carries its evidence.
+Where the Codex review is off (\`js-harness functions\`), gentle-ai's assessment decides when a change
+is reviewed.
 
 Every claim is checked (with its evidence), assumed, or not known. What another session, a
 sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it.
@@ -443,10 +442,7 @@ first passes two readers that did not write it: one attacks its claims, one look
 missing. The owner gets the improved version, with what each reader changed and what stays
 unguaranteed.
 
-A reply ends with one of five states: working (the owner sends nothing; say what wakes the work),
-decision (one question for the owner, never while work runs), question (an open question the owner
-answers in writing), cut (a new session, with the text to send it), or finished (name where to
-return).
+A reply ends in one of the five states of \`js-harness-protocols\` section 2.
 `;
 }
 

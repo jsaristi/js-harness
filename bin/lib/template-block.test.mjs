@@ -19,6 +19,15 @@ test('the template holds the harness\'s lines in a block whose mark carries thei
   assert.ok(text.indexOf(END) < text.indexOf('## Constraints'), 'the constraints, the project\'s own, come after it');
 });
 
+test('the block says gentle-ai\'s assessment decides when a change is reviewed, names no risk tier, and holds no copy of the test-first line or the five states', () => {
+  const body = templateBlock();
+  assert.match(body.replace(/\s+/g, ' '), /gentle-ai's assessment decides when a change is reviewed/);
+  assert.doesNotMatch(body, /medium or high risk/, 'no tier is named');
+  assert.doesNotMatch(body, /A behavior change arrives with the test/, 'the test-first line lives in AGENTS.md');
+  assert.doesNotMatch(body, /cut \(a new session/, 'the closing states live in protocol 2');
+  assert.ok(body.includes('`js-harness-protocols` section 2'), 'the block names the protocol that holds the states');
+});
+
 test('an unedited block of an older template is rendered again, and every line outside it is kept byte for byte', () => {
   const rendered = renderTemplateBlock(withBlock(OLD));
   assert.equal(rendered.state, 'rendered');

@@ -1,11 +1,11 @@
 // The reply check, C1 of odd/tasks/rule-hierarchy.md (T2): whether the reply that ends a turn closes the way
-// `AGENTS.md` asks, "End each reply with one state", read from the reply's text alone. It never judges what a reply
+// protocol 2 of `js-harness-protocols` asks, "End each reply in one of the five states", read from the reply's text alone. It never judges what a reply
 // says, only its close: one state line, what that state needs, and the block the user sends kept to a cut.
 //
 // A state line is a line, outside fenced blocks, that starts with a state's label once the markdown around it is
 // taken off (`**Sigo solo** — …`, `## Terminado: …`, `- Corte`); a label inside a sentence or as part of a longer
 // word is none. The labels are the project's, from the `reply` key of its `harness.json`, so a project that writes
-// its replies in Spanish declares the Spanish ones. What each state needs, from `AGENTS.md`:
+// its replies in Spanish declares the Spanish ones. What each state needs, from protocol 2:
 //   - working: what wakes the session, written after the label on its line;
 //   - decision: never while background work runs (the host's count of running tasks);
 //   - question: an open question the user answers in writing, not with the question tool's buttons, written after
