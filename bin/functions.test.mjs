@@ -53,6 +53,7 @@ test('a project with a program and no switches: each switch, what it resolves to
       'codeMap         on-demand  auto: src/fetch.py is a program',
       'languageServer  off        auto: no file of the project is TypeScript',
       'codexReview     on         auto: src/fetch.py is a program',
+      'pushUnasked     off        auto: the project asks until its owner turns it on',
     ].join('\n'),
     err: '',
   });
@@ -66,6 +67,7 @@ test('a project with no program: every function of code is off, and it says why'
       'codeMap         off        auto: no file of the project is a program',
       'languageServer  off        auto: no file of the project is TypeScript',
       'codexReview     off        auto: no file of the project is a program',
+      'pushUnasked     off        auto: the project asks until its owner turns it on',
     ].join('\n'),
   );
 });
@@ -98,6 +100,7 @@ test('--json prints the same as one object', async (t) => {
       codeMap: { value: 'on-demand', declared: 'auto', because: 'src/fetch.py is a program' },
       languageServer: { value: 'off', declared: 'auto', because: 'no file of the project is TypeScript' },
       codexReview: { value: 'on', declared: 'auto', because: 'src/fetch.py is a program' },
+      pushUnasked: { value: 'off', declared: 'auto', because: 'the project asks until its owner turns it on' },
     },
   });
 });
@@ -226,7 +229,7 @@ test('set refuses a switch or a value the table does not have, and writes nothin
   assert.deepEqual(await run(root, 'set', 'paste', 'off'), {
     code: 1,
     out: [],
-    err: ['paste is no switch; the switches are codeMap, languageServer, codexReview'],
+    err: ['paste is no switch; the switches are codeMap, languageServer, codexReview, pushUnasked'],
   });
   assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{}\n');
 });

@@ -55,7 +55,8 @@ test('every section of the protocols skill opens with the incident it came for a
 });
 
 test('the protocols skill says how a section is withdrawn and that a missing one is proposed, never created', () => {
-  assert.ok(TEXT.includes('A section whose incident has not come back and that nobody used is withdrawn'));
+  assert.ok(TEXT.includes('A section whose incident has not come back is withdrawn when the user decides'));
+  assert.ok(!TEXT.includes('nobody used'), 'a section is not withdrawn for going unused');
   assert.ok(TEXT.includes('reported and proposed to the user, never written as a protocol by the session that met it'));
 });
 
@@ -78,6 +79,20 @@ test('the protocol for changing a rule opens with the stale 73 percent, and its 
 
 // One home for every rule: the skill names a rule by its id and never restates its value, and every id it names is
 // declared, so that a rule changed by `js-harness rules change` reaches this text with nothing to carry by hand.
+test('protocol 3 sends every slice of code through Codex, whether gentle-ai reviewed it or not, as AGENTS.md says', () => {
+  const protocol3 = sections(TEXT)[2].lines.join('\n');
+  assert.match(protocol3, /every slice of code goes through Codex, whether gentle-ai reviewed it or not/);
+  assert.doesNotMatch(protocol3, /each approved slice/, 'Codex does not wait for gentle-ai\'s approval');
+});
+
+test('protocol 1 pushes unasked only where the project\'s pushUnasked switch reads on, and asks before a push elsewhere', () => {
+  const protocol1 = sections(TEXT)[0].lines.join('\n');
+  assert.match(protocol1, /pushUnasked/, 'the switch is named');
+  assert.match(protocol1, /`js-harness functions`/, 'a session reads the switch with the command that shows it');
+  assert.match(protocol1, /[Aa] push goes unasked where[^.]*`pushUnasked`[^.]*reads on/, 'where the switch reads on, a push goes unasked');
+  assert.match(protocol1, /where it is off, a push is asked first/, 'elsewhere a push is asked first, as any other decision');
+});
+
 test('every rule id the protocols skill names is declared, and none of their values is written in it', () => {
   const named = [...TEXT.matchAll(/`rule:([a-z0-9-]+)`/g)].map((match) => match[1]);
   assert.ok(named.length > 0, 'the skill names the rules it relies on');
