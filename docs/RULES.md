@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `11962e2aefb2`. In force: 61 (36 of Sebastián, 25 of the project). Retired: 0.
+Hash `88fa6696ee57`. In force: 60 (35 of Sebastián, 25 of the project). Retired: 1.
 
 ## Sebastián's
 
@@ -181,12 +181,6 @@ His wording is the need, not the specification: the agent recommends what is bes
 - Home: `bin/lib/project.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-08, 2026-10-10, checked by the command on 2026-10-22.
 
-### work-sessions
-The most work sessions open at one time: 3 sessions.
-- Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
-- Since 2026-10-09. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
-
 ### work-sessions-private-windows
 The most work sessions open at one time when only Windows is used: 3 sessions.
 - Of this repository only: not in force in a project that installs the harness.
@@ -336,4 +330,7 @@ How long js-harness wait waits before it says the time ran out, unless --for say
 
 ## Retired
 
-None.
+### work-sessions
+The most work sessions open at one time. Retired on 2026-10-24: read `work-sessions-public`, `work-sessions-private-wsl`, `work-sessions-private-windows` instead.
+- Was: 3 sessions until 2026-10-24.
+- Source: his words of 2026-10-24, checked by the command on 2026-10-24.

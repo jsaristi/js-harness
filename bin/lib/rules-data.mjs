@@ -640,11 +640,18 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-09",
-    "value": 3,
     "unit": "sessions",
-    "patterns": [
-      "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
-      "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
+    "was": [
+      {
+        "value": 3,
+        "until": "2026-10-24"
+      }
+    ],
+    "retired": "2026-10-24",
+    "successors": [
+      "work-sessions-public",
+      "work-sessions-private-wsl",
+      "work-sessions-private-windows"
     ]
   },
   {
