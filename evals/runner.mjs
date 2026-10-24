@@ -41,7 +41,7 @@ export function parseTap(text) {
 
 /** The names of the top-level tests a TAP output reports as failed, in order: its unindented `not ok <n> - <name>`
  * lines, a directive after ` # ` left off. A nested assertion is indented and is not a test of its own here. */
-export function failedTestsOf(text) {
+function failedTestsOf(text) {
   return [...String(text).replace(/\r/g, '').matchAll(/^not ok \d+ - (.*?)(?:\s+#\s.*)?$/gm)].map((match) => match[1]);
 }
 
@@ -547,7 +547,7 @@ const RECORD_FIELDS = ['task', 'config', 'effort', 'repeat', 'score', 'passed', 
 
 /** What `assertReading` throws. A class of its own because a suite treats it apart from every other error
  * (`runSuite`): it is the one failure known to come after a paid session and to be the reader's own. */
-export class ReadingError extends Error {}
+class ReadingError extends Error {}
 
 /** Throws a `ReadingError` unless `reading`, what the reader of config `configName` returned, has the shape `agent-output.mjs`
  * documents; returns it. The message names the first key that is missing or mistyped. Why it is checked: a

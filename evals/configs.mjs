@@ -19,7 +19,7 @@ import { keepTranscripts, trialListCost } from './transcript-usage.mjs';
  * `CLAUDE.local.md`, `.claude/`), plus `AGENTS.md`, which the harness's own instructions use. A trial
  * workspace that has one of them above it loads it, whatever the arm: the minimal arm would no longer be
  * "the model and the built-in tools, nothing else". */
-export const PROJECT_MEMORY_NAMES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', '.claude'];
+const PROJECT_MEMORY_NAMES = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', '.claude'];
 
 /** Where trial homes and workspaces go by default: `js-harness-evals-work` next to the repository, not
  * under it and not under the temp folder. The temp folder is no option: on Windows it is inside the
@@ -158,7 +158,7 @@ const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !=
 /** The identity every trial commits under. A sandbox home holds no real git configuration, and a commit
  * without an identity fails, so an agent that commits its work (the current arm's own habit) would get an
  * error that belongs to the sandbox, not to the configuration under test. */
-export const GIT_IDENTITY = { name: 'eval', email: 'eval@localhost' };
+const GIT_IDENTITY = { name: 'eval', email: 'eval@localhost' };
 
 function git(args, { cwd, env }) {
   const result = spawnSync('git', args, { cwd, env, encoding: 'utf8', windowsHide: true, timeout: 60000 });

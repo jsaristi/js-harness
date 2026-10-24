@@ -29,8 +29,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-export const INVENTORY = 'odd/tasks/launch-audit/inventory.tsv';
-export const HEADER = 'path\tclass\tarea\tverdict';
+const INVENTORY = 'odd/tasks/launch-audit/inventory.tsv';
+const HEADER = 'path\tclass\tarea\tverdict';
 const CLASSES = ['live', 'history', 'generated', 'fixture', 'internal', 'compatibility'];
 const AREAS = ['a', 'b', 'c', 'd', 'e', 'backup', 'clean', 'onboard', 'report', 'stack', 'shared', '-'];
 const NO_AREA = ['history', 'generated', 'fixture'];
@@ -223,7 +223,7 @@ function countsOf(rows) {
 }
 
 /** The findings of an inventory text against the tracked paths, and its counts. `where` names the file in locations. */
-export function checkInventory(text, paths, where) {
+function checkInventory(text, paths, where) {
   const { headerOk, rows } = parse(text);
   const tracked = new Set(paths);
   const findings = [];
@@ -326,7 +326,7 @@ function countLines(counts) {
 }
 
 /** Runs the command on `argv` in the repository of `cwd`; returns { code, stdout, stderr }. */
-export function inventoryMain(argv, { cwd = process.cwd() } = {}) {
+function inventoryMain(argv, { cwd = process.cwd() } = {}) {
   const parsed = parseArgs(argv);
   if (parsed.error) return { code: 2, stdout: '', stderr: `${parsed.error}\n${USAGE}\n` };
   const base = parsed.cwd === null ? cwd : path.resolve(cwd, parsed.cwd);

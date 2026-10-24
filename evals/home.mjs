@@ -29,7 +29,7 @@ export const requireAbsolute = (label, value) => {
 
 /** What the template's marker file says it is. `removeTemplate` and `seedHome` trust nothing without it, so
  * a mistyped directory is never emptied or seeded from. */
-export const TEMPLATE_KIND = 'js-harness-eval-home-template';
+const TEMPLATE_KIND = 'js-harness-eval-home-template';
 // The template of another agent's home (`codex-home.mjs`) has a kind and a name of its own, so neither is
 // ever seeded from, or removed as, the other. This is the one this module builds.
 const CLAUDE_TEMPLATE = { kind: TEMPLATE_KIND, label: 'js-harness eval home template' };
@@ -299,7 +299,7 @@ export const settledBytes = (rel, raw) => {
  * segments of a path, such as `.claude/skills`) over its files' paths and settled contents, and one over the items;
  * a file that is only bookkeeping (`BOOKKEEPING`) is left out. Two templates of the same setup have the same
  * fingerprint; the items say which part of a setup moved. */
-export function fingerprintOf(root, files = inventory(root)) {
+function fingerprintOf(root, files = inventory(root)) {
   const lines = new Map();
   for (const { path: rel } of files) {
     if (BOOKKEEPING.some((pattern) => pattern.test(rel))) continue;

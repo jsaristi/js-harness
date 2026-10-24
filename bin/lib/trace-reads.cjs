@@ -129,7 +129,7 @@ function removeTraces(dir, test) {
   real.rmSync(path.join(dir, traceName(test)), { force: true });
 }
 
-module.exports = { TRACER_VERSION, TRACE_ENV, KEPT_TRACES, traceEnvOf, hashOf, listingOf, stateOf, traceFolder, traceName, traceKey, traceFiles, pruneTraces, writeTrace, removeTraces };
+module.exports = { TRACER_VERSION, TRACE_ENV, KEPT_TRACES, traceEnvOf, hashOf, stateOf, traceFolder, traceFiles, pruneTraces, writeTrace };
 
 const env = process.env;
 if (env.JS_HARNESS_TRACE_DIR && env.JS_HARNESS_TRACE_ROOT && !globalThis[INSTALLED] && !process.execArgv.includes('--test')) install();

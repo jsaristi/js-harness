@@ -30,7 +30,7 @@ export const OUT_VARIABLE = 'COUNT_GIT_OUT';
 export const ROOT_VARIABLE = 'COUNT_GIT_ROOT';
 export const TEST_FILE_VARIABLE = 'COUNT_GIT_TEST_FILE';
 export const FRAMES_VARIABLE = 'COUNT_GIT_FRAMES';
-export const LAUNCH_VARIABLE = 'COUNT_GIT_LAUNCH';
+const LAUNCH_VARIABLE = 'COUNT_GIT_LAUNCH';
 
 const SELF = fileURLToPath(import.meta.url);
 const PRELOAD_OPTION = `--import=${import.meta.url}`;

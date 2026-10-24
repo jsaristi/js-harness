@@ -53,9 +53,9 @@ const fold = (text) => (process.platform === 'win32' ? text.toLowerCase() : text
 /** What the probe runs the agent as. The model and effort are the eval's real ones, so the request shape
  * (tools offered, haiku side calls) is the one a measured trial produces; `bypassPermissions` is for the
  * probe only, because a headless agent that must ask before running a tool never runs it. */
-export const PROBE_MODEL = 'claude-opus-5-5';
-export const PROBE_EFFORT = 'medium';
-export const PROBE_PERMISSION_MODE = 'bypassPermissions';
+const PROBE_MODEL = 'claude-opus-5-5';
+const PROBE_EFFORT = 'medium';
+const PROBE_PERMISSION_MODE = 'bypassPermissions';
 
 /** The API key every probe run hands the agent. It is obviously not a key, and it is scrubbed from every
  * output all the same: a probe that printed a key-shaped string would teach people to ignore the real
@@ -188,7 +188,7 @@ function carriesComponent(body, toolNames, { tools, markers, prefixes }) {
 
 /** The text the first user message of a subagent the probe starts carries, which is how the fake API tells that
  * request from the main agent's. */
-export const SUBAGENT_MARKER = 'Isolation probe subagent';
+const SUBAGENT_MARKER = 'Isolation probe subagent';
 /** The engram MCP tool that saves a memory, whatever the server is called in the config (`mcp__engram__mem_save` for a
  * server entry, `mcp__plugin_engram_engram__mem_save` for a plugin's own). */
 const MEM_SAVE_TOOL = /^mcp__[A-Za-z0-9_]*engram[A-Za-z0-9_]*__mem_save$/;
@@ -197,7 +197,7 @@ const SUBAGENT_TOOLS = ['Agent', 'Task'];
 /** What the probe looks for, inside the sandbox's engram store, to know a path of the plugin ran: the prompt (stored
  * by UserPromptSubmit, which is why the probe's prompt holds the nonce as `nonce:<nonce>`), the memory the MCP tool
  * saves, and what the subagent said last (stored by SubagentStop, if the server keeps it). */
-export const engramNeedles = (nonce) => ({ prompt: `nonce:${nonce}`, memory: `memsave:${nonce}`, subagent: `subagent:${nonce}` });
+const engramNeedles = (nonce) => ({ prompt: `nonce:${nonce}`, memory: `memsave:${nonce}`, subagent: `subagent:${nonce}` });
 
 /** Starts the fake Messages API on `127.0.0.1` (port 0: the OS picks a free one) and resolves to `{ url,
  * port, requests, toolResults(), close() }`.
@@ -1301,7 +1301,7 @@ function armFailures(result) {
  * beside it, since that the base carries a component is what makes the arm's not carrying it mean anything. A
  * `minimal-with` arm is refused: the probe has not been taught to put a component into minimal. Throws before anything
  * is made. */
-export function armPlans(arms) {
+function armPlans(arms) {
   return arms.map((name) => {
     if (name === 'current' || name === 'minimal') return { name, kind: name, components: [] };
     const parsed = parseArm(name, 'claude');

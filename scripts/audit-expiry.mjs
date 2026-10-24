@@ -21,7 +21,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 class ExpiryArgError extends Error {}
 
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const parsed = { today: null, allow: null, json: false, cwd: null };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -47,7 +47,7 @@ export function reviewDates(text) {
 }
 
 /** The findings of `files` ({ path, text }) on `today`: one `expired` for each review date before it. */
-export function expiryFindings(files, today) {
+function expiryFindings(files, today) {
   const findings = [];
   for (const { path: file, text } of files) {
     for (const { line, date } of reviewDates(text)) {
@@ -61,7 +61,7 @@ export function expiryFindings(files, today) {
 
 /** Splits `findings` by `allow` ({ kind, location, why }): the ones no entry hides, then a `stale-allow` finding for
  * each entry that hid nothing, and the count hidden. */
-export function applyAllow(findings, allow) {
+function applyAllow(findings, allow) {
   const used = new Set();
   const kept = findings.filter((finding) => {
     const index = allow.findIndex((entry) => entry.kind === finding.kind && entry.location === finding.location);

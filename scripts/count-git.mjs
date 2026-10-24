@@ -58,7 +58,7 @@ export function parseArgs(argv) {
 /** The environment of the test run: `base` with the preload added to whatever NODE_OPTIONS holds, and the
  * variables the preload reads. NODE_TEST_CONTEXT goes: under it (this tool run from a test) `node --test`
  * takes itself for a test file of the run above and runs nothing. */
-export function runEnv(base, { out, root, frames = 1 }) {
+function runEnv(base, { out, root, frames = 1 }) {
   const env = { ...base, [OUT_VARIABLE]: out, [ROOT_VARIABLE]: root, [FRAMES_VARIABLE]: String(frames) };
   delete env.NODE_TEST_CONTEXT;
   delete env[TEST_FILE_VARIABLE];
