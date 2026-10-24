@@ -71,7 +71,7 @@ and only files survive. So every decision made in the conversation is written to
 the feature document and committed on the feature branch in the same session; that record is
 part of the work and needs no separate request. While he is here, say when to cut: a new session
 when a feature closes, a PR merges or a phase starts. He never compacts by hand, here or away:
-near 88% of its window a session writes its state to the feature document and keeps working,
+near `rule:context-pause` of its window a session writes its state to the feature document and keeps working,
 the host compacts it by itself, and it resumes from the summary checked against that document,
 repeating any open question. A session that stops instead gets its next prompt from the
 orchestrator, never from him. End each reply with one state: working (he sends nothing; say
