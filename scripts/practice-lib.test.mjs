@@ -4,7 +4,7 @@ import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
   pauseReplyLine, pauseHookInput, pauseHookProblem, TEMPLATE_SECTIONS, templateLinesProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem, uninstallExpected,
-  channelEnv, channelStepProblem, channelRecord,
+  channelEnv, channelStepProblem, channelRecord, releasePracticeVerdict,
 } from './practice-lib.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { recordPath } from '../bin/lib/channel.mjs';
@@ -1344,4 +1344,74 @@ test('after uninstall, a settings file init created and its created folder are g
   assert.deepEqual(uninstallExpected(['?? .claude/', '?? scratch.txt'], manifest(settings(true, true))), [' D AGENTS.md', ' D harness.json', '?? scratch.txt']);
   assert.deepEqual(uninstallExpected(['?? .claude/settings.local.json', '?? scratch.txt'], manifest(settings(true, false))), [' D AGENTS.md', ' D harness.json', '?? scratch.txt']);
   assert.deepEqual(uninstallExpected(['?? .claude/', '?? scratch.txt'], manifest(settings(false, false))), [' D AGENTS.md', ' D harness.json', '?? .claude/', '?? scratch.txt']);
+});
+
+// ---- the release ------------------------------------------------------------------------------------------------------
+
+// The tagged commit in full, and the short sha a record line keeps (`git rev-parse --short`, seven characters here).
+const TAGGED = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+const SHORT = TAGGED.slice(0, 7);
+const CLEAN = { branch: 'main', commit: SHORT, dirty: false };
+/** The steps of a whole run that passed: every step of `JOURNEY`, once. */
+const WHOLE = JOURNEY.map(({ id }) => ({ id, ok: true, detail: `${id}: its evidence` }));
+/** The line a run on the tagged commit appends. `left` is written only when the run left steps out, as `run` does. */
+const releaseLine = ({ candidate = CLEAN, steps = WHOLE, left } = {}) => recordLine({
+  date: '2026-10-24T09:00:00.000Z', candidate, steps, node: 'v24.21.0', platform: 'win32', ...(left !== undefined && { left }),
+});
+/** The steps of the whole run without the host session, which `run --no-host` leaves out. */
+const WITHOUT_HOST = WHOLE.filter(({ id }) => id !== HOST_STEP);
+
+test('a release is refused when there is no record at all', () => {
+  const verdict = releasePracticeVerdict(null, TAGGED);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, /no record/);
+});
+
+test('a release is refused when the record holds no run of the tagged commit, and names the commit it lacks', () => {
+  const other = releaseLine({ candidate: { ...CLEAN, commit: 'a1b2c3e' } });
+  const verdict = releasePracticeVerdict(other, TAGGED);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, new RegExp(`no run of ${SHORT}`));
+});
+
+test('a release is refused when the one run of the tagged commit left the host session out', () => {
+  const verdict = releasePracticeVerdict(releaseLine({ steps: WITHOUT_HOST, left: [HOST_STEP] }), TAGGED);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, /steps left out: host-loads/);
+});
+
+test('a release is refused when any step was left out, not only the host session', () => {
+  const left = JOURNEY[0].id;
+  const verdict = releasePracticeVerdict(releaseLine({ steps: WHOLE.filter(({ id }) => id !== left), left: [left] }), TAGGED);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, new RegExp(`steps left out: ${left}`));
+});
+
+test('a release is refused when a step of the run failed, and names it', () => {
+  const steps = WHOLE.map((step) => (step.id === HOST_STEP ? { ...step, ok: false, detail: 'no answer' } : step));
+  const verdict = releasePracticeVerdict(releaseLine({ steps }), TAGGED);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, /failed: host-loads/);
+});
+
+test('a release is refused when the run was of a dirty candidate, even when every step passed', () => {
+  const verdict = releasePracticeVerdict(releaseLine({ candidate: { ...CLEAN, dirty: true } }), TAGGED);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reason, /dirty candidate/);
+});
+
+test('a whole pass on the tagged commit releases, whether the record names the commit short or in full', () => {
+  assert.equal(releasePracticeVerdict(releaseLine(), TAGGED).ok, true);
+  assert.equal(releasePracticeVerdict(releaseLine({ candidate: { ...CLEAN, commit: TAGGED } }), TAGGED).ok, true);
+});
+
+test('an earlier whole pass still releases after a later run of the commit was refused, and a torn line is skipped', () => {
+  const refused = releaseLine({ candidate: { ...CLEAN, dirty: true } });
+  const torn = releaseLine({ steps: WITHOUT_HOST, left: [HOST_STEP] }).slice(0, 40);
+  assert.equal(releasePracticeVerdict(`${releaseLine()}\n${refused}\n${torn}\n`, TAGGED).ok, true);
+});
+
+test('a short sha of fewer than seven characters, or one that is only a prefix of another commit, never matches', () => {
+  assert.equal(releasePracticeVerdict(releaseLine({ candidate: { ...CLEAN, commit: SHORT.slice(0, 6) } }), TAGGED).ok, false);
+  assert.equal(releasePracticeVerdict(releaseLine({ candidate: { ...CLEAN, commit: `${SHORT}0` } }), TAGGED).ok, false);
 });

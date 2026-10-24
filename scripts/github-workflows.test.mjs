@@ -127,6 +127,21 @@ test('the daily Windows suite is one bounded job on an exact Windows image, with
 /** The node versions a text names: each `node-version:` value and each `cimg/node:<tag>`, in order. */
 const nodeVersions = (text) => [...text.matchAll(/node-version:\s*([\d.]+)|cimg\/node:([\d.]+)/g)].map((match) => match[1] ?? match[2]);
 
+// C-e-1: `engines` names the Node major the gate runs, and the README and the guide say the same. The check is equality,
+// not "not above": a minimum below the gate's major promises a Node that no run tests (the defect of 2026-10-24, when
+// `>=22` stood against a gate on 24.21.0), and a minimum above it refuses a Node the gate tests as if it were fine.
+test('engines names the Node major the gate runs, and the README and the guide say the same', () => {
+  const engines = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).engines?.node;
+  const minimum = /^>=(\d+)$/.exec(engines ?? '')?.[1];
+  assert.ok(minimum !== undefined, `engines.node is ">=<major>", and is ${JSON.stringify(engines)}`);
+  const [gateNode] = nodeVersions(fs.readFileSync(GATE, 'utf8'));
+  const major = gateNode.split('.')[0];
+  assert.equal(minimum, major, `engines promises Node ${minimum} or newer, and the gate runs Node ${gateNode}`);
+  for (const file of ['README.md', 'docs/GUIDE.md']) {
+    assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), new RegExp(`Node ${major} or newer`), `${file} names Node ${major}`);
+  }
+});
+
 // C-e-14: both workflows say their node is the one the CircleCI image runs, so a bump of one without the other fails here.
 test('the workflows set up the node of the CircleCI image, and say so', () => {
   const [image, ...others] = nodeVersions(fs.readFileSync(path.join(ROOT, '.circleci', 'config.yml'), 'utf8'));
