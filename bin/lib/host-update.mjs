@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { windowsFolder } from './app-record.mjs';
+import { ruleHere } from './rules.mjs';
 import { compareSemver } from './version.mjs';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -53,6 +54,16 @@ function findAppVersion(value, depth = 0) {
   return null;
 }
 
+/** The text of the rules file of `project` (`bin/lib/rules-data.mjs`), or null where it has none or it cannot be read:
+ * the row reads it to say whether a rule of this repository holds there, and fails open like every read here. */
+export function readProjectRulesText(project) {
+  try {
+    return fs.readFileSync(path.join(project, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
 /** `{ found, desktop, staged, code }`: whether an app folder is there, the running desktop version, the version
  * its updater downloaded, and the highest Code tab CLI under `claude-code/`; `null` for what cannot be read.
  * Of `config.json` only the updater's staged version is read: the file also holds OAuth tokens. */
@@ -79,10 +90,24 @@ function updateWords(reviewed, now) {
   return desktop ?? (code ? `the Code tab CLI ${code}` : null);
 }
 
+/** The step of a review that turns Remote Control back on: a restart of the app turns it off. Only where the rule
+ * remote-control-yes is declared (`projectData`, the text of the project's rules file), his standing yes of 2026-10-15
+ * (odd/tasks/host-update-check.md, L9), is it turned on without asking; anywhere else the user is asked first (his
+ * answer Q88, C-shared-5). */
+function remoteControlStep(projectData) {
+  const restart = 'a session that has run no turn since the restart refuses it, so send it a message first';
+  const rule = ruleHere('remote-control-yes', undefined, projectData);
+  if (Object.hasOwn(rule, 'value')) {
+    return `turn Remote Control back on in each work session without asking the user (rule remote-control-yes: ${rule.value}); ${restart}`;
+  }
+  return `ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; ${restart}`;
+}
+
 /** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the cache's
  * `host.reviewed`, or `null`), and the record to write: the versions read, taken as reviewed, when there is no
- * record yet and the running version was read; `null` otherwise. */
-export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
+ * record yet and the running version was read; `null` otherwise. `projectData` is the text of the project's rules
+ * file (`readProjectRulesText`), or `null`: it words the Remote Control step of a review (`remoteControlStep`). */
+export function hostUpdateRow(versions, reviewed, now = () => new Date(), projectData = null) {
   const row = { id: 'host-update', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
   if (!versions.found) return { row, record: null };
   if (!versions.desktop) return { row: { ...row, installed: 'unknown', claude: 'unknown', upToDate: 'unknown' }, record: null };
@@ -100,9 +125,7 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
       ...(reviewed.desktop !== versions.desktop ? [`read ${DESKTOP_CHANGELOG} from ${reviewed.desktop} to ${versions.desktop}`] : []),
       ...(versions.code && reviewed.code && reviewed.code !== versions.code ? [`read the Claude Code CHANGELOG (${CODE_CHANGELOG}) from ${reviewed.code} to ${versions.code}`] : []),
       'check that the harness hooks in ~/.claude/settings.json still run',
-      // A restart of the app turns Remote Control off; his standing yes to turning it back on each time is in
-      // odd/tasks/host-update-check.md (L9).
-      'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
+      remoteControlStep(projectData),
       'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
       'then record the review: js-harness doctor --host-reviewed',
     ];

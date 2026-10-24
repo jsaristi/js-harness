@@ -2010,6 +2010,13 @@ test('a host update since the reviewed versions is stale, with the versions and 
     writeCache(home, { ...readCache(home), host: { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } } });
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const host = () => ({ found: true, desktop: '2.42304.0', staged: '2.42304.0', code: '2.1.299' });
+    // A project without the rule remote-control-yes is told to ask before turning Remote Control back on.
+    const asking = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
+    assert.ok(asking.output.includes('\n    ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; '), asking.output);
+    assert.doesNotMatch(asking.output, /without asking the user/);
+    // This repository's rules file declares it.
+    fs.mkdirSync(path.join(project, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'bin', 'lib', 'rules-data.mjs'), writeRules(RULES));
 
     const table = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
     assert.match(table.output, /^host-update\s+2\.42304\.0\s+stale\s+n\/a\s+n\/a\s+ok$/m);
@@ -2019,7 +2026,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
       '    read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
       '    read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
       '    check that the harness hooks in ~/.claude/settings.json still run',
-      '    turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
+      '    turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
       '    report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
       '    then record the review: js-harness doctor --host-reviewed',
     ].join('\n');

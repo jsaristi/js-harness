@@ -393,6 +393,23 @@
       "by": "command"
     }
   },
+  "remote-control-yes": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Se acabo de actualizar Claude Desktop, lee todo lo que cambio como el protocolo que hicimos",
+        "date": "2026-10-19",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 201
+      }
+    ],
+    "reading": "The protocol he asks to run after each Claude Desktop update is doctor's host-update review, and one of its steps turns Remote Control back on, since a restart of the app turns it off. His yes to doing that without asking is his own, so it holds in this repository only; in a project that installs the harness without this rule the step asks the user first.",
+    "accepted": "Tapped, not quoted: his answer of 2026-10-15 to \"¿Lo vuelvo a prender ahora y lo hago siempre después de cada reinicio sin preguntarte?\", Sí, y siempre (Recomendada), relayed by the lead (odd/tasks/host-update-check.md, L9), and Pregunta 88 (transcript 908805db, line 28470, Atarlo a una regla (Recomendada)), which ties that yes to a rule of this repository (C-shared-5). The quotation is his typed request of 2026-10-19 (line 201) to run the update protocol the step belongs to.",
+    "checked": {
+      "date": "2026-10-24",
+      "by": "command"
+    }
+  },
   "reply-five-states": {
     "kind": "words",
     "quotes": [

@@ -542,8 +542,8 @@ the review is done, listing the old and new versions and the review steps: the t
 the harness hooks, Remote Control, and a full report to the user: what improved, what changed
 and what was fixed, how each helps or hurts the harness and the way the user works, and what the
 harness should change; a version the changelog has no entry for is reported as having none. A restart of the app turns Remote
-Control off, and the step is to turn it back on in each work session without asking, his
-standing yes of 2026-10-15; a session that has run no turn since the restart refuses it, so it
+Control off, and the step is to turn it back on in each work session without asking where the rule
+`remote-control-yes` holds, his standing yes of 2026-10-15, and to ask the user first anywhere else; a session that has run no turn since the restart refuses it, so it
 is sent a message first. `js-harness doctor --host-reviewed`
 records the review; with `--json` it prints the record it wrote. The row also shows
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
