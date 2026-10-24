@@ -7,18 +7,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion, nextVersion } from './lib.mjs';
+import { resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion, globalPackageDir, nextVersion } from './lib.mjs';
 
 function assertThat(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-/** npm's --prefix global-install layout differs: Windows puts modules directly under the prefix,
- * everywhere else under prefix/lib. */
+/** The launcher of a --prefix global install, in the package folder lib.mjs's globalPackageDir names. */
 export function installedBinPath(prefix, platform = os.platform()) {
-  return platform === 'win32'
-    ? path.join(prefix, 'node_modules', 'js-harness', 'bin', 'js-harness.mjs')
-    : path.join(prefix, 'lib', 'node_modules', 'js-harness', 'bin', 'js-harness.mjs');
+  return path.join(globalPackageDir(prefix, platform), 'bin', 'js-harness.mjs');
 }
 
 function main() {
