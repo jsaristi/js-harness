@@ -77,7 +77,7 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 | T6 | S6 | inline | done | 53691533 |
 | T7 | S7 | inline | done | 35cbdcec |
 | T5b | S2-S5 | inline | done | a1ba5c61 (the review's advisory findings) |
-| T8 | S1 | inline | open | |
+| T8 | S1 | inline | done | 0881ec00 (#496's merge); the roadmap tick, L9 |
 
 - [x] T1 (kind: build) `bin/lib/ratchet.mjs`: the one comparison every legacy list uses
 - [x] T2 (kind: build) the refused-flag wording and exit 2, with its legacy list; "unknown flag" becomes "unknown argument"
@@ -86,13 +86,10 @@ Nothing beyond the plan Pregunta 40 approved; a product decision goes to the lea
 - [x] T5 (kind: build) shipped text names the user
 - [x] T6 (kind: build) the review lines
 - [x] T7 (kind: docs) the protocols skill's trigger
-- [ ] T8 (kind: docs) the roadmap item, reviews, the pull request
+- [x] T8 (kind: docs) the roadmap item, reviews, the pull request
 
 ## Next step
-All tasks built and both slices approved by gentle-ai (L5, L7). Left: commit 6 (advisory test titles) lands; then
-`js-harness codex-review --base 81305126` over the branch (2 parts, about 310k tokens), its findings treated like
-gentle-ai's; then push `feat/conventions`, open the pull request, tick the roadmap's Part 1, and send
-`js-harness notify --to orchestrator --kind ready`. Worktree `D:\js-harness\.claude\worktrees\clean-5f4555`.
+Part 1 is done (L9). Part 2 waits for onboarding v4, with the open item below.
 
 ## Open for part 2 (onboarding profiles)
 - A range of code alone is reviewed with `codex exec review --base` and Codex's own sentence, which takes no prompt
@@ -157,3 +154,9 @@ gentle-ai's; then push `feat/conventions`, open the pull request, tick the roadm
 - L8. 2026-10-21. gentle-ai assessed 53691533..2ea70ec (24e7ed76, the second review's advisory titles and comments, and
   2ea70ec, this document): medium, 23 lines, under_budget, not due. Codex reviewed 8130512..2ea70ec: correct in both
   parts. Pull request jsaristi/js-harness#496.
+- L9. 2026-10-24, the lead's 10:57 order. T8 checked on what is observed: `jsaristi/js-harness#496` merged at
+  2026-10-21T07:02:27Z as 0881ec00, holding every commit above; its reviews are L5 and L7 (gentle-ai, approved and
+  acknowledged) and L8 (gentle-ai assessed not due; Codex correct in both parts). The Done-when commands on main
+  9366175a, one file per run: conventions-arguments 2, conventions-errors 6, conventions-pure 2, conventions-voice 2,
+  ratchet 4, protocols-skill 15, codex-review-prompt 30, all passing; `npm run check` passes as this commit's gate.
+  The roadmap's Part 1 is ticked with the pull request. Part 2 stays open, waiting for onboarding v4.
