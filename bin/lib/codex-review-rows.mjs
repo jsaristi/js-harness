@@ -26,7 +26,7 @@ import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, working
  * with the `note` that counts the records that were left out.
  *
  * Which commits are code and which records cover them is not decided here. It is the one definition this
- * check shares with `js-harness codex-review` (`./lib/codex-review-coverage.mjs`), which reads it for the
+ * check shares with `js-harness codex-review` (`./codex-review-coverage.mjs`), which reads it for the
  * range it is asked to review: what this refuses to push is what that command reviews. */
 function codexReviewCoverage(cwd, head, { spawn, remote }) {
   const unknown = (detail, lines, why) => ({ unknown: { detail, ...(lines ? { lines } : {}), ...(why ? { why } : {}) } });
@@ -90,7 +90,7 @@ function coveredDetail({ codeCommits, base }) {
  * refuses the head whose next review would be a recheck, and nothing else. The head of a recheck that left
  * findings open passes with a warning that names them: a second recheck is not run, so refusing it would
  * leave a session away from the user no way forward, and whether a disputed finding is waived is the user's
- * call (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./lib/codex-review-runs.mjs says why);
+ * call (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./codex-review-runs.mjs says why);
  * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
  * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
 function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {

@@ -6,7 +6,6 @@ import path from 'node:path';
 import { GATE_WAIT_MS, readGateWaiters, takeGateLock } from './gate-lock.mjs';
 import { GateFirstError, claimTicket, issueTicket, logTicket, ofTree, readTickets } from './gate-first.mjs';
 import { gateLogSwitchedOff } from './gate-log.mjs';
-import { counted } from './codex-review-scope.mjs';
 
 /** The exit code of a `gate` that ran nothing because the lock was not its to take: with `--no-wait`, held
  * or with a gate ahead of it in the line, past the bound of its wait, or with its `--ready` check failing before
@@ -58,7 +57,7 @@ export const GATE_WAIT_USAGE =
  * longer than its bound. */
 function refusalSaid({ refused, holder, line, waitedMs, stillMs, besideOlder }, waitMinutes) {
   if (refused === 'held') return `${gateOf(holder)} holds the machine's gate lock, and --no-wait was given`;
-  // Its launcher ended (./lib/launcher.mjs, odd/tasks/orphan-gate.md): nobody waits for what it would run.
+  // Its launcher ended (./launcher.mjs, odd/tasks/orphan-gate.md): nobody waits for what it would run.
   if (refused === 'launcher gone') return 'the process that started this gate ended while it waited, so it gave up its place in the line';
   if (refused === 'ahead') {
     return `${waitingGateOf(line?.head)} waits ahead of this one for the machine's gate lock, which no gate holds, and --no-wait was given; a gate that died as it waited is passed a minute after its last sign of life`;
@@ -86,7 +85,7 @@ function refusalSaid({ refused, holder, line, waitedMs, stillMs, besideOlder }, 
 // `js-harness gate` reads it too, for the same question: whether another gate ran until a moment ago.
 export const GATE_WAIT_SAID_MS = 1000;
 
-/** One turn at the machine's gate lock (`./lib/gate-lock.mjs`), taken the way a gate takes it, for
+/** One turn at the machine's gate lock (`./gate-lock.mjs`), taken the way a gate takes it, for
  * whoever runs under it: `check` around its sensors, `js-harness gate` around a command. `name` is who
  * says the wait, `command` what the holder's file says it runs, in the folder `cwd`.
  *
@@ -114,7 +113,7 @@ export const GATE_WAIT_SAID_MS = 1000;
  * and not what is run.
  *
  * Every outcome also says whom this gate waited for and for how long, which is what the gate log keeps
- * (`./lib/gate-log.mjs`): `waitedMs`, and `waitedFor`, the gates the lock told of while it waited, as
+ * (`./gate-log.mjs`): `waitedMs`, and `waitedFor`, the gates the lock told of while it waited, as
  * `[{ cwd, pid, command }]`. They are the gates that held the lock, and no gate that only waited ahead of
  * this one: such a gate is there from the moment it holds the lock, if this gate still waits then. Each is
  * there once, by the token of its holder's file, since the lock tells of a gate again when its beat stops
@@ -130,7 +129,7 @@ export const GATE_WAIT_SAID_MS = 1000;
  * `session` is the id of the host's session that started the gate, or `null` where the host gives none:
  * the lock writes it in the gate's file, where the session board reads it. `check` and `js-harness gate`
  * pass what their environment says (`CLAUDE_CODE_SESSION_ID`). `first` is the ticket this gate claimed
- * (`{ id, reason }`, ./lib/gate-first.mjs), handed to the lock, which puts the gate before every gate that
+ * (`{ id, reason }`, ./gate-first.mjs), handed to the lock, which puts the gate before every gate that
  * waits; a gate waited for that went first by a ticket is marked `first: true` among `waitedFor`.
  * `take` stands in for `takeGateLock`, so a test stands in for the lock or runs the real one on its own
  * clock. */
@@ -204,7 +203,7 @@ export async function takeGateTurn({ name, home, cwd, command, wait, waitMinutes
  * given the mark of a held lock (`GATE_HELD_ENV`); `run({ lock: 'none', ... })` is called without the
  * lock. Both are told whom this gate waited for and for how long, as `takeGateTurn` says it, which the
  * gate writes in its log. A gate that is refused writes one line there through `record`, where it has
- * one (`gateRecord` of `./lib/gate-log.mjs`), and a line that could not be written is one more row.
+ * one (`gateRecord` of `./gate-log.mjs`), and a line that could not be written is one more row.
  * `takeGateLock` is injectable, as in `takeGateTurn`. */
 export async function underGateLock(cwd, { home, wait, waitMinutes, session, first = null }, { takeGateLock: take = takeGateLock }, run, record) {
   const turn = await takeGateTurn({ name: 'check', home, cwd, command: 'check', wait, waitMinutes, session, first: first && { id: first.id, reason: first.reason } }, take);

@@ -70,7 +70,10 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   `'..', '..', 'package.json'` from its new folder, the one line that had to change; `rules-installed`'s copy version
   calls it inside its try, so an unreadable file is still null, and loses its `fs` and `path` imports. `version` 12,
   `rules-installed` 10, `permit` 18, `install` 110 and `release-tags` 8 tests pass; `--version` prints 0.97.0. Commit: 2c.
-- [ ] T4 (kind: verify) S5, S6 — the differential inline; one independent Opus verifier (items 2 and 4).
+- [x] T4 (kind: verify) S5, S6 — the differential inline (L3); one independent Opus verifier (items 2 and 4), no
+  blocker (L4).
+- [x] T6 (kind: build) inline, S1, S2 — 2d, gentle-ai's advisories: `gate-turn.mjs`'s unused import of `counted` goes,
+  and the moved comments name their siblings from `bin/lib`. Commit: 2d.
 - [ ] T5 (kind: verify) S6 — gentle-ai per commit, Codex over the slice, the pull request and the ready notice.
 
 ## Log
@@ -87,7 +90,29 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   I land it. Open odd/tasks/reorganization.md with the task contract first; it holds slices 2 and 3."
 - L2. 2026-10-24, measured on 868f5eca: `check.mjs` 2,806 lines. The Codex rows use nothing declared elsewhere in
   `check.mjs`; outside it they are used for `codexSwitchHere` (the review row) and `counted` (the staged-size row). The
-  gate turn uses `gateRow` and `gateLogRows`, which move with it, and `counted`; `stoppedRow` stays, since it names
+  gate turn uses `gateRow` and `gateLogRows`, which move with it; `stoppedRow` stays, since it names
   `GATE_HELD_ENV`. `version.mjs` is a legacy entry of `conventions-pure.test.mjs`, so its header keeps the word "pure"
   and says the second read; that entry's reason ("its one directory listing") is now one short, and is slice 3's to
   reword, since this slice changes no test file.
+- L3. 2026-10-24, S4 and S5 measured on 868f5eca..78b31383 (2a 08d058ba, 2b 295e0e5f, 2c 78b31383): no test file in the
+  diff; 906, 650 and 49 changed lines under `--no-renames`; imports aside, 716 lines removed and 732 added, the
+  difference being the three module headers, `export` on seven names, `check.mjs`'s copy of `counted`, the one
+  `package.json` path and `rules-installed`'s call; `check.mjs` went from 2,806 to 2,110 lines. Each commit's gate
+  passed. The differential ran each copy's `bin/js-harness.mjs` from a `git archive` of each revision against this
+  worktree, with a scratch `HOME`, `JS_HARNESS_HOME` and `CODEX_HOME`, times and durations taken out: `--version`,
+  `check --help`, `check --push` (exit 1 both: the slice has no Codex record yet), `check --push --head HEAD~3`,
+  `check --verbose` under `JS_HARNESS_CHECK_INNER=1`, `gate --help`, `gate log --last 3`, `gate --wait x`,
+  `merge-queue --help`, `windows-daily --help`, `windows-daily`, `permit list --json` and `doctor --offline` are the
+  same; `gate --no-wait -- node -e "process.exit(3)"` exits 3 in both and differs only in the machine's load before
+  the command (5.4 against 1.7 busy processors), which is the sample, not the code. `merge-queue --dry-run` was left out:
+  it builds candidate worktrees in the shared repository and runs a door check beside the live queue.
+- L4. 2026-10-24, S6: the independent Opus verifier (items 2 and 4) found every spec met and no blocker. It compared the
+  Codex rows of both revisions in process on 18 inputs (refusals included, same JSON), the source of `takeGateTurn` and
+  `claimOf` (same), every export of the nine touched modules (none lost), and every moved identifier's binding (same
+  declaration); it ran `check-codex-reviews` 108, `check` 260, `gate` 80, `merge-queue` 118, `lib/manifest` 190,
+  `conventions-pure` 2 and `conventions-errors` 5, all passing; `windows-daily` now loads in about 135 ms against 205,
+  `refresh-copy` in about 146 against 205. gentle-ai reviewed 868f5eca..78b31383 with lenses risk, readability and
+  reliability, consent granted (pre-granted): approved and acknowledged, lineage review-3c7e286e97ece98e. Its four
+  advisories: `gate-turn.mjs` imported `counted` and used it nowhere (L2 had said it did: the map that found it read the
+  word inside template strings), and seven moved comments named `./lib/<module>` from inside `bin/lib`; both fixed in 2d.
+  R3-002 asked that the differential cover the `--no-wait` and `--push` refusals, which L3's does.
