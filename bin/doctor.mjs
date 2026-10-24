@@ -423,7 +423,9 @@ function recordStackReview({ home, cwd, json }, deps) {
  * same report as the interactive command (network allowed only when the cache is stale), digests
  * its gap list, and prints exactly one `{"systemMessage": ...}` line only when gaps exist and that
  * digest differs from the last one stored — never plain text, never anything on stderr, and always
- * exit 0, even if something above throws: a `SessionStart` hook must never break a session. */
+ * exit 0, even if something above throws: a `SessionStart` hook must never break a session. The one
+ * exception is before this runs: `doctorMain` refuses an argument it does not know with exit 2 and the
+ * usage on stderr (see there). */
 export async function hookMain(argv, env = process.env, deps = {}) {
   try {
     const { home, cwd } = parseArgs(argv, env);
