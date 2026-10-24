@@ -804,6 +804,7 @@ test('uninstallMain --global --full removes the memory snapshots and names each 
 const NO_SUCH = path.join(os.tmpdir(), 'js-harness-no-such-folder');
 const PNPM_COPY = path.join(NO_SUCH, 'pnpm', 'global', 'v11', '2bf18-0', 'node_modules', '.pnpm', 'js-harness@x', 'node_modules', 'js-harness', 'bin', 'install.mjs');
 const NPM_COPY = path.join(NO_SUCH, 'nvm4w', 'nodejs', 'node_modules', 'js-harness', 'bin', 'install.mjs');
+const NPM_CLI = path.join(NO_SUCH, 'nvm4w', 'nodejs', 'node_modules', 'npm', 'bin', 'npm-cli.js');
 
 /** A home with what a working machine keeps under `.js-harness` beside the install: the lead's files, backups, a
  * throughput day and a memory snapshot. */
@@ -833,17 +834,42 @@ test('uninstallMain --global --everything removes the whole .js-harness folder a
     const home = await livedInHome();
     const { spawn, calls } = recordingSpawn();
     try {
-      const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath }));
+      const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath, npmCli: NPM_CLI }));
       assert.deepEqual([code, errLines], [0, []], pm);
       assert.equal(fs.existsSync(path.join(home, '.js-harness')), false, 'nothing of .js-harness is left');
       assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness', 'SKILL.md')), false, 'the install is undone as by uninstall');
       assert.ok(outLines.includes(`removed ${path.join(home, '.js-harness')}: backups, lead, relief, throughput`), outLines.join('\n'));
       assert.ok(outLines.includes(`removed the js-harness program: ${pm} ${words.join(' ')}`), outLines.join('\n'));
       assert.ok(!outLines.some((line) => line.startsWith('kept ')), `nothing is said to be kept: ${outLines.join('\n')}`);
-      assert.deepEqual(calls.filter((call) => call.cmd === pm), [{ cmd: pm, args: words }]);
+      const invoked = pm === 'npm' ? { cmd: process.execPath, args: [NPM_CLI, ...words] } : { cmd: pm, args: words };
+      assert.deepEqual(calls.filter((call) => call.cmd === invoked.cmd), [invoked]);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
+  }
+});
+
+test('uninstallMain --global --everything runs the npm beside this node for an npm-installed program, never the PATH npm', async () => {
+  // On a machine where the PATH npm is a pnpm shim, `npm uninstall -g` fails and keeps the program (behavior.md, B3).
+  const prefix = path.join(NO_SUCH, 'nvm4w', 'nodejs');
+  const home = await livedInHome();
+  const { spawn, calls } = recordingSpawn();
+  try {
+    const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath: NPM_COPY, npmCli: NPM_CLI }));
+    assert.deepEqual([code, errLines], [0, []]);
+    assert.ok(outLines.includes(`removed the js-harness program: npm uninstall -g --prefix ${prefix} js-harness`), outLines.join('\n'));
+    assert.deepEqual(calls.filter((call) => call.cmd === 'npm'), [], 'the PATH npm runs nothing');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+
+  const failed = await livedInHome();
+  try {
+    const { code, errLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', failed], {}, { spawn: recordingSpawn(1).spawn, platform: 'linux', copyPath: NPM_COPY, npmCli: NPM_CLI }));
+    assert.equal(code, 1);
+    assert.ok(errLines.some((line) => line.startsWith('could not remove the js-harness program: npm exited 1 (ERR_PNPM_SOMETHING); run npm uninstall -g --prefix ')), errLines.join('\n'));
+  } finally {
+    fs.rmSync(failed, { recursive: true, force: true });
   }
 });
 
@@ -937,7 +963,8 @@ test('uninstallMain --global --everything removes no program when the copy that 
     const { code, outLines } = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath }));
     assert.equal(code, 0);
     assert.ok(outLines.includes(`kept the js-harness program: this one is a dependency of ${project}, not a global install`), outLines.join('\n'));
-    assert.deepEqual(calls.filter((call) => call.cmd === 'pnpm' || call.cmd === 'npm'), []);
+    // npm runs as this node and its npm-cli.js, so a call of process.execPath is an npm run too.
+    assert.deepEqual(calls.filter((call) => call.cmd === 'pnpm' || call.cmd === 'npm' || call.cmd === process.execPath), []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -965,8 +992,8 @@ test('uninstallMain --global --everything takes a copy under some other global/<
   const { spawn, calls } = recordingSpawn();
   const prefix = path.join(NO_SUCH, 'global', '2024');
   try {
-    await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath: path.join(prefix, 'node_modules', 'js-harness', 'bin', 'install.mjs') }));
-    assert.deepEqual(calls.filter((call) => call.cmd === 'pnpm' || call.cmd === 'npm'), [{ cmd: 'npm', args: ['uninstall', '-g', '--prefix', prefix, 'js-harness'] }]);
+    await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { spawn, platform: 'linux', copyPath: path.join(prefix, 'node_modules', 'js-harness', 'bin', 'install.mjs'), npmCli: NPM_CLI }));
+    assert.deepEqual(calls.filter((call) => call.cmd === 'pnpm' || call.cmd === process.execPath), [{ cmd: process.execPath, args: [NPM_CLI, 'uninstall', '-g', '--prefix', prefix, 'js-harness'] }]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

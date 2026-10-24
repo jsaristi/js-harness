@@ -390,7 +390,8 @@ memory folder while a pass holds its lock: the line says what releases it.
 `--global --everything` is `--full` and then the rest: the whole `.js-harness` folder of the home
 (the lead's notes, the backups, the throughput records and anything else under it), and the
 js-harness program, removed by the package manager that installed the copy running it (pnpm's
-`remove -g`, or npm's `uninstall -g` with that copy's own prefix). A copy run from a checkout was
+`remove -g`, or npm's `uninstall -g` with that copy's own prefix, run as the npm beside the node that runs js-harness, not
+whatever `npm` is first on PATH, which may be pnpm's shim). A copy run from a checkout was
 installed by no package manager, and one in a project's `node_modules` (or npx's cache) is that
 project's dependency, so the program is kept and the line says why. The program counts as
 removed only once its folder is gone, whatever the manager's exit code. While a gate runs, or the

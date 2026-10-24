@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { npmCliPath } from '../bin/lib/package-manager.mjs';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -13,9 +14,7 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
  * running node, beside `node.exe` on Windows and under `<prefix>/lib/node_modules` elsewhere. */
 export function resolveNpmCli(env = process.env, { execPath = process.execPath, platform = process.platform } = {}) {
   if (env.JS_HARNESS_E2E_NPM_CLI) return env.JS_HARNESS_E2E_NPM_CLI;
-  const nodeDir = path.dirname(execPath);
-  const modules = platform === 'win32' ? path.join(nodeDir, 'node_modules') : path.join(path.dirname(nodeDir), 'lib', 'node_modules');
-  return path.join(modules, 'npm', 'bin', 'npm-cli.js');
+  return npmCliPath(execPath, platform);
 }
 
 export function run(cmd, args, opts = {}) {

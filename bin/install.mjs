@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
+import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmCliOf, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
@@ -747,7 +747,9 @@ function removeEverything(dir, deps) {
   }
   // pnpm acts on its configured global folder; the copy that runs may lie in another one.
   const env = pm === 'pnpm' ? { ...process.env, pnpm_config_global_dir: pnpmGlobalDirOf(copyPath) } : undefined;
-  const ran = runPm(deps.spawn ?? spawnSync, [pm], args, env, platform);
+  // npm runs as the one beside this node: the PATH npm may be pnpm's shim, which refuses `uninstall -g` and keeps the program.
+  const npmCli = pm === 'npm' ? (deps.npmCli ?? npmCliOf()) : null;
+  const ran = runPm(deps.spawn ?? spawnSync, npmCli === null ? [pm] : [process.execPath, npmCli], args, env, platform);
   // A manager can exit 0 having removed nothing (npm, for a prefix that holds no such package): the folder says.
   if (ran.status === 0 && existsSync(root)) {
     console.error(`could not remove the js-harness program: ${pm} exited 0 and ${root} is still there; run ${byHand}`);
