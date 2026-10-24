@@ -54,13 +54,3 @@ export function readTraces(dir, test) {
   }
   return traces;
 }
-
-/** The newest stored trace of `test` in `dir`, or `null` when there is none. */
-export function readTrace(dir, test) {
-  return readTraces(dir, test)[0] ?? null;
-}
-
-/** Writes a passing trace as the tracer does, and removes all but the newest `keep` of a test's traces. */
-export const writeTrace = tracer.writeTrace;
-export const pruneTraces = tracer.pruneTraces;
-export const KEPT_TRACES = tracer.KEPT_TRACES;

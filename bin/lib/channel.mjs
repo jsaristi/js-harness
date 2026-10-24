@@ -13,6 +13,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { endsUnterminated } from './jsonl-tail.mjs';
 import { isSelf, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
 
 export const NOTICE_SCHEMA = 'js-harness.channel-notice/v1';
@@ -34,7 +35,7 @@ export const REPORT_SCHEMA = 'js-harness.channel-report/v1';
  * words given in the orchestrator's chat, with the transcript and the line they are read at), `relieved`
  * (who has the role now), `question` (a question put to him, written before it is asked: its options, what
  * waits on it, and the number it is known by, which is its line's place in the record) and `withdrawn` (a
- * question closed without his answer, said as not his). */
+ * question closed without his answer, said as not his) and `ready` (the pull request it names as `pr` is ready). */
 export const NOTICE_KINDS = ['opened', 'waiting', 'closed', 'note', 'answer', 'relieved', 'question', 'withdrawn', 'ready'];
 
 /** The longest text of a notice, in characters: two or three sentences. A notice says that something
@@ -269,23 +270,6 @@ function answerCopyEntry(entry) {
 /** `text` as it is kept: whole when it has `max` characters or fewer, else cut to `max` with `…` at its end. */
 function cutTo(text, max) {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
-}
-
-/** Whether `file` exists, is not empty and does not end with a line break. */
-function endsUnterminated(file) {
-  let fd;
-  try {
-    fd = fs.openSync(file, 'r');
-    const { size } = fs.fstatSync(fd);
-    if (size === 0) return false;
-    const last = Buffer.alloc(1);
-    fs.readSync(fd, last, 0, 1, size - 1);
-    return last[0] !== 0x0a;
-  } catch {
-    return false;
-  } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-  }
 }
 
 /** Appends `line` to `file` as a line of its own, creating the file and its folder.

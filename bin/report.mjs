@@ -56,7 +56,6 @@ function gitRead(run, cwd, args) {
   return { stdout: String(result.stdout) };
 }
 
-/** What landed on `ref` after `cut`, or `{ error }`. */
 /** What landed on `ref` after the cut, or `{ error }`. After a recorded report that names the commit it read, it is
  * what `ref` gained since that commit, whatever the merges' times: a pull request merged before that report and
  * fetched after it has an older time than the report, and a cut by time would never show it. A commit this clone

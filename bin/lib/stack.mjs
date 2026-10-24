@@ -1,11 +1,8 @@
-// The stack's tools as data, plus read-only, injectable probes for three of their four states:
-// installed (+ version), configured (per host, per project). `outdated` is T2's job — see
-// odd/tasks/stack-doctor.md — so every row here carries `upToDate: 'unknown'` for it to fill.
+// The stack's tools as data, plus read-only, injectable probes for their states: installed (+ version),
+// configured (per host, per project), and outdated (`upToDate`, which a tool's `upToDateFix` sets from the latest version).
 // The Codex row (`codex`, the Codex CLI itself) has `claude` `n/a` (Claude Code has no Codex side any more) and `codex`
-// "the Codex CLI is logged in". `checks` holds what doctor reports
-// that is not a tool: the Claude account check, whose `claude` cell is `ok`, `mismatch` or `unknown`, the
-// remote server check, whose `claude` cell is `ok`, `down`, `unknown` or `n/a`, and the hook commands check, whose
-// `claude` cell is `ok`, `stale`, `unknown` or `n/a`.
+// "the Codex CLI is logged in". `checks` holds what doctor reports that is not a tool: the memory-rules,
+// session-classes, claude-account, remote-server, hook-commands and pnpm-lock checks, each with its state cell and fix.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';

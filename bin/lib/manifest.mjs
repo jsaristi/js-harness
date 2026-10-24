@@ -1059,9 +1059,10 @@ function writeManifest(home, manifest) {
  *    (`recordScheduledTask`, kept the same way in `tasks`) and then the manifest;
  *  - `remote` (`bin/remote.mjs`) reads only `optional` and `tasks`, and when `start --at-login` fails halfway
  *    puts back its own two records and nothing else (`putOptionalRecordBack`, `putTaskRecordBack`);
- *  - `doctor` (`recordedLaunchers` in `bin/lib/stack.mjs`) reads only `optional`, for the login launchers.
- * Nothing else reads the machine manifest (`rg -n "readManifest|installedVersion" bin`, the tests left out,
- * 2026-10-11). */
+ *  - `wake` (`bin/wake.mjs`) reads `optional` through `writeStartupFile` and `removeStartupFile`, for its login launcher;
+ *  - `doctor` reads `optional` for the login launchers (`recordedLaunchers` in `bin/lib/stack.mjs`) and `entries` for
+ *    the hook commands (`recordedHookCommands`);
+ *  - the menu (`bin/tui.mjs`) asks `installedVersion` and shows no copy for `null`. */
 export function recordOptionalFile(home, file, content) {
   const record = { path: file, sha256: sha256(content) };
   return keepRecord(home, 'optional', record, (entry) => entry.path === file);

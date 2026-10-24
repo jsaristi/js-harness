@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ratchet } from './ratchet.mjs';
+import { ratchet } from './ratchet.testkit.mjs';
 
 const LEGACY = { 'a.mjs': 'says "unknown flag"', 'b.mjs': 'prints only the usage' };
 
