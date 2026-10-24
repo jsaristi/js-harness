@@ -6,7 +6,8 @@
 
 /** The host's own figure for an index line (the `consolidate-memory` skill: "under ~150 chars"): a constant with
  * one home, not a rule. Counted in code points. */
-const INDEX_LINE_CHARS = 150;
+export const INDEX_LINE_CHARS = 150;
+export const RULE_TYPES = new Set(['feedback', 'project']);
 
 const MEMORY_FILE = /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/]memory[\\/]([^\\/]+)$/i;
 

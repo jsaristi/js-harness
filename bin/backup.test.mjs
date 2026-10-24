@@ -1268,6 +1268,25 @@ test('backup status names the last success, the last failure and the commits to 
   assert.match(deps.stdout.text, /to push: 1 commits/);
 });
 
+test('the usage names what status prints: the last success and the last failure, not a last run', async (t) => {
+  const { deps } = setup(t);
+
+  assert.equal(await backupMain(['--help'], deps), 0);
+  assert.doesNotMatch(deps.stdout.text, /The last run/);
+  assert.match(deps.stdout.text, /status  The last success, the last failure and why/);
+});
+
+test('backup status says there is no clone when the clone folder is gone, not that nothing is pushed yet', async (t) => {
+  const { deps } = setup(t);
+  fs.rmSync(backupPaths(deps.home).clone, { recursive: true, force: true });
+  deps.stdout = sink();
+
+  assert.equal(await backupMain(['status'], deps), 0);
+
+  assert.match(deps.stdout.text, /to push: unknown \(no clone\)/);
+  assert.doesNotMatch(deps.stdout.text, /no upstream yet/);
+});
+
 // ---- the transcripts backup (odd/tasks/transcripts-backup.md) ------------------------------------------------------
 
 const TREPO = 'jsaristi/js-harness-transcripts-1';

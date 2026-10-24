@@ -223,7 +223,12 @@ export const USAGE =
   'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.\n' +
   '`--prompt codex` is the default in a turn of the gate lock; out of one, a run by hand, every review is asked with `own`, and the command says so when `codex` was given.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
-  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.';
+  'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.\n' +
+  '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.\n' +
+  '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.\n' +
+  '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.\n' +
+  '`--keep-home` leaves the Codex home of the run in place after it.\n' +
+  'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -1660,7 +1665,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
     const patch = git(spawn, root, patchArgs, { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
-      error(`Could not run \`git diff ${from.slice(0, 7)} HEAD\` to know what the review must see, so it was not started and nothing was recorded.`);
+      // The command that ran: the remerge diff of a merge (`rangeDiff`), else the diff of the range.
+      const ran = merge === null ? `git diff ${from.slice(0, 7)} HEAD` : `git diff --no-renames ${merge.auto.slice(0, 7)} ${head.slice(0, 7)}`;
+      error(`Could not run \`${ran}\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
     }
     const expected = patchKeys(patch);
@@ -2056,7 +2063,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (!completed) {
         const reason = result.error?.code === 'ENOBUFS'
           ? `its output exceeded ${REVIEW_MAX_BUFFER / (1024 * 1024)} MiB`
-          : result.error?.code === 'ETIMEDOUT' ? `it ran past ${REVIEW_TIMEOUT_MS / 60000} minutes and was stopped`
+          : result.error?.code === 'ETIMEDOUT' ? `it ran past ${timeoutMs / 60000} minutes and was stopped`
           : result.error?.code === 'EINTR' ? 'it was interrupted and stopped'
           : result.error ? `could not start it: ${result.error.message}`
             : result.status !== 0 ? `it exited ${result.status ?? `on ${result.signal ?? 'a signal'}`}`

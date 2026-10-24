@@ -24,8 +24,8 @@ import { isValidCodexReview } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { autoMaintenanceOff, withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
-// What a review that ran past its declared timeout says, in the words the command uses.
-const RAN_PAST = `ran past ${REVIEW_TIMEOUT_MS / 60000} minutes`;
+// What a review given `timeoutMs: 30` says: the bound it ran past, not the declared one.
+const RAN_PAST_AT_30_MS = `ran past ${30 / 60000} minutes`;
 
 // The tests of this file run as two processes. `node --test` gives each test file one process, and this
 // file's time is git processes started one after another, which made it the longest of the suite and so the
@@ -964,7 +964,9 @@ test('a review that never ends is stopped at the timeout: the tree is killed and
   assert.deepEqual(fake.killed, [4242]);
   assert.equal(child.stdout.destroyed, true, 'the pipe is released, so it cannot keep the process alive');
   assert.equal(unrefed, true, 'the child no longer holds the event loop');
-  assert.match(result.err, new RegExp(RAN_PAST));
+  assert.match(result.err, new RegExp(RAN_PAST_AT_30_MS));
+  // The bound this run was given (30 ms), not the declared one the message used to name.
+  assert.match(result.err, /it ran past 0\.0005 minutes and was stopped/);
   assert.doesNotMatch(result.err, /could not start/);
   assert.equal(wrote(root), false);
 });
@@ -1042,7 +1044,7 @@ test('a tree kill that fails is said in the report of the stopped run, not swall
   const fake = fakeCodex('', { hang: true });
   const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, timeoutMs: 30, killTree: () => { throw new Error('the process snapshot failed (exit 1): CIM is down'); } });
   assert.equal(result.code, 1);
-  assert.match(result.err, new RegExp(RAN_PAST));
+  assert.match(result.err, new RegExp(RAN_PAST_AT_30_MS));
   assert.match(result.err, /process tree could not be killed \(the process snapshot failed.*CIM is down\).*may still be running/);
 });
 
@@ -1490,6 +1492,11 @@ test(`the usage names no session: its flags are those of a review, and its secon
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
+    '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.',
+    '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.',
+    '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
+    '`--keep-home` leaves the Codex home of the run in place after it.',
+    'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.',
   ]);
   assert.ok(loads.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`), loads);
   // Nothing in it names a session to choose, nor says that a review can run on a model of the user's choosing.
@@ -3182,7 +3189,7 @@ test('a review stopped at the timeout is logged as timed out', async () => {
   assert.equal(result.code, 1);
   const logged = onlyRun(root);
   assert.equal(logged.outcome, 'timed-out');
-  assert.equal(logged.reason, `it ${RAN_PAST} and was stopped`);
+  assert.equal(logged.reason, `it ${RAN_PAST_AT_30_MS} and was stopped`);
   assert.equal(wrote(root), false);
 });
 
@@ -3729,7 +3736,7 @@ test('the first part that does not pass stops the run: no later part is started,
       /showed 2 of 6 changed lines of part 1 of 2 of [0-9a-f]{7}\.\.HEAD; nothing was recorded\.\n {2}not read in full: b\.txt \(4 of 4 changed lines missing\)/],
     ['Codex exited with a code of its own', 7, 'failed', (root, base, head) => ({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), answer: { status: 7 } }), /did not complete \(it exited 7\)/],
     ['an answer that cannot be read', 1, 'failed', (root, base, head) => ({ stdout: partShown(root, base, head, 'a.txt', 'b.txt'), said: 'not an answer' }), /the answer of the review is not JSON; no record was written/],
-    ['a timeout', 1, 'timed-out', () => ({ answer: { hang: true } }), new RegExp(RAN_PAST)],
+    ['a timeout', 1, 'timed-out', () => ({ answer: { hang: true } }), /ran past 0.025 minutes and was stopped/],
   ];
   for (const [name, code, outcome, session, said] of failures) {
     const { root, base, head } = makeThreeFileRepo();
@@ -5498,6 +5505,18 @@ test('a merge of a branch the default branch does not hold is reviewed as before
   assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, head, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
+test('a remerge diff git cannot run is named as the command that ran: the diff of the automatic merge against HEAD', async () => {
+  const { root, main } = makeResolvedMergeRepo();
+  const nothing = startsNothing(root);
+  // The remerge diff of a merge is the one run diff that has `--no-renames` and no submodule, numstat or path argument.
+  const remerge = (args) => args[0] === 'diff' && args.includes('--no-renames') && !args.some((a) => a.startsWith('--submodule') || a === '--numstat' || a === '--');
+  const spawn = (command, args, opts) => (command === 'git' && remerge(args) ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
+  const result = await run(['--base', main, '--cwd', root, ...nothing.home], { ...nothing.deps, spawn });
+  assert.equal(result.code, 1, result.err);
+  assert.match(result.err, /Could not run `git diff --no-renames [0-9a-f]{7} [0-9a-f]{7}` to know what the review must see, so it was not started and nothing was recorded\./);
+  nothing.untouched('a remerge diff git cannot run');
+});
+
 /** A branch that merged a stacked base, another branch that holds the remote's default branch, and resolved a
  * conflict in `m.txt` (odd/tasks/gate-first.md, T7): `{ root, base, mine, main, side, head }`. The default branch
  * moved on from `base` (`main`); the stacked base starts at it and has a commit of its own (`side`), with a
@@ -6412,6 +6431,11 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
+    '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.',
+    '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.',
+    '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
+    '`--keep-home` leaves the Codex home of the run in place after it.',
+    'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.',
   ]);
   const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
   // Since T1 of odd/tasks/commands-and-doctor.md a flag named after a seam is refused before anything starts,

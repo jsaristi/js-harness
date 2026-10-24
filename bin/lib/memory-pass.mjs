@@ -119,7 +119,7 @@ export function readLock(stateDir) {
 }
 
 /** What can release the lock `lock` (from `readLock`) of the state folder `stateDir`, as one line: verify or undo for a
- * finished plan, the file itself for one that is not. `uninstall` says the same (`bin/lib/manifest.mjs`). */
+ * finished plan, the file itself for one that is not. `uninstall` says the same (`bin/install.mjs`). */
 export function lockLine(stateDir, lock) {
   if (lock === null) return `the lock of ${stateDir} was released just now; run this again`;
   if (lock.stamp !== null && lock.manifest) return `a memory pass is planned (${lock.stamp}); js-harness memory verify or memory undo ${lock.stamp} releases it`;

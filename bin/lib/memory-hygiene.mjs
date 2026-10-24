@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCitations } from './citations.mjs';
 import { memoryFolderOf, memoryNoteType } from './memory-rules.mjs';
+import { INDEX_LINE_CHARS, RULE_TYPES } from './memory-index-guard.mjs';
 import { RULES } from './rules-data.mjs';
 import { ruleValue } from './rules.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
@@ -16,13 +17,12 @@ export const INDEX_BYTES = ruleValue('memory-index-bytes', 'bytes');
 export const PASS_DAYS = ruleValue('memory-pass-days', 'days');
 /** The host's own figure for an index line (the `consolidate-memory` skill: "under ~150 chars"): a
  * constant with one home, not a rule, as rule-hierarchy settled for host figures. */
-export const LINE_CHARS = 150;
+export const LINE_CHARS = INDEX_LINE_CHARS;
 /** Above this a note is printed as a candidate: notes load on demand, so their size costs nothing per
  * turn, but a long one is usually one that kept its amendments. */
 export const NOTE_BYTES = 3000;
 
 const INDEX = 'MEMORY.md';
-const RULE_TYPES = new Set(['feedback', 'project']);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export { memoryFolderOf };
