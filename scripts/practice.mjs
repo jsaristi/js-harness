@@ -267,6 +267,8 @@ const snapshot = (files) => Object.fromEntries(files.map((file) => [file, conten
 // the practice project, with the practice home as its config and a scratch home for everything else.
 
 const HOST_TIMEOUT_MS = 2 * 60 * 1000;
+// How each answer of the host session ends, so the project's reply check lets it stop in one turn (see `hostLoads`).
+const HOST_CLOSING = 'then a blank line and the line `**Working** — nothing else runs.`, and nothing else.';
 const HOST_COMMON = ['--model', 'claude-haiku-5-5', '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--max-budget-usd', '0.5'];
 // The folders the host's scratch home needs, as `hostEnv` names them.
 const HOST_DIRS = [['AppData', 'Roaming'], ['AppData', 'Local'], ['tmp'], ['.config'], ['.local', 'share'], ['.local', 'state'], ['.cache']];
@@ -355,12 +357,15 @@ function hostLoads(ctx, token) {
   let session;
   try {
     fs.appendFileSync(agents, `\nThe word of this run is ${word}.\n`);
-    const load = call('load', ['-p', 'Reply with the word of this run that your project instructions name, and nothing else.', '--tools', '']);
+    // The project's harness.json turns the reply check on (step reply-hook), which turns back a reply with no state:
+    // an answer without one takes a second turn and loses what was asked, so each answer closes as a reply that check
+    // lets stop does (`HOST_CLOSING`).
+    const load = call('load', ['-p', `Reply with the word of this run that your project instructions name, ${HOST_CLOSING}`, '--tools', '']);
     session = load.init.session_id;
     fs.writeFileSync(agents, original);
-    call('skill', ['-p', 'Invoke the js-harness skill, then quote its line that starts with `js-harness check --push`, and nothing else.', '--resume', session, '--tools', 'Skill', '--allowedTools', 'Skill']);
+    call('skill', ['-p', `Invoke the js-harness skill, then quote its line that starts with \`js-harness check --push\`, ${HOST_CLOSING}`, '--resume', session, '--tools', 'Skill', '--allowedTools', 'Skill']);
     // A sub-agent's start, the rules hook's third event (odd/tasks/rule-hierarchy.md, T16f).
-    call('subagent', ['-p', 'Use the Agent tool once, with a sub-agent whose whole task is to reply ok; then reply done, and nothing else.', '--resume', session, '--tools', 'Agent', '--allowedTools', 'Agent']);
+    call('subagent', ['-p', `Use the Agent tool once, with a sub-agent whose whole task is to reply ok; then reply done, ${HOST_CLOSING}`, '--resume', session, '--tools', 'Agent', '--allowedTools', 'Agent']);
     call('compact', ['-p', '/compact', '--resume', session]);
     ctx.host = { ...hostCost(streams), binary: claude, version };
     const cost = ctx.host;
