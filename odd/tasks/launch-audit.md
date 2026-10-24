@@ -125,6 +125,7 @@ Stage 2 onward; one row per finding, newest last.
 - M11. carried to stage 3. Values restated in prose instead of read from their rule (a scan of the rule values): `AGENTS.md:74` "near 88%" (his wording), `README.md:1381` and `bin/lib/test-run-warning.mjs:6` (gate-log-size), `bin/check.mjs:1605` (sensor-silence), `bin/check.mjs:1772` (gate-wait); and 31 in feature documents, which are history.
 - M12. closed. The reused gate rows on the whole tree at the audit: spec PASS (63 capabilities), budget PASS (1499 of 1500 tokens), rules check PASS.
 - Stage 6, codex-review slice (branch fix/audit-codex, PR 522, commit b4876d5a: shoulds C-b-8, C-b-9, C-b-10, C-b-11, C-b-12): gentle-ai assessed it medium, review not due (under_budget); Codex review of 9fbfe46..b4876d5 recorded, the patch is correct (0.96), no findings. C-b-10/11 took the row's first option: a covered range is advised no skip (a skip with --again would record covered commits as unreviewed).
+- Stage 6, nits sandbox (branch fix/audit-nits-sandbox, commit b08d6726: C-e-7): scripts/sandbox.mjs's installedBinPath joins bin/js-harness.mjs to lib.mjs's globalPackageDir instead of keeping its own layout; its tests pin the same paths on win32, linux and darwin. Built on PR 539's branch, which changes the same file. gentle-ai: not due (medium, under_budget). Codex: correct (0.99).
 
 ## Report of stages 1-2
 Read by sessions 2-4 before they start; the counts are of the tree at the fix slice (`6431cfae`).
