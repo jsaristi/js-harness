@@ -246,7 +246,7 @@ export async function rulesHookMain(argv, {
   stderr = (text) => process.stderr.write(`${text}\n`),
 } = {}) {
   if (argv.length > 0) {
-    stderr(`js-harness rules --hook: unknown argument ${argv[0]}\n${USAGE}`);
+    stderr(`js-harness rules --hook: unknown argument: ${argv[0]}\n${USAGE}`);
     return 2;
   }
   let input;
