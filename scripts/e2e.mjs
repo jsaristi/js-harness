@@ -5,6 +5,7 @@
 // NOT part of `npm run check` — this is slow (spawns two real global installs).
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion, globalPackageDir, nextVersion } from './lib.mjs';
 import { hooksOfHost, hookLabel, hostHooksProblem, uninstalledHostProblem } from './practice-lib.mjs';
 
@@ -17,6 +18,19 @@ const SKILLS = ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols']
 
 function assertThat(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+/** The `--pm` of the upgrade step: node and the npm CLI run through this same node, the real npm CLI and never a PATH
+ * `npm`. `upgrade` splits its `--pm` on whitespace (bin/update.mjs), so the two paths are the value as they are when
+ * neither holds a space. When one does (C:\Program Files\nodejs, the Windows default) they are named, quoted, inside a
+ * wrapper script in `dir`, and the value is the wrapper's path, which must hold no space (tui-walk does the same). */
+export function upgradePm(dir, execPath, npmCli, platform = process.platform) {
+  if (!/\s/.test(execPath) && !/\s/.test(npmCli)) return `${execPath} ${npmCli}`;
+  const file = path.join(dir, platform === 'win32' ? 'npm-e2e.cmd' : 'npm-e2e');
+  if (/\s/.test(file)) throw new Error(`the --pm wrapper would sit in ${dir}, a path with a space, which upgrade cannot hold`);
+  const content = platform === 'win32' ? `@"${execPath}" "${npmCli}" %*\r\n` : `#!/bin/sh\nexec "${execPath}" "${npmCli}" "$@"\n`;
+  fs.writeFileSync(file, content, { mode: 0o755 });
+  return file;
 }
 
 async function main() {
@@ -35,6 +49,7 @@ async function main() {
   const releasesDir = mkTmp('js-harness-e2e-releases-');
   const prefix = mkTmp('js-harness-e2e-prefix-');
   const home = mkTmp('js-harness-e2e-home-');
+  const pmDir = mkTmp('js-harness-e2e-pm-');
   const binPath = path.join(globalPackageDir(prefix), 'bin', 'js-harness.mjs');
   const claudeSettingsPath = path.join(home, '.claude', 'settings.json');
   const codexHooksPath = path.join(home, '.codex', 'hooks.json');
@@ -190,8 +205,8 @@ async function main() {
     });
 
     step('`js-harness upgrade --source` installs ' + TO + ' and re-syncs through it', () => {
-      // A multi-word --pm: run the real npm CLI through this same node, bypassing the pnpm shim.
-      const pm = `${process.execPath} ${npmCli}`;
+      // The real npm CLI through this same node, bypassing the pnpm shim, named by a wrapper (upgradePm).
+      const pm = upgradePm(pmDir, process.execPath, npmCli);
       const result = run(process.execPath, [
         binPath,
         'upgrade',
@@ -251,7 +266,7 @@ async function main() {
       );
     });
   } finally {
-    for (const dir of [staging, pack01Dir, releasesDir, prefix, home]) {
+    for (const dir of [staging, pack01Dir, releasesDir, prefix, home, pmDir]) {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }
@@ -259,4 +274,7 @@ async function main() {
   process.exit(failed ? 1 : 0);
 }
 
-main();
+// Compare real paths, as the `bin/` commands do, so the file can be imported without running the proof.
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
+  main();
+}

@@ -862,6 +862,7 @@ CRLF; whether an install by pnpm from the repository meets it is not measured.
 - Seen: 2026-10-13 — the lead's message to JH 7 at 19:02 (claimed; JH 8's) — `ERR_PNPM_BIN_CRLF`
   from pnpm's pack; the lead's install of that day from GitHub with `pnpm add -g` did complete; a
   `.gitattributes` line with `eol=lf` for `bin/` would be the fix if an install meets it
+- Control: check — scripts/gitattributes.test.mjs — "every file under bin/ has the eol=lf attribute, so a checkout writes it with LF whatever core.autocrlf says" — since 2026-10-23
 
 ### pnpm-update-leaves-lock
 The only road to update the installed command exits 1 on this machine and leaves a lock folder that
