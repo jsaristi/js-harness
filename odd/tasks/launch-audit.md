@@ -195,3 +195,18 @@ Read on `f45e78c2` (the code of `fb9108c0`). Each finding is one line of its fil
   - N3 shared: branch fix/audit-nits-shared, worktree D:/js-harness-worktrees/audit-nits-shared, commit aae06402: C-onboard-2, C-report-1, C-report-2, C-stack-2, C-shared-4, C-shared-8, C-shared-9, C-shared-10, C-shared-13, C-shared-15, C-shared-26, C-shared-27, C-shared-29 (ratchet.mjs -> ratchet.testkit.mjs, risk item 3: an Opus verifier before ready). Not fixed: C-shared-21 (identifyProcesses is imported by bin/remote.test.mjs and process-tree.testkit.mjs, so not dead) and C-shared-22 (shapeFindings' test is the only proof of the shipped profiles' shape). For the review: a failing closeSync in endsUnterminated is now swallowed in channel and codex-reviews, where it threw. Next: reviews, verifier, ledger, push, PR, ready.
   - Not started: N4 install-gate-scripts-docs (S13 C-a-6, C-a-7, C-a-9, C-a-10, C-a-11, B11; S7 C-b-7, C-b-26, C-b-30, C-b-31; S11 C-e-7, C-e-12; S12 C-e-14; S18 B6, B7, C-e-11), after 538-540 land; N5 skill-values (N28, N29, risk item 3), after N3; S3's C-b-17, C-b-18, C-b-27, after 541. Left to the lead: C-e-15 and the six housekeeping rows (B15-B17, B19-B21); C-a-4 waits on his C-a-3.
   - Both nit writers' full check printed a fixed-load warning (103,939 tokens over 100,000); whether it predates the nits is not checked.
+- L23. 2026-10-24 (05:20Z), stage 6 nits closed on this session's side. Of 67 nits:
+  - Landed: 36, in PRs 542 (N1), 543 (N2) and 544 (N3).
+  - Ready, each with Codex and gentle-ai as AGENTS.md says:
+    - 545, check: C-b-17, C-b-18, C-b-27.
+    - 546, install-gate: 11 rows, with an Opus verifier for item 3.
+    - 547, B11.
+    - 548, skill values: N28, N29, with an Opus verifier for item 3; renders byte-identical.
+    - 549, C-e-12 and C-e-14.
+    - 550, C-e-7, stacked on 539.
+  - Closed with no change, each with its evidence in its ledger line:
+    - C-a-7: scripts/release-proof.mjs passes init --home.
+    - C-shared-21 and C-shared-22: not dead.
+  - Left to the lead: C-e-15 and B15-B17, B19-B21.
+  - Waiting on his C-a-3: C-a-4.
+  - So 59 of 67 are fixed (56) or closed (3). With the shoulds (66 of 67, C-e-1 his) and the blockers (14 of 14), nothing of stage 6 that is this session's is left but landing.
