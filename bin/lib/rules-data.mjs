@@ -648,6 +648,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "work-sessions-private-windows",
+    "subject": "the most work sessions open at one time when only Windows is used",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": 3,
+    "unit": "sessions"
+  },
+  {
     "id": "work-sessions-private-wsl",
     "subject": "the most work sessions open at one time in a private repository used with WSL",
     "owner": "sebastian",

@@ -942,6 +942,23 @@
       "by": "session"
     }
   },
+  "work-sessions-private-windows": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "si solo utilizando windows solo 3",
+        "date": "2026-10-24",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 27593
+      }
+    ],
+    "reading": "When only Windows is used the most work sessions open at one time is 3: his words, typed while the session worked (line 27593), split from the one value work-sessions held.",
+    "accepted": "Typed by him, queued while the session worked (line 27593); no question was asked, so there is no tap.",
+    "checked": {
+      "date": "2026-10-24",
+      "by": "command"
+    }
+  },
   "work-sessions-private-wsl": {
     "kind": "words",
     "quotes": [
