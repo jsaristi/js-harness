@@ -360,7 +360,7 @@ proofs and by those tasks.
 ### The permit relay
 
 **Problem:** The host asks the user before some tool calls even in bypass mode, and the session waits in its own window: on 2026-10-17 five sessions waited 12 to 38 hours on such cards while the owner was away.
-**Requirement:** While the orchestrator holds the relay, a permission card of another session reaches it first and waits up to 570 seconds for its explicit allow or deny; with no verdict, no orchestrator, the orchestrator's own card or any failure, the card reaches the user as before. Nothing is allowed by a rule.
+**Requirement:** While the orchestrator holds the relay, a permission card of another session reaches it first and waits up to 570 seconds for its explicit allow or deny; with no verdict, no orchestrator, the orchestrator's own card or any failure, the card reaches the user as before. Nothing is allowed by a rule. Only the session holding the relay gives a verdict, and that is a convention between cooperating sessions, not a credential: the check reads the caller's session id from its environment and the holder's from `lease.json` in plain text, which any process of the user can read and set, and README says so (launch audit C-b-3).
 **Reason:** The owner's order of 2026-10-18 (odd/tasks/held-sessions.md, S8): the orchestrator judges what each card asks and lets the safe ones proceed. The host's `PermissionRequest` hook is the one documented way to answer a card for the user.
 **Proof:** `node --test bin/permit.test.mjs`, `node --test bin/lib/manifest.test.mjs`
 **Discarded:** A hook that allows by a fixed list of safe paths (S7: the owner chose the orchestrator's judgment). Answering a card already on screen: the host gives a session no tool for it.
