@@ -171,7 +171,7 @@ export function reviewScope(files, why) {
 const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 /** `count` things, with `noun` in the singular for one: `1 file`, `2 files`. */
-const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
+export const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
 
 /** What a review left out (the `leftOut` of `reviewScope`) as a person reads it, with no full stop: how
  * many files and changed lines, and why. One kind is said as it is; two are added up, with each in

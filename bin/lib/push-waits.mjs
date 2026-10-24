@@ -3,7 +3,7 @@
 // merge waits for it: on 2026-10-14 the push of pull request 121 waited about 16 minutes behind a measure
 // it did not need (odd/tasks/gate-turn-guards.md, S1).
 import { spawnSync } from 'node:child_process';
-import { checkCodexReviews } from '../check.mjs';
+import { checkCodexReviews } from './codex-review-rows.mjs';
 
 /** The milliseconds git or gh is given for one answer before it is stopped. A gh that hangs on the network or
  * on a credential helper would otherwise hold the gate before any bound of its own applies (Codex,
