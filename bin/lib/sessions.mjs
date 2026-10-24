@@ -2916,7 +2916,7 @@ export function askingRule(personAt, now, { waiting = 1 } = {}) {
 export const ORCHESTRATOR_IS = 'the session that leads this project\'s sessions, where one does: the js-harness-orchestrator skill says how';
 
 export function cutRule() {
-  return 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
+  return 'the user never compacts this session by hand, present or away, so give them nothing to send: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 }
 
 /** `<value> <label>`, or `<label> unavailable: <reason>` for a value that could not be read. */

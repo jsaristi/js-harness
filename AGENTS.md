@@ -69,11 +69,10 @@ A session holds one feature, because the conversation is lost on a new session o
 and only files survive. So every decision made in the conversation is written to the roadmap or
 the feature document and committed on the feature branch in the same session; that record is
 part of the work and needs no separate request. While he is here, say when to cut: a new session
-when a feature closes, a PR merges or a phase starts. He never compacts by hand, here or away:
-near `rule:context-pause` of its window a session writes its state to the feature document and keeps working,
-the host compacts it by itself, and it resumes from the summary checked against that document,
-repeating any open question. A session that stops instead gets its next prompt from the
-orchestrator, never from him. End each reply in one of the five states of `js-harness-protocols`
+when a feature closes, a PR merges or a phase starts. Near `rule:context-pause` of its window a session
+writes its state to the feature document and keeps working; the host compacts it by itself, and it
+resumes from the summary checked against that document. What he is given at that point is the pause
+notice's (`cutRule` in `bin/lib/sessions.mjs`). End each reply in one of the five states of `js-harness-protocols`
 section 2. A planned step he would only say yes to is decided and its cost said, as its section 1
 says. The orchestrator asks a decision with the question tool (`js-harness-orchestrator`); a cut
 carries what he sends, in one code block of only that text, under what it is, where
