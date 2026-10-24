@@ -11,6 +11,7 @@ import path from 'node:path';
 import { channelDir, recordPath, readNotices } from './channel.mjs';
 import { END_BYTES } from './jsonl-tail.mjs';
 import { writeStateFile } from './pause.mjs';
+import { isSessionId } from './session-id.mjs';
 import { roleOfTitle, sameSession, titleRead } from './sessions.mjs';
 
 /** How far back the first look of a session goes: a note older than that, from before the session looked at all,
@@ -20,13 +21,10 @@ const FIRST_LOOK_MS = 60 * 60 * 1000;
 /** The notices one look says at most; the rest are counted, with the record's path. */
 const SAID_MAX = 5;
 
-/** The shape `bin/resume.mjs` accepts for a session id, since the id becomes a file name. */
-const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/;
-
 /** The state of a session's inbox: `<home>/.js-harness/channel/inbox/<sessionId>.json`, inside the channel's folder,
  * which `uninstall` removes whole. A session id that is not of the shape of one throws. */
 export function inboxStatePath(home, sessionId) {
-  if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) throw new TypeError(`not a session id: ${JSON.stringify(sessionId)}`);
+  if (!isSessionId(sessionId)) throw new TypeError(`not a session id: ${JSON.stringify(sessionId)}`);
   return path.join(channelDir(home), 'inbox', `${sessionId}.json`);
 }
 

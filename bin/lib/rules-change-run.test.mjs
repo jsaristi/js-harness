@@ -224,6 +224,16 @@ test('his words are read from the transcript and stored with a check by the comm
   assert.match(checked.out, /source checked/);
 });
 
+test('a session id of seven characters names no transcript, so his words of it are refused', async () => {
+  const repo = repository();
+  const session = 'abc1234';
+  write(path.join(repo.claude, 'projects', repo.slug), `${session}.jsonl`, `${JSON.stringify({ type: 'user', origin: { kind: 'human' }, timestamp: '2026-10-15T17:00:00.000Z', message: { role: 'user', content: 'La espera queda en treinta minutos' } })}\n`);
+  const source = { kind: 'words', quotes: [{ session, line: 1, excerpt: 'treinta minutos' }], reading: 'thirty minutes', accepted: 'he typed it' };
+  const result = await change(repo, ['gate-wait'], { value: 30, source });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /no transcript "abc1234"/);
+});
+
 test('a failed rename puts the three files back and appends nothing', async () => {
   const repo = repository();
   const before = snapshot(repo);
