@@ -11,6 +11,7 @@ import { recordPath } from '../bin/lib/channel.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
 import { OPENING_TOOLS as GUARD_OPENING_TOOLS } from '../bin/lib/guard.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
+import { agentsTemplate } from '../bin/lib/project.mjs';
 
 // No test here starts a process, reads the clock or touches the disk: every fact is handed in, and the
 // platform is a parameter, so the Windows and the POSIX behaviour are both proven on any machine.
@@ -1276,8 +1277,8 @@ const TEMPLATE = [
   'Every claim is checked.',
   '',
   '## Working with the owner',
-  'A reply ends with one of five states: working,',
-  'decision, question, cut, or finished.',
+  'A reply ends in one of the five states of',
+  '`js-harness-protocols` section 2.',
   '',
 ].join('\n');
 const TEMPLATE_RIGHT = { agentsText: TEMPLATE, template: TEMPLATE, tokens: 600, budget: 1500 };
@@ -1291,6 +1292,11 @@ test('templateLinesProblem finds nothing wrong with the template, as init wrote 
   assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, tokens: 750 }), null);
 });
 
+test("templateLinesProblem finds the five states in the template init writes today, so the step and the template agree", () => {
+  const template = agentsTemplate('project');
+  assert.equal(templateLinesProblem({ agentsText: template, template, tokens: 0, budget: 1500 }), null);
+});
+
 test('templateLinesProblem names a project with no AGENTS.md, and one whose AGENTS.md is not the template', () => {
   assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: undefined }), 'the project has no AGENTS.md after js-harness init');
   assert.match(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: `${TEMPLATE}more\n` }), /^the AGENTS\.md js-harness init wrote is not this candidate's template/);
@@ -1299,9 +1305,9 @@ test('templateLinesProblem names a project with no AGENTS.md, and one whose AGEN
 test('templateLinesProblem names a missing section, the missing five states, and a template over half the budget', () => {
   const without = TEMPLATE.replace('## Working with the owner\n', '');
   assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: without, template: without }), 'the template js-harness init wrote has no section "Working with the owner"');
-  const stateless = TEMPLATE.replace('one of five states', 'a state');
+  const stateless = TEMPLATE.replace('one of the five states', 'a state');
   assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: stateless, template: stateless }), 'the template js-harness init wrote does not say that a reply ends with one of five states');
-  const four = TEMPLATE.replace('one of five states', 'one of four states');
+  const four = TEMPLATE.replace('one of the five states', 'one of the four states');
   assert.equal(templateLinesProblem({ ...TEMPLATE_RIGHT, agentsText: four, template: four }), 'the template js-harness init wrote does not say that a reply ends with one of five states', 'a template of the four states before the question is out of date');
   assert.equal(
     templateLinesProblem({ ...TEMPLATE_RIGHT, tokens: 751 }),

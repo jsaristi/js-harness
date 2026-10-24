@@ -51,3 +51,13 @@ test('setup makes the project commit with no git identity on the machine', { ski
     fs.rmSync(sandbox, { recursive: true, force: true });
   }
 });
+
+// `run` commits in the project too, and the whole run cannot be a unit test (it packs and installs with npm), so the
+// source is read: every git call that commits names the practice's identity, as setup's does (the T9 re-check found
+// `commitWithRows` without it, which failed `commit-passes` on a machine with no identity).
+test('every commit the practice makes names its own identity', () => {
+  const source = fs.readFileSync(new URL('./practice.mjs', import.meta.url), 'utf8');
+  const commits = source.split('\n').filter((line) => /\bgit\(.*'commit'/.test(line));
+  assert.ok(commits.length >= 5, `expected the practice's commits, found ${commits.length}`);
+  for (const line of commits) assert.match(line, /\.\.\.GIT_IDENTITY, 'commit'/, line.trim());
+});
