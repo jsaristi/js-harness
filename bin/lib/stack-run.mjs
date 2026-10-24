@@ -105,6 +105,15 @@ export function appliesOf(row, { home, spawn, platform, env }) {
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/** The undo of `record` as a person runs it by hand: its words, and the environment it was given (a prefix's home, a
+ * scratch home), a `PATH` as what goes first on it, since without them it reaches the default install. */
+function shownUndo(record, platform) {
+  const vars = Object.entries(record.env ?? {}).map(([name, value]) => (name === 'PATH' ? `${value} first on the PATH` : `${name}=${value}`));
+  const command = shownCommand(record.undo, platform);
+  if (vars.length === 0) return command;
+  return `${command}, with ${vars.length === 1 ? vars[0] : `${vars.slice(0, -1).join(', ')} and ${vars.at(-1)}`}`;
+}
+
 /** Undoes the records of `stack install`, the last run first (D7), as `{ undone, kept, failedRecords }`. Each is
  * probed first: a tool already gone loses its record (`gone`); one whose undo no longer applies (he upgraded it, or
  * registered it again with another entry) is his, kept and named, and loses its record (`changed`); else its undo is
@@ -112,7 +121,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  * it (`failed`). A record whose tool answers but cannot be read (`unreadable`) keeps its record untouched, and so does
  * the Codex CLI while an undo of a registration in Codex failed (`needed`), since that undo needs it. A record whose
  * command never got as far as reading back (`applies` is `null`) cannot tell what it left from a later install of his
- * own, so its undo is named, never run, and its record dropped (`unread`; T7, gentle-ai R1-001). `failedRecords`
+ * own, so its undo is named, never run, and its record dropped (`unread`; T7, gentle-ai R1-001); one in Codex keeps
+ * the Codex CLI too (`needed`), so that undo can still run. `failedRecords`
  * keeps the order they were installed in. */
 export function undoStack(records, { home, spawn = realSpawn, platform = process.platform, env = process.env, log = () => {} }) {
   const undone = [];
@@ -122,10 +132,12 @@ export function undoStack(records, { home, spawn = realSpawn, platform = process
     kept.push(entry);
     failed.add(record);
   };
+  const leftUnread = new Set();
+  const inCodex = (set) => [...set].some((other) => other.kind === 'registration' && other.dimension === 'codex');
   for (const record of [...records].reverse()) {
     const key = { tool: record.tool, dimension: record.dimension };
-    if (record.kind === 'package' && record.tool === 'codex' && [...failed].some((other) => other.kind === 'registration' && other.dimension === 'codex')) {
-      keep(record, { ...key, reason: 'needed', why: 'its undo of a registration in Codex failed, and needs it' });
+    if (record.kind === 'package' && record.tool === 'codex' && (inCodex(failed) || inCodex(leftUnread))) {
+      keep(record, { ...key, reason: 'needed', why: inCodex(failed) ? 'its undo of a registration in Codex failed, and needs it' : 'the undo of a registration in Codex left to you needs it' });
       continue;
     }
     const childEnv = withEnv(env, record.env, platform);
@@ -139,7 +151,8 @@ export function undoStack(records, { home, spawn = realSpawn, platform = process
       continue;
     }
     if (record.applies === null) {
-      kept.push({ ...key, reason: 'unread', undo: shownCommand(record.undo, platform) });
+      kept.push({ ...key, reason: 'unread', undo: shownUndo(record, platform) });
+      leftUnread.add(record);
       continue;
     }
     if (!same(now.value, record.applies)) {
