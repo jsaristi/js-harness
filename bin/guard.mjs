@@ -47,7 +47,7 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  the rules declare it), a start_session titled otherwise than <code> <n> · <purpose>, naming the next free\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
-  + '  does, a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
+  + '  does (where the rules declare terminal-note), a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md), that leaves a feedback note\n'
   + '  of a memory folder naming no home of its rule in the repository (where the rules declare memory-feedback-home),\n'
   + '  or that puts a line in a Markdown\n'
@@ -119,9 +119,9 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
   const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
-  if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command);
-  if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
+  if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
+  if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
   if (tool === SESSION_TOOL) {
     const root = rootOf();

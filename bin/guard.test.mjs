@@ -60,6 +60,11 @@ test('a command typed into his terminal is denied without its note at the end, a
   assert.deepEqual(await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: noted }), { code: 0, out: '', err: '' });
 });
 
+test('a command typed into the terminal of a project that does not declare the rule terminal-note passes with no note', async () => {
+  const bare = { tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: { command: 'npm test' } };
+  assert.deepEqual(await hook(bare, { rulesText: null }), { code: 0, out: '', err: '' });
+});
+
 test('an Agent call on a model no rule gives is denied in this repository, and one on an alias passes', async () => {
   const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet' } });
   assert.equal(refused.code, 0);

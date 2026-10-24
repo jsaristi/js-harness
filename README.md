@@ -1436,7 +1436,8 @@ its channel and openings, which `js-harness sessions --next-number` also prints,
 the project declares none (a proposal started by its `proposal_id` carries no title and passes); a message whose stamped hour, after its label or first before it, is more than a minute off the clock; a command typed into the user's Terminal panel that does not
 end with a note saying what it does, `<command>; Write-Host 'NOTE: <what it does>'` (`echo` in an
 SSH host's shell), four words or more, so the user reads it beside the command where it runs and
-learns from it (his request of 2026-10-19); a shell command with backticks
+learns from it (his request of 2026-10-19), where the rule
+`terminal-note` is declared; a shell command with backticks
 inside double quotes, which bash runs as commands; a recursive `rm` or an `rmdir` of a drive's root or a
 folder at its top, which the host holds for the user even in bypass mode, with where to put such a folder
 instead (below the project's worktrees folder, or the session's scratchpad); a gentle-ai review
