@@ -77,7 +77,7 @@ const queueRepo = repoTemplate((top) => {
 const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: passive', headRefOid: head, headRefName: branch, ...over });
 
 /** A runner that runs git for real and answers gh with `prs`, as GitHub does: `gh pr list --base <b>` lists the pull
- * requests based on b only. `gh.view()` answers `gh repo view`, `gh.edit(args)` answers `gh pr edit`, each a
+ * requests based on b only, and `--limit <n>` the first n of them (`prs` in GitHub's order, newest first). `gh.view()` answers `gh repo view`, `gh.edit(args)` answers `gh pr edit`, each a
  * `{ status, stdout, stderr }`; the calls it saw. */
 function runner(prs, gh = {}) {
   const calls = [];
@@ -86,7 +86,8 @@ function runner(prs, gh = {}) {
     if (command === 'git') return spawnSync(command, args, options);
     if (command === 'gh' && args[0] === 'pr' && args[1] === 'list') {
       const base = args.includes('--base') ? args[args.indexOf('--base') + 1] : null;
-      return { status: 0, stdout: JSON.stringify(base ? prs.filter((one) => one.baseRefName === base) : prs) };
+      const limit = args.includes('--limit') ? Number(args[args.indexOf('--limit') + 1]) : Infinity;
+      return { status: 0, stdout: JSON.stringify((base ? prs.filter((one) => one.baseRefName === base) : prs).slice(0, limit)) };
     }
     if (command === 'gh' && args[0] === 'repo' && args[1] === 'view' && gh.view) return gh.view(args);
     if (command === 'gh' && args[0] === 'pr' && args[1] === 'edit' && gh.edit) return gh.edit(args);
@@ -308,6 +309,19 @@ test('--land: an open pull request based on a branch that just landed is retarge
   assert.ok(calls.includes('gh pr edit 2 --base main'), calls.join('\n'));
   assert.equal(calls.filter((line) => line.startsWith('gh pr edit')).length, 1, 'only the stacked pull request is edited');
   assert.ok(out.includes('PR 2 retargeted from feat/a to main.'), out.join('\n'));
+});
+
+// Codex review of eed429b, P2: one listing of every open pull request stops at its limit, so a stacked one older than
+// the newest hundred was never retargeted. Each landed branch is asked for the pull requests based on it.
+test('--land: a stacked pull request older than a hundred newer open ones is still retargeted (C-b-4)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const stacked = stackOn(root, 'feat/a', 'feat/s');
+  const newer = Array.from({ length: 100 }, (_, i) => pr(300 + i, `other/${i}`, heads['feat/b'], { baseRefName: `other/base-${i}` }));
+  const prs = [...newer, pr(2, 'feat/s', stacked, { baseRefName: 'feat/a' }), pr(1, 'feat/a', heads['feat/a'])];
+  const { code, out, calls } = await land(root, prs, { gh: { edit: () => ({ status: 0, stdout: '', stderr: '' }) } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(calls.includes('gh pr edit 2 --base main'), calls.join('\n'));
+  assert.equal(calls.filter((line) => line.startsWith('gh pr edit')).length, 1, 'only the stacked pull request is edited');
 });
 
 test('--land: an open pull request whose base did not land is not touched (C-b-4)', async () => {

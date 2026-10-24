@@ -86,6 +86,8 @@ landed it; it asks about no pull request, moves nothing, writes no record and ex
 list the worktrees.`;
 
 const TIMEOUT_MS = 60_000;
+// The open pull requests one landed branch has based on it that a land retargets; gh pages up to this many itself.
+const RETARGET_LIMIT = 1000;
 
 /** One land's record (odd/tasks/land-unattended.md, Design 4, B2), filled while the land runs and written
  * once as it ends: what the throughput command measures lands by. `file` is set only by a land that is not a
@@ -526,25 +528,29 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
  * those: a pull request whose base did not land is left as it is. One line each; a retarget gh refuses is named with
  * its reason and changes no exit, since the land has happened (odd/tasks/merge-queue.md, C-b-4). */
 function retargetStacked({ run, cwd, defaultBranch, landedPrs, stdout }) {
-  const landedBranches = new Set(landedPrs.map((pr) => pr.headRefName));
   const landedNumbers = new Set(landedPrs.map((pr) => pr.number));
-  const listed = answer(run, 'gh', ['pr', 'list', '--state', 'open', '--limit', '100', '--json', 'number,baseRefName'], cwd);
-  let open = null;
-  try {
-    open = JSON.parse(listed.out);
-  } catch {
-    open = null;
-  }
-  if (!listed.ok || !Array.isArray(open)) {
-    stdout(`Could not list the open pull requests to retarget them (${listed.err.split('\n')[0] || 'gh gave no reason'}): the stacked ones stay where they are.`);
-    return;
-  }
-  for (const pr of open) {
-    // A pull request this land merged is GitHub's to close, whatever its base was: never edited here.
-    if (landedNumbers.has(pr.number) || !landedBranches.has(pr.baseRefName)) continue;
-    const edit = answer(run, 'gh', ['pr', 'edit', String(pr.number), '--base', defaultBranch], cwd);
-    if (edit.ok) stdout(`PR ${pr.number} retargeted from ${pr.baseRefName} to ${defaultBranch}.`);
-    else stdout(`Could not retarget PR ${pr.number} to ${defaultBranch} (${edit.err.split('\n')[0] || 'gh gave no reason'}): it stays on ${pr.baseRefName} until it is retargeted by hand.`);
+  // Each landed branch is asked for the pull requests based on it: one listing of every open pull request stops at its
+  // limit, and a stacked one past it was never retargeted (Codex, eed429b). A listing that fills its limit is said.
+  for (const branch of new Set(landedPrs.map((pr) => pr.headRefName))) {
+    const listed = answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', branch, '--limit', String(RETARGET_LIMIT), '--json', 'number,baseRefName'], cwd);
+    let open = null;
+    try {
+      open = JSON.parse(listed.out);
+    } catch {
+      open = null;
+    }
+    if (!listed.ok || !Array.isArray(open)) {
+      stdout(`Could not list the open pull requests based on ${branch} to retarget them (${listed.err.split('\n')[0] || 'gh gave no reason'}): they stay where they are.`);
+      continue;
+    }
+    if (open.length >= RETARGET_LIMIT) stdout(`${branch} has ${RETARGET_LIMIT} or more open pull requests based on it: the first ${RETARGET_LIMIT} are retargeted, the rest stay on ${branch}.`);
+    for (const pr of open) {
+      // A pull request this land merged is GitHub's to close, whatever its base was: never edited here.
+      if (landedNumbers.has(pr.number) || pr.baseRefName !== branch) continue;
+      const edit = answer(run, 'gh', ['pr', 'edit', String(pr.number), '--base', defaultBranch], cwd);
+      if (edit.ok) stdout(`PR ${pr.number} retargeted from ${pr.baseRefName} to ${defaultBranch}.`);
+      else stdout(`Could not retarget PR ${pr.number} to ${defaultBranch} (${edit.err.split('\n')[0] || 'gh gave no reason'}): it stays on ${pr.baseRefName} until it is retargeted by hand.`);
+    }
   }
 }
 
