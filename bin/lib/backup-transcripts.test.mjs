@@ -114,6 +114,10 @@ test('copyTranscripts writes each file whole or in parts with a manifest, and a 
   assert.equal(manifest.files[1].parts[0].path, storedPath('D--p/small.jsonl'));
   assert.equal(fs.readFileSync(path.join(clone, '.gitattributes'), 'utf8'), '* -text\n');
   assert.ok(fs.existsSync(path.join(clone, 'RESTORE.md')));
+  // The steps run the installed js-harness, from any folder, as the memory repository's RESTORE.md does.
+  const steps = fs.readFileSync(path.join(clone, 'RESTORE.md'), 'utf8');
+  assert.ok(steps.includes('js-harness backup restore --transcripts <this repository\'s URL>'), steps);
+  assert.ok(!steps.includes('node bin/js-harness.mjs'), steps);
 
   assert.equal(verifyTranscripts(clone).ok, true);
   assert.match(verifyTranscripts(clone).lines.join('\n'), /ok transcripts: 3 of 3 files byte for byte/);
