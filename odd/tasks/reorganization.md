@@ -103,7 +103,7 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   `bin/lib/source.testkit.mjs` holds the recursive scan and the two parses the three convention tests share;
   `evals/suite.mjs` reads the home with `harnessHome`. Each rule RED once in a scratch clone, then GREEN (L7).
 - [x] T8 (kind: verify) S12 — gentle-ai on the commit, Codex over the slice (L8), the pull request and the ready notice.
-- [ ] T9 (kind: docs) S12 — after slice 3 lands: `node scripts/inventory.mjs --write` in its own slice; the check exits 0.
+- [x] T9 (kind: docs) S12 — after slice 3 lands: `node scripts/inventory.mjs --write` in its own slice; the check exits 0 (L9).
 
 ## Log
 - L1. 2026-10-24, the lead (06:54): "Reorg slice 1 landed (PR 564, main 868f5eca): every JS_HARNESS_HOME read now goes
@@ -181,3 +181,12 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   - gentle-ai: 957b762a assessed medium, review not due (under_budget); the Stop hook offered it, its read-only status was run and nothing started.
   - Codex reviewed bf4b2b9a..957b762a in 1 part: correct (0.9), no findings, 79,788 input tokens; the record is in the machine's review log.
   - Next step: push the branch, open the pull request, send the ready notice; the lead lands it. Then T9, the inventory rewrite, in its own slice.
+- L9. 2026-10-24, the lead (08:20): "PR 566 (reorg slice 3) is on main as b32a4e0. Next, the inventory --write docs
+  slice: branch from origin/main and run `node scripts/inventory.mjs --write` so that the inventory check exits 0. Take
+  only what it writes, and record the gentle-ai and Codex lines on odd/tasks/reorganization.md. Then open the pull
+  request and send the ready notice." On b32a4e07 the check exited 1 with 34 missing rows and 1 stale
+  (`bin/lib/ratchet.mjs`, now `ratchet.testkit.mjs`); `--write` added the 34 and dropped the 1, 867 rows, and the check
+  then exits 0 with 0 findings. Commit 0fc3cb37 holds only `odd/tasks/launch-audit/inventory.tsv`, 35 changed lines.
+  - gentle-ai: 0fc3cb37 assessed medium, review not due (under_budget).
+  - Codex: nothing to review, since b32a4e07..0fc3cb37 changes no file a review reads; nothing was started or recorded.
+  - Next step: push the branch, open the pull request, send the ready notice; the lead lands it. The reorganization's slices are then all on main.
