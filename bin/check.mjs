@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
+import { VERSION_TAG_REF } from './lib/version.mjs';
 import { fixedLoadRow } from './lib/fixed-load.mjs';
 import { discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
@@ -316,7 +317,7 @@ const pushSide = (base, head) => ({
  * whose manifest says another version (bin/update.mjs). No row for any other ref, a tag such as `vendor-snapshot`
  * included: only a version tag is a release. */
 function checkTagRow(cwd, { ref, head = 'HEAD', spawn = spawnSync } = {}) {
-  const tagged = /^refs\/tags\/v(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?)$/.exec(ref ?? '');
+  const tagged = VERSION_TAG_REF.exec(ref ?? '');
   if (!tagged) return [];
   const version = tagged[1];
   const tag = `v${version}`;

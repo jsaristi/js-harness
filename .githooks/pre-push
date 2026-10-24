@@ -25,5 +25,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   esac
   # The check gets /dev/null: a child that inherits stdin would read the rest of the ref list.
   node "$root/bin/check.mjs" --push --remote "$1" --head "$local_sha" $ref_flag < /dev/null || status=1
+  # A version tag is a release: its commit needs one whole practice pass, the host session included (docs/SPEC.md, "A host loads what was installed").
+  case "$remote_ref" in
+    refs/tags/v*) node "$root/scripts/release-gate.mjs" --ref "$remote_ref" --head "$local_sha" < /dev/null || status=1 ;;
+  esac
 done
 exit $status

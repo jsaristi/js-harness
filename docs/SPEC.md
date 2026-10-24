@@ -558,11 +558,11 @@ proofs and by those tasks.
 ### A host loads what was installed
 
 **Problem:** The practice journey installed the harness into a stand-in home and a small project, committed and uninstalled, but started no host session, so nothing proved that Claude Code loads the skills, `AGENTS.md` and the hook entries it was given (defect f of 2026-10-13). A broken hook entry or an unread skill would pass every other check.
-**Requirement:** Before a release, one run of the journey starts a real host session in the practice project, under a home of its own, and shows from the host's own stream that it lists both installed skills, answers a word only `AGENTS.md` holds with no file tools, runs every session-start and after-tool hook entry with the practice copy of the command, runs the rules hook at a turn, a compaction and a sub-agent's start, and leaves no trace in the real home. A host that cannot answer (a cap, a login, a timeout) is told apart from a fault of the harness, and the spend of every call is recorded.
+**Requirement:** Before a release, one run of the journey starts a real host session in the practice project, under a home of its own, and shows from the host's own stream that it lists both installed skills, answers a word only `AGENTS.md` holds with no file tools, runs every session-start and after-tool hook entry with the practice copy of the command, runs the rules hook at a turn, a compaction and a sub-agent's start, and leaves no trace in the real home. A host that cannot answer (a cap, a login, a timeout) is told apart from a fault of the harness, and the spend of every call is recorded. The push of a version tag is refused without a whole pass of that run on the tagged commit (every step, the host session included, on a clean checkout of that commit): the pre-push hook runs `scripts/release-gate.mjs` for a `refs/tags/v*` ref, and the practice folder is named by `JS_HARNESS_PRACTICE_ROOT`, with no default.
 **Reason:** Every other check reads files; only a host session proves the host reads them. It spends a model, so it is small (four calls on the cheapest model) and can be turned off.
-**Proof:** `node --test scripts/practice-host.test.mjs`
+**Proof:** `node --test scripts/practice-host.test.mjs`, `node --test scripts/practice-lib.test.mjs`, `node --test scripts/release-gate.test.mjs`, `node --test bin/pre-push-hook.test.mjs`
 **Discarded:** Telling the hooks apart by their command: the stream carries none. Proving the sandbox by a new projects folder: an earlier session leaves one. The model alias: it may resolve to an older model, so the model is named. Not proven: that Codex loads its hooks and skills.
-**Today:** `scripts/practice.mjs`, `scripts/practice-lib.mjs`
+**Today:** `scripts/practice.mjs`, `scripts/practice-lib.mjs`, `scripts/release-gate.mjs`, `.githooks/pre-push`
 
 ### The reply check
 

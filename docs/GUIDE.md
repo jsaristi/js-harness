@@ -16,7 +16,7 @@ Lost at any point? `js-harness <command> --help` prints that command's usage and
 
 ## Install
 
-You need Node 22 or newer and git. The repository is public on GitHub, and the install reads it from there.
+You need Node 24 or newer and git. The repository is public on GitHub, and the install reads it from there.
 
 | Package manager | Command |
 |---|---|

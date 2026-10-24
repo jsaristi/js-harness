@@ -849,6 +849,60 @@ export function recordLine({ date, candidate, steps, node, platform, journey = J
   });
 }
 
+// ---- the release -----------------------------------------------------------------------------------------------------
+
+/** Whether the sha `recorded`, as a record line keeps it (`git rev-parse --short`), names the full sha `commit`. A
+ * prefix must be at least seven characters: git's own default for a short sha, and a shorter one would name too many
+ * commits to be proof of one. Lower case is compared as lower case, since git prints hex in either. */
+const namesCommit = (recorded, commit) => typeof recorded === 'string'
+  && /^[0-9a-f]{7,40}$/i.test(recorded)
+  && commit.toLowerCase().startsWith(recorded.toLowerCase());
+
+/** What keeps one run of a commit from being the proof of its release, as a list of short entries; empty when the run
+ * is a whole pass of the journey on a clean candidate. The host session is named apart from the rest: a release needs
+ * its pass, and a run that left it out says so in `left` (`run --no-host`), so it is never read as a pass. */
+function releaseProblems(line) {
+  const problems = [];
+  const left = Array.isArray(line.left) ? line.left : [];
+  const steps = Array.isArray(line.steps) ? line.steps : [];
+  if (line.candidate?.dirty !== false) problems.push('a dirty candidate: the tree had changes that were not committed, so the run proved more than the commit');
+  if (left.length > 0) problems.push(`steps left out: ${left.join(', ')}`);
+  const failed = steps.filter((step) => step.ok !== true).map(({ id }) => id);
+  if (failed.length > 0) problems.push(`failed: ${failed.join(', ')}`);
+  const hostPassed = steps.some(({ id, ok }) => id === HOST_STEP && ok === true);
+  if (!hostPassed && !left.includes(HOST_STEP) && !failed.includes(HOST_STEP)) problems.push(`${HOST_STEP} did not run`);
+  if (problems.length === 0 && line.ok !== true) problems.push('the run is not a whole pass of the journey');
+  return problems;
+}
+
+/** Whether the practice record, `recordText` as the file holds it (or `null` when there is no file), proves the release
+ * of the full sha `commit`. The proof is one line of a whole pass of the journey, the host session included, on a clean
+ * candidate, whose commit is `commit`; any such line stands, so a later run that was refused does not undo an earlier
+ * pass. A line that does not parse is an append that a crash cut short, and counts for nothing.
+ *
+ * Returns `{ ok: true, line }` for a release, or `{ ok: false, reason }` where `reason` says what is missing: no record, no
+ * run of the commit, or the problems of its last run (`releaseProblems`). The commit is read here, not in the caller's
+ * shell, so an annotated tag must be peeled to its commit before it is handed in. */
+export function releasePracticeVerdict(recordText, commit) {
+  if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) return { ok: false, reason: 'the tagged commit is not a full sha, so no run of it can be read' };
+  const short = commit.slice(0, 7);
+  const lines = [];
+  for (const text of String(recordText ?? '').split(/\r?\n/)) {
+    if (text.trim() === '') continue;
+    try {
+      lines.push(JSON.parse(text));
+    } catch {
+      // A torn line: it counts for nothing, and the lines around it still do.
+    }
+  }
+  if (lines.length === 0) return { ok: false, reason: 'no record: the practice record is missing or holds no run' };
+  const mine = lines.filter((line) => namesCommit(line?.candidate?.commit, commit));
+  if (mine.length === 0) return { ok: false, reason: `no run of ${short} in the record` };
+  const passing = mine.find((line) => releaseProblems(line).length === 0);
+  if (passing !== undefined) return { ok: true, line: passing };
+  return { ok: false, reason: `no full pass of ${short}: its last run has ${releaseProblems(mine[mine.length - 1]).join('; ')}` };
+}
+
 // ---- the arguments ---------------------------------------------------------------------------------------------------
 
 export const USAGE = `usage:
