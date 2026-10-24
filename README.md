@@ -1289,9 +1289,15 @@ The hook records the request, tells the orchestrator by a `permit <id>` note in 
 570 seconds for a verdict. An allow lets the call run; a deny refuses it with the orchestrator's reason, which the
 session reads. With no verdict in time, with no orchestrator holding the relay, for the orchestrator's own cards,
 or on any failure, the hook answers nothing and the card reaches the user as before. Nothing is allowed by a rule:
-only by the orchestrator's verdict, and a `deny` rule in the settings still wins over an allow. Only the session
-holding the relay gives a verdict, never the session that asks; a lease another session holds is replaced or ended
-only with `--take-over`, as a new orchestrator does. Requests, verdicts,
+only by the orchestrator's verdict, and a `deny` rule in the settings still wins over an allow. `allow` and `deny`
+answer only when the session that runs them is the one holding the relay, never the session that asks; a lease
+another session holds is replaced or ended only with `--take-over`, as a new orchestrator does.
+
+That check is a convention between cooperating sessions, not a credential. It compares the caller's
+`CLAUDE_CODE_SESSION_ID` with the session `lease.json` names in plain text, and every process of the user can read
+that file and set that variable, so any of them can give a verdict. No local secret would change this: what one
+of the user's processes can write, any other can read. The relay keeps cooperating sessions from answering each
+other's cards by mistake; it does not hold off a process that means to. Requests, verdicts,
 the lease and `log.jsonl`, one line per outcome, live under `~/.js-harness/channel/permits/<project>/`, which
 `uninstall` removes with the channel.
 
