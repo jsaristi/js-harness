@@ -38,11 +38,14 @@
 // allow-list is `--allow <file>`, a JSON array of `{ kind, location, why }`; the default is
 // `odd/tasks/launch-audit/allow/exports.json`, and a missing default is an empty list. A finding whose kind and
 // location match an entry is counted as allowed and not printed. Each finding prints as `<kind>  <location>
-// <detail>` (two spaces between the fields), then `<n> findings, <k> allowed`; `--json` prints one object,
-// `{ "findings": [...], "allowed": <k> }`, instead.
+// <detail>` (two spaces between the fields), then `<n> findings, <k> allowed`, and `, <s> test-only (info)` when
+// there are any; `--json` prints one object, `{ "findings": [...], "allowed": <k> }`, instead.
 //
-// Exits: 0 no finding beyond the allow-list; 1 findings; 2 a usage error (an unknown argument prints
-// `unknown argument: <token>` and then the usage) or a repository or allow-list it cannot read.
+// A `test-only-export` is a seam, not a failure: the launch audit's areas judged each one so (its M4), so it is
+// printed and counted as info, and `<n>` counts only the other kinds.
+//
+// Exits: 0 no finding beyond the allow-list but test-only ones; 1 findings; 2 a usage error (an unknown argument
+// prints `unknown argument: <token>` and then the usage) or a repository or allow-list it cannot read.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -50,6 +53,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const USAGE = 'usage: node scripts/audit-exports.mjs [--allow <file>] [--json] [--cwd <repo>]';
 const DEFAULT_ALLOW = 'odd/tasks/launch-audit/allow/exports.json';
+// The kind that is printed and counted as info, never as a failure.
+const INFO_KIND = 'test-only-export';
 const NO_IMPORTER = 'no file imports it';
 const OWN_USE = 'used only inside its own module, so the export keyword is what is unused';
 const TEST_FILE = /\.(?:test|testkit)\.(?:mjs|cjs)$/;
@@ -533,13 +538,15 @@ function main(argv) {
       ? []
       : parseAllow(fs.readFileSync(allowPath, 'utf8'), labelOf(cwd, allowPath));
     const { findings, allowed } = auditSources(sources, allow, labelOf(cwd, allowPath));
+    const seams = findings.filter((finding) => finding.kind === INFO_KIND).length;
+    const failing = findings.length - seams;
     if (options.json) {
       console.log(JSON.stringify({ findings, allowed }, null, 2));
     } else {
       for (const finding of findings) console.log(`${finding.kind}  ${finding.location}  ${finding.detail}`);
-      console.log(`${findings.length} findings, ${allowed} allowed`);
+      console.log(`${failing} findings, ${allowed} allowed${seams > 0 ? `, ${seams} test-only (info)` : ''}`);
     }
-    return findings.length > 0 ? 1 : 0;
+    return failing > 0 ? 1 : 0;
   } catch (error) {
     console.error(`error: ${error.message}`);
     return 2;

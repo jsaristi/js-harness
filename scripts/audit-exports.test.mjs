@@ -67,16 +67,33 @@ test('a name used only inside its own module is still unused, and the detail say
   ]);
 });
 
-test('an export that only a test file imports is a test-only-export naming the test file', () => {
+test('an export that only a test file imports is a test-only-export naming the test file, an info row that exits 0', () => {
   const dir = repo({
     'bin/b.mjs': 'export const tested = 2;\n',
     'bin/b.test.mjs': "import { tested } from './b.mjs';\nconsole.log(tested);\n",
   });
   const result = run(dir);
-  assert.equal(result.status, 1);
-  assert.deepEqual(report(result).findings, [
-    { kind: 'test-only-export', location: 'bin/b.mjs:1', detail: 'tested: imported only by test files: bin/b.test.mjs' },
-  ]);
+  assert.equal(result.status, 0, result.stdout);
+  assert.deepEqual(report(result), {
+    findings: [{ kind: 'test-only-export', location: 'bin/b.mjs:1', detail: 'tested: imported only by test files: bin/b.test.mjs' }],
+    summary: '0 findings, 0 allowed, 1 test-only (info)',
+  });
+});
+
+test('a test-only-export beside an export nothing imports: the unused one still fails, the seam is info', () => {
+  const dir = repo({
+    'bin/b.mjs': 'export const tested = 2;\nexport const ghost = 3;\n',
+    'bin/b.test.mjs': "import { tested } from './b.mjs';\nconsole.log(tested);\n",
+  });
+  const result = run(dir);
+  assert.equal(result.status, 1, result.stdout);
+  assert.deepEqual(report(result), {
+    findings: [
+      { kind: 'test-only-export', location: 'bin/b.mjs:1', detail: 'tested: imported only by test files: bin/b.test.mjs' },
+      unused('bin/b.mjs:2', 'ghost', NO_IMPORTER),
+    ],
+    summary: '1 findings, 0 allowed, 1 test-only (info)',
+  });
 });
 
 test('an export a module imports is not a finding', () => {

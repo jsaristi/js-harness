@@ -1199,7 +1199,11 @@ already stale.
 - Class: asked-of-him
 - Seen: 2026-10-07 — docs/ROADMAP.md:355-357 — "sent stale prompts twice"; the day is that of his
   request, the days of the two sends are not stated
-- Control: line — AGENTS.md — "End each reply with one state" — since 2026-10-09
+- Control: protocol — bin/lib/protocols-skill.mjs — "A reply ends in one of five states" — since
+  2026-10-23
+- Was: line — AGENTS.md — "End each reply with one state" — since 2026-10-09; replaced when PR 510
+  (2026-10-23) moved the states into protocol 2 of js-harness-protocols, and PR 560 (8b525bce) left
+  AGENTS.md only the pointer "End each reply in one of the five states of `js-harness-protocols`"
 
 ### stop-read-as-refusal
 The app words a turn stopped by another session as his refusal of a tool call, so the stopped
