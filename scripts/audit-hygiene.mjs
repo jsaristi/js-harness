@@ -6,8 +6,9 @@
 // The repository is public on GitHub, so every blob ever pushed can be read, whether a later commit deleted it or
 // not. This reads each blob of `git rev-list --objects --all` once, line by line, and reports four kinds: `secret`
 // (the shapes of GitHub, npm, OpenAI, Anthropic, AWS and Slack tokens, private key headers, and a password-like
-// assignment with a real-looking value), `email` (an address other than the noreply and reserved ones) and
-// `personal-path` (an absolute path into a person's home). One finding is one distinct matched text. Its detail
+// assignment with a real-looking value), `email` (an address other than the noreply and reserved ones),
+// `personal-path` (an absolute path into a person's home), and `stale-allow` (an allow-list entry that matches no
+// finding, below). One finding is one distinct matched text. Its detail
 // names the first place it sits, and says `at HEAD` when a blob of the current tree holds it, `history only` when
 // only older commits do.
 //

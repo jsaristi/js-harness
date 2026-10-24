@@ -123,3 +123,20 @@ test('the daily Windows suite is one bounded job on an exact Windows image, with
   assert.doesNotMatch(text, /GITHUB_TOKEN|github\.token/, 'the token handed to a step');
   assert.doesNotMatch(text, /persist-credentials:\s*true/);
 });
+
+/** The node versions a text names: each `node-version:` value and each `cimg/node:<tag>`, in order. */
+const nodeVersions = (text) => [...text.matchAll(/node-version:\s*([\d.]+)|cimg\/node:([\d.]+)/g)].map((match) => match[1] ?? match[2]);
+
+// C-e-14: both workflows say their node is the one the CircleCI image runs, so a bump of one without the other fails here.
+test('the workflows set up the node of the CircleCI image, and say so', () => {
+  const [image, ...others] = nodeVersions(fs.readFileSync(path.join(ROOT, '.circleci', 'config.yml'), 'utf8'));
+  assert.match(image ?? '', /^\d+\.\d+\.\d+$/);
+  assert.deepEqual(others, [], 'one cimg/node image in .circleci/config.yml');
+  for (const file of [GATE, DAILY]) {
+    const versions = nodeVersions(fs.readFileSync(file, 'utf8'));
+    assert.ok(versions.length >= 2, `${path.basename(file)} names its node and the image`);
+    assert.deepEqual(versions, versions.map(() => image), path.basename(file));
+  }
+  // The control: a workflow one patch behind the image is caught.
+  assert.notDeepEqual(nodeVersions('# cimg/node:24.21.0\nnode-version: 24.20.0'), ['24.21.0', '24.21.0']);
+});
