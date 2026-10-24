@@ -82,7 +82,19 @@ function updateWords(reviewed, now) {
 /** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the cache's
  * `host.reviewed`, or `null`), and the record to write: the versions read, taken as reviewed, when there is no
  * record yet and the running version was read; `null` otherwise. */
-export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
+/** The step of a review that turns Remote Control back on: a restart of the app turns it off. `here` is the rule
+ * remote-control-yes as it applies in the project, what `ruleHere` gives. Only where it has a value, his standing yes
+ * of 2026-10-15 (odd/tasks/host-update-check.md, L9), is it turned on without asking; anywhere else, or with no `here`,
+ * the user is asked first (his answer Q88 of 2026-10-23, C-shared-5). */
+function remoteControlStep(here) {
+  const restart = 'a session that has run no turn since the restart refuses it, so send it a message first';
+  if (here !== undefined && Object.hasOwn(here, 'value')) {
+    return `turn Remote Control back on in each work session without asking the user (rule remote-control-yes: ${here.value}); ${restart}`;
+  }
+  return `ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; ${restart}`;
+}
+
+export function hostUpdateRow(versions, reviewed, now = () => new Date(), here = undefined) {
   const row = { id: 'host-update', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
   if (!versions.found) return { row, record: null };
   if (!versions.desktop) return { row: { ...row, installed: 'unknown', claude: 'unknown', upToDate: 'unknown' }, record: null };
@@ -100,9 +112,7 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date()) {
       ...(reviewed.desktop !== versions.desktop ? [`read ${DESKTOP_CHANGELOG} from ${reviewed.desktop} to ${versions.desktop}`] : []),
       ...(versions.code && reviewed.code && reviewed.code !== versions.code ? [`read the Claude Code CHANGELOG (${CODE_CHANGELOG}) from ${reviewed.code} to ${versions.code}`] : []),
       'check that the harness hooks in ~/.claude/settings.json still run',
-      // A restart of the app turns Remote Control off; his standing yes to turning it back on each time is in
-      // odd/tasks/host-update-check.md (L9).
-      'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
+      remoteControlStep(here),
       'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
       'then record the review: js-harness doctor --host-reviewed',
     ];

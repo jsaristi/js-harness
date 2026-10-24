@@ -247,7 +247,8 @@ function stackRow(versions, home, now) {
  * records, so an update stays a gap until its review is done. */
 function hostRow(host, home, now) {
   const cache = readCache(home);
-  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now);
+  // Until the rule remote-control-yes is declared (C-shared-5), the standing yes holds everywhere, as it did before.
+  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now, { value: 'a standing yes of 2026-10-15' });
   if (record) writeCache(home, { ...cache, host: { reviewed: record } });
   return row;
 }

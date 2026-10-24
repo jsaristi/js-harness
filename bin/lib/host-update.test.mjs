@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { hostUpdateRow, readHostVersions } from './host-update.mjs';
+import { RULES } from './rules-data.mjs';
+import { ruleHere, writeRules } from './rules.mjs';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-host-update-'));
 
@@ -101,6 +103,13 @@ test('no app folder is not found; a folder whose files are missing or broken rea
 const current = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.299' };
 const reviewed = { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' };
 const NOW = () => new Date('2026-10-15T23:00:00.000Z');
+// His answer Q88 of 2026-10-23 (C-shared-5): the standing yes to turning Remote Control back on holds only where a rule
+// of this repository declares it. Until the rule remote-control-yes is declared, the tests read a fixture of it.
+const YES_RULE = { id: 'remote-control-yes', subject: 'turning Remote Control back on in each work session after a restart of the app', owner: 'sebastian', scope: 'repository', since: '2026-10-24', value: 'a standing yes of 2026-10-15' };
+const YES_LIST = [...RULES, YES_RULE];
+const YES_HERE = ruleHere('remote-control-yes', undefined, writeRules(YES_LIST), YES_LIST);
+const YES_STEP = 'turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first';
+const ASK_STEP = 'ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; a session that has run no turn since the restart refuses it, so send it a message first';
 
 test('the first reading with no record is taken as reviewed: the row is ok and the record to write holds what was read', () => {
   const { row, record } = hostUpdateRow(current, null, NOW);
@@ -109,7 +118,7 @@ test('the first reading with no record is taken as reviewed: the row is ok and t
 });
 
 test('an update since the reviewed versions is stale until reviewed: its fix names the old and new versions and every review step, and nothing is recorded', () => {
-  const { row, record } = hostUpdateRow(current, reviewed, NOW);
+  const { row, record } = hostUpdateRow(current, reviewed, NOW, YES_HERE);
   assert.equal(record, null);
   assert.equal(row.claude, 'stale');
   assert.equal(row.upToDate, 'ok');
@@ -119,10 +128,22 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
     'read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
     'read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
     'check that the harness hooks in ~/.claude/settings.json still run',
-    'turn Remote Control back on in each work session without asking the user (a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
+    YES_STEP,
     'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
     'then record the review: js-harness doctor --host-reviewed',
   ]);
+});
+
+test('where the rule remote-control-yes is not declared, or its declaration is behind, the step asks the user before turning Remote Control back on', () => {
+  const elsewhere = ruleHere('remote-control-yes', undefined, null, YES_LIST);
+  const behind = ruleHere('remote-control-yes', undefined, writeRules(RULES), YES_LIST);
+  assert.deepEqual([elsewhere, behind], [{ off: 'elsewhere' }, { off: 'behind' }]);
+  for (const here of [elsewhere, behind, undefined]) {
+    const steps = hostUpdateRow(current, reviewed, NOW, here).row.fix.claude;
+    assert.ok(steps.includes(ASK_STEP), JSON.stringify(here));
+    assert.ok(!steps.some((step) => /without asking/.test(step)), JSON.stringify(here));
+  }
+  assert.ok(hostUpdateRow(current, reviewed, NOW, YES_HERE).row.fix.claude.includes(YES_STEP));
 });
 
 test('a Code tab CLI update alone names only the CLI and its changelog', () => {
