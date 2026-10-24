@@ -33,6 +33,8 @@ bin/check.test.mjs	internal	b
 bin/clean-home.test.mjs	internal	clean	
 bin/clean.mjs	live	clean	
 bin/clean.test.mjs	internal	clean	
+bin/codex-meter.mjs	live	shared	
+bin/codex-meter.test.mjs	internal	shared	
 bin/codex-review-switch.test.mjs	internal	b	
 bin/codex-review.mjs	live	b	
 bin/codex-review.second.test.mjs	internal	b	
@@ -42,6 +44,7 @@ bin/contract.test.mjs	internal	d
 bin/conventions-arguments.test.mjs	internal	shared	
 bin/conventions-errors.test.mjs	internal	shared	
 bin/conventions-pure.test.mjs	internal	shared	
+bin/conventions-structure.test.mjs	internal	shared	
 bin/conventions-voice.test.mjs	internal	shared	
 bin/doctor-hook.test.mjs	internal	a	
 bin/doctor.mjs	live	a	
@@ -97,6 +100,10 @@ bin/lib/citations.test.mjs	internal	shared
 bin/lib/clean.mjs	live	clean	
 bin/lib/clean.test.mjs	internal	clean	
 bin/lib/clean.testkit.mjs	internal	clean	
+bin/lib/codex-launch.mjs	live	b	
+bin/lib/codex-launch.test.mjs	internal	b	
+bin/lib/codex-meter.mjs	live	shared	
+bin/lib/codex-meter.test.mjs	internal	shared	
 bin/lib/codex-review-allowance.mjs	live	b	
 bin/lib/codex-review-allowance.test.mjs	internal	b	
 bin/lib/codex-review-answer.mjs	live	b	
@@ -113,6 +120,7 @@ bin/lib/codex-review-prompt.mjs	live	b
 bin/lib/codex-review-prompt.test.mjs	internal	b	
 bin/lib/codex-review-recheck.mjs	live	b	
 bin/lib/codex-review-recheck.test.mjs	internal	b	
+bin/lib/codex-review-rows.mjs	live	b	
 bin/lib/codex-review-runs.mjs	live	b	
 bin/lib/codex-review-runs.test.mjs	internal	b	
 bin/lib/codex-review-scope.mjs	live	b	
@@ -125,6 +133,8 @@ bin/lib/codex-usage.mjs	live	b
 bin/lib/codex-usage.test.mjs	internal	b	
 bin/lib/contract.mjs	live	d	
 bin/lib/contract.test.mjs	internal	d	
+bin/lib/default-branch.mjs	live	b	
+bin/lib/default-branch.test.mjs	internal	b	
 bin/lib/digest.mjs	live	shared	
 bin/lib/digest.test.mjs	internal	shared	
 bin/lib/document-hour-guard.mjs	live	b	
@@ -146,6 +156,7 @@ bin/lib/gate-log.mjs	live	b
 bin/lib/gate-log.test.mjs	internal	b	
 bin/lib/gate-tree.mjs	live	b	
 bin/lib/gate-tree.test.mjs	internal	b	
+bin/lib/gate-turn.mjs	live	b	
 bin/lib/gate-wsl-trace.test.mjs	internal	b	
 bin/lib/gate-wsl.mjs	live	b	
 bin/lib/gate-wsl.test.mjs	internal	b	
@@ -157,10 +168,14 @@ bin/lib/git-fixture.test.mjs	internal	shared
 bin/lib/git-fixture.testkit.mjs	internal	shared	
 bin/lib/guard.mjs	live	b	
 bin/lib/guard.test.mjs	internal	b	
+bin/lib/home.mjs	live	shared	
+bin/lib/home.test.mjs	internal	shared	
 bin/lib/host-update.mjs	live	shared	
 bin/lib/host-update.test.mjs	internal	shared	
 bin/lib/inbox.mjs	live	shared	
 bin/lib/inbox.test.mjs	internal	shared	
+bin/lib/jsonl-tail.mjs	live	shared	
+bin/lib/jsonl-tail.test.mjs	internal	shared	
 bin/lib/latest.mjs	live	a	
 bin/lib/latest.test.mjs	internal	a	
 bin/lib/launcher.mjs	live	b	
@@ -193,10 +208,12 @@ bin/lib/onboard.mjs	live	onboard
 bin/lib/onboard.test.mjs	internal	onboard	
 bin/lib/onboard.testkit.mjs	internal	onboard	
 bin/lib/package-manager.mjs	live	shared	
+bin/lib/package-manager.test.mjs	internal	shared	
 bin/lib/pause.mjs	live	shared	
 bin/lib/pause.test.mjs	internal	shared	
 bin/lib/payload.mjs	live	b	
 bin/lib/payload.test.mjs	internal	b	
+bin/lib/permit-times.mjs	live	b	
 bin/lib/pnpm-lock.mjs	live	shared	
 bin/lib/pnpm-lock.test.mjs	internal	shared	
 bin/lib/process-tree.mjs	live	shared	
@@ -228,8 +245,10 @@ bin/lib/protocols-skill.test.mjs	internal	shared
 bin/lib/pull-request.mjs	live	shared	
 bin/lib/pull-request.test.mjs	internal	shared	
 bin/lib/push-waits.mjs	live	b	
-bin/lib/ratchet.mjs	live	shared	
 bin/lib/ratchet.test.mjs	internal	shared	
+bin/lib/ratchet.testkit.mjs	internal	shared	
+bin/lib/record-days.mjs	live	d	
+bin/lib/record-days.test.mjs	internal	d	
 bin/lib/refresh-copy.mjs	live	b	
 bin/lib/refresh-copy.test.mjs	internal	b	
 bin/lib/remote.mjs	live	c	
@@ -270,6 +289,7 @@ bin/lib/sessions.mjs	live	c
 bin/lib/sessions.test.mjs	internal	c	
 bin/lib/settings-key.mjs	live	shared	
 bin/lib/settings-key.test.mjs	internal	shared	
+bin/lib/source.testkit.mjs	internal	shared	
 bin/lib/spec.mjs	live	b	
 bin/lib/spec.test.mjs	internal	b	
 bin/lib/stack-install.mjs	live	stack	
@@ -303,7 +323,9 @@ bin/lib/version.test.mjs	internal	shared
 bin/lib/wake.mjs	live	c	
 bin/lib/wake.test.mjs	internal	c	
 bin/lib/web-block.mjs	live	shared	
+bin/lib/web-block.test.mjs	internal	shared	
 bin/lib/windows-args.mjs	live	shared	
+bin/lib/windows-args.test.mjs	internal	shared	
 bin/lib/windows-daily.mjs	live	d	
 bin/lib/windows-daily.test.mjs	internal	d	
 bin/lib/worktrees.mjs	live	shared	
@@ -713,6 +735,7 @@ odd/tasks/honesty-audit.md	history	-
 odd/tasks/host-update-check.md	history	-	
 odd/tasks/install-update.md	history	-	
 odd/tasks/installed-harness.md	history	-	
+odd/tasks/instruction-homes.md	history	-	
 odd/tasks/land-unattended.md	history	-	
 odd/tasks/launch-audit.md	history	-	
 odd/tasks/launch-audit/a.md	history	-	
@@ -739,6 +762,7 @@ odd/tasks/launch-audit/refute-small.md	history	-
 odd/tasks/launch-audit/report.md	history	-	
 odd/tasks/launch-audit/shared.md	history	-	
 odd/tasks/launch-audit/stack.md	history	-	
+odd/tasks/launch-audit/triage.md	history	-	
 odd/tasks/lead-tools.md	history	-	
 odd/tasks/memory-backup.md	history	-	
 odd/tasks/memory-feedback-home.md	history	-	
@@ -752,6 +776,7 @@ odd/tasks/notify-lead-channel.md	history	-
 odd/tasks/notify-worktree-title.md	history	-	
 odd/tasks/on-demand-functions.md	history	-	
 odd/tasks/onboarding.md	history	-	
+odd/tasks/one-home-folder.md	history	-	
 odd/tasks/orphan-gate.md	history	-	
 odd/tasks/pause-no-idle.md	history	-	
 odd/tasks/practice-project.md	history	-	
@@ -768,6 +793,7 @@ odd/tasks/recent-memory.md	history	-
 odd/tasks/recheck-refusal-new-code.md	history	-	
 odd/tasks/release-095.md	history	-	
 odd/tasks/remote-control.md	history	-	
+odd/tasks/reorganization.md	history	-	
 odd/tasks/reply-question-state.md	history	-	
 odd/tasks/report-table.md	history	-	
 odd/tasks/restart-announce.md	history	-	
@@ -813,9 +839,11 @@ scripts/count-git-preload.mjs	internal	e
 scripts/count-git.mjs	internal	e	
 scripts/count-git.test.mjs	internal	e	
 scripts/e2e.mjs	internal	e	
+scripts/e2e.test.mjs	internal	e	
 scripts/fixtures/host-call1.jsonl	fixture	-	
 scripts/fixtures/host-call2.jsonl	fixture	-	
 scripts/fixtures/host-call3.jsonl	fixture	-	
+scripts/gitattributes.test.mjs	internal	e	
 scripts/github-workflows.test.mjs	internal	e	
 scripts/inventory.mjs	internal	e	
 scripts/inventory.test.mjs	internal	e	
@@ -826,10 +854,15 @@ scripts/practice-host.test.mjs	internal	e
 scripts/practice-lib.mjs	internal	e	
 scripts/practice-lib.test.mjs	internal	e	
 scripts/practice.mjs	internal	e	
+scripts/practice.test.mjs	internal	e	
+scripts/release-gate.mjs	internal	e	
+scripts/release-gate.test.mjs	internal	e	
 scripts/release-proof-lib.mjs	internal	e	
 scripts/release-proof-lib.test.mjs	internal	e	
 scripts/release-proof.mjs	internal	e	
 scripts/sandbox.mjs	internal	e	
+scripts/sandbox.test.mjs	internal	e	
 scripts/stack-scratch.mjs	internal	e	
 scripts/stack-scratch.test.mjs	internal	e	
 scripts/tui-walk.mjs	internal	e	
+scripts/tui-walk.test.mjs	internal	e	
