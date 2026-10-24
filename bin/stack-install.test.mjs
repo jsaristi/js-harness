@@ -38,7 +38,10 @@ function spawnOf(world, home, manifestSeen = []) {
     if (args[0] === '--version') return world[file]?.installed === 'ok' ? { status: 0, stdout: `${file} 2.0.0\n` } : { status: 1 };
     world.lines.push({ line, env: options.env, stdio: options.stdio, timeout: options.timeout, codexHomeExisted: Boolean(options.env?.CODEX_HOME) && fs.existsSync(options.env.CODEX_HOME) });
     manifestSeen.push(readManifest(home)?.stack?.map((r) => `${r.tool}.${r.dimension}`) ?? []);
-    if (world.timeout?.has(line)) return { status: null, signal: 'SIGTERM' };
+    if (world.timeout?.has(line)) {
+      world.onTimeout?.(line);
+      return { status: null, signal: 'SIGTERM' };
+    }
     if (world.fail.has(line)) {
       world.onFail?.(line);
       return { status: 1, stderr: 'it broke' };
@@ -247,6 +250,28 @@ test('a command that timed out keeps its record, since what it started may still
   assert.equal(code, 1);
   assert.ok(err.includes('codex installed: timed out after 120000 ms, and what it started may still be running; it stays recorded, so uninstall machine judges it'), err);
   assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', null]]);
+}));
+
+// T7 (gentle-ai R1-001): a record left unread is read once the probe can, at the end of the run, so its undo applies
+// to what it left and not to whatever answers later.
+test('a timed-out install the probe reads ok at the end of the run gets what its undo applies to, and the run exits 0', withHome(async (home) => {
+  const world = newWorld();
+  world.timeout = new Set(['pnpm add -g @openai/codex']);
+  world.onTimeout = () => { world.codex.installed = 'ok'; };
+  const { code, out } = await run(['--yes', '--tool', 'codex'], { world, home });
+  assert.equal(code, 0);
+  assert.ok(out.includes('codex installed: read at the end of the run: done'), out);
+  assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', '2.0.0']]);
+}));
+
+test('a failed command the probe still cannot tell at the end of the run stays unread, and the run exits 1', withHome(async (home) => {
+  const world = newWorld();
+  world.fail.add('pnpm add -g @openai/codex');
+  world.onFail = () => { world.codex.installed = 'unknown'; };
+  const { code, out } = await run(['--yes', '--tool', 'codex'], { world, home });
+  assert.equal(code, 1);
+  assert.ok(!out.includes('read at the end of the run'), out);
+  assert.deepEqual(readManifest(home).stack.map((row) => row.applies), [null]);
 }));
 
 test('in a terminal no command is timed out', withHome(async (home) => {

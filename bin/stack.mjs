@@ -204,6 +204,8 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
   const fold = (dir) => (platform === 'win32' ? path.resolve(dir).toLowerCase() : path.resolve(dir));
   const codexElsewhere = fold(codexHome) !== fold(codexHomeRead);
   const unverified = [];
+  // The records left with `applies` still `null`, read again at the end of the run (T7).
+  const unread = [];
   const chosen = (plan) => plan.mandatory.filter((row) => args.tools.length === 0 || args.tools.includes(row.tool));
   const missingIn = (plan, key) => chosen(plan).find((row) => keyOf(row) === key);
   const missing = (key) => missingIn(planNow(), key);
@@ -248,6 +250,7 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     if (result.timedOut) {
       // The shell is killed, not always what it started, which may still install: the record stays.
       unverified.push(record);
+      unread.push({ record, row, childEnv });
       error(`${tool} ${dimension}: ${result.why}, and what it started may still be running; it stays recorded, so uninstall machine judges it`);
       continue;
     }
@@ -260,15 +263,31 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     if (!result.ok && state !== 'ok') {
       // Something of it may have stayed: the record stays, and uninstall machine keeps it until it can read it.
       unverified.push(record);
+      unread.push({ record, row, childEnv });
       error(`${tool} ${dimension}: the command failed (${result.why}) and the probe cannot tell what it left; it stays recorded, so uninstall machine judges it`);
       continue;
     }
-    recordStackRow(args.home, { ...record, applies: appliesOf(row, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value });
-    if (stillMissing) error(`${tool} ${dimension}: the command exited 0 and the probe still finds it missing; it stays recorded, so uninstall machine tries its undo`);
+    const applies = appliesOf(row, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
+    recordStackRow(args.home, { ...record, applies });
+    if (applies === null) unread.push({ record, row, childEnv });
+    if (stillMissing) error(`${tool} ${dimension}: the command exited 0 and the probe still finds it missing; it stays recorded, so uninstall machine judges it`);
     else if (state === 'ok') log(`${tool} ${dimension}: done`);
     else {
       unverified.push(record);
       error(`${tool} ${dimension}: the command exited 0 and the probe cannot tell whether it worked; it stays recorded, so uninstall machine judges it`);
+    }
+  }
+  // A record left unread is read once the probe can, so its undo applies to what the command left and not to whatever
+  // answers by the time of the uninstall, which never runs the undo of a record still unread (T7, gentle-ai R1-001).
+  if (unread.length > 0) {
+    const end = readNow();
+    for (const { record, row, childEnv } of unread) {
+      if (end.rows.find((probed) => probed.id === record.tool)?.[record.dimension] !== 'ok') continue;
+      const applies = appliesOf(row, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
+      if (applies === null) continue;
+      recordStackRow(args.home, { ...record, applies });
+      if (unverified.includes(record)) unverified.splice(unverified.indexOf(record), 1);
+      log(`${record.tool} ${record.dimension}: read at the end of the run: done`);
     }
   }
   const left = chosen(planNow()).filter((row) => first.some((was) => keyOf(was) === keyOf(row)));

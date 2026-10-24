@@ -77,7 +77,8 @@ of the one scratch trial (package downloads).
 - [x] T4 (kind: verify) The trial of D9 on a scratch home, its output in the Log
 - [x] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [x] T6 (kind: build) Done: a651b921 (Log, T6). A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
-- [ ] T7 (kind: build) A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11). Also: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
+- [x] T7 (kind: build) Done (Log, L16). A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11)
+- [ ] T8 (kind: build) A follow-up, split from T7 on 2026-10-24: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
 
 ## Design
 
@@ -207,7 +208,9 @@ plan, asks him (through the lead where there is one), then runs one tool per cal
   `claudeJsonMcpServer` already returns, `bin/lib/stack.mjs:105-112`; Codex's `[mcp_servers.codegraph]` table, read
   by a new reader of that one section), since the probes see only that a name is present
   (`bin/lib/stack.mjs:87-97`) and a name alone cannot tell the harness's entry from his own. It is written
-  **before** the command starts, so a run killed halfway leaves something `uninstall` can try.
+  **before** the command starts, so a run killed halfway leaves something `uninstall` can name. A record whose
+  `applies` stayed `null` is read again at the end of the run; one still unread at `uninstall machine` has its undo
+  printed, never run, and its record dropped, since it cannot tell what it left from a later install of his own (T7).
 - After the command, the row is probed: still a gap after a failure, and the record is dropped, since nothing of it
   stayed and a later install of his own must not be undone; `ok`, and it stays with the version read.
 - `uninstall machine` undoes the records in reverse order, printing each undo before running it. Before each, it
@@ -348,6 +351,6 @@ onboarding's files; a note in the shared notes folder hands that session this co
   shared notes folder as jh31-stack-json-contract.md; the reviews are L7 to L12.
   - gentle-ai: 80a5fa3b assessed medium, review_due false, reason under_budget (96 lines).
   - Codex on f96ebc8..80a5fa3 (1 part, 63 lines): the patch is correct (0.93), no findings. Recorded.
-- T6 (2026-10-24, the lead's 10:57 order) built test-first in a651b921 on fix/stack-install-t6: `splitCommand(pm, exists)` keeps a line that holds whitespace and names a file one word, so `upgrade --pm` and `JS_HARNESS_PM` share `stack`'s rule; `resolveStackPm` calls it and drops its copy. RED then GREEN: bin/lib/version.test.mjs (13) and bin/update.test.mjs (68), and stack, lib/stack, tui, stack-run, install, package-manager pass. An independent Opus verifier (risk item 3, a shared parser) ran 146 cases against 1649f32b: PASS, `resolveStackPm` and `pmKind` identical in every case, and the only differences the intended ones (an existing path with a space is one word in `upgrade`, quoted by `cmdWord` on win32; `npm --cache "x` still refused). Advisory: `scripts/sandbox.mjs:64-71` does not mention the one-word case.
+- L15 (2026-10-24) T6, from the lead's 10:57 order, built test-first in a651b921 on fix/stack-install-t6: `splitCommand(pm, exists)` keeps a line that holds whitespace and names a file one word, so `upgrade --pm` and `JS_HARNESS_PM` share `stack`'s rule; `resolveStackPm` calls it and drops its copy. RED then GREEN: bin/lib/version.test.mjs (13) and bin/update.test.mjs (68), and stack, lib/stack, tui, stack-run, install, package-manager pass. An independent Opus verifier (risk item 3, a shared parser) ran 146 cases against 1649f32b: PASS, `resolveStackPm` and `pmKind` identical in every case, and the only differences the intended ones (an existing path with a space is one word in `upgrade`, quoted by `cmdWord` on win32; `npm --cache "x` still refused). Advisory: `scripts/sandbox.mjs:64-71` does not mention the one-word case.
   - gentle-ai: a651b921 assessed medium, review_due false, reason under_budget (44 lines).
   - Codex 1649f32..a651b92: correct (0.96), no findings.

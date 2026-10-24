@@ -137,11 +137,21 @@ test('undoStack keeps the record of an undo that failed, for a second run', () =
   assert.deepEqual(result.failedRecords, [PACKAGE]);
 }));
 
-test('undoStack tries the undo of a record whose command never finished, while its tool is there', () => withHome((home) => {
-  const { spawn, calls } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.51.0' } : { status: 0 }));
+// gentle-ai R1-001 (T7): a record whose `applies` was never read cannot tell the harness's install from a later one of
+// his own, so its undo is named, never run, and the record dropped.
+test('undoStack never runs the undo of a record whose applies was never read: it names it and drops the record', () => withHome((home) => {
+  const { spawn, calls } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.51.0' } : assert.fail('ran an undo')));
   const result = undoStack([{ ...PACKAGE, applies: null }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
-  assert.deepEqual(result.undone, [{ tool: 'codex', dimension: 'installed' }]);
-  assert.equal(calls.length, 2);
+  assert.deepEqual(result.undone, []);
+  assert.deepEqual(result.kept, [{ tool: 'codex', dimension: 'installed', reason: 'unread', undo: 'pnpm remove -g @openai/codex' }]);
+  assert.deepEqual(result.failedRecords, []);
+  assert.equal(calls.length, 1);
+}));
+
+test('undoStack drops a never-read record whose tool is already gone, as any other', () => withHome((home) => {
+  const { spawn } = fakeSpawn((file) => (file === 'codex' ? { status: 1 } : assert.fail('ran an undo')));
+  const result = undoStack([{ ...PACKAGE, applies: null }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.deepEqual(result.kept, [{ tool: 'codex', dimension: 'installed', reason: 'gone' }]);
 }));
 
 const CODEX_REG = { tool: 'codegraph', dimension: 'codex', kind: 'registration', run: ['codex', 'mcp', 'add'], undo: ['codex', 'mcp', 'remove', 'codegraph'], applies: '[mcp_servers.codegraph]', env: {} };
