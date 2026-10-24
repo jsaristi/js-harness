@@ -159,7 +159,7 @@ before any work: the median of the latest five sessions, read from their transcr
 over 100,000 tokens.
 
 ```console
-$ js-harness check
+$ js-harness check --verbose
 PASS  budget  639 estimated tokens (budget 1500)
 PASS  contracts  no contracts under odd/tasks
 INFO  payload claude  639 estimated tokens per turn from files (tools and hook output not counted)

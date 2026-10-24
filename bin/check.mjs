@@ -799,10 +799,10 @@ const S6_GATES = 30;
 export function checkExactCount(cwd, home) {
   const exact = discoverExactTests(cwd);
   if (exact.value === null) return [];
-  if (exact.value === 'skip') return [{ name: 'exact tests', pass: true, detail: 'skip: on since harness.json says so; S6\'s count stopped at the switch' }];
+  if (exact.value === 'skip') return [{ name: 'exact tests', pass: true, info: true, detail: 'skip: on since harness.json says so; S6\'s count stopped at the switch' }];
   const { run, last } = s6Count(readGateLog(home).events);
   const since = last ? `, since the gate of ${rowTime(last.at)} where ${last.files.join(', ')} failed` : '';
-  return [{ name: 'exact tests', pass: true, detail: `S6: ${run} of ${S6_GATES} gates in a row would have skipped a test file and saw none of those fail${since}; the skip is switched on at ${S6_GATES}` }];
+  return [{ name: 'exact tests', pass: true, info: true, detail: `S6: ${run} of ${S6_GATES} gates in a row would have skipped a test file and saw none of those fail${since}; the skip is switched on at ${S6_GATES}` }];
 }
 
 /** `iso` as a row says it: the local day and time, to the minute. */
@@ -2546,6 +2546,12 @@ export const USAGE = [
   '       --first <reason>: issues this session a ticket for this tree and claims it as the gate arrives, so it goes before every gate that waits; for the orchestrator\'s batch run on main (odd/tasks/gate-first.md)',
   '       --verbose: prints every row of a gate that passes, which otherwise prints one line (PASS check, with the review\'s verdict); a failing gate prints every row either way. JS_HARNESS_CHECK_VERBOSE=1 asks the same, for a hook that runs check without flags (odd/tasks/quiet-gate.md)',
   '       --door --base <rev> [--branch <name>]: runs only the rule rows over the lines <rev>..HEAD brings, judged by the running list, and the failures row, and exits 1 when one refuses (the merge door of merge-queue, odd/tasks/rule-hierarchy.md); --branch names the pull request\'s branch, which may change bin/lib/rules-data.mjs only when it is a rule/ branch',
+  '       --home <path>: the home whose gate lock, gate log and session records this gate uses (the user\'s home when not given)',
+  '       --remote <name>: the remote a gate pushes its tree to for its run on GitHub, and a push checks against (origin when not given)',
+  '       --subagents: adds the INFO row subagents, today\'s sub-agents of this project against the model and effort rules; it reads the Claude Code records, so the commit gate does not ask for it',
+  '       --push: the pre-push check of a project with the Codex review on; its Codex row refuses a push whose code commits no Codex record covers',
+  '       --head <rev>: with --push only, the commit the push sends (HEAD when not given)',
+  '       --ref <name>: with --push only, the remote ref the push updates',
 ].join('\n');
 
 // A flag with no value (end of argv, or immediately followed by another `--flag`) is a usage

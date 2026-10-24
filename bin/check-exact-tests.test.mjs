@@ -203,7 +203,7 @@ test('in skip mode the row says the skip is on and S6\'s count stopped at the sw
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-exact-count-root-'));
   try {
     fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify({ exactTests: 'skip' }));
-    assert.deepEqual(checkExactCount(root, home), [{ name: 'exact tests', pass: true, detail: 'skip: on since harness.json says so; S6\'s count stopped at the switch' }]);
+    assert.deepEqual(checkExactCount(root, home), [{ name: 'exact tests', pass: true, info: true, detail: 'skip: on since harness.json says so; S6\'s count stopped at the switch' }]);
   } finally {
     [home, root].forEach((one) => fs.rmSync(one, { recursive: true, force: true }));
   }
@@ -227,4 +227,30 @@ test('a project in shadow has a row that says S6\'s running count and informs on
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+// C-b-27: the row informs only, as the payload row does, so it prints and counts as INFO, never as a PASS.
+test('the exact tests row is an INFO row, whatever harness.json says', async () => {
+  const fsm = await import('node:fs');
+  const os = await import('node:os');
+  const pathm = await import('node:path');
+  const dir = fsm.mkdtempSync(pathm.join(os.tmpdir(), 'js-harness-exact-info-'));
+  try {
+    for (const exactTests of [undefined, 'skip']) {
+      fsm.writeFileSync(pathm.join(dir, 'harness.json'), JSON.stringify(exactTests ? { exactTests } : {}));
+      const rows = checkExactCount(dir, dir);
+      assert.deepEqual(rows.map((row) => [row.name, row.info]), rows.length ? rows.map(() => ['exact tests', true]) : [], String(exactTests));
+    }
+  } finally {
+    fsm.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// C-b-18: the help explains every flag its usage line names.
+test('check --help explains --push, --ref, --head, --subagents, --remote and --home', async () => {
+  const { USAGE } = await import('./check.mjs');
+  for (const flag of ['--push', '--ref <name>', '--head <rev>', '--subagents', '--remote <name>', '--home <path>']) {
+    assert.match(USAGE, new RegExp(`\\n {7}${flag.replace(/[<>]/g, '.')}[^\\n]*: `), flag);
+  }
+  assert.match(USAGE, /--push[^\n]*refuses a push/);
 });
