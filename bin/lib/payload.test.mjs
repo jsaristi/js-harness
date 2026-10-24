@@ -272,7 +272,7 @@ test('malformed hooks.json yields no Codex hooks, without throwing', () => {
 
 // --- hook order and event filtering ---
 
-test('hooks are listed in configured order, only for UserPromptSubmit and SessionStart', () => {
+test('hooks are listed in configured order, and a Stop hook is not read', () => {
   withFixture((home, cwd) => {
     write(
       path.join(home, '.claude', 'settings.json'),
@@ -292,6 +292,30 @@ test('hooks are listed in configured order, only for UserPromptSubmit and Sessio
       { event: 'UserPromptSubmit', command: 'codegraph.cmd prompt-hook' },
       { event: 'SessionStart', command: 'gentle-ai review stop-hook' },
       { event: 'SessionStart', command: 'js-harness doctor --hook' },
+    ]);
+  });
+});
+
+test('hooks that add context before or after a tool call, or at a subagent launch, are listed too', () => {
+  withFixture((home, cwd) => {
+    write(
+      path.join(home, '.claude', 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'guard --hook' }] }],
+          PostToolUse: [{ hooks: [{ type: 'command', command: 'resume --pause' }] }],
+          PostToolUseFailure: [{ matcher: 'WebFetch', hooks: [{ type: 'command', command: 'resume --pause' }] }],
+          SubagentStart: [{ hooks: [{ type: 'command', command: 'rules --hook' }] }],
+          SubagentStop: [{ hooks: [{ type: 'command', command: 'should-not-appear' }] }],
+        },
+      }),
+    );
+    const { hosts } = measurePayload({ home, cwd });
+    assert.deepEqual(hosts[0].hooks, [
+      { event: 'PreToolUse', command: 'guard --hook' },
+      { event: 'PostToolUse', command: 'resume --pause' },
+      { event: 'PostToolUseFailure', command: 'resume --pause' },
+      { event: 'SubagentStart', command: 'rules --hook' },
     ]);
   });
 });

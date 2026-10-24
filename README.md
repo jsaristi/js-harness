@@ -118,10 +118,17 @@ prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_I
 sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
 so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
 `JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
-`--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+`--door` print their rows either way. `--head` goes only with `--push`, and `--push` refuses `--first`,
+`--subagents`, `--wait`, `--no-wait` and `--verbose`, as a usage error. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's CircleCI run of the merge queue's candidates sets 2.
+
+Three keys of `harness.json` shape the gate's sensors: `documents` (an array of paths from the top of
+the repository, with forward slashes and a final `/` for a folder; a commit that holds only these
+runs no `sensors`), `documentSensors` (named commands that run at such a commit instead, and need
+`documents`), and `exactTests` (`"shadow"` or `"skip"`). A value of the wrong shape fails the
+`sensors` row, which names the key and the shape it takes, and no sensor runs.
 
 When a `node --test` suite fails, the test files it names as failed run once more, alone. A
 file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
