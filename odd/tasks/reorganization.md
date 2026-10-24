@@ -74,7 +74,7 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   blocker (L4).
 - [x] T6 (kind: build) inline, S1, S2 — 2d, gentle-ai's advisories: `gate-turn.mjs`'s unused import of `counted` goes,
   and the moved comments name their siblings from `bin/lib`. Commit: 2d.
-- [ ] T5 (kind: verify) S6 — gentle-ai per commit, Codex over the slice, the pull request and the ready notice.
+- [x] T5 (kind: verify) S6 — gentle-ai per commit, Codex over the slice (L5), the pull request and the ready notice.
 
 ## Log
 - L1. 2026-10-24, the lead (06:54): "Reorg slice 1 landed (PR 564, main 868f5eca): every JS_HARNESS_HOME read now goes
@@ -116,3 +116,7 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   advisories: `gate-turn.mjs` imported `counted` and used it nowhere (L2 had said it did: the map that found it read the
   word inside template strings), and seven moved comments named `./lib/<module>` from inside `bin/lib`; both fixed in 2d.
   R3-002 asked that the differential cover the `--no-wait` and `--push` refusals, which L3's does.
+- L5. 2026-10-24, the ledger of slice 2:
+  - gentle-ai: 08d058ba, 295e0e5f and 78b31383 reviewed as one slice, approved and acknowledged (L4); 32e6d187 assessed medium, review not due (under_budget).
+  - Codex reviewed the slice from the base 868f5eca in 4 parts, each correct (0.94 to 0.98), no findings, about 600,000 input tokens; the record is in the machine's review log.
+  - Next step: push the branch, open the pull request, send the ready notice; the lead lands it. Slice 3 (the structure check) comes after it lands, in this document.
