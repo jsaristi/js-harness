@@ -154,8 +154,8 @@ export const RULES = [
     "value": 100000,
     "unit": "tokens",
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\bbudget\\b.{0,30}{amount}\\s*tokens",
-      "^(?!.*\\bruleValue\\().*\\bover\\s+{amount}\\s*tokens"
+      "^(?!.*\\bruleValue\\().*\\bfixed[- ]load\\b.{0,60}?{amount}\\s*tokens",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*tokens.{0,40}\\bfixed[- ]load\\b"
     ]
   },
   {
