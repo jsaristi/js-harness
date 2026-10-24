@@ -10,12 +10,11 @@ import { spawnSync } from 'node:child_process';
 import readline from 'node:readline';
 import { unknownArgument } from './lib/args.mjs';
 import { forgetStackRow, recordStackRow } from './lib/manifest.mjs';
-import { realCodexHome } from './lib/codex-review-home.mjs';
 import { resolveStackPm } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
-import { probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
+import { codexHomeOf, probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 export { resolveStackPm };
@@ -57,12 +56,13 @@ function parseArgs(argv, env) {
 }
 
 /** What the plan reads: the tool rows `probeStack` probes (its checks left out), the project's switches as `doctor`
- * resolves them, and the prerequisites' states. */
-export function readStack({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env }) {
+ * resolves them, and the prerequisites' states. `homedir` is the real home, whose Codex home is the `CODEX_HOME` the
+ * user set (T8). */
+export function readStack({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env, homedir }) {
   const project = resolveProjectRoot(cwd, spawn);
   const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn)));
   const ids = new Set(tools.map((tool) => tool.id));
-  const rows = probeStack({ home, project, spawn, platform, interactive: false, functions, env }).filter((r) => ids.has(r.id));
+  const rows = probeStack({ home, project, spawn, platform, interactive: false, functions, env, homedir }).filter((r) => ids.has(r.id));
   const prerequisites = PREREQUISITES.map((id) => ({ id, state: probeVersionCommand(id, ['--version'], { spawn, platform }).state }));
   return { rows, functions, prerequisites };
 }
@@ -170,9 +170,9 @@ const rowLines = (row, platform, head) => [head, `     run:  ${shownCommand(row.
  * `--yes` nothing runs. Its record is written before it starts; after it the stack is probed again, so a row an
  * earlier command closed is not run, a failure whose gap is still open loses its record, and one that closed it keeps
  * it with what its undo applies to, read back; a row is done only when the probe then reads it `ok`. A prefix's `bin`
- * is on the PATH of every probe and command, so what it installs is found; a registration in Codex while his
- * `CODEX_HOME` is elsewhere than `<home>/.codex`, which the probe and the record read, is left to him. Exit 0 when no
- * row it set out to run is left missing or unverified, 1 when one is (declined, failed, timed out or left to him), 2
+ * is on the PATH of every probe and command, so what it installs is found; a registration in Codex goes to the Codex
+ * home doctor reads (`codexHomeOf`: the `CODEX_HOME` he set, on the real home), which its record keeps. Exit 0 when no
+ * row it set out to run is left missing or unverified, 1 when one is (declined, failed or timed out), 2
  * on a usage error. `deps`: `read` (the probes), `spawn` (the runner, refused in a
  * test unless given), `ask`, `interactive`, `realHome`, `now`, `log`, `error`, `platform`. */
 export async function stackInstallMain(argv, env = process.env, deps = {}) {
@@ -194,15 +194,14 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
   const pm = resolveStackPm(args.pm, env);
   // A scratch home and a prefix's `bin` reach every child, the probes included, and the record keeps them for the
   // undo (D6).
-  const scratch = { ...homeEnv(args.home, deps.realHome ?? os.homedir(), platform), ...(args.prefix && { PATH: prefixBinOf(pm.kind, args.prefix, platform) }) };
-  const readNow = () => read({ home: args.home, cwd: args.cwd, spawn: deps.spawn, platform, env: withEnv(env, scratch, platform) });
+  const realHome = deps.realHome ?? os.homedir();
+  const scratch = { ...homeEnv(args.home, realHome, platform), ...(args.prefix && { PATH: prefixBinOf(pm.kind, args.prefix, platform) }) };
+  const readNow = () => read({ home: args.home, cwd: args.cwd, spawn: deps.spawn, platform, env: withEnv(env, scratch, platform), homedir: realHome });
   const planOf = ({ rows, functions, prerequisites }) => planStack({ rows, functions, prerequisites, pm, prefix: args.prefix, platform });
   const planNow = () => planOf(readNow());
-  // Codex writes its registrations where `CODEX_HOME` says; the probe and the record read `<home>/.codex`.
-  const codexHome = realCodexHome(withEnv(env, scratch, platform), args.home, platform);
-  const codexHomeRead = path.join(args.home, '.codex');
-  const fold = (dir) => (platform === 'win32' ? path.resolve(dir).toLowerCase() : path.resolve(dir));
-  const codexElsewhere = fold(codexHome) !== fold(codexHomeRead);
+  // Codex writes its registrations where `CODEX_HOME` says, and doctor reads them there (T8): the registration in Codex
+  // runs with that home, and its record keeps it, so the check and the undo reach the same table.
+  const codexHome = codexHomeOf({ home: args.home, env: withEnv(env, scratch, platform), homedir: realHome, platform });
   const unverified = [];
   // The records left with `applies` still `null`, read again at the end of the run (T7).
   const unread = [];
@@ -227,22 +226,18 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
       log(`${tool} ${dimension}: no longer missing`);
       continue;
     }
-    if (row.kind === 'registration' && dimension === 'codex' && codexElsewhere) {
-      error(`${tool} ${dimension}: your CODEX_HOME is ${codexHome}, and js-harness reads ${codexHomeRead}; register it by hand: ${shownCommand(row.run, platform)}`);
-      continue;
-    }
     for (const line of rowLines(row, platform, `${tool} ${dimension}`)) log(line);
     if (!args.yes && !(await ask('Run it? [y/N] '))) {
       log(`${tool} ${dimension}: skipped`);
       continue;
     }
-    const given = { ...scratch, ...row.env };
+    const inCodex = row.kind === 'registration' && dimension === 'codex';
+    const given = { ...scratch, ...row.env, ...(inCodex && { CODEX_HOME: codexHome }) };
     const childEnv = withEnv(env, given, platform);
     const record = { tool, dimension, kind: row.kind, ...(row.bin && { bin: row.bin }), run: row.run, undo: row.undo, applies: null, env: given, at: now() };
     recordStackRow(args.home, record);
     // Codex refuses a `CODEX_HOME` that does not exist, and a fresh home has no `.codex` until Codex first ran (T4).
-    // `codexElsewhere` is false here, so this is the folder Codex itself would make.
-    if (row.kind === 'registration' && dimension === 'codex') fs.mkdirSync(codexHomeRead, { recursive: true });
+    if (inCodex) fs.mkdirSync(codexHome, { recursive: true });
     const result = runWords(row.run, { spawn: deps.spawn, env: childEnv, timeout: TIMEOUTS[row.kind], interactive: !args.yes, platform });
     const after = readNow();
     const stillMissing = Boolean(missingIn(planOf(after), `${tool}.${dimension}`));
@@ -267,7 +262,7 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
       error(`${tool} ${dimension}: the command failed (${result.why}) and the probe cannot tell what it left; it stays recorded, so uninstall machine judges it`);
       continue;
     }
-    const applies = appliesOf(row, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
+    const applies = appliesOf(record, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
     recordStackRow(args.home, { ...record, applies });
     if (applies === null) unread.push({ record, row, childEnv });
     if (stillMissing) error(`${tool} ${dimension}: the command exited 0 and the probe still finds it missing; it stays recorded, so uninstall machine judges it`);
@@ -283,7 +278,7 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     const end = readNow();
     for (const { record, row, childEnv } of unread) {
       if (end.rows.find((probed) => probed.id === record.tool)?.[record.dimension] !== 'ok') continue;
-      const applies = appliesOf(row, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
+      const applies = appliesOf(record, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
       if (applies === null) continue;
       recordStackRow(args.home, { ...record, applies });
       if (unverified.includes(record)) unverified.splice(unverified.indexOf(record), 1);

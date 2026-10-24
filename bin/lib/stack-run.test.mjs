@@ -104,6 +104,15 @@ test('appliesOf reads a package\'s version, Claude\'s entry and Codex\'s table',
   assert.deepEqual(appliesOf({ tool: 'codegraph', dimension: 'codex', kind: 'registration' }, { home }), { present: true, value: '[mcp_servers.codegraph]\ncommand = "codegraph"', readable: true });
 }));
 
+test('appliesOf reads a registration in Codex from the Codex home its record names (stack-install T8)', () => withHome((home) => {
+  const own = path.join(home, 'his-codex');
+  fs.mkdirSync(own);
+  fs.writeFileSync(path.join(own, 'config.toml'), '[mcp_servers.codegraph]\ncommand = "codegraph"\n');
+  const row = { tool: 'codegraph', dimension: 'codex', kind: 'registration' };
+  assert.deepEqual(appliesOf({ ...row, env: { CODEX_HOME: own } }, { home }), { present: true, value: '[mcp_servers.codegraph]\ncommand = "codegraph"', readable: true });
+  assert.deepEqual(appliesOf({ ...row, env: {} }, { home }), { present: false, value: null, readable: true }, 'a record that names none reads <home>/.codex');
+}));
+
 const PACKAGE = { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'], applies: '0.50.0', env: { PNPM_HOME: '/p' } };
 const CLAUDE = { tool: 'codegraph', dimension: 'claude', kind: 'registration', run: ['claude', 'mcp', 'add'], undo: ['claude', 'mcp', 'remove', '-s', 'user', 'codegraph'], applies: { command: 'codegraph' }, env: {} };
 

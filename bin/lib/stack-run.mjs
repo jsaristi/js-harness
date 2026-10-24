@@ -71,10 +71,10 @@ export function runWords(words, { spawn = realSpawn, env, timeout, interactive =
 /** The `[mcp_servers.<name>]` table of `<home>/.codex/config.toml`, with its own subtables (`[mcp_servers.<name>.env]`),
  * as its text trimmed, or `null` when there is none: what `codex mcp add` wrote, so an undo can tell the entry it made
  * from one written since. */
-export function codexMcpSection(home, name) {
+export function codexMcpSection(home, name, codexHome = path.join(home, '.codex')) {
   let text;
   try {
-    text = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
+    text = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
   } catch {
     return null;
   }
@@ -99,7 +99,8 @@ export function appliesOf(row, { home, spawn, platform, env }) {
     const { state, entry } = claudeJsonMcpServer(home, row.tool);
     return { present: entry != null, value: entry ?? null, readable: state !== 'unknown' };
   }
-  const value = codexMcpSection(home, row.tool);
+  // The Codex home the registration was made in, which its record keeps (stack-install T8); else `<home>/.codex`.
+  const value = codexMcpSection(home, row.tool, row.env?.CODEX_HOME || undefined);
   return { present: value !== null, value, readable: true };
 }
 

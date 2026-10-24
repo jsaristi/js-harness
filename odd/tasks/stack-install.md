@@ -78,7 +78,7 @@ of the one scratch trial (package downloads).
 - [x] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [x] T6 (kind: build) Done: a651b921 (Log, T6). A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
 - [x] T7 (kind: build) Done (Log, L16). A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11)
-- [ ] T8 (kind: build) A follow-up, split from T7 on 2026-10-24: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
+- [x] T8 (kind: build) Done (Log, L17). A follow-up, split from T7 on 2026-10-24: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
 
 ## Design
 
@@ -372,3 +372,25 @@ onboarding's files; a note in the shared notes folder hands that session this co
   - gentle-ai: 0c9bb95f assessed medium, review_due false, reason under_budget (46 lines).
   - Codex 612ceff..4c2955d: incorrect (0.94), one P2, the named undo lost the recorded environment. Recorded.
   - Codex 4c2955d..0c9bb95: correct (0.97), the P2 fixed. Recorded.
+- L17 (2026-10-24) T8, from the lead's 11:47 order: "`doctor` should read `CODEX_HOME` before `<home>/.codex`, so
+  that `stack install` can make that registration itself ... Keep the old path when `CODEX_HOME` is unset or empty".
+  Built test-first on fix/stack-install-t8. 4d95598c: `codexHomeOf` gives the `CODEX_HOME` he set when the home is
+  the real one, and `<home>/.codex` when it is unset or empty or the home is a fixture, the rule the login probe
+  already followed and now shares (`usersCodexHome`). doctor's three registration probes (engram, codegraph,
+  context7) read it; `stack install` runs the registration in Codex with it, records it in the record's `env`, and
+  `appliesOf` reads the section back from there, so the check and the undo reach the same `config.toml`. The branch
+  that left that registration to him is gone. The fake `codex mcp add` now writes `config.toml`, which also covers
+  T7's advisory 2. RED 4, then GREEN. Suites: stack-run 19, stack-install 21, doctor 92, lib/stack 125, stack 14,
+  doctor-hook 14, install 111, tui 88, codex-review-home 33. The other readers of `<home>/.codex` stay as they are
+  (the skills and hooks install writes in `manifest.mjs`, `payload.mjs`, `backup.mjs`, `clean.mjs`, the stale-hooks
+  read, `scripts/stack-scratch.mjs` with its own `CODEX_HOME`): the harness writes there too, and moving one reader
+  alone would split them.
+  An independent Opus verifier (risk item 3: doctor's reading is shared with the login probe) on
+  e16a4e78..4d95598c: PASS, a differential of 176 cases per tree over `probeStack`, `doctorMain --json`, the login
+  probe's env, `stack install` and `undoStack`, 139 identical and the 37 others intended (the reads and the
+  registration move to his `CODEX_HOME` on the real home; old records undo as before), the new tests failing at the
+  base. Its advisories are left: the `CODEX_HOME` folder `stack install` makes is not recorded (as `<home>/.codex`
+  was not), a relative `CODEX_HOME` is stored as given (from `realCodexHome`), and no committed test runs `stackMain`
+  without a fake `read`, so `readStack` getting `homedir` is pinned only by its probe.
+  - gentle-ai: 4d95598c assessed medium, review_due false, reason under_budget (188 lines).
+  - Codex e16a4e7..4d95598: correct (0.86), no findings. Recorded.
