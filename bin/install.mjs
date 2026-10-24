@@ -12,6 +12,7 @@ import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoo
 import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
+import { codexHomeOf } from './lib/stack.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -273,6 +274,28 @@ function logEntries(entries) {
   }
 }
 
+/** The config.toml Codex keeps its hooks' trust in, for the Codex home of `home` as doctor reads it (`codexHomeOf`,
+ * stack-install T8): install records it on each Codex entry, so `uninstall` takes the trust out of that file
+ * (odd/tasks/codex-hook-trust.md). `deps.homedir` and `deps.platform` are the seams of a test. */
+function codexConfigOf(home, env, deps) {
+  return path.join(codexHomeOf({ home, env, homedir: deps.homedir ?? os.homedir(), platform: deps.platform ?? process.platform }), 'config.toml');
+}
+
+/** Says what taking hook entries out did to Codex's trust of them, and of the user's own hooks they moved
+ * (odd/tasks/codex-hook-trust.md), for `uninstall` and for the entries a `sync` prunes. A config.toml that could not
+ * be edited is a change to the user's Codex left half done that nothing records any more: it goes to stderr, and the
+ * count of them is returned so the command fails. */
+function logTrust({ trustMoved = [], trustKept = [] }) {
+  for (const { path: p, dropped, moved } of trustMoved) {
+    if (dropped > 0) console.log(`removed ${dropped} trust record${dropped === 1 ? '' : 's'} of the harness's Codex hooks from ${p}`);
+    if (moved > 0) console.log(`moved ${moved} trust record${moved === 1 ? '' : 's'} of your own Codex hooks in ${p} to their hooks' new places`);
+  }
+  for (const { path: p, hooksPath, why } of trustKept) {
+    console.error(`could not take the trust of the harness's Codex hooks out of ${p} (${why}): it is as it was, so its [hooks.state] tables for ${hooksPath} name places the harness's hooks no longer hold; remove those by hand, and trust your own hooks that moved again in interactive codex`);
+  }
+  return trustKept.length;
+}
+
 /** Files this run actually wrote: a record carried forward after a failed write is still in the
  * manifest (so uninstall can undo it) but was not written now. */
 function writtenCount(manifest) {
@@ -294,7 +317,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
   // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
   let manifest;
   try {
-    manifest = sync(home, version, deps);
+    manifest = sync(home, version, { ...deps, codexConfig: codexConfigOf(home, env, deps) });
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -305,6 +328,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
+  if (logTrust(manifest) > 0) return 1;
   return acceptMessages ? reportSessionMessages(home) : 0;
 }
 
@@ -446,7 +470,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   const home = parsed.home;
   let manifest;
   try {
-    manifest = sync(home, version, deps);
+    manifest = sync(home, version, { ...deps, codexConfig: codexConfigOf(home, env, deps) });
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -457,7 +481,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   logFiles(manifest.files);
   logEntries(manifest.entries);
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
-  return 0;
+  return logTrust(manifest) > 0 ? 1 : 0;
 }
 
 /** Scope by location (T3 design): inside a git repository `js-harness init` touched (`harness.json`
@@ -570,6 +594,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   }
   for (const p of result.entriesRemoved) console.log(`removed hook entry from ${p}`);
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
+  logTrust(result);
   for (const p of result.settingsRestored ?? []) console.log(`put ${SESSION_MESSAGES.key} back in ${p}`);
   for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
   for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is still recorded; run js-harness uninstall --global again, or set it back by hand`);
@@ -693,7 +718,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

@@ -70,7 +70,7 @@ const LEGACY = {
 const CEILINGS = {
   'bin/lib/sessions.mjs': 3431,
   'bin/codex-review.mjs': 2284,
-  'bin/lib/manifest.mjs': 2160,
+  'bin/lib/manifest.mjs': 2159,
   'bin/check.mjs': 2110,
   'bin/lib/project.mjs': 2043,
   'evals/isolation-probe.mjs': 1681,

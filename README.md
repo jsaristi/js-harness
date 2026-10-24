@@ -339,6 +339,12 @@ registered hook entry in ~\.codex\hooks.json: js-harness reply --hook || exit 0 
 …
 ```
 
+Then trust the Codex hooks: Codex runs no hook of `hooks.json` that its `config.toml` holds no
+trust record for, and says nothing about it (Codex CLI 0.163.0). Run `codex` in a terminal and
+answer its prompt about hooks with "Trust all and continue". Install never writes that record:
+trusting a hook is your security setting, and its hash is Codex's own. Until you do, `doctor`'s
+`codex-trust` row is `missing` and names each hook Codex skips.
+
 ### js-harness loop
 
 Runs a session's long background loops (the orchestrator's heartbeat, its channel watch, a merge
@@ -525,6 +531,15 @@ It also says whether Claude Code and the desktop app are signed into the same ac
 identifier is printed) and whether the remote server of each recorded login launcher is running.
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
 `worktrees` row for the worktrees on branches main already holds. `--json` prints the rows.
+
+Its `codex-trust` row reads the `config.toml` of the Codex home (`CODEX_HOME` when the home is the
+real one and it is set, else `~/.codex`) for a `trusted_hash` of each harness hook of
+`~/.codex/hooks.json`, at the place Codex keys it by:
+`[hooks.state.'<hooks.json>:<event>:<group>:<handler>']`. A hook with none is `missing`, listed by
+that place and its command, with the step that trusts it; doctor never writes the record. A hash
+that no longer matches its hook, after an upgrade changed it, cannot be told from here.
+`uninstall` takes the trust records of the hooks it removes out of the `config.toml` install
+recorded, and moves the records of your own hooks that come after them to their new places.
 
 Its `engram-plugin` row, shown while engram's Claude Code plugin (`engram@engram`) is installed and
 enabled, compares the plugin with the one the engram binary's own release ships: the version that

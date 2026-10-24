@@ -148,13 +148,13 @@ test("doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead. The harness's own row could not read main's list either: `unknown`.
-      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -563,12 +563,13 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-5), accountLine('ok'), output);
-    assert.equal(lines.at(-4), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.equal(lines.at(-6), accountLine('ok'), output);
+    assert.equal(lines.at(-5), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.match(lines.at(-4), /^codex-trust\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/, 'then the Codex trust check, with no manifest to read');
     assert.equal(lines.at(-3), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
     assert.match(lines.at(-2), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
     assert.match(lines.at(-1), /^js-harness\s+[0-9a-f]{8}\s+n\/a\s+n\/a\s+n\/a\s+unknown$/, "then the harness's own rules, main unread");
-    assert.equal(lines.length, 14, "the header, the six tools, the six checks and the harness's own row");
+    assert.equal(lines.length, 15, "the header, the six tools, the seven checks and the harness's own row");
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
