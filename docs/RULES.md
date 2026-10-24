@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `28ad681548ff`. In force: 57 (32 of Sebastián, 25 of the project). Retired: 0.
+Hash `9a5d286100f1`. In force: 57 (32 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -87,9 +87,9 @@ When the user asks what was done, the lead's status report shows each section th
 - Since 2026-10-20. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-20.
 
 ### restart-announce
-Before the user restarts or updates, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"
+Before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-20. Row: reports. Source: his words of 2026-10-20, 2026-10-20, checked by the command on 2026-10-20.
+- Since 2026-10-23. Row: reports. Source: his words of 2026-10-23, checked by the command on 2026-10-23.
 
 ### review-effort
 The effort a Codex review runs at: medium.

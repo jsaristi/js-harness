@@ -462,22 +462,16 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Recuerdame avisarme cuando tenga que reiniciar y por favor escribemelo en mayusculas para pdoer saber algo asi: YA PUEDES REINICIAR Y ACTUALIZAR!!! y pausas todo para darme tiempo a hacerlo",
-        "date": "2026-10-20",
+        "quote": "Hay una actualizacion pendiente ya sabes me avisas para reiniciar cuando puedas pausa todo y esto por favor vuelve un protocolo para que el usuario siempre que le diga al orquestador el arnes tenga un protocolo para permitir pausar varias cosas pero no que queden incompletas y poder hacer la actualizacion y poder continuar despues del reinicio",
+        "date": "2026-10-23",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
-        "line": 10294
-      },
-      {
-        "quote": "por favor agregame lo de avisarme asi al harnes",
-        "date": "2026-10-20",
-        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
-        "line": 10399
+        "line": 26478
       }
     ],
-    "reading": "When he must restart or update (a Claude Desktop update js-harness doctor reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), the lead first pauses everything at a safe point: each working session on this machine commits what is ready, pushes only when its check passes, writes its state to its feature document and starts nothing new, and the lead stops its own loops and waits once the board shows nothing working. \"Pausas todo para darme tiempo\" puts the pause before the notice. Then the lead says, in capitals, the phrase he gave, with what to do in order, what not to touch and the line to send it back; when he is back it resumes the sessions by message and carries out js-harness doctor's fixes. His second line asks that this be in the harness: the orchestrator skill's \"The restart\" carries it.",
-    "accepted": "Not put to him as a reading: he was away when the skill text was written (a work session, from the lead's brief of 2026-10-20), and it is his to correct.",
+    "reading": "When he asks the lead to pause for a restart or an update, or must restart or update himself (a Claude Desktop update js-harness doctor reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), the lead pauses everything at a safe point: each working session on this machine commits what is ready, pushes only when its check passes, writes its state to its feature document and starts nothing new; what is already running reaches its end, nothing is cut halfway, and a unit that cannot finish stops only at a commit with its state written; each session sends the lead one paused note naming what is left mid-way. Only then does the lead say, in capitals, the phrase he gave, with what to do in order, what not to touch and the line to send it back. When he is back the lead resumes the sessions from the steps it wrote to its relief file and gives each paused session the next step from that session's own written state. He asks that the pause come first, that the protocol cover an update and the continuation after the restart, and that the orchestrator skill carry it.",
+    "accepted": "Not put to him as a reading: it is his own message of 2026-10-23 (908805db, line 26478), which asks for this protocol in the orchestrator skill; it is his to correct.",
     "checked": {
-      "date": "2026-10-20",
+      "date": "2026-10-23",
       "by": "command"
     }
   },

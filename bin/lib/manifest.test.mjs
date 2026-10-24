@@ -2823,13 +2823,17 @@ test('the orchestrator skill says how the lead pauses everything before it tells
   const text = components[2].content('0.1.0');
   assert.ok(text.includes('\n## The restart\n'));
   for (const line of [
-    'When the user must restart or update (a Claude Desktop update `js-harness doctor` reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), pause everything at a safe point first, and only then tell them.',
+    'When the user must restart or update (a Claude Desktop update `js-harness doctor` reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), or whenever the user asks the lead to pause for a restart or an update, pause everything at a safe point first, and only then tell them.',
     'it commits what is ready, pushes only when its check already passes, writes its state to its feature document and starts nothing new',
+    'What is already running reaches its end (a writer, a review, a land, a gate), and nothing is cut halfway',
+    'a unit that cannot finish is stopped only at a commit, with its state written',
+    'Each session sends the lead one "paused" note that names anything left mid-way.',
     'Keep your watch until the board shows no other session `working` (yours always reads so) and no gate running.',
     'write the paused sessions and the resume steps to your relief file',
     'tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!',
     'what not to touch, and the line to send this session when they are back',
-    'resume each paused session by message',
+    'resume each paused session by message, from the steps you wrote to your relief file before the announcement',
+    'with the next step from that session\'s own written state',
     'Run `js-harness doctor` and carry out its fixes',
     '7. a restart or an update of theirs is ready (The restart, below).',
   ]) assert.ok(text.includes(line), line);
