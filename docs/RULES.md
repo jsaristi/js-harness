@@ -53,7 +53,7 @@ A design before it is built, and what reaches the user to decide, passes two rea
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
-- Read by: none.
+- Read by: `bin/lib/fixed-load.mjs`.
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
 
 ### lead-charter

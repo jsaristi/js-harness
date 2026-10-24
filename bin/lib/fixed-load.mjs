@@ -5,9 +5,10 @@
 // prompt) raises one session and a headless `claude -p` run, which loads fewer tools, lowers one; neither moves it.
 import fs from 'node:fs';
 import path from 'node:path';
+import { ruleValue } from './rules.mjs';
 
-/** His "100 mil" (2026-10-15, odd/tasks/fixed-load.md S6), until he sets another (D1). */
-export const FIXED_LOAD_BUDGET = 100_000;
+/** His "100 mil" (2026-10-15, odd/tasks/fixed-load.md S6), declared as rule:fixed-load-budget. */
+export const FIXED_LOAD_BUDGET = ruleValue('fixed-load-budget', 'tokens');
 
 const SESSIONS = 5;
 const CHUNK = 64 * 1024;
