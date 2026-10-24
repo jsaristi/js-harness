@@ -3971,7 +3971,13 @@ test('the skills state the permit, memory-index, share and wait-for values from 
   }
   const text = components.map((component) => component.content('0.0.0')).join('\n');
   for (const said of [`up to ${WAIT_MS / 60_000} minutes`, `it lasts ${LEASE_MINUTES} minutes`, `over ${INDEX_LINE_CHARS} characters`,
-    `more than ${SHARE_TOLERANCE} points`, `after ${ruleValue('wait-for', 'minutes') / 60} hours`]) {
+    `more than ${SHARE_TOLERANCE} points`, `after ${ruleValue('wait-for', 'minutes') / 60} hours`,
+    `waits for you up to ${WAIT_MS / 60_000} minutes`, `shorten an index line to ${INDEX_LINE_CHARS} characters`]) {
     assert.ok(text.includes(said), said);
   }
+});
+
+test('statedHours gives minutes as hours to one decimal place at most, so a skill never prints a long fraction', async () => {
+  const { statedHours } = await import('./manifest.mjs');
+  assert.deepEqual([480, 450, 470, 30].map(statedHours), ['8', '7.5', '7.8', '0.5']);
 });

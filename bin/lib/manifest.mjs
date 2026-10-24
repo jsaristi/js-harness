@@ -19,6 +19,9 @@ import { protocolsSkillContent } from './protocols-skill.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
 
+/** Minutes as the hours a skill states, to one decimal place at most: rule wait-for's 480 reads "8". */
+export const statedHours = (minutes) => String(Math.round(minutes / 6) / 10);
+
 function skillContent(version) {
   return `---
 name: js-harness
@@ -130,7 +133,7 @@ Every question of the project reaches the user in one place: the orchestrator's 
 What you run:
 - \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the work sessions that hold work you handed them and have made no commit, notice or gate for ${ruleValue('session-stall', 'minutes')} minutes (\`Stalled\`), the worktrees with their feature plans, the running gates, the open pull requests and your relief file. \`js-harness loop heartbeat\` ends on such a session too, with a \`STALLED:\` line, and on a red daily Windows run not told before, with a \`WINDOWS:\` line that names its failing tests. It also keeps each settled day's throughput snapshot and ends on a throughput review that falls due, with a \`DUE:\` line that names the commands to run; every line that ends it is followed by the \`DUE:\` lines still open.
 - \`js-harness sessions --watch\`, in the background — your way of waiting. It is silent until the board changes in a way that needs a decision, then prints the changes and the board. Launch it again each time it returns. A return with "nothing changed" is not news: relaunch it and say nothing.
-- Resting: when a fresh board shows no work session running, nothing waiting on you and no pull request to land, stop every timed watch and wait with one \`js-harness wait --notice-to orchestrator\` in the background. It ends only on a notice to you or after ${ruleValue('wait-for', 'minutes') / 60} hours, so a quiet stretch wakes you once, not every half hour.
+- Resting: when a fresh board shows no work session running, nothing waiting on you and no pull request to land, stop every timed watch and wait with one \`js-harness wait --notice-to orchestrator\` in the background. It ends only on a notice to you or after ${statedHours(ruleValue('wait-for', 'minutes'))} hours, so a quiet stretch wakes you once, not every half hour.
 - \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes; \`--pace\` gives the tasks closed and added each day on the default branch.
 - \`js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>\`, in the background — each loop you keep (\`js-harness loop heartbeat\`, \`js-harness loop channel-watch\`, a merge keeper): it records you as its owner, runs the command, and its end wakes you. \`js-harness loop status\` lists the project's loops with their owners; \`js-harness loop stop <name>\` stops one of yours and says only when nothing of it is left.
 
