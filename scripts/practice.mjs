@@ -183,7 +183,7 @@ const GIT_IDENTITY = ['-c', 'user.name=practice', '-c', 'user.email=practice@exa
 /** `git commit` with the gate's rows in its output: a gate that passes prints one line unless it is asked for every
  * row, which a hook, run without flags, is asked by JS_HARNESS_CHECK_VERBOSE (odd/tasks/quiet-gate.md). The steps
  * read those rows as the proof that the hook ran each one. */
-const commitWithRows = (ctx, cwd, ...args) => git({ ...ctx, env: { ...ctx.env, JS_HARNESS_CHECK_VERBOSE: '1' } }, cwd, 'commit', ...args);
+const commitWithRows = (ctx, cwd, ...args) => git({ ...ctx, env: { ...ctx.env, JS_HARNESS_CHECK_VERBOSE: '1' } }, cwd, ...GIT_IDENTITY, 'commit', ...args);
 
 /** One command of the installed candidate, with the practice project as its cwd. It is run through this
  * same node and the installed entry file, so no step depends on how a shell finds the command; the one

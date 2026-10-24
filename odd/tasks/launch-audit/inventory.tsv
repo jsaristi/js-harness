@@ -283,6 +283,8 @@ bin/lib/select-tests.mjs	live	shared
 bin/lib/select-tests.test.mjs	internal	shared	
 bin/lib/session-classes.mjs	live	shared	
 bin/lib/session-classes.test.mjs	internal	shared	
+bin/lib/session-id.mjs	live	shared	
+bin/lib/session-id.test.mjs	internal	shared	
 bin/lib/session-title-guard.mjs	live	b	
 bin/lib/session-title-guard.test.mjs	internal	b	
 bin/lib/sessions.mjs	live	c	

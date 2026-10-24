@@ -568,7 +568,7 @@ export function templateLinesProblem({ agentsText, template, tokens, budget }) {
   for (const section of TEMPLATE_SECTIONS) {
     if (!headings.includes(`## ${section}`)) return `the template js-harness init wrote has no section "${section}"`;
   }
-  if (!agentsText.replace(/\s+/g, ' ').includes('A reply ends with one of five states')) return 'the template js-harness init wrote does not say that a reply ends with one of five states';
+  if (!agentsText.replace(/\s+/g, ' ').includes('A reply ends in one of the five states')) return 'the template js-harness init wrote does not say that a reply ends with one of five states';
   const half = budget / 2;
   if (tokens > half) return `the template js-harness init wrote is ${tokens} estimated tokens, over ${half}, half of agents-budget: a project keeps less than half for its own lines`;
   return null;
