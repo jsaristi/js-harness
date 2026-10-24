@@ -77,12 +77,20 @@ const ticked = (text) => [...(text ?? '').matchAll(/`([^`]+)`/g)].map((match) =>
 // A word that is a plain relative path to a `.mjs`, `.js` or `.md` file, with an optional `:line` or `:from-to`.
 const PROOF_FILE = /^([\w.-]+(?:\/[\w.-]+)*\.(?:mjs|js|md))(?::\d+(?:-\d+)?)?$/;
 
-/** The files of the repository a proof command runs, read from each backticked command: every word that, without one
- * pair of quotes around it, is a plain relative path to a `.mjs`, `.js` or `.md` file (`PROOF_FILE`), wherever it
- * stands. A URL, a git range, a ref, a pattern and code name no such path, so none of them is read as a file. */
+// The options of a proof command whose next argument is a value, code or a pattern, never a file to run. Any other
+// option takes no value (`--test`, `--test-only`, `--`), so a file after it is read.
+const VALUE_OPTIONS = ['-e', '--eval', '-p', '--print', '--test-name-pattern', '--test-skip-pattern', '--ref'];
+
+/** The arguments of a command as a shell splits them: a quoted run is one argument, without its quotes. */
+const argumentsOf = (command) => [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((match) => match[1] ?? match[2] ?? match[3]);
+
+/** The files of the repository a proof command runs, read from each backticked command: every argument that is a
+ * plain relative path to a `.mjs`, `.js` or `.md` file (`PROOF_FILE`) and not the value of a `VALUE_OPTIONS`
+ * option. A URL, a git range, quoted code and a pattern are no such argument, so none of them is read as a file. */
 function proofFiles(command) {
-  return command.split(/\s+/).flatMap((word) => {
-    const match = PROOF_FILE.exec(word.replace(/^(["'])(.*)\1$/, '$2'));
+  const args = argumentsOf(command);
+  return args.flatMap((arg, i) => {
+    const match = VALUE_OPTIONS.includes(args[i - 1]) ? null : PROOF_FILE.exec(arg);
     return match ? [match[1]] : [];
   });
 }

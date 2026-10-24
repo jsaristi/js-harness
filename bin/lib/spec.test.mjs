@@ -95,6 +95,18 @@ test('a proof file after an option that takes no value is read: -- and --test-on
   }
 });
 
+test('a file name inside quoted code is not a finding: the quotes hold one argument, which is code', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: `\`node -e "console.log('ok missing.md ok')"\`` })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a quoted test file name after --test-name-pattern is not a finding: it is the pattern, not a file', () => {
+  for (const proof of ['`node --test --test-name-pattern "missing.test.mjs"`', '`node --test --test-skip-pattern missing.test.mjs`']) {
+    const { findings } = specFindings(spec(capability('The reply check', { Proof: proof })), plain);
+    assert.deepEqual(findings, [], proof);
+  }
+});
+
 test('a proof whose --ref takes a tag name is not a finding: refs/tags/v1.0.0 is no file', () => {
   const { findings } = specFindings(spec(capability('The reply check', { Proof: '`js-harness check --push --ref refs/tags/v1.0.0`' })), plain);
   assert.deepEqual(findings, []);
