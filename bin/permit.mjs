@@ -36,7 +36,8 @@ const SCHEMA = 'js-harness.permit/v1';
 /** How long a card waits for the lead: under the hook's 600 s timeout, so the hook answers before the host cuts it. */
 export const WAIT_MS = 570 * 1000;
 const POLL_MS = 2000;
-const LEASE_MINUTES = 40;
+/** How long a lease holds the relay without a renewal. */
+export const LEASE_MINUTES = 40;
 
 /** The folder of the project `slug`'s relay under `home`: under the channel folder, which `uninstall` removes. */
 export function permitsDir(home, slug) {

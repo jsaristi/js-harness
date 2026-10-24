@@ -12,7 +12,7 @@ const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_messa
 
 /** How far a stated share may sit from the recorded one and still be right: the recorded share agreed with the
  * app's own reading within 2 points in 110 of 127 matched cases (odd/tasks/honesty-audit.md, version 4). */
-const SHARE_TOLERANCE = 2;
+export const SHARE_TOLERANCE = 2;
 
 const pad = (n) => String(n).padStart(2, '0');
 

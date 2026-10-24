@@ -3957,3 +3957,21 @@ test('writeManifestAtomic renames again while Windows holds the manifest, and le
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// N28, N29: a value the skills state has one home in code (protocol 4), so the skills read it, never restate it.
+test('the skills state the permit, memory-index, share and wait-for values from the code that enforces them', async () => {
+  const { WAIT_MS, LEASE_MINUTES } = await import('../permit.mjs');
+  const { INDEX_LINE_CHARS } = await import('./memory-index-guard.mjs');
+  const { SHARE_TOLERANCE } = await import('./audit.mjs');
+  const { ruleValue } = await import('./rules.mjs');
+  for (const value of [WAIT_MS, LEASE_MINUTES, INDEX_LINE_CHARS, SHARE_TOLERANCE]) assert.equal(typeof value, 'number');
+  const source = fs.readFileSync(new URL('./manifest.mjs', import.meta.url), 'utf8');
+  for (const literal of [/\b9\.5 minutes/, /lasts 40 minutes/, /\b150 characters/, /more than 2 points/, /after 8 hours/]) {
+    assert.doesNotMatch(source, literal);
+  }
+  const text = components.map((component) => component.content('0.0.0')).join('\n');
+  for (const said of [`up to ${WAIT_MS / 60_000} minutes`, `it lasts ${LEASE_MINUTES} minutes`, `over ${INDEX_LINE_CHARS} characters`,
+    `more than ${SHARE_TOLERANCE} points`, `after ${ruleValue('wait-for', 'minutes') / 60} hours`]) {
+    assert.ok(text.includes(said), said);
+  }
+});
