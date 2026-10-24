@@ -1145,3 +1145,5 @@ Read plainly, it is F5's finding again and sharper on the second host: on tasks 
 the stack's context and workflow add cost without adding score, and on Codex, run with no
 person to answer, a question the workflow asks can end the session.
 
+
+- 2026-10-24 gentle-ai: 54e51f62 and b26f8de2 (a70e92f2..b26f8de2) assessed medium, not due (under_budget), by `gentle-ai review assess --base-ref a70e92f2 --committed-only`; Codex: correct (0.99), recorded. The F6 result moved here from docs/ROADMAP.md (reorg plan v2, slice 4).
