@@ -556,6 +556,24 @@ test('upgrade fails when the package manager exits non-zero and the installed co
   assert.ok(!calls.some((call) => [call.cmd, ...call.args].join(' ').includes(' sync ')), 'nothing was synced');
 });
 
+// stack-install T6: `--pm` naming a package manager whose path holds a space runs that file, as `stack` does, instead
+// of splitting it into two words.
+test('upgrade --pm with a path that holds a space runs that one file', async () => {
+  const folder = makeTmpDir('js-harness-upgrade-pm with space-');
+  const pm = path.join(folder, 'npm');
+  fs.writeFileSync(pm, '#!/bin/sh\n');
+  try {
+    const calls = [];
+    const run = await prefixUpgrade(installExits(0, NEWER, calls), { pm });
+    assert.equal(run.code, 0, run.err);
+    const installCall = calls.find((call) => call.args.includes('install'));
+    assert.equal(installCall.cmd, pm);
+    assert.equal(installCall.args[0], 'install');
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 /** A stand-in where every install exits 1 with os error 32 and the copy answers NEWER from install `goodFrom` on. */
 function installsFailUntil(goodFrom, calls) {
   let installs = 0;
