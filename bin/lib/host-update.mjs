@@ -90,9 +90,6 @@ function updateWords(reviewed, now) {
   return desktop ?? (code ? `the Code tab CLI ${code}` : null);
 }
 
-/** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the cache's
- * `host.reviewed`, or `null`), and the record to write: the versions read, taken as reviewed, when there is no
- * record yet and the running version was read; `null` otherwise. */
 /** The step of a review that turns Remote Control back on: a restart of the app turns it off. Only where the rule
  * remote-control-yes is declared (`projectData`, the text of the project's rules file), his standing yes of 2026-10-15
  * (odd/tasks/host-update-check.md, L9), is it turned on without asking; anywhere else the user is asked first (his
@@ -106,6 +103,10 @@ function remoteControlStep(projectData) {
   return `ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; ${restart}`;
 }
 
+/** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the cache's
+ * `host.reviewed`, or `null`), and the record to write: the versions read, taken as reviewed, when there is no
+ * record yet and the running version was read; `null` otherwise. `projectData` is the text of the project's rules
+ * file (`readProjectRulesText`), or `null`: it words the Remote Control step of a review (`remoteControlStep`). */
 export function hostUpdateRow(versions, reviewed, now = () => new Date(), projectData = null) {
   const row = { id: 'host-update', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
   if (!versions.found) return { row, record: null };
