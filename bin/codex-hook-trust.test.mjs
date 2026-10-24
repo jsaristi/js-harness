@@ -190,8 +190,34 @@ test('install records the config.toml of the Codex home on each Codex entry, so 
     const { entries } = readManifest(home);
     const codexRecords = entries.filter((entry) => entry.path === hooksPathOf(path.join(home, '.codex')));
     assert.equal(codexRecords.length, 5);
-    for (const record of codexRecords) assert.equal(record.trustConfig, config);
-    for (const record of entries.filter((entry) => !codexRecords.includes(entry))) assert.equal(record.trustConfig, undefined);
+    for (const record of codexRecords) assert.deepEqual(record.trustConfigs, [config]);
+    for (const record of entries.filter((entry) => !codexRecords.includes(entry))) assert.equal(record.trustConfigs, undefined);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an install under another CODEX_HOME adds its config.toml to the record, and uninstall takes the trust out of both', async () => {
+  const home = makeTmp('js-harness-trust-home-');
+  try {
+    // The home is the real one (`homedir`), so the CODEX_HOME the user set decides which config.toml install records.
+    const [first, second] = [path.join(home, 'codex-a'), path.join(home, 'codex-b')];
+    await quietly(() => installMain(['--home', home], { CODEX_HOME: first }, { homedir: home }));
+    await quietly(() => installMain(['--home', home], { CODEX_HOME: second }, { homedir: home }));
+    const codexHome = path.join(home, '.codex');
+    const [firstConfig, secondConfig] = [path.join(first, 'config.toml'), path.join(second, 'config.toml')];
+    for (const record of readManifest(home).entries.filter((entry) => entry.path === hooksPathOf(codexHome))) {
+      assert.deepEqual(record.trustConfigs, [firstConfig, secondConfig]);
+    }
+    for (const config of [firstConfig, secondConfig]) {
+      fs.mkdirSync(path.dirname(config), { recursive: true });
+      fs.writeFileSync(config, `model = "gpt"\n\n${trustEverything(codexHome)}`, 'utf8');
+    }
+
+    const { code, err } = await quietly(() => uninstallMain(['--global', '--home', home], {}));
+
+    assert.equal(code, 0, err.join('\n'));
+    for (const config of [firstConfig, secondConfig]) assert.equal(fs.readFileSync(config, 'utf8'), 'model = "gpt"\n\n', config);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -299,7 +325,7 @@ test('sync that drops an entry no longer shipped takes its trust and moves the t
     hooks.hooks.Stop.unshift(retired);
     fs.writeFileSync(hooksPath, JSON.stringify(hooks, null, 2), 'utf8');
     const manifest = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8'));
-    manifest.entries.push({ path: hooksPath, pointer: ['hooks', 'Stop'], entry: retired, createdFile: true, createdFolders: [], createdContainers: 0, skipped: false, trustConfig: config });
+    manifest.entries.push({ path: hooksPath, pointer: ['hooks', 'Stop'], entry: retired, createdFile: true, createdFolders: [], createdContainers: 0, skipped: false, trustConfigs: [config] });
     fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
     fs.writeFileSync(config, trustEverything(codexHome), 'utf8');
 

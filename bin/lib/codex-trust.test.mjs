@@ -106,3 +106,42 @@ test('moveTrust keeps the comments above the next header when it drops the table
   const text = `[hooks.state.'${HOOKS}:stop:0:0']\ntrusted_hash = "x"\n\n# the TUI\n[tui]\nx = 1\n`;
   assert.equal(moveTrust(text, HOOKS, { stop: [-1] }, 'win32').text, '# the TUI\n[tui]\nx = 1\n');
 });
+
+test('a """ or a [ inside a comment or a one-line string opens nothing, so the tables after it are read and kept', () => {
+  const text = [
+    '# a note with """ in it',
+    "path = 'C:\\a[1'",
+    'title = "say \\"\'\'\'\\""',
+    `[hooks.state.'${HOOKS}:stop:0:0']`,
+    'trusted_hash = "sha256:gone"',
+    '',
+    '[tui]',
+    'x = 1',
+    '',
+  ].join('\n');
+  assert.deepEqual([...trustedPlaces(text, HOOKS, 'win32')], ['stop:0:0']);
+  const result = moveTrust(text, HOOKS, { stop: [-1] }, 'win32');
+  assert.equal(result.dropped, 1);
+  assert.equal(result.text, ['# a note with """ in it', "path = 'C:\\a[1'", 'title = "say \\"\'\'\'\\""', '[tui]', 'x = 1', ''].join('\n'));
+});
+
+test('moveTrust renames the key itself, never a comment after it that repeats the key\'s end', () => {
+  const text = `[hooks.state.'${HOOKS}:stop:1:0'] # was :stop:1:0\ntrusted_hash = "x"\n`;
+  assert.equal(moveTrust(text, HOOKS, { stop: [-1, 0] }, 'win32').text, `[hooks.state.'${HOOKS}:stop:0:0'] # was :stop:1:0\ntrusted_hash = "x"\n`);
+});
+
+test('quoted spellings of hooks.state are the same tables: a trust key is read and moved, any other form refused', () => {
+  const text = `["hooks" . 'state'.'${HOOKS}:stop:1:0']\ntrusted_hash = "x"\n`;
+  assert.deepEqual([...trustedPlaces(text, HOOKS, 'win32')], ['stop:1:0']);
+  assert.equal(moveTrust(text, HOOKS, { stop: [-1, 0] }, 'win32').text, `["hooks" . 'state'.'${HOOKS}:stop:0:0']\ntrusted_hash = "x"\n`);
+  for (const refused of [
+    '["hooks"."state"]\n"a:stop:0:0" = { trusted_hash = "x" }\n',
+    "['hooks'.state]\n",
+    `[hooks.state.'${HOOKS}:stop:0:0'.extra]\n`,
+    `[[hooks.state.'${HOOKS}:stop:0:0']]\n`,
+    '["hooks"]\nstate = {}\n',
+    '"hooks".state."a:stop:0:0".trusted_hash = "x"\n',
+  ]) {
+    assert.throws(() => trustedPlaces(refused, HOOKS, 'win32'), TrustFormError, refused);
+  }
+});

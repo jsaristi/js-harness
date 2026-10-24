@@ -18,7 +18,7 @@ import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
-import { moveTrustRecords, planTrustMoves } from './codex-trust.mjs';
+import { moveTrustRecords, planTrustMoves, withConfig } from './codex-trust.mjs';
 import { deepEqual } from './json-equal.mjs';
 
 /** Minutes as the hours a skill states, to one decimal place at most: rule wait-for's 480 reads "8". */
@@ -880,9 +880,9 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
-      // A Codex entry names the config.toml Codex keeps its trust in, as the caller resolved it at install, so the
-      // uninstall edits that file whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
-      ...(codexConfig && component.id.startsWith('codex-') ? { trustConfig: codexConfig } : {}),
+      // A Codex entry names every config.toml Codex may keep its trust in, as each install resolved it, so the
+      // uninstall edits those files whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
+      ...(codexConfig && component.id.startsWith('codex-') ? { trustConfigs: withConfig(previousEntry?.trustConfigs ?? [], codexConfig) } : {}),
     };
     // Not enumerable, like `pruneKept`: that the host file already held the entry is this run's report, not part of
     // the manifest the record goes into.
@@ -1590,7 +1590,7 @@ export function sync(home, version, deps = {}) {
  * is the seam that removes a component or an optional file, so a test can make a removal fail without relying
  * on file permissions (the same reason as `install`'s `deps.writeFile`).
  *
- * Codex keys a hook's trust by its place, so the config.toml recorded on a Codex entry (`trustConfig`) loses the trust
+ * Codex keys a hook's trust by its place, so each config.toml recorded on a Codex entry (`trustConfigs`) loses the trust
  * of the entries removed and moves that of the hooks after them (bin/lib/codex-trust.mjs): `trustMoved` and
  * `trustKept`, there only when not empty, say per file what went and moved, and why a file was left as it was.
  *

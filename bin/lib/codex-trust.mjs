@@ -4,8 +4,8 @@
 // index in the event's list and the handler the hook's index in the entry (B4 of the launch audit). The hash is a sha256
 // of a form internal to Codex, so nothing here can write one: this module reads the records and, for `uninstall`, drops
 // or renumbers them, line by line, so every other byte of the file stays as the user had it. No TOML library: only the
-// table headers Codex writes are read, and hook trust spelled any other way (a `[hooks.state]` table, dotted keys, an
-// inline table) is refused with `TrustFormError` instead of guessed at.
+// table headers are read, their keys quoted or not, and hook trust spelled any other way (a `[hooks.state]` table,
+// dotted keys, an inline table) is refused with `TrustFormError` instead of guessed at.
 import fs from 'node:fs';
 import path from 'node:path';
 import { deepEqual } from './json-equal.mjs';
@@ -16,13 +16,6 @@ export class TrustFormError extends Error {}
 /** A hooks.json event name as Codex writes it in a key: `SessionStart` is `session_start`. */
 export const snakeEvent = (event) => event.replace(/(?<=[a-z0-9])([A-Z])/g, '_$1').toLowerCase();
 
-// A header of a trust table: `[hooks.state.'<key>']`, the key a literal string, or a basic one in double quotes.
-const TRUST_HEADER = /^\s*\[\s*hooks\s*\.\s*state\s*\.\s*(?:'([^'\r\n]*)'|"((?:[^"\\\r\n]|\\.)*)")\s*\]\s*(?:#.*)?$/;
-// Any other table header, an array of tables included.
-const HEADER = /^\s*\[/;
-// The bare name a table header or a key line starts with, for the forms that are refused.
-const HOOKS_TABLE = /^\s*\[\s*hooks\s*\]\s*(?:#.*)?$/;
-const HOOKS_STATE_TABLE = /^\s*\[\s*hooks\s*\.\s*state\s*\]\s*(?:#.*)?$/;
 // A key's place: `<hooks.json>:<event>:<group>:<handler>`, the path itself holding colons on Windows.
 const PLACE = /^(.*):([a-z_]+):(\d+):(\d+)$/;
 
@@ -41,44 +34,111 @@ function samePath(a, b, platform) {
   return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
 
-/** The lines of `text`, each with its own line ending, sorted into tables: `{ lines, header, place }` per table, the
- * first one being what comes before any header (`header` null). `place` is `{ hooksPath, event, group, handler }` for
- * a trust table and `null` for any other. A multi-line string's lines stay in the table that opened it, and hook trust
- * in any form but a trust table's header throws `TrustFormError`. */
+/** `list`, config.toml paths, with `config` added unless it holds it already as `samePath` compares them: each file
+ * is edited once, since a second edit would move again the keys the first one moved. */
+export function withConfig(list, config, platform = process.platform) {
+  return list.some((known) => samePath(known, config, platform)) ? list : [...list, config];
+}
+
+/** The keys of a table header line, `[a."b".'c']`: `{ array, keys }`, each key `{ name, end, basic }`, its name as
+ * written between its quotes (`basic` says a basic string's escapes are still in it) and `end` where that spelling
+ * ends in the line. `null` for a line that is no header this reads. */
+function headerKeys(line) {
+  let i = line.search(/\S/);
+  const array = line.startsWith('[[', i);
+  i += array ? 2 : 1;
+  const keys = [];
+  for (;;) {
+    while (line[i] === ' ' || line[i] === '\t') i += 1;
+    const quote = line[i];
+    if (quote === '"' || quote === "'") {
+      let j = i + 1;
+      while (j < line.length && line[j] !== quote) j += quote === '"' && line[j] === '\\' ? 2 : 1;
+      if (j >= line.length) return null;
+      keys.push({ name: line.slice(i + 1, j), end: j, basic: quote === '"' });
+      i = j + 1;
+    } else {
+      const bare = /^[A-Za-z0-9_-]+/.exec(line.slice(i));
+      if (!bare) return null;
+      keys.push({ name: bare[0], end: i + bare[0].length, basic: false });
+      i += bare[0].length;
+    }
+    while (line[i] === ' ' || line[i] === '\t') i += 1;
+    if (line[i] === '.') {
+      i += 1;
+      continue;
+    }
+    const close = array ? ']]' : ']';
+    if (!line.startsWith(close, i)) return null;
+    return /^\s*(?:#.*)?$/.test(line.slice(i + close.length)) ? { array, keys } : null;
+  }
+}
+
+/** Where a line leaves a value that spans lines, from where the line before left it: `open` the multi-line string it
+ * is inside (`"""`, `'''` or null), `depth` how deep inside arrays. One scan of strings, comments and brackets, so a
+ * quote or a bracket inside a string or a comment opens nothing. */
+function scanLine(line, { open, depth }) {
+  let i = 0;
+  while (i < line.length) {
+    if (open) {
+      if (open === '"""' && line[i] === '\\') {
+        i += 2;
+      } else if (line.startsWith(open, i)) {
+        // Up to two quotes of the string's own can sit against its closing three.
+        while (line[i] === open[0]) i += 1;
+        open = null;
+      } else {
+        i += 1;
+      }
+      continue;
+    }
+    const char = line[i];
+    if (char === '#') break;
+    if (line.startsWith('"""', i) || line.startsWith("'''", i)) {
+      open = line.slice(i, i + 3);
+      i += 3;
+    } else if (char === '"' || char === "'") {
+      i += 1;
+      while (i < line.length && line[i] !== char) i += char === '"' && line[i] === '\\' ? 2 : 1;
+      i += 1;
+    } else {
+      if (char === '[') depth += 1;
+      if (char === ']') depth = Math.max(0, depth - 1);
+      i += 1;
+    }
+  }
+  return { open, depth };
+}
+
+/** The lines of `text`, each with its own line ending, sorted into tables: `{ lines, header, place, keyEnd }` per
+ * table, the first one being what comes before any header (`header` null). `place` is `{ hooksPath, event, group,
+ * handler }` for a trust table, with `keyEnd` where its key ends in the header, and `null` for any other. The lines of
+ * a value that spans lines stay in the table that opened it, and hook trust in any form but a trust table's header
+ * throws `TrustFormError`. */
 function tables(text) {
   const found = [{ header: null, place: null, lines: [] }];
-  let open = null;
-  // How deep the line is inside an array a value opened on an earlier line: its lines are values, never headers.
-  let depth = 0;
+  let state = { open: null, depth: 0 };
   let table = 'root';
   for (const line of text.split(/(?<=\n)/)) {
     const current = found[found.length - 1];
     const bare = line.replace(/\r?\n$/, '');
-    if (open) {
-      current.lines.push(line);
-      if (bare.split(open).length % 2 === 0) open = null;
+    const outside = !state.open && state.depth === 0;
+    if (outside && /^\s*\[/.test(bare)) {
+      const head = headerKeys(bare);
+      const names = head?.keys.map((key) => key.name) ?? [];
+      const underState = names[0] === 'hooks' && names[1] === 'state';
+      if (underState && (names.length !== 3 || head.array)) throw new TrustFormError(names.length === 2 ? 'a [hooks.state] table' : 'hook trust in a nested table or an array of tables');
+      const key = underState ? head.keys[2] : null;
+      const place = key && PLACE.exec(key.basic ? unescapeBasic(key.name) : key.name);
+      table = names.length === 1 && names[0] === 'hooks' && !head.array ? 'hooks' : 'other';
+      found.push({ header: line, lines: [], keyEnd: place ? key.end : null, place: place && { hooksPath: place[1], event: place[2], group: Number(place[3]), handler: Number(place[4]) } });
       continue;
     }
-    if (depth === 0 && HEADER.test(bare)) {
-      if (HOOKS_STATE_TABLE.test(bare)) throw new TrustFormError('a [hooks.state] table');
-      const trust = TRUST_HEADER.exec(bare);
-      const key = trust ? trust[1] ?? unescapeBasic(trust[2]) : null;
-      const place = key === null ? null : PLACE.exec(key);
-      table = HOOKS_TABLE.test(bare) ? 'hooks' : 'other';
-      found.push({ header: line, lines: [], place: place && { hooksPath: place[1], event: place[2], group: Number(place[3]), handler: Number(place[4]) } });
-      continue;
-    }
-    if (depth === 0 && ((table === 'root' && /^\s*["']?hooks["']?\s*[.=]/.test(bare) && /state/.test(bare)) || (table === 'hooks' && /^\s*["']?state["']?\s*[.=]/.test(bare)))) {
+    if (outside && ((table === 'root' && /^\s*["']?hooks["']?\s*[.=]/.test(bare) && /state/.test(bare)) || (table === 'hooks' && /^\s*["']?state["']?\s*[.=]/.test(bare)))) {
       throw new TrustFormError('hook trust in dotted keys or an inline table');
     }
     current.lines.push(line);
-    for (const quote of ['"""', "'''"]) {
-      if (bare.split(quote).length % 2 === 0) open = quote;
-    }
-    if (!open) {
-      const code = bare.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, '').replace(/#.*$/, '');
-      depth = Math.max(0, depth + (code.match(/\[/g)?.length ?? 0) - (code.match(/\]/g)?.length ?? 0));
-    }
+    state = scanLine(bare, state);
   }
   return found;
 }
@@ -121,9 +181,9 @@ export function moveTrust(text, hooksPath, moves, platform = process.platform) {
       continue;
     }
     if (to !== undefined && to !== place.group) {
-      const old = `:${place.event}:${place.group}:${place.handler}`;
-      const at = table.header.lastIndexOf(old);
-      out.push(`${table.header.slice(0, at)}:${place.event}:${to}:${place.handler}${table.header.slice(at + old.length)}`, ...table.lines);
+      // The key's own end, so a comment after the header that repeats it is left as written.
+      const at = table.keyEnd - `:${place.event}:${place.group}:${place.handler}`.length;
+      out.push(`${table.header.slice(0, at)}:${place.event}:${to}:${place.handler}${table.header.slice(table.keyEnd)}`, ...table.lines);
       moved += 1;
       continue;
     }
@@ -170,12 +230,12 @@ function groupMoves(data, places) {
 
 /** The trust edits that taking the entries of `removing` out makes in Codex's config.toml (`uninstall` takes them all,
  * `sync` those no longer shipped), planned before an entry is taken out, since the places are those of the hooks.json
- * as it is now: one per hooks.json whose records name the config.toml install recorded (`trustConfig`), with where
- * each of its groups goes. A hooks.json that cannot be read, or holds none of the entries, has none: nothing of it is
- * removed, so no key moves. */
+ * as it is now: one per hooks.json and config.toml its records name (`trustConfigs`, every one an install recorded),
+ * with where each of its groups goes. A hooks.json that cannot be read, or holds none of the entries, has none: nothing
+ * of it is removed, so no key moves. */
 export function planTrustMoves(removing) {
   const plans = [];
-  for (const hooksPath of new Set(removing.filter((entry) => entry.trustConfig).map((entry) => entry.path))) {
+  for (const hooksPath of new Set(removing.filter((entry) => entry.trustConfigs?.length).map((entry) => entry.path))) {
     const records = removing.filter((entry) => entry.path === hooksPath);
     let data;
     try {
@@ -185,7 +245,9 @@ export function planTrustMoves(removing) {
     }
     const places = entryPlaces(data, records);
     if (places.length === 0) continue;
-    plans.push({ hooksPath, config: records.find((entry) => entry.trustConfig).trustConfig, moves: groupMoves(data, places) });
+    const moves = groupMoves(data, places);
+    const configs = records.flatMap((entry) => entry.trustConfigs ?? []).reduce((list, config) => withConfig(list, config), []);
+    for (const config of configs) plans.push({ hooksPath, config, moves });
   }
   return plans;
 }
