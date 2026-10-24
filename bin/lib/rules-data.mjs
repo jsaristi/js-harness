@@ -648,6 +648,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "work-sessions-private-wsl",
+    "subject": "the most work sessions open at one time in a private repository used with WSL",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": 6,
+    "unit": "sessions"
+  },
+  {
     "id": "work-sessions-public",
     "subject": "the most work sessions open at one time in a public repository",
     "owner": "sebastian",
