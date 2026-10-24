@@ -960,6 +960,23 @@
       "by": "session"
     }
   },
+  "terminal-note": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Pero explicame que va a hacer el comando en el terminal al final para poderlo ver junto al comando y aprender que hace ademas metelo al harnes",
+        "date": "2026-10-18",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 188
+      }
+    ],
+    "reading": "He asked that every command for his terminal end with a note of what it does, to see it beside the command and learn from it, and that the harness carry it: the guard's terminal-note check. It is his own preference, so it holds in this repository only, as session-title does, and other projects that install the harness type any command.",
+    "accepted": "Tapped, not quoted: Pregunta 85 (transcript 908805db, line 28361, Atarlo a una regla (Recomendada)), which ties the terminal-note check to a rule of this repository (C-b-34). The quotation is his typed request of 2026-10-18, local time (line 188), that the check carries.",
+    "checked": {
+      "date": "2026-10-24",
+      "by": "command"
+    }
+  },
   "throughput-backfill-days": {
     "kind": "design",
     "path": "odd/tasks/throughput-review.md"

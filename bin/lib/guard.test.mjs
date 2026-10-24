@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
-import { writeRules } from './rules.mjs';
+import { ruleHere, writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, sessionEffortRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { spawnSync } from 'node:child_process';
@@ -218,7 +218,9 @@ test('a heredoc body is left out, quoted or not, and the command after it is rea
 });
 
 // His request of 2026-10-19: a command typed into his Terminal panel ends with a note that says what it does, so he
-// reads it beside the command and learns from it (odd/tasks/terminal-note.md, S1).
+// reads it beside the command and learns from it (odd/tasks/terminal-note.md, S1). His answer of 2026-10-23 (Q85,
+// C-b-34) ties it to a rule of this repository: the check holds only where the rule terminal-note is declared.
+
 test('a command for his terminal with no note at its end is refused, and the refusal shows the shape of one', () => {
   for (const command of [
     'npm test',
@@ -230,7 +232,7 @@ test('a command for his terminal with no note at its end is refused, and the ref
     "npm test; Write-Host 'note: runs the tests of this repository'",
   ]) {
     assert.match(
-      terminalNoteRefusal(command),
+      terminalNoteRefusal(command, HERE),
       /^js-harness guard: a command for the user's terminal ends with a note that says what it does, in everyday words: <command>; Write-Host 'NOTE: <what it does>'/,
       command,
     );
@@ -242,7 +244,20 @@ test('a command for his terminal that ends with its note passes, in PowerShell a
     "npm test; Write-Host 'NOTE: runs the tests of this repository and prints how many pass'",
     "git status;   write-host   'NOTE: shows which files changed and are not committed yet'  ",
     "ls -la; echo 'NOTE: lists the files of this folder with their sizes'",
-  ]) assert.equal(terminalNoteRefusal(command), null, command);
+  ]) assert.equal(terminalNoteRefusal(command, HERE), null, command);
+});
+
+test('a command for his terminal is not checked where the rule terminal-note is not declared, nor where the declaration is behind', () => {
+  // Behind: the project's file is of a copy that did not declare the rule yet.
+  const behind = writeRules(RULES.filter((rule) => rule.id !== 'terminal-note'));
+  assert.deepEqual([ruleHere('terminal-note', undefined, null), ruleHere('terminal-note', undefined, behind)], [{ off: 'elsewhere' }, { off: 'behind' }]);
+  for (const projectData of [null, behind]) {
+    for (const command of ['npm test', "npm test; Write-Host 'NOTE: x'"]) assert.equal(terminalNoteRefusal(command, projectData), null, command);
+  }
+});
+
+test('the refusal names the rule terminal-note and its value', () => {
+  assert.match(terminalNoteRefusal('npm test', HERE), /\(rule terminal-note: <command>; Write-Host 'NOTE: <what it does>'\)/);
 });
 
 test('a heredoc inside a $(...) of a double-quoted string is left out too (Codex, 2026-10-14)', () => {

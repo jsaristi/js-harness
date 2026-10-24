@@ -587,6 +587,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "terminal-note",
+    "subject": "the note that ends a command typed into his Terminal panel, saying what it does in everyday words, so he reads it beside the command where it runs: the guard refuses a run_in_terminal command without it",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": "<command>; Write-Host 'NOTE: <what it does>'"
+  },
+  {
     "id": "throughput-backfill-days",
     "subject": "how many closed days back the heartbeat writes a missing throughput snapshot for",
     "owner": "project",
