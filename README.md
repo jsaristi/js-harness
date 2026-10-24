@@ -1582,8 +1582,8 @@ the clone's `private-terms.txt` is dropped and counted; without that file nothin
 it reads `PRIVATE`, clones it, and seeds `private-terms.txt` with the other Engram projects'
 names. The checkout it bundles is the git repository the folder `init` runs in, or the one
 `--checkout <path>` names (any folder inside it, refused with exit 2 when it is in no work tree).
-A config with no `bundles` list yet takes the checkout `init` runs in; an existing list is left as
-it is, and `--checkout` adds its checkout to it when no entry is the same folder, saying so. Each
+A config with no `bundles` list yet, or an empty one, takes the checkout `init` runs in; a list
+that names a checkout is left as it is, and `--checkout` adds its checkout to it when no entry is the same folder, saying so. Each
 bundled repository gets a clone line in `RESTORE.md` with its `origin` (read when the file is
 written, its credential removed), or the instruction to clone it from wherever the project lives
 when it has none. With no checkout, nothing is bundled and `init` says so: run

@@ -1029,7 +1029,8 @@ function restoreSteps(repo, transcripts = [], checkouts = []) {
     ? [
       '3. Clone each repository the backup bundles into the path it had, since the Claude memory folder is named after that path:',
       ...checkouts.map((c) => (c.origin
-        ? `   \`git clone ${c.origin} ${c.path}\``
+        // Quoted, so a path with a space (C:\Users\First Last) stays one argument, as the restore's own lines quote theirs.
+        ? `   \`git clone "${c.origin}" "${c.path}"\``
         : `   Clone it from wherever the project lives into \`${c.path}\` (it has no origin, or git cannot read it).`)),
       '   If a checkout lives elsewhere now, add `--map <old path>=<new path>` for it to the next step.',
     ]
@@ -1148,7 +1149,7 @@ function initCommand(args, deps) {
   // The checkout is named by `--checkout <path>`, else the git repository the folder init runs in. It is resolved before
   // anything is written or asked of GitHub: a path in no work tree is refused with nothing changed.
   const checkoutFlag = valueOf(args, '--checkout');
-  const checkout = checkoutFlag === undefined ? checkoutRoot(deps, deps.cwd()) : checkoutRoot(deps, path.resolve(checkoutFlag));
+  const checkout = checkoutRoot(deps, checkoutFlag === undefined ? deps.cwd() : path.resolve(deps.cwd(), checkoutFlag));
   if (checkoutFlag !== undefined && !checkout) {
     deps.stderr.write(`backup init: refused: ${checkoutFlag} is not inside a git work tree; --checkout names one\n`);
     return 2;
@@ -1160,11 +1161,12 @@ function initCommand(args, deps) {
     return 1;
   }
   const config = { ...(readJson(paths.config) ?? {}), repo };
-  // The bundle list is what RESTORE.md names, so it is the one place a checkout is recorded. A config with no list yet
-  // takes the checkout init runs in; a list on disk, empty or not, is left exactly as it is unless --checkout names a
-  // checkout: that one is added when no entry is the same folder, and init says so either way.
-  const fresh = !Array.isArray(config.bundles);
-  if (fresh) config.bundles = [];
+  // The bundle list is what RESTORE.md names, so it is the one place a checkout is recorded. A config with no list yet,
+  // or an empty one (what init wrote before it recorded a checkout, so no choice of anyone's), takes the checkout init
+  // runs in; a list that names a checkout is left exactly as it is unless --checkout names one: that one is added when
+  // no entry is the same folder, and init says so either way.
+  if (!Array.isArray(config.bundles)) config.bundles = [];
+  const fresh = config.bundles.length === 0;
   if (checkoutFlag !== undefined) {
     if (config.bundles.some((dir) => typeof dir === 'string' && sameFolder(dir, checkout))) {
       deps.stdout.write(`backup: ${checkout} is already bundled\n`);
