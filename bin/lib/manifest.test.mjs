@@ -3964,6 +3964,7 @@ test('the skills state the permit, memory-index, share and wait-for values from 
   const { INDEX_LINE_CHARS } = await import('./memory-index-guard.mjs');
   const { SHARE_TOLERANCE } = await import('./audit.mjs');
   const { ruleValue } = await import('./rules.mjs');
+  const { statedHours } = await import('./manifest.mjs');
   for (const value of [WAIT_MS, LEASE_MINUTES, INDEX_LINE_CHARS, SHARE_TOLERANCE]) assert.equal(typeof value, 'number');
   const source = fs.readFileSync(new URL('./manifest.mjs', import.meta.url), 'utf8');
   for (const literal of [/\b9\.5 minutes/, /lasts 40 minutes/, /\b150 characters/, /more than 2 points/, /after 8 hours/]) {
@@ -3971,7 +3972,7 @@ test('the skills state the permit, memory-index, share and wait-for values from 
   }
   const text = components.map((component) => component.content('0.0.0')).join('\n');
   for (const said of [`up to ${WAIT_MS / 60_000} minutes`, `it lasts ${LEASE_MINUTES} minutes`, `over ${INDEX_LINE_CHARS} characters`,
-    `more than ${SHARE_TOLERANCE} points`, `after ${ruleValue('wait-for', 'minutes') / 60} hours`,
+    `more than ${SHARE_TOLERANCE} points`, `after ${statedHours(ruleValue('wait-for', 'minutes'))} hours`,
     `waits for you up to ${WAIT_MS / 60_000} minutes`, `shorten an index line to ${INDEX_LINE_CHARS} characters`]) {
     assert.ok(text.includes(said), said);
   }
