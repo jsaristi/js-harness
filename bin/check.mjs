@@ -1769,8 +1769,8 @@ export function watchRun(record, watch = watchBusiest) {
  * stands in for the watch.
  *
  * A gate stops before its sensors when a row it knew before them has already failed, which it says with
- * `stoppedBy` in `lock`, the names of those rows: the commit cannot pass, so the wait for the lock, an hour
- * at most, and the run of the sensors would be paid before anyone read a failure that was known in a
+ * `stoppedBy` in `lock`, the names of those rows: the commit cannot pass, so the wait for the lock, up to
+ * `rule:gate-wait`, and the run of the sensors would be paid before anyone read a failure that was known in a
  * second. Nothing after the stop happens: no lock is asked for or waited for and no folder made for one,
  * no load is sampled, no sensor runs. The one row (`stoppedRow`) is a FAIL named `gate` that says so and
  * names the rows, and carries `stopped: true` for the caller, which prints no row after it. With
