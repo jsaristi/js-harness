@@ -389,6 +389,30 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
   }
 });
 
+// B11: a sync of an up-to-date home writes neither host file, so it says each entry was already there, not registered.
+test('a second sync --global says every entry is already registered and writes neither host file', async () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal((await captureConsole(() => installMain(['--home', home]))).code, 0);
+    const files = [path.join(home, '.claude', 'settings.json'), path.join(home, '.codex', 'hooks.json')];
+    const before = files.map((file) => fs.readFileSync(file, 'utf8'));
+    const synced = await captureConsole(() => syncMain(['--global', '--home', home]));
+    assert.equal(synced.code, 0);
+    assert.deepEqual(synced.outLines.filter((line) => line.startsWith('registered hook entry')), []);
+    const already = entryComponents.map((component) => {
+      const entry = component.entry();
+      const matcher = typeof entry.matcher === 'string' ? `, matcher ${entry.matcher}` : '';
+      return `already registered hook entry in ${component.target(home)}: ${entry.hooks[0].command} (${component.pointer.at(-1)}${matcher})`;
+    });
+    assert.deepEqual(synced.outLines.filter((line) => line.startsWith('already registered hook entry')), already);
+    assert.deepEqual(files.map((file) => fs.readFileSync(file, 'utf8')), before);
+    // The fact is this run's report, never a field of the manifest it records.
+    assert.doesNotMatch(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8'), /alreadyRegistered/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstallMain reports an optional file with the removed files, and an edited one with the kept ones', async () => {
   const home = makeTmpHome();
   try {

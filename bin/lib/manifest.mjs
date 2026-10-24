@@ -735,7 +735,7 @@ function appendEntryToFile(target, pointer, entry, ours) {
   const stale = arr.map((item, i) => (isOlderOwnEntry(item, entry) ? i : -1)).filter((i) => i !== -1);
   const has = arr.some((item) => deepEqual(item, entry));
   if (has && stale.length === 0) {
-    return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
+    return { skipped: false, present: true, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
   for (const i of [...stale].reverse()) arr.splice(i, 1);
   if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
@@ -880,7 +880,7 @@ function installEntries(home, previousManifest, missingBefore = new Map()) {
     // pointer still holds. Written as none, the next install would take those containers for the user's, and
     // `uninstall` would leave them empty behind it.
     const earlier = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer));
-    return {
+    const record = {
       path: target,
       pointer,
       entry,
@@ -891,6 +891,10 @@ function installEntries(home, previousManifest, missingBefore = new Map()) {
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
     };
+    // Not enumerable, like `pruneKept`: that the host file already held the entry is this run's report, not part of
+    // the manifest the record goes into.
+    if (result.present) Object.defineProperty(record, 'alreadyRegistered', { value: true, enumerable: false });
+    return record;
   });
 }
 
