@@ -74,7 +74,7 @@ writes its state to the feature document and keeps working; the host compacts it
 resumes from the summary checked against that document. What he is given at that point is the pause
 notice's (`cutRule` in `bin/lib/sessions.mjs`). End each reply in one of the five states of `js-harness-protocols`
 section 2. A planned step he would only say yes to is decided and its cost said, as its section 1
-says. The orchestrator asks a decision with the question tool (`js-harness-orchestrator`); a cut
+says. A question reaches him as `rule:questions-one-place` says; a cut
 carries what he sends, in one code block of only that text, under what it is, where
 it goes, what sending it does: two blocks out of order cost a session. Before it, say what was
 done, what is next and why, and for which session: he runs several. Then the map: each phase's
