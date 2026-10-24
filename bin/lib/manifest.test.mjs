@@ -2640,7 +2640,7 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
   // A whole test run of a session's own is no gate: the line names the command that puts it in line.
   assert.ok(text.includes("- Commit with a plain `git commit`: in a project that holds `.github/workflows/gate.yml` its gate sends the tests to GitHub's machines first, and anywhere it waits by itself for its turn here while another runs (`Gates` in `js-harness sessions` says which runs and which wait). A whole test run of your own goes through `js-harness gate -- <command>`, which waits for its turn too; a commit wrapped in it holds the machine's lock and never goes to GitHub.\n"));
   // A push that waited for a measure's turn held a merge 16 minutes (odd/tasks/gate-turn-guards.md, S1).
-  assert.ok(text.includes('\n- Push in the same step your last check passes. While a commit that a push would take waits on a branch with an open pull request, `js-harness gate` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (`--cwd <worktree>`).\n'));
+  assert.ok(text.includes('\n- Push in the same step your last check passes, where the project\'s `pushUnasked` switch reads on (`js-harness functions`); where it is off, ask first. While a commit that a push would take waits on a branch with an open pull request, `js-harness gate` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (`--cwd <worktree>`).\n'));
   assert.doesNotMatch(text, /Start no whole test run/);
   assert.ok(text.includes('\n3. two gates run at once (a gate that waits for its turn is not one of them);\n'));
 });

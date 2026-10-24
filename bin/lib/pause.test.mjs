@@ -186,7 +186,7 @@ test('the crossing: the first call at the pause says the share, the room and the
 // The user no longer compacts by hand, present or away (odd/tasks/no-manual-compact.md S1): the notice gives them
 // nothing to send, whenever they last wrote, and the session's state is the pause's whole answer.
 const typed = (at, text = 'go on') => ({ type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: text }, timestamp: new Date(at).toISOString() });
-const CUT = 'give the user nothing to send, present or away: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
+const CUT = 'the user never compacts this session by hand, present or away, so give them nothing to send: the host compacts this session inside a turn and your state is read after it, and a session that stops gets its next prompt from the orchestrator, never from the user';
 
 test('the crossing while the user wrote here minutes ago: the notice still gives them nothing to send', inHome((home) => {
   const transcript = write(home, 't.jsonl', [typed(NOW - 5 * 60000), reply(OVER)]);
