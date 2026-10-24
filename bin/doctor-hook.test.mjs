@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { doctorMain } from './doctor.mjs';
+import { doctorMain, USAGE } from './doctor.mjs';
 import { readCache, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
@@ -364,11 +364,20 @@ test('doctor --hook exits 0 with empty stdout and stderr even when something ins
   }
 });
 
-test('doctor --hook exits 0 with empty stdout and stderr even on unusable arguments', async () => {
+test('doctor --hook exits 0 with empty stdout and stderr even when a known option misses its value', async () => {
   const { code, stdout, stderr } = await runHook(['--hook', '--home'], {}, { fetch: failFetch });
   assert.equal(code, 0);
   assert.equal(stdout, '');
   assert.equal(stderr, '');
+});
+
+// The one exit that is not 0 (C-a-3): an argument the hook does not know means the copy on PATH is older than the
+// install that wrote its entry, and a SessionStart hook's exit 2 shows that one line without stopping the session.
+test('doctor --hook refuses an argument it does not know with exit 2, the usage on stderr and nothing on stdout', async () => {
+  const { code, stdout, stderr } = await runHook(['--hook', '--bogus'], {}, { fetch: failFetch });
+  assert.equal(code, 2);
+  assert.equal(stdout, '');
+  assert.equal(stderr, `unknown argument: --bogus\n\n${USAGE}\n`);
 });
 
 test('doctor --hook starts no copy of js-harness for the hook commands its manifest records, the session-start report keeping its cost', async () => {
