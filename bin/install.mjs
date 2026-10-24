@@ -272,7 +272,7 @@ function hookName(record) {
 function logEntries(entries) {
   for (const entry of entries ?? []) {
     if (entry.skipped) logSkip(entry);
-    else console.log(`registered hook entry in ${entry.path}${hookName(entry)}`);
+    else console.log(`${entry.alreadyRegistered ? 'already registered' : 'registered'} hook entry in ${entry.path}${hookName(entry)}`);
   }
 }
 
