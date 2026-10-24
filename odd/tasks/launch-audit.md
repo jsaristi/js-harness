@@ -232,3 +232,16 @@ Read on `f45e78c2` (the code of `fb9108c0`). Each finding is one line of its fil
   - Left, after rule/instruction-homes lands (only one rule/ branch may hold an undelivered declaration): merge origin/main into each branch; declare each rule with `js-harness rules change <id>`, quoting a typed line of his and naming the tapped answer in `accepted`; read the real rule in the code and the tests; correct the texts that call the check unconditional (bin/guard.mjs usage, bin/js-harness.mjs, bin/lib/manifest.mjs:49 after origin/main is merged, docs/SPEC.md) and README for Remote Control. Then per slice: gentle-ai assess, Codex review, an Opus verifier (items 2 and 3), the ledger line, the PR and the ready notice.
 - L25. 2026-10-24 (10:45Z), the lead (05:26): rule/instruction-homes landed (PR 560, main 828f35a7). Both branches merged origin/main. terminal-note declared on rule/terminal-note-rule (5243dccc), the guard reads it and the texts say where it holds; reviewed and verified (the ledger line of the slice). remote-control-yes waits: rules change refuses a second open declaration until this one lands, so C-shared-5 declares after it, with its code switch already written.
 - L26. 2026-10-24 (11:40Z), PR 561 (C-b-34) landed (main 676eb26b); remote-control-yes declared on rule/remote-control-yes (25f70eaf), doctor reads it, reviewed and verified (the ledger line of the slice). After it lands, the lead's next row.
+- L27. 2026-10-24 (11:40Z), the lead (06:31): prune the stale worktrees of D:/js-harness. Of 47, 32 removed with `git worktree remove` (never --force): each clean, every commit on origin/main or on its pushed branch, and no live session or open PR using it. No branch was deleted. Kept, and why:
+  - D:/js-harness: the main checkout, where the lead runs.
+  - .claude/worktrees/clean-5f4555: this session.
+  - D:/js-harness-worktrees/one-home: the lead's slice 1 writer works in it.
+  - the two merge-queue worktrees under .git/js-harness: the queue owns them.
+  - Orca's workspaces copepod and medaka (C:/Users/Oficina/orca): another tool's, not this harness's.
+  - rule-remote-control-yes: PR 562 was open when the list was read; it has landed since, so the next pass removes it.
+  - gate-wait-count (feat/gate-wait-count, not on origin): unpushed fc70dc39 and c844f290.
+  - gate-wsl (feat/gate-wsl): unpushed ec037aa9.
+  - report-rules (feat/report-rules, not on origin): unpushed cfae46ac.
+  - session-board (docs/session-board-t7-close): one uncommitted change.
+  - watch-share (feat/watch-notice-share, not on origin): two uncommitted changes.
+  - The unpushed commits stay unpushed: a push needs their Codex records.
