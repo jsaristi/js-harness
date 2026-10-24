@@ -1,5 +1,6 @@
-// The shape of a session id, as one helper every reader of one calls: `inbox.mjs`, `pause.mjs` and `rules-reach.mjs`
-// here, and `rules-change-run.mjs` of this folder. A session id becomes a file name (its transcript, its pause state,
+// The shape of a session id, as one helper its readers in this folder call: `inbox.mjs`, `pause.mjs`,
+// `rules-reach.mjs` and `rules-change-run.mjs`. `bin/resume.mjs` keeps a copy written inline, because the file sits at
+// its line ceiling; `session-id.test.mjs` fails the day the copy differs. A session id becomes a file name (its transcript, its pause state,
 // its inbox), so the shape refuses a folder separator and a dot, which can name a folder, and a leading dash, which
 // reads as an option. It is pure: it reads nothing and asks nothing of the machine, so a hook that calls it keeps its
 // deadline.

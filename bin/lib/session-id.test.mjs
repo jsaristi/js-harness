@@ -1,6 +1,7 @@
 // The session id's shape, as `session-id.mjs` holds it: the one helper every reader of a session id calls.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { SESSION_ID, isSessionId } from './session-id.mjs';
 
 test('a Claude Code session id, a UUID, is an id', () => {
@@ -32,4 +33,9 @@ test('a value that is not a string is not an id', () => {
   for (const value of [undefined, null, 12345678, ['abcdef12'], { id: 'abcdef12' }]) {
     assert.equal(isSessionId(value), false);
   }
+});
+
+test("bin/resume.mjs's inline copy is this shape, so the two cannot drift apart", () => {
+  const resume = fs.readFileSync(new URL('../resume.mjs', import.meta.url), 'utf8');
+  assert.ok(resume.includes(`${String(SESSION_ID)}.test(input.session_id)`), 'resume.mjs no longer holds the shape of session-id.mjs');
 });
