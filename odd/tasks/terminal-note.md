@@ -51,9 +51,9 @@ Nothing: both rules are his words; spend is one gate, one gentle-ai review and o
 - [x] T2 (S2, kind: build): the report step in `bin/lib/host-update.mjs`, its two test copies, README. Route: inline.
   No RED of its own: the step is one constant the tests assert verbatim, changed in the same edit. GREEN:
   host-update and doctor tests 94/94.
-- [ ] T3 (kind: verify): gate, gentle-ai review, Codex review, pull request, land, `sync --global`, the installed guard
+- [x] T3 (kind: verify): gate, gentle-ai review, Codex review, pull request, land, `sync --global`, the installed guard
   denies a bare command. Gates, the verifier and both Codex reviews done (L4, L5); the land and the installed check
-  are left.
+  done (L6).
 
 ## Log
 - L1 (2026-10-19, his words, verbatim): see S1 and S2.
@@ -72,3 +72,14 @@ Nothing: both rules are his words; spend is one gate, one gentle-ai review and o
   lowercase advisory is pinned by the same test.
 - L5 (2026-10-19): the fix committed as 84b829bd (gate passed). gentle-ai 4ed1cc5d..84b829bd medium, not due
   (under_budget). Codex 4ed1cc5..84b829b: correct (0.99), the P2 fixed.
+- L6 (2026-10-24, 16:05Z): T3 closed on observed evidence, on origin/main 1649f32b.
+  - Land: PR 561 merged at 2026-10-24T11:11:49Z (merge 676eb26b).
+  - Done when, the tests, one file per call: lib/guard 35, guard 30, lib/manifest 190, lib/host-update 12, doctor 91,
+    install 110, all pass. `npm run check` on 1649f32b: exit 0 (`PASS check 13 rows passed, 7 of them INFO`).
+  - The installed copy, synced: `js-harness` 0.97.0 (pnpm global), whose `bin/lib/guard.mjs` holds
+    `terminalNoteRefusal`; the PreToolUse matcher of `js-harness guard --hook` in `~/.claude/settings.json` names
+    `mcp__terminal__run_in_terminal`; `js-harness rules terminal-note` declares the rule (owner sebastian, since
+    2026-10-24).
+  - The installed guard against the rule, fed a host-shaped PreToolUse payload with cwd D:\js-harness: `git status`
+    is denied (`permissionDecision: deny`, the reason naming `<command>; Write-Host 'NOTE: <what it does>'`), and
+    `git status; Write-Host 'NOTE: shows the changed files of this checkout'` passes with no output; both exit 0.
