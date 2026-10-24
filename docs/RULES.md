@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `d75ae5407d80`. In force: 62 (37 of Sebastián, 25 of the project). Retired: 1.
+Hash `d144f41ae8fb`. In force: 61 (36 of Sebastián, 25 of the project). Retired: 2.
 
 ## Sebastián's
 
@@ -85,11 +85,6 @@ The lead's recap names each session's effort mode for its kind of work, and why:
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
-
-### reply-four-states
-A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
-- Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-23. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-23.
 
 ### report-table
 When the user asks what was done, the lead's status report shows each section that holds items as a table: "- Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user)."
@@ -339,6 +334,10 @@ How long js-harness wait waits before it says the time ran out, unless --for say
 - Since 2026-10-15. Row: reports. Source: design, `odd/tasks/session-channel.md`.
 
 ## Retired
+
+### reply-four-states
+A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.
+- Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
 
 ### work-sessions
 The most work sessions open at one time. Retired on 2026-10-24: read `work-sessions-public`, `work-sessions-private-wsl`, `work-sessions-private-windows` instead.

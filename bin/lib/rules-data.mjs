@@ -311,11 +311,9 @@ export const RULES = [
     "subject": "a reply ends in one of five states, and a question is his decision alone, explained before it is asked",
     "owner": "sebastian",
     "since": "2026-10-23",
-    "path": "bin/lib/protocols-skill.mjs",
-    "phrases": [
-      "A reply ends in one of five states.",
-      "One decision a question, one question at a time, never while work runs.",
-      "Before the question, say what a yes covers in everyday words"
+    "retired": "2026-10-24",
+    "successors": [
+      "reply-five-states"
     ]
   },
   {
