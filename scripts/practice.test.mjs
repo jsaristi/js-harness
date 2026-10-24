@@ -10,10 +10,15 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { main } from './practice.mjs';
 import { practiceLayout } from './practice-lib.mjs';
+import { REPO_ROOT } from './lib.mjs';
+
+// setup names the candidate it comes from by the checkout's branch and commit, so it needs a git checkout: the WSL
+// gate's mirror is synced without .git, and there the test is skipped, with this reason, rather than failed.
+const inCheckout = spawnSync('git', ['rev-parse', '--git-dir'], { cwd: REPO_ROOT }).status === 0;
 
 const IDENTITY_VARIABLES = ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'EMAIL'];
 
-test('setup makes the project commit with no git identity on the machine', () => {
+test('setup makes the project commit with no git identity on the machine', { skip: !inCheckout && 'setup names its candidate from a git checkout, and this tree has no .git' }, () => {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-practice-setup-'));
   const home = path.join(sandbox, 'home');
   const globalConfig = path.join(sandbox, 'gitconfig-global');
