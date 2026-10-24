@@ -64,6 +64,7 @@ import { readStalled } from './lib/stall.mjs';
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -582,14 +583,14 @@ export async function sessionsMain(
   // harness home, which is JS_HARNESS_HOME or the user's home. An empty JS_HARNESS_HOME is no home here:
   // joined as it is, it would put the file under the folder the command runs in. A relative `--relief` is
   // read from that folder, as `--claude-home` and `--tmp` are, not from `--cwd`.
-  const harnessHome = env.JS_HARNESS_HOME || homedir();
-  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? reliefPath(harnessHome, slug));
+  const home = harnessHome({ env, homedir });
+  const reliefFile = path.resolve(defaultCwd, parsed.relief ?? reliefPath(home, slug));
   // The readers of a compaction's measures (odd/tasks/session-channel.md, section 14): told from the pause's state, kept
   // from the commits of the feature document and, for the orchestrator (`readersOf`), its relief file. The board judges
   // each session's last automatic compaction with them and `--measures` every compaction, so the two never read a fact
   // in two ways.
   const measureReaders = {
-    told: (sessionId, after, at) => toldBetween({ home: harnessHome, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
+    told: (sessionId, after, at) => toldBetween({ home, sessionId, after, before: at, fileSystem: stateFiles, tmpdir: pauseTmp }),
     kept: keptByGitLog(run),
     relief: keptByRelief(readFile, reliefFile),
   };
@@ -612,7 +613,7 @@ export async function sessionsMain(
     readSessionsWindow({
       projectDir,
       slug,
-      harnessHome,
+      harnessHome: home,
       hours: parsed.hours,
       now,
       tasksRoot: path.join(parsed.tmp ?? tmpdir(), 'claude', slug),
@@ -638,7 +639,7 @@ export async function sessionsMain(
 
   /** The board's stalled sessions at `at` (ms): `{ limitMinutes, items, unavailable }`, read as the heartbeat reads them. */
   const stalledOf = (at) => {
-    const { stalled, unavailable } = readStalled({ home: harnessHome, slug, now: at, limitMs: STALL_MINUTES * 60 * 1000, windowMs: parsed.hours * 3600 * 1000, run, fileSystem: { readFileSync: (file) => readFile(file), readdirSync: readdir } });
+    const { stalled, unavailable } = readStalled({ home, slug, now: at, limitMs: STALL_MINUTES * 60 * 1000, windowMs: parsed.hours * 3600 * 1000, run, fileSystem: { readFileSync: (file) => readFile(file), readdirSync: readdir } });
     return { limitMinutes: STALL_MINUTES, items: stalled, unavailable };
   };
 
@@ -685,12 +686,12 @@ export async function sessionsMain(
       // which goes with what was read: the board says the ages of these gates against it.
       const readAt = now();
       const reading = { now: () => readAt, fileSystem: lockFiles };
-      const waiters = readGateWaiters(harnessHome, reading);
-      return { holder: readGateHolder(harnessHome, reading), waiters, readAt };
+      const waiters = readGateWaiters(home, reading);
+      return { holder: readGateHolder(home, reading), waiters, readAt };
     });
     // The tickets that put a session's next check first in that lock, under the same home and through the
     // same functions (./lib/gate-first.mjs).
-    const gateTickets = readGateTickets(() => readTickets(harnessHome, { now, fileSystem: lockFiles }));
+    const gateTickets = readGateTickets(() => readTickets(home, { now, fileSystem: lockFiles }));
     return {
       root,
       projectDir,
@@ -726,7 +727,7 @@ export async function sessionsMain(
       relief: readRelief(reliefFile, readFile),
       // Whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5): the main checkout's
       // memory folder, which the host keeps beside the transcripts, and the journal `memory` keeps under the home.
-      memory: boardMemory({ home: harnessHome, slug, folder: path.join(projectDir, 'memory'), now: now() }),
+      memory: boardMemory({ home: home, slug, folder: path.join(projectDir, 'memory'), now: now() }),
       notVisible: NOT_VISIBLE,
     };
   };
@@ -748,7 +749,7 @@ export async function sessionsMain(
       stderr(`js-harness sessions: ${path.join(root, 'harness.json')} declares no "code", the project's identifier a session's title starts with (such as "JH"): add it to give the next number`);
       return 1;
     }
-    const next = nextSessionNumber(harnessHome, slug, { code, readdir, readFile });
+    const next = nextSessionNumber(home, slug, { code, readdir, readFile });
     for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
     stdout(`${next.code} ${next.number}`);
     return next.unavailable ? 2 : 0;
@@ -768,7 +769,7 @@ export async function sessionsMain(
   // cannot be written is said, and the opening is printed all the same.
   if (parsed.opening !== undefined) {
     const wanted = JSON.stringify(parsed.opening);
-    const found = findOpenings(harnessHome, slug, parsed.opening, { readdir, readFile });
+    const found = findOpenings(home, slug, parsed.opening, { readdir, readFile });
     const notKnown = `js-harness sessions: not known whether there is an opening for ${wanted}`;
     const unreadable = `${found.unreadable} file${found.unreadable === 1 ? '' : 's'} of ${found.dir} could not be read as an opening`;
     if (found.unavailable !== undefined) {
@@ -823,15 +824,15 @@ export async function sessionsMain(
     // recorded is said.
     // Either id may be the start of the other: a reading under the whole id and one under `--self`'s start,
     // with no transcript to complete it, are the same session's (`sameSession`).
-    const held = readNotices(harnessHome, slug, { readFile }).readings.findLast((reading) => sameSession(reading.reader.id, reader.id))?.title ?? null;
+    const held = readNotices(home, slug, { readFile }).readings.findLast((reading) => sameSession(reading.reader.id, reader.id))?.title ?? null;
     if (held !== null && held !== opening.title) {
       stderr(`js-harness sessions: the opening was read, and no reading was recorded: this session already read the opening of ${JSON.stringify(held)}, which stays its title (--peek reads an opening and records nothing)`);
       return 0;
     }
     try {
-      appendReading(harnessHome, slug, newReading({ at: new Date(now()).toISOString(), reader, title: opening.title }));
+      appendReading(home, slug, newReading({ at: new Date(now()).toISOString(), reader, title: opening.title }));
     } catch (err) {
-      stderr(`js-harness sessions: the opening was read, and that could not be recorded in ${recordPath(harnessHome, slug)} (${err.code ?? err.message})`);
+      stderr(`js-harness sessions: the opening was read, and that could not be recorded in ${recordPath(home, slug)} (${err.code ?? err.message})`);
     }
     return 0;
   }
@@ -980,7 +981,7 @@ export async function sessionsMain(
     }
     const generatedAt = now();
     const since = generatedAt - parsed.hours * 3600 * 1000;
-    const record = readNotices(harnessHome, slug, { readFile });
+    const record = readNotices(home, slug, { readFile });
     const readings = record.readings;
     const measured = [];
     for (const name of names) {

@@ -25,6 +25,7 @@ import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { REFRESH_FAILED, refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
@@ -212,7 +213,7 @@ export function failedRows(output) {
  * a refused ticket it waits its turn. A gate that exits `GATE_NOT_RUN` (no turn, or a waiting push took it) or
  * that is stopped before it ends ran nothing: `notRun`, which is no red (odd/tasks/land-unattended.md). */
 /** The harness home a land reads and writes beside its gates: the relief file, the channel and the gate log. */
-const harnessHomeOf = (env) => env.JS_HARNESS_HOME || os.homedir();
+const harnessHomeOf = (env) => harnessHome({ env, homedir: os.homedir });
 
 /** The names of the tests the last gate that ended at `place` found failing, from the gate log under `home`
  * (each sensor's `failing`); none where no gate there recorded any. Only gates that began at `since` (ms) or

@@ -44,6 +44,7 @@ import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
+import { harnessHome, homeIsSet } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness resume --hook',
@@ -448,7 +449,7 @@ const RELIEF_READ = 'Read its last lines before anything else: it is the orchest
 
 /** The temp folder the pause's state falls back to: under the harness home when `JS_HARNESS_HOME` is set, so a made-up
  * home never reaches the real temp folder, and the system's otherwise. */
-const tempOf = (env) => (env.JS_HARNESS_HOME ? path.join(env.JS_HARNESS_HOME, 'tmp') : undefined);
+const tempOf = (env) => (homeIsSet(env) ? path.join(harnessHome({ env, homedir: os.homedir }), 'tmp') : undefined);
 
 /** What a step says: the line it gives, or, when it throws, `<step>: not read (<reason>)`, so the rest of the hook goes on. */
 function stepSaid(step, work) {
@@ -879,13 +880,13 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   const slug = projectSlug(root);
   const projectsDir = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects');
   const projectDir = path.join(projectsDir, slug);
-  const harnessHome = env.JS_HARNESS_HOME || homedir();
+  const home = harnessHome({ env, homedir });
   const sessionId = typeof input.session_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/.test(input.session_id) ? input.session_id : null;
   // A start speaks only when it is a clear's: the app's record is read for a start alone, and only in an opted-in project.
   const compacted = input.source === 'compact';
   const cleared = compacted ? null : clearedStart(input.source, sessionId, readApp);
   if (!compacted && cleared === null) return [];
-  const record = readNotices(harnessHome, slug, { readFile });
+  const record = readNotices(home, slug, { readFile });
   const transcript = transcriptOf(input, sessionId, { projectDir, projectsDir, readFile });
   // Whether `sessions --quote` can read the transcript: it is in the project's sessions folder, the one that command reads.
   // The stretch's lines and the questions' lines take this one fact; without a transcript it is not used.
@@ -896,9 +897,9 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   const lines = [compacted ? JUST_COMPACTED : JUST_CLEARED];
   lines.push(title === null ? `Session: title not known (${from})` : `Session: "${oneLine(title)}" (${from})`);
 
-  const dir = openingsDir(harnessHome, slug);
+  const dir = openingsDir(home, slug);
   if (title === null) lines.push(`Opening: not known without a title (the openings of this project are in ${dir}; js-harness sessions --opening "<title>" prints one)`);
-  else lines.push(...openingLines(findOpenings(harnessHome, slug, title, { readdir, readFile }), title));
+  else lines.push(...openingLines(findOpenings(home, slug, title, { readdir, readFile }), title));
 
   // The stretch of work before the compaction is read once, here, and only when the transcript was read: the feature
   // document and the lines of the stretch both come from it. A deadline that passed first names it as not read. A clear
@@ -917,7 +918,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   let subject = null;
   const orchestrator = roleOfTitle(title)?.role === 'orchestrator';
   if (orchestrator) {
-    const relief = reliefPath(harnessHome, slug);
+    const relief = reliefPath(home, slug);
     subject = { file: relief, worktree: null };
     lines.push(...reliefLinesOf(relief, { readFile, stat, now }));
   } else if (late()) {
@@ -960,7 +961,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
   if (transcript !== null && stretch !== null) {
     // The session is named by its id, as `sessions --quote` takes it, when its transcript is in the project's sessions
     // folder (`quoted`); a transcript is read only when the hook has one.
-    lines.push(...beforeLines(transcriptFile, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home: harnessHome, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
+    lines.push(...beforeLines(transcriptFile, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
   }
   // The questions come after the stretch's lines and before the deadline's line. Past the deadline they are named as not read.
   if (late()) left.push(STEP.questions);
@@ -1017,7 +1018,7 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run, fileSystem = 
   const cwd = typeof input.cwd === 'string' && input.cwd !== '' ? path.resolve(input.cwd) : defaultCwd;
   const root = harnessRootOf(cwd, isFile);
   if (root === null) return null;
-  const home = env.JS_HARNESS_HOME || homedir();
+  const home = harnessHome({ env, homedir });
   // The start of each gentle-ai review live in the project's store, kept before gentle-ai deletes it at the burn (B6
   // of odd/tasks/throughput-review.md). Any session's call serves, a sub-agent's too, since the store is the
   // project's. The common folder is found by files, and a layout they do not tell is skipped, so no call asks git;

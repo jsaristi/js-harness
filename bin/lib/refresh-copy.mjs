@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { takeGateTurn } from '../check.mjs';
 import { GATE_NOT_RUN } from '../gate.mjs';
 import { installCopy, pnpmBinDir, pnpmRunning } from '../update.mjs';
+import { harnessHome } from './home.mjs';
 
 /** The exit of a refresh that ran and could not verify the copy, or could not finish after it (a `js-harness install`
  * that exits non-zero, or a shim the prune finds broken). The land's own exit stands in the printed record. */
@@ -201,7 +202,7 @@ export async function refreshCopy({
   landed,
   sha,
   version,
-  home = process.env.JS_HARNESS_HOME || os.homedir(),
+  home = harnessHome({ env: process.env, homedir: os.homedir }),
   // The settings `js-harness install` writes: those of the same home (Codex P2 on 93de70b..2e6f86b).
   settings = path.join(home, '.claude', 'settings.json'),
   cwd = process.cwd(),

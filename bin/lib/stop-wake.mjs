@@ -22,6 +22,7 @@
 import { readNotices } from './channel.mjs';
 import { isSelf, mainCheckout, projectSlug, roleOfTitle, sameSession, titleRead } from './sessions.mjs';
 import { handedNumber, readOpenings, workNumber } from './stall.mjs';
+import { harnessHome } from './home.mjs';
 
 /** The words only this warning has, by which an earlier one is found in the transcript. */
 export const WAKE_MARKER = 'nothing will wake this session';
@@ -113,7 +114,7 @@ export function wakeWarning(payload, state, io) {
 
   const marks = transcriptMarks(io.readFile(payload.transcript_path));
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
-  const home = io.env.JS_HARNESS_HOME || io.homedir();
+  const home = harnessHome({ env: io.env, homedir: io.homedir });
   const slug = projectSlug(mainCheckout(io.run, cwd));
   const record = readNotices(home, slug, { readFile: io.readFile });
   if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);

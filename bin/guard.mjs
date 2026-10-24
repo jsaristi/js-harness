@@ -39,6 +39,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { memoryFileOf, memoryIndexRefusal, memoryNoteType, resultOf } from './lib/memory-index-guard.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
@@ -126,7 +127,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (tool === SESSION_TOOL) {
     const root = rootOf();
     const rules = rulesTextOf(root, readFile);
-    return sessionEffortRefusal(input, rules) ?? (await sessionTitleOf(input, rules, root, env.JS_HARNESS_HOME || homedir(), readFile));
+    return sessionEffortRefusal(input, rules) ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
   }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
@@ -190,7 +191,7 @@ async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoo
   if (read === null) return null;
   const { hostWindow } = await import('./lib/pause.mjs');
   const projectDir = typeof payload.cwd === 'string' && payload.cwd !== '' ? projectRoot(path.resolve(payload.cwd)) : null;
-  const window = hostWindow({ env, home: env.JS_HARNESS_HOME || homedir(), projectDir });
+  const window = hostWindow({ env, home: harnessHome({ env, homedir }), projectDir });
   const recorded = window === null ? read : { ...read, window };
   return shareRefusal(given ?? recorded.text, recorded);
 }

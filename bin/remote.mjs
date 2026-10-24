@@ -32,6 +32,7 @@ import {
 } from './lib/remote.mjs';
 import { lookAt, startupLocation } from './lib/startup-file.mjs';
 import { unknownArgument } from './lib/args.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 
@@ -87,7 +88,7 @@ function parseArgs(argv, env) {
     subcommand,
     cwd: values['--cwd'] ?? process.cwd(),
     // Absolute from here on: the supervisor runs in the repository, where a relative home would be another folder.
-    home: path.resolve(values['--home'] ?? (env.JS_HARNESS_HOME || os.homedir())),
+    home: harnessHome({ given: values['--home'], env, homedir: os.homedir }),
     name,
     spawnMode,
     permissionMode,

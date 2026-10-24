@@ -9,6 +9,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { HASH_KEYS } from './rules.mjs';
 import { parseProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
+import { harnessHome } from './home.mjs';
 
 /** Where the harness's own checkout keeps its list, from its git top. */
 export const HARNESS_LIST = 'bin/lib/rules-data.mjs';
@@ -238,7 +239,7 @@ function runGit(args, top) {
 export async function rulesHookMain(argv, {
   env = process.env,
   // Every home of the harness honours JS_HARNESS_HOME, uninstall included; an empty one is no home.
-  home = env.JS_HARNESS_HOME || os.homedir(),
+  home = harnessHome({ env, homedir: os.homedir }),
   git = runGit,
   now = Date.now(),
   stdin = () => (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8')),

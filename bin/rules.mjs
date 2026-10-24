@@ -33,6 +33,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule } from './lib/rules-change-run.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
@@ -459,7 +460,7 @@ export async function rulesMain(argv, {
       git: (args) => run('git', args, { cwd: top }),
       stdin,
       now,
-      home: path.resolve(env.JS_HARNESS_HOME || homedir()),
+      home: harnessHome({ env, homedir }),
       slug,
       transcripts: path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects', slug),
       rename,

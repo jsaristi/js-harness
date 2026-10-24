@@ -14,6 +14,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { batchText, removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { WAKE_WINDOW_MS, wakePlan, wakeText } from './lib/wake.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness wake [--notify] [--boot-time <iso>] [--cwd <path>] [--claude-home <path>] [--home <path>]',
@@ -135,11 +136,10 @@ export async function wakeMain(
   const root = mainCheckout(run, path.resolve(parsed.cwd ?? defaultCwd));
   // The harness home (the channel, the machine manifest) and the Claude home (the transcripts). An empty
   // JS_HARNESS_HOME is no home: joined as it is, it would name the folder the command runs in.
-  const harnessHome = parsed.home !== undefined ? path.resolve(parsed.home) : env.JS_HARNESS_HOME || homedir();
+  const home = harnessHome({ given: parsed.home, env, homedir });
   const defaultClaudeHome = path.join(homedir(), '.claude');
   const claudeHome = parsed.claudeHome !== undefined ? path.resolve(parsed.claudeHome) : env.CLAUDE_CONFIG_DIR || defaultClaudeHome;
   if (parsed.atLogin) {
-    const home = harnessHome;
     const name = startupName(remoteId(root));
     if (parsed.remove) {
       const removed = removeStartupFile({ env, home, name });
@@ -156,7 +156,7 @@ export async function wakeMain(
       content = startupText({
         node: execPath,
         root,
-        home: same(harnessHome, homedir()) ? undefined : harnessHome,
+        home: same(home, homedir()) ? undefined : home,
         claudeHome: same(claudeHome, defaultClaudeHome) ? undefined : claudeHome,
       });
     } catch (err) {
@@ -194,12 +194,12 @@ export async function wakeMain(
       // A transcript removed while this read is no session to wake.
     }
   }
-  const record = readNotices(harnessHome, slug);
+  const record = readNotices(home, slug);
   // The newest opening the title names, by its whole title or its code and role (`findOpenings`), read by the
   // command `sessions --opening` takes; a title that command cannot take whole is named by the session's own.
   let openingsUnread = null;
   const openingOf = (title) => {
-    const found = findOpenings(harnessHome, slug, title);
+    const found = findOpenings(home, slug, title);
     if (found.unavailable !== undefined) openingsUnread ??= `the openings folder ${found.dir} (${found.unavailable})`;
     const [newest] = found.openings;
     return newest === undefined ? null : (openingCommand(newest.title) ?? openingCommand(title));
@@ -254,7 +254,7 @@ export async function wakeMain(
   // half told, since a later run takes any note of this boot as all of them.
   const at = new Date(now()).toISOString();
   const notices = notes.map((note) => newNotice({ at, from, to: note.to, kind: 'note', text: note.text }));
-  for (const notice of notices) appendNotice(harnessHome, slug, notice);
+  for (const notice of notices) appendNotice(home, slug, notice);
   stdout(`${notes.length} notes recorded in ${record.path}.`);
   return 0;
 }

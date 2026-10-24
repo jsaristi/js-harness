@@ -2494,3 +2494,31 @@ test('doctorMain shows the clean row stale past the threshold, names its size in
     fs.rmSync(project, { recursive: true, force: true });
   }
 });
+
+test('doctor takes an empty JS_HARNESS_HOME as unset: its cache is read from the user home, never the working directory', async () => {
+  const work = makeTmpHome();
+  const home = makeTmpHome();
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  try {
+    // A fresh cache under the user home says gentle-ai is at 9.9.9; the fake gentle-ai is 4.2.0, so the row is outdated.
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'doctor.json'), JSON.stringify({ latest: { checkedAt: '2099-01-01T00:00:00.000Z', versions: { 'gentle-ai': '9.9.9' } } }));
+    // os.homedir() reads these: the empty JS_HARNESS_HOME falls back to the user home, not to the working directory.
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 4.2.0' } });
+
+    const { output } = await runDoctor(['--cwd', work, '--json', '--offline'], { JS_HARNESS_HOME: '' }, { spawn, fetch: noopFetch });
+
+    const gentleAi = JSON.parse(output).find((row) => row.id === 'gentle-ai');
+    assert.equal(gentleAi.upToDate, 'outdated');
+    assert.equal(fs.existsSync(path.join(work, '.js-harness')), false);
+  } finally {
+    for (const key of ['HOME', 'USERPROFILE']) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

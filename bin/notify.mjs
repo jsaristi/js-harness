@@ -22,6 +22,7 @@ import { pullRequestProblems } from './lib/pull-request.mjs';
 import { closeProblems } from './lib/summary.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, channelDir, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, transcriptOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectCode, projectDirsOf, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
@@ -351,7 +352,7 @@ export async function notifyMain(
   const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
+  const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const at = new Date(now()).toISOString();
 
   // An hour the text stamps as its sending is held to the clock the notice is stamped with, as the guard holds a

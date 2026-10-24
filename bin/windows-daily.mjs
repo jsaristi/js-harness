@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { unknownArgument } from './lib/args.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { windowsDaily } from './lib/windows-daily.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 const USAGE = [
   'Usage: js-harness windows-daily [--cwd <path>] [--home <path>]',
@@ -53,7 +54,7 @@ export async function windowsDailyMain(
     return 0;
   }
   const cwd = path.resolve(defaultCwd, valueOf(argv, '--cwd') ?? '.');
-  const home = path.resolve(defaultCwd, valueOf(argv, '--home') ?? (env.JS_HARNESS_HOME || homedir()));
+  const home = harnessHome({ given: valueOf(argv, '--home'), env, cwd: defaultCwd, homedir });
   const slug = projectSlug(mainCheckout(run, cwd));
   const result = await daily({ home, slug, cwd });
   for (const line of result.lines) stdout(line);

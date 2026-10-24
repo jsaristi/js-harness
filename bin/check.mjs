@@ -46,6 +46,7 @@ import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
 import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export { estimateTokens };
 
@@ -2642,7 +2643,7 @@ function parseArgs(argv, env) {
     ref,
     first: first?.trim(),
     cwd: get('--cwd') ?? process.cwd(),
-    home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: get('--home'), env, homedir: os.homedir }),
     push: argv.includes('--push'),
     subagents: argv.includes('--subagents'),
     verbose: argv.includes('--verbose'),

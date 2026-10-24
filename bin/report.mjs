@@ -11,6 +11,7 @@ import { appendReport as appendReportLine, newReport, readNotices } from './lib/
 import { PACE_REF_ARGS, paceRef } from './lib/progress-pace.mjs';
 import { REPORT_WINDOW_HOURS, cutOf, landedOf, mapOf, mergeCommitsArgs, mergeLogArgs, parseMergeLog, questionsOf, reportLines, sessionsOf, stamp } from './lib/report.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness report [--since <time>] [--mark] [--cwd <path>] [--home <path>]',
@@ -98,7 +99,7 @@ export async function reportMain(argv, { cwd: defaultCwd = process.cwd(), stdout
   // project. The harness home is --home, else JS_HARNESS_HOME, else the user's home.
   const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
   const slug = projectSlug(mainCheckout(run, cwd));
-  const home = path.resolve(defaultCwd, parsed.home ?? (env.JS_HARNESS_HOME || homedir()));
+  const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const at = now();
 
   const record = readNotices(home, slug);

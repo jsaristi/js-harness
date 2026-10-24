@@ -5,6 +5,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { unknownArgument } from './lib/args.mjs';
 import { KIND_IDS, applyKinds, formatBytes, logPath, readLog, remainingAfter, scan, writeMeasure } from './lib/clean.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = [
   'Usage: js-harness clean [--json] [--home <path>]',
@@ -38,7 +39,7 @@ function parseArgs(argv, env, deps) {
   const kinds = [...new Set(values('--kind'))];
   for (const kind of kinds) if (!KIND_IDS.includes(kind)) throw new CleanArgError(`unknown kind: ${kind}`);
   const args = {
-    home: values('--home')[0] ?? env.JS_HARNESS_HOME ?? deps.scan?.home ?? os.homedir(),
+    home: harnessHome({ given: values('--home')[0], env, homedir: () => deps.scan?.home ?? os.homedir() }),
     apply: argv.includes('--apply'),
     measure: argv.includes('--measure'),
     log: argv.includes('--log'),

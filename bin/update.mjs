@@ -14,6 +14,7 @@ import { MalformedManifestError, installedVersion } from './lib/manifest.mjs';
 import { projectLocation, staleManifestMessage, invalidHarnessJsonMessage, howToPinClause } from './lib/project.mjs';
 import { DEFAULT_REPO, INSTALL_NEWEST, latestFromSource, latestTag, tagSpec, splitCommand, pmKind, installPlan, isNewer } from './lib/version.mjs';
 import { unknownArgument } from './lib/args.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 const PKG_NAME = 'js-harness';
 export const UPDATE_USAGE = 'Usage: js-harness update [--home <path>] [--repo <url or folder>] [--source <dir>]';
@@ -37,7 +38,7 @@ function parseArgs(argv, env) {
     return i !== -1 ? argv[i + 1] : undefined;
   };
   return {
-    home: get('--home') ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: get('--home'), env, homedir: os.homedir }),
     source: get('--source') ?? env.JS_HARNESS_SOURCE,
     repo: get('--repo') ?? env.JS_HARNESS_REPO ?? DEFAULT_REPO,
     prefix: get('--prefix') ?? env.JS_HARNESS_PREFIX,
@@ -232,7 +233,7 @@ function parseStatusArgs(argv, env) {
     cwd: values['--cwd'] ?? process.cwd(),
     cwdExplicit: values['--cwd'] !== undefined,
     global,
-    home: values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(),
+    home: harnessHome({ given: values['--home'], env, homedir: os.homedir }),
     source: values['--source'] ?? env.JS_HARNESS_SOURCE,
     repo: values['--repo'] ?? env.JS_HARNESS_REPO ?? DEFAULT_REPO,
   };

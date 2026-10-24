@@ -1,5 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { stackMain, readStack, resolveStackPm } from './stack.mjs';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
@@ -129,4 +134,29 @@ test('stack --help and stack install --help print the usage of both, with the --
     assert.match(out, /--tool: codex, codegraph/);
   }
   assert.equal(read, 0);
+});
+
+test('stack takes an empty JS_HARNESS_HOME as unset: gentle-ai state is read from the user home, not the working directory', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-stack-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
+  try {
+    fs.mkdirSync(path.join(home, '.gentle-ai'));
+    fs.writeFileSync(path.join(home, '.gentle-ai', 'state.json'), JSON.stringify({ installed_agents: ['claude-code'] }));
+
+    const run = spawnSync(process.execPath, [fileURLToPath(new URL('./js-harness.mjs', import.meta.url)), 'stack', '--json', '--cwd', work], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
+    });
+
+    // The row must be there and still ask for codex: an absent row would also hold "no claude". It asks for
+    // `installed` too on a machine without gentle-ai, so only codex and claude are pinned.
+    const gentleAi = JSON.parse(run.stdout).manual.filter((row) => row.tool === 'gentle-ai');
+    assert.equal(gentleAi.length, 1, run.stdout);
+    assert.equal(gentleAi[0].dimensions.includes('codex'), true, run.stdout);
+    assert.equal(gentleAi[0].dimensions.includes('claude'), false, run.stdout);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
