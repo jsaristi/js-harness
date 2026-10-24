@@ -1916,8 +1916,8 @@ test('agentsTemplate carries the lines that hold in any project', () => {
   // Item 3: the owner's wording is the need.
   assert.match(text, /The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded\./);
   // Item 4: every claim is one of three; a report from elsewhere is a claim.
-  assert.match(text, /Every claim is checked \(with its evidence\), assumed, or not known\./);
-  assert.match(text, /What another session, a sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it\. What is passed on says what failed and what was not checked, "nothing" when that is true\./);
+  assert.match(text, /A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known, as `js-harness-protocols` section 6 says\./);
+  assert.match(text, /Everything else is decided and its cost said, as `js-harness-protocols` section 1 says, and the work goes on\./);
   // Item 6: a reply ends with one of five states.
   assert.match(text, /A reply ends in one of the five states of `js-harness-protocols` section 2\./);
   // Items 5, 7 and 8 are rules for building the harness and stay in its own AGENTS.md only.
@@ -1937,7 +1937,7 @@ test('agentsTemplate asks for two readers before a design is built or a proposal
 test('agentsTemplate serves a project with code and one without', () => {
   const template = agentsTemplate('project');
   assert.match(template, /<where the work lives: the code, the data, the documents>/);
-  assert.match(template, /A finding arrives with the evidence that proves it\./);
+  assert.match(template, /A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known,/);
   assert.doesNotMatch(template, /A behavior change arrives with the test/, 'AGENTS.md keeps the test-first line; the block does not');
 });
 

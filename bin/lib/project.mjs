@@ -419,19 +419,16 @@ that was not checked; what is passed on is complete and true; and each mistake l
 the smallest kind that does the job. A rule is not recorded until it has its place in a check, a
 line of this file or a protocol.
 
-A finding arrives with the evidence that proves it. A claim about this project carries its evidence.
+A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known,
+as \`js-harness-protocols\` section 6 says.
 Where the Codex review is off (\`js-harness functions\`), gentle-ai's assessment decides when a change
 is reviewed.
-
-Every claim is checked (with its evidence), assumed, or not known. What another session, a
-sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it.
-What is passed on says what failed and what was not checked, "nothing" when that is true.
 
 ## Working with the owner
 The owner decides spend outside the plan, anything installed or changed on a machine, a product
 choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
 published outside this project. Ask those one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
-Everything else is decided, its cost said, and the work goes on.
+Everything else is decided and its cost said, as \`js-harness-protocols\` section 1 says, and the work goes on.
 
 Near \`rule:context-pause\` of its window a session writes its state and keeps working; the host
 compacts it, and the pause notice says what the owner gets then.
