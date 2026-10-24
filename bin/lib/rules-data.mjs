@@ -295,6 +295,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "remote-control-yes",
+    "subject": "turning Remote Control back on in each work session after a restart of the Claude app, which turns it off: the review step of a host update (doctor's host-update row) does it without asking only where this rule holds, and asks the user first anywhere else",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": "a standing yes of 2026-10-15"
+  },
+  {
     "id": "reply-five-states",
     "subject": "a reply ends in one of five states, and a question is his decision alone, explained before it is asked",
     "owner": "sebastian",

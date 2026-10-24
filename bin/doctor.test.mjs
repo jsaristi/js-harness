@@ -2010,6 +2010,13 @@ test('a host update since the reviewed versions is stale, with the versions and 
     writeCache(home, { ...readCache(home), host: { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } } });
     const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const host = () => ({ found: true, desktop: '2.42304.0', staged: '2.42304.0', code: '2.1.299' });
+    // A project without the rule remote-control-yes is told to ask before turning Remote Control back on.
+    const asking = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
+    assert.ok(asking.output.includes('\n    ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; '), asking.output);
+    assert.doesNotMatch(asking.output, /without asking the user/);
+    // This repository's rules file declares it.
+    fs.mkdirSync(path.join(project, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'bin', 'lib', 'rules-data.mjs'), writeRules(RULES));
 
     const table = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
     assert.match(table.output, /^host-update\s+2\.42304\.0\s+stale\s+n\/a\s+n\/a\s+ok$/m);

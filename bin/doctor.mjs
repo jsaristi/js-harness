@@ -21,7 +21,7 @@ import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestV
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
-import { hostNotice, hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
+import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
@@ -210,7 +210,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
   const withUnseen = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
-  const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now)] : withBackup;
+  const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now, project)] : withBackup;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
   const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
@@ -245,10 +245,9 @@ function stackRow(versions, home, now) {
 /** The host-update row (bin/lib/host-update.mjs): the Claude Desktop app and its Code tab CLI against the versions
  * last reviewed. The first reading, with no record, is recorded as reviewed; after that only `--host-reviewed`
  * records, so an update stays a gap until its review is done. */
-function hostRow(host, home, now) {
+function hostRow(host, home, now, project) {
   const cache = readCache(home);
-  // Until the rule remote-control-yes is declared (C-shared-5), the standing yes holds everywhere, as it did before.
-  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now, { value: 'a standing yes of 2026-10-15' });
+  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now, readProjectRulesText(project));
   if (record) writeCache(home, { ...cache, host: { reviewed: record } });
   return row;
 }

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `bc1c8f44d328`. In force: 62 (37 of Sebastián, 25 of the project). Retired: 2.
+Hash `39e97c43dfc0`. In force: 63 (38 of Sebastián, 25 of the project). Retired: 2.
 
 ## Sebastián's
 
@@ -80,6 +80,12 @@ Every question of the project reaches the user in the orchestrator's chat, throu
 The lead's recap names each session's effort mode for its kind of work, and why: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
+
+### remote-control-yes
+Turning Remote Control back on in each work session after a restart of the Claude app, which turns it off: the review step of a host update (doctor's host-update row) does it without asking only where this rule holds, and asks the user first anywhere else: a standing yes of 2026-10-15.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/host-update.mjs`.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-19, checked by the command on 2026-10-24.
 
 ### reply-five-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
