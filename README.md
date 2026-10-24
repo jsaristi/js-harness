@@ -1685,7 +1685,8 @@ projects and the newest entry; `doctor` calls the backup stale when a success le
 A SessionStart hook in both hosts, `backup --session-start`, resolves the session's project and asks
 `engram stats` for it within 3 seconds. When Engram holds less than nine tenths of what the last
 backup held of it, the session is told so, pointed to its file's head, and given the restore command;
-otherwise it says nothing:
+otherwise it says nothing. An Engram that answers but holds too few is told it holds less than its
+backup; only one with no memory of the project, silent or failing is told its protocol is not working:
 
 ```console
 js-harness: Engram has no memory of js-harness (memory fallback, odd/tasks/recent-memory.md).

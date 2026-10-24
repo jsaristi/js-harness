@@ -59,8 +59,16 @@ test('a wiped, emptied, silent or failing Engram gets the file, its head, the or
     assert.match(text, /lines 1-120/);
     assert.match(text, /js-harness backup restore --from "C:\\Users\\me\\\.js-harness\\memory-backup\\repo" --merge/);
     assert.match(text, /never `js-harness backup run --allow-shrink`/);
-    assert.match(text, /the Engram protocol shown at this start is not working for this project/i);
     assert.doesNotMatch(text, /client/);
+  }
+});
+
+test('an Engram that answers but holds less is told as a shortfall, never as not working (N32)', () => {
+  const short = notice({ state: 'ok', observations: 12 });
+  assert.doesNotMatch(short, /not working/i);
+  assert.match(short, /Engram answers for this project, but holds less than its last backup: until it is restored, what it lacks is in the memory:/);
+  for (const stats of [{ state: 'unknown' }, { state: 'timeout' }, { state: 'failed', reason: 'database is locked' }]) {
+    assert.match(notice(stats), /the Engram protocol shown at this start is not working for this project/i);
   }
 });
 

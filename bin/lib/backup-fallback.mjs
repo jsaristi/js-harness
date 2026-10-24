@@ -71,7 +71,10 @@ export function fallbackNotice({ entry, stats, clone, cloneExists, repo }) {
   const from = cloneExists ? clone : `https://github.com/${repo}.git`;
   return [
     `js-harness: ${reason} (memory fallback, odd/tasks/recent-memory.md).`,
-    'The Engram protocol shown at this start is not working for this project. Until Engram is back, the readable fallback is the memory:',
+    // An Engram that answers with too few observations is short, not down: its protocol works for what it holds.
+    stats.state === 'ok'
+      ? 'Engram answers for this project, but holds less than its last backup: until it is restored, what it lacks is in the memory:'
+      : 'The Engram protocol shown at this start is not working for this project. Until Engram is back, the readable fallback is the memory:',
     read,
     `To bring Engram back: \`js-harness backup restore --from "${from}" --merge\` (it adds only what Engram lacks); never \`js-harness backup run --allow-shrink\` before that, which would replace the good copy with the wiped memory.`,
     'Say so to the user before work that depends on past decisions.',
