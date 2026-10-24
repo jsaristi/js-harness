@@ -97,12 +97,14 @@ export function runSession(run) {
   return run?.session === 'lean' ? 'lean' : 'current';
 }
 
+// A test seam: no command reads it, and the tests pin how a line written before the field reads.
 /** The prompt a run line's review was asked with: its `prompt` when that is `codex` or `own`, else
  * `codex`, which is what every line written before the field existed was asked with. */
 export function runPrompt(run) {
   return run?.prompt === 'own' ? 'own' : 'codex';
 }
 
+// A test seam: no command reads it, and the tests pin how a line without its findings reads.
 /** The counts of the findings of a run line, `{ total, bySeverity }`, or `null` when the line holds none:
  * it was written before the answer was read as data, it ran in the `current` session, or its answer could
  * not be read. Only counts that say they were read from an answer (`answerSource`) are given, so `null` is
@@ -188,6 +190,7 @@ export function keptPartFor(runs, key) {
   return null;
 }
 
+// A test seam: no command calls it; the tests take the path of the log from here.
 /** `<git common dir>/js-harness/codex-review-runs.jsonl` for the repository at `root`, or `null` when
  * `root` is not inside one. */
 export function codexReviewRunsPath(root, deps = {}) {

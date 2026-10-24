@@ -52,14 +52,14 @@ export const USAGE = [
   '         a clear in a project with a harness.json, prints the session\'s title, its opening, its feature document',
   '         (its relief file, for an orchestrator) and what to read there; after a compaction it also tells what its',
   '         transcript holds of the stretch before it. It prints nothing anywhere else and writes nothing; when its',
-  '         standard input was not read, it says so on standard error. It always exits 0.',
+  '         standard input was not read, it says so on standard error. It exits 0, or 2 for a usage error.',
   'Usage: js-harness resume --pause',
   '         a PostToolUse hook for the context pause: it reads the hook\'s input from standard input and prints',
   '         one JSON line with the notice the first time a stretch of work passes the pause, and the notices of the',
   '         channel addressed to the session that it was not told yet, once each, and at most once a day for',
   '         the project that a memory hygiene pass is due (js-harness memory status); and, after a WebFetch the',
   '         site answered 402, 403, 429 or 503, sub-agents\' too, the next rung: js-harness fetch, then the browser.',
-  '         It never fails and always exits 0.',
+  '         It never fails and exits 0, or 2 for a usage error.',
 ].join('\n');
 
 // How long one `git` may take, in milliseconds. The hook asks at most seven questions and the host gives
