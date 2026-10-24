@@ -149,8 +149,12 @@ test('stack takes an empty JS_HARNESS_HOME as unset: gentle-ai state is read fro
       env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
     });
 
+    // The row must be there and still ask for codex: an absent row would also hold "no claude". It asks for
+    // `installed` too on a machine without gentle-ai, so only codex and claude are pinned.
     const gentleAi = JSON.parse(run.stdout).manual.filter((row) => row.tool === 'gentle-ai');
-    assert.equal(gentleAi.some((row) => row.dimensions.includes('claude')), false, run.stdout);
+    assert.equal(gentleAi.length, 1, run.stdout);
+    assert.equal(gentleAi[0].dimensions.includes('codex'), true, run.stdout);
+    assert.equal(gentleAi[0].dimensions.includes('claude'), false, run.stdout);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
