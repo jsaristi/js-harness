@@ -63,7 +63,7 @@ Launch means the 1.0.0 tag (`odd/tasks/release-095.md`, T4), which waits until h
 - [x] T8 (kind: verify) (S6) Stage 5, behavior (session 4). Route: per-action workers. Done: `behavior.md`; the report below.
 - [ ] T9 (kind: build) (S6) Stage 6: confirm, fix in slices, re-check. Route: per its size.
 - [x] T9a (kind: verify) (S6) Follow-up of the check-gate slice: no Codex record covers 68da2005 (a quoted Proof file read without its quotes), because codex-review refuses a second recheck of the finding 457d69ca left not fixed. The lead (19:50) chose the way out the refusal names: a fresh review of the whole slice, `codex-review --base 6bdd0dc8e7cf615a38dedd78669dccafe10fa32e --again`; its findings are fixed test-first with one recheck. Route: inline. Done: one P2 fixed in ba379452, Codex recheck fixed (0.97).
-- [ ] T10 (kind: verify) (S6) Stage 7: sign-off on the final sha, the diff since the audit sha included. Route: inline.
+- [x] T10 (kind: verify) (S6) Stage 7: sign-off on the final sha, the diff since the audit sha included. Route: inline. Done: L29 (no-go on 491a98a8, with what each item needs).
 
 ## Ids
 - `I-<source>-<id>`: a record imported in stage 0. `HR` harness-review, `RH` rule-hierarchy, `SW` the sweep of 2026-10-11 (its reader ids), `RM` the ROADMAP.
@@ -76,9 +76,9 @@ Each verified against the bytes at the audit sha on 2026-10-23.
 ### harness-review
 - I-HR-T0 · open, carried to T10. Which open tasks close before 1.0.0 and which are carried with his yes. Its first list (harness-review L45) named v0.9.0 and v1.0.0; the tags since are v0.9.0, v0.95.0, v0.96.0, v0.97.0 (`git ls-remote --tags origin`), and 1.0.0 is release-095 T4. Open on the audit sha, from `js-harness progress`: backup-ready T9; conventions T8; F2 T5 and fixed-load T6 (gentle-ai #4036); future-model T8, T9; held-sessions T3; onboarding T4, T5; release-095 T4; rule-hierarchy T1, T8, T11, T16, T16f; session-channel T11; stack-install T6, T7; terminal-note T3; and the ROADMAP rows "The lead's manual steps are commands with tests", "Every command reviewed…" (I-RM-1), the VM rehearsal of "Memory that survives the machine", onboarding's design, conventions parts 1 and 2.
 - I-HR-L48a · closed by the skill and the board: the archive retry. The board lists `to archive` and the orchestrator skill archives again after turning Remote Control off (`bin/lib/manifest.mjs:209`); archiving is the desktop app's alone, so no command can retry it (harness-review L53).
-- I-HR-L48b · open, to stage 4 area c: the opening of a cleared session. The resume hook still fires on `compact` only (`bin/lib/manifest.mjs:416`); the probe of harness-review L12 found a clear starts with source `startup`.
-- I-HR-L48c · open, to stage 4 area b: the Codex meter (e4). No command reads `account/rateLimits/read` (`grep -rn "rateLimits\|app-server" bin` finds only clean's release folders and tests); the memory note `codex-meter-is-readable.md` points to a scratchpad script.
-- I-HR-L48d · open, to stage 4 area b: retargeting a stacked pull request after its base lands (e16). `merge-queue` lists only pull requests based on main (`bin/merge-queue.mjs:848`); nothing retargets (`grep -rn retarget bin`).
+- I-HR-L48b · closed by PR 536 (homes-resume slice, C-c-5; merge cb8e86b9): the opening of a cleared session. The resume hook was on `compact` only at the audit sha; it is registered for `compact|clear|startup` now (`bin/lib/manifest.mjs:424`), since the probe of harness-review L12 found a clear starts with source `startup`.
+- I-HR-L48c · closed by PR 554 (C-b-37; merge b6efac01): the Codex meter (e4). `js-harness codex-meter` reads `account/rateLimits/read` from `codex app-server` (`bin/lib/codex-meter.mjs`).
+- I-HR-L48d · closed by PR 557 (C-b-4, C-b-6; merge 120b50ef): retargeting a stacked pull request after its base lands (e16). `merge-queue` reads the default branch and retargets the open pull requests stacked on a branch it landed (`retargetStacked`, `bin/merge-queue.mjs:9`).
 - I-HR-L48e · fixed `cc55c749`: DEP0190. `bin/update.mjs:405` and `:531` pass an argument array with `shell: true`; `bin/lib/package-manager.mjs:22-27` already shows the form Node does not warn on.
 - I-HR-L48f · fixed `99ffa66c`: a committed test of the pre-push hook's `--ref` for a version tag. `.githooks/pre-push:21-23` passes it; `bin/pre-push-hook.test.mjs` has no case with a `refs/tags/v*` line (the check's own `--ref` is tested at `bin/check.test.mjs:5705`).
 - I-HR-L15 · closed: R1-001 (`bin/update.mjs:427` refuses `"` and `%` on Windows) and R1-002/R4 (`pnpmRunning`, `bin/update.mjs:158`) are in the code.
@@ -89,7 +89,7 @@ Each verified against the bytes at the audit sha on 2026-10-23.
 - I-RH-T16f · carried, his: the turn-start hook's reach. Stays in `odd/tasks/rule-hierarchy.md`.
 
 ### ROADMAP
-- I-RM-1 · open, to T3 and T7: "Every command reviewed against its help, README and SPEC, and every finding fixed or written down" (`docs/ROADMAP.md:220`). Stage 2's flag parity is its mechanical half; stage 4 its reading half.
+- I-RM-1 · closed by stages 2, 4 and 6: "Every command reviewed against its help, README and SPEC, and every finding fixed or written down" (`docs/ROADMAP.md:220`). Its mechanical half is stage 2's flag parity (M8 allowed with why, M10 allowed, M9 carried to stage 4); its reading half is stage 4's eleven area files (163 judged), whose findings stage 6 fixed or wrote down here. `node scripts/audit-flags.mjs` on 7394555d gives 23 unprobed findings, 7 more allowed (96 unprobed at the audit sha); each of the 23 is a probe limit a stage 4 row judged: loop's two (C-d-13), summary's (C-c-17, wrong), merge-queue's seven and guard's five (C-b-41, no defect), remote's seven and sessions' one (C-c-18, wrong). The ROADMAP box is left for T10, with I-HR-T0's list.
 
 ### The sweep of 2026-10-11
 47 items were open in `docs/sweep-2026-10-11.md`. Each was checked for its file and for the quoted "Says:" text (a scratch script; the counts: 17 still stand, 18 quotes gone, 8 files gone, 4 machine places).
@@ -246,3 +246,52 @@ Read on `f45e78c2` (the code of `fb9108c0`). Each finding is one line of its fil
   - session-board (docs/session-board-t7-close): one uncommitted change.
   - watch-share (feat/watch-notice-share, not on origin): two uncommitted changes.
   - The unpushed commits stay unpushed: a push needs their Codex records.
+- L28. 2026-10-24 (13:55Z), the lead (08:30): the housekeeping rows of stage 5, and the imported rows later slices settled.
+  - B20 and B21 · fixed by the lead at 08:29: the local branches feat/subagent-model-routing (f6382f05) and feat/gate-log (de50a402) deleted with `git branch -d`; both were merged into origin/main and are still on origin.
+  - B15 · carried, his: deleting the 350 files in D:/js-harness-worktrees/practice-project cannot be undone, so it goes on his return list.
+  - B16 and B17 · carried, his: copepod and medaka are Orca's workspaces, another tool's.
+  - B19 · carried, his: session-board's uncommitted change is already on his return list.
+  - C-e-15 · its own slice, PR 568 (the ledger line of the unused-exports slice).
+  - Closed with their PRs: I-HR-L48b (536), I-HR-L48c (554), I-HR-L48d (557); I-RM-1 by stages 2, 4 and 6 (each in its imported row).
+  - Next: T10, stage 7, on the final sha once PR 568 lands.
+- L29. 2026-10-24 (14:40Z), stage 7: the sign-off report (T10), on the final sha `491a98a8cd19cc8f9479e8a047edddca3861ff52` (origin/main, the merge of PR 568). The diff since the audit sha `3f25784a` is 291 commits, 314 files, +16,124/-3,114 (bin/ 205 files, +6,742/-1,926). The data and the command behind each number are in `t10-data.md` of the lead's side-session notes (local_bd0ae465…); the numbers that decide are below.
+  - **Verdict: no-go for 1.0.0 on 491a98a8.** Every blocker of the audit is fixed and both suites pass, but four things a release needs are not true on this sha (the go/no-go list below); two are this repository's to fix in one small slice, two are his.
+  - **Suites, bound to the sha:**
+    - Windows (the gate): `node bin/check.mjs --verbose` on a detached checkout of 491a98a8: native `node --test` exit 0, 7,347 tests: 7,324 pass, 0 fail, 23 skipped, in 1,124 s; and the gate `node bin/check.mjs --verbose`, exit 0 in 175 s, every row PASS or INFO. The gate alone would not do: its tests row ran in WSL2 (Ubuntu) with exact tests skipping 31 of 247 test files, so the native run is the Windows proof and the gate's is a second Linux one. Tools: node v24.15.0, Windows 10.0.19044, 8 logical processors, npm 12.2.0, git 2.54.0.windows.1, gentle-ai 4.2.0, codex-cli 0.163.0.
+    - Linux (CircleCI): job 280 on queue/20261024T135221-491a98a (vcs_revision 491a98a8, the commit main became): success, `PASS check 13 rows passed, 7 of them INFO`, 4 min 3 s; runner node v24.21.0 (the pinned cimg/node:24.21.0), linux 7.0.0-1014-aws, 2 processors, 4 GB. gentle-ai is not on that runner, so its review row is not assessed there.
+  - **Coverage by file.** `inventory --check` on 491a98a8: exit 0, 867 rows (live 191, history 156, generated 21, fixture 200, internal 299, compatibility 0; 814 at the stage-2 report). Stage 3 judged 51 instruction rows from about 230 directives in nine sources; stage 4's eleven areas read the 462 live and internal rows of fb9108c0 and judged 163 code rows. History, generated and fixture rows had the reference check only, by design (S4a). Two limits: the inventory's verdict column is empty in all 867 rows, so per-file coverage lives only in each area file's "Not read" section, not in the inventory as S4 says; and ten shipped modules added after fb9108c0 (bin/codex-meter.mjs and bin/lib codex-launch, codex-meter, codex-review-rows, default-branch, gate-turn, home, jsonl-tail, permit-times, record-days) were reviewed only inside their slices by gentle-ai and Codex.
+  - **Coverage by behavior.** Stage 5 (behavior.md, at f45e78c2): the real-host loading probe (Claude Code 13 hook entries, Codex 5, three skills byte-identical, every hook exits 0), release-proof 12/12 with npm and with pnpm, a cold start from a local pack, and uninstall residuals with no harness file left. The practice journey stopped at project-uninstall (B1, fixed in PR 520): its last six steps have no recorded pass, and stage 5 was not re-run after stage 6. The `spec` row counts 64 capabilities, each Proof naming its files; it does not run them.
+  - **Findings by severity and status** (the 223 triaged rows; refuted rows and M1-M12 apart):
+
+    | class | rows | fixed | closed / wrong | carried, his | open | unclear |
+    |---|---|---|---|---|---|---|
+    | blocker | 14 | 14 | 0 | 0 | 0 | 0 |
+    | should | 67 | 64 | 0 | 0 | 3 | 0 |
+    | nit | 67 | 60 | 3 | 4 | 0 | 0 |
+    | his: C | 9 | 9 | 0 | 0 | 0 | 0 |
+    | his: B | 6 | 3 | 0 | 3 | 0 | 0 |
+    | his: N | 34 | 28 | 3 | 0 | 1 (+N43 in part) | 1 |
+    | not defects | 16 | 0 | 16 | 0 | 0 | 0 |
+    | N awaiting a home | 10 | 0 | 0 | 0 | 10 | 0 |
+    | total | 223 | 178 | 22 | 7 | 14 | 1 |
+
+    Apart: 13 refuted rows (wrong); M1-M12: 3 fixed, 6 closed or allowed, M4, M9 and M11 carried into stages 3-4 and settled there (M4's 168 test-only exports stay as seams the areas judged); imported rows: 2 fixed, 7 closed, I-RH-T16 and T16f carried, his; I-HR-T0 below.
+  - **Open, with where and why:**
+    - Shoulds C-shared-14 (the session-id pattern copied three times plus a looser fourth, `bin/lib/rules-change-run.mjs:29`; triage left the shape to the lead), B4 (no proof that Codex runs or trusts the harness's hooks; needs a Codex session, a spend) and B8 (doctor --hook near its 10 s timeout under load; to be measured on a quiet machine). No slice took them, so L22's "66 of 67" and L23's "nothing … left but landing" were wrong: the right count was 63 of 67 then, 64 now with C-e-1.
+    - Instruction rows waiting for a home: N9, N10, N16, N24, N30, N31, N32, N34, N45, N47. N32 first: `bin/lib/backup-fallback.mjs:74` tells a model Engram "is not working" in its ok state.
+    - N7 (his typed list), N43's copy at `bin/lib/manifest.mjs:208` (his typed words or the lead's decision).
+    - Unclear: N17. instruction-homes lists it done, but `memory/codex-meter-is-readable.md` still says nothing reads the meter, which PR 554 made untrue.
+  - **Not checked:** host-loads, a Codex session, the GitHub steps (README step 1, update, upgrade, release-proof --from a tag), GUIDE.md and onboard (stage 5); the real merge-queue land, launcher's Windows process table, live backup against GitHub, clean --apply and stack install (stage 4); C-e-6 under a path with a space, whether the desktop app writes its record before SessionStart runs, compareSemver with a prerelease, I-SW-CD-43; 3e7f0d7d has no gentle-ai review (operation_timeout twice); and the advisories each slice row lists.
+  - **Payload, audit sha → 491a98a8:**
+    - AGENTS.md: 1,477 → 1,436 estimated tokens (budget 1,500; LF text, as checkBudget reads it; M12's 1,499 counted the Windows checkout's CRs).
+    - npm package (`npm pack --dry-run --json`, npm 12.2.0, on a git archive of each sha): 167 files, 1,064,749 B → 176 files, 1,088,660 B; ratchet.mjs left, the ten modules above came in, no test or testkit ships.
+    - Fixed load (`measureFixedLoad`, median first turn of the latest five sessions): 103,939 → 106,094 (the gate's row on 491a98a8, worktree sessions counted), over its 100,000 budget; every sampled session started before the AGENTS.md cuts of PRs 558 and 560, so the after cannot be measured until new sessions start.
+    - Installed payload today (`measurePayload`, read-only): Claude 27,040, Codex 31,717 tokens; the audit sha's is not reproducible, because his home has changed since.
+  - **Go/no-go list:**
+    1. A SPEC Proof fails: `failures check --settled` exits 1 (on 491a98a8 plus this ledger: "not settled: 1 of 100 failures", stale-prompts-sent "control lost"; the gate's failures row passes, since it does not ask for --settled). Its control phrase left AGENTS.md in PR 560; the `spec` row does not run Proofs, so check stays green. This repository's to fix.
+    2. Three stage-2 scripts exit 1 on 491a98a8: audit-citations (two allow entries keyed by lines of bin/codex-review.mjs that moved: 2 stale-allow and 1 no-such-file, exit 1, rechecked), audit-hygiene (seven new fixture values not allow-listed) and audit-exports (M4's 168 test-only exports, never allow-listed). audit-expiry and the inventory pass. The first two are this repository's to fix, with 1 in the same slice; the third needs an allow-list or a rule that test-only is not a failure.
+    3. His gate: ROADMAP:71 holds 1.0.0 for the three gentle-ai #4036 tasks, and #4036 is open with no activity since 2026-09-12.
+    4. The tag gate of PR 556 needs a full practice pass with a host session on the tag's commit, which spends a model; with it, B4 and the six unrun steps get their proof.
+  - **His:** I-HR-T0 (every open task of the audit sha's list is still open, plus instruction-homes T4, one-home-folder T4 and this ledger's T9 and T10); the 1.0.0 tag (release-095 T4); gentle-ai #4036; the spend of the practice pass and of B4's Codex session; B12-B14 (his paste of the settings lines), B15-B17 and B19; M5's history rewrite; N7, N43's copy; I-RH-T16 and T16f; ROADMAP:72's 1.0.0 review and record, not designed yet. C-e-1 is no longer his: PR 556 fixed it with his choice ("Subir engines a 24"), as C-a-3 and C-a-4 in PR 552. The ROADMAP box of I-RM-1 is ticked by this report, since the ledger row closes it.
+  - T10 is ticked: this is its report. T9 stays open, because stage 6's re-check is not whole (stage 5 not re-run, stage 2 red as above) and three shoulds are open.
+  - Next: the slice for go/no-go 1 and 2 (the failures control, the two allow-lists, a rule for test-only exports), then the open shoulds as the lead orders them.
