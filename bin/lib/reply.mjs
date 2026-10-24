@@ -1,15 +1,15 @@
 // The reply check, C1 of odd/tasks/rule-hierarchy.md (T2): whether the reply that ends a turn closes the way
-// `AGENTS.md` asks, "End each reply with one state", read from the reply's text alone. It never judges what a reply
+// protocol 2 of `js-harness-protocols` asks, "End each reply in one of the five states", read from the reply's text alone. It never judges what a reply
 // says, only its close: one state line, what that state needs, and the block the user sends kept to a cut.
 //
 // A state line is a line, outside fenced blocks, that starts with a state's label once the markdown around it is
 // taken off (`**Sigo solo** — …`, `## Terminado: …`, `- Corte`); a label inside a sentence or as part of a longer
 // word is none. The labels are the project's, from the `reply` key of its `harness.json`, so a project that writes
-// its replies in Spanish declares the Spanish ones. What each state needs, from `AGENTS.md`:
+// its replies in Spanish declares the Spanish ones. What each state needs, from protocol 2:
 //   - working: what wakes the session, written after the label on its line;
 //   - decision: never while background work runs (the host's count of running tasks);
 //   - question: an open question the user answers in writing, not with the question tool's buttons, written after
-//     the label on its line; never while background work runs, like a decision, since both wait on the user;
+//     the label on its line; it may close while background work runs, since the person answers it, not the work;
 //   - cut: one fenced block of what the user sends, under the three labels (what it is, where it goes, what sending it
 //     does), each once;
 //   - finished: the session to return to, written after the label on its line.
@@ -112,7 +112,7 @@ function linesOf(text) {
 function shapeOf({ states, labels }) {
   return `End the reply with one line that starts with one of: ${states.working} (say what wakes you), `
     + `${states.decision} (never while background work runs; the question itself goes through the question tool), `
-    + `${states.question} (an open question the user answers in writing, asked on that line; never while background work runs), `
+    + `${states.question} (an open question the user answers in writing, asked on that line), `
     + `${states.cut} (one code block of only what the user sends, under the lines ${labels.what}:, ${labels.where}: and ${labels.effect}:), `
     + `${states.finished} (name the session to return to). Your reply is already shown: write the close again in your next words.`;
 }
@@ -168,8 +168,8 @@ export function replyRefusal(text, config, { running = 0 } = {}) {
   if (state === 'working' && rest === '') return turned(`"${states.working}" says nothing after it: say on that line what wakes you`);
   if (state === 'finished' && rest === '') return turned(`"${states.finished}" says nothing after it: name on that line the session to return to`);
   if (state === 'question' && rest === '') return turned(`"${states.question}" says nothing after it: write on that line what you ask`);
-  if ((state === 'decision' || state === 'question') && running > 0) {
-    return turned(`"${states[state]}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a ${state} is never asked while work runs; wait for it, or close with ${states.working}`);
+  if (state === 'decision' && running > 0) {
+    return turned(`"${states.decision}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a decision is never asked while work runs; wait for it, or close with ${states.working}`);
   }
   if (state === 'cut') return cutRefusal({ labels, labelLines, blocks, turned });
   return null;

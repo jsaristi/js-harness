@@ -1912,14 +1912,14 @@ test('agentsTemplate carries the lines that hold in any project', () => {
   assert.match(text, /A rule is not recorded until it has its place in a check, a line of this file or a protocol\./);
   // Item 2: what is the owner's, asked one at a time; the rest is decided and goes on.
   assert.match(text, /The owner decides spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report published outside this project\./);
-  assert.match(text, /Ask those one at a time, never while work runs, naming which it is\. Everything else is decided, its cost said, and the work goes on\./);
+  assert.match(text, /Ask those one at a time, never while work runs, naming which it is, as `rule:questions-one-place` says\./);
   // Item 3: the owner's wording is the need.
   assert.match(text, /The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded\./);
   // Item 4: every claim is one of three; a report from elsewhere is a claim.
-  assert.match(text, /Every claim is checked \(with its evidence\), assumed, or not known\./);
-  assert.match(text, /What another session, a sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it\. What is passed on says what failed and what was not checked, "nothing" when that is true\./);
+  assert.match(text, /A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known, as `js-harness-protocols` section 6 says\./);
+  assert.match(text, /Everything else is decided and its cost said, as `js-harness-protocols` section 1 says, and the work goes on\./);
   // Item 6: a reply ends with one of five states.
-  assert.match(text, /A reply ends with one of five states: working \(the owner sends nothing; say what wakes the work\), decision \(one question for the owner, never while work runs\), question \(an open question the owner answers in writing\), cut \(a new session, with the text to send it\), or finished \(name where to return\)\./);
+  assert.match(text, /A reply ends in one of the five states of `js-harness-protocols` section 2\./);
   // Items 5, 7 and 8 are rules for building the harness and stay in its own AGENTS.md only.
   assert.doesNotMatch(text, /One session, one feature|consent|judged twice/i);
 });
@@ -1937,14 +1937,15 @@ test('agentsTemplate asks for two readers before a design is built or a proposal
 test('agentsTemplate serves a project with code and one without', () => {
   const template = agentsTemplate('project');
   assert.match(template, /<where the work lives: the code, the data, the documents>/);
-  assert.match(template, /A behavior change arrives with the test that proves it, written first; a finding, with the\nevidence that proves it\./);
+  assert.match(template, /A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known,/);
+  assert.doesNotMatch(template, /A behavior change arrives with the test/, 'AGENTS.md keeps the test-first line; the block does not');
 });
 
-// His answer to question 4 (odd/tasks/on-demand-functions.md, S9): with the Codex review off, gentle-ai reviews
-// high and medium risk, a written rule that nothing enforces at a push.
+// His answer to question 4 (odd/tasks/on-demand-functions.md, S9): with the Codex review off, gentle-ai's assessment
+// decides when a change is reviewed, naming no tier (N6, his answer of 2026-10-24).
 test('agentsTemplate writes the rule of a project whose Codex review is off', () => {
   const template = agentsTemplate('project');
-  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai reviews every change of medium\nor high risk\.$/m);
+  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai's assessment decides when a change\nis reviewed\.$/m);
 });
 
 // --- runCodegraphInit spawn shape ---

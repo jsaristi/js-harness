@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SWITCHES, programFile, readFunctions, resolveFunctions, typeScriptFile } from './functions.mjs';
 
-const DEFAULTS = { codeMap: 'auto', languageServer: 'auto', codexReview: 'auto' };
+const DEFAULTS = { codeMap: 'auto', languageServer: 'auto', codexReview: 'auto', pushUnasked: 'auto' };
 
 test('a harness.json with no "functions" is every switch at its default, with no error', () => {
   assert.deepEqual(readFunctions({ version: '0.1.0' }), { values: DEFAULTS, declared: {}, errors: [] });
@@ -40,12 +40,27 @@ test('a switch with a value it does not take is read as on, never as off', () =>
   assert.equal(readFunctions({ functions: { codexReview: false } }).values.codexReview, 'on');
   assert.equal(readFunctions({ functions: { codeMap: 'none' } }).values.codeMap, 'on-demand');
   assert.equal(readFunctions({ functions: { languageServer: 0 } }).values.languageServer, 'on');
+  // Pushing unasked is the one switch read as off: a value it cannot read asks the person, never pushes.
+  assert.equal(readFunctions({ functions: { pushUnasked: 'yes' } }).values.pushUnasked, 'off');
+});
+
+test('pushing unasked is off where the project says nothing: the session asks before it pushes', () => {
+  const because = 'the project asks until its owner turns it on';
+  for (const paths of [['README.md'], ['src/fetch.py']]) {
+    assert.deepEqual(resolveFunctions(DEFAULTS, { paths }).pushUnasked, { value: 'off', declared: 'auto', because });
+  }
+  assert.deepEqual(resolveFunctions(DEFAULTS, { unknown: 'git failed' }).pushUnasked, { value: 'off', declared: 'auto', because });
+});
+
+test('pushing unasked is on only where the project declares it on, whatever its files are', () => {
+  const resolved = resolveFunctions({ ...DEFAULTS, pushUnasked: 'on' }, { paths: [] });
+  assert.deepEqual(resolved.pushUnasked, { value: 'on', declared: 'on', because: 'declared in harness.json' });
 });
 
 test('a name that is no switch is an error, so a misspelt switch is never a silent default', () => {
   const read = readFunctions({ functions: { codexreview: 'off' } });
   assert.deepEqual(read.errors, [
-    'harness.json "functions" holds "codexreview", which is no switch; the switches are "codeMap", "languageServer", "codexReview"',
+    'harness.json "functions" holds "codexreview", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked"',
   ]);
   assert.deepEqual(read.values, DEFAULTS);
 });
@@ -54,7 +69,7 @@ test('a "functions" that is not an object is an error and every switch is read a
   for (const functions of ['off', ['codexReview'], null, 3]) {
     const read = readFunctions({ functions });
     assert.deepEqual(read.errors, [`harness.json "functions" must be an object; it is ${JSON.stringify(functions)}`]);
-    assert.deepEqual(read.values, { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on' });
+    assert.deepEqual(read.values, { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off' });
   }
 });
 
@@ -116,12 +131,13 @@ test('auto for the language server goes by TypeScript, not by any program', () =
 });
 
 test('a declared value is the answer whatever the files are', () => {
-  const values = { codeMap: 'always', languageServer: 'on', codexReview: 'off' };
+  const values = { codeMap: 'always', languageServer: 'on', codexReview: 'off', pushUnasked: 'on' };
   for (const paths of [[], ['src/fetch.py', 'web/app.ts']]) {
     assert.deepEqual(resolveFunctions(values, { paths }), {
       codeMap: { value: 'always', declared: 'always', because: 'declared in harness.json' },
       languageServer: { value: 'on', declared: 'on', because: 'declared in harness.json' },
       codexReview: { value: 'off', declared: 'off', because: 'declared in harness.json' },
+      pushUnasked: { value: 'on', declared: 'on', because: 'declared in harness.json' },
     });
   }
 });
@@ -143,7 +159,7 @@ test('a name every object inherits is no switch either: an error, never a crash'
   for (const name of ['constructor', 'toString', '__proto__']) {
     const read = readFunctions(JSON.parse(`{ "functions": { "${name}": "off" } }`));
     assert.deepEqual(read.errors, [
-      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview"`,
+      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked"`,
     ]);
     assert.deepEqual(read.values, DEFAULTS);
   }

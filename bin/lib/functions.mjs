@@ -1,5 +1,5 @@
-// The functions a project can turn off and on: the code map, the language server and the Codex review,
-// declared under `harness.json` `"functions"`. This module only reads what is declared and says what each
+// The functions a project can turn off and on: the code map, the language server, the Codex review and pushing
+// unasked, declared under `harness.json` `"functions"`. This module only reads what is declared and says what each
 // switch resolves to; it spawns nothing and reads no file, so the rules are all testable as data. The
 // commands that act on a switch (check, init, sync, doctor, codex-review) ask it. See
 // odd/tasks/on-demand-functions.md.
@@ -9,12 +9,13 @@
 const CODEX_REVIEW_DEFAULT = 'auto';
 
 /** Each switch: the values it takes, the one it has when the project declares none (`fallback`), and the
- * one it is read as when what is declared cannot be read (`strict`): on, since a switch that cannot be
- * read must never turn a check off. */
+ * one it is read as when what is declared cannot be read (`strict`). A check is on there, since a switch that
+ * cannot be read must never turn a check off; pushing unasked is off, since it must never push unseen. */
 export const SWITCHES = {
   codeMap: { values: ['auto', 'on-demand', 'always', 'off'], fallback: 'auto', strict: 'on-demand' },
   languageServer: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
   codexReview: { values: ['auto', 'on', 'off'], fallback: CODEX_REVIEW_DEFAULT, strict: 'on' },
+  pushUnasked: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'off' },
 };
 
 const quoted = (names) => names.map((name) => `"${name}"`).join(', ');
@@ -127,6 +128,8 @@ export function resolveFunctions(values, tree) {
     codeMap: () => byProgram('on-demand'),
     languageServer: byTypeScript,
     codexReview: () => byProgram('on'),
+    // Auto asks: a project pushes unasked only where its owner declares it on.
+    pushUnasked: () => ({ value: 'off', because: 'the project asks until its owner turns it on' }),
   };
 
   return Object.fromEntries(

@@ -130,9 +130,9 @@ test('a question closes a reply that leaves the user an open question to answer 
   assert.match(refusal('Hecho.\n\n**Te pregunto**'), /what you ask/, 'the question is written on its line');
 });
 
-test('a question while background work runs is turned back, like a decision', () => {
+test('a question closes a reply while background work runs; only a decision is turned back then', () => {
   const text = 'Hecho.\n\nTe pregunto: ¿qué nombre lleva el proyecto?';
-  assert.match(refusal(text, { running: 1 }), /"Te pregunto" while 1 background task runs: a question is never asked while work runs/);
+  assert.equal(refusal(text, { running: 1 }), null, 'a question is asked of the person; the work it waits on keeps running');
   assert.equal(refusal(text, { running: 0 }), null);
   assert.match(refusal('Hecho.\n\nNecesito tu decisión: el orquestador te la pregunta.', { running: 1 }), /a decision is never asked while work runs/, 'the decision keeps its words');
 });

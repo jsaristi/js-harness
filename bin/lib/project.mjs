@@ -419,20 +419,19 @@ that was not checked; what is passed on is complete and true; and each mistake l
 the smallest kind that does the job. A rule is not recorded until it has its place in a check, a
 line of this file or a protocol.
 
-A behavior change arrives with the test that proves it, written first; a finding, with the
-evidence that proves it. A claim about this project carries its evidence.
-Where the Codex review is off (\`js-harness functions\`), gentle-ai reviews every change of medium
-or high risk.
-
-Every claim is checked (with its evidence), assumed, or not known. What another session, a
-sub-agent or the owner reports as done elsewhere is a claim: check one thing before building on it.
-What is passed on says what failed and what was not checked, "nothing" when that is true.
+A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known,
+as \`js-harness-protocols\` section 6 says.
+Where the Codex review is off (\`js-harness functions\`), gentle-ai's assessment decides when a change
+is reviewed.
 
 ## Working with the owner
 The owner decides spend outside the plan, anything installed or changed on a machine, a product
 choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
-published outside this project. Ask those one at a time, never while work runs, naming which it is.
-Everything else is decided, its cost said, and the work goes on.
+published outside this project. Ask those one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
+Everything else is decided and its cost said, as \`js-harness-protocols\` section 1 says, and the work goes on.
+
+Near \`rule:context-pause\` of its window a session writes its state and keeps working; the host
+compacts it, and the pause notice says what the owner gets then.
 
 The owner's wording is the need, not the specification: an answer to a proposal of theirs says the
 need that was understood, what would be done differently from their words and why, and what it
@@ -443,10 +442,7 @@ first passes two readers that did not write it: one attacks its claims, one look
 missing. The owner gets the improved version, with what each reader changed and what stays
 unguaranteed.
 
-A reply ends with one of five states: working (the owner sends nothing; say what wakes the work),
-decision (one question for the owner, never while work runs), question (an open question the owner
-answers in writing), cut (a new session, with the text to send it), or finished (name where to
-return).
+A reply ends in one of the five states of \`js-harness-protocols\` section 2.
 `;
 }
 
