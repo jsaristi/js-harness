@@ -14,16 +14,14 @@
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// The refs a release is: `bin/lib/version.mjs`'s `VERSION_TAG_REF`, the one `bin/check.mjs`'s tag row reads.
 import { VERSION_TAG_REF as VERSION_TAG } from '../bin/lib/version.mjs';
 import { practiceLayout, releasePracticeVerdict } from './practice-lib.mjs';
-
-// The refs a release is: `bin/lib/version.mjs`'s `VERSION_TAG_REF`, the one `bin/check.mjs`'s tag row reads.
-export { VERSION_TAG };
 
 /** The variable that names the practice folder a release was proven in: the folder given to `practice setup --root`.
  * There is no default folder, because a practice folder can be anywhere; the record is `practiceLayout(folder).record`,
  * the one place that knows the file's name. */
-export const ROOT_VARIABLE = 'JS_HARNESS_PRACTICE_ROOT';
+const ROOT_VARIABLE = 'JS_HARNESS_PRACTICE_ROOT';
 
 /** The command that makes the proof: the whole journey, every step, in a folder of its own, set up once before. */
 const RUN_COMMAND = 'node scripts/practice.mjs run --root <dir>';
@@ -56,7 +54,7 @@ export function releaseGate({ ref, commit, recordText }) {
 
 /** The record a release names, or `null` when none is named: `--record <file>` when given, else the record of the folder
  * `ROOT_VARIABLE` names. An empty variable names nothing. */
-export function namedRecord(flags, env) {
+function namedRecord(flags, env) {
   if (flags['--record'] !== undefined) return flags['--record'];
   const root = env[ROOT_VARIABLE];
   return root !== undefined && root !== '' ? practiceLayout(root).record : null;

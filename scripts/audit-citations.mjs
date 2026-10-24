@@ -38,7 +38,7 @@ const DEFAULT_ALLOW = 'odd/tasks/launch-audit/allow/citations.json';
 const VALUED = new Set(['--inventory', '--allow', '--cwd']);
 
 /** The options of the command line, or `{ error }`. */
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const options = { inventory: null, allow: null, cwd: process.cwd(), json: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -58,7 +58,7 @@ export function parseArgs(argv) {
 
 /** The repository paths of the live rows of an inventory (tab-separated, `path` and `class` named by its header), or
  * `{ error }` when the header names no such column. A row of another class is not read. */
-export function liveFiles(text) {
+function liveFiles(text) {
   const [header = '', ...rows] = text.split(/\r?\n/);
   const columns = header.split('\t');
   const pathColumn = columns.indexOf('path');
@@ -125,7 +125,7 @@ function kindOf(why) {
 
 /** The findings of the citations in the live `files` (repository paths) of the repository at `top`, before the allow
  * list: `{ kind, location, detail }` each. */
-export function citationFindings(top, files) {
+function citationFindings(top, files) {
   const cache = new Map();
   const linesAt = (repoPath) => {
     if (!cache.has(repoPath)) cache.set(repoPath, readLines(top, repoPath));
@@ -152,7 +152,7 @@ export function citationFindings(top, files) {
 }
 
 /** The allow list, `[{ kind, location, why }]`, or `{ error }` when it is not such an array. */
-export function parseAllow(text) {
+function parseAllow(text) {
   let entries;
   try {
     entries = JSON.parse(text);
@@ -166,7 +166,7 @@ export function parseAllow(text) {
 
 /** The findings the allow list does not hide, and how many it hides. Each entry that hides none is a `stale-allow`
  * finding at its location. */
-export function applyAllow(findings, entries) {
+function applyAllow(findings, entries) {
   const used = new Set();
   const kept = [];
   let allowed = 0;
@@ -194,7 +194,7 @@ function repositoryTop(cwd) {
 }
 
 /** Runs the check on the command line `argv`, prints its report, and returns the exit code. */
-export function main(argv) {
+function main(argv) {
   const parsed = parseArgs(argv);
   if (parsed.error) {
     process.stderr.write(`${parsed.error}\n${USAGE}\n`);

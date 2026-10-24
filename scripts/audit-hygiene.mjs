@@ -84,7 +84,7 @@ export function isPlaceholderName(name) {
 }
 
 /** True for the value of an assignment that is a placeholder and not a credential: `<...>`, `xxx`, `${...}`, `process.env...`. */
-export function isPlaceholderValue(value) {
+function isPlaceholderValue(value) {
   return /^<.*>$/.test(value) || /xxx/i.test(value) || value.includes('${') || value.startsWith('process.env');
 }
 
@@ -116,7 +116,7 @@ export function scanLine(line) {
 }
 
 /** The hits of a blob's content, each with its line number (1-based), or null when the blob is binary. */
-export function scanBlob(content) {
+function scanBlob(content) {
   if (content.subarray(0, BINARY_PROBE).includes(0)) return null;
   const hits = [];
   content.toString('utf8').split('\n').forEach((text, index) => {
@@ -126,7 +126,7 @@ export function scanBlob(content) {
 }
 
 /** Reads the output of `git cat-file --batch` as it arrives, one object at a time, into `onObject(sha, content)`. */
-export function batchParser(onObject) {
+function batchParser(onObject) {
   let pending = Buffer.alloc(0);
   let header = null;
   return {
@@ -156,7 +156,7 @@ export function batchParser(onObject) {
 }
 
 /** Every object of the history with the path it was first listed at (commits, and some tags, have none). */
-export function parseObjects(text) {
+function parseObjects(text) {
   return text.split('\n').filter(Boolean).map((line) => {
     const space = line.indexOf(' ');
     return space < 0 ? { sha: line, path: '' } : { sha: line.slice(0, space), path: line.slice(space + 1) };
@@ -164,7 +164,7 @@ export function parseObjects(text) {
 }
 
 /** Type and size per object, from `git cat-file --batch-check` with the format `%(objectname) %(objecttype) %(objectsize)`. */
-export function parseObjectInfo(text) {
+function parseObjectInfo(text) {
   const info = new Map();
   for (const line of text.split('\n').filter(Boolean)) {
     const [sha, type, size] = line.split(' ');
@@ -174,7 +174,7 @@ export function parseObjectInfo(text) {
 }
 
 /** The blob ids of a tree, from `git ls-tree -r`. */
-export function parseTreeBlobs(text) {
+function parseTreeBlobs(text) {
   const blobs = new Set();
   for (const line of text.split('\n')) {
     const match = /^\d+ blob ([0-9a-f]+)\t/.exec(line);
@@ -239,7 +239,7 @@ function streamBlobs(cwd, shas, onBlob) {
  * Scans every blob of the history at `cwd`: `{ hits, read, skipped }`, where hits are the findings per distinct
  * kind and matched text, each with the blobs holding it and the first place it sits (and the first at HEAD).
  */
-export async function scanHistory(cwd, { skip = null } = {}) {
+async function scanHistory(cwd, { skip = null } = {}) {
   // `skip` is the allow-list's path in the repository: its entries quote the values they allow, so read as a blob
   // each would find itself and never go stale.
   const objects = parseObjects(git(cwd, ['rev-list', '--objects', '--all'])).filter((object) => object.path !== skip);
@@ -308,7 +308,7 @@ export function applyAllowList(hits, allow) {
 }
 
 /** The allow-list at `file`: an empty list when it is missing and not required, else a list or an error. */
-export function readAllowList(file, required) {
+function readAllowList(file, required) {
   if (!fs.existsSync(file)) {
     if (required) throw new Error(`allow list not found: ${file}`);
     return [];
@@ -326,7 +326,7 @@ export function readAllowList(file, required) {
 }
 
 /** Runs the scan from the command line and returns the exit code. */
-export async function main(argv) {
+async function main(argv) {
   const options = parseArgs(argv);
   if (options.error) {
     console.error(options.error);

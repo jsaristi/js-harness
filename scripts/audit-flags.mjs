@@ -146,7 +146,7 @@ export function subWords(words) {
 
 /** How the place shows the flag's value: `eq` for `--home=<path>`, `space` for a value after a space (`--to <n>`,
  * `--pm npm|pnpm`, `--day YYYY-MM-DD`, `--purpose "<text>"`), `none` when nothing follows that reads as one. */
-export function valueShape(after) {
+function valueShape(after) {
   if (after.startsWith('=')) return 'eq';
   const token = /^\s+(\S+)/.exec(after)?.[1] ?? '';
   const shown = PLACEHOLDER_START.test(token) || PIPED_VALUE.test(token) || CAPS_VALUE.test(token) || /^["']/.test(token);
@@ -221,7 +221,7 @@ export function subcommandFlags(text) {
 
 /** The flags a command's `--help` names: each line read the way flagsOnLine reads it, placed as `help` (or `help of <command>`
  * for a flag the help names for another command). */
-export function helpOccurrences(command, text, commands) {
+function helpOccurrences(command, text, commands) {
   return text.split('\n').flatMap((line) => flagsOnLine(line, command, commands)).map((occurrence) => ({
     ...occurrence,
     place: occurrence.command === command ? 'help' : `help of ${command}`,
@@ -231,7 +231,7 @@ export function helpOccurrences(command, text, commands) {
 /** The flags the documents name: the fenced example lines of a README section that show `js-harness`, and every line or
  * backticked span of the documents that begins `js-harness <command>`, each placed by its file and line (`README:12`). The
  * prose of a section names other tools' flags too (`git diff --quiet`), so it is not read. */
-export function documentedOccurrences(docs, commands) {
+function documentedOccurrences(docs, commands) {
   const found = [];
   for (const { tag, text } of docs) {
     const place = (number) => `${tag}:${number}`;
@@ -286,7 +286,7 @@ export function probesOf(occurrences) {
 const TAIL = { gate: ['--', 'node', '--version'] };
 
 /** The argv of a probe: the command, its sub words, the flag with its value, and the sentinel that must be refused. */
-export function probeArgs({ command, sub, flag, value }) {
+function probeArgs({ command, sub, flag, value }) {
   const token = value === 'eq' ? `${flag}=x` : flag;
   return [command, ...sub, token, ...(value === 'space' ? ['x'] : []), SENTINEL, ...(TAIL[command] ?? [])];
 }
@@ -315,7 +315,7 @@ function namesValue(probe, line) {
 }
 
 /** Whether a refusal says the flag needs a value: `js-harness backup verify: --from needs a value`. */
-export function needsValue(stderr, flag) {
+function needsValue(stderr, flag) {
   return stderr.split(/\r?\n/).some((line) => SUBJECT(flag).test(line) && /\b(?:requires|needs) a value\b/.test(line));
 }
 
@@ -383,7 +383,7 @@ export function entryFiles(dispatcherText) {
 }
 
 /** Every flag a text names, whatever its place. */
-export function namedFlags(text) {
+function namedFlags(text) {
   return new Set([...text.matchAll(FLAG)].map((match) => match[0]));
 }
 
@@ -421,7 +421,7 @@ function readText(file) {
 }
 
 /** The allow-list at a file: an array of { kind, location, why }. A missing file is an empty list unless one was named. */
-export function readAllow(file, { required }) {
+function readAllow(file, { required }) {
   const text = readText(file);
   if (text === null) {
     if (required) throw new Error(`no allow-list at ${file}`);
@@ -520,7 +520,7 @@ export function audit({ repo = REPO_ROOT, only = null, allow = [], run = isolate
 }
 
 /** The command line: the options, or `{ error }` for an argument it does not know or a value it lacks. */
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const options = { only: null, allow: null, json: false, cwd: REPO_ROOT };
   const valued = ['--only', '--allow', '--cwd'];
   for (let index = 0; index < argv.length; index += 1) {
@@ -539,7 +539,7 @@ export function parseArgs(argv) {
   return options;
 }
 
-export function main(argv) {
+function main(argv) {
   const options = parseArgs(argv);
   if (options.error) {
     console.error(`${options.error}\n${USAGE}`);

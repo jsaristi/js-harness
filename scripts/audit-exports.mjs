@@ -61,10 +61,11 @@ const IDENTIFIER = /^[\w$]+$/;
 const IMPORT = /(?<![\w$.])import\s*(?:([\w$]+)\s*(?:,\s*)?)?(?:\{([^}]*)\}|\*\s*as\s+([\w$]+))?\s*(?:from\s*)?(['"])/g;
 const DYNAMIC = /(?<![\w$.])import\s*\(\s*/g;
 // A CommonJS module (`.cjs`): its export object, its `exports.name =` assignments, and a load with `require` or with
-// `createRequire(<url>)`. A destructuring declaration in front of a load names the exports it reads (`const { a } = `).
+// `createRequire(<url>)`, bare or through its module object (`nodeModule.createRequire`). A destructuring declaration
+// in front of a load names the exports it reads (`const { a } = `).
 const CJS_LIST = /(?<![\w$.])module\.exports\s*=\s*\{/g;
 const CJS_DOTTED = /(?<![\w$.])(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
-const CJS_REQUIRE = /(?<![\w$.])(?:require|createRequire\s*\([^()]*\)\s*)\(\s*(['"])/g;
+const CJS_REQUIRE = /(?<![\w$.])(?:require|(?:[A-Za-z_$][\w$]*\.)?createRequire\s*\([^()]*\)\s*)\(\s*(['"])/g;
 const CJS_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*$/;
 const CJS_BINDING = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*$/;
 const EXPORT = /(?<![\w$.])export\s+/g;
@@ -100,7 +101,7 @@ const closeOf = (masked, open) => {
 /** `code` is the source with its comments blanked, and `masked` is that with the contents of its strings blanked
  * too (the quotes stay). Both are as long as the source, and every line break stays, so one offset reads the same
  * place in each. */
-export function maskSource(source) {
+function maskSource(source) {
   const code = source.split('');
   const masked = source.split('');
   const blank = (from, to, text) => {
@@ -294,7 +295,7 @@ function blankRanges(text, ranges) {
  * name the module binds (null for a default export and a re-export), and `ownUse` says the module uses that
  * binding itself. `uses` lists `{ target, names }`, where `target` is a resolved path or a RegExp over the
  * checked paths (a template), and `names` is the list of names read, or null for every export. */
-export function scanModule(file, source) {
+function scanModule(file, source) {
   const { code, masked } = maskSource(source);
   const declared = [];
   const uses = [];
@@ -418,7 +419,7 @@ export function scanModule(file, source) {
 /** The findings of a set of modules: `sources` maps every tracked `.mjs` path to its text, and `allow` is the
  * allow-list. Returns `{ findings, allowed }`: the findings not allowed (stale entries included, last), and how
  * many findings the allow-list covers. */
-export function auditSources(sources, allow = [], allowLabel = DEFAULT_ALLOW) {
+function auditSources(sources, allow = [], allowLabel = DEFAULT_ALLOW) {
   const scans = new Map(Object.entries(sources).map(([file, source]) => [file, scanModule(file, source)]));
   const usedBy = new Map();
   const record = (target, importer, names) => {
@@ -469,7 +470,7 @@ export function auditSources(sources, allow = [], allowLabel = DEFAULT_ALLOW) {
 }
 
 /** The options of the command line, or `{ error }` for one it does not know. */
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const options = { allow: null, json: false, cwd: process.cwd() };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -488,7 +489,7 @@ export function parseArgs(argv) {
 }
 
 /** The allow-list of a JSON text, every entry an object of three strings, or an error naming the file. */
-export function parseAllow(text, label) {
+function parseAllow(text, label) {
   let entries;
   try {
     entries = JSON.parse(text);
@@ -518,7 +519,7 @@ function labelOf(cwd, file) {
   return relative.split(path.sep).join('/');
 }
 
-export function main(argv) {
+function main(argv) {
   const options = parseArgs(argv);
   if (options.error) {
     console.error(`${options.error}\n${USAGE}`);

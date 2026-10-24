@@ -543,7 +543,7 @@ const RUN_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/;
  * positive integer for `--min-discriminating`, and a run name that is not a plain file name are a `UsageError`. So
  * is a gate given with `--codex-results-dir`: a gate holds the A/B result of one host, the comparison is of two, and
  * a gate that was typed and checked nothing would let a command pass for one it was not. */
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const options = { runs: undefined, resultsDir: undefined, codexResultsDir: undefined, json: false, requireComplete: false, minDiscriminating: undefined };
   const given = new Set();
   const once = (flag) => {
@@ -718,7 +718,7 @@ function armLines(arms, costLabel) {
  * (the trials of each host, then each host's mean score, input + output tokens, cost and wall time, formatted as
  * `formatReport` formats them), and the notes without which the columns would be read wrong. A cell a host did not
  * record reads `missing` in that host's columns; `?` is a value the host recorded trials for and does not know. */
-export function formatComparison(comparison) {
+function formatComparison(comparison) {
   const sideLine = (name) => `${name}: runs ${comparison[name].runs.join(', ')}; model ${comparison[name].model}; stack: ${stackText(comparison[name].stack)}`;
   const per = (cell, pick) => (cell === null ? 'missing' : pick(cell));
   const pair = (row, pick) => [per(row.claude, pick), per(row.codex, pick)];

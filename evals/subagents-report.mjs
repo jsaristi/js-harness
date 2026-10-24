@@ -391,7 +391,7 @@ const RUN_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/;
  * `configs.mjs`, whatever the order typed: it is the order of the report. The flags are `report.mjs`'s where the
  * two reports share one; its others are refused, since a flag that was typed and did nothing would let a command
  * pass for one it was not. */
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const options = { runs: undefined, resultsDir: undefined, modes: undefined, requireComplete: false };
   const given = new Set();
   const once = (flag) => {
@@ -510,7 +510,7 @@ function modeLines({ mode, rows }, effort) {
  * passed every check, the list cost of the orchestrator, of its subagents and of both, wall time and turns) and a row
  * that compares each other arm with the baseline, followed by the subagent outcomes of the counted trials; then the
  * trials that are in no figure, and the flags, trial by trial and counted by kind. */
-export function formatSubagentsReport(report) {
+function formatSubagentsReport(report) {
   const [baseline, ...others] = report.arms;
   const priceText = report.prices.length === 0 ? 'no price table is recorded' : report.prices.map((price) => `${price.url}, read ${price.readOn}`).join('; ');
   const lines = [

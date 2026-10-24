@@ -57,8 +57,8 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const fold = (text) => (process.platform === 'win32' ? text.toLowerCase() : text);
 
 /** What the probe runs the agent as: the model and the lower effort of the F6 matrix. */
-export const PROBE_MODEL = 'gpt-6.1-sol';
-export const PROBE_EFFORT = 'medium';
+const PROBE_MODEL = 'gpt-6.1-sol';
+const PROBE_EFFORT = 'medium';
 /** The one word the agent is asked to answer with. */
 export const PROBE_WORD = 'PROBE-DONE';
 const ARMS = ['minimal', 'current'];

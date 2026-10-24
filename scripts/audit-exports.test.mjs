@@ -329,6 +329,14 @@ test('a renamed destructure reads the export it names, and a rest element reads 
   assert.equal(report(run(rest)).summary, '0 findings, 0 allowed');
 });
 
+test('a createRequire reached through its module object (`nodeModule.createRequire`) is a load as the bare one is', () => {
+  const dir = repo({
+    'bin/lib/tool.cjs': 'module.exports = {\n  one: 1,\n  two: 2,\n};\n',
+    'bin/a.mjs': "import nodeModule from 'node:module';\nconst { one } = nodeModule.createRequire(import.meta.url)('./lib/tool.cjs');\nconsole.log(one);\n",
+  });
+  assert.deepEqual(report(run(dir)).findings, [unused('bin/lib/tool.cjs:3', 'two', NO_IMPORTER)]);
+});
+
 test('a .cjs test file that loads a module through require is a test importer, as a .mjs test file is', () => {
   const dir = repo({
     'bin/lib/tool.cjs': 'const one = () => 1;\nmodule.exports = { one };\n',

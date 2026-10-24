@@ -64,7 +64,7 @@ export function parseRateLimits(result) {
 }
 
 /** A Unix time in seconds as the host's local `YYYY-MM-DD HH:MM`: the reset a person reads, not a UTC instant. */
-export function localClock(seconds) {
+function localClock(seconds) {
   const date = new Date(seconds * 1000);
   const two = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
