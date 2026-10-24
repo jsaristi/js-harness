@@ -248,12 +248,16 @@ const TERMINAL_NOTE = /;\s*(?:[Ww]rite-[Hh]ost|echo)\s+'NOTE: (?:[^'\s]+\s+){3}[
 
 /** Why the command `command`, typed into the user's terminal, is refused, or null: it does not end with a note that
  * says what it does. His request of 2026-10-19 (odd/tasks/terminal-note.md, S1): he reads the note beside the command,
- * where it runs, and learns what it does. A comment cannot carry it: the tool refuses one. */
-export function terminalNoteRefusal(command) {
+ * where it runs, and learns what it does. A comment cannot carry it: the tool refuses one. `here` is the rule
+ * terminal-note as it applies in this project, what `ruleHere` gives: only where it has a value is the command
+ * checked, so a project that does not declare the rule, or whose declaration is behind, types any command (his answer
+ * Q85 of 2026-10-23, C-b-34). */
+export function terminalNoteRefusal(command, here) {
+  if (!Object.hasOwn(here, 'value')) return null;
   if (TERMINAL_NOTE.test(String(command ?? ''))) return null;
   return 'js-harness guard: a command for the user\'s terminal ends with a note that says what it does, in everyday words: '
     + '<command>; Write-Host \'NOTE: <what it does>\' (echo instead of Write-Host in an SSH host\'s shell), four words '
-    + 'or more, in single quotes and printable ASCII, so the user reads it beside the command where it runs.';
+    + `or more, in single quotes and printable ASCII, so the user reads it beside the command where it runs (rule terminal-note: ${here.value}).`;
 }
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their

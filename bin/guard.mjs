@@ -119,7 +119,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
   const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
-  if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command);
+  // Until the rule terminal-note is declared (C-b-34), the check holds everywhere, as it did before the rule.
+  if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command, { value: "<command>; Write-Host 'NOTE: <what it does>'" });
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
