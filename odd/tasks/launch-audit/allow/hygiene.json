@@ -318,5 +318,40 @@
     "kind": "personal-path",
     "location": "C:/Users/Ana",
     "why": "a placeholder home of a test fixture (scripts/audit-hygiene.test.mjs)"
+  },
+  {
+    "kind": "email",
+    "location": "ghp_TokenForTest123@github.com",
+    "why": "the fake token of a credential-stripping test, in an origin URL, not a credential (bin/backup.test.mjs@16efe56f:1230)"
+  },
+  {
+    "kind": "email",
+    "location": "a@b.co",
+    "why": "a placeholder address in a reader's note of the audit (odd/tasks/launch-audit/e.md@e5b4a7be:7)"
+  },
+  {
+    "kind": "email",
+    "location": "ana@corp.io",
+    "why": "a fixture address of the hygiene scanner's own test (scripts/audit-hygiene.test.mjs@32142af0:170)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\\\Users\\\\ana",
+    "why": "the placeholder home of a test fixture, escaped as in a JS string (bin/lib/backup.test.mjs@18b6421a:164)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:/Users/ana",
+    "why": "the placeholder home of a test fixture (bin/lib/backup.test.mjs@18b6421a:165)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "/home/ana",
+    "why": "the placeholder home of a test fixture (bin/lib/backup.test.mjs@18b6421a:172)"
+  },
+  {
+    "kind": "personal-path",
+    "location": "C:\\Users\\ana",
+    "why": "the placeholder home of a test fixture, quoted in the backup area's reader note (odd/tasks/launch-audit/backup.md@9f77cf86:4)"
   }
 ]

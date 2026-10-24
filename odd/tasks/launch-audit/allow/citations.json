@@ -1,12 +1,12 @@
 [
   {
     "kind": "no-such-file",
-    "location": "bin/codex-review.mjs:371",
+    "location": "bin/codex-review.mjs:380",
     "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
   },
   {
     "kind": "no-such-file",
-    "location": "bin/codex-review.mjs:1874",
+    "location": "bin/codex-review.mjs:1880",
     "why": "cites a file of Codex's own source tree (openai/codex), not of this repository"
   },
   {

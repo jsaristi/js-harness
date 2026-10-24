@@ -33,5 +33,120 @@
     "kind": "undocumented",
     "location": "sessions --context-limit",
     "why": "compatibility: a removed flag kept only to refuse with what replaced it (sessions.mjs:191-195)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "loop --cwd",
+    "why": "a probe limit, not a parser gap: the probe put the flag before loop's subcommand, so loop refused it as a subcommand; loop's own refusal wording is C-d-13, fixed in PR 543 (launch-audit d.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "loop --home",
+    "why": "a probe limit, not a parser gap: the probe put the flag before loop's subcommand, so loop refused it as a subcommand; loop's own refusal wording is C-d-13, fixed in PR 543 (launch-audit d.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "summary --summary",
+    "why": "a scanner misattribution: --summary is a flag of notify named in summary's README section; summary takes no such flag (C-c-17, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --dry-run",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --land",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --refresh-copy",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --prune",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --cwd",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --version",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "merge-queue --force",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --cwd",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --home",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --name",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --permission-mode",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --spawn",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --watchdog",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "remote --at-login",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "guard --hook",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "guard --base-ref",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "guard --test",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "sessions read of --watch",
+    "why": "a probe limit: given a valid subcommand and value the flag answers unknown argument for the sentinel; the probe gave none, so it never reached it (C-c-18, wrong; launch-audit c.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "guard --memory",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
+  },
+  {
+    "kind": "unprobed",
+    "location": "guard --stop",
+    "why": "no defect: the command refuses an unknown token with its usage, exit 2, before the probe's sentinel, and some of the flags are other programs' named in its help (C-b-41; launch-audit b.md)"
   }
 ]
