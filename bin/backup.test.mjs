@@ -8,6 +8,7 @@ import { backupHealth, backupMain, backupPaths, bundleName, dueReason, BACKUP_EV
 import { defaultRun } from './lib/backup.mjs';
 import { shortKey, UNTRACKED_MAX_BYTES } from './lib/backup-repos.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { INSTALL_NEWEST } from './lib/version.mjs';
 
 // Git is real, against a bare repository in a scratch folder; engram and gh are fakes that record what they were
 // asked. The clone's fetch URL names the private repository, its push URL the bare one, so the origin guard reads the
@@ -72,7 +73,8 @@ function setup(t, { visibility = 'PRIVATE', engram = EXPORT, machine = 'DESKTOP-
     now: () => state.now,
     stdout: sink(),
     stderr: sink(),
-    bundles: [],
+    // The folder `backup init` runs in: a scratch folder outside any repository, so no test reads the checkout of this one.
+    cwd: () => root,
     startDetached: (args) => state.started.push(args),
     run: (cmd, args, options) => {
       state.calls.push([cmd, ...args]);
@@ -940,7 +942,7 @@ test('backup init creates the repository private when it is missing, refuses a p
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
   assert.ok(restore.includes(`backup restore --from https://github.com/${REPO}.git\``), 'the steps travel with the backup');
   assert.ok(!restore.includes('%USERPROFILE%'), 'PowerShell does not expand %VAR%, so the steps name no home');
-  assert.ok(restore.indexOf('backup restore') < restore.indexOf('js-harness.mjs install'), 'restore comes before install, so no hook backs up an empty memory');
+  assert.ok(restore.indexOf('backup restore') < restore.indexOf('`js-harness install`'), 'restore comes before install, so no hook backs up an empty memory');
 
   state.visibility = 'PUBLIC';
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 1);
@@ -982,6 +984,211 @@ test('backup init refuses an existing clone whose origin is another repository, 
   assert.equal(await backupMain(['init', '--repo', 'other/x'], deps), 1);
   assert.match(deps.stderr.text, /the clone's remote is jsaristi\/js-harness-memory, not other\/x/);
   assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'the config still names the repository the clone is of');
+});
+
+/** A git work tree in a scratch folder, with a `sub` folder in it and an origin when `origin` is given: the checkout a
+ * `backup init` run in it, or given `--checkout`, reads. Returns its folder. */
+function checkoutRepo(root, name, origin) {
+  const dir = path.join(root, name);
+  fs.mkdirSync(path.join(dir, 'sub'), { recursive: true });
+  defaultRun('git', ['init', '-q', dir]);
+  if (origin) defaultRun('git', ['-C', dir, 'remote', 'add', 'origin', origin]);
+  return dir;
+}
+
+/** The path `backup init` records for a checkout made by `checkoutRepo`: git's root, as Node resolves it. */
+const recordedPath = (dir) => path.resolve(fs.realpathSync.native(dir));
+
+/** RESTORE.md names the checkout the backup was made from, never a path or a repository hardcoded for one owner. */
+function assertNoOwnerText(text) {
+  assert.ok(!text.includes('D:\\js-harness') && !text.includes('D:/js-harness'), 'no hardcoded checkout path');
+  assert.ok(!text.includes('jsaristi/js-harness.git'), 'no hardcoded checkout repository');
+}
+
+test('backup init on a fresh config seeds the bundle with the checkout it runs in, and RESTORE.md names its path and origin', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  fs.rmSync(paths.config);
+  const checkout = checkoutRepo(root, 'mine', 'https://github.com/someone/their-project.git');
+  deps.cwd = () => path.join(checkout, 'sub');
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const dir = recordedPath(checkout);
+  const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
+  assert.deepEqual(config.bundles, [dir], 'the root of the checkout the folder is in, not the folder init ran in');
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(`git clone https://github.com/someone/their-project.git ${dir}`), 'the clone step fetches the origin into that path');
+  assertNoOwnerText(restore);
+});
+
+// The bundled checkout is the user's project, not js-harness: a step that cd's into it and runs node bin/js-harness.mjs
+// runs a file that is not there. So the steps install js-harness and run the installed command, from any folder.
+test('RESTORE.md installs js-harness and runs the installed command, never a cd into a bundled checkout', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  fs.rmSync(paths.config);
+  const checkout = checkoutRepo(root, 'mine', 'https://github.com/someone/their-project.git');
+  deps.cwd = () => checkout;
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(INSTALL_NEWEST), 'a step installs js-harness the way the README does');
+  assert.ok(!restore.includes('node bin/js-harness.mjs'), 'no step runs a checkout file');
+  assert.ok(!restore.includes(`cd ${recordedPath(checkout)}`), 'no step cd\'s into the bundled checkout');
+  for (const command of [`js-harness backup restore --from https://github.com/${REPO}.git`, `js-harness backup verify --from https://github.com/${REPO}.git`, 'js-harness install', `js-harness backup init --repo ${REPO}`]) {
+    assert.ok(restore.includes(`\`${command}`), command);
+  }
+});
+
+test('backup init --checkout <path> records that checkout from any folder, over the one init runs in', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const here = checkoutRepo(root, 'here', 'https://github.com/someone/here.git');
+  const named = checkoutRepo(root, 'named', 'https://github.com/someone/named.git');
+  deps.cwd = () => here;
+
+  assert.equal(await backupMain(['init', '--repo', REPO, '--checkout', path.join(named, 'sub')], deps), 0, deps.stderr.text);
+
+  const dir = recordedPath(named);
+  const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
+  assert.deepEqual(config.bundles, [dir], 'the named checkout is the one bundled');
+  assert.match(deps.stdout.text, /backup: added .* to bundles/, 'and init says so');
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes('https://github.com/someone/named.git'), 'the named checkout\'s origin');
+  assert.ok(!restore.includes('someone/here.git'), 'and not the origin of the folder init ran in');
+});
+
+test('backup init --checkout refuses a path outside every git work tree with exit 2, and writes nothing', async (t) => {
+  const { root, paths, deps, state } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const before = fs.readFileSync(paths.config, 'utf8');
+  const plain = path.join(root, 'plain');
+  fs.mkdirSync(plain);
+
+  assert.equal(await backupMain(['init', '--repo', REPO, '--checkout', plain], deps), 2);
+  assert.match(deps.stderr.text, /backup init: refused: .* is not inside a git work tree/);
+  assert.equal(await backupMain(['init', '--repo', REPO, '--checkout'], deps), 2, 'a flag is no value');
+  assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'the config is untouched');
+  assert.equal(fs.existsSync(paths.clone), false, 'and no clone is made');
+  assert.equal(state.calls.some((c) => c[0] === 'gh'), false, 'nor is GitHub asked');
+});
+
+test('backup init with no checkout seeds no bundle, says no repository will be bundled, and names the flag that adds one', async (t) => {
+  const { paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
+  assert.deepEqual(config.bundles, [], 'the empty list the config holds is left as it is');
+  assert.match(deps.stdout.text, /no repository will be bundled/);
+  assert.match(deps.stdout.text, /--checkout <path>/);
+  assertNoOwnerText(fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8'));
+});
+
+test('backup init on a checkout with no origin tells RESTORE.md to clone it from wherever the project lives, inventing no URL', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const checkout = checkoutRepo(root, 'local-only');
+
+  assert.equal(await backupMain(['init', '--repo', REPO, '--checkout', checkout], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(recordedPath(checkout)), 'the path is still named');
+  assert.ok(restore.includes('wherever the project lives'), 'and the clone says where from');
+  assert.ok(!restore.includes('git clone https://'), 'no URL is made up for a checkout that has none');
+});
+
+test('backup init on an existing config keeps its bundles and its other keys, and only records the checkout', async (t) => {
+  const { root, paths, deps } = setup(t, { scope: 'js-harness' });
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: ['D:/kept'], scope: 'js-harness' }));
+  deps.cwd = () => checkoutRepo(root, 'mine', 'https://github.com/someone/their-project.git');
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
+  assert.deepEqual(config.bundles, ['D:/kept'], 'a bundle list already on disk is not rewritten');
+  assert.equal(config.scope, 'js-harness');
+  assert.equal(config.repo, REPO);
+  assert.match(deps.stdout.text, /reads PRIVATE; clone in/);
+});
+
+test('backup init --checkout on an existing config adds the checkout to its bundles when absent, and says so', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: ['D:/kept'], scope: 'all' }));
+  const named = checkoutRepo(root, 'named', 'https://github.com/someone/named.git');
+
+  assert.equal(await backupMain(['init', '--repo', REPO, '--checkout', named], deps), 0, deps.stderr.text);
+
+  const config = JSON.parse(fs.readFileSync(paths.config, 'utf8'));
+  assert.deepEqual(config.bundles, ['D:/kept', recordedPath(named)], 'the bundle already there stays, the checkout follows it');
+  assert.match(deps.stdout.text, /backup: added .* to bundles/);
+});
+
+test('backup init --checkout does not bundle a checkout twice: the bundles are compared by resolved path', async (t) => {
+  const { root, paths, deps } = setup(t);
+  const named = checkoutRepo(root, 'named', 'https://github.com/someone/named.git');
+  // The same folder spelled with a `..` that resolves back to it.
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [`${named}${path.sep}sub${path.sep}..`], scope: 'all' }));
+
+  assert.equal(await backupMain(['init', '--repo', REPO, '--checkout', named], deps), 0, deps.stderr.text);
+
+  assert.equal(JSON.parse(fs.readFileSync(paths.config, 'utf8')).bundles.length, 1, 'one entry, not two');
+  assert.match(deps.stdout.text, /already bundled/);
+});
+
+test('an old config whose bundles name a checkout, with no recorded checkout, writes RESTORE.md naming that path', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const old = checkoutRepo(root, 'old', 'https://github.com/someone/old.git');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [old], scope: 'all' }));
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.config, 'utf8')).bundles, [old], 'the list is left as it is');
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(`git clone https://github.com/someone/old.git ${old}`), 'the path it already bundles is the one named');
+});
+
+test('RESTORE.md holds no token of an https origin: the credential is stripped before the file is written', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const checkout = checkoutRepo(root, 'tokened', 'https://user:ghp_TokenForTest123@github.com/someone/their-project.git');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [checkout], scope: 'all' }));
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(!restore.includes('ghp_TokenForTest123'), 'the token text is absent from the file');
+  assert.ok(!restore.includes('user:'), 'and so is the user part of the userinfo');
+  assert.ok(restore.includes(`git clone https://github.com/someone/their-project.git ${checkout}`), 'the same URL without it');
+});
+
+test('RESTORE.md keeps an ssh origin\'s user and strips its password', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const checkout = checkoutRepo(root, 'sshed', 'ssh://me:hunter2Pass@example.com/someone/x.git');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [checkout], scope: 'all' }));
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(!restore.includes('hunter2Pass'), 'the password is absent from the file');
+  assert.ok(restore.includes(`git clone ssh://me@example.com/someone/x.git ${checkout}`), 'the user stays');
+});
+
+test('RESTORE.md writes an scp-like origin, git@host:path, exactly as git holds it', async (t) => {
+  const { root, paths, deps } = setup(t);
+  fs.rmSync(paths.clone, { recursive: true, force: true });
+  const checkout = checkoutRepo(root, 'scp', 'git@example.com:someone/x.git');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [checkout], scope: 'all' }));
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  assert.ok(restore.includes(`git clone git@example.com:someone/x.git ${checkout}`));
 });
 
 test('every backup subcommand refuses an unknown flag with a usage error, and keeps the flags it takes', async (t) => {

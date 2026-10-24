@@ -1541,8 +1541,8 @@ Engram, the Claude memory folders or `~/.js-harness` loses nothing that was back
 home and reference copies of the Claude, Codex and Engram config, the plugin lists
 (`installed_plugins.json`, `known_marketplaces.json`) and Claude Desktop's side-session notes and
 session presets, blanks every secret value it finds (a token, a key, a field named like a
-credential), and for each repository of `config.json`'s `bundles` (`init` seeds it with
-`D:/js-harness` when that checkout exists) keeps a bundle of the commits on no remote, every stash
+credential), and for each repository of `config.json`'s `bundles` (`init` seeds it with the git
+checkout it ran in, or the one `--checkout <path>` names; with none, nothing is bundled) keeps a bundle of the commits on no remote, every stash
 entry and each worktree's detached commit included, a patch of each worktree's uncommitted edits
 with its untracked files and its changed binary files copied whole, where the secret blanking can
 read them (one over 5 MB is left out and named by `ready`), and the records of its
@@ -1580,7 +1580,14 @@ the clone's `private-terms.txt` is dropped and counted; without that file nothin
 
 `backup init --repo <owner/name>` creates the repository private when it does not exist, checks
 it reads `PRIVATE`, clones it, and seeds `private-terms.txt` with the other Engram projects'
-names. The summary reads the checkout `--summary-repo <dir>` names, and only then (a public push cannot be taken back; `backup summary --summary-repo <dir>`
+names. The checkout it bundles is the git repository the folder `init` runs in, or the one
+`--checkout <path>` names (any folder inside it, refused with exit 2 when it is in no work tree).
+A config with no `bundles` list yet takes the checkout `init` runs in; an existing list is left as
+it is, and `--checkout` adds its checkout to it when no entry is the same folder, saying so. Each
+bundled repository gets a clone line in `RESTORE.md` with its `origin` (read when the file is
+written, its credential removed), or the instruction to clone it from wherever the project lives
+when it has none. With no checkout, nothing is bundled and `init` says so: run
+`init --repo <owner/name> --checkout <path>` from a checkout to add one. The summary reads the checkout `--summary-repo <dir>` names, and only then (a public push cannot be taken back; `backup summary --summary-repo <dir>`
 shows it first);
 every URL of its origin must be `jsaristi/js-harness` on github.com, or no summary is pushed.
 `backup status` prints the last success, the last failure and the commits to push, and
@@ -1646,11 +1653,12 @@ Read C:\Users\me\.js-harness\memory-backup\repo\recent\js-harness.md, lines 1-12
 ```
 
 After a reinstall, the steps are in `RESTORE.md` in the private repository (`init` writes it, every run rewrites it);
-in short, before any session and before `install`:
+in short, with js-harness installed (`npm i -g --allow-git=all github:jsaristi/js-harness`) and before any session
+and before `js-harness install`:
 
 ```console
-$ node bin/js-harness.mjs backup restore --from https://github.com/<owner>/<name>.git
-$ node bin/js-harness.mjs backup verify --from https://github.com/<owner>/<name>.git
+$ js-harness backup restore --from https://github.com/<owner>/<name>.git
+$ js-harness backup verify --from https://github.com/<owner>/<name>.git
 ```
 
 `restore` works on this user's home unless `--home <dir>` names another. It imports Engram

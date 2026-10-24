@@ -30,6 +30,7 @@ import { fallbackNotice, projectOf, readStats, STATS_TIMEOUT_MS } from './lib/ba
 import { copyTranscripts, restoreTranscripts, verifyTranscripts } from './lib/backup-transcripts.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
 import { unknownArgument } from './lib/args.mjs';
+import { INSTALL_NEWEST } from './lib/version.mjs';
 
 const USAGE = [
   'Usage: js-harness backup <run | status | ready | summary | init | restore | verify | --hook | --session-start>',
@@ -59,9 +60,12 @@ const USAGE = [
   '  summary [--summary-repo <dir>]  Print the public summary as the next run would push it: the roadmap and feature documents on the',
   "    summary repository's origin/main and the decisions of the last export, every line checked against the clone's",
   '    private-terms.txt.',
-  '  init --repo <owner/name> [--summary-repo <dir>]  Create the repository private when it does not exist, check it',
-  '    reads PRIVATE, clone it, write RESTORE.md and seed private-terms.txt. The summary repository is the checkout',
-  '    named, and only then, since a public push cannot be taken back; every URL of its origin must be',
+  '  init --repo <owner/name> [--checkout <path>] [--summary-repo <dir>]  Create the repository private when it does not exist, check it',
+  '    reads PRIVATE, clone it, write RESTORE.md and seed private-terms.txt. A config with no bundle list yet takes the git',
+  '    repository the folder init runs in; --checkout <path> (any folder inside a repository) adds that repository to the',
+  '    bundles when absent, and says so. An existing bundle list is otherwise left as it is. RESTORE.md clones each bundled',
+  '    repository from its origin, with no credential in it. With no checkout, nothing is bundled and init says so. The summary repository',
+  '    is the checkout named, and only then, since a public push cannot be taken back; every URL of its origin must be',
   '    jsaristi/js-harness on github.com.',
   '  init --transcripts-repo <owner/name>  The same for a repository of the Claude transcripts, apart from the memory',
   "    backup's: created private, read PRIVATE, cloned, and added to config.json's transcripts.repos. The last one",
@@ -319,7 +323,7 @@ export function runBackup(deps, { allowShrink = false, adopt = false } = {}) {
   // Only now, from the export the shrink guard accepted: a wiped Engram never reaches the readable fallback either.
   const recent = writeRecent(paths.clone);
   // RESTORE.md holds no time, so every run writes it: a clone made before a change of the steps gets them.
-  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo, transcriptsClones(paths, config)));
+  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(config.repo, transcriptsClones(paths, config), bundleCheckouts(deps, bundleSources(config))));
   const found = checkoutsOf((cwd, args, options) => git(deps, cwd, args, options), bundleSources(config), scope);
   // A repository git cannot read this time (a drive not mounted, a folder moved) lists no checkout, and the mirror would
   // drop the copies the last run made of its memory folders: under the same scope, every folder the clone holds stays.
@@ -971,14 +975,73 @@ function sessionStartCommand(deps) {
   return 0;
 }
 
-/** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. */
-function restoreSteps(repo, transcripts = []) {
+/** The root of the git work tree `dir` is in, as git names it and Node resolves it, or null when `dir` is in none (a
+ * bare repository included). `backup init` bundles that root, the one repository a checkout is. */
+function checkoutRoot(deps, dir) {
+  const top = deps.run('git', ['-C', dir, 'rev-parse', '--show-toplevel']);
+  return top.status === 0 && top.stdout.trim() ? path.resolve(top.stdout.trim()) : null;
+}
+
+/** Whether two paths name one folder. Windows folders are case-insensitive, so there the spelling does not decide it. */
+function sameFolder(a, b) {
+  const key = (place) => (process.platform === 'win32' ? path.resolve(place).toLowerCase() : path.resolve(place));
+  return key(a) === key(b);
+}
+
+/** The origin URL of a repository, for RESTORE.md, with its credential removed (`withoutCredentials`), or null when the
+ * repository has none or git cannot read it. It is read at write time, so RESTORE.md always names the origin as it is. */
+function originOf(deps, dir) {
+  const got = deps.run('git', ['-C', dir, 'remote', 'get-url', 'origin']);
+  return got.status === 0 ? withoutCredentials(got.stdout.trim()) : null;
+}
+
+/** Each bundled repository as RESTORE.md names it: its path as `config.json` holds it and its origin, or null. */
+function bundleCheckouts(deps, bundles) {
+  return bundles.map((dir) => ({ path: dir, origin: originOf(deps, dir) }));
+}
+
+/** An origin URL with its credential taken out, so no password or token reaches RESTORE.md, which is written to a
+ * repository. `https://user:token@host/x.git` keeps only `https://host/x.git`; an `ssh://user:pass@host/x.git` keeps its
+ * user, since a user name is no secret, and loses the password. A scp-like `git@host:x.git` has no scheme, so it is left
+ * as it is. Null when the text has a scheme the URL parser refuses: nothing unreadable is written in its place. */
+function withoutCredentials(text) {
+  if (!text) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) return text;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'ssh:') url.username = '';
+  url.password = '';
+  return url.toString();
+}
+
+/** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. `checkouts`
+ * are the bundled repositories (`bundleCheckouts`): RESTORE.md clones each into the path it had, since the Claude memory
+ * folder is named after that path. Nothing is named but what the config and the origins hold, never a path of the owner's. */
+function restoreSteps(repo, transcripts = [], checkouts = []) {
   const url = `https://github.com/${repo}.git`;
+  // Each checkout gets a clone line: its origin when it has one, else the instruction to clone it from wherever the
+  // project lives (no URL is made up). With no checkout bundled, the steps say so and leave the folder to the user.
+  const cloneLines = checkouts.length
+    ? [
+      '3. Clone each repository the backup bundles into the path it had, since the Claude memory folder is named after that path:',
+      ...checkouts.map((c) => (c.origin
+        ? `   \`git clone ${c.origin} ${c.path}\``
+        : `   Clone it from wherever the project lives into \`${c.path}\` (it has no origin, or git cannot read it).`)),
+      '   If a checkout lives elsewhere now, add `--map <old path>=<new path>` for it to the next step.',
+    ]
+    : [
+      '3. No repository was bundled when this backup was made (`backup init` found no checkout): clone your projects',
+      '   from wherever they live, and for one whose path differs now, add `--map <old path>=<new path>` to the next step.',
+    ];
   // The transcripts repositories (odd/tasks/transcripts-backup.md, D6), one line each, oldest first.
   const transcriptLines = transcripts.length
     ? [
       '   Then the Claude transcripts, from each of their private repositories (none writes over a live file):',
-      ...transcripts.map((t) => `   \`node bin/js-harness.mjs backup restore --transcripts https://github.com/${t.name}.git\``),
+      ...transcripts.map((t) => `   \`js-harness backup restore --transcripts https://github.com/${t.name}.git\``),
     ]
     : [];
   return [
@@ -991,17 +1054,17 @@ function restoreSteps(repo, transcripts = []) {
     'its recent decisions and work, readable here on GitHub without restoring anything.',
     '',
     '1. Install Node, git, the GitHub CLI (then `gh auth login`) and engram.',
-    '2. Install Claude Code and Codex.',
-    '3. `git clone https://github.com/jsaristi/js-harness.git D:\\js-harness` (the Claude memory folder is named after',
-    '   that path; if the checkout lives elsewhere, add `--map D:\\js-harness=<new path>` to the next step).',
-    `4. \`cd D:\\js-harness\` and \`node bin/js-harness.mjs backup restore --from ${url}\``,
+    '2. Install Claude Code and Codex, then js-harness, so every step below runs the installed `js-harness` from',
+    `   any folder: ${INSTALL_NEWEST}.`,
+    ...cloneLines,
+    `4. \`js-harness backup restore --from ${url}\``,
     '   It restores into this user\'s home (`--home <dir>` names another): it imports Engram, puts back the',
     '   memory folders and ~/.js-harness, and leaves the old config files in',
     '   ~/.js-harness/restored-config to compare by hand. It prints the line that fetches unpushed commits.',
     ...transcriptLines,
-    `5. \`node bin/js-harness.mjs backup verify --from ${url}\` restores again into a scratch home and checks it.`,
-    '6. `node bin/js-harness.mjs install`.',
-    `7. \`node bin/js-harness.mjs backup init --repo ${repo}\` and \`node bin/js-harness.mjs backup run --adopt\`: this`,
+    `5. \`js-harness backup verify --from ${url}\` restores again into a scratch home and checks it.`,
+    '6. `js-harness install`.',
+    `7. \`js-harness backup init --repo ${repo}\` and \`js-harness backup run --adopt\`: this`,
     '   machine takes over the backup.',
     '',
     'An Engram restore brings back every observation as it is now, not its edit history (observation_versions).',
@@ -1066,7 +1129,7 @@ function initTranscripts(repo, deps) {
 }
 
 function initCommand(args, deps) {
-  if (refuseBareFlag(args, ['--summary-repo'], 'init', deps)) return 2;
+  if (refuseBareFlag(args, ['--summary-repo', '--checkout'], 'init', deps)) return 2;
   const t = args.indexOf('--transcripts-repo');
   if (t !== -1) {
     const repo = args[t + 1];
@@ -1082,6 +1145,14 @@ function initCommand(args, deps) {
     deps.stderr.write('backup init: --repo <owner/name> is required\n');
     return 2;
   }
+  // The checkout is named by `--checkout <path>`, else the git repository the folder init runs in. It is resolved before
+  // anything is written or asked of GitHub: a path in no work tree is refused with nothing changed.
+  const checkoutFlag = valueOf(args, '--checkout');
+  const checkout = checkoutFlag === undefined ? checkoutRoot(deps, deps.cwd()) : checkoutRoot(deps, path.resolve(checkoutFlag));
+  if (checkoutFlag !== undefined && !checkout) {
+    deps.stderr.write(`backup init: refused: ${checkoutFlag} is not inside a git work tree; --checkout names one\n`);
+    return 2;
+  }
   const paths = backupPaths(deps.home);
   const refusal = privateClone(deps, repo, paths.clone, 'js-harness memory backup (private)');
   if (refusal) {
@@ -1089,7 +1160,21 @@ function initCommand(args, deps) {
     return 1;
   }
   const config = { ...(readJson(paths.config) ?? {}), repo };
-  if (!Array.isArray(config.bundles)) config.bundles = deps.bundles ?? [];
+  // The bundle list is what RESTORE.md names, so it is the one place a checkout is recorded. A config with no list yet
+  // takes the checkout init runs in; a list on disk, empty or not, is left exactly as it is unless --checkout names a
+  // checkout: that one is added when no entry is the same folder, and init says so either way.
+  const fresh = !Array.isArray(config.bundles);
+  if (fresh) config.bundles = [];
+  if (checkoutFlag !== undefined) {
+    if (config.bundles.some((dir) => typeof dir === 'string' && sameFolder(dir, checkout))) {
+      deps.stdout.write(`backup: ${checkout} is already bundled\n`);
+    } else {
+      config.bundles.push(checkout);
+      deps.stdout.write(`backup: added ${checkout} to bundles\n`);
+    }
+  } else if (fresh && checkout) {
+    config.bundles.push(checkout);
+  }
   // The checkout whose main the public summary reads (D4), only when named: a push to a public repository cannot be
   // taken back, so it is never a default, and its first content is read first with `backup summary --summary-repo`.
   if (args.includes('--summary-repo')) {
@@ -1102,7 +1187,7 @@ function initCommand(args, deps) {
     config.summaryRepo = named;
   }
   writeJson(paths.config, config);
-  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(repo, transcriptsClones(paths, config)));
+  fs.writeFileSync(path.join(paths.clone, 'RESTORE.md'), restoreSteps(repo, transcriptsClones(paths, config), bundleCheckouts(deps, config.bundles)));
   // The terms the public summary must never name (D4), kept in the private clone so a restore brings them back.
   const termsFile = path.join(paths.clone, 'private-terms.txt');
   if (!fs.existsSync(termsFile)) {
@@ -1118,6 +1203,10 @@ function initCommand(args, deps) {
     }
   }
   deps.stdout.write(`backup: ${repo} reads PRIVATE; clone in ${paths.clone}\n`);
+  // Said once more when nothing is bundled, so the owner learns that no repository is backed up before a wipe relies on it.
+  if (!config.bundles.length) {
+    deps.stdout.write('backup: no repository will be bundled: init found no git checkout here; add one with js-harness backup init --repo <owner/name> --checkout <path>\n');
+  }
   return 0;
 }
 
@@ -1131,7 +1220,7 @@ function defaultDeps() {
     run: defaultRun,
     stdout: process.stdout,
     stderr: process.stderr,
-    bundles: ['D:/js-harness'].filter((dir) => fs.existsSync(path.join(dir, '.git'))),
+    cwd: () => process.cwd(),
     stdin: () => (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8')),
     desktop: desktopDir(home, process.env),
     // Node itself on this install's own entry point: no `.cmd` shim, no shell between the hook and the run.
@@ -1151,7 +1240,7 @@ const FLAGS = {
   status: {},
   ready: {},
   summary: { valued: ['--summary-repo'] },
-  init: { valued: ['--repo', '--summary-repo', '--transcripts-repo'] },
+  init: { valued: ['--repo', '--checkout', '--summary-repo', '--transcripts-repo'] },
   restore: { valued: ['--from', '--home', '--map', '--transcripts'], bare: ['--merge'] },
   verify: { valued: ['--from', '--summary', '--transcripts'] },
 };
