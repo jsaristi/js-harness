@@ -102,7 +102,7 @@ Nothing open: the plan's five decisions were settled with the recommended answer
 - [x] T7 (kind: build) inline, S7-S11 — `bin/conventions-structure.test.mjs` with the five rules and their unit tests;
   `bin/lib/source.testkit.mjs` holds the recursive scan and the two parses the three convention tests share;
   `evals/suite.mjs` reads the home with `harnessHome`. Each rule RED once in a scratch clone, then GREEN (L7).
-- [ ] T8 (kind: verify) S12 — gentle-ai on the commit, Codex over the slice, the pull request and the ready notice.
+- [x] T8 (kind: verify) S12 — gentle-ai on the commit, Codex over the slice (L8), the pull request and the ready notice.
 - [ ] T9 (kind: docs) S12 — after slice 3 lands: `node scripts/inventory.mjs --write` in its own slice; the check exits 0.
 
 ## Log
@@ -177,3 +177,7 @@ Nothing open: the plan's five decisions were settled with the recommended answer
     module in a subfolder, and `merge-queue.mjs` one line under its ceiling (rule 4); a module in `bin/lib/sub/` calling
     `process.exit`, which the base's flat scan passed and the recursive one fails, and a pure claim there (rule 5). The
     three tests pass on the copy before and after; the copy was removed.
+- L8. 2026-10-24, the ledger of slice 3 (commit 957b762a, 311 changed lines; its gate passed):
+  - gentle-ai: 957b762a assessed medium, review not due (under_budget); the Stop hook offered it, its read-only status was run and nothing started.
+  - Codex reviewed bf4b2b9a..957b762a in 1 part: correct (0.9), no findings, 79,788 input tokens; the record is in the machine's review log.
+  - Next step: push the branch, open the pull request, send the ready notice; the lead lands it. Then T9, the inventory rewrite, in its own slice.
