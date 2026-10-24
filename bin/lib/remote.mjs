@@ -21,6 +21,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { killTree, takeSnapshot } from './process-tree.mjs';
+import { batchText } from './startup-file.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './windows-args.mjs';
 
 /** Whether a variable of that name may be one a Claude session injected into what it starts. */
@@ -116,13 +117,7 @@ const LAUNCHER_LABELS = {
  * run before it. That line is written only when the command needs it: the console is the launcher's own. */
 export function loginLauncher(options) {
   const command = startCommandLine(options);
-  return [
-    '@echo off',
-    'rem Starts the Claude remote-control server of one project at login. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.',
-    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
-    command,
-    '',
-  ].join('\r\n');
+  return batchText('Starts the Claude remote-control server of one project at login. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.', command);
 }
 
 /** The one command line the launcher and the watchdog task both run: `"<node>" <script> start --cwd <root> --name

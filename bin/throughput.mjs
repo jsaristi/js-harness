@@ -48,6 +48,9 @@ import {
 
 export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 
+// The days the usage names, read from the same rules the table and the status read.
+const QUIET_DAYS = ruleValue('throughput-quiet-days', 'days');
+
 export const USAGE = [
   'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
   '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]... [--copied-at <YYYY-MM-DDTHH:MMZ>]',
@@ -66,12 +69,12 @@ export const USAGE = [
   '    at most two (the log and its rotated file), for a day the live log has rotated away; a copy made before the',
   '    day settled keeps it as partial until then. A copy is made no earlier than its modification time; one that kept',
   "    its source's time says when it was made with --copied-at.",
-  '  --against: the window compared with an equal window before it, a row each, daily value with daily value. Under 7',
+  `  --against: the window compared with an equal window before it, a row each, daily value with daily value. Under ${COMPARE_DAYS}`,
   '    days a side it prints both and how often the after median of a window that did not change falls outside the',
-  '    before range, and judges nothing; from 7, a row moved only when the after median lies outside the before range.',
+  `    before range, and judges nothing; from ${COMPARE_DAYS}, a row moved only when the after median lies outside the before range.`,
   '  status: the days kept, each partial one with why, and each day since the first one kept that has none (exit 1);',
   '    none kept at all is missing too (exit 1). Then a DUE line for each review owed, which changes no exit code: the',
-  '    last settled day, unless a review of it or later is recorded, or weekly once the last reviews in a row the rule',
+  `    last settled day, unless a review of it or later is recorded, or every ${QUIET_DAYS} days once the last reviews in a row the rule`,
   '    throughput-quiet-runs counts found nothing; and a re-measure of each day something shipped, once the',
   '    throughput-compare-days after it have settled.',
   '  reviewed: records a review of the days up to --day, or the re-measure of what shipped on --shipped, and whether',
@@ -114,7 +117,7 @@ function parseArgs(argv) {
       flags.item = arg;
       continue;
     }
-    if (!allowed.has(arg)) throw new ThroughputArgError(arg.startsWith('--') ? `${arg} is not an option of throughput${verb === 'table' ? '' : ` ${verb}`}` : `unexpected argument: ${arg}`);
+    if (!allowed.has(arg)) throw new ThroughputArgError(arg.startsWith('--') ? `unknown argument: ${arg}` : `unexpected argument: ${arg}`);
     if (arg === '--json') {
       flags.json = true;
       continue;

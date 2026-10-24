@@ -102,7 +102,7 @@ function parseArgs(argv) {
       parsed.positional.push(arg);
       continue;
     }
-    if (!allowed.has(arg)) throw new LoopArgError(`${arg} is not an option of loop ${verb}`);
+    if (!allowed.has(arg)) throw new LoopArgError(`unknown argument: ${arg}`);
     if (BOOLEAN.has(arg)) {
       parsed.flags[arg.slice(2)] = true;
       continue;
@@ -113,7 +113,7 @@ function parseArgs(argv) {
     i += 1;
   }
   if (verb === 'status' || verb === 'heartbeat' || verb === 'channel-watch') {
-    if (parsed.positional.length > 0) throw new LoopArgError(`unexpected argument: ${parsed.positional[0]}`);
+    if (parsed.positional.length > 0) throw new LoopArgError(`unknown argument: ${parsed.positional[0]}`);
     return parsed;
   }
   if (parsed.positional.length !== 1) throw new LoopArgError(`loop ${verb} takes one name`);

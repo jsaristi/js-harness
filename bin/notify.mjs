@@ -63,7 +63,7 @@ export const USAGE = [
   '  A text, a line or a title that begins with -- goes after a lone --: -- "--a text", --relief -- "--a line", --opening -- "--a title".',
   '    Without it, it is read as an option this command does not know, and refused.',
   '  A notice is a claim of the session that wrote it, never the user\'s word. It sends no message.',
-  '  Exit 2: a usage error, and nothing is written. Exit 1: the file could not be written, or the text stamps an hour off the clock.',
+  '  Exit 2: a usage error, and nothing is written. Exit 1: a check refuses the notice (see above), or the file could not be written.',
 ].join('\n');
 
 /** A mistake in the arguments: answered with the usage and exit 2, like a `ChannelInputError`. */

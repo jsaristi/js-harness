@@ -482,7 +482,8 @@ export function buildCommands({
 /** CLI entry point: gathers version info, reads where it opened (`--cwd`, default the current folder),
  * binds the real commands to a home, computes the stack block (offline, never blocking on the network —
  * see `computeStackState`), opens the TUI. `io` may also carry `fetch`/`now` overrides for tests;
- * production leaves them at their real defaults. */
+ * production leaves them at their real defaults. `argv` is a test seam: bin/js-harness.mjs opens the menu with no
+ * arguments, so only the tests pass `--home`, `--cwd` or `--source`. */
 export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {}) {
   const get = (flag) => {
     const i = argv.indexOf(flag);

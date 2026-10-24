@@ -753,10 +753,10 @@ DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 -
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by
 row, daily value with daily value. The gate-wait median moved from 216 s to 69 s from one day to
-the next with nothing shipped, so under 7 days a side it prints both and how often the median of
-a window that did not change falls outside the before range, and judges nothing; from 7 days a
+the next with nothing shipped, so with fewer than `throughput-compare-days` days a side it prints both and how often the median of
+a window that did not change falls outside the before range, and judges nothing; from `throughput-compare-days` days a
 row moved only when the after window's median lies outside the before range, which an unchanged
-week does 7% of the time. The window before must end by the one compared.
+window of that length does 7% of the time. The window before must end by the one compared.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
@@ -1492,14 +1492,14 @@ a notice or a land comes, so it is told to arm `js-harness wait --notice-to <num
 background, or to give the work back with `--kind closed`. A `waiting` notice does not give it
 back: a session that waits still arms a wait. It says so once a handing, as the transcript records
 its earlier block, and again after a background task launched since has ended. A close with the
-decision state is not told, a handing older than the session's transcript belongs to another
+decision or the question state is not told, a handing older than the session's transcript belongs to another
 session of that number (except the opening the session read, always stored before it began), a
 call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
 is refused too, both reasons go in one block.
 
 ```console
 $ js-harness reply --hook < stop.json
-{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (an open question the user answers in writing, asked on that line; never while background work runs), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
 ```
 
 ### js-harness fetch

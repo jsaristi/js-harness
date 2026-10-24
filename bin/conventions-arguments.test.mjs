@@ -49,12 +49,8 @@ const BEFORE = {
 };
 
 const LEGACY = {
-  loop: 'says "js-harness loop: <token> is not an option of loop status"',
-  throughput: 'says "js-harness throughput: <token> is not an option of throughput status"',
-  'windows-daily': 'says "js-harness windows-daily: <token> is no argument of this command"',
   'merge-queue': 'prints only the usage',
   guard: 'prints only the usage',
-  reply: 'prints only the usage',
 };
 
 /** The commands `js-harness --help` lists, in its order: the first word of each line under "Commands:". */

@@ -3,11 +3,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { notifyMain, readyProblems } from './notify.mjs';
+import { notifyMain, readyProblems, USAGE } from './notify.mjs';
 import { sessionsMain } from './sessions.mjs';
 import { channelDir, findOpenings, openingFileName, openingsDir, readNotices, recordPath, reliefPath, reliefStamp } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { summaryTemplate } from './lib/summary.mjs';
+
+// The usage names the causes of exit 1 once: the checks that refuse the notice, named above it.
+test('the usage names exit 1 once, as a check that refuses the notice', () => {
+  const exit1 = USAGE.split('\n').filter((line) => line.includes('Exit 1:'));
+  assert.equal(exit1.length, 1);
+  assert.match(exit1[0], /Exit 1: a check refuses the notice \(see above\)/);
+});
 import { spawnSync } from 'node:child_process';
 
 // Every test has a machine of its own in the temp folder: a harness home, a Claude home with synthetic

@@ -364,9 +364,9 @@ test('loop refuses a malformed call with exit 2, the cause named, and nothing ru
   for (const [argv, said] of [
     [[], /a subcommand is required: run, status, stop, heartbeat or channel-watch/],
     [['walk'], /unknown subcommand: walk/],
-    [['status', '--purpose', 'x'], /--purpose is not an option of loop status/],
+    [['status', '--purpose', 'x'], /unknown argument: --purpose/],
     [['run', 'keeper', '--purpose'], /--purpose requires a value/],
-    [['status', 'keeper'], /unexpected argument: keeper/],
+    [['status', 'keeper'], /unknown argument: keeper/],
     [['run', 'one', 'two', '--purpose', 'p', '--until', 'u', ...command], /loop run takes one name/],
     [['stop'], /loop stop takes one name/],
     [['run', 'Keeper', '--purpose', 'p', '--until', 'u', ...command], /a loop's name is lower case letters, digits and dashes: Keeper/],

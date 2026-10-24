@@ -81,7 +81,9 @@ export async function replyMain(argv, {
     return 0;
   }
   if (argv.length !== 1 || argv[0] !== '--hook') {
-    stderr(USAGE);
+    // The first token that is not the lone --hook, named as the other commands name a refused argument.
+    const unknown = argv.find((token, i) => i > 0 || token !== '--hook');
+    stderr(`${unknown === undefined ? '' : `js-harness reply: unknown argument: ${unknown}\n\n`}${USAGE}`);
     return 2;
   }
   let reason = null;
