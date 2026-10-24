@@ -78,7 +78,7 @@ of the one scratch trial (package downloads).
 - [x] T5 (kind: docs) The ROADMAP line, the note to the onboarding session (D8), the reviews recorded
 - [x] T6 (kind: build) Done: a651b921 (Log, T6). A follow-up, out of this feature: `splitCommand` (`bin/lib/version.mjs:92`), shared with `upgrade`, splits a package manager path with a space (`C:\Program Files\nodejs\npm.cmd`) into two words; `stack` keeps such a line whole since 2c5753ef, `upgrade --pm` still does not (Codex on 12e46c4..6a2b0ad, finding 3, L8)
 - [x] T7 (kind: build) Done (Log, L16). A follow-up, out of this feature: a stack record whose `applies` stayed `null` (a failure the probe could not read, a timeout, or exit 0 while still missing) is undone whenever its tool is present, so a later install of his own can be removed; it needs what the undo applies to read once the probe can (gentle-ai R1-001, L11)
-- [ ] T8 (kind: build) A follow-up, split from T7 on 2026-10-24: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
+- [x] T8 (kind: build) Done (Log, L17). A follow-up, split from T7 on 2026-10-24: `doctor` reads `<home>/.codex` and ignores `CODEX_HOME`, so `stack install` leaves that registration to him (Codex finding 6, L10)
 
 ## Design
 

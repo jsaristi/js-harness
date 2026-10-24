@@ -52,7 +52,14 @@ function spawnOf(world, home, manifestSeen = []) {
       world.codegraph.claude = 'ok';
       fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { command: 'codegraph', args: ['serve', '--mcp'] } } }));
     }
-    if (line.startsWith('codex mcp add')) world.codegraph.codex = 'ok';
+    if (line.startsWith('codex mcp add')) {
+      world.codegraph.codex = 'ok';
+      // Codex writes the table where CODEX_HOME says.
+      if (options.env?.CODEX_HOME) {
+        fs.mkdirSync(options.env.CODEX_HOME, { recursive: true });
+        fs.writeFileSync(path.join(options.env.CODEX_HOME, 'config.toml'), '[mcp_servers.codegraph]\ncommand = "codegraph"\n');
+      }
+    }
     return { status: 0, stdout: '' };
   };
 }
@@ -123,7 +130,7 @@ test('--yes --tool runs only that tool\'s rows, in order, and records each with 
   assert.deepEqual(records.map((r) => [r.tool, r.dimension, r.applies]), [
     ['codegraph', 'installed', '2.0.0'],
     ['codegraph', 'claude', { command: 'codegraph', args: ['serve', '--mcp'] }],
-    ['codegraph', 'codex', null],
+    ['codegraph', 'codex', '[mcp_servers.codegraph]\ncommand = "codegraph"'],
   ]);
   assert.deepEqual(records[0].undo, ['pnpm', 'remove', '-g', '@colbymchenry/codegraph']);
   assert.equal(records[0].at, '2026-10-19T00:00:00.000Z');
@@ -220,14 +227,27 @@ test('under --prefix the probes and every command after the install see the pref
   assert.ok(readManifest(home).stack.every((row) => row.env.PATH === path.join('/p', 'bin')), 'the undo gets the same PATH');
 }));
 
-test('a Codex home of his own elsewhere keeps the registration in Codex his step: nothing is run or recorded for it', withHome(async (home) => {
+// stack-install T8: doctor reads the CODEX_HOME he set, so the registration in Codex is made there, and its record
+// keeps that home, so the undo and its check reach the same table.
+test('a Codex home of his own on the real home gets the registration in Codex, and its record keeps that home (T8)', withHome(async (home) => {
   const world = newWorld();
-  const elsewhere = path.join(home, 'his-codex');
-  const { code, err } = await run(['--yes', '--tool', 'codegraph'], { world, home, env: { CODEX_HOME: elsewhere } });
-  assert.equal(code, 1);
-  assert.ok(!world.lines.some(({ line }) => line.startsWith('codex mcp add')), 'never written where the record does not read');
-  assert.ok(err.includes(`codegraph codex: your CODEX_HOME is ${elsewhere}, and js-harness reads ${path.join(home, '.codex')}; register it by hand: codex mcp add codegraph -- codegraph serve --mcp`), err);
-  assert.deepEqual(readManifest(home).stack.map((row) => `${row.tool}.${row.dimension}`), ['codegraph.installed', 'codegraph.claude']);
+  const own = path.join(home, 'his-codex');
+  const { code, err } = await run(['--yes', '--tool', 'codegraph'], { world, home, env: { CODEX_HOME: own } });
+  assert.equal(code, 0, err);
+  const add = world.lines.find(({ line }) => line.startsWith('codex mcp add'));
+  assert.equal(add.env.CODEX_HOME, own);
+  assert.ok(add.codexHomeExisted, 'the folder was there when codex mcp add started');
+  const record = readManifest(home).stack.find((row) => row.dimension === 'codex');
+  assert.equal(record.env.CODEX_HOME, own);
+  assert.equal(record.applies, '[mcp_servers.codegraph]\ncommand = "codegraph"');
+}));
+
+test('on a home that is not the real one a CODEX_HOME he set is never written to', withHome(async (home) => {
+  const world = newWorld();
+  const { code } = await run(['--yes', '--tool', 'codegraph'], { world, home, env: { CODEX_HOME: path.join(home, 'his-codex') }, realHome: path.join(home, 'elsewhere') });
+  assert.equal(code, 0);
+  assert.equal(world.lines.find(({ line }) => line.startsWith('codex mcp add')).env.CODEX_HOME, path.join(home, '.codex'));
+  assert.equal(fs.existsSync(path.join(home, 'his-codex')), false);
 }));
 
 test('a failed command whose probe then cannot tell is not done: it stays recorded and the run exits 1', withHome(async (home) => {

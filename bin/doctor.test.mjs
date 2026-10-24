@@ -859,6 +859,33 @@ test('doctorMain shows a timed-out login probe as unknown and lists no codex fix
   }
 });
 
+// stack-install T8: Codex writes its MCP servers where CODEX_HOME says, so on the real home doctor reads them there;
+// unset or empty it reads `<home>/.codex`, and a fixture home never reads the real one.
+test('doctorMain reads the Codex registrations from the CODEX_HOME the user set, on the real home only (stack-install T8)', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.rmSync(path.join(home, '.codex', 'config.toml'));
+    const own = path.join(home, 'his-codex');
+    fs.mkdirSync(own);
+    fs.writeFileSync(path.join(own, 'config.toml'), '[mcp_servers.engram]\ncommand = "engram"\n\n[mcp_servers.codegraph]\ncommand = "codegraph"\n', 'utf8');
+    const spawn = fakeSpawn({ codexLogin: 'in' });
+    const codexOf = async (env, homedir) => {
+      const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], env, { spawn, fetch: noopFetch, homedir });
+      return Object.fromEntries(JSON.parse(output).filter((r) => ['engram', 'codegraph'].includes(r.id)).map((r) => [r.id, r.codex]));
+    };
+    assert.deepEqual(await codexOf({ CODEX_HOME: own }, home), { engram: 'ok', codegraph: 'ok' });
+    assert.deepEqual(await codexOf({ CODEX_HOME: own }, path.join(home, 'elsewhere')), { engram: 'missing', codegraph: 'missing' }, 'a fixture home never reads the real one');
+    assert.deepEqual(await codexOf({ CODEX_HOME: '' }, home), { engram: 'missing', codegraph: 'missing' }, 'an empty CODEX_HOME is unset');
+    fs.copyFileSync(path.join(own, 'config.toml'), path.join(home, '.codex', 'config.toml'));
+    assert.deepEqual(await codexOf({}, home), { engram: 'ok', codegraph: 'ok' }, 'unset, the old path');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test("doctorMain's login probe reads the Codex home under --home, never the real one", async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

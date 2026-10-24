@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { realCodexHome } from './codex-review-home.mjs';
 import { resolveStackPm, shownWord } from './package-manager.mjs';
 import { readManifest } from './manifest.mjs';
 import { takeSnapshot } from './process-tree.mjs';
@@ -80,10 +81,11 @@ function readJsonFile(filePath) {
   }
 }
 
-/** Minimal read-only presence check for a `[mcp_servers.<name>]` TOML section header: no TOML
- * library, since T1 only ever needs to know the section exists, never its contents. */
-function hasCodexMcpServer(home, name) {
-  const filePath = path.join(home, '.codex', 'config.toml');
+/** Minimal read-only presence check for a `[mcp_servers.<name>]` TOML section header in the `config.toml` of the Codex
+ * home `codexHome` (`codexHomeOf`): no TOML library, since T1 only ever needs to know the section exists, never its
+ * contents. */
+function hasCodexMcpServer(codexHome, name) {
+  const filePath = path.join(codexHome, 'config.toml');
   if (!fs.existsSync(filePath)) return false;
   let text;
   try {
@@ -206,11 +208,11 @@ function deadGentleAiHooks(deps, cells) {
  * hosted entry (`type: "http"` with a `url`) has no version of its own; a self-run one pins
  * `@upstash/context7-mcp@X` in its npx args. Registered only in Codex (whose config we only ever
  * presence-check, never parse) is `unknown`, not `missing` — it is installed, just unreadable. */
-function context7InstalledVersion(home) {
-  const { state, entry } = claudeJsonMcpServer(home, 'context7');
+function context7InstalledVersion(deps) {
+  const { state, entry } = claudeJsonMcpServer(deps.home, 'context7');
   if (state === 'unknown') return { state: 'unknown', version: null };
   if (state === 'missing') {
-    return hasCodexMcpServer(home, 'context7')
+    return hasCodexMcpServer(codexHomeOf(deps), 'context7')
       ? { state: 'unknown', version: null }
       : { state: 'missing', version: null };
   }
@@ -238,16 +240,29 @@ function sameDirectory(a, b, platform) {
   return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
 
+/** The `CODEX_HOME` the user set, when `home` is the real home (`homedir`) and it is set and not empty (its name in any
+ * case on win32, as `realCodexHome` reads it), else `null`: a fixture home never reads the real one. */
+function usersCodexHome({ home, env = process.env, homedir = os.homedir(), platform = process.platform }) {
+  if (!sameDirectory(home, homedir, platform)) return null;
+  const own = realCodexHome(env, home, platform);
+  return own === path.join(home, '.codex') ? null : own;
+}
+
+/** The Codex home of `home`, where Codex reads and writes its MCP servers: the `CODEX_HOME` the user set when `home`
+ * is the real home, else `<home>/.codex`, the path when it is unset or empty (stack-install T8). `doctor`'s probes,
+ * `stack install` and its records read it, so a registration is made, read and undone in the same place. */
+export function codexHomeOf(deps) {
+  return usersCodexHome(deps) ?? path.join(deps.home, '.codex');
+}
+
 /** Whether the Codex CLI is logged in, by asking Codex itself: `codex login status` exits 0 when it is.
  * Run with `CODEX_HOME=<home>/.codex` so `--home` means the same Codex home and a fixture home never reads
  * the real one — except when `home` is the real home and the user already set their own `CODEX_HOME`: that
  * one is kept, since it is where their login actually lives (R3-codex-home-overrides-user-env). `env` and
  * `homedir` are injectable so tests never touch `process.env`. `unknown` on a timeout; any other outcome
  * (not logged in, no `codex` on PATH, a spawn that throws) is `missing`. Never reads `auth.json`. */
-function codexLoginState({ home, env: userEnv = process.env, homedir = os.homedir(), ...deps }) {
-  const platform = deps.platform ?? process.platform;
-  const keepUsersCodexHome = Boolean(userEnv.CODEX_HOME) && sameDirectory(home, homedir, platform);
-  const env = keepUsersCodexHome ? undefined : { CODEX_HOME: path.join(home, '.codex') };
+function codexLoginState(deps) {
+  const env = usersCodexHome(deps) ? undefined : { CODEX_HOME: path.join(deps.home, '.codex') };
   const result = spawnProbe('codex', ['login', 'status'], { ...deps, env });
   if (result && probeTimedOut(result)) return 'unknown';
   return result && !result.error && result.status === 0 ? 'ok' : 'missing';
@@ -322,9 +337,9 @@ export const tools = [
   {
     id: 'engram',
     installed: (deps) => probeVersionCommand('engram', ['version'], deps),
-    configured: ({ home, project }) => ({
-      claude: claudeJsonMcpServer(home, 'engram', project).state,
-      codex: hasCodexMcpServer(home, 'engram') ? 'ok' : 'missing',
+    configured: (deps) => ({
+      claude: claudeJsonMcpServer(deps.home, 'engram', deps.project).state,
+      codex: hasCodexMcpServer(codexHomeOf(deps), 'engram') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
     fix: () => ({
@@ -355,9 +370,9 @@ export const tools = [
   {
     id: 'codegraph',
     installed: (deps) => probeVersionCommand('codegraph', ['--version'], deps),
-    configured: ({ home, project }) => ({
-      claude: claudeJsonMcpServer(home, 'codegraph', project).state,
-      codex: hasCodexMcpServer(home, 'codegraph') ? 'ok' : 'missing',
+    configured: (deps) => ({
+      claude: claudeJsonMcpServer(deps.home, 'codegraph', deps.project).state,
+      codex: hasCodexMcpServer(codexHomeOf(deps), 'codegraph') ? 'ok' : 'missing',
     }),
     // Where the project's codeMap switch is off, no index is wanted: `n/a`, which is no gap, so no init is offered.
     project: ({ project, functions }) => {
@@ -378,10 +393,10 @@ export const tools = [
   },
   {
     id: 'context7',
-    installed: ({ home }) => context7InstalledVersion(home),
-    configured: ({ home, project }) => ({
-      claude: claudeJsonMcpServer(home, 'context7', project).state,
-      codex: hasCodexMcpServer(home, 'context7') ? 'ok' : 'missing',
+    installed: (deps) => context7InstalledVersion(deps),
+    configured: (deps) => ({
+      claude: claudeJsonMcpServer(deps.home, 'context7', deps.project).state,
+      codex: hasCodexMcpServer(codexHomeOf(deps), 'context7') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
     // No `installed` fix: context7 has no CLI of its own to install — being registered nowhere

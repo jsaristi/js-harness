@@ -607,7 +607,7 @@ behind loses its record, and one the probe cannot read afterwards keeps it, as d
 of the run; one still unread by `uninstall machine` cannot tell what it left from a later install
 of your own, so its undo is printed for you and never run. Under `--prefix` the
 prefix's binaries come first on the PATH of every probe and command. With a `CODEX_HOME` of your
-own elsewhere than `~/.codex`, the registration in Codex is printed for you to run, never run. It
+own, the registration in Codex goes there, where `doctor` reads it and the undo finds it. It
 exits 0 when nothing it set out to install is missing or unverified, 1 when something is
 (declined, failed, timed out or left to you). In the TUI, Install the stack sits after Doctor
 while a required tool is missing, and runs `stack install`, each y/N answered by one key.
