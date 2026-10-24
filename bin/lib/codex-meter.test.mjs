@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { METER_TIMEOUT_MS, parseRateLimits, readRateLimits } from './codex-meter.mjs';
+import { METER_TIMEOUT_MS, failureLine, parseRateLimits, readRateLimits } from './codex-meter.mjs';
 
 // A fake `codex app-server`: a child whose stdin answers each request line with what `answer` returns for it.
 // Nothing here starts Codex. `answer` returns the lines the server writes back, objects or already-written text.
@@ -12,6 +12,19 @@ function fakeCodex(answer, { spawnError = null, exitCode = null } = {}) {
   const spawned = [];
   const child = new EventEmitter();
   child.pid = 4321;
+  child.unrefs = 0;
+  child.unref = () => {
+    child.unrefs += 1;
+  };
+  // How a real child ends: `exit` first, then its streams end and `close` follows.
+  const ended = (code) => {
+    child.emit('exit', code, null);
+    setImmediate(() => {
+      child.stdout.end();
+      child.emit('close', code, null);
+    });
+  };
+  child.ended = ended;
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
   child.stdin = {
@@ -29,7 +42,7 @@ function fakeCodex(answer, { spawnError = null, exitCode = null } = {}) {
   const spawn = (command, args, options) => {
     spawned.push({ command, args, options });
     if (spawnError) setImmediate(() => child.emit('error', spawnError));
-    if (exitCode !== null) setImmediate(() => child.emit('exit', exitCode, null));
+    if (exitCode !== null) setImmediate(() => ended(exitCode));
     return child;
   };
   const kill = (target, lifetime) => {
@@ -155,4 +168,58 @@ test('the process exits before it answers: the reason is exited, with its exit c
 test('the timeout is a named constant of a few seconds', () => {
   assert.equal(typeof METER_TIMEOUT_MS, 'number');
   assert.ok(METER_TIMEOUT_MS >= 2000 && METER_TIMEOUT_MS <= 15000, `a few seconds, not ${METER_TIMEOUT_MS} ms`);
+});
+
+// Codex review of 74d679a, P2: `exit` can come before the last stdout data, so a process that wrote its answer and
+// exited is read through `close`, which comes after its streams end.
+test('an answer written after the exit event and before close is read, not reported as an exit', async () => {
+  let fake;
+  fake = fakeCodex((message) => {
+    if (message.method === 'initialize') return [{ id: message.id, result: {} }];
+    if (message.method === 'account/rateLimits/read') {
+      setImmediate(() => {
+        fake.child.emit('exit', 0, null);
+        fake.child.stdout.write(`${JSON.stringify({ id: message.id, result: RESULT })}\n`);
+        setImmediate(() => fake.child.emit('close', 0, null));
+      });
+    }
+    return [];
+  });
+  const outcome = await readRateLimits({ spawn: fake.spawn, kill: fake.kill, platform: 'linux', timeoutMs: 2000 });
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+});
+
+// Codex review of 74d679a, P2: a kill that throws must not leave the child's pipes holding the event loop.
+test('a kill that throws still releases the child: its streams are destroyed and it is unref-ed', async () => {
+  const fake = fakeCodex(answering());
+  const outcome = await readRateLimits({ spawn: fake.spawn, kill: () => { throw new Error('access denied'); }, platform: 'linux', timeoutMs: 2000 });
+  assert.equal(outcome.ok, true);
+  assert.equal(outcome.killError, 'access denied');
+  assert.equal(fake.child.stdout.destroyed, true);
+  assert.equal(fake.child.stderr.destroyed, true);
+  assert.equal(fake.child.unrefs, 1);
+});
+
+// Codex review of 74d679a, P2: the server leads its own process group off Windows, so an interrupted read must
+// stop it itself; the handlers are the read's only, and are gone once it ends.
+test('an interruption stops the server and the read ends as interrupted, its signal handlers removed', async () => {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const fake = fakeCodex(() => []);
+    const signals = new EventEmitter();
+    const reading = readRateLimits({ spawn: fake.spawn, kill: fake.kill, platform: 'linux', timeoutMs: 2000, signals });
+    await new Promise((resolve) => setImmediate(resolve));
+    signals.emit(signal);
+    const outcome = await reading;
+    assert.equal(outcome.reason, 'interrupted', signal);
+    assert.equal(fake.killed.length, 1, signal);
+    assert.equal(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM'), 0, signal);
+  }
+  assert.match(failureLine({ ok: false, reason: 'interrupted' }), /interrupted/);
+});
+
+test('a read that ends by its answer leaves no signal handler behind', async () => {
+  const fake = fakeCodex(answering());
+  const signals = new EventEmitter();
+  await readRateLimits({ spawn: fake.spawn, kill: fake.kill, platform: 'linux', timeoutMs: 2000, signals });
+  assert.equal(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM'), 0);
 });

@@ -35,6 +35,7 @@ export const METER_TIMEOUT_MS = 15000;
 const INITIALIZE_ID = 1;
 const READ_ID = 2;
 const READ_METHOD = 'account/rateLimits/read';
+const SIGNALS = ['SIGINT', 'SIGTERM'];
 const CLIENT_INFO = { name: 'js-harness', version: 'codex-meter' };
 
 // Codex says a command it cannot find in this shell in these words; a shell launch that fails that way is missing.
@@ -95,6 +96,8 @@ export function failureLine(outcome) {
       return `codex app-server did not answer within ${Math.round(outcome.timeoutMs / 1000)} seconds, so it was stopped.`;
     case 'error':
       return `codex app-server answered with an error (code ${outcome.code ?? '?'}).`;
+    case 'interrupted':
+      return 'the read was interrupted, and codex app-server was stopped.';
     case 'exited':
       return `codex app-server exited before it answered (exit ${outcome.code ?? '?'}).`;
     default:
@@ -106,18 +109,23 @@ export function failureLine(outcome) {
  *  - `{ ok: true, result }`: the answer's `result`, as the server gave it (see `parseRateLimits`);
  *  - `{ ok: false, reason }` with `reason` one of `missing` (no `codex` to start), `timeout` (no answer within
  *    `timeoutMs`, with `timeoutMs` given back), `error` (the server answered with an error, its `code` given),
- *    `exited` (the process ended before it answered, its `code` given), or `failed` (it could not be started,
- *    with `detail`).
+ *    `exited` (the process ended before it answered, its `code` given), `interrupted` (SIGINT or SIGTERM reached
+ *    this process first), or `failed` (it could not be started, with `detail`).
  * The process is killed on every outcome, once, with `kill(child, { startedAt, exitedAt })`; a kill that throws is
- * given back as `killError`, and the read's own outcome stands. The three requests go out in the order the
+ * given back as `killError`, and the read's own outcome stands; either way the child's pipes are destroyed and it is
+ * unref-ed, so a child the kill missed cannot hold this process open. The three requests go out in the order the
  * protocol needs: `initialize`, then `initialized`, then the read, which waits for the handshake's answer.
- * `spawn`, `kill`, `platform`, `timeoutMs` and `now` are injectable, so the tests run no server. */
+ * The server leads its own process group off Windows, so a Ctrl-C of this command would not reach it: while the read
+ * runs, SIGINT and SIGTERM end it as `interrupted` and stop the server, and the handlers go when the read ends.
+ * `spawn`, `kill`, `platform`, `timeoutMs`, `now` and `signals` (the process) are injectable, so the tests run no
+ * server and send no signal. */
 export function readRateLimits({
   spawn = spawnChild,
   platform = process.platform,
   kill = (child, lifetime) => killTree(child, lifetime, { platform }),
   timeoutMs = METER_TIMEOUT_MS,
   now = Date.now,
+  signals = process,
 } = {}) {
   return new Promise((resolve) => {
     const startedAt = now(); // before the spawn: the child cannot have started earlier
@@ -132,6 +140,7 @@ export function readRateLimits({
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      for (const signal of SIGNALS) signals.off(signal, interrupted);
       let killError = null;
       if (child) {
         try {
@@ -139,9 +148,12 @@ export function readRateLimits({
         } catch (err) {
           killError = err.message;
         }
+        for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy?.();
+        child.unref?.();
       }
       resolve({ ...outcome, killError });
     };
+    const interrupted = () => finish({ ok: false, reason: 'interrupted' });
 
     const send = (message) => child.stdin?.write(`${JSON.stringify(message)}\n`);
 
@@ -175,6 +187,7 @@ export function readRateLimits({
     }
 
     timer = setTimeout(() => finish({ ok: false, reason: 'timeout', timeoutMs }), timeoutMs);
+    for (const signal of SIGNALS) signals.once(signal, interrupted);
     child.stdin?.on?.('error', () => {}); // a server that exits first makes the next write fail; its exit is what counts
     child.stderr?.on?.('data', (chunk) => {
       stderr = `${stderr}${chunk}`.slice(-2000);
@@ -192,8 +205,13 @@ export function readRateLimits({
     child.on('error', (err) => {
       finish({ ok: false, reason: err.code === 'ENOENT' ? 'missing' : 'failed', detail: err.message });
     });
-    child.on('exit', (code) => {
+    // `exit` can come before the last of stdout is read; `close` comes after the streams end, so an answer the server
+    // wrote just before it exited is read before the exit is taken for a failure.
+    child.on('exit', () => {
       exitedAt = now();
+    });
+    child.on('close', (code) => {
+      exitedAt ??= now();
       finish({ ok: false, reason: NOT_FOUND.test(stderr) ? 'missing' : 'exited', code });
     });
 
