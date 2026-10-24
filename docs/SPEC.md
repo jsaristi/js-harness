@@ -270,11 +270,11 @@ proofs and by those tasks.
 ### The merge queue
 
 **Problem:** Each merge made every other pull request's green run stale: 205 minutes of a 2,000-minute monthly allowance on 2026-10-14, and GitHub's merge queue is not offered for a private personal repository (`odd/tasks/merge-queue.md`).
-**Requirement:** The queue builds the default branch plus each ready pull request merged in number order, naming each one left out and why; it tests the candidate on this machine under the lock and on one CI system, and when both are green moves the default branch to it by fast-forward, leased on the branch it was built from; a red batch is bisected to the pull request that broke it; the pre-push hook refuses a push of the default branch from anywhere but the queue. No CI runs for a pull request.
+**Requirement:** The queue builds the default branch plus each ready pull request merged in number order, naming each one left out and why. The default branch is read once a run: what origin's HEAD names, else what `gh repo view` names, and the queue refuses, naming both, when neither does. It tests the candidate on this machine under the lock and on one CI system, and when both are green moves the default branch to it by fast-forward, leased on the branch it was built from; a red batch is bisected to the pull request that broke it; after a land, each open pull request based on a branch that land merged is retargeted to the default branch (`gh pr edit --base`); the pre-push hook refuses a push of the default branch from anywhere but the queue. No CI runs for a pull request.
 **Reason:** A second pusher makes the tested candidate a tree the default branch never was, and minutes are the scarce resource.
-**Proof:** `node --test bin/merge-queue.test.mjs`, `node --test bin/lib/refresh-copy.test.mjs`, `node --test scripts/circleci-config.test.mjs`, `node --test scripts/github-workflows.test.mjs`
+**Proof:** `node --test bin/merge-queue.test.mjs`, `node --test bin/lib/default-branch.test.mjs`, `node --test bin/lib/pull-request.test.mjs`, `node --test bin/lib/refresh-copy.test.mjs`, `node --test scripts/circleci-config.test.mjs`, `node --test scripts/github-workflows.test.mjs`
 **Discarded:** A GitHub Actions run on every pull request, with its bounds held by a test (`odd/tasks/drop-github-gate.md`). Windows on GitHub for each pull request: 22 billed minutes a run while the repository was private (it now runs once a day, "The daily Windows suite"). A self-hosted runner on the same machine: the same eight threads and the same lock. Merging on GitHub's side: it bypasses the hook.
-**Today:** `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `.circleci/config.yml`, `js-harness merge-queue`
+**Today:** `bin/merge-queue.mjs`, `bin/lib/default-branch.mjs`, `bin/lib/pull-request.mjs`, `.circleci/config.yml`, `js-harness merge-queue`
 
 ### Evals that discriminate
 
