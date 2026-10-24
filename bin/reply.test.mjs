@@ -44,6 +44,17 @@ test('anything but --hook prints the usage and exits 2', async () => {
   assert.match(help.out, /Usage: js-harness reply --hook/);
 });
 
+test('a refused argument is named: unknown argument: <token>, then the usage', async () => {
+  for (const [argv, token] of [[['--stop'], '--stop'], [['--hook', 'extra'], 'extra'], [['--hook', '--hook'], '--hook'], [['check'], 'check']]) {
+    const result = await hook(null, { argv });
+    assert.equal(result.code, 2, JSON.stringify(argv));
+    assert.match(result.err, new RegExp(`^js-harness reply: unknown argument: ${token}\\n\\nUsage: js-harness reply --hook`), JSON.stringify(argv));
+  }
+  const bare = await hook(null, { argv: [] });
+  assert.equal(bare.code, 2);
+  assert.match(bare.err, /^Usage: js-harness reply --hook/);
+});
+
 test('a reply that ends with no state is turned back with the hooks contract\'s block and its reason', async () => {
   const result = await hook(stopPayload('Merged pull request 12.'));
   assert.equal(result.code, 0);

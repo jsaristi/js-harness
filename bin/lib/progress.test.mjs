@@ -1,43 +1,48 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSteps, parseRoadmap, parseFeature, tokenize } from './progress.mjs';
+import { parseRoadmap, parseFeature, tokenize } from './progress.mjs';
 
-// --- parseSteps ---
+// Every checkbox list item of `markdown`, in document order: `- [ ]`/`- [x]`/`- [X]`, also `*`/`+` bullets, any
+// leading indent. Lines inside a fenced code block are ignored, and `[ ]`-looking text that does not start a list
+// item is not a step. The tests below pin the tokenizer's steps through it.
+const stepsOf = (markdown) => tokenize(markdown).filter((token) => token.step).map((token) => token.step);
 
-test('parseSteps reads `- [ ]` and `- [x]` bullets, trims text', () => {
+// --- stepsOf ---
+
+test('stepsOf reads `- [ ]` and `- [x]` bullets, trims text', () => {
   const md = '- [ ] pending step\n- [x] done step\n';
-  assert.deepEqual(parseSteps(md), [
+  assert.deepEqual(stepsOf(md), [
     { text: 'pending step', done: false },
     { text: 'done step', done: true },
   ]);
 });
 
-test('parseSteps accepts an uppercase `X`', () => {
-  assert.deepEqual(parseSteps('- [X] done step\n'), [{ text: 'done step', done: true }]);
+test('stepsOf accepts an uppercase `X`', () => {
+  assert.deepEqual(stepsOf('- [X] done step\n'), [{ text: 'done step', done: true }]);
 });
 
-test('parseSteps accepts `*` and `+` bullets', () => {
+test('stepsOf accepts `*` and `+` bullets', () => {
   const md = '* [ ] star bullet\n+ [x] plus bullet\n';
-  assert.deepEqual(parseSteps(md), [
+  assert.deepEqual(stepsOf(md), [
     { text: 'star bullet', done: false },
     { text: 'plus bullet', done: true },
   ]);
 });
 
-test('parseSteps accepts any leading indent', () => {
+test('stepsOf accepts any leading indent', () => {
   const md = '  - [ ] indented two\n\t- [x] indented tab\n      - [ ] indented six\n';
-  assert.deepEqual(parseSteps(md), [
+  assert.deepEqual(stepsOf(md), [
     { text: 'indented two', done: false },
     { text: 'indented tab', done: true },
     { text: 'indented six', done: false },
   ]);
 });
 
-test('parseSteps trims surrounding whitespace from the step text', () => {
-  assert.deepEqual(parseSteps('- [ ]   spaced out text   \n'), [{ text: 'spaced out text', done: false }]);
+test('stepsOf trims surrounding whitespace from the step text', () => {
+  assert.deepEqual(stepsOf('- [ ]   spaced out text   \n'), [{ text: 'spaced out text', done: false }]);
 });
 
-test('parseSteps ignores lines inside a fenced code block, both ``` and ~~~ fences', () => {
+test('stepsOf ignores lines inside a fenced code block, both ``` and ~~~ fences', () => {
   const md = [
     '- [ ] a real step',
     '```',
@@ -49,20 +54,20 @@ test('parseSteps ignores lines inside a fenced code block, both ``` and ~~~ fenc
     '- [x] another real step',
     '',
   ].join('\n');
-  assert.deepEqual(parseSteps(md), [
+  assert.deepEqual(stepsOf(md), [
     { text: 'a real step', done: false },
     { text: 'another real step', done: true },
   ]);
 });
 
-test('parseSteps does not treat `[ ]`-looking text as a step unless it starts a list item', () => {
+test('stepsOf does not treat `[ ]`-looking text as a step unless it starts a list item', () => {
   const md = 'Some prose with [ ] in the middle, not a step.\n- [ ] a real step\n';
-  assert.deepEqual(parseSteps(md), [{ text: 'a real step', done: false }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'a real step', done: false }]);
 });
 
 // --- fence closer must match the opener's character and length (R3-fence-mismatch, Codex P2) ---
 
-test('parseSteps: a ```` opener is not closed by a shorter ``` line, only by ```` or longer', () => {
+test('stepsOf: a ```` opener is not closed by a shorter ``` line, only by ```` or longer', () => {
   const md = [
     '````',
     '- [ ] fenced',
@@ -72,10 +77,10 @@ test('parseSteps: a ```` opener is not closed by a shorter ``` line, only by ```
     '- [x] real step after the fence closes',
     '',
   ].join('\n');
-  assert.deepEqual(parseSteps(md), [{ text: 'real step after the fence closes', done: true }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'real step after the fence closes', done: true }]);
 });
 
-test('parseSteps: a ~~~~ opener wrapping a ``` block keeps the checkbox inside fenced, and counts real steps after it closes', () => {
+test('stepsOf: a ~~~~ opener wrapping a ``` block keeps the checkbox inside fenced, and counts real steps after it closes', () => {
   const md = [
     '~~~~markdown',
     '```',
@@ -85,10 +90,10 @@ test('parseSteps: a ~~~~ opener wrapping a ``` block keeps the checkbox inside f
     '- [x] real step after the outer fence closes',
     '',
   ].join('\n');
-  assert.deepEqual(parseSteps(md), [{ text: 'real step after the outer fence closes', done: true }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'real step after the outer fence closes', done: true }]);
 });
 
-test('parseSteps: a ``` line inside a ~~~ fence does not close it (different fence character)', () => {
+test('stepsOf: a ``` line inside a ~~~ fence does not close it (different fence character)', () => {
   const md = [
     '~~~',
     '- [ ] fenced',
@@ -98,45 +103,45 @@ test('parseSteps: a ``` line inside a ~~~ fence does not close it (different fen
     '- [x] real step after',
     '',
   ].join('\n');
-  assert.deepEqual(parseSteps(md), [{ text: 'real step after', done: true }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'real step after', done: true }]);
 });
 
-test('parseSteps: an unclosed fence runs to end of file, so nothing inside it is ever a step', () => {
+test('stepsOf: an unclosed fence runs to end of file, so nothing inside it is ever a step', () => {
   const md = ['```', '- [ ] fenced, never closed', '- [x] also fenced, still never closed', ''].join('\n');
-  assert.deepEqual(parseSteps(md), []);
+  assert.deepEqual(stepsOf(md), []);
 });
 
-test('parseSteps: a longer closing fence than the opener still closes it', () => {
+test('stepsOf: a longer closing fence than the opener still closes it', () => {
   const md = ['```', '- [ ] fenced', '````', '- [x] real step after (longer closer still closes)', ''].join('\n');
-  assert.deepEqual(parseSteps(md), [{ text: 'real step after (longer closer still closes)', done: true }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'real step after (longer closer still closes)', done: true }]);
 });
 
 // --- a backtick fence opener's info string may not contain a backtick (R3-backtick-info-string) ---
 
-test('parseSteps: a line with backticks after a leading ``` is not a fence opener, so it does not fence what follows', () => {
+test('stepsOf: a line with backticks after a leading ``` is not a fence opener, so it does not fence what follows', () => {
   const md = [
     "```inline``` text",
     "- [x] counted, not fenced (the opener's info string contains a backtick)",
     '# Heading still seen',
     '',
   ].join('\n');
-  assert.deepEqual(parseSteps(md), [
+  assert.deepEqual(stepsOf(md), [
     { text: "counted, not fenced (the opener's info string contains a backtick)", done: true },
   ]);
 });
 
-test('parseSteps: a plain ```js opener (no backtick in its info string) still fences normally', () => {
+test('stepsOf: a plain ```js opener (no backtick in its info string) still fences normally', () => {
   const md = ['```js', '- [ ] fenced (a valid opener, no backtick in the info string)', '```', '- [x] real step after', ''].join(
     '\n',
   );
-  assert.deepEqual(parseSteps(md), [{ text: 'real step after', done: true }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'real step after', done: true }]);
 });
 
-test('parseSteps: a ~~~ opener may contain backticks in its info string and still fences', () => {
+test('stepsOf: a ~~~ opener may contain backticks in its info string and still fences', () => {
   const md = ['~~~ a`b`', '- [ ] fenced (tilde openers may contain backticks)', '~~~', '- [x] real step after', ''].join(
     '\n',
   );
-  assert.deepEqual(parseSteps(md), [{ text: 'real step after', done: true }]);
+  assert.deepEqual(stepsOf(md), [{ text: 'real step after', done: true }]);
 });
 
 test('parseFeature: a heading is still seen after a line whose backtick-info disqualifies it as a fence opener', () => {
@@ -146,16 +151,16 @@ test('parseFeature: a heading is still seen after a line whose backtick-info dis
   assert.deepEqual(result.steps, [{ text: 'a real step', done: true }]);
 });
 
-test('parseSteps works on CRLF input', () => {
+test('stepsOf works on CRLF input', () => {
   const md = '- [ ] first\r\n- [x] second\r\n';
-  assert.deepEqual(parseSteps(md), [
+  assert.deepEqual(stepsOf(md), [
     { text: 'first', done: false },
     { text: 'second', done: true },
   ]);
 });
 
-test('parseSteps returns an empty array for markdown with no checkboxes', () => {
-  assert.deepEqual(parseSteps('# Title\n\nJust prose.\n'), []);
+test('stepsOf returns an empty array for markdown with no checkboxes', () => {
+  assert.deepEqual(stepsOf('# Title\n\nJust prose.\n'), []);
 });
 
 // --- parseRoadmap ---
@@ -388,7 +393,7 @@ test('parseRoadmap still counts checkboxes only: a task table in the Checklist i
 
 test('tokenize keeps HTML comments unless stripComments is set, so progress counts are unchanged', () => {
   const md = '<!--\n- [ ] hidden\n-->\n- [x] shown\n';
-  assert.equal(parseSteps(md).length, 2);
+  assert.equal(stepsOf(md).length, 2);
   assert.deepEqual(tokenize(md, { stripComments: true }).filter((t) => t.step).map((t) => t.step.text), ['shown']);
 });
 
@@ -396,12 +401,12 @@ test('tokenize takes a fence indented past three spaces of what it is under only
   const kinds = (tokens) => tokens.map((t) => (t.fence ? 'fence' : t.step ? 'step' : 'text'));
   // Under no list item, four spaces is past three: text without the option, a fence with it.
   const loose = 'a paragraph\n\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
-  assert.equal(parseSteps(loose).length, 2);
+  assert.equal(stepsOf(loose).length, 2);
   assert.deepEqual(kinds(tokenize(loose)), ['text', 'text', 'text', 'step', 'text', 'step', 'text']);
   assert.deepEqual(kinds(tokenize(loose, { indentedFences: true })), ['text', 'text', 'fence', 'fence', 'fence', 'step', 'text']);
   // Under a list item whose text starts at column 2, eight spaces is past three of it.
   const deep = '- [ ] a task\n        ```\n        - [ ] an example\n        ```\n- [ ] the next task\n';
-  assert.equal(parseSteps(deep).length, 3);
+  assert.equal(stepsOf(deep).length, 3);
   assert.deepEqual(kinds(tokenize(deep, { indentedFences: true })), ['step', 'fence', 'fence', 'fence', 'step', 'text']);
   const md = '- [ ] a task\n    ```\n    - [ ] an example\n    <!-- never closed\n    ```\n- [ ] the next task\n';
   assert.deepEqual(kinds(tokenize(md, { indentedFences: true })), ['step', 'fence', 'fence', 'fence', 'fence', 'step', 'text']);
@@ -427,7 +432,7 @@ const fenceKinds = (md, options) => tokenize(md, options).map((t) => (t.fence ? 
 test('a fence under a list item is a fence without the option, so a checkbox it shows is no step', () => {
   const md = '- [ ] a task\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
   assert.deepEqual(fenceKinds(md), ['step', 'fence', 'fence', 'fence', 'step', 'text']);
-  assert.deepEqual(parseSteps(md).map((step) => step.text), ['a task', 'the next task']);
+  assert.deepEqual(stepsOf(md).map((step) => step.text), ['a task', 'the next task']);
   assert.equal(parseFeature(`# F\n${md}`, 'f').total, 2);
   // Under a numbered item and under an item of an item, the text's column is further in.
   const numbered = '10. a numbered line\n    ```\n    - [ ] an example\n    ```\n- [ ] the next task\n';
@@ -451,7 +456,7 @@ test('a fence that opens at the margin leaves the list item, so a later fence is
   // Were the item still open, the four-space marker would close the second fence and the last line be a step.
   const md = '- [ ] a task\n```\nat the margin\n```\n  ```\n  - [ ] an example\n    ```\n- [ ] fenced still\n';
   assert.deepEqual(fenceKinds(md), ['step', 'fence', 'fence', 'fence', 'fence', 'fence', 'fence', 'fence', 'fence']);
-  assert.deepEqual(parseSteps(md).map((step) => step.text), ['a task']);
+  assert.deepEqual(stepsOf(md).map((step) => step.text), ['a task']);
 });
 
 test('a thematic break written with spaces opens no list item', () => {

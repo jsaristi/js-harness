@@ -15,6 +15,20 @@ import { forgetOptionalFile, readManifest, recordOptionalFile } from './manifest
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+/** The text of a batch file a Startup folder runs at login: `@echo off`, a `rem` line that says what the file does,
+ * a `chcp 65001` line first when `command` holds a letter beyond ASCII (`loginLauncher` in bin/lib/remote.mjs says
+ * why), then `command`. Every line ends in CRLF. `wake --at-login` and `remote start --at-login` write their
+ * batch files this way. */
+export function batchText(remark, command) {
+  return [
+    '@echo off',
+    `rem ${remark}`,
+    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
+    command,
+    '',
+  ].join('\r\n');
+}
+
 /** Where the Startup file `name` goes: `{ dir, file }`, from the `APPDATA` of `env` and nothing else; `{ why }`
  * when `env` has none. Nothing is created: that folder is Windows's to make. */
 export function startupLocation(env, name) {

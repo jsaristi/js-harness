@@ -115,8 +115,3 @@ export function scheduledRegistry(root, { readdir = fs.readdirSync, readFile = (
   }
   return { found, tasks };
 }
-
-/** The scheduled tasks the app keeps, as `{ id, cwd, enabled }`. */
-export function scheduledTasks(root, deps = {}) {
-  return scheduledRegistry(root, deps).tasks;
-}

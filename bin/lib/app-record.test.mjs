@@ -146,27 +146,6 @@ test('a folder or a registry file that is there and cannot be read is told to un
   assert.deepEqual(told, [[nodePath.join(ACCOUNT, 'scheduled-tasks.json'), 'EPERM']]);
 });
 
-// --- scheduledTasks ---
-
-test('scheduledTasks lists each task of the scheduled-tasks file as its id, cwd and enabled flag', () => {
-  const root = fakeFs(Object.fromEntries([
-    [nodePath.join(ACCOUNT, 'scheduled-tasks.json'), JSON.stringify({ scheduledTasks: [
-      { id: 'task-a', cwd: 'D:\\proj', enabled: false, fireAt: 1791761100000, displayName: 'made up' },
-      { id: 'task-b', cwd: 'C:\\other', enabled: true },
-    ], recordedSkips: {} })],
-  ]));
-  assert.deepEqual(lib.scheduledTasks(ROOT, root), [
-    { id: 'task-a', cwd: 'D:\\proj', enabled: false },
-    { id: 'task-b', cwd: 'C:\\other', enabled: true },
-  ]);
-});
-
-test('scheduledTasks is empty when the file is missing, is not JSON, or holds no list', () => {
-  assert.deepEqual(lib.scheduledTasks(ROOT, fakeFs({})), []);
-  assert.deepEqual(lib.scheduledTasks(ROOT, fakeFs({ [nodePath.join(ACCOUNT, 'scheduled-tasks.json')]: '{ broken' })), []);
-  assert.deepEqual(lib.scheduledTasks(ROOT, fakeFs({ [nodePath.join(ACCOUNT, 'scheduled-tasks.json')]: '{"scheduledTasks":{}}' })), []);
-});
-
 // The registry is read or not, apart from how many tasks it holds: an empty list is a registry that says nothing
 // is scheduled, while a missing or unparsable file says nothing about the tasks at all.
 test('scheduledRegistry says a registry was found when a file parses to a task list, even an empty one', () => {

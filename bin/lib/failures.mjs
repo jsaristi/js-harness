@@ -122,7 +122,7 @@ function readControl(value) {
     errors.push(`a check is never a .md file ("${file}"): a check names the test file that proves it, and prose is a line or a protocol`);
   }
   if (phrase.length < MIN_PHRASE) {
-    errors.push(`the phrase "${phrase}" has ${phrase.length} characters: a phrase has at least twelve, so that it is not found by accident`);
+    errors.push(`the phrase "${phrase}" has ${phrase.length} characters: a phrase has at least ${MIN_PHRASE} characters, so that it is not found by accident`);
   }
   if (level !== 'owed' && !isDate(since)) errors.push(`in Control, "${since}" is no date: a date is written YYYY-MM-DD`);
   // A date edited on this line alone would settle every sighting before it, measured or not.

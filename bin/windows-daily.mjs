@@ -39,7 +39,7 @@ export async function windowsDailyMain(
 ) {
   const unknown = unknownArgument(argv, KNOWN);
   if (unknown !== null) {
-    stderr(`js-harness windows-daily: ${unknown} is no argument of this command\n\n${USAGE}`);
+    stderr(`js-harness windows-daily: unknown argument: ${unknown}\n\n${USAGE}`);
     return 2;
   }
   for (const flag of KNOWN.valued) {
