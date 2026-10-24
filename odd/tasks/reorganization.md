@@ -66,7 +66,10 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   `gate.mjs` to `gate-turn.mjs`, 19 to `flaky.mjs`; removed equals added but the header, `export` on the five names
   `check.mjs` still reads, and `gate.mjs`'s re-export. `flaky` 18, `windows-daily` 11, `refresh-copy` 18 and `gate` 80
   tests pass. Commit: 2b.
-- [ ] T3 (kind: build) inline, S3, S4 — 2c, the version and the permit times.
+- [x] T3 (kind: build) inline, S3, S4 — 2c, the version and the permit times: `currentVersion` reads
+  `'..', '..', 'package.json'` from its new folder, the one line that had to change; `rules-installed`'s copy version
+  calls it inside its try, so an unreadable file is still null, and loses its `fs` and `path` imports. `version` 12,
+  `rules-installed` 10, `permit` 18, `install` 110 and `release-tags` 8 tests pass; `--version` prints 0.97.0. Commit: 2c.
 - [ ] T4 (kind: verify) S5, S6 — the differential inline; one independent Opus verifier (items 2 and 4).
 - [ ] T5 (kind: verify) S6 — gentle-ai per commit, Codex over the slice, the pull request and the ready notice.
 

@@ -1,5 +1,5 @@
-// Pure version-comparison and command-construction helpers. Directory listing is the one
-// filesystem read here, kept simple and injectable via its `dir` argument.
+// Pure version-comparison and command-construction helpers. Two filesystem reads are kept simple here: a directory
+// listing, injectable via its `dir` argument, and this package's own package.json (`currentVersion`).
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -138,4 +138,10 @@ export function installPlan(kind, spec, prefix, env, platform) {
       [pathKey]: env[pathKey] ? `${bin}${delimiter}${env[pathKey]}` : bin,
     },
   };
+}
+
+/** This package's own version, read from its package.json (never the installed target's). */
+export function currentVersion() {
+  const pkgPath = path.join(import.meta.dirname, '..', '..', 'package.json');
+  return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
 }

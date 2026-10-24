@@ -20,6 +20,9 @@ import { unknownArgument } from './lib/args.mjs';
 import { appendNotice, channelDir, newNotice } from './lib/channel.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { LEASE_MINUTES, WAIT_MS } from './lib/permit-times.mjs';
+
+export { LEASE_MINUTES, WAIT_MS };
 
 export const USAGE = 'Usage: js-harness permit --hook | lease [--session <id>] [--minutes <n>] [--take-over] | lease --off | list [--json]\n'
   + '       | allow <id> | deny <id> --reason <text>\n'
@@ -34,11 +37,7 @@ export const USAGE = 'Usage: js-harness permit --hook | lease [--session <id>] [
   + '           holding the relay gives a verdict, never the one that asks\n';
 
 const SCHEMA = 'js-harness.permit/v1';
-/** How long a card waits for the lead: under the hook's 600 s timeout, so the hook answers before the host cuts it. */
-export const WAIT_MS = 570 * 1000;
 const POLL_MS = 2000;
-/** How long a lease holds the relay without a renewal. */
-export const LEASE_MINUTES = 40;
 
 /** The folder of the project `slug`'s relay under `home`: under the channel folder, which `uninstall` removes. */
 export function permitsDir(home, slug) {
