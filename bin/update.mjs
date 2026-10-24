@@ -204,13 +204,13 @@ function clearPnpmLock(binDir, since, isPnpmRunning) {
 }
 
 export const STATUS_USAGE =
-  'Usage: js-harness status [--cwd <path>] [--home <path>] [--global] [--repo <url or folder>] [--source <dir>] [--pm <command>] [--prefix <dir>]';
+  'Usage: js-harness status [--cwd <path>] [--home <path>] [--global] [--repo <url or folder>] [--source <dir>]';
 
 class StatusArgError extends Error {}
 
-/** `status`'s flags are strict, unlike `update`/`upgrade`'s lenient `parseArgs` above (whose behavior stays
- * as it was): an unknown flag or a missing value is a usage error, and `--global` with `--cwd` is one too,
- * the same rule `sync` and `uninstall` follow (`--cwd` only means anything for the project scope). */
+/** `status`'s flags are strict, as `updateMain` and `upgradeMain` are before they call `parseArgs`: an unknown
+ * flag or a missing value is a usage error, and `--global` with `--cwd` is one too, the same rule `sync` and
+ * `uninstall` follow (`--cwd` only means anything for the project scope). */
 function parseStatusArgs(argv, env) {
   const values = {};
   let global = false;
@@ -218,7 +218,7 @@ function parseStatusArgs(argv, env) {
     const token = argv[i];
     if (token === '--global') {
       global = true;
-    } else if (['--cwd', '--home', '--repo', '--source', '--prefix', '--pm'].includes(token)) {
+    } else if (['--cwd', '--home', '--repo', '--source'].includes(token)) {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) throw new StatusArgError(`${token} requires a value`);
       values[token] = value;
@@ -235,8 +235,6 @@ function parseStatusArgs(argv, env) {
     home: values['--home'] ?? env.JS_HARNESS_HOME ?? os.homedir(),
     source: values['--source'] ?? env.JS_HARNESS_SOURCE,
     repo: values['--repo'] ?? env.JS_HARNESS_REPO ?? DEFAULT_REPO,
-    prefix: values['--prefix'] ?? env.JS_HARNESS_PREFIX,
-    pm: values['--pm'],
   };
 }
 
@@ -484,9 +482,8 @@ const PNPM_LOCK_NOTE =
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function upgradeMain(argv, env = process.env, spawn = spawnSync, platform = process.platform, { sleep = defaultSleep, copyPath } = {}) {
-  // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs; `update`,
-  // which writes nothing, refuses only a value flag with no value and otherwise keeps the lenient parse
-  // (T1 of odd/tasks/commands-and-doctor.md).
+  // `upgrade` installs and syncs, so a flag it does not know is refused before anything runs, and so is a value flag
+  // with no value; `update` takes the same refusals before its lookup (`refusal` above).
   const refused = refusal(argv, ['--home', '--repo', '--source', '--prefix', '--pm']);
   if (refused !== null) {
     console.error(`${refused}\n\n${UPGRADE_USAGE}`);

@@ -53,6 +53,10 @@ export const USAGE = [
   GATE_WAIT_USAGE,
   `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
   `       --ready <command>: a quick check, one shell command line, run before the wait and again as the turn comes after one; when it fails, nothing runs (exit 75), so a command that would refuse at once does not wait for a turn`,
+  "       --home <path>: the home that holds the gate lock, the gate log and the tickets (JS_HARNESS_HOME, else this user's home)",
+  "       --cwd <path>: the folder the command runs in, the current one when not given; the push check reads the branch of that folder",
+  "       log --last <n>: how many of the last runs are printed",
+  "       first --session <id> --reason <why>: a ticket that puts that session's next whole check before every gate that waits; two are open at most, for an hour at most (--minutes <n> sets it, 60 at most); --cancel <id> withdraws one",
 ].join('\n');
 
 /** How many gates `gate log` prints when `--last` does not say. */

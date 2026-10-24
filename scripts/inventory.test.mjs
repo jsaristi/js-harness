@@ -220,6 +220,7 @@ const CLASS_CASES = [
   ['docs/sessions/s.md', 'history', '-'],
   ['docs/origin.md', 'history', '-'],
   ['docs/sweep-2026-10-11.md', 'history', '-'],
+  ['docs/model-effort.md', 'history', '-'],
   ['docs/research/r.md', 'history', '-'],
   ['evals/proofs/p.md', 'history', '-'],
   ['docs/RULES.md', 'generated', '-'],

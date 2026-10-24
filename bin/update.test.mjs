@@ -1031,15 +1031,28 @@ test('status in a project writes nothing', async () => {
   }
 });
 
-test('status in a project accepts --source/--pm/--prefix without using them', async () => {
+test('status refuses --pm and --prefix, which it never read, as unknown arguments (exit 2)', async () => {
   const root = makeProject();
   const home = makeTmpDir('js-harness-status-home-');
   try {
-    const { code } = await runStatus(
-      ['--cwd', root, '--home', home, '--source', '/nowhere', '--pm', 'nope', '--prefix', '/nowhere'],
-      {},
-      noPackageManager,
-    );
+    for (const flag of ['--pm', '--prefix']) {
+      const { code, out, err } = await runStatus(['--cwd', root, '--home', home, flag, 'nope'], {}, noPackageManager);
+      assert.equal(code, 2, flag);
+      assert.equal(out, '', flag);
+      assert.match(err, new RegExp(`^unknown argument: ${flag}\\n\\nUsage: js-harness status`), flag);
+      assert.doesNotMatch(err, /--pm <command>|--prefix <dir>/, flag);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('status in a project still accepts --source', async () => {
+  const root = makeProject();
+  const home = makeTmpDir('js-harness-status-home-');
+  try {
+    const { code } = await runStatus(['--cwd', root, '--home', home, '--source', '/nowhere'], {}, noPackageManager);
     assert.equal(code, 0);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

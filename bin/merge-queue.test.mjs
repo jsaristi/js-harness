@@ -173,7 +173,7 @@ test('with no pull request ready the queue says so and exits 0 having built noth
   assert.equal(git(root, 'worktree', 'list').split('\n').length, 1);
 });
 
-test('merge-queue without --dry-run refuses for now, and a usage error is exit 2', async () => {
+test('no mode, or an unknown flag, is a usage error (exit 2)', async () => {
   const { run } = runner([]);
   const out = [];
   const io = { run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) };

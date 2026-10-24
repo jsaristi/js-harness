@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { GATE_MAX_MINUTES, GATE_NOT_RUN, PUSH_RECHECK_MS, commandLineOf, gateMain } from './gate.mjs';
+import { GATE_MAX_MINUTES, GATE_NOT_RUN, PUSH_RECHECK_MS, USAGE as GATE_USAGE, commandLineOf, gateMain } from './gate.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { GATE_COMMAND_MAX, appendGateBusiest, appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
@@ -102,6 +102,10 @@ const USAGE = [
   `       --wait <minutes>: how long the machine's gate lock may go without changing hands before this gate gives up on it (${ruleValue('gate-wait', 'minutes')} when not given); --no-wait: refuse at once instead of waiting`,
   `       --max <minutes>: how long the command may run before it is stopped with every process it started (${GATE_MAX_MINUTES} when not given)`,
   '       --ready <command>: a quick check, one shell command line, run before the wait and again as the turn comes after one; when it fails, nothing runs (exit 75), so a command that would refuse at once does not wait for a turn',
+  "       --home <path>: the home that holds the gate lock, the gate log and the tickets (JS_HARNESS_HOME, else this user's home)",
+  "       --cwd <path>: the folder the command runs in, the current one when not given; the push check reads the branch of that folder",
+  "       log --last <n>: how many of the last runs are printed",
+  "       first --session <id> --reason <why>: a ticket that puts that session's next whole check before every gate that waits; two are open at most, for an hour at most (--minutes <n> sets it, 60 at most); --cancel <id> withdraws one",
 ].join('\n');
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
@@ -1923,3 +1927,9 @@ test('a gate claims the ticket its session issued for its folder, and leaves one
   assert.deepEqual(readTickets(home).open.map((ticket) => ticket.tree), [null]);
   assert.equal(ticketEvents(home).filter(({ event }) => event === 'first-claimed').length, 1);
 }));
+
+test('gate usage explains every flag and form it names, not only --wait and --max', () => {
+  for (const line of [/^ {7}--home <path>: /m, /^ {7}--cwd <path>: /m, /^ {7}log --last <n>: /m, /^ {7}first --session <id> --reason <why>: /m]) {
+    assert.match(GATE_USAGE, line);
+  }
+});
