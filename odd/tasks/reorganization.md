@@ -1,24 +1,29 @@
 # Reorganization: library code out of the commands, then a structure check
 
-Locator: `odd/tasks/reorganization.md` · Engram mirror: `odd/reorganization/tasks` · Branch: `refactor/library-out-of-commands`
+Locator: `odd/tasks/reorganization.md` · Engram mirror: `odd/reorganization/tasks` · Branches: `refactor/library-out-of-commands` (slice 2, PR 565), `test/structure-check` (slice 3)
 Delivery: slice 2 is three commits (2a, 2b, 2c) in one pull request the lead lands; slice 3 follows in its own.
 Test runner: `node --test <one file>`; the commit's gate runs the rest. Plan: `reorg-plan-v2.md` in the lead's shared notes.
 
 ## Goal
 Library modules stop importing commands for code that is library code: the Codex rows, the gate turn, the failing-test
-reader, the package version and the permit relay's times live in `bin/lib`, and the commands re-export them.
+reader, the package version and the permit relay's times live in `bin/lib`, and the commands re-export them. Then a
+structure check holds that shape: frozen paths, no new library import of a command, one reader of the harness home, and
+no growth of a module over 1,000 lines.
 
 ## Why
 Five of the eight places where a `bin/lib` module imports a command go: `windows-daily` (hourly) and `refresh-copy`
 stop loading the 2,803-line gate to read one function (257-313 ms against 41-62 ms), `push-waits` stops loading it for
 the Codex rows, and `manifest` stops loading `permit`. `check.mjs` shrinks by about a quarter, and slice 3's structure
-check can then hold the line at the three imports left.
+check can then hold the line at the three imports left. From 2026-10-01 to this plan, `sessions.mjs`, `check.mjs` and
+`manifest.mjs` took 9,398 added lines against 1,965 removed; nothing stopped it, and nothing stopped a move of a path
+a file outside the repository runs.
 
 ## Done when
 - `npm run check` exits 0
-- `git diff --name-only origin/main...HEAD -- '*.test.mjs'` prints nothing
+- `git diff --name-only 868f5eca...bf4b2b9a -- '*.test.mjs'` prints nothing (slice 2)
 - the behavior differential of S5 matches before and after, as recorded in the Log
 - every commit holds at most 1,200 changed lines under `git show --numstat --no-renames`
+- `node --test bin/conventions-structure.test.mjs` exits 0, and each of its rules was seen RED once (slice 3, L7)
 
 ## In scope / Out of scope
 - In: `bin/check.mjs`, `bin/gate.mjs`, `bin/install.mjs`, `bin/permit.mjs`; the new `bin/lib/codex-review-rows.mjs`,
@@ -28,6 +33,10 @@ check can then hold the line at the three imports left.
 - Out: every test file (the re-exports keep their imports); the three library imports of commands left
   (`refresh-copy` of `update`, `spec` of `js-harness`, `windows-daily` of `notify`), which slice 3 lists; any change of
   behavior, text or exit code.
+- In (slice 3): the new `bin/conventions-structure.test.mjs` and `bin/lib/source.testkit.mjs`;
+  `bin/conventions-errors.test.mjs` and `bin/conventions-pure.test.mjs`; `evals/suite.mjs`'s one read of the home.
+- Out (slice 3): splitting a module over the limit (the plan's section 3 cuts it; the ceilings shrink them when touched);
+  moving the three library imports of commands left; the inventory rewrite, which is its own docs slice after this lands.
 
 ## Constraints
 - A moved block keeps its code and doc comments byte for byte — because the proof is that removed lines equal added
@@ -57,6 +66,21 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   copy of the base". Stdout, stderr and exit code are compared with a scratch home.
 - S6. The lead: "one independent Opus verifier, since item 2 (pre-push Codex refusal) and item 4 (gate turn) apply."
   "Watch the 1,200-line commit rule under --no-renames. Its gentle-ai, Codex and ready steps are as usual; I land it."
+- S7 (slice 3, rule 1). The lead: "four frozen paths, each with its reader". The plan: "`bin/js-harness.mjs`,
+  `bin/remote.mjs`, `bin/wake.mjs` (their `SELF` path is written into launchers and scheduled tasks),
+  `bin/lib/rules-data.mjs`". A frozen path that is gone fails; so does one whose line of code that hands it to its
+  reader is gone, which frees it.
+- S8 (rule 2). The lead: "no bin/lib module imports a command, with the legacy list left after slice 2 and a reason for
+  each entry". The legacy entries are `refresh-copy -> update`, `spec -> js-harness` and `windows-daily -> notify`,
+  held by the ratchet.
+- S9 (rule 3). The lead: "JS_HARNESS_HOME is read only in lib/home.mjs".
+- S10 (rule 4). The lead: "size ceilings for modules over 1,000 lines, measured on today's tree and only allowed to go
+  down". The plan: "a new module may not pass 1,000".
+- S11 (rule 5). The lead: "recursive conventions scans with a lower bound of at least 100 modules". The scans are
+  `conventions-errors.test.mjs:60` and `conventions-pure.test.mjs:48`.
+- S12. The lead: "Show each rule RED once in a scratch clone, then GREEN. Then run its gentle-ai, Codex and ready
+  steps; I land it. After it lands, run `node scripts/inventory.mjs --write` in its own docs slice, so that the
+  inventory check exits 0."
 
 ## Tasks
 - [x] T1 (kind: build) inline, S1, S4 — 2a, the Codex rows: 389 lines moved by line range; removed equals added
@@ -75,6 +99,11 @@ Nothing open: the plan's five decisions were settled with the recommended answer
 - [x] T6 (kind: build) inline, S1, S2 — 2d, gentle-ai's advisories: `gate-turn.mjs`'s unused import of `counted` goes,
   and the moved comments name their siblings from `bin/lib`. Commit: 2d.
 - [x] T5 (kind: verify) S6 — gentle-ai per commit, Codex over the slice (L5), the pull request and the ready notice.
+- [x] T7 (kind: build) inline, S7-S11 — `bin/conventions-structure.test.mjs` with the five rules and their unit tests;
+  `bin/lib/source.testkit.mjs` holds the recursive scan and the two parses the three convention tests share;
+  `evals/suite.mjs` reads the home with `harnessHome`. Each rule RED once in a scratch clone, then GREEN (L7).
+- [ ] T8 (kind: verify) S12 — gentle-ai on the commit, Codex over the slice, the pull request and the ready notice.
+- [ ] T9 (kind: docs) S12 — after slice 3 lands: `node scripts/inventory.mjs --write` in its own slice; the check exits 0.
 
 ## Log
 - L1. 2026-10-24, the lead (06:54): "Reorg slice 1 landed (PR 564, main 868f5eca): every JS_HARNESS_HOME read now goes
@@ -120,3 +149,31 @@ Nothing open: the plan's five decisions were settled with the recommended answer
   - gentle-ai: 08d058ba, 295e0e5f and 78b31383 reviewed as one slice, approved and acknowledged (L4); 32e6d187 assessed medium, review not due (under_budget).
   - Codex reviewed the slice from the base 868f5eca in 4 parts, each correct (0.94 to 0.98), no findings, about 600,000 input tokens; the record is in the machine's review log.
   - Next step: push the branch, open the pull request, send the ready notice; the lead lands it. Slice 3 (the structure check) comes after it lands, in this document.
+- L6. 2026-10-24, the lead (07:53): "Reorg slice 2 landed (PR 565, main bf4b2b9). Go on with slice 3, the structure
+  check: bin/conventions-structure.test.mjs, as reorg-plan-v2.md section 2 "Slice 3" describes. It has five rules: 1.
+  four frozen paths, each with its reader; 2. no bin/lib module imports a command, with the legacy list left after slice
+  2 and a reason for each entry; 3. JS_HARNESS_HOME is read only in lib/home.mjs; 4. size ceilings for modules over
+  1,000 lines, measured on today's tree and only allowed to go down; 5. recursive conventions scans with a lower bound
+  of at least 100 modules. Show each rule RED once in a scratch clone, then GREEN. Then run its gentle-ai, Codex and
+  ready steps; I land it. After it lands, run `node scripts/inventory.mjs --write` in its own docs slice, so that the
+  inventory check exits 0."
+- L7. 2026-10-24, slice 3 measured on bf4b2b9a and decided:
+  - The source is every `.mjs` and `.cjs` module under `bin`, `scripts` and `evals`, at any depth, tests aside, and
+    without the code an eval or a test hands to the program it checks (`scripts/fixtures`, `evals/fixtures`,
+    `evals/tasks`, `evals/review/seeded`): 223 modules; `bin/lib` alone has 134.
+  - Fifteen modules are over 1,000 lines, not the plan's ten: `bin` has eleven today, `evals` three and `scripts` one. Their sizes are the ceilings, with `evals/suite.mjs` at 1,130, one
+    line more for its import of `harnessHome`. A ceiling must equal its module's size: a module that shrinks fails until
+    its ceiling is lowered, so it cannot grow back unseen.
+  - The one read of `JS_HARNESS_HOME` outside `home.mjs` was `evals/suite.mjs` (`env.JS_HARNESS_HOME || realHome`), which
+    slice 1 left; it now reads `harnessHome({ env, homedir: () => realHome })`, the same folder for an empty, unset or
+    absolute value, and a relative one resolved against the working directory, as the plan's section 6 decided.
+  - The frozen readers: `package.json`'s `bin` entry; `remote.mjs`'s and `wake.mjs`'s `SELF`, written into the login
+    launcher, the watchdog task and the Startup file; `HARNESS_LIST` in `rules-reach.mjs`, which `rules-installed.mjs`
+    fetches from GitHub's default branch. `version.mjs`'s legacy reason in `conventions-pure` now names its two reads.
+  - RED once each in a `mktemp -d` copy of the tracked tree, then GREEN: moving `bin/wake.mjs` and renaming
+    `HARNESS_LIST` (rule 1); `audit.mjs` importing `js-harness.mjs`, and `windows-daily.mjs` dropping its import of
+    `notify.mjs`, which the ratchet reports as complying (rule 2); `bin/doctor.mjs` reading `process.env.JS_HARNESS_HOME`
+    and `scripts/inventory.mjs` destructuring it (rule 3); `check.mjs` one line over its ceiling, a new 1,001-line
+    module in a subfolder, and `merge-queue.mjs` one line under its ceiling (rule 4); a module in `bin/lib/sub/` calling
+    `process.exit`, which the base's flat scan passed and the recursive one fails, and a pure claim there (rule 5). The
+    three tests pass on the copy before and after; the copy was removed.

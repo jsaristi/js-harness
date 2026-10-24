@@ -11,13 +11,15 @@
 // exception, named in `EXIT_EXEMPT` below.
 //
 // Only what a test can see is checked: the declarations and the calls, read from the source with its comment lines
-// left out. The command modules are the ones the dispatcher's COMMANDS table loads. LEGACY lists the commands that
-// declare no ArgError yet, each with how it signals a usage error instead; it only shrinks (bin/lib/ratchet.testkit.mjs).
+// left out. The command modules are the ones the dispatcher's COMMANDS table loads; every module under `bin/lib` is
+// read, at any depth (bin/lib/source.testkit.mjs). LEGACY lists the commands that declare no ArgError yet, each with
+// how it signals a usage error instead; it only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ratchet } from './lib/ratchet.testkit.mjs';
+import { sourceModules, withoutComments } from './lib/source.testkit.mjs';
 
 const BIN = import.meta.dirname;
 const LIB = path.join(BIN, 'lib');
@@ -39,14 +41,6 @@ const LEGACY = {
   'windows-daily.mjs': 'prints the refusal from its main and returns 2',
 };
 
-/** `text` without its comment lines, so a comment that names `process.exit` is not a call. */
-function withoutComments(text) {
-  return text
-    .split(/\r?\n/)
-    .filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line))
-    .join('\n');
-}
-
 const code = (file) => withoutComments(fs.readFileSync(file, 'utf8'));
 
 /** The command modules: each `./<name>.mjs` the dispatcher's COMMANDS table imports. */
@@ -57,7 +51,11 @@ function commandModules() {
   return [...new Set([...table[1].matchAll(/import\('\.\/([a-z-]+\.mjs)'\)/g)].map((match) => match[1]))];
 }
 
-const libModules = () => fs.readdirSync(LIB).filter((name) => /\.(?:mjs|cjs)$/.test(name) && !name.endsWith('.test.mjs'));
+const libModules = () => sourceModules(LIB);
+
+test('every module under bin/lib is read, at any depth', () => {
+  assert.ok(libModules().length >= 100, `only ${libModules().length} modules were read under bin/lib`);
+});
 
 test('every command module declares its own ArgError, but the legacy ones', () => {
   const modules = commandModules();

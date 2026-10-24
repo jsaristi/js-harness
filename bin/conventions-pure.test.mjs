@@ -8,13 +8,14 @@
 // say in the header what the module does read instead of calling it pure. "Pure-ish" is no claim.
 //
 // Only direct static imports are read (`import ... from`, `import '...'`, `export ... from`), with or without the
-// `node:` prefix. LEGACY lists the modules whose header claims more than their imports keep, each with why; it
-// only shrinks (bin/lib/ratchet.testkit.mjs).
+// `node:` prefix. Every module under `bin/lib` is read, at any depth (bin/lib/source.testkit.mjs). LEGACY lists the
+// modules whose header claims more than their imports keep, each with why; it only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ratchet } from './lib/ratchet.testkit.mjs';
+import { importsOf, sourceModules } from './lib/source.testkit.mjs';
 
 const LIB = path.join(import.meta.dirname, 'lib');
 const IMPURE = new Set(['fs', 'fs/promises', 'child_process', 'net', 'os']);
@@ -22,7 +23,7 @@ const CLAIM = /\bpure\b(?!-)/i;
 
 const LEGACY = {
   'process-tree.mjs': 'says `selectDescendants` is pure, and the module imports node:child_process and node:fs',
-  'version.mjs': 'says "Pure version-comparison" and imports node:fs for its one directory listing',
+  'version.mjs': 'says "Pure version-comparison" and imports node:fs for a directory listing and its own package.json',
 };
 
 /** The comment lines that open `text`, after a shebang: the header a writer reads first. */
@@ -36,16 +37,9 @@ function headerOf(text) {
   return header.join('\n');
 }
 
-/** The specifiers `text` imports or re-exports statically, without the `node:` prefix. */
-function importsOf(text) {
-  // `[^;'"`]` keeps a match inside one statement's names: it cannot run on past a quote to pair an `export` line
-  // with a later string that happens to follow a `from`.
-  const found = [...text.matchAll(/^\s*(?:import|export)\s[^;'"`]*?\sfrom\s+['"]([^'"]+)['"]/gm), ...text.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)];
-  return found.map((match) => match[1].replace(/^node:/, ''));
-}
-
 test('every bin/lib module whose header says it is pure imports no fs, child_process, net or os, but the legacy ones', () => {
-  const modules = fs.readdirSync(LIB).filter((name) => name.endsWith('.mjs') && !name.endsWith('.test.mjs'));
+  const modules = sourceModules(LIB).filter((name) => name.endsWith('.mjs'));
+  assert.ok(modules.length >= 100, `only ${modules.length} modules were read under bin/lib`);
   const claiming = modules.filter((name) => CLAIM.test(headerOf(fs.readFileSync(path.join(LIB, name), 'utf8'))));
   assert.ok(claiming.length >= 5, `only ${claiming.length} modules claim to be pure: ${claiming.join(', ')}`);
   const broken = claiming.filter((name) => importsOf(fs.readFileSync(path.join(LIB, name), 'utf8')).some((spec) => IMPURE.has(spec)));
