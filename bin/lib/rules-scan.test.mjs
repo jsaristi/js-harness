@@ -62,6 +62,7 @@ const PLANTED = {
   'context-pause': { line: 'Near 88% of its window a session writes its state.', marked: 'At the pause of `rule:context-pause` a session writes its state.' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
+  'fixed-load-budget': { line: 'A session starts with a budget of 100,000 tokens.', marked: 'A session starts with the budget of `rule:fixed-load-budget`.' },
   'gate-log-command': { line: 'The gate log keeps a command cut at 120 characters.', marked: 'The gate log keeps a command cut as `rule:gate-log-command` says.' },
   'gate-log-size': { line: 'When the gate log is past 512 KiB it is renamed.', marked: 'When the gate log is past `rule:gate-log-size` it is renamed.' },
   'gate-max': { line: 'A gate is stopped after 30 minutes.', marked: 'A gate is stopped at `rule:gate-max`.' },

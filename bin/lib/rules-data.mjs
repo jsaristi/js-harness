@@ -147,6 +147,18 @@ export const RULES = [
     "review": "2026-11-16"
   },
   {
+    "id": "fixed-load-budget",
+    "subject": "the fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns",
+    "owner": "sebastian",
+    "since": "2026-10-24",
+    "value": 100000,
+    "unit": "tokens",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bbudget\\b.{0,30}{amount}\\s*tokens",
+      "^(?!.*\\bruleValue\\().*\\bover\\s+{amount}\\s*tokens"
+    ]
+  },
+  {
     "id": "gate-log-command",
     "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
     "owner": "project",

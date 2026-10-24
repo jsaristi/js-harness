@@ -199,6 +199,23 @@
       "by": "command"
     }
   },
+  "fixed-load-budget": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "ya que solo inicar la sesion gasta 100 mil",
+        "date": "2026-10-15",
+        "session": "e072aeab-1e91-40cf-b7cb-3647e2cff105",
+        "line": 1126
+      }
+    ],
+    "reading": "His 100 mil is the fixed load of a session at its first turn, before any work: about 100,000 tokens. It is the budget the fixed-load row measures against, the figure he chose when asked (Pregunta 84, line 28313: declare it as a rule). The budget itself is the number he named; the warning over it is the row's.",
+    "accepted": "Tapped, not quoted: Pregunta 84 (line 28313, Declararlo como regla (Recomendada)), which declares the literal in bin/lib/fixed-load.mjs as a rule. The quotation is his typed words on the start's cost (line 1126, 2026-10-15); the D1 tap of 2026-10-15 (100.000) is recorded in the lead's transcript, not quotable.",
+    "checked": {
+      "date": "2026-10-24",
+      "by": "command"
+    }
+  },
   "gate-log-command": {
     "kind": "design",
     "path": "odd/tasks/gate-log.md"

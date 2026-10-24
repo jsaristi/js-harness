@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `c92a60b62f66`. In force: 61 (36 of Sebastián, 25 of the project). Retired: 1.
+Hash `d75ae5407d80`. In force: 62 (37 of Sebastián, 25 of the project). Retired: 1.
 
 ## Sebastián's
 
@@ -50,6 +50,11 @@ A design before it is built, and what reaches the user to decide, passes two rea
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
 - Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+
+### fixed-load-budget
+The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
+- Read by: none.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
 
 ### lead-charter
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
