@@ -222,3 +222,8 @@ Read on `f45e78c2` (the code of `fb9108c0`). Each finding is one line of its fil
   - Left to the lead: C-e-15 and B15-B17, B19-B21.
   - Waiting on his C-a-3: C-a-4.
   - So 59 of 67 are fixed (56) or closed (3). With the shoulds (66 of 67, C-e-1 his) and the blockers (14 of 14), nothing of stage 6 that is this session's is left but landing.
+- L24. 2026-10-24 (09:15Z), two rows tied to rules of this repository, by the lead (03:59 and 04:04), one slice each:
+  - C-b-34: the terminal-note refusal runs only where a declared rule asks for it, like session-title (his Q85, transcript 908805db line 28361). Branch rule/terminal-note-rule, worktree D:/js-harness-worktrees/rule-terminal-note.
+  - C-shared-5: doctor says to turn Remote Control back on without asking only where a declared rule holds that standing yes; elsewhere it says to ask first (his Q88, line 28470). Branch rule/remote-control-yes, worktree D:/js-harness-worktrees/rule-remote-control-yes.
+  - Committed now: the code and its tests, reading a fixture declaration of each rule; the guard keeps the terminal-note check everywhere until the rule is declared.
+  - Left, after rule/instruction-homes lands (only one rule/ branch may hold an undelivered declaration): merge origin/main into each branch; declare each rule with `js-harness rules change <id>`, quoting a typed line of his and naming the tapped answer in `accepted`; read the real rule in the code and the tests; correct the texts that call the check unconditional (bin/guard.mjs usage, bin/js-harness.mjs, bin/lib/manifest.mjs:49 after origin/main is merged, docs/SPEC.md) and README for Remote Control. Then per slice: gentle-ai assess, Codex review, an Opus verifier (items 2 and 3), the ledger line, the PR and the ready notice.
