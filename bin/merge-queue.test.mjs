@@ -429,6 +429,28 @@ test('--land: a pull request whose head moved during the land is named after the
   ]);
 });
 
+// Verifier of eed429b, advisory: a branch whose head moved during the land holds commits main has not, so a pull request
+// stacked on it stays there until that branch lands again; retargeted, it would show those commits as its own.
+test('--land: a pull request stacked on a branch whose head moved during the land is not retargeted (C-b-4)', async () => {
+  const { root, origin, heads } = makeQueueRepo();
+  const stacked = stackOn(root, 'feat/a', 'feat/s');
+  const other = path.join(path.dirname(origin), 'other');
+  const moveHead = (call) => {
+    if (call !== 0) return;
+    git(path.dirname(origin), 'clone', '--quiet', '--branch', 'feat/a', origin, other);
+    git(other, 'config', 'user.email', 'js-harness-test@example.invalid');
+    git(other, 'config', 'user.name', 'js-harness test');
+    fs.writeFileSync(path.join(other, 'a.txt'), 'A from a, later\n', 'utf8');
+    git(other, 'commit', '--quiet', '-am', 'a later commit');
+    git(other, 'push', '--quiet', 'origin', 'feat/a');
+  };
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/s', stacked, { baseRefName: 'feat/a' })];
+  const { code, out, calls } = await land(root, prs, { onChecks: moveHead, gh: { edit: () => ({ status: 0, stdout: '', stderr: '' }) } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(!calls.some((line) => line.startsWith('gh pr edit')), calls.join('\n'));
+  assert.match(out.at(-1), /^PR 1 moved to [0-9a-f]{7} during the land; its new commits are not in main\.$/);
+});
+
 test('--land: heads that cannot be read after the landing are said to be unread, never taken for unmoved', async () => {
   const { root, main, heads } = makeQueueRepo();
   const wrap = failingGit((args) => args[0] === 'ls-remote' && args.includes('refs/heads/feat/a'), refused);

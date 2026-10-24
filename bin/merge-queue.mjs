@@ -690,20 +690,23 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
     } catch (err) {
       stdout(`Could not write the landing lines of the relief file (${err.message}): main moved all the same.`);
     }
-    // The pull requests stacked on the branches this land merged: retargeted, so the next run takes them. Never a failure.
-    retarget(merged);
     // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
     // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
     const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
     if (!refs.ok) {
+      // The pull requests stacked on the branches this land merged: retargeted, so the next run takes them. Never a failure.
+      retarget(merged);
       stdout(`Could not read the heads of the landed pull requests (${refs.err.split('\n')[0] || 'git gave no reason'}): check none moved during the land.`);
       return 0;
     }
     const heads = new Map(refs.out.split('\n').filter(Boolean).map((line) => line.split('\t').reverse()));
-    for (const pr of merged) {
+    const moved = merged.filter((pr) => {
       const head = heads.get(`refs/heads/${pr.headRefName}`);
-      if (head && head !== pr.headRefOid) stdout(`PR ${pr.number} moved to ${head.slice(0, 7)} during the land; its new commits are not in main.`);
-    }
+      return head && head !== pr.headRefOid;
+    });
+    // A branch that moved holds commits main has not: what is stacked on it stays there until it lands again.
+    retarget(merged.filter((pr) => !moved.includes(pr)));
+    for (const pr of moved) stdout(`PR ${pr.number} moved to ${heads.get(`refs/heads/${pr.headRefName}`).slice(0, 7)} during the land; its new commits are not in main.`);
     return 0;
   } finally {
     drop();
