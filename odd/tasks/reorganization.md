@@ -62,7 +62,10 @@ Nothing open: the plan's five decisions were settled with the recommended answer
 - [x] T1 (kind: build) inline, S1, S4 — 2a, the Codex rows: 389 lines moved by line range; removed equals added
   but the module's header, `export` on `codexSwitchHere` and `counted`, and `check.mjs`'s copy of `counted` gone.
   `node --test bin/check-codex-reviews.test.mjs` 108 of 108, `bin/lib/push-waits.test.mjs` 18 of 18. Commit: 2a.
-- [ ] T2 (kind: build) inline, S2, S4 — 2b, the gate turn and `failingTests`.
+- [x] T2 (kind: build) inline, S2, S4 — 2b, the gate turn and `failingTests`: 281 lines from `check.mjs` and 6 from
+  `gate.mjs` to `gate-turn.mjs`, 19 to `flaky.mjs`; removed equals added but the header, `export` on the five names
+  `check.mjs` still reads, and `gate.mjs`'s re-export. `flaky` 18, `windows-daily` 11, `refresh-copy` 18 and `gate` 80
+  tests pass. Commit: 2b.
 - [ ] T3 (kind: build) inline, S3, S4 — 2c, the version and the permit times.
 - [ ] T4 (kind: verify) S5, S6 — the differential inline; one independent Opus verifier (items 2 and 4).
 - [ ] T5 (kind: verify) S6 — gentle-ai per commit, Codex over the slice, the pull request and the ready notice.

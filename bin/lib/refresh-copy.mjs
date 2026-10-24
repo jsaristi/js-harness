@@ -11,8 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { takeGateTurn } from '../check.mjs';
-import { GATE_NOT_RUN } from '../gate.mjs';
+import { GATE_NOT_RUN, takeGateTurn } from './gate-turn.mjs';
 import { installCopy, pnpmBinDir, pnpmRunning } from '../update.mjs';
 import { harnessHome } from './home.mjs';
 

@@ -33,6 +33,9 @@ import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { GATE_NOT_RUN } from './lib/gate-turn.mjs';
+
+export { GATE_NOT_RUN };
 
 /** The minutes a command may run when `--max` does not say. A turn holds the lock for every session on the
  * machine, and on 2026-10-14 a measure that waited for its own sampler held it 24 minutes after its work had
@@ -62,13 +65,6 @@ export const USAGE = [
 
 /** How many gates `gate log` prints when `--last` does not say. */
 const GATE_LOG_LAST = 20;
-
-/** The exit code of a `gate` that ran nothing because the lock was not its to take: with `--no-wait`, held
- * or with a gate ahead of it in the line, past the bound of its wait, or with its `--ready` check failing before
- * the wait or after it. It is the "try again later" of
- * sysexits.h (EX_TEMPFAIL), a code a test runner does not give, so
- * a caller can tell "did not run" from "ran and failed". A usage error is 2, as everywhere here. */
-export const GATE_NOT_RUN = 75;
 
 /** How long the check of `--ready` may run before it is stopped and taken as failed: it is declared quick,
  * a `git status` or a `git diff --quiet`, and one that hangs must not hold a turn. */
