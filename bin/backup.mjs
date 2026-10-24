@@ -1025,6 +1025,15 @@ function literalArgument(value) {
   return /['‘’‚‛\r\n]/.test(value) ? null : `'${value}'`;
 }
 
+/** `text` as a Markdown code span that renders it as it is: fenced by one backtick more than its longest run of them,
+ * and padded with a space when it starts or ends with one (CommonMark strips one space from each side). */
+function codeSpan(text) {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = '`'.repeat(longest + 1);
+  const pad = /^`|`$/.test(text) ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
 /** RESTORE.md (D5): the way back, kept in the private repository so it survives the machine with the memory. `checkouts`
  * are the bundled repositories (`bundleCheckouts`): RESTORE.md clones each into the path it had, since the Claude memory
  * folder is named after that path. Nothing is named but what the config and the origins hold, never a path of the owner's. */
@@ -1036,10 +1045,10 @@ function restoreSteps(repo, transcripts = [], checkouts = []) {
     ? [
       '3. Clone each repository the backup bundles into the path it had, since the Claude memory folder is named after that path:',
       ...checkouts.map((c) => {
-        if (!c.origin) return `   Clone it from wherever the project lives into \`${c.path}\` (it has no origin, or git cannot read it).`;
+        if (!c.origin) return `   Clone it from wherever the project lives into ${codeSpan(c.path)} (it has no origin, or git cannot read it).`;
         const origin = literalArgument(c.origin);
         const dir = literalArgument(c.path);
-        if (origin && dir) return `   \`git clone -- ${origin} ${dir}\``;
+        if (origin && dir) return `   ${codeSpan(`git clone -- ${origin} ${dir}`)}`;
         return `   Clone ${c.origin} into the folder ${c.path} (a quote in one of them keeps this from being a command to paste).`;
       }),
       '   If a checkout lives elsewhere now, add `--map <old path>=<new path>` for it to the next step.',
@@ -1047,6 +1056,18 @@ function restoreSteps(repo, transcripts = [], checkouts = []) {
     : [
       '3. No repository was bundled when this backup was made (`backup init` found no checkout): clone your projects',
       '   from wherever they live, and for one whose path differs now, add `--map <old path>=<new path>` to the next step.',
+    ];
+  // The restore leaves the old config aside (restored-config), and init run from any folder bundles that folder or none:
+  // so each bundled checkout is named to init again, one line each, and the backup keeps them all.
+  const initLine = `js-harness backup init --repo ${repo}`;
+  const named = checkouts.map((c) => ({ c, dir: literalArgument(c.path) }));
+  const takeOverLines = !checkouts.length
+    ? [`7. ${codeSpan(initLine)}, from the checkout to back up or with \`--checkout <path>\`.`]
+    : [
+      '7. Record each checkout the backup bundles again:',
+      ...named.map(({ c, dir }) => (dir
+        ? `   ${codeSpan(`${initLine} --checkout ${dir}`)}`
+        : `   ${codeSpan(initLine)} with --checkout naming the folder ${c.path} (a quote in it keeps this from being a command to paste).`)),
     ];
   // The transcripts repositories (odd/tasks/transcripts-backup.md, D6), one line each, oldest first.
   const transcriptLines = transcripts.length
@@ -1075,8 +1096,8 @@ function restoreSteps(repo, transcripts = [], checkouts = []) {
     ...transcriptLines,
     `5. \`js-harness backup verify --from ${url}\` restores again into a scratch home and checks it.`,
     '6. `js-harness install`.',
-    `7. \`js-harness backup init --repo ${repo}\` and \`js-harness backup run --adopt\`: this`,
-    '   machine takes over the backup.',
+    ...takeOverLines,
+    '   Then `js-harness backup run --adopt`: this machine takes over the backup.',
     '',
     'An Engram restore brings back every observation as it is now, not its edit history (observation_versions).',
     '',

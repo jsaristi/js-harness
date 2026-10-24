@@ -1152,9 +1152,29 @@ test('RESTORE.md writes each clone argument literally: single quotes for $ and b
   assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
 
   const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
-  assert.ok(restore.includes(`\`git clone -- 'https://github.com/someone/a$b.git' '${recordedPath(odd)}'\``), restore);
+  // Fresh Codex review of 0cf198a..af6f0ff, P2: a backtick in the path ends a one-backtick code span, so the span is
+  // fenced by one backtick more than the longest run inside it, and the command reads as it is when copied rendered.
+  assert.ok(restore.includes(`\`\`git clone -- 'https://github.com/someone/a$b.git' '${recordedPath(odd)}'\`\``), restore);
   assert.ok(!restore.includes(`git clone -- 'https://github.com/someone/q.git'`), 'no command for a path a quote would end');
   assert.ok(restore.includes(`https://github.com/someone/q.git`) && restore.includes(recordedPath(quoted)), restore);
+});
+
+// Fresh Codex review of 0cf198a..af6f0ff, P2: the restore leaves the old config aside, and init run from any folder
+// bundles the folder it runs in or none, so the last step names each bundled checkout to keep them all backed up.
+test('RESTORE.md takes the backup over with one backup init --checkout line for each bundled checkout', async (t) => {
+  const { root, paths, deps } = setup(t);
+  const one = checkoutRepo(root, 'one', 'https://github.com/someone/one.git');
+  const two = checkoutRepo(root, 'two', 'https://github.com/someone/two.git');
+  fs.writeFileSync(paths.config, JSON.stringify({ repo: REPO, bundles: [one, two] }));
+  deps.cwd = () => root;
+
+  assert.equal(await backupMain(['init', '--repo', REPO], deps), 0, deps.stderr.text);
+
+  const restore = fs.readFileSync(path.join(paths.clone, 'RESTORE.md'), 'utf8');
+  for (const dir of [one, two]) {
+    assert.ok(restore.includes(`\`js-harness backup init --repo ${REPO} --checkout '${recordedPath(dir)}'\``), restore);
+  }
+  assert.ok(restore.indexOf(`--checkout '${recordedPath(two)}'`) < restore.indexOf('`js-harness backup run --adopt`'), 'every checkout is named before the run adopts');
 });
 
 test('backup init --checkout resolves a relative path from the folder init runs in', async (t) => {
