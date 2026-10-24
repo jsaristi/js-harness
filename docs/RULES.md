@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `978b5c995476`. In force: 58 (33 of Sebastián, 25 of the project). Retired: 0.
+Hash `d144f41ae8fb`. In force: 61 (36 of Sebastián, 25 of the project). Retired: 2.
 
 ## Sebastián's
 
@@ -51,6 +51,11 @@ A design before it is built, and what reaches the user to decide, passes two rea
 - Looked at again on 2026-11-16.
 - Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
 
+### fixed-load-budget
+The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
+- Read by: `bin/lib/fixed-load.mjs`.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
+
 ### lead-charter
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
 - Home: `bin/lib/manifest.mjs`.
@@ -76,15 +81,15 @@ The lead's recap names each session's effort mode for its kind of work, and why:
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
 
-### reply-four-states
+### reply-five-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-23. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-23.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
 
 ### report-table
-When the user asks what was done, the lead's status report shows each section that holds items as a table: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
+When the user asks what was done, the lead's status report shows each section that holds items as a table: "- Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user)."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-20. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-20.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-24.
 
 ### restart-announce
 Before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"
@@ -181,11 +186,23 @@ His wording is the need, not the specification: the agent recommends what is bes
 - Home: `bin/lib/project.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-08, 2026-10-10, checked by the command on 2026-10-22.
 
-### work-sessions
-The most work sessions open at one time: 3 sessions.
+### work-sessions-private-windows
+The most work sessions open at one time when only Windows is used: 3 sessions.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
-- Since 2026-10-09. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
+
+### work-sessions-private-wsl
+The most work sessions open at one time in a private repository used with WSL: 6 sessions.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: none.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
+
+### work-sessions-public
+The most work sessions open at one time in a public repository: 12 sessions.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: none.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
 
 ## The project's
 
@@ -318,4 +335,11 @@ How long js-harness wait waits before it says the time ran out, unless --for say
 
 ## Retired
 
-None.
+### reply-four-states
+A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.
+- Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
+
+### work-sessions
+The most work sessions open at one time. Retired on 2026-10-24: read `work-sessions-public`, `work-sessions-private-wsl`, `work-sessions-private-windows` instead.
+- Was: 3 sessions until 2026-10-24.
+- Source: his words of 2026-10-24, checked by the command on 2026-10-24.

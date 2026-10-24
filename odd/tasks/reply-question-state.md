@@ -22,7 +22,7 @@ state as proposal B (Pregunta 48, "Sí, sumalo", the lead's transcript 908805db,
 
 ## In scope / Out of scope
 - In: the reply check and the wake check (`bin/lib/reply.mjs`, `bin/lib/stop-wake.mjs`), their tests, the texts that
-  list the states, `harness.json`'s labels, `rule:reply-four-states` through `js-harness rules change`.
+  list the states, `harness.json`'s labels, `rule:reply-five-states` (then reply-four-states) through `js-harness rules change`.
 - Out: renaming the rule's id — an id never changes; the state D3 of the onboarding asks for is used, not redesigned.
 
 ## Constraints
@@ -35,7 +35,7 @@ Nothing: the state is his decision, already made; its label "Te pregunto" is the
 ## Tasks
 - [x] T1 (kind: build) The question state in the reply check and the wake check, tests first; the texts and the init
   template name five (3c642629; the decision's refusal words kept in 2bbe12bf)
-- [x] T2 (kind: build) `rule:reply-four-states` says five states, through `js-harness rules change` (06c2d8e2)
+- [x] T2 (kind: build) `rule:reply-five-states` (then reply-four-states) says five states, through `js-harness rules change` (06c2d8e2)
 - [x] T3 (kind: verify) Gate, gentle-ai assessment, Codex review, pull request, ready notice (L4-L5)
 
 ## Log

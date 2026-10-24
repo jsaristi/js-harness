@@ -147,6 +147,18 @@ export const RULES = [
     "review": "2026-11-16"
   },
   {
+    "id": "fixed-load-budget",
+    "subject": "the fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns",
+    "owner": "sebastian",
+    "since": "2026-10-24",
+    "value": 100000,
+    "unit": "tokens",
+    "patterns": [
+      "^(?!.*\\bruleValue\\().*\\bfixed[- ]load\\b.{0,60}?{amount}\\s*tokens",
+      "^(?!.*\\bruleValue\\().*{amount}\\s*tokens.{0,40}\\bfixed[- ]load\\b"
+    ]
+  },
+  {
     "id": "gate-log-command",
     "subject": "the longest command a line of the gate log holds, since what follows gate -- can hold a secret",
     "owner": "project",
@@ -283,10 +295,10 @@ export const RULES = [
     ]
   },
   {
-    "id": "reply-four-states",
+    "id": "reply-five-states",
     "subject": "a reply ends in one of five states, and a question is his decision alone, explained before it is asked",
     "owner": "sebastian",
-    "since": "2026-10-23",
+    "since": "2026-10-24",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A reply ends in one of five states.",
@@ -295,13 +307,22 @@ export const RULES = [
     ]
   },
   {
+    "id": "reply-four-states",
+    "subject": "a reply ends in one of five states, and a question is his decision alone, explained before it is asked",
+    "owner": "sebastian",
+    "since": "2026-10-23",
+    "retired": "2026-10-24",
+    "successors": [
+      "reply-five-states"
+    ]
+  },
+  {
     "id": "report-table",
     "subject": "when the user asks what was done, the lead's status report shows each section that holds items as a table",
     "owner": "sebastian",
-    "since": "2026-10-20",
+    "since": "2026-10-24",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
-      "how much is done, or what you have done, the answer is a report",
       "Show each section that holds items as a table: one row an item"
     ]
   },
@@ -640,11 +661,45 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-09",
-    "value": 3,
     "unit": "sessions",
-    "patterns": [
-      "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
-      "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
+    "was": [
+      {
+        "value": 3,
+        "until": "2026-10-24"
+      }
+    ],
+    "retired": "2026-10-24",
+    "successors": [
+      "work-sessions-public",
+      "work-sessions-private-wsl",
+      "work-sessions-private-windows"
     ]
+  },
+  {
+    "id": "work-sessions-private-windows",
+    "subject": "the most work sessions open at one time when only Windows is used",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": 3,
+    "unit": "sessions"
+  },
+  {
+    "id": "work-sessions-private-wsl",
+    "subject": "the most work sessions open at one time in a private repository used with WSL",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": 6,
+    "unit": "sessions"
+  },
+  {
+    "id": "work-sessions-public",
+    "subject": "the most work sessions open at one time in a public repository",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": 12,
+    "unit": "sessions"
   }
 ];

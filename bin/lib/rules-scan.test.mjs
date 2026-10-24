@@ -62,6 +62,7 @@ const PLANTED = {
   'context-pause': { line: 'Near 88% of its window a session writes its state.', marked: 'At the pause of `rule:context-pause` a session writes its state.' },
   'contract-run-timeout': { line: 'A contract command is stopped after 30 minutes.', marked: 'A contract command is stopped at `rule:contract-run-timeout`.' },
   'control-phrase-min': { line: 'A control phrase needs at least 12 characters.', marked: 'A control phrase needs the length of `rule:control-phrase-min`.' },
+  'fixed-load-budget': { line: 'The fixed load of a session warns over 100,000 tokens.', marked: 'The fixed load of a session warns over `rule:fixed-load-budget`.' },
   'gate-log-command': { line: 'The gate log keeps a command cut at 120 characters.', marked: 'The gate log keeps a command cut as `rule:gate-log-command` says.' },
   'gate-log-size': { line: 'When the gate log is past 512 KiB it is renamed.', marked: 'When the gate log is past `rule:gate-log-size` it is renamed.' },
   'gate-max': { line: 'A gate is stopped after 30 minutes.', marked: 'A gate is stopped at `rule:gate-max`.' },
@@ -83,7 +84,6 @@ const PLANTED = {
   'subagent-writer-model': { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:subagent-writer-model`.' },
   'wait-every': { line: 'js-harness wait looks again every 120 seconds.', marked: 'js-harness wait looks again as often as `rule:wait-every` says.' },
   'wait-for': { line: 'js-harness wait gives up after 480 minutes.', marked: 'js-harness wait gives up at `rule:wait-for`.' },
-  'work-sessions': { line: 'At most 3 work sessions run at once.', marked: 'At most the work sessions of `rule:work-sessions` run at once.' },
 };
 
 test('on the real list, every rule with patterns finds its own planted line, and loses it to its mark', () => {
@@ -105,6 +105,7 @@ const NEAR_MISS = {
     'The busiest 24 hours of the window hold 47 events.',
     'The context limit defaults to 73%.',
   ],
+  'fixed-load-budget': 'The `budget` row still fails only on `AGENTS.md` over 1,500 tokens.',
   'gate-log-command': 'The Codex command line is cut to 100 characters.',
   'gate-log-size': 'Search the git log over 3 days.',
   'gate-max': 'The gate is stopped when 90 percent are done.',

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FIXED_LOAD_BUDGET, fixedLoadRow, measureFixedLoad } from './fixed-load.mjs';
+import { ruleValue } from './rules.mjs';
 
 function withFixture(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-fixed-load-home-'));
@@ -169,4 +170,9 @@ test('a record whose usage reports no input at all is not the first turn', () =>
     transcript(home, cwd, 's', [user, zero, zero, assistant(2, 60_000, 50_000)], 1);
     assert.equal(measureFixedLoad({ home, cwd }).sessions[0].tokens, 110_002);
   });
+});
+
+test('the fixed-load budget is the declared fixed-load-budget, read from its rule and not written in its module', () => {
+  assert.equal(FIXED_LOAD_BUDGET, ruleValue('fixed-load-budget', 'tokens'));
+  assert.doesNotMatch(fs.readFileSync(new URL('./fixed-load.mjs', import.meta.url), 'utf8'), /100_000/);
 });

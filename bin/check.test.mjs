@@ -50,6 +50,20 @@ test('checkBudget fails over the token limit', () => {
   }
 });
 
+test('checkBudget counts a CRLF checkout of AGENTS.md as its LF text', () => {
+  const dir = makeTmpDir();
+  try {
+    const line = `${'a'.repeat(79)}\n`;
+    const text = line.repeat(Math.floor((TOKEN_BUDGET * 4) / line.length)); // just under the budget in LF
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), text.replace(/\n/g, '\r\n'));
+    const row = checkBudget(dir);
+    assert.equal(row.pass, true, row.detail);
+    assert.equal(row.detail, `${estimateTokens(text)} estimated tokens (budget ${TOKEN_BUDGET})`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('checkBudget fails with a clear message when AGENTS.md is missing', () => {
   const dir = makeTmpDir();
   try {
