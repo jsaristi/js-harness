@@ -38,6 +38,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { markBatch } from '../bin/lib/batch-mark.mjs';
+import { harnessHome } from '../bin/lib/home.mjs';
 import { tools } from '../bin/lib/stack.mjs';
 import { assertAgentCommand, codexCurrentConfig, codexMinimalConfig, codexSandboxEnv } from './codex-configs.mjs';
 import { DEFAULT_MIN_LOGIN_HOURS_LEFT, assertLoginFresh, buildCodexTemplate, codexHomeOf, removeCodexTemplate, seedFromCodexTemplate } from './codex-home.mjs';
@@ -1088,7 +1089,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
     };
     // Raw logs are named by task, config, effort and repeat, so runs that share trials (the headroom screen and the
     // A/B run) would overwrite each other's in one directory: each run keeps its own, named like its results file.
-    unmark = mark(env.JS_HARNESS_HOME || realHome, { cwd: repoRoot, command: `suite ${argv.join(' ')}` });
+    unmark = mark(harnessHome({ env, homedir: () => realHome }), { cwd: repoRoot, command: `suite ${argv.join(' ')}` });
     const result = await runSuite({
       tasks, configs, efforts: args.efforts, repeats: args.repeats, store, runsDir: path.join(rawHome, args.name), workRoot,
       runTrial: reporting, signal: interrupted.signal, log: (message) => warn(`${message}\n`),
