@@ -15,7 +15,7 @@ He asked on 2026-10-09 that everything be proven before it reaches a project of 
 tambien es poder probar todo antes de irlo a probar en un proyecto externo"). The roadmap gives
 the order: by its tests, then by use on this repository, then in a practice project made for the
 purpose; "that third step does not exist yet and is the first thing to build for it"
-(`docs/ROADMAP.md:659-663`).
+(`odd/tasks/rule-hierarchy.md, "Rule hierarchy"`).
 
 The first two steps do not show what a project receives:
 
@@ -79,9 +79,9 @@ first, at no cost.
 - Zero dependencies, plain Node, like `scripts/e2e.mjs` — because it runs with what the machine
   already has.
 - The unit tests of the pure part start no process — because the gate stands within two minutes
-  of its bound (`docs/ROADMAP.md:652-653`) and must not grow.
+  of its bound (`odd/tasks/rule-hierarchy.md, "Rule hierarchy"`) and must not grow.
 - Never run while a gate runs — because the run packs and installs the package with npm, and two
-  heavy runs at once made a gate time out (`docs/ROADMAP.md:341-344`). Until the gate has its
+  heavy runs at once made a gate time out (`odd/tasks/codex-review-lean.md, "Codex review result"`). Until the gate has its
   lock, "Gates" in `js-harness sessions` is read once before starting, and never again and again
   while a gate runs: the read is load too (Progress, the orchestrator's notice of 2026-10-10).
 
@@ -351,7 +351,7 @@ whole is about 1,230 lines with the two library changes of T2. That is over the 
 `main`, the form the session board and the watchdog used: slice 1 is this document, the pure part
 and its tests; slice 2 the command, the first run's record and the roadmap entry. Each code slice
 gets its gentle-ai review and then its Codex review, whose cost the orchestrator admits under
-the charter (`docs/ROADMAP.md:736-741`).
+the charter (`odd/tasks/rule-hierarchy.md, "Rule hierarchy"`).
 
 Cost, said first: about six gates of this repository (one per commit, 8 to 18 minutes each),
 taken in turns with `JH 1`, never two at once; two Codex reviews; no model spend in the practice

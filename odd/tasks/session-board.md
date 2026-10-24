@@ -1590,7 +1590,7 @@ cut to fit the budget: 884 of the 1,576 lines are tests.
     that a planned step he would only say yes to is no decision. So the question was
     withdrawn in this session's chat, and T7 is checked off with criteria 1, 2 and 5
     seen, 4 seen for desktop sessions and failed for a phone-opened one, and 3 partly
-    seen with its commit test owed in `docs/ROADMAP.md` under the session channel. He did
+    seen with its commit test owed in `odd/tasks/session-channel.md` under the session channel. He did
     not answer the question, and no message of his is recorded here as an answer to it;
     if he reads this and disagrees, T7 is reopened by unchecking a box.
   - 2026-10-10, his words that day, typed in the orchestrator's chat (checked here in its

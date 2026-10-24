@@ -442,7 +442,7 @@ Two independent read-only readers, 2026-10-15, neither the writer.
 ### T7: what goes to him (one list)
 
 Delete (superseded or duplicate):
-- `merge-from-chat.md`: code merges are the lead's (charter, `docs/ROADMAP.md:1047`); its one fact, "he cannot
+- `merge-from-chat.md`: code merges are the lead's (charter, `docs/ROADMAP.md:335`); its one fact, "he cannot
   merge from the phone app", moves to `orchestrator-autonomy-charter.md`.
 - `questions-through-the-question-tool.md`: duplicates `questions-with-buttons.md`.
 

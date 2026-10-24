@@ -25,7 +25,7 @@ by two independent read-only readers (one attacked it, one looked only for what 
   opues 5.5 alto o fable 5.5 alto … ningun otro modelo hasta la fecha".
 - The document he wants, 593da809:1016 and :1055: "un documento vivo … a medida que se vayan
   haciendo los cambios este se actualice", to "crearlo mejor y desde cero solo con ese
-  documento"; docs/ROADMAP.md:565-566 records that it says what the harness does, "never how it
+  documento"; odd/tasks/rule-hierarchy.md, "Rule hierarchy" records that it says what the harness does, "never how it
   is coded today".
 - 2026-10-11, 130317af:2037, :2489, :2671: apply the effort research and always tell him the
   mode each kind of work calls for; Haiku for documentation "con el mejor esfuerzo relacion

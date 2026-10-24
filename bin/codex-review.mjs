@@ -184,6 +184,7 @@ import {
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
+import { launchCodex } from './lib/codex-launch.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -578,14 +579,6 @@ function commandLine(command, exitCode) {
 }
 
 const PROBE_TIMEOUT_MS = 15000;
-
-/** Runs `codex <argv>` through `spawnFn` (sync or async, same signature). `codex` is a `.cmd` shim on
- * Windows, which only a shell can start. */
-function launchCodex(spawnFn, platform, argv, options) {
-  return platform === 'win32'
-    ? spawnFn(windowsCommandLine('codex', argv), [], { ...options, shell: true })
-    : spawnFn('codex', argv, options);
-}
 
 // A version as `codex --version` prints it after the name: `0.160.0`, or `0.161.0-alpha.2`.
 const CLI_VERSION = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?/;

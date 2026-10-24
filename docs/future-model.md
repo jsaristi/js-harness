@@ -68,7 +68,7 @@ js-harness commit the workspace is initialized from, so for those the freeze is 
 
 ## Step 2. Record the baseline (no spend)
 
-The outgoing model's last measurement is the baseline: the sections "F5 result" and "F6 result"
+The outgoing model's last measurement is the baseline: the sections "F5 result" (odd/tasks/evals.md) and "F6 result" (odd/tasks/codex-parity.md)
 of the roadmap and the files they name under `evals/results/`. Nothing is re-run on the old model.
 `node evals/report.mjs` refuses to pool runs whose model or stack differ (`checkRuns`), so the
 comparison across models is made by hand, table beside table, and says so.
@@ -103,7 +103,7 @@ The five tasks of F5, both arms, on the new model:
   "Eval verdict" (score is the floor, cost decides between equals).
 
 `medium` first; `high` only if he asks. On Codex, `current` sessions ended on questions of
-gentle-ai that nobody answers (roadmap, "F6 result"): its results measure that as much as the
+gentle-ai that nobody answers (odd/tasks/codex-parity.md, "F6 result"): its results measure that as much as the
 components, and the report says so.
 
 If no task discriminates on score (`node evals/report.mjs --runs <model>-ab --min-discriminating
@@ -207,7 +207,7 @@ written yet, and running it is his.
 The figures of the last runs, as a scale and not a bound: a new model has its own prices and
 speed, and removing a component can make a session cheaper or dearer (Step 1's prices recompute
 them). Claude: F5 on Opus 5.5, at `medium` its 30 trials cost $9.75 for `minimal` and $20.28 for
-`current` and took about 36 and 56 minutes (roadmap, "F5 result"). Codex: F6 on `gpt-6.1-sol`,
+`current` and took about 36 and 56 minutes (odd/tasks/evals.md, "F5 result"). Codex: F6 on `gpt-6.1-sol`,
 $0.12 to $0.29 a trial; the first five-hour window of the plan's cap held about 18 trials and each
 later one about five of `current` (`odd/tasks/codex-parity.md`, T7), and Codex reviews draw on the
 same cap, so a Codex batch holds back the pre-push reviews of every session while it runs.

@@ -26,7 +26,7 @@ a feature; a cheaper one that finds less is not, which is why the switch waits o
 - `node --test "evals/review/*.test.mjs"` exits 0
 - `node evals/review/report.mjs --require-complete` exits 0, so every cell of the comparison is
   recorded
-- `docs/ROADMAP.md` records the result of the comparison (per configuration: findings, seeded
+- this document, `## Codex review result`, records the result of the comparison (per configuration: findings, seeded
   defects found, tokens, wall time) and which configuration `codex-review` runs by default
 - This document holds the proposal for the Codex plugin (the `doctor` row, `codex:rescue`, the
   SessionStart hook), with the numbers it rests on, for Sebastián to decide
@@ -157,7 +157,7 @@ D = T8–T9, E = T10–T15. Review boundary starts at the branch point, `3915b88
   and `AGENTS.md` only if needed and within budget — route: delegated writer
 - [x] T14 The proposal for the Codex plugin, with the numbers: the `doctor` row, `codex:rescue`,
   the SessionStart hook — route: inline
-- [x] T15 The result in `docs/ROADMAP.md`, the carried follow-ups of
+- [x] T15 The result in this document (`## Codex review result`), the carried follow-ups of
   `odd/tasks/codex-exec-review.md` that this feature closed marked there — route: inline
 
 ## Evidence at the start (2026-10-06, `main` at `3915b88`, codex-cli 0.160.0)
@@ -977,7 +977,7 @@ What follows from it:
     the second run of `current:seeded` is a second sample of that side, the lean side has
     three runs that found D7 (medium, own prompt, high), and the verdict of T13 says how
     many runs each side rests on instead of calling one run a result.
-  - R3-token-budget-unchecked (`docs/ROADMAP.md:268`): the 1,499 of 1,500 is not left to
+  - R3-token-budget-unchecked (`odd/tasks/evals.md, "F5 result"`): the 1,499 of 1,500 is not left to
     the prose. `npm run check` counts `AGENTS.md` against the budget and the pre-commit
     hook ran it for `9c9b00d`; an edit that passes the cap fails the commit. No change.
 - 2026-10-08: `87854b1` (the fix, the three readings and the report; gate green) assessed
@@ -1386,3 +1386,44 @@ diff). gentle-ai has reviewed up to `b5c8766`; `b5c8766..b0053cf` and `b0053cf..
 were each declined after a timeout of gentle-ai itself (Progress, reported upstream as an
 occurrence on its issue 4655). From `2b67316` it reviewed and approved every commit up to
 `fefec21`; what follows `fefec21` is assessed with the commit of the five fixes.
+
+## Codex review result
+
+Two ways of running `js-harness codex-review`, compared on 2026-10-08 with Codex CLI 0.161.0
+(`node evals/review/report.mjs` over `evals/results/review/readings/`, written to
+`evals/results/review/report.md`; the runs and what each proved are in
+`odd/tasks/codex-review-lean.md`). `current` is the review on the user's whole Codex
+configuration, measured in a copy of his home; `lean` loads the diff, read access to the
+repository, the project's `AGENTS.md` and Codex's review rubric. Two ranges: a diff of 292
+changed lines seeded with seven known defects, and a real range of this repository, 255
+changed lines with no known defect. Input tokens are the sum over the requests of a review,
+cache included; the first request is what the session loads before it reads the diff.
+
+| Range | Configuration | Ran with | Findings | Seeded found | Input tokens | First request | Wall time |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seeded | `current` | `gpt-6-astra` `low` | 6 | 6 of 7 | 151,204 | 27,912 | 79 s |
+| seeded | `lean` | `gpt-6.1-sol` `medium` | 7 | 7 of 7 | 54,797 | 5,717 | 60 s |
+| seeded | `lean`, own prompt | `gpt-6.1-sol` `medium` | 7 | 7 of 7 | 55,203 | 6,156 | 61 s |
+| seeded | `lean`, high effort | `gpt-6.1-sol` `high` | 8 | 7 of 7 | 57,161 | 5,726 | 87 s |
+| real | `current` | `gpt-6-astra` `low` | 0 | | 228,539 | 28,936 | 47 s |
+| real | `lean` | `gpt-6.1-sol` `medium` | 0 | | 134,283 | 6,711 | 33 s |
+| real | `lean`, own prompt | `gpt-6.1-sol` `medium` | 0 | | 145,842 | 7,063 | 34 s |
+| real | `lean`, high effort | `gpt-6.1-sol` `high` | 0 | | 374,661 | 6,711 | 92 s |
+| real | `lean` with CodeGraph | `gpt-6.1-sol` `medium` | 0 | | 160,383 | 7,491 | 30 s |
+
+The verdict: `lean` found the same or more with fewer tokens on both ranges, 36% of the input
+of `current` on the seeded range and 59% on the real one, so it is what `codex-review` runs by
+default since 2026-10-08; `--session current` stayed that day and was removed in the next
+feature, its model being one nobody could verify (`odd/tasks/codex-review-cost.md`). What it
+rests on, read plainly: on the seeded range two runs of `current`, which missed the same defect both times (the first run,
+156,564 input tokens, is in the history of `9c9b00d`), and three lean runs that found it; on
+the real range one run a cell. `lean` and `current` differ in three things at once, what the
+session loads, the model and the effort, so the defect found cannot be given to one of them.
+The first request can: about 28,000 tokens against 6,000 to 7,500 is the load. High effort
+bought nothing these ranges measure, one more finding outside the key and the same answer for
+2.8 times the input on the real range. The own prompt costs what Codex's sentence costs and
+found the same, so the default prompt stays Codex's. CodeGraph cost 19% more input for the
+same answer on a range with nothing to find, so it stays out. The model of the lean rows was
+measured in the CodeGraph cell; the other lean readings were taken before the reading
+recorded it and carry what the command passed.
+

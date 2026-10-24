@@ -18,7 +18,7 @@ test green (`odd/tasks/session-board.md`, entry of the gate of pid 30936 beside 
 `odd/tasks/codex-review-cost.md`, F7). Three sessions each kept a private wait script by
 2026-10-09 and one collision still happened (`odd/tasks/session-channel.md`, section 16, point 5).
 The roadmap ranks a rule a command enforces above a rule in prose, and names this lock as the
-example (`docs/ROADMAP.md`, "Rule hierarchy", level 1). It is also what the other planned
+example (`odd/tasks/rule-hierarchy.md`, "Rule hierarchy", level 1). It is also what the other planned
 features wait on: sessions work in parallel only once the gate has its lock.
 
 The run is long for two measured reasons, and both are paid on every commit:
@@ -965,7 +965,7 @@ machine until T6 and T7 land.
   tokens; with 471,865 left it waits for his answer.
 
 - 2026-10-10 · T8 begun with what hangs on none of his three answers (route: inline, one
-  document): `docs/ROADMAP.md` says, under the gate in the order he asked for, what the lock
+  document): `odd/tasks/session-channel.md` says, under the gate in the order he asked for, what the lock
   covers, what it does not, what the shorter run gave and what is asked of him and not
   built; the gate on GitHub stays for a later slice. Its commit's gate is one of the two
   gates of the `Done when` that asks for two `check` commands started together: the other
