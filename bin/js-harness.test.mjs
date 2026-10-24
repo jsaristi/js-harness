@@ -609,6 +609,21 @@ test('--help describes status\'s two scopes (project vs. machine/--global)', () 
   assert.match(result.stdout, /status\s+.*project.*pin.*machine.*versions.*--global.*outside a git repository/);
 });
 
+// codex-meter reads the account's limits from codex app-server: its help says it runs no model and spends no tokens,
+// and the dispatcher loads its module for it alone.
+test('--help lists codex-meter, which reads Codex\'s limits and spends no tokens', () => {
+  assert.match(run(['--help']).stdout, /codex-meter\s+.*Codex.*limits.*spends no tokens/);
+});
+
+test('codex-meter loads its own module and runs it with its arguments, and no other loader', async () => {
+  const loaded = [];
+  const ran = [];
+  const code = await dispatch(['codex-meter', '--json'], { commands: spyTable(loaded, ran) });
+  assert.equal(code, 0);
+  assert.deepEqual(loaded, ['codex-meter']);
+  assert.deepEqual(ran, [['codex-meter', ['--json']]]);
+});
+
 // The dispatcher imports no command module at its top: each command's loader imports its module when the command
 // runs. These tests hand `run` a table of spies in place of the real loaders, so they run no command and import
 // no command module, and they read nothing of this machine.
