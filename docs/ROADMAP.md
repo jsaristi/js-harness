@@ -141,7 +141,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] codegraph prompt hook measured with and without
 - [x] gentle-ai v4 adopted when released
 - [ ] Block exclusion via gentle-ai #4036, if it ships
-- [x] The fixed load of a session measured per part and owner, and a `fixed load` row in `check` that warns over 100,000 tokens (`odd/tasks/fixed-load.md`)
+- [x] The fixed load of a session measured per part and owner, and a `fixed load` row in `check` that warns over `rule:fixed-load-budget` (`odd/tasks/fixed-load.md`)
 - [ ] The cuts that document recommends, one at a time: moved, never deleted, measured before and after, proven by an eval, each undoable (his decisions D1-D7 there)
 
 ### Project init
