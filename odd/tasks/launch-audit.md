@@ -62,6 +62,7 @@ Launch means the 1.0.0 tag (`odd/tasks/release-095.md`, T4), which waits until h
 - [x] T7 (kind: verify) (S6) Stage 4, the code review by area (session 3). Route: delegated readers. Done: eleven area files and five refute files; the report below.
 - [x] T8 (kind: verify) (S6) Stage 5, behavior (session 4). Route: per-action workers. Done: `behavior.md`; the report below.
 - [ ] T9 (kind: build) (S6) Stage 6: confirm, fix in slices, re-check. Route: per its size.
+- [ ] T9a (kind: verify) (S6) Follow-up of the check-gate slice: no Codex record covers 68da2005 (a quoted Proof file read without its quotes), because codex-review refuses a second recheck of the finding 457d69ca left not fixed. The lead (19:50) chose the way out the refusal names: a fresh review of the whole slice, `codex-review --base 6bdd0dc8e7cf615a38dedd78669dccafe10fa32e --again`; its findings are fixed test-first with one recheck. Route: inline.
 - [ ] T10 (kind: verify) (S6) Stage 7: sign-off on the final sha, the diff since the audit sha included. Route: inline.
 
 ## Ids
