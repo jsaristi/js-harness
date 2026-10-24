@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { HASH_KEYS } from './rules.mjs';
 import { parseProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
 import { harnessHome } from './home.mjs';
+import { isSessionId } from './session-id.mjs';
 
 /** Where the harness's own checkout keeps its list, from its git top. */
 export const HARNESS_LIST = 'bin/lib/rules-data.mjs';
@@ -23,8 +24,6 @@ export const MAIN_REFS = [
 ];
 // The sources of `SessionStart` after which what the context held may be gone, so the session is told again.
 const RETOLD = new Set(['compact', 'clear', 'resume']);
-// The shape of a session id, as `statePath` of ./pause.mjs takes it, since it becomes a file name.
-const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/;
 // A session's record that has not been written for this long is pruned at the next write.
 const PRUNE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 const USAGE = 'Usage: js-harness rules --hook (reads a Claude Code hook input on standard input)';
@@ -178,7 +177,7 @@ export function reachHook(input, { home = os.homedir(), git = runGit, now = Date
   // A sub-agent's own session events carry the session's id: they must not spend the session's notice.
   if (event !== 'SubagentStart' && subagent) return quiet();
   const records = event === 'UserPromptSubmit' || event === 'SessionStart';
-  if (records && (typeof input.session_id !== 'string' || !SESSION_ID.test(input.session_id))) return quiet();
+  if (records && !isSessionId(input.session_id)) return quiet();
   if (typeof input.cwd !== 'string' || input.cwd === '') return quiet();
   const top = gitTop(path.resolve(input.cwd));
   const list = top === null ? null : listOf(top);

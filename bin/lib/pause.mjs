@@ -1,20 +1,18 @@
 // The context pause, as one library: `pauseNotice` is run by the hook after every tool call of a session,
 // so it reads the end of the session's transcript and nothing more, and says the pause to the session once.
 // Another hook (a `Stop` one) imports the same function, so the rule lives here and in the constants of
-// `./sessions.mjs`, and nowhere else. Zero dependencies: it imports only `node:fs`, `node:os`, `node:path` and `./sessions.mjs`.
+// `./sessions.mjs`, and nowhere else. Zero dependencies: it imports only `node:fs`, `node:os`, `node:path`, `./jsonl-tail.mjs`, `./session-id.mjs` and `./sessions.mjs`.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { END_BYTES } from './jsonl-tail.mjs';
+import { isSessionId } from './session-id.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, ORCHESTRATOR_IS, cutRule, percentOf, shareOf } from './sessions.mjs';
 
 /** The most of a transcript's end that the hook reads while it looks for a reply with usage. The first `END_BYTES`
  * may hold only one large tool result after the last reply, and the reply before it is still the session's count,
  * so the read grows; past this bound a file with no such reply costs no more than this many bytes. */
 const END_MAX_BYTES = 8388608;
-
-/** The shape `bin/resume.mjs` accepts for a session id, since the id becomes a file name. */
-const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{7,}$/;
 
 /** The compaction point of a session that has measured none: the share the host compacts at, in tokens. */
 const DEFAULT_COMPACTION = shareOf(DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT);
@@ -196,7 +194,7 @@ export function readEnd(file, { bytes = END_BYTES, maxBytes = END_MAX_BYTES, fil
  * when a session was told the pause, which a measure reads later, and of the compaction point the session
  * was seen to have. A session id that is not of the shape of one throws, since it becomes a file name. */
 export function statePath(home, sessionId) {
-  if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) throw new TypeError(`not a session id: ${JSON.stringify(sessionId)}`);
+  if (!isSessionId(sessionId)) throw new TypeError(`not a session id: ${JSON.stringify(sessionId)}`);
   return path.join(home, '.js-harness', 'channel', 'pause', `${sessionId}.json`);
 }
 

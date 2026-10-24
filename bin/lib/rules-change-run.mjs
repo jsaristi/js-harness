@@ -12,6 +12,7 @@ import { parseRegister } from './failures.mjs';
 import { checkRules } from './rules-check.mjs';
 import { countFindings, isTextInForce } from './rules-scan.mjs';
 import { RuleChangeError, changedList, sourceOf } from './rules-change.mjs';
+import { isSessionId } from './session-id.mjs';
 
 const NOT_FETCHED = 'not fetched: the count reads origin/main as this clone holds it; a real change fetches it first';
 import { renderList, writeRules } from './rules.mjs';
@@ -25,8 +26,6 @@ const BASE = 'origin/main';
 const LIST_FINDINGS = ['docs/RULES.md is missing:', 'docs/RULES.md is not what the declarations render:'];
 // What each change costs, as the approved protocol asks to be said beside it.
 const COST = "cost: one gate, gentle-ai's assessment and a small Codex review";
-// A session id as the host names a transcript: no folder can be named through it.
-const SESSION_ID = /^[A-Za-z0-9-]+$/;
 
 /** The list a text of rules-data.mjs declares: the JSON after `export const RULES = `, as `writeRules` writes it. */
 export function rulesOfText(text) {
@@ -245,7 +244,7 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       given = change.source;
     }
     const transcriptOf = (session) => {
-      if (typeof session !== 'string' || !SESSION_ID.test(session)) return null;
+      if (!isSessionId(session)) return null;
       const file = path.join(transcripts, `${session}.jsonl`);
       return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
     };
