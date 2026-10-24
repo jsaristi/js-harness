@@ -222,6 +222,35 @@ test('pruneStalePnpm removes unused install folders and old bin backups as prune
   assert.deepEqual(result.broken, ['gone']);
 });
 
+// C-b-32 (odd/tasks/launch-audit/triage.md): pnpm writes the POSIX shim as a sh script with no extension and forward
+// slashes, beside the .cmd with backslashes. The prune named a broken shim only in the .cmd form, so on Linux and macOS it never did.
+test('pruneStalePnpm names a POSIX shim whose target is missing, and not one whose target is there (C-b-32)', () => {
+  const top = tempDir('js-harness-prune-posix-');
+  const home = path.join(top, 'pnpm');
+  const bin = path.join(home, 'bin');
+  const used = 'a1b2c3-0123456789abcdef-0';
+  fs.mkdirSync(path.join(home, 'global', 'v11', used, 'node_modules', 'js-harness', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'global', 'v11', used, 'node_modules', 'js-harness', 'bin', 'js-harness.mjs'), '');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, 'js-harness'), `#!/bin/sh\nbasedir=$(dirname "$0")\nexec node "$basedir/../global/v11/${used}/node_modules/js-harness/bin/js-harness.mjs" "$@"\n`);
+  fs.writeFileSync(path.join(bin, 'gone'), '#!/bin/sh\nbasedir=$(dirname "$0")\nexec node "$basedir/../global/v11/0000aa-0000000000000000-9/node_modules/gone/bin/gone.mjs" "$@"\n');
+  const result = pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false });
+  assert.deepEqual(result.broken, ['gone']);
+  assert.ok(fs.existsSync(path.join(bin, 'gone')), 'a broken shim is named, not removed');
+});
+
+// Blocker 2 (the verifier): pnpm on Windows writes a .cmd and an extensionless shim beside it. A broken pair is named once.
+test('pruneStalePnpm names a broken shim once when its .cmd and its POSIX shim both miss their target (blocker 2)', () => {
+  const top = tempDir('js-harness-prune-pair-');
+  const bin = path.join(top, 'pnpm', 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const target = 'global/v11/0000aa-0000000000000000-9/node_modules/gone/bin/gone.mjs';
+  fs.writeFileSync(path.join(bin, 'gone.cmd'), `@"%~dp0\\..\\${target.replace(/\//g, '\\')}" %*\n`);
+  fs.writeFileSync(path.join(bin, 'gone'), `#!/bin/sh\nexec node "$basedir/../${target}" "$@"\n`);
+  const result = pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false });
+  assert.deepEqual(result.broken, ['gone']);
+});
+
 test('pruneStalePnpm removes nothing while a pnpm process runs, or when the process list cannot be read', () => {
   const top = tempDir('js-harness-prune-busy-');
   const bin = path.join(top, 'pnpm', 'bin');

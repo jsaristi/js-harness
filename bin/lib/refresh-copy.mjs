@@ -136,18 +136,22 @@ export function pruneStalePnpm({ binDir, now = Date.now, isPnpmRunning, fsys = f
     if (!name.startsWith('.pnpm-bin-backup-') || young(entry)) continue;
     if (gone(entry)) backups += 1;
   }
-  // Every shim must still reach its target after the pass.
+  // Every shim must still reach its target after the pass. A .cmd names it with backslashes; the POSIX shim, a script with no
+  // extension, with forward slashes, as pnpm writes it on Linux and macOS; npm makes a symlink there, which the loop reads as the
+  // JavaScript it points at and skips (C-b-32). A name is reported once, though its .cmd and its POSIX shim both miss their target.
   const broken = [];
   for (const name of names(binDir)) {
-    if (!name.endsWith('.cmd')) continue;
+    const cmd = name.endsWith('.cmd');
+    if (!cmd && path.extname(name) !== '') continue;
     let text;
     try {
       text = fsys.readFileSync(path.join(binDir, name), 'utf8');
     } catch {
       continue;
     }
-    const target = /global\\v11\\[^"]+/.exec(text)?.[0];
-    if (target && !fsys.existsSync(path.join(home, target.replace(/\\/g, '/')))) broken.push(path.basename(name, '.cmd'));
+    const target = cmd ? /global\\v11\\[^"]+/.exec(text)?.[0].replace(/\\/g, '/') : /global\/v11\/[^"'\s]+/.exec(text)?.[0];
+    const shim = path.basename(name, '.cmd');
+    if (target && !fsys.existsSync(path.join(home, target)) && !broken.includes(shim)) broken.push(shim);
   }
   return { removed, backups, kept, broken };
 }

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { GATE_MAX_MINUTES, GATE_NOT_RUN, commandLineOf, gateMain } from './gate.mjs';
+import { GATE_MAX_MINUTES, GATE_NOT_RUN, PUSH_RECHECK_MS, commandLineOf, gateMain } from './gate.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { GATE_COMMAND_MAX, appendGateBusiest, appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
@@ -1796,6 +1796,51 @@ test('gate refuses a turn that only names a push or a merge in an argument while
     const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', command], {}, { spawn: spawned, gh: ghWith(OPEN) });
     assert.deepEqual([code, said, spawned.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0], command);
   }
+}));
+
+// C-b-29 (odd/tasks/launch-audit/triage.md): a push that becomes due while a gate waits for the lock goes first, as one that is due on arrival does.
+// `pushWaiting` and the clock are fakes: the first ask (the arrival) finds nothing, the next one finds the push.
+const waitingPush = (dir) => ({ branch: 'feat/x', count: 1, pullRequest: 7, command: `git -C ${dir} push origin feat/x` });
+
+test('gate gives its turn up when a push becomes due while it waits for the lock, prints the push, and runs nothing (C-b-29)', withHome(async (home, dir) => {
+  let clock = 0;
+  const asks = [];
+  const pushWaiting = () => {
+    asks.push(clock);
+    return asks.length < 2 ? null : waitingPush(dir);
+  };
+  const spawned = ranWith(0);
+  // The lock is held by another gate: this one waits, and the push becomes due while it does.
+  const takeGateLock = async ({ stillWanted }) => {
+    assert.equal(stillWanted(), true);
+    clock += PUSH_RECHECK_MS;
+    if (!stillWanted()) return { refused: 'launcher gone', holder: null, line: null, waitedMs: clock, stillMs: clock, besideOlder: false };
+    assert.fail('the wait was not given up');
+  };
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'sh', 'measure.sh'], {}, { spawn: spawned, pushWaiting, now: () => clock, takeGateLock });
+  assert.deepEqual([code, said, spawned.asked.length, asks], [GATE_NOT_RUN, pushFirst(dir), 0, [0, PUSH_RECHECK_MS]]);
+  const [gate] = gatesOf(readGateLog(home).events);
+  assert.equal(gate.refused?.reason, 'push waits', JSON.stringify(gate));
+}));
+
+test('gate keeps its place while a push is not yet due: it asks again only once per re-check interval, and runs once its turn comes (C-b-29)', withHome(async (home, dir) => {
+  let clock = 0;
+  const asks = [];
+  const pushWaiting = () => {
+    asks.push(clock);
+    return null;
+  };
+  const spawned = ranWith(0);
+  const takeGateLock = async ({ stillWanted }) => {
+    assert.equal(stillWanted(), true);
+    clock += 1_000;
+    assert.equal(stillWanted(), true);
+    clock += PUSH_RECHECK_MS;
+    assert.equal(stillWanted(), true);
+    return { waitedMs: clock, lost: () => false, release: () => {} };
+  };
+  const { code, said } = await runGate(['--home', home, '--cwd', dir, '--', 'sh', 'measure.sh'], {}, { spawn: spawned, pushWaiting, now: () => clock, takeGateLock });
+  assert.deepEqual([code, said, spawned.asked.length, asks], [0, [], 1, [0, 1_000 + PUSH_RECHECK_MS]]);
 }));
 
 test('gate runs a turn when no push could go now: a code commit no Codex record covers, until a record covers it', withHome(async (home, dir) => {

@@ -945,9 +945,9 @@ matters: when the candidate is red or untested on this machine, or once CircleCI
 CircleCI with the suite saves the minutes the two took in series; its cost is one CircleCI run spent
 on each candidate this machine turns red or does not test, since removing the branch does not
 cancel its build. A land killed before it ends leaves its `queue/*` branch on origin, to be removed
-by hand. A `--land` run from a `bin/merge-queue.mjs` that is not origin/main's, after its fetch
-(line ends aside), says so and stops before it builds anything, exit 1: it would land with code
-main no longer has. The pre-push hook refuses every other push of main from a clone; a
+by hand. A `--land` run from a copy whose `bin/` is not origin/main's, after its fetch (any file that
+differs, line ends aside, or is on one side only), names those files and stops before it builds anything,
+exit 1: it would land with code main no longer has. The pre-push hook refuses every other push of main from a clone; a
 merge made on GitHub's side does not pass through it.
 `--land --refresh-copy` also refreshes the installed copy the hooks run, after a land that moved main, in place of the
 lead's hand scripts: under the gate lock, the Claude settings are backed up (the newest five kept under
