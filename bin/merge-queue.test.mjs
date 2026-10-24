@@ -69,18 +69,27 @@ const queueRepo = repoTemplate((top) => {
   }
   git(root, 'checkout', '--quiet', '--detach', main);
   git(root, 'fetch', '--quiet', 'origin');
+  // A clone of a repository that has commits names its default branch as origin's HEAD; the queue reads it there.
+  git(root, 'remote', 'set-head', 'origin', 'main');
   return { main, heads };
 });
 
 const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: passive', headRefOid: head, headRefName: branch, ...over });
 
-/** A runner that runs git for real and answers gh with `prs`; the calls it saw. */
-function runner(prs) {
+/** A runner that runs git for real and answers gh with `prs`, as GitHub does: `gh pr list --base <b>` lists the pull
+ * requests based on b only. `gh.view()` answers `gh repo view`, `gh.edit(args)` answers `gh pr edit`, each a
+ * `{ status, stdout, stderr }`; the calls it saw. */
+function runner(prs, gh = {}) {
   const calls = [];
   const run = (command, args, options) => {
     calls.push([command, ...args].join(' '));
     if (command === 'git') return spawnSync(command, args, options);
-    if (command === 'gh' && args[0] === 'pr' && args[1] === 'list') return { status: 0, stdout: JSON.stringify(prs) };
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'list') {
+      const base = args.includes('--base') ? args[args.indexOf('--base') + 1] : null;
+      return { status: 0, stdout: JSON.stringify(base ? prs.filter((one) => one.baseRefName === base) : prs) };
+    }
+    if (command === 'gh' && args[0] === 'repo' && args[1] === 'view' && gh.view) return gh.view(args);
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'edit' && gh.edit) return gh.edit(args);
     return { status: 1, stdout: '', stderr: 'unexpected' };
   };
   return { run, calls };
@@ -184,8 +193,8 @@ test('no mode, or an unknown flag, is a usage error (exit 2)', async () => {
 
 /** A runner for `--land`: git for real, `gh pr list` from `prs`, and the check runs of a commit from `checks`,
  * one answer a call (the last repeats); `onChecks(call)` runs before each answer. */
-function landRunner(prs, checks, onChecks = () => {}) {
-  const base = runner(prs);
+function landRunner(prs, checks, onChecks = () => {}, gh = {}) {
+  const base = runner(prs, gh);
   let asked = 0;
   const run = (command, args, options) => {
     if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1])) {
@@ -203,8 +212,8 @@ function landRunner(prs, checks, onChecks = () => {}) {
 
 const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root } = {}) {
-  const { run, calls } = landRunner(prs, checks, onChecks);
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh } = {}) {
+  const { run, calls } = landRunner(prs, checks, onChecks, gh);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
   return { code, out, calls };
@@ -218,6 +227,107 @@ const remoteBranches = (origin) => git(origin, 'for-each-ref', '--format=%(refna
 const queueBranches = (origin) => remoteBranches(origin).filter((name) => name.startsWith('queue/'));
 /** Whether a call among `calls` pushed main; the queue branch is pushed by every land that tests a candidate. */
 const pushedMain = (calls) => calls.some((line) => line.startsWith('git push') && line.endsWith(':refs/heads/main'));
+
+/** A project whose default branch is `name`, not main: origin's HEAD names it and origin holds no main (C-b-6). */
+function makeTrunkRepo(name = 'trunk') {
+  const made = makeQueueRepo();
+  const { root, origin } = made;
+  git(origin, 'symbolic-ref', 'HEAD', `refs/heads/${name}`);
+  git(origin, 'branch', '-m', 'main', name);
+  git(root, 'fetch', '--quiet', '--prune', 'origin');
+  git(root, 'remote', 'set-head', 'origin', name);
+  return { ...made, name };
+}
+
+/** Takes origin's HEAD off `root`, and keeps a fetch from putting it back: git 2.48 and later re-create it on fetch by
+ * default (`remote.<name>.followRemoteHEAD`), and the queue fetches before it reads the default branch. */
+function unsetOriginHead(root) {
+  git(root, 'config', 'remote.origin.followRemoteHEAD', 'never');
+  git(root, 'remote', 'set-head', 'origin', '--delete');
+}
+
+/** A branch of `root` built on `base`, with one file of its own, pushed; its head. The clone goes back to where it was. */
+function stackOn(root, base, branch) {
+  const was = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', branch, base);
+  fs.writeFileSync(path.join(root, `${branch.replace('/', '-')}.txt`), `${branch}\n`, 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', branch);
+  git(root, 'push', '--quiet', 'origin', branch);
+  const head = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', was);
+  return head;
+}
+
+test('--land: a repository whose default branch is not main lands on that branch, read from origin\'s HEAD (C-b-6)', async () => {
+  const { root, origin, heads, main, name } = makeTrunkRepo();
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'], { baseRefName: name })]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(!out.some((line) => /could not read origin\/main/.test(line)), out.join('\n'));
+  assert.ok(calls.some((line) => line.startsWith('gh pr list') && line.includes(`--base ${name}`)), 'the pull requests asked for are based on the default branch');
+  assert.ok(calls.some((line) => line.startsWith('git push') && line.endsWith(`:refs/heads/${name}`)), 'the candidate is pushed to the default branch');
+  assert.notEqual(git(origin, 'rev-parse', name), main, 'the default branch moved');
+  assert.ok(out.some((line) => line.startsWith(`Landed: ${name} `)), out.join('\n'));
+});
+
+test('--land: with origin\'s HEAD unset, the default branch is the one gh repo view names, and the land goes on (C-b-6)', async () => {
+  const { root, origin, heads, main, name } = makeTrunkRepo();
+  unsetOriginHead(root);
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'], { baseRefName: name })], { gh: { view: () => ({ status: 0, stdout: `${name}\n`, stderr: '' }) } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(calls.includes('gh repo view --json defaultBranchRef -q .defaultBranchRef.name'), 'gh was asked for the default branch');
+  assert.notEqual(git(origin, 'rev-parse', name), main, 'the default branch moved');
+});
+
+test('--land: when neither origin/HEAD nor gh repo view names the default branch, the land refuses, names both commands and pushes nothing (C-b-6)', async () => {
+  const { root, origin, heads, main } = makeQueueRepo();
+  unsetOriginHead(root);
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { gh: { view: () => ({ status: 1, stdout: '', stderr: 'gh: not logged in' }) } });
+  assert.equal(code, 1, out.join('\n'));
+  assert.match(out.at(-1), /^merge-queue: could not read the default branch: .*git symbolic-ref refs\/remotes\/origin\/HEAD.*gh repo view --json defaultBranchRef/);
+  assert.equal(git(origin, 'rev-parse', 'main'), main, 'main did not move');
+  assert.ok(!calls.some((line) => line.startsWith('git push')), 'nothing was pushed');
+});
+
+test('--land: a repository whose origin names main reads it there and asks gh for nothing of its own, as before (C-b-6, previous behavior)', async () => {
+  const { root, origin, heads, main } = makeQueueRepo();
+  const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'])]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(!calls.some((line) => line.startsWith('gh repo view')), 'origin\'s HEAD answered, so gh is not asked');
+  assert.ok(calls.some((line) => line.startsWith('gh pr list') && line.includes('--base main')));
+  assert.ok(calls.some((line) => line.startsWith('git push') && line.endsWith(':refs/heads/main')), 'the candidate is pushed to main');
+  assert.notEqual(git(origin, 'rev-parse', 'main'), main, 'main moved');
+});
+
+test('--land: an open pull request based on a branch that just landed is retargeted to the default branch with gh pr edit, and says so (C-b-4)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const stacked = stackOn(root, 'feat/a', 'feat/s');
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/s', stacked, { baseRefName: 'feat/a' })];
+  const { code, out, calls } = await land(root, prs, { gh: { edit: () => ({ status: 0, stdout: '', stderr: '' }) } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(calls.includes('gh pr edit 2 --base main'), calls.join('\n'));
+  assert.equal(calls.filter((line) => line.startsWith('gh pr edit')).length, 1, 'only the stacked pull request is edited');
+  assert.ok(out.includes('PR 2 retargeted from feat/a to main.'), out.join('\n'));
+});
+
+test('--land: an open pull request whose base did not land is not touched (C-b-4)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const stacked = stackOn(root, 'feat/c', 'feat/t');
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(3, 'feat/t', stacked, { baseRefName: 'feat/c' })];
+  const { code, out, calls } = await land(root, prs);
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(!calls.some((line) => line.startsWith('gh pr edit')), calls.join('\n'));
+});
+
+test('--land: a retarget gh refuses is said, and the land still exits 0 with main moved (C-b-4)', async () => {
+  const { root, origin, heads, main } = makeQueueRepo();
+  const stacked = stackOn(root, 'feat/a', 'feat/s');
+  const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/s', stacked, { baseRefName: 'feat/a' })];
+  const { code, out } = await land(root, prs, { gh: { edit: () => ({ status: 1, stdout: '', stderr: 'refused by the test' }) } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.notEqual(git(origin, 'rev-parse', 'main'), main, 'the land happened');
+  assert.ok(out.includes('Could not retarget PR 2 to main (refused by the test): it stays on feat/a until it is retargeted by hand.'), out.join('\n'));
+});
 
 test('--land: the candidate green locally and on CircleCI becomes main, by fast-forward, and its queue branch is removed', async () => {
   const { root, origin, main, heads } = makeQueueRepo();

@@ -934,12 +934,17 @@ WINDOWS: https://github.com/jsaristi/js-harness/actions/runs/39007607383 failure
 
 ### js-harness merge-queue
 
-Builds the candidate main would be: origin/main with each ready pull request merged into it in
-order of number, and names each one it leaves out and why. Ready means the pull request is open,
-not a draft, mergeable, on main and with a gentle-ai line in its body, has a Codex review record for
-every code commit, and merges into the candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+Builds the candidate the default branch would be: origin's default branch with each ready pull request
+merged into it in order of number, and names each one it leaves out and why. The default branch is
+the one origin's HEAD names, else the one `gh repo view` names; when neither does, the queue refuses
+and names both commands, so a project whose default is not `main` lands on its own branch.
+Ready means the pull request is open, not a draft, mergeable, based on the default branch and with a
+gentle-ai line in its body, has a Codex review record for every code commit, and merges into the
+candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and, at the same time, on CircleCI on a `queue/*` branch pushed
-before the suite starts, and when both are green moves main to it by fast-forward, leased on the main it was built from (odd/tasks/merge-queue.md).
+before the suite starts, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).
+After a land, each open pull request whose base is a branch that land merged is retargeted to the default branch
+(`gh pr edit <n> --base`), so the next land takes it as a candidate; a retarget gh refuses is named, and the land still exits 0.
 A candidate whose every changed path is a document main's `harness.json` declares (`documents`) runs
 no suite on this machine, as a commit of documents alone runs none, and takes no turn of the gate
 lock: CircleCI's run of the whole gate is its test.

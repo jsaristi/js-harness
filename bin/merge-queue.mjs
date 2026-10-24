@@ -1,10 +1,12 @@
-// `js-harness merge-queue`: the ready pull requests merged into main as one candidate (odd/tasks/merge-queue.md).
+// `js-harness merge-queue`: the ready pull requests merged into the default branch as one candidate (odd/tasks/merge-queue.md).
 //
-// The candidate is origin/main with each ready pull request merged into it in order of number, built in a
-// worktree of its own under the git directory and removed before the command ends. A pull request is ready
+// The candidate is origin's default branch with each ready pull request merged into it in order of number, built in a
+// worktree of its own under the git directory and removed before the command ends. The default branch is read once per
+// run (`defaultBranchOf`): origin's HEAD, else gh's word, else the run refuses. A pull request is ready
 // when nothing of its own keeps it from merging (`pullRequestProblems`), every code commit of it has a Codex
 // review record (`checkCodexReviews`), and it merges into the candidate so far with no conflict. `--dry-run`
-// builds and prints the candidate; `--land` tests it and moves main to it (`landCandidate`).
+// builds and prints the candidate; `--land` tests it and moves the default branch to it (`landCandidate`), then
+// retargets the open pull requests stacked on a branch it landed (`retargetStacked`).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -18,6 +20,7 @@ import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, re
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
+import { defaultBranchOf } from './lib/default-branch.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
@@ -25,8 +28,8 @@ import { REFRESH_FAILED, refreshCopy as refreshInstalledCopy } from './lib/refre
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
-Builds the candidate main would be: origin/main with each ready pull request merged into it in order of
-number. Ready means open, not a draft, mergeable, based on main, a gentle-ai line in its body, a Codex
+Builds the candidate the default branch would be: origin's default branch (what origin's HEAD names, else what gh names)
+with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a gentle-ai line in its body, a Codex
 review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
 has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
@@ -71,12 +74,14 @@ A land tells the work session of each pull request it left out why, the failing 
 note to that session's number in the channel; the session is the one whose newest ready notice names the pull
 request (js-harness notify --kind ready --pr <n>), and none is told twice the same reason for one ready notice.
 The record keeps, in each left-out entry, the failing tests of a red and the number of the session told.
+After it lands, each open pull request based on a branch that land landed is retargeted to the default branch (gh pr edit
+--base), so the next run takes it as a candidate; a retarget that gh refuses is named and changes no exit.
 After it lands, a land removes the worktree of each pull request it landed (git worktree remove, never --force)
 when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
 changed for 10 minutes, and it is not under .claude/worktrees or orca/workspaces (other apps' own), the main
 one, locked, or the one the land runs from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
 no exit.
---prune fetches origin and removes, by the same rule, every worktree on a branch origin/main holds, whatever
+--prune fetches origin and removes, by the same rule, every worktree on a branch origin's default branch holds, whatever
 landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or
 list the worktrees.`;
 
@@ -516,13 +521,40 @@ function recordLandings({ gitIn, place, main, candidate, merged, home, slug, now
   }
 }
 
-/** `--land`: the candidate at `place`, built on `main`, tested on this machine and on CircleCI at once, and main
- * moved to it when both are green (S6, S7). Its CircleCI run is that of a `queue/*` branch pushed for it before
- * the local suite starts (odd/tasks/land-unattended.md, D) and removed as soon as its answer no longer matters:
- * once the candidate is red or untested here, or once CircleCI answered. Main moves by fast-forward only,
- * leased on the `main` the candidate was built from: a main that moved in between is left as it is (exit 3).
- * Red anywhere is exit 4. */
-async function landCandidate({ run, gitIn, place, main, door, merged, suite, sleep, stdout, fail, landed, log }) {
+/** After a land, each open pull request whose base is the head branch of a pull request this land merged is retargeted
+ * to the default branch `defaultBranch` (`gh pr edit <n> --base <defaultBranch>`), so the next land takes it as a candidate. Only
+ * those: a pull request whose base did not land is left as it is. One line each; a retarget gh refuses is named with
+ * its reason and changes no exit, since the land has happened (odd/tasks/merge-queue.md, C-b-4). */
+function retargetStacked({ run, cwd, defaultBranch, landedPrs, stdout }) {
+  const landedBranches = new Set(landedPrs.map((pr) => pr.headRefName));
+  const landedNumbers = new Set(landedPrs.map((pr) => pr.number));
+  const listed = answer(run, 'gh', ['pr', 'list', '--state', 'open', '--limit', '100', '--json', 'number,baseRefName'], cwd);
+  let open = null;
+  try {
+    open = JSON.parse(listed.out);
+  } catch {
+    open = null;
+  }
+  if (!listed.ok || !Array.isArray(open)) {
+    stdout(`Could not list the open pull requests to retarget them (${listed.err.split('\n')[0] || 'gh gave no reason'}): the stacked ones stay where they are.`);
+    return;
+  }
+  for (const pr of open) {
+    // A pull request this land merged is GitHub's to close, whatever its base was: never edited here.
+    if (landedNumbers.has(pr.number) || !landedBranches.has(pr.baseRefName)) continue;
+    const edit = answer(run, 'gh', ['pr', 'edit', String(pr.number), '--base', defaultBranch], cwd);
+    if (edit.ok) stdout(`PR ${pr.number} retargeted from ${pr.baseRefName} to ${defaultBranch}.`);
+    else stdout(`Could not retarget PR ${pr.number} to ${defaultBranch} (${edit.err.split('\n')[0] || 'gh gave no reason'}): it stays on ${pr.baseRefName} until it is retargeted by hand.`);
+  }
+}
+
+/** `--land`: the candidate at `place`, built on `main` (the sha of origin's default branch `defaultBranch`), tested on this
+ * machine and on CircleCI at once, and the default branch moved to it when both are green (S6, S7). Its CircleCI run is
+ * that of a `queue/*` branch pushed for it before the local suite starts (odd/tasks/land-unattended.md, D) and removed
+ * as soon as its answer no longer matters: once the candidate is red or untested here, or once CircleCI answered. The
+ * branch moves by fast-forward only, leased on the `main` the candidate was built from: a branch that moved in between
+ * is left as it is (exit 3). Red anywhere is exit 4. `retarget` runs after a land, for the pull requests stacked on it. */
+async function landCandidate({ run, gitIn, place, main, defaultBranch, door, merged, suite, sleep, stdout, fail, landed, retarget, log }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   log.record.candidate = candidate;
@@ -592,7 +624,7 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
         stdout('No pull request is left to land: main was not pushed.');
         return 4;
       }
-      return landCandidate({ run, gitIn, place, main, door, merged: kept, suite, sleep, stdout, fail, landed, log });
+      return landCandidate({ run, gitIn, place, main, defaultBranch, door, merged: kept, suite, sleep, stdout, fail, landed, retarget, log });
     }
     if (!local.ok) {
       // One pull request (alone, or the last a bisection kept) is the one that turned it red (Codex, 2026-10-17).
@@ -628,14 +660,14 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
     // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
     const pushEnded = log.phase('push');
-    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/main:${main}`, 'origin', `${candidate}:refs/heads/main`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
+    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
     if (pushed.ok) pushEnded(true);
     else {
-      const now = gitIn(place, 'ls-remote', 'origin', 'refs/heads/main').out.split('\t')[0];
+      const now = gitIn(place, 'ls-remote', 'origin', `refs/heads/${defaultBranch}`).out.split('\t')[0];
       pushEnded(now === candidate);
       // A push that reached origin and lost its answer, as a timeout loses it: main is the candidate, landed.
       if (now === candidate) {
-        stdout(`The push of main reported a failure (${pushed.err.split('\n')[0] || 'git gave no reason'}), and origin's main is the candidate all the same.`);
+        stdout(`The push of main reported a failure (${pushed.err.split('\n')[0] || 'git gave no reason'}), and origin's ${defaultBranch} is the candidate all the same.`);
       } else if (now && now !== main) {
         stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
         return 3;
@@ -645,13 +677,15 @@ async function landCandidate({ run, gitIn, place, main, door, merged, suite, sle
     }
     log.record.landed = merged.map((pr) => pr.number);
     log.landedBranches = new Map(merged.map((pr) => [pr.headRefName, pr.number]));
-    stdout(`Landed: main ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
+    stdout(`Landed: ${defaultBranch} ${main.slice(0, 7)} is now ${candidate.slice(0, 7)}, with ${merged.map((pr) => `PR ${pr.number}`).join(', ')}.`);
     // Main has moved: the relief's lines never turn a land into a failure.
     try {
       landed(candidate, merged);
     } catch (err) {
       stdout(`Could not write the landing lines of the relief file (${err.message}): main moved all the same.`);
     }
+    // The pull requests stacked on the branches this land merged: retargeted, so the next run takes them. Never a failure.
+    retarget(merged);
     // A head pushed after the candidate merged it is not in main, and GitHub leaves its pull request open: named,
     // so it is landed again. The push of main is not undone for it: the candidate was tested whole (lead, 2026-10-15).
     const refs = gitIn(place, 'ls-remote', 'origin', ...merged.map((pr) => `refs/heads/${pr.headRefName}`));
@@ -692,7 +726,7 @@ function removeLandedWorktrees({ cwd, run, now, log, stdout }) {
   }
 }
 
-/** `--prune`: removes every worktree `removableWorktrees` gives against origin/main once fetched, whatever landed its
+/** `--prune`: removes every worktree `removableWorktrees` gives against origin's default branch once fetched, whatever landed its
  * branch (odd/tasks/land-unattended.md, T10), as a land removes those of its own pull requests. No land record. */
 function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
   const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
@@ -700,10 +734,15 @@ function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
     stderr('merge-queue: could not fetch origin.');
     return 1;
   }
-  const base = gitIn(args.cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
+  const named = defaultBranchOf((command, gitArgs) => answer(run, command, gitArgs, args.cwd));
+  if (!named.name) {
+    stderr(`merge-queue: ${named.why}: none was removed.`);
+    return 1;
+  }
+  const base = gitIn(args.cwd, 'rev-parse', '--verify', '--quiet', `origin/${named.name}`).out.trim();
   const found = base ? removableWorktrees({ cwd: args.cwd, base, gitIn, now }) : null;
   if (found === null) {
-    stderr(`merge-queue: could not ${base ? 'list the worktrees' : 'read origin/main'}: none was removed.`);
+    stderr(`merge-queue: could not ${base ? 'list the worktrees' : `read origin/${named.name}`}: none was removed.`);
     return 1;
   }
   let removed = 0;
@@ -714,7 +753,7 @@ function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
       continue;
     }
     removed += 1;
-    stdout(`Removed the worktree at ${tree.path}: its branch ${tree.branch} is in origin/main, and the worktree was clean and idle. The branch stays.`);
+    stdout(`Removed the worktree at ${tree.path}: its branch ${tree.branch} is in origin/${named.name}, and the worktree was clean and idle. The branch stays.`);
   }
   stdout(`${removed} worktree${removed === 1 ? '' : 's'} removed.`);
   return 0;
@@ -891,8 +930,12 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
   const common = gitIn(cwd, 'rev-parse', '--git-common-dir').out.trim();
   if (common && !args.dryRun) log.file = path.join(path.resolve(cwd, common), 'js-harness', 'lands.jsonl');
   if (!gitIn(cwd, 'fetch', '-q', 'origin').ok) return fail('could not fetch origin.');
-  const main = gitIn(cwd, 'rev-parse', 'origin/main').out.trim();
-  if (!main) return fail('could not read origin/main.');
+  // The default branch, read once for the run: every name of it below is this one, never a fixed main (C-b-6).
+  const defaultRead = defaultBranchOf((command, gitArgs) => answer(run, command, gitArgs, cwd));
+  if (!defaultRead.name) return fail(defaultRead.why);
+  const defaultBranch = defaultRead.name;
+  const main = gitIn(cwd, 'rev-parse', `origin/${defaultBranch}`).out.trim();
+  if (!main) return fail(`could not read origin/${defaultBranch}.`);
   log.record.main = main;
   // A land run from a merge-queue that is not main's runs code main no longer has: the lead's lands ran a stale
   // checkout's, so D and B2 never ran (odd/tasks/land-unattended.md, L17). Only where main holds the queue: a
@@ -901,13 +944,13 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
     const stale = staleBin(self, main, (...gitArgs) => gitIn(cwd, ...gitArgs));
     if (stale.length) {
       const named = stale.slice(0, 3).join(', ') + (stale.length > 3 ? ` and ${stale.length - 3} more` : '');
-      return fail(`${self} is not origin/main's bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
+      return fail(`${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/${defaultBranch}.`);
     }
   }
   const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
   let listed;
   try {
-    listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', 'main', '--limit', '100', '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName'], cwd).out);
+    listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', defaultBranch, '--limit', '100', '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName'], cwd).out);
   } catch {
     listed = null;
   }
@@ -920,7 +963,7 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
   for (const pr of ordered) {
     // UNKNOWN is GitHub not having computed the merge yet, for about a minute after main moves: the merge into
     // the candidate below is the queue's own test of it, so it decides. CONFLICTING is GitHub's answer.
-    const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr);
+    const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr, defaultBranch);
     if (problems.length) {
       leaveOut(log, stdout, pr, 'not-ready', problems.join(' '));
       continue;
@@ -995,7 +1038,8 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
       home: harnessHomeOf(env),
       slug: projectSlug(mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), cwd)),
     });
-    return await landCandidate({ run, gitIn, place, main, door, merged, suite: local, sleep, stdout, fail, landed, log });
+    const retarget = (landedPrs) => retargetStacked({ run, cwd, defaultBranch, landedPrs, stdout });
+    return await landCandidate({ run, gitIn, place, main, defaultBranch, door, merged, suite: local, sleep, stdout, fail, landed, retarget, log });
   } finally {
     gitIn(cwd, 'worktree', 'remove', '--force', mainPlace);
     gitIn(cwd, 'worktree', 'remove', '--force', place);
