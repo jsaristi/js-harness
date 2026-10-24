@@ -58,7 +58,8 @@ export function checkBudget(cwd) {
   if (!fs.existsSync(agentsPath)) {
     return { name: 'budget', pass: false, detail: 'AGENTS.md not found' };
   }
-  const text = fs.readFileSync(agentsPath, 'utf8');
+  // A Windows checkout (core.autocrlf) holds CRLF; the budget is the text's, not the platform's.
+  const text = fs.readFileSync(agentsPath, 'utf8').replace(/\r\n/g, '\n');
   const tokens = estimateTokens(text);
   const pass = tokens <= TOKEN_BUDGET;
   const detail = `${tokens} estimated tokens (budget ${TOKEN_BUDGET})`;
