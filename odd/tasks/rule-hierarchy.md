@@ -20,7 +20,7 @@ step he would only say yes to was loaded in a session that still stopped for a y
 (`odd/tasks/session-board.md`, entry of 2026-10-10, "A sentence did not carry it"). A rule
 changed in a memory note did not reach the sessions already open (failure 2 below). And text is
 not free: in F5 the stack with the most instructions cost 1.68 to 2.54 times as much for the same
-score (`docs/ROADMAP.md`, "F5 result").
+score (`odd/tasks/evals.md`, "F5 result").
 
 The survey of 2026-10-10 (section "Survey" below) counted 83 rules. For 49 of them nothing acts:
 they live only in a memory note, in the orchestrator's relief file or as roadmap text. In
@@ -79,7 +79,7 @@ fourteen matters two places say different things; each is listed, with the text 
   install step.
 - The wording of each line of `AGENTS.md`, and each thing shipped, passes by Sebastián in the
   build session — because he accepted the content and the direction, not the final text
-  (`docs/ROADMAP.md`, "Rule hierarchy").
+  (this document, "Rule hierarchy").
 - T2, T7, T8 and T9 are not built while the session channel is being built — because they edit
   `bin/lib/manifest.mjs` and `docs/ROADMAP.md`, which the channel edits too, and the channel
   changes two sentences of `AGENTS.md` (the resume prompt of a cut) that T8 here rewrites with
@@ -262,7 +262,7 @@ sensors stay. Its trials are spend he approves first.
 **C8 Sub-agent models** (last, optional). His rule of 2026-10-10: Haiku only for sub-agents that
 write code; designing, planning and verifying on Opus 5.5 at high effort at least. A `PreToolUse`
 hook can read `model` and refuse one the project does not allow; it cannot read `effort`. The
-comparison is closed (`docs/ROADMAP.md`, "Subagent models result", merged on 2026-10-10): the
+comparison is closed (`odd/tasks/subagent-model-routing.md`, "Subagent models result", merged on 2026-10-10): the
 same score, 58% less cost for the session, not faster, and a recommendation that nothing is
 turned on by default and that, if it goes in, it is the model of the writing sub-agent only.
 What enters the harness from it is his and not answered, so C8 is built only after his answer
@@ -2861,7 +2861,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
       are on `main` since 2026-10-15 (`eec4ee3`). The queue of values the second reader found
       ("What T16b builds", item 2), judged by the design's test (a value is a rule when a
       text in force states it or a person decided it): the gate log's size and its command
-      cut are stated in `docs/ROADMAP.md:897-898`, so they are declared as `gate-log-size` and
+      cut are stated in `odd/tasks/session-channel.md, "Session channel"`, so they are declared as `gate-log-size` and
       `gate-log-command` and read by `bin/lib/gate-log.mjs` (commit `2e47e6d`, draft pull request 206; gentle-ai
       medium and not due; Codex's record covers `eec4ee3..2e47e6d`, no finding).
       The shortest phrase of a control was declared before, as `control-phrase-min`. The rest
@@ -4141,9 +4141,9 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
     mid-number; `review-timeout` wants no unit; `gate-max` and `gate-wait` catch measurements
     ("it ran 3 minutes"). The scan never compares the amount with the value, by design.
   - misses: `gate-wait`'s "an hour" before any "wait" (`bin/gate.mjs:190`, `bin/check.mjs:2125`,
-    `docs/ROADMAP.md:736`); `agents-budget` without "budget" beside it (`docs/ROADMAP.md:468`,
+    `odd/tasks/rule-hierarchy.md, "Rule hierarchy"`); `agents-budget` without "budget" beside it (`odd/tasks/subagent-model-routing.md, "Subagent models result"`,
     `odd/tasks/f2-context-diet.md:52`); `review-part-lines`' "stays at 400 lines"
-    (`docs/ROADMAP.md:364`); `review-timeout`'s "stops"; `gate-log-command`'s "keeps each
+    (`odd/tasks/codex-review-lean.md, "Codex review result"`); `review-timeout`'s "stops"; `gate-log-command`'s "keeps each
     command to 120 characters".
   The `AMOUNT` fix takes the mid-number false positives; the rest is a second pass of patterns
   after his 13 rules.
@@ -4171,7 +4171,7 @@ cites its numbers. Owner, as designed that day: RH this feature, CH the session 
   missed by word order, not by the bound, so it is now "The commit is 5,222 changed lines.",
   which a probe found without the bound. The independent verifier (Opus): PASS, no blocker; 8
   of the 11 findings restate a value, and all three false positives were `subagent-effort`'s:
-  two records of how readers ran, and "subagent" inside a path (`docs/ROADMAP.md:371`). So
+  two records of how readers ran, and "subagent" inside a path (`odd/tasks/codex-review-lean.md, "Codex review result"`). So
   `subagent-effort`'s first pattern now wants a setting verb ("runs", "launched") before the
   effort, and a subject that is not inside a path; it keeps one finding,
   `odd/tasks/rule-hierarchy.md:1892`, a restatement. `NEAR_MISS` takes several lines per rule
@@ -4707,7 +4707,7 @@ the order and with the tests the section names; then an independent verifier, ge
 
 **State for a resume, 2026-10-15 at 18:21 by `date`.** Pull requests 238 and 234 landed
 (`main` e7e97df and d2441d5): T16c is checked off. Its prerequisite for T16d, the gate's stop
-before its sensors, is built (`docs/ROADMAP.md:801`, 2026-10-11). Next: T16d, the row `rules`,
+before its sensors, is built (`odd/tasks/session-channel.md, "Session channel"`, 2026-10-11). Next: T16d, the row `rules`,
 designed the way T16c was: a read-only map of what exists, the design here, two readers that did
 not write it, then the build, tests first.
 
@@ -4998,3 +4998,253 @@ on by default in a project that installs it; the paid measurement of documentati
 A working rule since 2026-10-12, by the lead's notice of his words: after a compaction this
 session's first act is one line to the lead with its title, the hour, the share of its
 context and what it resumes.
+
+## Rule hierarchy
+
+Designed on 2026-10-10 in `odd/tasks/rule-hierarchy.md`, by one design session that also wrote
+`odd/tasks/session-channel.md`, and being built on the branch `feat/failures-register`, where
+`odd/tasks/rule-hierarchy.md` is current. Where this section and that document differ on the
+design, the document wins; a decision of his that the document does not restate stands as it is written
+here and in the orchestrator's relief file. It holds the survey (83 rules, 49 with nothing that makes them act, and the
+place of each), the checks to build, the outline of the rewritten `AGENTS.md`, the protocols,
+and the list of that day's failures with the proof each one owes. This section stays as the
+reasoning it came from and is replaced by a pointer when the feature closes (its last task).
+
+A feature of its own, asked by Sebastián on 2026-10-08, who approved the design below that day.
+This section was the starting point of that document.
+
+The problem. Working rules live in places that do not act. Two of that day existed only in an
+agent's memory and in a feature document: how a decision is asked of him (what the yes covers
+in everyday words, what it does to him, what it does not authorize, what the other option
+means, one thing per yes), and his directive that what lives in memory is always forgotten, so
+everything is cemented in the harness, in the documentation and in the files that make it act
+here and wherever it is installed. A rule that depends on a session remembering it is repeated
+by him, session after session.
+
+What he asked, and how it is read. He described the rules ranked, with `AGENTS.md` as the
+orchestrator of the most important ones, the rest in another place that matters as much, a
+first rule that nothing is done for the sake of doing it or of complying but in the best and
+correct way, and protocols, knowing that many protocols complicate. He then said not to take
+his wording as the specification and asked to be guided to the best way. So what follows is
+the design recommended to him, for that session to work out and for him to decide; his wording
+is the need, not the plan.
+
+The recommendation: each rule goes where it cannot be forgotten, in this order of preference.
+More written protocols are not the answer: F5 measured the stack with the most instructions at
+about twice the cost for the same score (F5 result).
+
+1. A check a command or a hook runs. It costs no tokens and cannot be forgotten. The example of
+   that day: "never two gates at once" was kept by reading the process list by hand before
+   every test run, and one overlap still made a gate time out after 1,200 s; a lock taken by
+   `check` would make the rule impossible to break and take it out of the prose.
+2. A line in `AGENTS.md`, with its reason, when the rule cannot be checked and applies always.
+   It is paid on every turn and capped at 1,500 tokens (`bin/check.mjs`, `TOKEN_BUDGET`); it
+   stood at 1,497 that day, so a rule that enters makes another leave. It holds the principles
+   and an index of where the rest is.
+3. A protocol loaded on demand, when the rule applies only in some situations: the steps of
+   asking for a decision, of running something that costs, of delivering a slice. `install`
+   already writes a skill on each machine for Claude Code and Codex (`skillContent`,
+   `bin/lib/manifest.mjs`), and `init` writes a base `AGENTS.md` in a project (`agentsTemplate`,
+   `bin/lib/project.mjs`). A skill loads when its description matches the situation, not
+   always, so a rule that applies to every reply needs its line in `AGENTS.md` and a check, not
+   the skill alone.
+
+The record of what was decided is none of the three and already exists: this file and the
+feature documents. An agent's memory is the place of nothing.
+
+His first rule. "Done properly, not to comply" goes at the top of `AGENTS.md` with its reason.
+As a sentence alone it changes little: on that day a rule was stored in memory and nothing
+stopped it. What gives it force is a concrete meaning of done: a rule is not recorded until it
+has its place in one of the three levels.
+
+A principle he added on 2026-10-09, and how it is read. His words: never fall into bias,
+assumption or belief; always verify information; always work with quality and judgment,
+researching well; never take a shortcut, cheat, or pull out or invent information. He asked
+how to do it better than writing it down, so this is the recommendation. He accepted it the
+same day, with what follows it below ("acepto todo como lo hemos estado hablando"): the
+content and the direction; the wording of each line and each thing built still pass by him
+in this feature. Quality and no shortcut are his first two principles again. What is new is
+one thing: nothing is stated that was not checked. As a prohibition it does little, for two
+reasons seen that same day. A bias cannot be seen by the one who has it, so "never be
+biased" forbids something invisible; and the rule "verify before stating" was already
+loaded in every session when the main session assumed `install` had a `--help` and
+installed on his machine, and when another session told him its check "runs on GitHub",
+where no workflow exists. So each part becomes something that leaves a trace:
+
+- Verify. A report says of each claim which of three it is: checked (with the command and
+  its output, or `path:line`), assumed (said as an assumption), or not known. An assumption
+  is allowed; an unnamed one is the defect. `AGENTS.md` already asks for the evidence; what
+  it lacks is the other two words.
+- Invent nothing. A number, a path, a quotation or an output in a report comes from
+  something run or read in that session. Part of it can be a sensor: `check` can refuse a
+  feature document that cites a path or a commit that does not exist.
+- No shortcut, no cheating. The checks exist (the test written first, the contract's
+  commands, the hooks). What is added is what a reviewer is told to look for: a test
+  weakened so that it passes, a hook skipped, a failing check left out of the report.
+- Bias. The answer is not will but a second look that does not share it: the two reviews
+  that already run, a reviewer handed the code and not the conclusion, and before a
+  conclusion that costs, the question of what would show it wrong.
+- Research well. Before running a command one does not know, read its code; a writing
+  command refuses a flag it does not know, so that the mistake is not possible.
+
+Where it lives, judged twice. Here, `AGENTS.md` is at its budget, so the line enters with
+this feature's rework and another one leaves. In a project that only uses the harness, the
+line is in the `AGENTS.md` that `init` writes and the sensors come with `check`. What the
+stack already says is not repeated: on this machine the global `CLAUDE.md` holds "Verify
+technical claims before stating them" (checked); whether gentle-ai writes that line on
+every machine is not known and is looked up before the line is worded. And the line has to earn its tokens like any other piece (principle 2): an eval task
+whose honest answer is "this could not be verified", scored with and without the line. If
+the score does not move, the sensors stay and the sentence goes. (Since 2026-10-14 this eval is
+T10 of "JH 15 · auditoría de honestidad", `odd/tasks/honesty-audit.md` on `feat/honesty-audit`,
+moved there from rule-hierarchy's T10 by the lead.)
+
+Working as a team, asked and accepted the same day. His words: always pass clear information
+between sessions and agents, verified, without hiding what matters. The reading: a message
+between sessions is a claim, not a fact, and the truth is in the repository.
+
+- Every handoff has one shape, whether to him, to another session or to a sub-agent: what
+  was done, what was checked and how, what was not checked, what failed, what stays open.
+  "Not checked" and "failed" are always filled, with "nothing" when that is true, so that
+  leaving something out takes writing a falsehood rather than forgetting.
+- Whoever receives checks one thing before building on it. `AGENTS.md` already says so of a
+  step he reports doing outside the session; it extends to another session's message and to
+  a sub-agent's report.
+- Bad news goes first, and at once.
+- Each thing has one owner: a session writes its feature, one place writes the shared plan.
+- What looks wrong is said, with its evidence, before it is done.
+
+Three things he had not named, proposed and accepted with the rest:
+
+- Each mistake leaves a control. The `install --help` of that day does not end in an
+  apology but in a command that refuses a flag it does not know. A mistake made twice is a
+  defect of the harness, not of the agent.
+- An honesty audit: the reader of transcripts built for the session board could take a
+  session's final report and check what can be checked (the paths and commits exist, the
+  test count is the one that ran). That it can be built cheaply on that reader is an
+  assumption, to be confirmed by reading the code before it is promised. (Since 2026-10-14 this
+  audit, C9, is T14 of JH 15's `odd/tasks/honesty-audit.md`, moved there from rule-hierarchy's
+  T14 by the lead.)
+- Reversible by default: what cannot be undone asks first, the rest records how it is
+  undone. The harness already does this for what it installs.
+
+His addition, the same day: say so when a protocol is missing, without filling the harness
+with protocols for the sake of having them. It sharpens the rule above that another enters
+only when a problem repeats. An agent that finds no protocol for its situation does the
+work with judgment, says in its report that there was none and what it did, and proposes;
+it never creates one, that is his. A proposal passes five questions first. Did the problem
+happen, with its evidence, or could it only happen? Twice, or once at a cost or with
+something that could not be undone? Can a check do it, so that nothing is written? Does a
+protocol that exists cover part of it, so that one is amended? What does it cost, and what
+leaves in exchange? And a protocol expires: it records the problem it came for, and when
+that problem has not returned and nobody used it, it is withdrawn.
+
+The principles, then, are six, stated once: done properly, not to comply; no shortcut;
+under the agreed protocols; nothing stated that was not checked; what is passed on is
+complete and true, with what failed and what was not checked; each mistake leaves a
+control, of the smallest kind that does the job. Asked whether anything was missing, the
+answer he was given is no: a seventh enters through the five questions, with its incident.
+
+How far is far enough, his question. No point exists where a model never errs, and more
+text makes it worse (F5 result). The aim is three things: a mistake cannot do damage that
+cannot be undone, it is seen quickly, and it is not repeated. This feature is done when
+seven signals hold: six principles stated once; no principle without at least one control
+behind it; no rule living only in an agent's memory; `AGENTS.md` within its budget; the
+honesty eval passing, with the line moving the score; no repeated mistake; no protocol
+without the incident that justifies it. From there a rule enters only by replacing another.
+
+Protocols start with the four that have already cost something, and another enters only when a
+problem repeats: how a decision is asked of him; how a reply closes, so he knows whose turn it
+is; how something that costs is run (gates, eval batches, reviews), with its count said first;
+and how a new rule is recorded.
+
+The steps of the feature: list every rule that exists today, in `AGENTS.md`, in this file and
+in the agents' memories of this project (twelve entries on that day); place each one with the
+order above; move them, automating first what can be automated; and measure the end by two
+numbers, rules that live only in a memory (zero) and `AGENTS.md` within its budget. It takes
+in the session signals asked on 2026-10-07 (whose turn it is in every reply, a notice when a
+session finishes, the context window watched).
+
+A first pass of that list, made on 2026-10-09 at his request ("qué cosas importantes
+quedaron en memoria que deberían haber quedado en la doctrina"), by reading the twelve notes
+of the project's shared memory against `AGENTS.md`, the template `init` writes
+(`agentsTemplate`, four headings and two sentences) and the two installed skills. Not read:
+whatever the other open sessions hold only in their conversations. Missing from what acts:
+
+- His wording is the need, not the specification (name the problem behind it, recommend the
+  best design): memory only. For `AGENTS.md` here and for the template; it holds in any
+  project.
+- How a reply closes (the reply states): in `AGENTS.md` here, not installed. For the
+  template, with the check "Session signals" of Next already asks for.
+- How he is reported to (what needs him, what runs alone, what was done, everyday words):
+  this file and memory. For the orchestrator skill, with the session channel.
+- The direct channel between sessions: this file and memory. Same place.
+- High effort on every sub-agent: memory and feature documents. It waited for his answer on
+  the result of the sub-agent models comparison ("Subagent models result" above), which came
+  on 2026-10-11; since the first slice of the rules list it is a declared rule,
+  `rule:subagent-effort`.
+- The context percentage reported and the cut proposed: half in `AGENTS.md` here. For a
+  check or the status line, not prose.
+- Every proposal judged twice: this file and memory. For `AGENTS.md` of this repository
+  only, since it is a rule for building the harness and is not installed.
+- Not a rule but a tool: the script that waits for no gate before a commit lives outside
+  the repository, on his machine alone. The lock in `check` replaces it.
+
+In their place already: the review consent, the recap before a prompt, the main session as
+orchestrator. Facts of his machine and not doctrine, so memory is their place: merging from
+the chat, opening a session from the phone, the list of models.
+
+The specification of the harness, asked the same day and part of this feature. He asked for one
+complete document that says everything the harness does, how it is designed and the reason for
+each piece; alive, updated as changes are made; and useful to the agent about to change
+something. A first answer proposed a description of the pieces as they stand, and he corrected
+it: that reads as the architecture it has today, and what he wants is a document that says what
+the harness really is, from which a more capable model of a later generation could rebuild it
+from nothing and better, with that document alone. That is the reading that stands, and it is
+the document F7's protocol needs. Today `docs/` holds this file (the plan, and each decision
+with its reason) and `origin.md` (the founding reasoning, frozen at the start), the feature
+documents hold how each piece was built and its evidence, and nothing says what the whole must
+achieve. The recommendation:
+
+- One file, `docs/SPEC.md`: what the harness must achieve and why, never how it is coded today,
+  because a description of today's pieces would make a rebuild copy them. Principles alone
+  would not do either: nothing can be rebuilt from a philosophy.
+- It opens with the problem the harness exists for and the bet behind it, then holds one entry
+  per capability, each with the same five parts: the problem, with the incident or measurement
+  that showed it; the requirement, as what must be true; the reason; how a rebuild is known to
+  meet it, as a command or a test that exits 0; and what was tried and discarded, so a later
+  model does not pay for the same lesson twice. A last line, "today", points to the files that
+  implement it: the only part tied to the present, and what the agent about to change a piece
+  reads to find it.
+- It is the contract of the whole harness, in the shape F3 gave a task: a goal, a reason and
+  done-when commands. A rebuild is proved by those commands and by the eval tasks, which are
+  the measure of "better" and so belong to the kit together with this document.
+- Alive by a check, not by remembering: `check` validates it as it validates a contract, and
+  fails a commit when a capability has no command that proves it, when a file its "today" line
+  names does not exist, or when a command, a hook or a file written outside the repository is
+  claimed by no capability.
+- It is not loaded on every turn. `AGENTS.md` carries one line that sends an agent to the entry
+  of the capability it is about to change.
+
+A limit to state plainly: the check proves that every capability is named and provable, not
+that its reason is well told; that part stays with review.
+
+It comes first in the feature, since listing the capabilities and listing the rules are one
+survey.
+
+A limit of the feature as a whole: most of the text loaded on every turn is not this repository's but
+gentle-ai's managed block (F2), so this orders the thin layer, not the whole payload.
+
+**A project's own rules**, built on 2026-10-14 in `odd/tasks/project-rules.md` (S1-S7, design
+version 2 after two readers; his answer "Sí, en prosa y por sensor (Recomendada)", the lead's
+transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 15809). A project where the harness is
+installed declares its own rules in `docs/rules.json` (`{ "format": 1, "rules": [...] }`), each
+with an id, an owner and one body: prose (a file and phrases that must still be in it), a sensor
+(a name that must still be declared in `harness.json` or `package.json`), or retired. `js-harness
+rules`, `rules <id>` and `rules check` read that list at a project's git top; the gate's first row,
+`rules`, holds it there and only there, and refuses a phrase gone from its file, a sensor no
+longer declared, a `failure` id the register does not hold, and a rule present at `HEAD` and now
+missing (retire it instead). An id the harness also ships is a note, never a refusal. No values
+and no overrides of the harness's own rules: those would be a feature of their own, beside the
+switches of `harness.json`. The harness never writes the list, so `uninstall` has nothing of it
+to undo. `status` says how many hold; the skill and the `AGENTS.md` template name the list.
+

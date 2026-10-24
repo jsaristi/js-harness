@@ -23,7 +23,7 @@ Pull requests on jsaristi/js-harness, all merged (`gh pr view <n> --json state,m
 - gentle-ai: issue #5422 got one occurrence comment (issuecomment-6229376872), after his "Reportar y seguir" (L6).
 
 ## Decisions
-- His: the Windows suite runs once a day (above), recorded at `docs/ROADMAP.md:69`. The daily run replaces the per-batch hand run that no land made (`docs/ROADMAP.md:986-989`).
+- His: the Windows suite runs once a day (above), recorded at `docs/ROADMAP.md:69`. The daily run replaces the per-batch hand run that no land made (`odd/tasks/session-channel.md, "Session channel"`).
 - The lead's:
   - R1 waited for first-version T6f (PR 360).
   - The two land refusals were fixed by adding gentle-ai lines: L13 for #367, and the PR body for #369.

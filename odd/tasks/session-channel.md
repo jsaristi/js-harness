@@ -4250,3 +4250,261 @@ tries of point 14, each before it is run. The yardstick of "the last task" ("Ope
 its first row) and whether the orchestrator is relieved or compacted (the sweep's A3 89)
 reach him through the lead. For the gate's session, through the lead: the lock should record
 the session id that holds it, so `Gates` names the session exactly (point 4, "As built").
+
+## Session channel
+
+Designed on 2026-10-10 and being built in `odd/tasks/session-channel.md`: what is done is read
+in its tasks and in `js-harness progress`. What this section held of that feature (the problem
+and the proposal he approved, points 1 to 6, the advice on width and his answer, the reasoning
+of the lead, the charter, the context and its measure, the live handover, the two classes, the
+test owed and the limits) was moved there word for word on 2026-10-15, to section 16
+("Decisions carried from the roadmap"); that document wins where the two differ. What stays
+here is the order he asked for on 2026-10-09, whose items are features of their own.
+
+### The order he asked for (2026-10-09)
+
+The order he asked for, the same day ("quiero que lo que hemos hablado le hagamos un plan y lo
+podamos implementar todo"), each a feature of its own with its own document and session:
+
+1. The session board, finished: the Codex review of its code, the pull requests, the merge,
+   the install on this machine and its T7.
+2. The gate: one at a time on the machine by a lock in `check`, a shorter run, and the same
+   gate run by GitHub on every pull request.
+   In a project that uses the harness the lock comes with `check`; whether `init`
+   also writes the GitHub workflow is a product choice, his.
+   Its first slice is built (2026-10-10, `odd/tasks/gate-lock.md`): the lock and a shorter
+   run. The gate on GitHub stays for a later slice, his to start.
+   - What the lock covers: every `check` that runs sensors, and any command run through
+     `js-harness gate -- <command>` (a batch of evals, a whole test run by hand), for one
+     user on one machine, across projects and worktrees, since the lock is a folder under
+     the home (`~/.js-harness/gate`). A second gate waits for its turn, in the order the
+     gates arrived (the line, below), and says whose gate it waits for; `--wait` bounds
+     that wait and `--no-wait` refuses instead. `Gates` of `js-harness sessions` shows who runs and who waits, and the
+     watch no longer raises an alarm for a gate that only waits. A gate that is killed
+     leaves a holder that the next one takes over a minute after its last beat. A gate that
+     ends leaves nothing of the lock on disk (its two lines in the gate log, below, are all
+     it leaves), and `uninstall` removes what a killed one left.
+   - What it does not cover: a gate of a branch, or of an installed version, from before
+     the lock, which runs beside the others as it always did; a test file run alone by
+     hand, left free on purpose; a `check` that could not take the
+     lock at all, which runs and says so in a row; a process that carries the mark of a
+     held lock without a holder behind it; two machines; and `check --push`, which runs
+     no sensor. On Windows `gate` refuses, among several arguments, one that `cmd.exe`
+     cannot be handed whole (a double quote, a percent sign, a line break): such a command
+     goes as one argument.
+   - The line (2026-10-11, `odd/tasks/gate-turn.md`): the lock gave no turns. Whichever
+     gate looked first when it came free took it, and on 2026-10-11 one commit waited 53
+     minutes while two gates that asked after it ran; the feature document counts five
+     such sightings that day. Every gate that waits already left a file that says since
+     when; now a gate tries to take the lock only while no live gate that arrived before
+     it waits, and two gates of the same instant are ordered by their token. Taking the
+     lock is still the one rename, so the line adds no way for two gates to run at once,
+     and an error while the line is read counts as nobody ahead, so it never makes a gate
+     run without the lock either. A gate ahead that dies stops touching its file and is
+     passed over after a minute. A gate from a version before the line keeps none and
+     would pass at every look, so beside a live one a gate behaves as it did before: on a
+     machine where each worktree has the version it has, the line holds among the gates
+     that keep it. A wait says how many gates are ahead and which is first, `--no-wait`
+     refuses behind a gate that waits as it does behind one that runs, and a gate's file
+     records the session it runs for, which the board can then show.
+     What `--wait` bounds changed with the line, and he chose that default on 2026-10-11
+     ("La opción B", of two put to him: stay while the line moves, and leave only when the
+     lock has served nobody for an hour): it is no longer the minutes since the gate
+     arrived but the minutes the lock may go without changing hands, sixty when not given. With gates of about fourteen minutes a
+     gate with four ahead reached an hour while the line moved, was refused and came back
+     last; two commits lost an hour each that way on 2026-10-11. The bound exists to give
+     up on a lock that does not move. What a user of the installed gate sees by default is
+     therefore a commit that may wait more than an hour in a line that moves, and there is
+     no bound on the whole wait. Counting from the arrival again is one line of
+     `bin/lib/gate-lock.mjs`.
+   - The shorter run: measured file by file, the suite is as long as one file,
+     `bin/codex-review.test.mjs` (909.7 of 910 s, every other file done by 458 s). Its
+     test repositories built once and copied took that file from 640 s to 490 s alone and
+     the gate from about 900 s to between 730 and 870 s. `gitDirs` now asks git in one
+     process for the two folders it asked for in two. Running that file in three shards,
+     approved by him on 2026-10-10, was built and measured and gave nothing inside a whole
+     run (747 s and 833 s), so it was taken out again: on this machine of four cores the
+     bound is the work, 15,467 git processes in a whole run that slow each other down
+     (counted 2026-10-11, below), and not how the files are arranged. What shortens the
+     gate is fewer of them. And, approved by him the same day, a commit of documents alone
+     runs no test sensor (see Sensors above): 205 of 410 commits since 2026-09-26 touched
+     only Markdown, each paying a gate of 13 minutes that no document could fail, since no
+     test reads `docs/` or `odd/tasks/`.
+     That was no longer so on 2026-10-12: `bin/rules.test.mjs` and `bin/sessions.test.mjs`
+     read them, so such a commit now runs the sensors of documents (see Sensors above).
+   - Fewer git processes, counted and not timed (2026-10-11, `odd/tasks/gate-log.md`): a
+     time on this machine depends on what else runs, a count does not.
+     `node scripts/count-git.mjs [--frames <n>] <test files>` runs test files and says how
+     many processes they started, by git subcommand, by the line that asked and by test
+     file. The whole suite starts 15,467 git processes, and the two long files,
+     `bin/codex-review.test.mjs` and `bin/check-codex-reviews.test.mjs`, 11,735 of them
+     (76%). Two cuts chosen from that profile took the two files to 8,213 (30% fewer), with
+     no assertion changed: a `codex-review` run asks where the repository is once and
+     hands it on, where each of its steps asked again (11,735 to 9,986); and the tests ask
+     for the git folder once per repository they build, and build five repositories of
+     the second file once (9,986 to 8,213). What is left is mostly what a run must ask:
+     `rev-parse` 2,952, `diff` 1,667. Two more cuts were weighed and left: under one
+     percent each, one against an assertion and one through 45 test bodies.
+   - What the time of a gate depends on that no session saw (2026-10-11): on main with this
+     slice merged in, the whole suite took 867 s and the gate 832 s, and what pull requests
+     53 and 54 added costs 3.4 s of it. The same hour a gate on main without this slice
+     timed out at 1,200 s and one of this slice took 1,069 s, beside a video playing in a
+     browser and a TypeScript language server of a session spinning at about 1.5 logical
+     processors with nothing to do. The process look counts neither. The bound stays at
+     1,200 s; a gate that says the load on the machine when it starts is built (below),
+     and so is the gate log (below both).
+   - The load a gate starts under (2026-10-11, `odd/tasks/gate-log.md`): every gate that
+     runs sensors, and every `js-harness gate -- <command>`, reads the machine's processors
+     twice, a second apart, after it took the lock and before its first sensor, and says
+     what it read in a row `load` of its report: how many of the logical processors were
+     busy, and whether it started right after another gate. From one busy processor on it
+     looks two seconds more and names the three processes that spent most, by program,
+     script and pid, which is how a language server spinning in a session of this
+     repository was found the day it was built. A script is named only when its argument is
+     the whole path of a file that exists, asked of the disk by a process of its own that a
+     silent server cannot hold: a command line can carry a secret, and no spelling tells
+     one from a file name. Nothing a gate proves depends on the row;
+     `JS_HARNESS_GATE_LOAD=off` takes no sample. What it does not do: it does not wait for
+     a quiet machine, it does not say whose session a busy process belongs to, and it
+     changes no bound.
+   - The gate log (2026-10-11, `odd/tasks/gate-log.md`): which gates ran beside which, how
+     long each took and under what load was a session's memory, and three failures of
+     2026-10-10 name a log of gates as the proof they lacked. Every gate now writes it: a
+     line when its sensors are about to run (when, where, which command, how it had the
+     lock: its own, its parent's turn or none; how long it waited and for whose gates; the
+     load it read) and a line when it ends (the seconds and the result of each sensor), so
+     a gate that was killed stays in it as a start alone; a gate that was refused the
+     lock, or ran out of patience, writes one line saying so. `js-harness gate log [--last
+     <n>]` prints the last gates, one short line each. It is JSON lines in a folder of its
+     own under the home, `~/.js-harness/gate-log`, two files at most and about a megabyte:
+     past 512 KiB the file is renamed over the older one, never rewritten, since gates
+     that could not take the lock write side by side. A command line is cut at 120
+     characters, the gate's own and those of the gates it waited for. A log that cannot be
+     written is said once and changes no result; `JS_HARNESS_GATE_LOG=off` writes nothing.
+     `uninstall` removes the folder, and keeps it beside the lock's while a gate is alive.
+     Where that folder lives was his to say, and he said it on 2026-10-11: there ("Sí, en
+     .js-harness/gate-log"); it is one function, `gateLogDir`. What the log first showed, before it
+     existed, from the gates' own reports: the lock gives no turns in order of arrival (a
+     commit waited 36 minutes while one that asked five minutes later ran), which the
+     `waitedFor` of each start will now put on record.
+   - The stop before the sensors (2026-10-11, `odd/tasks/gate-turn.md`): a gate knows its
+     static rows (the register of failures, the budget, the contracts) in a second, and it
+     took the lock and ran every sensor even when one of them had already failed and the
+     commit could not pass. A gate whose static row fails now stops there: it asks for no
+     lock and waits for none, samples no load, runs no sensor and prints neither the
+     `review` row nor the Codex debt. One FAIL row named `gate` says that no sensor ran and
+     which rows stopped it, and the gate log keeps one line of a kind of its own,
+     `stopped`, with those rows and no start, so the stops can be counted. The rule names
+     no row: a row added to the static ones stops the gate by being there, which is what
+     the rows of the rule hierarchy need, and a row that states a rule of the project
+     (`failures` today) is the first of the report. A push and the inner check of a sensor
+     are as they were. Two things a gate of that day showed came with it. The sensors'
+     PowerShell wrote its module cache into the working tree, since under the sensors'
+     empty home it finds no folder for local application data and falls back to the
+     current directory, and that untracked folder made gentle-ai refuse to assess the
+     change; the sensors now get `PSModuleAnalysisCachePath` under their temporary home.
+     And a gate that ran its sensors names, in an INFO row `tree`, the untracked paths that
+     appeared in the working tree while they ran. It compares two listings of the whole
+     tree, so it says when a path appeared and not who wrote it: a file an editor or
+     another process made meanwhile is named too. Each listing is bounded at twenty
+     seconds, since it is asked while the lock is held.
+   - The sensors in WSL2 (2026-10-14, `odd/tasks/gate-wsl.md`): on one commit the whole suite
+     took 111.5 s in WSL2 and 603 s on this machine's Windows, and the lock had been busy
+     for hours. Where the js-harness home holds `gate-wsl.json` (a distribution and the
+     Linux folder of node) and the project's `harness.json` says `"sensorsInWsl": true`
+     (the machine says how, the project whether: a suite that cannot run on Linux is never
+     moved), the sensors of a gate's turn run in that distribution from a mirror of the
+     working tree on the Linux disk, synced by `rsync --checksum` before each run (about
+     seven seconds once it exists: `/mnt` shows mtimes to the second, so size and time
+     missed a change; `.git`, `.codegraph` and `node_modules` stay out, and what a test
+     made of them in the mirror goes), under a clean environment. Where they ran is part
+     of the tree's key, so a pass in WSL2 never spares a run on Windows; what a test left
+     in the mirror is named in a `tree` row. The lock, the load sample, the gate log, the tree key and
+     every question to git stay on Windows, and the sensors of documents never move. A
+     sensor that never reached the mirror runs on Windows and its row says why; one that
+     failed there failed; a switch file that cannot be taken fails the gate in a row `wsl`.
+     The gate log marks each sensor that ran there (`ranIn`). A sensor that failed, there or on Windows, keeps in its end line
+     the names of its failing tests (`failing`, twenty at most), read from what `node --test`
+     printed (2026-10-14, `odd/tasks/gate-log-failing-tests.md`). With no file, off Windows,
+     or with `JS_HARNESS_GATE_WSL=0`, a gate runs as it did; with the variable and the
+     file, each row says where its temporary files went. What Windows loses per commit:
+     its own code paths are tested by one run per merged batch, in a lock turn on `main`:
+     `TEMP='D:\js-harness-tmp' TMP='D:\js-harness-tmp' JS_HARNESS_GATE_WSL=0 node
+     bin/check.mjs`, written where merges are made: the README's `js-harness merge-queue`. An
+     installed project gets nothing unless its machine has the file.
+     Undo: delete the file; in the distribution, `~/.js-harness-gate` and the node it names.
+   - The ticket that goes first (2026-10-16, `odd/tasks/gate-first.md`, his "agrega la prioridad
+     del gate"): `js-harness gate first --session <id> --reason <why>` puts that session's next
+     whole check before every gate that waits; the turn that runs is never cut. Two are open at
+     most, for an hour at most; a gate claims its session's ticket as it arrives and spends it
+     whatever comes next. The orchestrator's batch run carries one by itself with `check --first
+     <reason>`. It cannot be made impossible, so it is made seen: `js-harness sessions` prints
+     each open ticket with its issuer and flags one the orchestrator did not issue, a gate that
+     went first says by which ticket, and the gate log keeps each issue, claim, expiry and
+     cancellation. Undo: `gate first --cancel <id>`, or delete `~/.js-harness/gate-first`.
+   - A faster whole check of the same quality (2026-10-14 to 2026-10-16, closed,
+     `odd/tasks/faster-check.md`): the design that ranked how to free the lock without proving
+     less, read by two readers and handed to the orchestrator as version 2. Its first three parts
+     are built, each in its own document: the sensors in WSL2 and the ticket that goes first
+     (both above), and Codex's review out of the lock (the Review row of "Decided"); with them,
+     two guards on a turn of `js-harness gate` (`odd/tasks/gate-turn-guards.md`). The parts it
+     ranked after those were not built there, and it claims nothing of their state.
+   - The wait for the gate, measured and cut (2026-10-12 to 16, `odd/tasks/gate-wait.md`, closed).
+     *What the measurement found*: one whole run under the lock, 77 files, started 1,005 Node
+     processes and 12,041 git processes and ended at 780 s, its longest file at 686 s. After
+     the command's tests ran as two processes, no file was the wall any more (533 s, the
+     machine 94% busy), so only less work shortens a run: fewer process starts, or less of
+     what the antivirus spends on each (1,077 processor-seconds of 5,524 in that run, his).
+     Two cuts of git were taken, each judged by a second count: the questions a
+     `codex-review` run asks (its test file, 7,840 to 6,628 git processes), and test
+     repositories built once per process and copied (`bin/lib/git-fixture.testkit.mjs`,
+     1,545 fewer in 15 files, 6.8% of the suite's git). *What may run beside a gate*: both
+     reviews. Codex ran beside a commit gate 67 times and every run ended reviewed; a
+     gentle-ai review adds at most 12 s to a gate, against 30 s written before it was
+     measured. A test run still may not: the guard refuses `node --test` of several files
+     while another gate holds the lock, outside a turn. A review in parts keeps the parts
+     that passed, a review runs at medium effort, and a queued command can be refused before
+     it waits (`js-harness gate --ready`). *What the trial on GitHub answered* (run
+     38296748258): on machines of one size the suite took 1,258 s on Windows (124 failing)
+     and 184 s on Linux (7 failing), 6.8 times longer on Windows, so it is Windows that is
+     slow for this suite, not his machine. The figure of a month of gates there (about 21 to
+     26 dollars while the repository was private) went to him, and nothing was paid; once it
+     was public, the gates that would wait for the lock go to GitHub's Linux machines instead
+     (`odd/tasks/first-version.md`, T7), and since `odd/tasks/commit-gates-first.md` every
+     commit's gate goes there first.
+3. The session channel, points 1 to 6 above, with the way the orchestrator reports to him.
+4. The rule hierarchy above, with the six principles he accepted on 2026-10-09 stated once
+   at its top. It is built beside item 3 since 2026-10-11, starting with the tasks that wait
+   for nothing of the channel, on the branch `feat/failures-register`, where
+   `odd/tasks/rule-hierarchy.md` is current.
+   Each of the four is proven before it reaches a project of his, as he asked the same day
+   ("la idea tambien es poder probar todo antes de irlo a probar en un proyecto externo"):
+   by its tests, then by use on this repository, then in a practice project made for the
+   purpose, where the harness is only installed and never edited. That third step exists
+   since 2026-10-10 (`odd/tasks/practice-project.md`). `node scripts/practice.mjs run --root
+   D:\js-harness-practice` packs the checkout it is run from, installs it into a prefix and
+   a stand-in home inside that one folder, and walks a journey of named steps in a small
+   project that only receives the harness: `install`, `init` the first time and `status`
+   then `sync` afterwards, a commit that passes through the hook and one that is refused,
+   both uninstalls. It hashes what the harness owns in his real home before and after, and
+   any difference fails the run. A run takes under fifteen seconds, spends no model, and
+   appends one line to the folder's `record.jsonl` with the commit that was proven. A
+   feature that changes what a project receives adds its own step, in its own branch: an
+   entry in `JOURNEY` (`scripts/practice-lib.mjs`) and its function in `STEPS`
+   (`scripts/practice.mjs`), and the run exiting 0 goes in its contract. Since 2026-10-14
+   the journey has thirteen steps (`odd/tasks/practice-project.md`, T5, and
+   `odd/tasks/project-rules.md`, T6): `project-rules` holds a project's own rules and refuses
+   two commits that break them, and `host-loads` starts a real Claude Code session in the
+   practice project, three Haiku 5.5 calls under a home of their own (about half a cent and
+   fifteen seconds; `--no-host` leaves it out, and it needs `JS_HARNESS_EVAL_OAUTH_TOKEN`). The
+   session lists both skills, answers with a word only `AGENTS.md` holds, runs the three hook
+   entries, and leaves no trace in his real home; the first full pass is of `1659801`. Not
+   proven: that Codex loads its `hooks.json` and its skills.
+5. Kept for later, his idea and not designed: several accounts, each on a maximum plan and
+   each working three features at once, orchestrated together and able to talk to each
+   other. What is known: the app's messages stay inside one account, so across accounts the
+   meeting point is the repository. He takes it up again after the four above.
+
+For the gate on GitHub, a fact found the same day: the repository is private
+(`gh repo view --json visibility`), so its runs count against the account's minutes.
+

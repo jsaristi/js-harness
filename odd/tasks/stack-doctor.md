@@ -474,3 +474,30 @@ budget. Sebastián can switch to a chained strategy before the PR opens.
 ## Next step
 None for this feature: it is complete. `fix/doctor-windows-exit` was merged via
 `jsaristi/js-harness#5` as `1d8b048`.
+
+## Stack doctor notes
+
+Evidence gathered 2026-09-26 for the design:
+
+- gentle-ai 3.7.0 checks itself, engram and two more tools against the GitHub releases API, at
+  most once every 6 h (`~/.gentle-ai/state.json`), 5 s timeout, fail-open; it shows the result
+  only when its TUI opens, and it does not check whether MCP servers are registered in a host.
+  Its own skills and agents ship inside its binary and are reconciled by `gentle-ai sync`
+  (`internal/update/registry.go`, `cooldown.go`, `github.go` in Gentleman-Programming/gentle-ai).
+- Claude Code `SessionStart` fires on `startup` and `resume` (also `--continue`). A hook's
+  `systemMessage` is shown to the user and not added to the model's context; plain stdout on
+  `SessionStart` is added to it and costs tokens. Hooks can run `async`. A command status line
+  costs no tokens and can refresh on an interval ([hooks](https://code.claude.com/docs/en/hooks.md),
+  [status line](https://code.claude.com/docs/en/statusline.md)).
+- Codex has `SessionStart` with `systemMessage` too, but no command-backed status line, so on
+  Codex the notice arrives only on start or resume ([hooks](https://learn.chatgpt.com/docs/hooks)).
+
+Resolved while building (details in `odd/tasks/stack-doctor.md`):
+
+- The manifest now records entries as well as whole files: one hook entry inside
+  `~/.claude/settings.json` and `~/.codex/hooks.json`, removed exactly on uninstall, never
+  overwriting a value of unexpected shape, and preserving the file's indent and line endings.
+- `ccstatusline` 2.2.30 ships a `custom-command` widget, so a zero-token status-line indicator is
+  possible; left for later. Codex 0.157.1 has hooks on by default (`codex features list`), but a
+  new hook command may need a one-time trust prompt — unverified live.
+

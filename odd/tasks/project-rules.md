@@ -254,7 +254,7 @@ JH 9); `bin/lib/project.mjs` (the template clause; JH 9 and JH 7's T9); `bin/lib
   and roadmap (S5; route: inline; files of JH 8, JH 9 and JH 7, agreed through the lead first; 9302730 and the roadmap commit)
 - [x] T6 The practice journey's step for a project's own rule (S5; route: inline; ed24609, bf3a8d5, bb7d53d, 1659801)
 - [x] T7 At the close: one note per capability built, in the five parts of the SPEC
-  (`docs/ROADMAP.md` 605-633), sent to the lead, who appends it (S6; route: inline; sent 2026-10-14, two notes)
+  (`odd/tasks/rule-hierarchy.md`, "Rule hierarchy"), sent to the lead, who appends it (S6; route: inline; sent 2026-10-14, two notes)
 
 ## Log
 - L1. 2026-10-13, the opening the lead wrote for this session (a claim, not his words; read with

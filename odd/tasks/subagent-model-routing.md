@@ -33,7 +33,7 @@ design has to make delegation happen. Its start prompt was handed to him on 2026
   holds with the new runs recorded
 - `node evals/subagents-report.mjs --require-complete --modes write` exits 0, so the matrix of
   this feature (the `write` mode, since 2026-10-10) is complete and every counted trial delegated
-- `docs/ROADMAP.md` records the result per delegation mode and task (both arms' score, list
+- this document, `## Subagent models result`, records the result per delegation mode and task (both arms' score, list
   cost split between orchestrator and subagents, wall time, subagent outcomes) and the
   recommendation
 
@@ -209,7 +209,7 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
 - [x] T6 The other two repeats: 12 trials, after Sebastián's go-ahead (route: inline; the run
   `write-high` continued with `--repeats 3`, 4,947 s, exit 0). 18 of 18 trials delegated, none
   failed; `node evals/subagents-report.mjs --require-complete --modes write` exits 0
-- [x] T7 The result and the recommendation in `docs/ROADMAP.md` (route: inline, one document):
+- [x] T7 The result and the recommendation in this document (route: inline, one document):
   the section "Subagent models result", and item 8 of Next points to it
 
 ## Progress
@@ -543,7 +543,7 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   three trials a cell: the same score in every pair (1.00, 0.98, 1.00); list cost $14.64 for
   the Opus arm and $6.11 for the Haiku arm over nine trials each (42%), the subagents' part
   $9.30 against $1.04 and the orchestrator's $5.35 against $5.08; wall time 62 against 65
-  minutes. The table, the reading, the limits and the recommendation are in `docs/ROADMAP.md`,
+  minutes. The table, the reading, the limits and the recommendation are in this document,
   "Subagent models result". Spent on trials in all: $20.76 at list price, and $0.35 for the
   probe, against an estimate of $22 to $31. Durations, by the windows the lead passed on
   (another session's claims, local time): `format-v2` `sub-opus` #2 (20:12:58 to 20:23:30) ran
@@ -572,3 +572,64 @@ with 30% to 80% added for delegation: $40 to $75 at list price and 3.5 to 4.5 ho
   hard enough to leave the score ceiling), each his to approve. Follow-ups left in the code, none
   blocking: `SUBAGENTS_DIR` is not exported from `evals/suite.mjs`, the three task ids are a
   constant in the report, and the text helpers of `evals/report.mjs` are copied into it.
+
+## Subagent models result
+
+Measured on 2026-10-10 (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort
+orchestrating a subagent that writes the change, with every subagent forced to Opus 5.5 in one
+arm and to Haiku 5.5 in the other (one subagent a trial, except two trials of the Haiku arm
+that spawned a second). Three tasks, three trials a cell, 18 trials, under
+`bypassPermissions`, Claude Code 2.1.296 with gentle-ai 4.0.0 and engram 3.3.0 (`node
+evals/subagents-report.mjs --modes write` over `evals/results/subagents/write-high.json`). The
+orchestrator plans, delegates the writing and reviews the result; every trial delegated and none
+failed. Score is the hidden grader's, the same in every trial of a cell; cost is the mean list
+cost of one session, read from its transcripts, with the orchestrator apart from its subagents.
+
+| Task | Score Opus / Haiku | Cost Opus / Haiku | Ratio | Orchestrator Opus / Haiku | Subagents Opus / Haiku | Wall Opus / Haiku |
+|------|------|------|------|------|------|------|
+| format-v2 | 1.00 / 1.00 | $2.40 / $1.03 | 0.43× | $0.84 / $0.79 | $1.56 / $0.24 | 9m17s / 10m17s |
+| house-rules | 0.98 / 0.98 | $0.81 / $0.40 | 0.50× | $0.39 / $0.38 | $0.41 / $0.03 | 2m21s / 3m44s |
+| lost-updates | 1.00 / 1.00 | $1.68 / $0.61 | 0.36× | $0.55 / $0.53 | $1.13 / $0.08 | 9m02s / 7m40s |
+
+Read plainly, against what he had read (75% cheaper at the same quality, and much faster):
+
+- Quality: the same. The Haiku subagent's change scored what the Opus subagent's did in all nine
+  pairs.
+- Cost: 58% less for the session, $6.11 against $14.64 over nine trials each. The subagent's own
+  work costs 89% less ($1.04 against $9.30), but the orchestrator is Opus in both arms and costs
+  the same ($5.08 against $5.35), so it is 83% of what the Haiku arm costs. Haiku also spends
+  more to make the same change: 2.3 times the output tokens and 2 times the cache reads, and on
+  `format-v2` and `lost-updates` 54 of its requests passed the 100,000-token prompt, where its
+  price is five times higher.
+- Speed: not faster. 65 minutes against 62 over the nine trials. Slower on the small task in
+  every repeat (1.58×), and on the two larger ones the repeats of the two arms overlap.
+
+What it does not show. These tasks sit at the score ceiling with any config (F5), so they can
+show that Haiku costs less on scoped work and cannot show where it starts to write worse code;
+Anthropic's own figures put it well under Sonnet 5.5 and Opus 5.5 on complex agentic coding. Three
+tasks and three trials a cell are a small sample. Wall time was taken on a machine other
+sessions were using: tests of another session ran beside three of the trials and a browser
+beside five more; the marked trials are not out of line with their cells, but the speed line
+above is the weakest of the three. And both arms delegate: F5 ran the same three tasks with
+Opus 5.5 alone at high effort, on Claude Code 2.1.284, for $2.86 and 11 minutes the three, which
+is less than Opus with an Opus subagent ($4.88, 21 minutes) and faster than either arm. That
+figure is from another version and another week, so it is a pointer, not a comparison.
+
+Recommendation, his to decide. Where a session already delegates the writing of scoped code,
+forcing that subagent to Haiku 5.5 is supported by this measurement: same score, less than half
+the cost. It is no reason to delegate more: on tasks this size the delegation is what costs,
+not the model. So nothing is turned on by default in the harness from this alone. If it goes
+in, it goes in as the model of the writing subagent only, set on the call that delegates the
+writing, never as `CLAUDE_CODE_SUBAGENT_MODEL` for the session, which would also move the
+subagents that explore, review and verify, and his rule of 2026-10-10 keeps those on Opus 5.5
+at high effort. Two measurements would settle what this one leaves open, each his to approve:
+the same three tasks with Opus 5.5 alone at high effort on this version (9 trials, about $9), so
+that not delegating is in the same table; and one task hard enough to leave the ceiling.
+
+Decided for this repository's way of working (Sebastián, 2026-10-11, "apliquemos lo que
+investigaste", the orchestrator's transcript `130317af-a818-419c-a3de-3a21335db0a8.jsonl`, line
+2037): the sub-agent that writes scoped code is launched on Haiku 5.5, set on the call, and the
+ones that explore, review and verify stay on Opus 5.5 at high effort. What the harness turns on
+by default in a project stays open, and so do the two measurements. The table it belongs to, the
+mechanism that will apply it and the measurements still to run are in `docs/model-effort.md`.
+

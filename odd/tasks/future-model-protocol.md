@@ -76,7 +76,7 @@ From `odd/tasks/rule-hierarchy.md`, "Signals of done". One holds.
 
 ## What the roadmap's section holds and the rule hierarchy does not (S2)
 
-Read by comparing `docs/ROADMAP.md:416-646` ("Rule hierarchy") with `odd/tasks/rule-hierarchy.md`
+Read by comparing the former ROADMAP section "Rule hierarchy" (now at the end of `odd/tasks/rule-hierarchy.md`) with the rest of `odd/tasks/rule-hierarchy.md`
 (C3 at `:228`, the `AGENTS.md` outline and the protocols at `:1290-1385`). For JH 7 to carry into
 `docs/SPEC.md` or its document before the section becomes a pointer. Covered already: the five
 parts and the "today" line of the specification (C3), the six principles (outline item 1), the

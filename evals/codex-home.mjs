@@ -271,7 +271,7 @@ export function withEngramEnv(toml, { dataDir, port }) {
 /** What the current arm leaves out of the copy: the Codex desktop app's pieces (Sebastián, 2026-10-04). A
  * trial runs with approvals bypassed, and these reach the live desktop app (a named pipe, screen and browser
  * control), which a hash of the real trees cannot see; so the arm carries fewer tools than his daily Codex,
- * and the F6 result says so. The precedent is Claude's current arm, which ran without the claude.ai
+ * and the F6 result in odd/tasks/codex-parity.md says so. The precedent is Claude's current arm, which ran without the claude.ai
  * connector. `keys` are top-level keys of `config.toml` (`notify` runs the computer-use program at every
  * turn's end), `servers` are `[mcp_servers.<name>]` tables, and `plugins` are `<name>@<marketplace>` ids:
  * each one's `[plugins."<id>"]` table and its directory `plugins/cache/<marketplace>/<name>`, where the

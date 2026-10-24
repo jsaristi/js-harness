@@ -6,7 +6,7 @@ Locator: `odd/tasks/gate-log.md` · Engram mirror: `odd/gate-log/tasks` · Branc
 `JH ORQ · js-harness`
 
 State 2026-10-11: opened by the orchestrator's prompt, inside the order Sebastián asked for
-(`docs/ROADMAP.md`, "The order he asked for", item 2; `odd/tasks/gate-lock.md`, "Next").
+(`odd/tasks/session-channel.md`, "The order he asked for", item 2; `odd/tasks/gate-lock.md`, "Next").
 The design below was written by this session and read, before anything was built on it, by a
 reader that did not write it; Progress says what the reader changed.
 
@@ -20,13 +20,13 @@ processes, so a slow gate is explained by a file and the usual gate has less wor
   and another took 1,069 s, against 832 s for the same tree, beside a video in a browser and a
   language server spinning at about 1.5 logical processors. The process look counts neither,
   and the script that did find them (`load.ps1`) lived in one session's scratchpad
-  (`docs/ROADMAP.md:773-780`; `odd/tasks/gate-lock.md:1278-1291`).
+  (`odd/tasks/session-channel.md, "Session channel"`; `odd/tasks/gate-lock.md:1278-1291`).
 - "Which gates ran beside which" is today a session's memory. Three failures of 2026-10-10
   name a gate log as the proof they lacked (`odd/tasks/gate-lock.md:1122-1131`). A gate's time
   is also only known to the session that ran it: the list `885, 728, 872, …` in
   `odd/tasks/gate-lock.md:1294` was kept by hand.
 - The gate is as long as its work: 15,467 git processes in the whole suite (counted, Progress)
-  that slow each other down on four cores, and arranging the files differently gave nothing (`docs/ROADMAP.md:760-768`).
+  that slow each other down on four cores, and arranging the files differently gave nothing (`odd/tasks/session-channel.md, "Session channel"`).
   What shortens it is fewer of them. Measured on 2026-10-10 in `bin/codex-review.test.mjs`
   alone: 12,591 git processes, 10,008 of them started by the command under test in 546 runs,
   and 6,509 of those a `git rev-parse` (`odd/tasks/gate-lock.md:917-921`). So the larger part
@@ -48,7 +48,7 @@ processes, so a slow gate is explained by a file and the usual gate has less wor
   recorded in Progress with the profile each cut was chosen from
 - `docs/ROADMAP.md` says what a gate now says and records, where the log lives and how it is
   removed, and what the cuts gave; its sentence "A gate that ends leaves nothing on disk"
-  (`docs/ROADMAP.md:750`) is reworded
+  (`odd/tasks/session-channel.md, "Session channel"`) is reworded
 
 ## In scope / Out of scope
 - In: `bin/check.mjs`, `bin/gate.mjs`, the help text of `bin/js-harness.mjs`, new
@@ -477,7 +477,7 @@ Progress.
     `bin/lib/project.test.mjs` 852, `evals/review/compare.test.mjs` 599,
     `bin/lib/codex-review-coverage.test.mjs` 545, `bin/remote.test.mjs` 451; 24 files start
     git at all.
-  - So "some fifty thousand git processes" (`docs/ROADMAP.md:767`, repeated in this
+  - So "some fifty thousand git processes" (`odd/tasks/session-channel.md, "Session channel"`, repeated in this
     document's Why and stop rule) was three times too many, and the reader's arithmetic
     built on it ("2,500 of fifty thousand") with it. The two files this slice names are
     three quarters of the suite's git, and the cuts below are about a fifth of all of it.
