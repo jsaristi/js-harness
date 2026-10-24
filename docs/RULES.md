@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `d144f41ae8fb`. In force: 61 (36 of Sebastián, 25 of the project). Retired: 2.
+Hash `bc1c8f44d328`. In force: 62 (37 of Sebastián, 25 of the project). Retired: 2.
 
 ## Sebastián's
 
@@ -180,6 +180,12 @@ The model of a sub-agent that writes scoped code, in this repository: claude-hai
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
+
+### terminal-note
+The note that ends a command typed into his Terminal panel, saying what it does in everyday words, so he reads it beside the command where it runs: the guard refuses a run_in_terminal command without it: <command>; Write-Host 'NOTE: <what it does>'.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/guard.mjs`.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-18, checked by the command on 2026-10-24.
 
 ### wording-is-the-need
 His wording is the need, not the specification: the agent recommends what is best and says where it differs: "The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded."
