@@ -334,7 +334,7 @@ test('a control in a shape it does not know is refused, and both shapes are show
 test('a phrase shorter than twelve characters is refused, because it could be found by accident', () => {
   refusedOnce(
     faults(entry('short-phrase', '- Class: machine', SEEN, '- Control: owed — odd/tasks/gate-log.md — "T4 the gate"')),
-    /^entry "short-phrase": the phrase "T4 the gate" has 11 characters.*at least twelve/,
+    /^entry "short-phrase": the phrase "T4 the gate" has 11 characters: a phrase has at least 12 characters, so that it is not found by accident/,
   );
   assert.deepEqual(faults(entry('long-enough', '- Class: machine', SEEN, '- Control: owed — odd/tasks/gate-log.md — "T4 the gates"')), []);
 });

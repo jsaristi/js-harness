@@ -3,9 +3,6 @@
 // are read by bin/subagents.mjs and handed in parsed. Of a description only its first word is ever kept,
 // since the records hold the person's own messages.
 
-/** The roles a sub-agent invocation can be classified as. */
-export const ROLES = ['writer', 'explorer', 'reviewer', 'verifier', 'other'];
-
 /** Built-in subagent types that are read-only explorers. */
 const EXPLORER_TYPES = new Set(['Explore', 'Plan', 'claude-code-guide']);
 

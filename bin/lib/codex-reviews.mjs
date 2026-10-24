@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { gitDirs } from './project.mjs';
+import { endsUnterminated } from './jsonl-tail.mjs';
 
 export const CODEX_REVIEW_SCHEMA = 'js-harness.codex-review/v1';
 
@@ -45,23 +46,6 @@ export function jsonLinesPath(root, name, { spawn = spawnSync, where } = {}) {
  * `root` is not inside one. */
 export function codexReviewsPath(root, deps = {}) {
   return jsonLinesPath(root, 'codex-reviews.jsonl', deps);
-}
-
-/** Whether `file` exists, is not empty and does not end with a newline. */
-function endsUnterminated(file) {
-  let fd;
-  try {
-    fd = fs.openSync(file, 'r');
-    const { size } = fs.fstatSync(fd);
-    if (size === 0) return false;
-    const last = Buffer.alloc(1);
-    fs.readSync(fd, last, 0, 1, size - 1);
-    return last[0] !== 0x0a;
-  } catch {
-    return false;
-  } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-  }
 }
 
 /** Appends `record` as one JSON line to the file `name`, creating the folder on first use, and returns

@@ -2582,7 +2582,11 @@ const VALUED_FLAGS = ['--cwd', '--home', '--head', '--remote', '--ref', '--wait'
 const BARE_FLAGS = ['--push', '--no-wait', '--subagents', '--door', '--verbose'];
 // The flags of a gate that runs sensors or waits for the lock, and `--home`, where that lock and the gate log live:
 // `--door` uses none of them, so one of them with it is refused rather than ignored.
-const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--head', '--remote', '--home'];
+const GATE_FLAGS = ['--first', '--subagents', '--wait', '--no-wait', '--remote', '--home'];
+// The gate's flags that a `--push` refuses rather than ignores, as it does `--first`: a push runs no sensor and takes
+// no lock. `--verbose` is in the list because a push always prints every row (its output is never the one line a
+// passing gate prints), so `--verbose` changed nothing there. `--home` and `--remote` are shared by both and stay legal.
+const NOT_WITH_PUSH = ['--subagents', '--wait', '--no-wait', '--verbose'];
 
 /** Throws `CheckArgError` for the first token of `argv` that is no flag of `check` and no value of one.
  * A token it does not know was ignored until 2026-10-12, so `check --help` was a whole gate: it waited
@@ -2610,6 +2614,12 @@ function parseArgs(argv, env) {
   const first = get('--first');
   if (first !== undefined && first.trim() === '') throw new CheckArgError('--first needs a reason, not an empty one');
   if (first !== undefined && argv.includes('--push')) throw new CheckArgError('--first goes with a gate that runs its sensors, not with --push');
+  const gateOnly = NOT_WITH_PUSH.find((flag) => argv.includes('--push') && argv.includes(flag));
+  if (gateOnly !== undefined) throw new CheckArgError(`${gateOnly} goes with a gate that runs its sensors, not with --push`);
+  // `--head` names the commit a push checks (`--push` alone checks HEAD); a gate or the door would take it and ignore it.
+  // Its value is read first, so a `--head` with none is reported as missing it.
+  const head = get('--head');
+  if (head !== undefined && !argv.includes('--push')) throw new CheckArgError('--head goes with --push');
   const door = argv.includes('--door');
   const base = get('--base') ?? null;
   const branch = get('--branch') ?? null;
@@ -2628,7 +2638,7 @@ function parseArgs(argv, env) {
     push: argv.includes('--push'),
     subagents: argv.includes('--subagents'),
     verbose: argv.includes('--verbose'),
-    head: get('--head') ?? 'HEAD',
+    head: head ?? 'HEAD',
     remote: get('--remote') ?? 'origin',
     noWait,
     waitMinutes,

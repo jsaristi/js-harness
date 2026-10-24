@@ -7,20 +7,23 @@
 // How to comply: in a command, `class <Name>ArgError extends Error {}` beside its parsing, thrown for a bad
 // argument and caught in its main; in `bin/lib`, return `{ error }` (or throw an error the caller catches) and
 // leave the exit to the command. A child script under `bin/lib` that is its own process may set
-// `process.exitCode`, which is how it hands its result to the parent that spawned it.
+// `process.exitCode`, which is how it hands its result to the parent that spawned it. A `--require` preload is the one
+// exception, named in `EXIT_EXEMPT` below.
 //
 // Only what a test can see is checked: the declarations and the calls, read from the source with its comment lines
 // left out. The command modules are the ones the dispatcher's COMMANDS table loads. LEGACY lists the commands that
-// declare no ArgError yet, each with how it signals a usage error instead; it only shrinks (bin/lib/ratchet.mjs).
+// declare no ArgError yet, each with how it signals a usage error instead; it only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ratchet } from './lib/ratchet.mjs';
+import { ratchet } from './lib/ratchet.testkit.mjs';
 
 const BIN = import.meta.dirname;
 const LIB = path.join(BIN, 'lib');
 const ARG_ERROR_CLASS = /\bclass\s+\w*ArgError\s+extends\s+Error\b/;
+// A preload is its own process, loaded into every node a Codex review starts: it ends that run when the run must not go on.
+const EXIT_EXEMPT = { 'no-test-outside-turn.cjs': 'a --require preload: it ends the node run it is loaded into with exit 97' };
 
 const LEGACY = {
   'backup.mjs': 'prints the usage from its dispatch and returns 2',
@@ -54,7 +57,7 @@ function commandModules() {
   return [...new Set([...table[1].matchAll(/import\('\.\/([a-z-]+\.mjs)'\)/g)].map((match) => match[1]))];
 }
 
-const libModules = () => fs.readdirSync(LIB).filter((name) => name.endsWith('.mjs') && !name.endsWith('.test.mjs'));
+const libModules = () => fs.readdirSync(LIB).filter((name) => /\.(?:mjs|cjs)$/.test(name) && !name.endsWith('.test.mjs'));
 
 test('every command module declares its own ArgError, but the legacy ones', () => {
   const modules = commandModules();
@@ -69,9 +72,14 @@ test('no module under bin/lib declares an ArgError: a usage error belongs to the
   assert.deepEqual(declaring, [], 'move the class to the command and return { error } from bin/lib');
 });
 
+test('the .cjs files under bin/lib are read by the exit convention too', () => {
+  assert.ok(libModules().includes('no-test-outside-turn.cjs'), 'libModules lists the .cjs files: a preload that exits is checked');
+});
+
 test('no module under bin/lib calls process.exit: it returns, and the command decides the exit', () => {
   const exiting = libModules().filter((name) => /\bprocess\.exit\s*\(/.test(code(path.join(LIB, name))));
-  assert.deepEqual(exiting, [], 'return the result to the command; a child script sets process.exitCode instead');
+  const problems = ratchet({ checked: libModules(), broken: exiting, legacy: EXIT_EXEMPT });
+  assert.deepEqual(problems, [], 'return the result to the command; a child script sets process.exitCode instead');
 });
 
 test('a comment line that names process.exit is not a call, and a line of code is', () => {

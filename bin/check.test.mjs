@@ -2871,7 +2871,7 @@ test('check refuses an argument it does not know: exit 2 with the usage, no row 
     }
     assert.deepEqual([spawn.ran, take.asked.length], [0, 0]);
     // Every flag it knows is taken as it was, a value that looks like nothing it knows included.
-    const known = await run(['--cwd', dir, '--home', home, '--remote', 'upstream', '--head', 'help', '--wait', '5']);
+    const known = await run(['--cwd', dir, '--home', home, '--remote', 'help', '--wait', '5']);
     assert.notEqual(known.code, 2, known.errOutput);
     assert.match(known.output, /^PASS {2}tests /m);
     assert.deepEqual([spawn.ran, take.asked.length], [1, 1]);
@@ -5762,9 +5762,60 @@ test('check --push leaves a ref that is not a v* tag unchecked against the versi
   }
 });
 
+test('check --head with no value says so first, as --remote does, before it says --head goes with --push', async () => {
+  for (const [argv, message] of [[['--head'], '--head requires a value'], [['--head', '--push'], '--head requires a value'], [['--remote'], '--remote requires a value']]) {
+    const { code, output, errOutput } = await runCheck(argv, {}, {});
+    assert.equal(code, 2, argv.join(' '));
+    assert.equal(errOutput.split('\n')[0], message, argv.join(' '));
+    assert.equal(output, '');
+  }
+});
+
 test('check --ref goes with --push, and is a usage error without it', async () => {
   const { code, errOutput } = await runCheck(['--ref', 'refs/tags/v1.0.0'], {}, {});
   assert.deepEqual([code, errOutput.split('\n')[0]], [2, '--ref goes with --push']);
+});
+
+test('a flag of another mode is a usage error, not ignored: --head without --push, and the gate flags with --push', async () => {
+  const dir = makeTmpDir();
+  try {
+    const refused = [
+      [['--head', 'nosuchrev', '--cwd', dir], '--head goes with --push'],
+      [['--door', '--base', 'HEAD', '--head', 'nosuchrev', '--cwd', dir], '--head goes with --push'],
+      [['--push', '--wait', '5', '--cwd', dir], '--wait goes with a gate that runs its sensors, not with --push'],
+      [['--push', '--no-wait', '--cwd', dir], '--no-wait goes with a gate that runs its sensors, not with --push'],
+      [['--push', '--subagents', '--cwd', dir], '--subagents goes with a gate that runs its sensors, not with --push'],
+      [['--push', '--verbose', '--cwd', dir], '--verbose goes with a gate that runs its sensors, not with --push'],
+    ];
+    for (const [argv, message] of refused) {
+      const { code, output, errOutput } = await runCheck(argv, {}, {});
+      assert.equal(code, 2, argv.join(' '));
+      assert.equal(errOutput.split('\n')[0], message, argv.join(' '));
+      assert.match(errOutput, /Usage: js-harness check/);
+      assert.equal(output, '');
+    }
+    // Each mode keeps the flags it takes: --remote is shared by the gate and the push, and --head, --remote and
+    // --ref go with the push, --base and --branch with the door. None of them is a usage error.
+    // A gate takes the machine's lock and writes its log in its home, so each gate or push runs in a home of its own.
+    // The door runs no gate and refuses `--home`, so it takes none.
+    const home = makeTmpDir();
+    const taken = [
+      ['--remote', 'origin', '--cwd', dir, '--home', home],
+      ['--push', '--head', 'HEAD', '--remote', 'origin', '--cwd', dir, '--home', home],
+      ['--door', '--base', 'HEAD', '--branch', 'feat/x', '--cwd', dir],
+    ];
+    try {
+      for (const argv of taken) {
+        const { code, errOutput } = await runCheck(argv, {}, {});
+        assert.notEqual(code, 2, `${argv.join(' ')}: ${errOutput}`);
+        assert.doesNotMatch(errOutput, /Usage: js-harness check/, argv.join(' '));
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('check --push gives no row rules where the remote has no default branch to read the push against', async () => {

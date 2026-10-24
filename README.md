@@ -118,10 +118,17 @@ prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_I
 sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
 so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
 `JS_HARNESS_CHECK_VERBOSE=1`, for a hook, which runs `check` without flags. `--push` and
-`--door` print their rows either way. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
+`--door` print their rows either way. `--head` goes only with `--push`, and `--push` refuses `--first`,
+`--subagents`, `--wait`, `--no-wait` and `--verbose`, as a usage error. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
 at a time, for a machine where node's default, one fewer than its processors, is too few: this
 repository's CircleCI run of the merge queue's candidates sets 2.
+
+Three keys of `harness.json` shape the gate's sensors: `documents` (an array of paths from the top of
+the repository, with forward slashes and a final `/` for a folder; a commit that holds only these
+runs no `sensors`), `documentSensors` (named commands that run at such a commit instead, and need
+`documents`), and `exactTests` (`"shadow"` or `"skip"`). A value of the wrong shape fails the
+`sensors` row, which names the key and the shape it takes, and no sensor runs.
 
 When a `node --test` suite fails, the test files it names as failed run once more, alone. A
 file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
@@ -685,7 +692,7 @@ Map: docs/ROADMAP.md on origin/main  80/85  94%
 ```
 
 With `--mark`, the same report ends in one more line, `Recorded this report at <time>`, and the
-next report starts at that time.
+next report starts at that time, and at that commit for merges.
 
 ### js-harness throughput
 
@@ -754,10 +761,10 @@ DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 -
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by
 row, daily value with daily value. The gate-wait median moved from 216 s to 69 s from one day to
-the next with nothing shipped, so under 7 days a side it prints both and how often the median of
-a window that did not change falls outside the before range, and judges nothing; from 7 days a
+the next with nothing shipped, so with fewer than `throughput-compare-days` days a side it prints both and how often the median of
+a window that did not change falls outside the before range, and judges nothing; from `throughput-compare-days` days a
 row moved only when the after window's median lies outside the before range, which an unchanged
-week does 7% of the time. The window before must end by the one compared.
+window of that length does 7% of the time. The window before must end by the one compared.
 
 ```console
 $ js-harness throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
@@ -1358,7 +1365,7 @@ start only when the app's record of the session names the session it was cleared
 it names the lines to read, not the whole file: its resume sections ("Next step", "State for a
 resume"), the open task the first of them names first, that task's specs and its last log entries,
 each range with its size. It writes
-nothing and always exits 0. `resume --pause` is the hook of the context pause, measured against the window the host is configured to compact on when a setting gives one (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, a number or one with a `k` or `M` suffix such as `350k`, else `autoCompactWindow` of the project's `.claude/settings.local.json`, its `.claude/settings.json` or the user's settings), and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too; so it does after a WebFetch that failed as a tool error ("Claude Code is unable to fetch from <domain>"), which reaches no `PostToolUse` hook: `install` registers the same command as a `PostToolUseFailure` entry on WebFetch for that.
+nothing and exits 0, or 2 for a usage error. `resume --pause` is the hook of the context pause, measured against the window the host is configured to compact on when a setting gives one (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, a number or one with a `k` or `M` suffix such as `350k`, else `autoCompactWindow` of the project's `.claude/settings.local.json`, its `.claude/settings.json` or the user's settings), and of the channel's inbox: after a tool call it says once each notice addressed to the session that it was not told yet. After a WebFetch the site refused as AI traffic (402, 403, 429 or 503) it names the next rung, `js-harness fetch`, to a sub-agent too; so it does after a WebFetch that failed as a tool error ("Claude Code is unable to fetch from <domain>"), which reaches no `PostToolUse` hook: `install` registers the same command as a `PostToolUseFailure` entry on WebFetch for that.
 
 ```console
 $ js-harness resume --hook < hook-input.json
@@ -1493,14 +1500,14 @@ a notice or a land comes, so it is told to arm `js-harness wait --notice-to <num
 background, or to give the work back with `--kind closed`. A `waiting` notice does not give it
 back: a session that waits still arms a wait. It says so once a handing, as the transcript records
 its earlier block, and again after a background task launched since has ended. A close with the
-decision state is not told, a handing older than the session's transcript belongs to another
+decision or the question state is not told, a handing older than the session's transcript belongs to another
 session of that number (except the opening the session read, always stored before it began), a
 call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
 is refused too, both reasons go in one block.
 
 ```console
 $ js-harness reply --hook < stop.json
-{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (an open question the user answers in writing, asked on that line; never while background work runs), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
 ```
 
 ### js-harness fetch

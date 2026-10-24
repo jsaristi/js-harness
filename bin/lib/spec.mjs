@@ -74,6 +74,27 @@ export function parseSpec(markdown) {
 /** The text in backticks of a field. */
 const ticked = (text) => [...(text ?? '').matchAll(/`([^`]+)`/g)].map((match) => match[1].trim());
 
+// A word that is a plain relative path to a `.mjs`, `.js` or `.md` file, with an optional `:line` or `:from-to`.
+const PROOF_FILE = /^([\w.-]+(?:\/[\w.-]+)*\.(?:mjs|js|md))(?::\d+(?:-\d+)?)?$/;
+
+// The options of a proof command whose next argument is a value, code or a pattern, never a file to run. Any other
+// option takes no value (`--test`, `--test-only`, `--`), so a file after it is read.
+const VALUE_OPTIONS = ['-e', '--eval', '-p', '--print', '--test-name-pattern', '--test-skip-pattern', '--ref'];
+
+/** The arguments of a command as a shell splits them: a quoted run is one argument, without its quotes. */
+const argumentsOf = (command) => [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((match) => match[1] ?? match[2] ?? match[3]);
+
+/** The files of the repository a proof command runs, read from each backticked command: every argument that is a
+ * plain relative path to a `.mjs`, `.js` or `.md` file (`PROOF_FILE`) and not the value of a `VALUE_OPTIONS`
+ * option. A URL, a git range, quoted code and a pattern are no such argument, so none of them is read as a file. */
+function proofFiles(command) {
+  const args = argumentsOf(command);
+  return args.flatMap((arg, i) => {
+    const match = VALUE_OPTIONS.includes(args[i - 1]) ? null : PROOF_FILE.exec(arg);
+    return match ? [match[1]] : [];
+  });
+}
+
 /** What one item of a today line is: a command, a manifest id, a home path or a file of the repository. */
 function readItem(item, entries) {
   const command = /^js-harness ([a-z][a-z-]*)$/.exec(item);
@@ -97,6 +118,10 @@ export function specFindings(markdown, { exists, commands = null, entries = null
     const where = `"${title}" (line ${line})`;
     for (const name of FIELDS) if (!Object.hasOwn(fields, name) || fields[name].trim() === '') findings.push(`${where} has no **${name}:** field`);
     if (Object.hasOwn(fields, 'Proof') && fields.Proof.trim() !== '' && ticked(fields.Proof).length === 0) findings.push(`${where} has no command in backticks in its **Proof:** field`);
+    // A proof whose test file is gone proves nothing, so its file is held to exist as a today file is.
+    for (const command of ticked(fields.Proof)) {
+      for (const file of proofFiles(command)) if (!exists(file)) findings.push(`${where} names ${file} in **Proof:**, which does not exist`);
+    }
     for (const item of ticked(fields.Today)) {
       const read = readItem(item, entries ?? ids);
       if (read.kind === 'unknown') findings.push(`${where} names "${item}" in **Today:**: ${TODAY_SHAPE}`);

@@ -47,7 +47,7 @@ const USAGE = [
   '    named one, it then copies every ~/.claude/projects/**/*.jsonl as text into the transcripts repositories, a file',
   '    over 40 MiB cut by line into parts, and pushes them after the same checks; a transcripts failure is recorded and',
   '    never fails the backup. --transcripts runs them now, and then their failure is the exit.',
-  '  status  The last run, the last success, the last failure and why, and the commits still to push.',
+  '  status  The last success, the last failure and why, and the commits still to push.',
   '  ready  Whether this machine can be wiped: a `missing:` line for each thing the backup is configured for that has',
   '    no copy off it (the clone ahead of origin or never pushed, a file or an Engram count the last backup does not',
   '    hold, and for each repository of `bundles` no remote, commits or a stash entry in no bundle, a worktree\'s edits',
@@ -833,13 +833,14 @@ function statusCommand(deps) {
     return 1;
   }
   const last = readJson(paths.last) ?? {};
+  const cloned = fs.existsSync(path.join(paths.clone, '.git'));
   const ahead = git(deps, paths.clone, ['rev-list', '--count', '@{u}..HEAD']);
   const lines = [
     `repository: ${config.repo}`,
     `scope: ${config.scope ?? DEFAULT_SCOPE}${config.scope ? '' : ' (the default)'}`,
     `last success: ${last.lastSuccess ? `${last.lastSuccess.at}, ${last.lastSuccess.counts.observations} observations` : 'never'}`,
     `last failure: ${last.lastFailure ? `${last.lastFailure.at}, ${last.lastFailure.error}` : 'none'}`,
-    `to push: ${ahead.status === 0 ? `${ahead.stdout.trim()} commits` : 'unknown (no upstream yet)'}`,
+    `to push: ${ahead.status === 0 ? `${ahead.stdout.trim()} commits` : cloned ? 'unknown (no upstream yet)' : 'unknown (no clone)'}`,
   ];
   const recent = readJson(path.join(paths.clone, 'manifest.json'))?.recent;
   const newest = Array.isArray(recent) ? recent.map((r) => r.newest ?? '').sort().at(-1) : '';

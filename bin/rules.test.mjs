@@ -544,7 +544,7 @@ test('rules --hook is answered by the turn-start hook, through the dispatcher an
       assert.deepEqual([quiet.status, quiet.stdout], [0, ''], `${entry}: a folder with no list is told nothing`);
       const unknown = spawnSync(process.execPath, [...args, '--other'], { cwd: outside, input: '', encoding: 'utf8' });
       assert.equal(unknown.status, 2, entry);
-      assert.match(unknown.stderr, /^js-harness rules --hook: unknown argument --other/, entry);
+      assert.match(unknown.stderr, /^js-harness rules --hook: unknown argument: --other\n/, entry);
     }
   } finally {
     fs.rmSync(outside, { recursive: true, force: true });

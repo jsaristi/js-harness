@@ -6,11 +6,10 @@
 // matter: at the top, or under `metadata:` as this host writes it (31 notes read on 2026-10-14).
 import fs from 'node:fs';
 import path from 'node:path';
-import { memoryNoteType } from './memory-index-guard.mjs';
+import { memoryNoteType, RULE_TYPES } from './memory-index-guard.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
 import { PROTOCOLS } from './protocols-skill.mjs';
 
-const RULE_TYPES = new Set(['feedback', 'project']);
 const INDEX = 'MEMORY.md';
 
 /** The fix of a `stale` row: where a rule goes, in order, then what is done to the note. The protocol's home

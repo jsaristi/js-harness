@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { appendNotice, findOpenings, newNotice, NOTICE_TEXT_MAX, openingCommand, readNotices } from './lib/channel.mjs';
 import { remoteId, UNSAFE_IN_BATCH } from './lib/remote.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
-import { removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
+import { batchText, removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { WAKE_WINDOW_MS, wakePlan, wakeText } from './lib/wake.mjs';
 
@@ -53,13 +53,7 @@ function startupText({ node, root, home, claudeHome }) {
     ...(home === undefined ? [] : ['--home', home]),
     ...(claudeHome === undefined ? [] : ['--claude-home', claudeHome]),
   ]);
-  return [
-    '@echo off',
-    'rem Leaves each session of one project a note after a boot. Written by js-harness wake --at-login; js-harness wake --at-login --remove removes it.',
-    ...(/[^\x00-\x7f]/.test(command) ? ['chcp 65001 >nul'] : []),
-    command,
-    '',
-  ].join('\r\n');
+  return batchText('Leaves each session of one project a note after a boot. Written by js-harness wake --at-login; js-harness wake --at-login --remove removes it.', command);
 }
 
 /** Two reads of the boot an uptime gives differ by seconds; notes this close to the boot are of the same one. */

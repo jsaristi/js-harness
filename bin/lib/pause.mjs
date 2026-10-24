@@ -5,11 +5,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { END_BYTES } from './jsonl-tail.mjs';
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_LAST_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, ORCHESTRATOR_IS, cutRule, percentOf, shareOf } from './sessions.mjs';
-
-/** The most of a transcript's end that the hook reads, in bytes. The hook runs after every tool call, so a
- * file of megabytes costs what this many bytes cost: the end is all it may look at. */
-const END_BYTES = 262144;
 
 /** The most of a transcript's end that the hook reads while it looks for a reply with usage. The first `END_BYTES`
  * may hold only one large tool result after the last reply, and the reply before it is still the session's count,
@@ -267,7 +264,7 @@ function writeState(files, state, fileSystem, now) {
 
 /** Writes one place of the state, `true` when it is kept there. A write that fails leaves nothing behind: the
  * rename is the last step, and a temp file that outlived a failed one is removed, its own failure swallowed. */
-function writeStateFile(file, state, fileSystem) {
+export function writeStateFile(file, state, fileSystem) {
   const temp = `${file}.${process.pid}.tmp`;
   try {
     fileSystem.mkdirSync(path.dirname(file), { recursive: true });

@@ -5,9 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readManifest, uninstall } from './manifest.mjs';
-import { removeStartupFile, startupLocation, writeStartupFile } from './startup-file.mjs';
+import { batchText, removeStartupFile, startupLocation, writeStartupFile } from './startup-file.mjs';
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
+
+test('batchText writes a batch file: @echo off, the rem line, a chcp line only for a command beyond ASCII, CRLF throughout', () => {
+  assert.equal(batchText('Says what it does.', 'node.exe x.mjs'), '@echo off\r\nrem Says what it does.\r\nnode.exe x.mjs\r\n');
+  assert.equal(batchText('Says it.', 'node.exe D:\\año\\x.mjs'), '@echo off\r\nrem Says it.\r\nchcp 65001 >nul\r\nnode.exe D:\\año\\x.mjs\r\n');
+});
 
 /** An APPDATA whose Startup folder exists, and a home for the machine manifest. */
 function places({ startup = true } = {}) {

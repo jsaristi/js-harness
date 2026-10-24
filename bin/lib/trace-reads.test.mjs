@@ -5,7 +5,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import nodeModule from 'node:module';
-import { hashOf, KEPT_TRACES, pruneTraces, readTrace, readTraces, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv, writeTrace } from './trace-reads.mjs';
+import { hashOf, readTraces, TRACE_ENV, TRACE_PRELOAD, TRACER_VERSION, traceEnv } from './trace-reads.mjs';
+
+const { KEPT_TRACES, pruneTraces, writeTrace } = nodeModule.createRequire(import.meta.url)('./trace-reads.cjs');
+/** The newest stored trace of `test` in `dir`, or `null` when there is none. */
+const readTrace = (dir, test) => readTraces(dir, test)[0] ?? null;
 
 /** Whether this node has `module.registerHooks`, by which the tracer sees imports (Node 22.15 and later). */
 const HOOKS = typeof nodeModule.registerHooks === 'function';

@@ -9,11 +9,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { channelDir, recordPath, readNotices } from './channel.mjs';
+import { END_BYTES } from './jsonl-tail.mjs';
+import { writeStateFile } from './pause.mjs';
 import { roleOfTitle, sameSession, titleRead } from './sessions.mjs';
-
-/** The most of a transcript's end that is read for the session's title: the host writes the title again every few
- * dozen lines, so the end the pause hook reads holds it too. */
-const END_BYTES = 262144;
 
 /** How far back the first look of a session goes: a note older than that, from before the session looked at all,
  * is taken as read. */
@@ -40,24 +38,6 @@ function readState(file, fileSystem) {
     return isObject(value) ? value : {};
   } catch {
     return {};
-  }
-}
-
-/** Writes the state as a temp file renamed over it, and says whether it is kept. */
-function writeState(file, state, fileSystem) {
-  const temp = `${file}.${process.pid}.tmp`;
-  try {
-    fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-    fileSystem.writeFileSync(temp, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-    fileSystem.renameSync(temp, file);
-    return true;
-  } catch {
-    try {
-      fileSystem.unlinkSync(temp);
-    } catch {
-      // there may be no temp file: the write failed before it was made
-    }
-    return false;
   }
 }
 
@@ -163,7 +143,7 @@ export function inboxNotice({ transcript, sessionId, cwd, home, now = () => Date
     const said = titleInEnd(transcript, fileSystem);
     // A title in the transcript wins, as for `notify`: one that names no role leaves the session with no address.
     if (said !== null && roleOfTitle(said) === null) {
-      if (said !== state.title) writeState(file, { ...state, title: said }, fileSystem);
+      if (said !== state.title) writeStateFile(file, { ...state, title: said }, fileSystem);
       return null;
     }
     const slug = state.cwd === cwd && typeof state.slug === 'string' ? state.slug : slugOf(cwd);
@@ -175,12 +155,12 @@ export function inboxNotice({ transcript, sessionId, cwd, home, now = () => Date
       size = null;
     }
     const keep = () => {
-      if (['cwd', 'slug', 'title', 'recordSize', 'seen'].some((key) => next[key] !== state[key])) writeState(file, next, fileSystem);
+      if (['cwd', 'slug', 'title', 'recordSize', 'seen'].some((key) => next[key] !== state[key])) writeStateFile(file, next, fileSystem);
     };
     // No record yet: nothing to say; a title seen is kept, since it may leave the end of the transcript before the
     // record begins. A record and a title as they were: nothing new to read.
     if (size === null) {
-      if (next.title !== null && next.title !== state.title) writeState(file, { ...state, title: next.title }, fileSystem);
+      if (next.title !== null && next.title !== state.title) writeStateFile(file, { ...state, title: next.title }, fileSystem);
       return null;
     }
     if (size === state.recordSize && next.title === (state.title ?? null)) {
@@ -209,7 +189,7 @@ export function inboxNotice({ transcript, sessionId, cwd, home, now = () => Date
       keep();
       return null;
     }
-    if (!writeState(file, next, fileSystem)) return null;
+    if (!writeStateFile(file, next, fileSystem)) return null;
     const shown = fresh.slice(-SAID_MAX);
     const earlier = fresh.length - shown.length;
     const lines = [

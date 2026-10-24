@@ -1,10 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROLES, verbOf, roleOf, usageOf, dayOf, callsOf, launchesOf, countOf } from './subagent-count.mjs';
-
-test('ROLES lists the five roles in a fixed order', () => {
-  assert.deepEqual(ROLES, ['writer', 'explorer', 'reviewer', 'verifier', 'other']);
-});
+import { verbOf, roleOf, usageOf, dayOf, callsOf, launchesOf, countOf } from './subagent-count.mjs';
 
 test('verbOf returns the lower-cased first word', () => {
   assert.equal(verbOf('Write x'), 'write');

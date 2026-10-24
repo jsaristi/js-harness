@@ -203,15 +203,6 @@ export function tokenize(markdown, { stripComments = false, indentedFences = fal
   return tokens;
 }
 
-/** Every checkbox list item in `markdown`, in document order: `- [ ]`/`- [x]`/`- [X]`, also `*`/`+`
- * bullets, any leading indent. Lines inside a fenced code block are ignored, and `[ ]`-looking text
- * that does not start a list item is not a step. */
-export function parseSteps(markdown) {
-  return tokenize(markdown)
-    .filter((token) => token.step)
-    .map((token) => token.step);
-}
-
 /** The project roadmap's `## Checklist` section, grouped by phase. Only that section counts: it
  * starts at the `## Checklist` heading and ends at the next `## ` heading (or end of file). Each
  * step belongs to the nearest preceding `### <title>` heading inside the section; a `###` with no

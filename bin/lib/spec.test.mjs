@@ -24,7 +24,7 @@ function spec(...entries) {
   return ['# The specification', '', 'The problem and the bet.', '', '## Capabilities', '', ...entries.flat()].join('\n');
 }
 
-const files = new Set(['bin/lib/reply.mjs', 'bin/reply.mjs', 'docs/SPEC.md']);
+const files = new Set(['bin/lib/reply.mjs', 'bin/lib/reply.test.mjs', 'bin/reply.mjs', 'docs/SPEC.md', 'x.test.mjs']);
 const exists = (file) => files.has(file);
 /** What a project's own specification is held to: no list of the harness's commands or entries. */
 const plain = { exists };
@@ -50,6 +50,66 @@ test('a capability that lacks one of the six fields is a finding naming it and t
 test('a capability whose proof names no command in backticks is a finding', () => {
   const { findings } = specFindings(spec(capability('The reply check', { Proof: 'the tests of the reply check' })), plain);
   assert.deepEqual(findings, ['"The reply check" (line 7) has no command in backticks in its **Proof:** field']);
+});
+
+test('a test file the proof names that does not exist is a finding, as a today file is', () => {
+  const kept = specFindings(spec(capability('The reply check', { Proof: '`node --test bin/lib/reply.test.mjs`' })), plain);
+  assert.deepEqual(kept.findings, []);
+  const gone = specFindings(spec(capability('The reply check', { Proof: '`node --test bin/lib/replies.test.mjs`' })), plain);
+  assert.deepEqual(gone.findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist']);
+});
+
+// A proof's words that are no file of the repository are not findings: a URL, a git range, the value of an option, code.
+test('a proof that fetches a URL is not a finding: its path is no file of the repository', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`curl https://example.com/x`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof that names a git range is not a finding: origin/main..HEAD is no file', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`git log origin/main..HEAD`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof whose option takes a value with a slash is not a finding: "a/b" after --test-name-pattern is no file', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`node --test x.test.mjs --test-name-pattern "a/b"`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a proof of node -e is not a finding: the module it imports inside the quoted code is not a file of the command', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`node -e "import(\'./x.mjs\')"`' })), plain);
+  assert.deepEqual(findings, []);
+});
+
+// A file is read wherever it stands in the command, quoted or not, after any option.
+test('a quoted proof file that does not exist is a finding: its quotes are not part of its name', () => {
+  for (const proof of ['`node --test "bin/lib/replies.test.mjs"`', "`node --test 'bin/lib/replies.test.mjs'`"]) {
+    const { findings } = specFindings(spec(capability('The reply check', { Proof: proof })), plain);
+    assert.deepEqual(findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist'], proof);
+  }
+});
+
+test('a proof file after an option that takes no value is read: -- and --test-only are no value-taking options', () => {
+  for (const proof of ['`node --test -- bin/lib/replies.test.mjs`', '`node --test --test-only bin/lib/replies.test.mjs`']) {
+    const { findings } = specFindings(spec(capability('The reply check', { Proof: proof })), plain);
+    assert.deepEqual(findings, ['"The reply check" (line 7) names bin/lib/replies.test.mjs in **Proof:**, which does not exist'], proof);
+  }
+});
+
+test('a file name inside quoted code is not a finding: the quotes hold one argument, which is code', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: `\`node -e "console.log('ok missing.md ok')"\`` })), plain);
+  assert.deepEqual(findings, []);
+});
+
+test('a quoted test file name after --test-name-pattern is not a finding: it is the pattern, not a file', () => {
+  for (const proof of ['`node --test --test-name-pattern "missing.test.mjs"`', '`node --test --test-skip-pattern missing.test.mjs`']) {
+    const { findings } = specFindings(spec(capability('The reply check', { Proof: proof })), plain);
+    assert.deepEqual(findings, [], proof);
+  }
+});
+
+test('a proof whose --ref takes a tag name is not a finding: refs/tags/v1.0.0 is no file', () => {
+  const { findings } = specFindings(spec(capability('The reply check', { Proof: '`js-harness check --push --ref refs/tags/v1.0.0`' })), plain);
+  assert.deepEqual(findings, []);
 });
 
 test('a file the today line names that does not exist is a finding; a path:line is read as its path', () => {
@@ -117,13 +177,15 @@ test('a specification with no capability is a finding', () => {
   assert.deepEqual(findings, [`${SPEC_PATH} holds no capability: each is a "### " heading under "## Capabilities"`]);
 });
 
-/** A folder holding `docs/SPEC.md` with `text`, removed after `body` runs. */
+/** A folder holding `docs/SPEC.md` with `text`, and the test file the default proof names, removed after `body` runs. */
 function withSpec(text, body) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-spec-'));
   try {
     if (text !== null) {
       fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
       fs.writeFileSync(path.join(dir, SPEC_PATH), text);
+      fs.mkdirSync(path.join(dir, 'bin', 'lib'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'bin', 'lib', 'reply.test.mjs'), '');
     }
     return body(dir);
   } finally {
@@ -143,6 +205,16 @@ test('checkSpec passes with the counts, and fails with one line per finding', ()
     assert.deepEqual(checkSpec(dir, { own: false }), [{
       name: 'spec', pass: false, detail: `1 finding in ${SPEC_PATH}`,
       lines: ['"The reply check" (line 7) has no command in backticks in its **Proof:** field'],
+    }]);
+  });
+});
+
+test('checkSpec fails the row when the test file a proof names was deleted, and names the file', () => {
+  withSpec(spec(capability('The reply check', { Today: '`docs/SPEC.md`' })), (dir) => {
+    fs.rmSync(path.join(dir, 'bin', 'lib', 'reply.test.mjs'));
+    assert.deepEqual(checkSpec(dir, { own: false }), [{
+      name: 'spec', pass: false, detail: `1 finding in ${SPEC_PATH}`,
+      lines: ['"The reply check" (line 7) names bin/lib/reply.test.mjs in **Proof:**, which does not exist'],
     }]);
   });
 });

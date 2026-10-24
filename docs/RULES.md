@@ -293,7 +293,7 @@ How many days a side a throughput comparison needs before it judges a change: 7 
 
 ### throughput-quiet-days
 How many days after the last recorded throughput review the next is due once the review has gone quiet: 7 days.
-- Read by: `bin/lib/throughput.mjs`.
+- Read by: `bin/lib/throughput.mjs`, `bin/throughput.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/throughput-review.md`.
 
 ### throughput-quiet-runs

@@ -1085,6 +1085,18 @@ test('resume without --hook is a usage error: exit 2, with the usage on stderr a
   }
 });
 
+test('the usage says a hook exits 0, or 2 for a usage error, which is what resumeMain returns', async () => {
+  const err = [];
+  const neverRun = () => {
+    throw new Error('a usage error must not run or read anything');
+  };
+  const code = await resumeMain(['bogus'], { stdout: neverRun, stderr: (line) => err.push(line), run: neverRun, readStdin: neverRun, stdinIsTTY: false });
+  assert.equal(code, 2);
+  const usage = err.join('\n');
+  assert.doesNotMatch(usage, /always exits 0/);
+  assert.equal(usage.match(/exits 0, or 2 for a usage error/g)?.length, 2);
+});
+
 // Through the dispatcher, as a host runs it: a process, the hook's input on its standard input, a home
 // of its own, and a time limit. The project is a real repository so `git` is the machine's.
 test('js-harness resume --hook, run as a process: it reads standard input, prints for an opted-in project and nothing for another', withMachine(async (machine) => {
