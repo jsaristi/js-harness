@@ -23,10 +23,11 @@ means the commit is not ready yet.
 The plan is `docs/ROADMAP.md`: what is decided, done, next and still open. A session starts there;
 `docs/origin.md`, frozen, keeps the reasoning it came from. Feature work is tracked in
 `odd/tasks/<feature>.md`, the gentle-ai ODD document, mirrored in engram. Read it before resuming
-a feature; together with the roadmap it is the handoff, and nothing else is.
+a feature; together with the roadmap it is the handoff, and nothing else is: a new session's opening
+prompt only points to them.
 
-A new feature document opens with the task contract (`js-harness contract template`), so its end
-is a set of commands that exit 0, not an opinion. `check` validates every contract; `js-harness
+A new feature document opens with the task contract (`js-harness contract template`), which comes
+first here as this project's order over gentle-ai's, so its end is a set of commands that exit 0, not an opinion. `check` validates every contract; `js-harness
 contract goal <doc>` prints the `/goal` condition that runs them.
 
 ## What good looks like
