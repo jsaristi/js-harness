@@ -34,6 +34,7 @@ Each section opens with the incident it came for and its date. A section whose i
 Incident (2026-10-09): a session stopped and waited 17 hours for the user's yes to run its own gate, push and pull request, none of which was the user's to decide.
 
 - Ask only what is the user's; the project's \`AGENTS.md\` says what that is. Decide everything else, say what it costs, and go on.
+- A push goes unasked where the project's \`pushUnasked\` switch reads on (\`js-harness functions\`); where it is off, a push is asked first, as any other decision.
 - Before the question, say what a yes covers in everyday words, what it does to the user, what it does not authorize, and what the other option means. Put a choice as an everyday situation with its options A and B.
 - One decision a question, one question at a time, never while work runs. Where an orchestrator holds its role, the question goes through it (\`js-harness-orchestrator\`, "Questions to the user").
 - A question asked again says first that the earlier answer still holds, and what changed since.

@@ -66,7 +66,7 @@ absence is in L1.
 ## Tasks
 - [x] T1 (kind: docs) This feature document, committed first (S1-S18; b6d2d40b)
 - [x] T2 (kind: build) N12: the reply check refuses only a decision while work runs; RED (the question close refused while 1 task ran) then GREEN in `bin/lib/reply.test.mjs` (S8, S16)
-- [ ] T3 (kind: build) N2: the per-project pushing switch, declared beside the other functions (S2, S17)
+- [x] T3 (kind: build) N2: the per-project pushing switch `pushUnasked`, declared beside the other functions; RED in `functions`, `project-functions`, `functions` CLI and protocol 1 / orchestrator texts, GREEN after; js-harness declares it on (S2, S17)
 - [ ] T4 (kind: build) N7: the union list in one rule through `js-harness rules change`; `docs/RULES.md` re-rendered (S6, S18)
 - [ ] T5 (kind: docs) Text rows: N1, N3, N4, N6, N8, N22, N33, N38, N39-N42, N43-N44, N46 each name one home (S1, S3-S5, S7, S9-S14)
 - [ ] T6 (kind: verify) N48: a test asserts the shipped init block and AGENTS.md name the same rule ids (S15)
