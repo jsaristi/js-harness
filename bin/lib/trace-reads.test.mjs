@@ -74,7 +74,7 @@ test('a test file that passed leaves its trace: what it read, probed, listed and
     assert.equal(trace.test, 'test/all.test.mjs');
     assert.equal(trace.node, process.version);
     assert.equal(trace.tracer, TRACER_VERSION);
-    // A node of the engines field (>=22) without module hooks marks every test untraced, on purpose (Codex, 2026-10-14).
+    // A node of the engines field (>=24) without module hooks marks every test untraced, on purpose (Codex, 2026-10-14).
     assertUntraced(trace, null);
     const reads = trace.reads;
     assert.equal(reads['test/all.test.mjs'], hashOf(path.join(root, 'test/all.test.mjs')));

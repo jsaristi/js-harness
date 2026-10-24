@@ -9,7 +9,7 @@ of commands that exit 0, and a record of everything it writes, so that it can be
 **New here? Start with the [user guide](docs/GUIDE.md):** install, the menu, the first run, a typical day and
 uninstall. This page is the reference of every command.
 
-It is plain Node with no dependencies. It needs Node 22 or newer and git.
+It is plain Node with no dependencies. It needs Node 24 or newer and git.
 
 ## Install
 
@@ -79,12 +79,22 @@ No package registry is involved: the tag on GitHub is the release.
    the version released and the minor after it (`v0.9.0` and `v0.10.0` for 0.9.0), so it needs no
    real tag; it installs the first into throwaway folders, upgrades to the second, moves a
    project's pin, uninstalls, and fails unless the throwaway home ends as it started.
-3. The tag: `git tag vX.Y.Z <commit>` on that same commit, then `git push origin vX.Y.Z`. The
-   pre-push hook refuses a tag whose `package.json` at the tagged commit says another version.
-   Once the tag exists, `npm run release-proof -- --from vX.Y.Z` proves it from GitHub itself.
-4. A machine: `js-harness update` says that a newer release exists, and `js-harness upgrade`
+3. The practice run, on that same commit: one run of the journey starts a real host session, which
+   no other step does (`docs/SPEC.md`, "A host loads what was installed"). Set its folder up once
+   with `node scripts/practice.mjs setup --root <dir>`, then run `node scripts/practice.mjs run --root <dir>`
+   without `--no-host`. The host step needs `JS_HARNESS_EVAL_OAUTH_TOKEN`, a token from
+   `claude setup-token`, and it spends a model: each release costs one host session, and v1.0.0 is
+   the first. The run passes only when every step does, the host session included, on a clean checkout
+   of that commit. It appends its line to `<dir>/record.jsonl`.
+4. The tag: `git tag vX.Y.Z <commit>` on that same commit, then push it with the folder of step 3
+   named: `JS_HARNESS_PRACTICE_ROOT=<dir> git push origin vX.Y.Z`. The pre-push hook refuses a tag
+   whose `package.json` at the tagged commit says another version, and a tag with no whole pass of
+   step 3 on its commit: it reads `<dir>/record.jsonl`, and its refusal says what is missing. With no
+   folder named, the refusal says how to name one. Once the tag exists,
+   `npm run release-proof -- --from vX.Y.Z` proves it from GitHub itself.
+5. A machine: `js-harness update` says that a newer release exists, and `js-harness upgrade`
    installs it and syncs the home.
-5. A project: raising its pin is an explicit commit, like a lockfile. Set `version` in its
+6. A project: raising its pin is an explicit commit, like a lockfile. Set `version` in its
    `harness.json` to the new version, run `js-harness sync` with that version installed, and commit
    what it wrote.
 

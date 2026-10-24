@@ -6,6 +6,11 @@ import { pathToFileURL } from 'node:url';
 
 const TARBALL_RE = /^js-harness-(\d+\.\d+\.\d+)\.tgz$/;
 
+/** A pushed ref that is a release: `refs/tags/v` and a version of three numbers, with a prerelease or build part;
+ * the version is group 1. `check`'s tag row and `scripts/release-gate.mjs` both read this one, so a tag such as
+ * `vendor-snapshot` is no release for either. */
+export const VERSION_TAG_REF = /^refs\/tags\/v(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?)$/;
+
 /** Compares two "x.y.z" versions. Returns -1, 0, or 1. No pre-release/build metadata support. */
 export function compareSemver(a, b) {
   const pa = a.split('.').map(Number);

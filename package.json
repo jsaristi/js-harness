@@ -22,7 +22,7 @@
     "hooks": "git config core.hooksPath .githooks"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "repository": {
     "type": "git",
