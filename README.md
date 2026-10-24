@@ -157,7 +157,7 @@ failing test names of a red run.
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
 before any work: the median of the latest five sessions, read from their transcripts under
 `~/.claude/projects` (and, from a worktree, its main checkout's). It never fails a commit, and warns
-over 100,000 tokens.
+over `rule:fixed-load-budget` tokens.
 
 ```console
 $ js-harness check --verbose
