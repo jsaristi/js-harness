@@ -7,8 +7,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** The variable that runs one gate on Windows although the machine opted in: the run per merged batch
- * that keeps the code paths of Windows tested. */
+/** The variable that runs one gate on Windows although the machine opted in: a run that reproduces a red daily
+ * Windows run here (README, the Windows suite). */
 export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
 
 /** What the runner prints once the mirror is synced. Its absence from a sensor's output means the
@@ -39,8 +39,8 @@ export function gateWslPath(home) {
 }
 
 /** The machine's choice: `null` where the sensors run on Windows because there is no switch file,
- * `{ windows: GATE_WSL_ENV }` where there is one and `GATE_WSL_ENV` is `0` in `env` (the run per merged
- * batch, whose rows then say where its temporary files went, so a run that forgot to move them is seen),
+ * `{ windows: GATE_WSL_ENV }` where there is one and `GATE_WSL_ENV` is `0` in `env` (a run that reproduces a
+ * red daily Windows run, whose rows then say where its temporary files went, so a run that forgot to move them is seen),
  * `{ distro, node }` where they run in WSL2, `{ error }` for a switch file that cannot be taken, which
  * the gate fails as it fails a broken declaration. */
 export function readGateWsl(home, env = {}) {

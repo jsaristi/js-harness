@@ -51,7 +51,7 @@ function diffStep(reviewed, snapshots, home) {
   return `diff the global CLAUDE.md, which gentle-ai rewrites on sync, against its copy from before the first sync since the review: diff -u <(${before}) ${quote(claudeMd)}`;
 }
 
-/** `{ row, record }`: the `gentle-ai-update` row for the installed gentle-ai `version` (the gentle-ai row's, `null`
+/** `{ row, record }`: the `gentle-ai-sync` row for the installed gentle-ai `version` (the gentle-ai row's, `null`
  * when it was not read) and the `reviewed` record (or `null`), and the record to write: the version read, taken as
  * reviewed, when there is no record yet; `null` otherwise. */
 export function gentleAiUpdateRow({ version, reviewed, snapshots, home, now = () => new Date() }) {

@@ -38,7 +38,7 @@ function parseArgs(argv, env) {
   }
   return {
     cwd: cwd ?? process.cwd(),
-    // `--home`/JS_HARNESS_HOME precedence matches install.mjs's parseHome, even though init writes
+    // `--home`/JS_HARNESS_HOME precedence matches install.mjs's parseInstallArgs, even though init writes
     // nothing under home — kept for consistency with the other commands (see "T2 design").
     home: home ?? env.JS_HARNESS_HOME ?? os.homedir(),
   };

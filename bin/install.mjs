@@ -85,8 +85,6 @@ function reportSessionMessages(home) {
   return 0;
 }
 
-/** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7).
- * A planned pass is released from its project's checkout, which no file records, against the uninstall's home. */
 /** `value` as one word the user's shell reads back as it is: in single quotes, inside which neither sh nor
  * PowerShell expands `$` or ends at `"`, as they do in double quotes. A single quote is written as each reads it:
  * `'\''` for sh, `''` for PowerShell (`platform` win32). */
@@ -108,6 +106,8 @@ export function cmdExeWord(value, platform = process.platform) {
 /** What PowerShell does not read as it is inside double quotes: what it expands, and the curly double quotes. */
 const PWSH_DOUBLE_QUOTED_UNSAFE = /[$`“”„]/;
 
+/** What the uninstall says of a part of the folder of memory hygiene it left, other than kept snapshots (D7).
+ * A planned pass is released from its project's checkout, which no file records, against the uninstall's home. */
 function memoryKeptLine(folder, home) {
   switch (folder.reason) {
     case 'locked':
@@ -351,10 +351,9 @@ function logSyncProjectAction(action) {
   }
 }
 
-/** Renders `syncProject`'s result and returns the exit code — the project-scope half of `syncMain`.
- * `result.notGitRepo`/`result.notInitialized` are never reached here: the caller reports those itself
- * and names `--global` (T4 design), never as project-scope outcomes to render. */
-/** Prints what a project sync did and returns its exit code: 1 when it could not undo something it had written. */
+/** Prints what a project sync did and returns its exit code: 1 when it could not undo something it had written.
+ * It is the project-scope half of `syncMain`: `result.notGitRepo`/`result.notInitialized` are never reached here,
+ * the caller reports those itself and names `--global` (T4 design), never as project-scope outcomes to render. */
 export function reportSyncProject(result) {
   if (result.noSuchDirectory) {
     console.error(`no such directory: ${result.cwd}`);

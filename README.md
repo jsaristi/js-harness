@@ -60,7 +60,8 @@ the home what `install` wrote. Each one reads the manifest the install recorded,
 only those files, and all of them. Measured on Windows with an empty home and an empty project:
 
 - the project is left as it was: `git status` shows nothing;
-- the home keeps the empty folders `.claude/` and `.codex/`, and an empty `AppData/Roaming/`;
+- the home keeps no `.claude/` or `.codex/`: a folder `install` made goes with the last file in it,
+  and only an empty `AppData/Roaming/` is left;
 - the home keeps no `.codegraph/`: `init` runs `codegraph init` with `DO_NOT_TRACK=1`, so codegraph
   writes no telemetry there (measured on codegraph 1.6.0).
 
@@ -196,8 +197,8 @@ Three more forms of `check` share the same command:
 
 Runs a heavy command under the machine's gate lock, one at a time with the gates of every
 project, and records the run in the machine's gate log. `gate log` prints the last runs. A
-command is stopped after 30 minutes (`--max <minutes>`), and while the branch of the folder it runs
-in has an open pull request and commits a push would take now, any command but that push or a merge
+command is stopped after the minutes of `rule:gate-max` (`--max <minutes>` replaces them), and
+while the branch of the folder it runs in has an open pull request and commits a push would take now, any command but that push or a merge
 is refused, with the push command printed. `--ready <command>` declares a quick check, such as
 `git diff --quiet`, run before the wait and again as the turn comes after one: when it fails, nothing
 runs (exit 75), so a command that would refuse at once does not wait for a turn first.
@@ -325,6 +326,7 @@ registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exi
 registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
 registered hook entry in ~\.claude\settings.json: js-harness reply --hook || exit 0 (Stop)
 registered hook entry in ~\.codex\hooks.json: js-harness reply --hook || exit 0 (Stop)
+…
 ```
 
 ### js-harness loop
