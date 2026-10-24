@@ -258,6 +258,15 @@ proofs and by those tasks.
 **Discarded:** The Codex plugin's review: it passes no per-thread setting and returns only text. Reading gentle-ai's or the plugin's own state as the record: pruned, opaque and free to change.
 **Today:** `bin/codex-review.mjs`, `bin/lib/codex-reviews.mjs`, `bin/lib/codex-review-coverage.mjs`, `bin/lib/codex-review-turns.mjs`, `.githooks/pre-push`, `js-harness codex-review`
 
+### The Codex meter
+
+**Problem:** No command read Codex's rate limits, so the five-hour window, the weekly one and the reset credits could be seen only in the app (`odd/tasks/launch-audit/b.md`, C-b-37). The owner's note `codex-meter-is-readable.md` named a scratchpad script that no longer exists; `grep -rn "rateLimits\|rate_limits\|app-server" bin --include=*.mjs` found no reader outside the release cleanup.
+**Requirement:** A command reads the five-hour window, the weekly window and the reset credits left from the local `codex app-server` (`account/rateLimits/read`), without running a model, so without tokens. Each read starts one process and kills it on every outcome. It prints a line per window and the credits, or `--json` numbers; a field the answer lacks is unknown. It exits 1 with one line when codex is missing, does not answer within its timeout, answers with an error or exits first, and it never prints an account identifier.
+**Reason:** The owner asked for the limits at the moment he looks, at no model's cost; the price he accepted is one process per read.
+**Proof:** `node --test bin/codex-meter.test.mjs`, `node --test bin/lib/codex-meter.test.mjs`
+**Discarded:** `rate_limits` from the rollout files `codex-usage` reads: they hold `null` in the sessions this repository ran. A flag of `codex-review --plan`: a read runs no review and writes no record.
+**Today:** `bin/codex-meter.mjs`, `bin/lib/codex-meter.mjs`, `bin/lib/process-tree.mjs`, `js-harness codex-meter`
+
 ### The merge queue
 
 **Problem:** Each merge made every other pull request's green run stale: 205 minutes of a 2,000-minute monthly allowance on 2026-10-14, and GitHub's merge queue is not offered for a private personal repository (`odd/tasks/merge-queue.md`).

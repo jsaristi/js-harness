@@ -911,6 +911,21 @@ Left out of the review: 5 Markdown documents, 818 changed lines.
 Allowance of this plan: 872,400 input tokens, the larger of 300,000 a review and 1,200 a changed line, for the 727 changed lines it reads. Its estimate, about 470,000, is inside it. …
 ```
 
+### js-harness codex-meter
+
+Reads Codex's five-hour and weekly limits and the reset credits left, from the local `codex app-server`.
+The server answers the read without running a model, so it spends no tokens; each read starts one
+process and kills it after. `--json` prints the numbers. A field the answer does not hold is shown as
+unknown, and a failed read (no `codex` on the PATH, no answer within 15 seconds, an error answer, or a
+process that exits first) says so in one line and exits 1. A usage error exits 2.
+
+```console
+$ js-harness codex-meter
+five-hour: 3% used, resets at 2026-10-24 06:01
+weekly: 8% used, resets at 2026-10-30 13:38
+reset credits left: 1
+```
+
 ### js-harness windows-daily
 
 The gates run on Linux, so the whole suite also runs once a day on GitHub's Windows machines
