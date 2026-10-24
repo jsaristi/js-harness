@@ -3,7 +3,7 @@
 Locator: `odd/tasks/codex-hook-trust.md` · Engram mirror: `odd/codex-hook-trust/tasks` · Branch: `feat/codex-hook-trust`,
 cut from `origin/main` at `3b1c8d89`, worktree `D:js-harness.claudeworktreeswonderful-gagarin-88a4cc` · Runner: `node --test` · Delivery: one slice, one PR.
 
-Next step (kept current): T1-T3 built, nothing committed yet. The first gate refused (L5); fixed the doctor.test regex, the clean-home row, moved the trust planning and `deepEqual` out of `manifest.mjs` (now 2159 of 2160 lines). Then: `node bin/js-harness.mjs gate -- git commit` with the message in L5, push, `js-harness codex-review --base origin/main`, PR, `gentle-ai review assess`.
+Next step (kept current): T1-T3 committed in `c7af39e2` (gate passed). Running: `gentle-ai review assess --base-ref 3b1c8d89 --committed-only` and `js-harness codex-review --base 3b1c8d89` (log `$TEMP/codex-trust-review.log`). Then: treat Codex's findings, commit this state, push `feat/codex-hook-trust`, open the PR, record its link here, tick T4.
 
 ## Goal
 A user whose Codex skips the harness's hooks is told so by `doctor` with the step that fixes it, and `uninstall` leaves
