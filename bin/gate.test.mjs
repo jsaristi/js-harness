@@ -1940,13 +1940,17 @@ test('gate takes an empty JS_HARNESS_HOME as unset: its lock and log stay out of
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-gate-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
   try {
+    // Inside a gate every test carries JS_HARNESS_CHECK_INNER=1, and a gate that sees it runs its command and
+    // writes nothing (gate.mjs, gateMain); without these off, this test would pass on the old code too.
+    const { JS_HARNESS_CHECK_INNER, JS_HARNESS_GATE_LOG, JS_HARNESS_GATE_HELD, ...rest } = process.env;
     const run = spawnSync(process.execPath, [dispatcher, 'gate', '--no-wait', '--', 'node', '-e', '0'], {
       cwd: work,
       encoding: 'utf8',
-      env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
+      env: { ...rest, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
     });
 
     assert.equal(run.status, 0, run.stderr);
+    assert.equal(fs.existsSync(path.join(home, '.js-harness', 'gate-log', 'log.jsonl')), true, 'the log lands in the user home');
     assert.equal(fs.existsSync(path.join(work, '.js-harness')), false);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });

@@ -36,7 +36,7 @@ Nothing open. A change of what a flag means would be asked first.
 
 ## Specs
 - S1. `bin/lib/home.mjs` exports `harnessHome({ given, env, cwd, homedir })`: `given` (the `--home` value) wins when it is
-  set; otherwise `env.JS_HARNESS_HOME` when it is non-empty; otherwise `homedir()`. The result is `path.resolve(cwd, value)`.
+  non-empty, so an empty `--home ""` is unset like an empty variable (amended by the lead, L8); otherwise `env.JS_HARNESS_HOME` when it is non-empty; otherwise `homedir()`. The result is `path.resolve(cwd, value)`.
   It exports `homeIsSet(env)`, true only for a non-empty value. It reads no file and spawns nothing.
 - S2. All reads of `JS_HARNESS_HOME` in `bin/*.mjs` and `bin/lib/*.mjs` use the helper, keeping each site's order of
   sources. The clean command keeps its `deps.scan` home after the environment, as the `homedir` fallback. The clean
@@ -87,3 +87,4 @@ Nothing open. A change of what a flag means would be asked first.
   file under the user home: CI wrote no `gate-log` there, and I have not found why (open; the in-process
   `gate resolves its home` test covers the home choice). Both tests fail on the base copy (doctor: `unknown` for
   `outdated`; gate: the working directory got its lock or log), so both remain RED evidence.
+- L8 (2026-10-24, the lead) The independent Opus verifier (scratch C:\Users\Oficina\AppData\Local\Temp\tmp.rzUYgin5yp) found no change-caused defect. S1 PARTIAL, S2 PASS, S3 PARTIAL, S4 PASS. The 148-pair differential shows only the asked-for changes. D1: an empty `--home ""` no longer means the working directory. The lead accepts it under his 07:10Z word (908805db line 28784), because it removes the same defect class, and amends S1. A1: CI wrote no gate log because every test inside a gate carries JS_HARNESS_CHECK_INNER=1, and a gate that sees it writes nothing (gate.mjs gateMain). That is a test artifact, not a Linux defect. The gate test now strips the inner-gate variables and asserts the log lands in the user home; observed RED on 828f35a7 and GREEN on the candidate, both with JS_HARNESS_CHECK_INNER=1. A2: the two unused imports in bin/doctor.test.mjs are gone, and doctor.test.mjs passes 91 of 91.
