@@ -11,7 +11,7 @@ import { channelDir } from './channel.mjs';
 import { gateFirstDir } from './gate-first.mjs';
 import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
-import { LEASE_MINUTES, WAIT_MS } from '../permit.mjs';
+import { LEASE_MINUTES, WAIT_MS } from './permit-times.mjs';
 import { INDEX_LINE_CHARS } from './memory-index-guard.mjs';
 import { SHARE_TOLERANCE } from './audit.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';

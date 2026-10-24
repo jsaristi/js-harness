@@ -22,8 +22,10 @@ import {
   invalidHarnessJsonMessage,
   howToPinClause,
 } from './lib/project.mjs';
-import { DEFAULT_REPO, INSTALL_NEWEST, tagSpec } from './lib/version.mjs';
+import { DEFAULT_REPO, INSTALL_NEWEST, currentVersion, tagSpec } from './lib/version.mjs';
 import { harnessHome } from './lib/home.mjs';
+
+export { currentVersion };
 
 export const INSTALL_USAGE = 'Usage: js-harness install [--home <path>] [--accept-session-messages]';
 export const UNINSTALL_USAGE = [
@@ -238,12 +240,6 @@ function reportUninstallProject(result) {
   }
   for (const action of result.actions) logUninstallProjectAction(action);
   return result.code;
-}
-
-/** This package's own version, read from its package.json (never the installed target's). */
-export function currentVersion() {
-  const pkgPath = path.join(import.meta.dirname, '..', 'package.json');
-  return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
 }
 
 // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): a skipped component or

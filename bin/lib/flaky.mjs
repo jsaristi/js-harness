@@ -198,3 +198,23 @@ export function checkLedger(cwd, { readFile = (file) => fs.readFileSync(file, 'u
   }
   return ledgerRow(text, { testFiles: testFilesOf(cwd), failureIds, today });
 }
+
+/** How many names of failing tests a gate's end line keeps for one sensor, and how long each may be. */
+const FAILING_KEPT = 20;
+const FAILING_NAME_MAX = 200;
+
+/** The names of the tests that failed, read from what a `node --test` printed: the lines under its
+ * `✖ failing tests:` (the spec reporter, a run's default when its output is no terminal), each without
+ * the time after it, or else the top-level `not ok <n> - <name>` of the tap reporter. Colours are taken
+ * off, each name is kept once, twenty at most and two hundred characters each. None for an output of any
+ * other kind: the gate keeps what it can read, and a sensor's own report stays where it is. A WSL2 run's
+ * output lives only in the mirror and the report, and on 2026-10-14 the name of a failing test could not be
+ * had back once the report was gone (odd/tasks/gate-log-failing-tests.md). */
+export function failingTests(output) {
+  const lines = String(output ?? '').replace(/\u001b\[[0-9;]*m/g, '').split(/\r?\n/);
+  const under = lines.findIndex((line) => line.trim() === '✖ failing tests:');
+  const names = under === -1
+    ? lines.map((line) => /^not ok \d+ - (.+)$/.exec(line)?.[1]).filter(Boolean)
+    : lines.slice(under + 1).map((line) => /^✖ (.+?)(?: \([\d.]+m?s\))?$/.exec(line)?.[1]).filter(Boolean);
+  return [...new Set(names.map((name) => name.trim().slice(0, FAILING_NAME_MAX)))].slice(0, FAILING_KEPT);
+}

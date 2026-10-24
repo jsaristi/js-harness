@@ -3,13 +3,11 @@
 // second part)"). The stamp is the copy's own list, hashed over its unscoped rules; it is compared with the same hash
 // of the default branch's list, read fresh every time and never cached, so that a failed read is `unknown` and never
 // an old hash in force.
-import fs from 'node:fs';
-import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { RULES } from './rules-data.mjs';
 import { readRules, shippedRulesHash, unscoped } from './rules.mjs';
 import { diffRules, HARNESS_LIST, listOf, MAIN_REFS, readListText } from './rules-reach.mjs';
-import { DEFAULT_REPO, INSTALL_NEWEST } from './version.mjs';
+import { DEFAULT_REPO, INSTALL_NEWEST, currentVersion } from './version.mjs';
 
 // The same bound as every other lookup of `doctor` (bin/lib/latest.mjs).
 const TIMEOUT_MS = 5000;
@@ -67,7 +65,7 @@ function differsOf(copy, main) {
 /** The version of this copy, from its own `package.json`, as `js-harness --version` prints it. */
 function copyVersion() {
   try {
-    return JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')).version ?? null;
+    return currentVersion() ?? null;
   } catch {
     return null;
   }
