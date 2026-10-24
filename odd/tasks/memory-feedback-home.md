@@ -172,3 +172,5 @@ he did not type; his exact words are in the rule sources):
   while group 1's map gave one-sample no home, and gave conflict-merge only the review-scope phrase of
   bin/lib/codex-review-turns.mjs, not the merge-tree technique. Before a list of notes to delete is sent, run
   its quotations against the homes, as `memory verify` will, so that the list is not wrong.
+- L14 (2026-10-24) His words of 2026-10-24 (transcript 908805db, line 26478) on a pause for a restart or an update: rule:restart-announce amended (a900807e) and rule:reuse-first added (e766e853), each by `rules change`; a6b17b46 merges origin/main between the two runs, which the command requires. Searched first: `js-harness rules`, protocols 4 and 8.
+- L15 (2026-10-24) gentle-ai: a900807e and e766e853 (d21810e7..e766e853) assessed medium, not due (under_budget), by `gentle-ai review assess --base-ref d21810e7 --committed-only`; Codex: correct (0.91), recorded. PR 551.

@@ -307,13 +307,25 @@ export const RULES = [
   },
   {
     "id": "restart-announce",
-    "subject": "before the user restarts or updates, the lead pauses every session at a safe point, and only then tells them in capitals",
+    "subject": "before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals",
     "owner": "sebastian",
-    "since": "2026-10-20",
+    "since": "2026-10-23",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!",
-      "pause everything at a safe point first, and only then tell them"
+      "pause everything at a safe point first, and only then tell them",
+      "nothing is cut halfway"
+    ]
+  },
+  {
+    "id": "reuse-first",
+    "subject": "before adding a command, an option, a function, a protocol, a rule or a document, a session searches for one that already does it, and amends that one",
+    "owner": "sebastian",
+    "since": "2026-10-24",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "search for one that already does it",
+      "amend that one instead of adding a second"
     ]
   },
   {

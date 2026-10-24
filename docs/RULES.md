@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `28ad681548ff`. In force: 57 (32 of Sebastián, 25 of the project). Retired: 0.
+Hash `978b5c995476`. In force: 58 (33 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -87,9 +87,14 @@ When the user asks what was done, the lead's status report shows each section th
 - Since 2026-10-20. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-20.
 
 ### restart-announce
-Before the user restarts or updates, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"
+Before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-20. Row: reports. Source: his words of 2026-10-20, 2026-10-20, checked by the command on 2026-10-20.
+- Since 2026-10-23. Row: reports. Source: his words of 2026-10-23, checked by the command on 2026-10-23.
+
+### reuse-first
+Before adding a command, an option, a function, a protocol, a rule or a document, a session searches for one that already does it, and amends that one: "- Before adding a command, an option, a function, a protocol, a rule or a document, search for one that already does it (codegraph_explore, \`js-harness rules\`, the protocols and the skills); amend that one instead of adding a second, and say in the commit what was searched."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-23, checked by the command on 2026-10-24.
 
 ### review-effort
 The effort a Codex review runs at: medium.
