@@ -137,11 +137,32 @@ test('undoStack keeps the record of an undo that failed, for a second run', () =
   assert.deepEqual(result.failedRecords, [PACKAGE]);
 }));
 
-test('undoStack tries the undo of a record whose command never finished, while its tool is there', () => withHome((home) => {
-  const { spawn, calls } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.51.0' } : { status: 0 }));
+// gentle-ai R1-001 (T7): a record whose `applies` was never read cannot tell the harness's install from a later one of
+// his own, so its undo is named, never run, and the record dropped.
+test('undoStack never runs the undo of a record whose applies was never read: it names it and drops the record', () => withHome((home) => {
+  const { spawn, calls } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.51.0' } : assert.fail('ran an undo')));
   const result = undoStack([{ ...PACKAGE, applies: null }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
-  assert.deepEqual(result.undone, [{ tool: 'codex', dimension: 'installed' }]);
-  assert.equal(calls.length, 2);
+  assert.deepEqual(result.undone, []);
+  assert.deepEqual(result.kept, [{ tool: 'codex', dimension: 'installed', reason: 'unread', undo: 'pnpm remove -g @openai/codex, with PNPM_HOME=/p' }]);
+  assert.deepEqual(result.failedRecords, []);
+  assert.equal(calls.length, 1);
+}));
+
+// Codex on 612ceff..4c2955d (P2): the record is dropped, so the undo it names carries the environment it was given,
+// or it would remove the default install, possibly his, and not the one under the prefix.
+test('the undo named for a never-read record carries its recorded environment, a PATH as what goes first', () => withHome((home) => {
+  const { spawn } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.51.0' } : assert.fail('ran an undo')));
+  const record = { ...PACKAGE, applies: null, env: { PNPM_HOME: '/p', PATH: '/p/bin' } };
+  const result = undoStack([record], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.equal(result.kept[0].undo, 'pnpm remove -g @openai/codex, with PNPM_HOME=/p and /p/bin first on the PATH');
+  const bare = undoStack([{ ...record, env: {} }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.equal(bare.kept[0].undo, 'pnpm remove -g @openai/codex');
+}));
+
+test('undoStack drops a never-read record whose tool is already gone, as any other', () => withHome((home) => {
+  const { spawn } = fakeSpawn((file) => (file === 'codex' ? { status: 1 } : assert.fail('ran an undo')));
+  const result = undoStack([{ ...PACKAGE, applies: null }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.deepEqual(result.kept, [{ tool: 'codex', dimension: 'installed', reason: 'gone' }]);
 }));
 
 const CODEX_REG = { tool: 'codegraph', dimension: 'codex', kind: 'registration', run: ['codex', 'mcp', 'add'], undo: ['codex', 'mcp', 'remove', 'codegraph'], applies: '[mcp_servers.codegraph]', env: {} };
@@ -161,4 +182,16 @@ test('undoStack keeps the Codex CLI while the undo of a registration in Codex fa
   assert.deepEqual(calls.map((call) => call.args.slice(0, 2)), [['mcp', 'remove']], 'only the registration\'s undo ran');
   assert.deepEqual(result.kept.map((k) => [k.tool, k.dimension, k.reason]), [['codegraph', 'codex', 'failed'], ['codex', 'installed', 'needed']]);
   assert.deepEqual(result.failedRecords, [PACKAGE, CODEX_REG], 'in the order they were installed');
+}));
+
+// The T7 verifier's advisory: the undo named for a never-read registration in Codex needs the Codex CLI to run.
+test('undoStack keeps the Codex CLI while the undo of a registration in Codex is left to him unread', () => withHome((home) => {
+  fs.mkdirSync(path.join(home, '.codex'));
+  fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[mcp_servers.codegraph]\n');
+  const { spawn, calls } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.50.0' } : assert.fail('ran an undo')));
+  const result = undoStack([PACKAGE, { ...CODEX_REG, applies: null }], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.deepEqual(calls.filter((call) => call.args[0] !== '--version'), [], 'no undo ran');
+  assert.deepEqual(result.kept.map((k) => [k.tool, k.dimension, k.reason]), [['codegraph', 'codex', 'unread'], ['codex', 'installed', 'needed']]);
+  assert.equal(result.kept[1].why, 'the undo of a registration in Codex left to you needs it');
+  assert.deepEqual(result.failedRecords, [PACKAGE]);
 }));

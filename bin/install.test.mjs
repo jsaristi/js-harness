@@ -2208,6 +2208,20 @@ test('uninstall machine drops the record of a tool already gone, and names one t
   }
 });
 
+test('uninstall machine runs no undo of a record stack install never read: it names the undo, drops the record and exits 0 (T7)', async () => {
+  const home = makeTmpHome();
+  try {
+    recordStackRow(home, { tool: 'codex', dimension: 'installed', kind: 'package', bin: 'codex', run: ['pnpm', 'add', '-g', '@openai/codex'], undo: ['pnpm', 'remove', '-g', '@openai/codex'], applies: null, env: {}, at: 'then' });
+    const stackSpawn = (file, args) => ([file, ...args].join(' ') === 'codex --version' ? { status: 0, stdout: '2.0.0' } : assert.fail('ran an undo'));
+    const { code, outLines } = await captureConsole(() => uninstallMain(['machine', '--home', home], {}, { stackSpawn }));
+    assert.equal(code, 0);
+    assert.ok(outLines.includes("kept codex installed (stack install never read what it left, so it may be yours): no longer recorded; if it is the harness's, its undo is: pnpm remove -g @openai/codex"), outLines.join('\n'));
+    assert.equal(readManifest(home), null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall machine keeps the record of a tool that answers but cannot be read, and exits 1 (Codex on b9722fc..e57f2d0)', async () => {
   const home = makeTmpHome();
   try {
