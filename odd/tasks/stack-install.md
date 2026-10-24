@@ -354,3 +354,21 @@ onboarding's files; a note in the shared notes folder hands that session this co
 - L15 (2026-10-24) T6, from the lead's 10:57 order, built test-first in a651b921 on fix/stack-install-t6: `splitCommand(pm, exists)` keeps a line that holds whitespace and names a file one word, so `upgrade --pm` and `JS_HARNESS_PM` share `stack`'s rule; `resolveStackPm` calls it and drops its copy. RED then GREEN: bin/lib/version.test.mjs (13) and bin/update.test.mjs (68), and stack, lib/stack, tui, stack-run, install, package-manager pass. An independent Opus verifier (risk item 3, a shared parser) ran 146 cases against 1649f32b: PASS, `resolveStackPm` and `pmKind` identical in every case, and the only differences the intended ones (an existing path with a space is one word in `upgrade`, quoted by `cmdWord` on win32; `npm --cache "x` still refused). Advisory: `scripts/sandbox.mjs:64-71` does not mention the one-word case.
   - gentle-ai: a651b921 assessed medium, review_due false, reason under_budget (44 lines).
   - Codex 1649f32..a651b92: correct (0.96), no findings.
+- L16 (2026-10-24) T7, from the lead's 10:57 order, built test-first on fix/stack-install-t7 (stacked on T6's branch,
+  since both write this document). 4c2955d2: `undoStack` never runs the undo of a record whose `applies` is `null`
+  while its tool is there; it names it (`unread`) and drops the record, and `uninstall machine` prints "kept <tool>
+  <dimension> (stack install never read what it left, so it may be yours): no longer recorded; if it is the
+  harness's, its undo is: <undo>" and exits 0. `stack install` reads every record left unread once more at the end
+  of the run, so a timed-out install that finished gets its `applies` and the run exits 0. RED 3, then GREEN. The
+  `CODEX_HOME` half of the old T7 is split into T8, open. 0c9bb95f takes the two findings, test-first (RED 2, then
+  GREEN): the named undo carries the recorded environment (Codex's P2), and an unread registration in Codex keeps
+  the Codex CLI (`needed`) so that undo can still run (the verifier's advisory 1). An independent Opus verifier (risk
+  item 1: when an uninstall removes a package) on 612ceffa..4c2955d2: PASS, a differential of 15 `stack install`
+  runs and 14 records through `undoStack` and `uninstall machine`, every difference an intended one, the three new
+  tests failing at the base. Its advisory 2, the fake `codex mcp add` writes no `config.toml`, so the end-of-run
+  read of a written Codex registration is not exercised, is left. Suites: stack-run 18, stack-install 20, install
+  111, stack 14, lib/stack 125, manifest-stack 7, manifest 190.
+  - gentle-ai: 4c2955d2 assessed medium, review_due false, reason under_budget (112 lines).
+  - gentle-ai: 0c9bb95f assessed medium, review_due false, reason under_budget (46 lines).
+  - Codex 612ceff..4c2955d: incorrect (0.94), one P2, the named undo lost the recorded environment. Recorded.
+  - Codex 4c2955d..0c9bb95: correct (0.97), the P2 fixed. Recorded.
