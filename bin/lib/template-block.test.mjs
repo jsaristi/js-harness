@@ -2,8 +2,14 @@
 // not edited them (odd/tasks/rule-hierarchy.md, T16f): the mark that opens the block carries the hash of its lines.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { agentsTemplate, templateBlock, renderTemplateBlock } from './project.mjs';
 import { sha256 } from './manifest.mjs';
+
+// The rule ids a text names, sorted and once each (odd/tasks/instruction-homes.md, N48): a text that names a rule the other does
+// not has drifted from it, so the shipped block and this repo's AGENTS.md must name the same ids.
+const ruleIdsOf = (text) => [...new Set([...text.matchAll(/rule:([a-z][a-z-]*)/g)].map((match) => match[1]))].sort();
 
 const mark = (body) => `<!-- js-harness block ${sha256(body.replace(/\r\n/g, '\n')).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->`;
 const END = '<!-- js-harness block end -->';
@@ -26,6 +32,12 @@ test('the block says gentle-ai\'s assessment decides when a change is reviewed, 
   assert.doesNotMatch(body, /A behavior change arrives with the test/, 'the test-first line lives in AGENTS.md');
   assert.doesNotMatch(body, /cut \(a new session/, 'the closing states live in protocol 2');
   assert.ok(body.includes('`js-harness-protocols` section 2'), 'the block names the protocol that holds the states');
+});
+
+test('the shipped block and this repo\'s AGENTS.md name the same rule ids', () => {
+  const agents = readFileSync(fileURLToPath(new URL('../../AGENTS.md', import.meta.url)), 'utf8');
+  assert.ok(ruleIdsOf(agents).length > 0, 'AGENTS.md names a rule');
+  assert.deepEqual(ruleIdsOf(templateBlock()), ruleIdsOf(agents));
 });
 
 test('an unedited block of an older template is rendered again, and every line outside it is kept byte for byte', () => {

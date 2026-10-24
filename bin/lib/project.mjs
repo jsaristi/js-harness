@@ -433,6 +433,9 @@ choice, what cannot be undone, a change of the plan or of its order, a new proto
 published outside this project. Ask those one at a time, never while work runs, naming which it is.
 Everything else is decided, its cost said, and the work goes on.
 
+Near \`rule:context-pause\` of its window a session writes its state and keeps working; the host
+compacts it, and the pause notice says what the owner gets then.
+
 The owner's wording is the need, not the specification: an answer to a proposal of theirs says the
 need that was understood, what would be done differently from their words and why, and what it
 costs or is not known; only then is it recorded.
