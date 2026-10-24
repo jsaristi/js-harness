@@ -73,7 +73,7 @@ Version 2 governs where they differ.
 - C, the rule (reader 2). Declared with `js-harness rules change ci-gate-bound` on `rule/ci-gate-bound`, after this
   document was committed (its source must be a file of the repository); scope everywhere (ci-gate.mjs runs in every
   project), one pattern for a restated bound, its planted line in `bin/lib/rules-scan.test.mjs`.
-- C, the texts (reader 2). Also changed: `docs/SPEC.md` (the requirement and its title), `docs/ROADMAP.md:899`, the
+- C, the texts (reader 2). Also changed: `docs/SPEC.md` (the requirement and its title), `odd/tasks/session-channel.md, "Session channel"`, the
   work-session skill line in `bin/lib/manifest.mjs` (and the test that holds it), a Log line in
   `odd/tasks/first-version.md` superseding "Overflow only", and `gate log`, which now says a CI gate ran "on GitHub's
   machines" instead of reading like a run under the lock (`LOCK_SAID`, `bin/lib/gate-log.mjs`).
@@ -220,7 +220,7 @@ Versions 1 (below) and 2 (above) stand where this does not change them. What the
   plan put his question as "a Windows run off the lock on a cadence he chooses (e.g. once a day or every N
   batches)" (throughput-v3-plan.md:9-12), since per batch it would hold the lock 15-19 hours a day, and he chose
   once a day (`docs/ROADMAP.md:69`). The per-batch step was a promise no land kept (0 of 84 land suites ran on
-  Windows), so an automated daily run replaces it; `docs/ROADMAP.md:986`'s limit "no dropping the Windows run from
+  Windows), so an automated daily run replaces it; `odd/tasks/session-channel.md, "Session channel"`'s limit "no dropping the Windows run from
   a land" gets a note saying so (L8). The daily run cannot see this machine's antivirus, temporary folders or
   paths; the README says so.
 - The texts: README `:75-82` (the Windows-only tests are run daily on GitHub's Windows too), `:563-574` (one

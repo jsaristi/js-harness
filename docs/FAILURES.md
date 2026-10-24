@@ -81,7 +81,7 @@ A block meant to hold his answer was worded as an instruction and he read it as 
 run.
 - Class: asked-of-him
 - Seen: 2026-10-07 — odd/tasks/codex-review-lean.md:528-529 — read three times as a task to run in
-  Codex; also docs/ROADMAP.md:1075-1077 and odd/tasks/rule-hierarchy.md:162
+  Codex; also docs/ROADMAP.md:363-365 and odd/tasks/rule-hierarchy.md:162
 - Control: protocol — bin/lib/manifest.mjs — "Every question of the project reaches the user in one
   place" — since 2026-10-14
 - Was: line — AGENTS.md — "never an instruction: one was read as his task." — replaced on
@@ -269,7 +269,7 @@ A session ran a command it did not know, to read its help, and the command acted
 - Class: rule-not-acting
 - Aka: the defect "install acts on a flag it does not know" (relief file, line 17)
 - Seen: 2026-10-09 — odd/tasks/session-board.md:1183-1198 — `install --help` installed two skills
-  and two hook entries on his machine; also docs/ROADMAP.md:434-436 and :481
+  and two hook entries on his machine; also odd/tasks/subagent-model-routing.md, "Subagent models result" and :481
 - Seen: 2026-10-10 — relief file, line 54 — `claude remote-control --help` printed nothing and hung
   120 s; odd/tasks/session-board.md:1335-1339 calls it the same mistake, a day after the rule was
   written
@@ -317,7 +317,7 @@ Sessions were told to cut, or proposed a cut, near 70 percent of their context b
 ### context-fills-unnoticed
 A session's context reached a level nobody had looked at.
 - Class: unseen-state
-- Seen: 2026-10-07 — docs/ROADMAP.md:1071 — a session reached 77 percent of 500k unnoticed (the day
+- Seen: 2026-10-07 — docs/ROADMAP.md:359 — a session reached 77 percent of 500k unnoticed (the day
   is that of his request; the day it happened is not stated)
 - Seen: 2026-10-10 — relief file, line 75 — a session said 80 percent where the board said 68,
   inside a task that could not close
@@ -437,7 +437,7 @@ on it.
 - Seen: 2026-10-11 — relief file, line 186 — context percentages told to him between two reads were
   estimates and not marked
 - Seen: 2026-10-11 — relief file, line 220 — the roadmap says "some fifty thousand git processes"
-  (docs/ROADMAP.md:767); counted, 15,467 (claimed by JH 6)
+  (odd/tasks/session-channel.md, "Session channel"); counted, 15,467 (claimed by JH 6)
 - Seen: 2026-10-13 — relief file, line 615 — "62 of 352, modest", the figure of JH 10's first
   version of a design, was told to him before its readers had read it; its readers made it about a
   third. A figure reaches him only from the version after the readers
@@ -1040,7 +1040,7 @@ A rule lived only in an agent's memory note, so he repeated it and sessions alre
 it or did not follow it.
 - Class: rule-not-acting
 - Aka: failure 2 (odd/tasks/rule-hierarchy.md; relief file, line 143)
-- Seen: 2026-10-08 — docs/ROADMAP.md:381-395 — two rules of that day existed only in memory; his
+- Seen: 2026-10-08 — odd/tasks/codex-review-cost.md, "Codex review cost result" — two rules of that day existed only in memory; his
   wording rule said for the first time
 - Seen: 2026-10-09 — relief file, line 3 — his wording rule again, with the lead
 - Seen: 2026-10-10 — relief file, line 80 — "third time he states it"; also
@@ -1197,7 +1197,7 @@ conflict git did not reproduce and the merge was refused.
 He could not tell a session that worked from one that waited on him, and sent prompts that were
 already stale.
 - Class: asked-of-him
-- Seen: 2026-10-07 — docs/ROADMAP.md:1067-1069 — "sent stale prompts twice"; the day is that of his
+- Seen: 2026-10-07 — docs/ROADMAP.md:355-357 — "sent stale prompts twice"; the day is that of his
   request, the days of the two sends are not stated
 - Control: line — AGENTS.md — "End each reply with one state" — since 2026-10-09
 
@@ -1308,7 +1308,7 @@ A test that forgot `--home` wrote into the real home.
 He was told something about what he would see or what had happened that nobody had checked, and it
 was not so.
 - Class: wrong-information
-- Seen: 2026-10-09 — docs/ROADMAP.md:436-437 — a session told him its check "runs on GitHub", where
+- Seen: 2026-10-09 — odd/tasks/subagent-model-routing.md, "Subagent models result" — a session told him its check "runs on GitHub", where
   no workflow exists; also odd/tasks/subagent-model-routing.md:306-307
 - Seen: 2026-10-09 — odd/tasks/session-board.md:1243-1244 — "you will see it in your list", without
   having checked; he did not see it

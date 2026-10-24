@@ -21,7 +21,7 @@ by hidden tests, so a score is a command's exit, not a phrasing match.
 - `node bin/js-harness.mjs contract check odd/tasks/evals.md` exits 0
 - `node --test "evals/**/*.test.mjs"` exits 0
 - `node evals/report.mjs --require-complete --min-discriminating 3` exits 0
-- `docs/ROADMAP.md` records the A/B result (per task and effort: both configs' mean score, spread,
+- this document, `## F5 result`, records the A/B result (per task and effort: both configs' mean score, spread,
   tokens and wall time) and `node bin/js-harness.mjs progress` shows F5's three steps checked
 
 ## In scope / Out of scope
@@ -1360,7 +1360,7 @@ same at 2.7× the input tokens. Sebastián then changed what "discriminates" mea
 floor, cost as what separates (Constraints, 2026-10-02), so every candidate goes to the A/B run
 and no headroom task is needed. T5 is done (run `ab-high`, see Progress); no trial is left to
 run. T6 is done (2026-10-03): the report, and the result in `docs/ROADMAP.md` (Decided, Eval
-verdict; Phases; F5 result), which checks F5's three steps. F5 is complete on this branch; what
+verdict; Phases; `## F5 result` in this document), which checks F5's three steps. F5 is complete on this branch; what
 remained was delivery, and it is done (see Delivery): the four slices are merged to `main`
 (`5ab2ae6`, `bb82ea8`, `0f44719`, `7f02627`), and `main`'s tree equals `feat/evals` at
 `3babe73`. **The feature is closed.** The
@@ -1382,3 +1382,32 @@ size); a step he reports doing outside the session is checked first, since he of
 suggested prompt from his phone (twice that day for a token that was not stored); and line 73
 re-wrapped. It now measures about 1,455 of its 1,500 tokens. The roadmap's stale stack line
 (engram v2) is already fixed on `feat/stack-v4`, so it is left alone here.
+
+## F5 result
+
+Five tasks, three trials per config and effort, Opus 5.5 under `bypassPermissions`, Claude Code
+2.1.284 with gentle-ai 4.0.0 and engram 3.0.0 (`node evals/report.mjs` over
+`evals/results/headroom.json`, `headroom-current.json` and `ab-high.json`). Score is the
+mean with its range when the trials differ; cost is the mean list cost of one session; tokens
+are input (cache included) plus output over every model of the session; wall time is the mean.
+
+| Task | Effort | Score minimal / current | Cost minimal / current | Ratio | Tokens minimal / current | Wall minimal / current | Verdict |
+|------|--------|------|------|------|------|------|------|
+| format-v2 | medium | 0.99 (0.98–1.00) / 0.99 (0.98–1.00) | $1.38 / $2.50 | 1.81× | 1.09M / 3.43M | 4m55s / 7m24s | cost: minimal |
+| house-rules | medium | 0.98 / 0.98 | $0.40 / $1.01 | 2.54× | 313k / 1.04M | 1m17s / 2m20s | cost: minimal |
+| lost-updates | medium | 1.00 / 1.00 | $0.52 / $1.03 | 2.00× | 342k / 968k | 2m19s / 2m55s | cost: minimal |
+| resolver | medium | 1.00 / 1.00 | $0.41 / $1.01 | 2.44× | 195k / 824k | 1m40s / 2m52s | cost: minimal |
+| spec-drift | medium | 0.99 (0.98–1.00) / 1.00 | $0.54 / $1.21 | 2.25× | 385k / 1.15M | 1m44s / 3m01s | cost: minimal |
+| format-v2 | high | 1.00 / 1.00 | $1.67 / $3.53 | 2.11× | 1.17M / 4.37M | 6m24s / 10m40s | cost: minimal |
+| house-rules | high | 0.98 / 0.98 | $0.47 / $0.89 | 1.92× | 344k / 902k | 1m35s / 2m00s | cost: minimal |
+| lost-updates | high | 1.00 / 0.99 (0.98–1.00) | $0.72 / $1.73 | 2.42× | 466k / 2.15M | 3m02s / 5m35s | cost: minimal |
+| resolver | high | 1.00 / 1.00 | $0.60 / $1.32 | 2.20× | 290k / 1.11M | 2m27s / 4m09s | cost: minimal |
+| spec-drift | high | 1.00 / 1.00 | $0.86 / $1.45 | 1.68× | 518k / 1.43M | 2m57s / 4m04s | cost: minimal |
+
+All ten cells reach the score ceiling with both configs, and the minimal config wins every one
+on cost: the current stack costs 1.68× to 2.54× as much, $47.07 against $22.71 over 30 trials
+each, and takes longer on every task. The predecessor's score-only rule separates one cell,
+spec-drift at medium, by 0.01. Read plainly: on tasks like these the stack's context and
+workflow add cost without adding score; what it may buy (recall across sessions, review, larger
+work) these tasks do not measure.
+

@@ -203,7 +203,7 @@ What serves only code, and its cost where there is none:
 |---|---|---|---|
 | Code map index: `codegraph init` → `.codegraph/` | `init` and every `sync` (`bin/lib/project.mjs:382-400`, `:686-694`, `:1388-1396`) | wall time, an untracked folder; `sync` makes it again if deleted | only on `.codegraph` existing; nothing looks for code |
 | Code map as a gap: a missing `.codegraph` | doctor's `project` cell (`bin/lib/stack.mjs:336`), read at each session start | a gap line in a project that has nothing to map | no |
-| Code map paste at each prompt | codegraph's own hook; off with `CODEGRAPH_NO_PROMPT_HOOK=1` (`docs/ROADMAP.md:1297`) | about 1,200 tokens a prompt on average here | not the harness's; off by hand in this repository's untracked `.claude/settings.local.json`, which no worktree gets |
+| Code map paste at each prompt | codegraph's own hook; off with `CODEGRAPH_NO_PROMPT_HOOK=1` (`docs/ROADMAP.md:563`) | about 1,200 tokens a prompt on average here | not the harness's; off by hand in this repository's untracked `.claude/settings.local.json`, which no worktree gets |
 | TypeScript language server | Claude's plugin `typescript-lsp@claude-plugins-official`, on for the machine (`~/.claude/settings.json:37`); the harness only reports it (`stack.mjs:368-382`) | processes that spun and lengthened each gate by about 100 seconds (line 3913) | off by hand in the same untracked file |
 | Codex review, demanded | `check --push` (`bin/check.mjs:1176-1202`, `:1399-1400`), called only by this repository's `.githooks/pre-push:11` | a push refused; money for each review | only code commits count (not `.md`, not `-codex-review`: `bin/lib/codex-review-scope.mjs:52-54`, `:125`) |
 | Codex review, as a debt row | plain `check`, information (`check.mjs:1245-1295`, `:1437`) | git processes at every commit | says "no code commits" |
@@ -382,7 +382,7 @@ Both are keys in Claude's settings: `env.CODEGRAPH_NO_PROMPT_HOOK = "1"` and
   not as written, the way a committed file is today (`project.mjs:730-733`).
 - **Proof owed before this is built on:** that Claude Code honors both keys from that file is
   shown only by this repository's hand-written copy, "two samples and no proof"
-  (`docs/ROADMAP.md:1300`). The first task of the build is a probe, recorded with its output.
+  (`docs/ROADMAP.md:566`). The first task of the build is a probe, recorded with its output.
 - **An older copy on the path:** the manifest's shape check ignores a list it does not know
   (`project.mjs:1012-1027`), so an older `js-harness uninstall` would delete the manifest and
   leave the keys. The manifest carries the version that wrote it; an `uninstall` older than its

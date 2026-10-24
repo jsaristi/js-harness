@@ -94,7 +94,7 @@ push of that branch.
 - [x] T5 The part-size measurement, after Sebastián's go-ahead on its count: the same code with
   parts of 400 and of 1,000 lines at `high`, findings against a key and tokens; the bound
   changes only on what it shows — route: inline runs
-- [x] T6 The result in `docs/ROADMAP.md` — route: inline
+- [x] T6 The result in this document (`## Codex review cost result`) — route: inline
 
 ## Progress
 - 2026-10-08: opened from the analysis of the fifty reviews (Why). Branch cut at `5663c8c`.
@@ -141,7 +141,7 @@ push of that branch.
     unlinks a login name a measured run killed before today may have left.
   - The comparison's readings, its list and its report are byte for byte as they were.
   - The roadmap: the Review and Effort rows say one session on `gpt-6.1-sol` at `high`, and
-    the sentence of "Codex review result" that said `--session current` stays says what
+    the sentence of "Codex review result" (odd/tasks/codex-review-lean.md) that said `--session current` stays says what
     became of it.
   - Left open by the writer and decided by the parent for the next slice: a lean review
     whose rollout names no model still stands. Under "only `gpt-6.1-sol` at `high`" it
@@ -697,3 +697,65 @@ is left of this feature.
 Waiting for him, from `odd/tasks/codex-review-lean.md`: the proposal for the Codex plugin
 (asked on 2026-10-08, not answered: he asked instead why there were so many reviews, which
 opened this feature). Push, pull request and merge of both branches are done.
+
+## Codex review cost result
+
+Closed on 2026-10-09 (`odd/tasks/codex-review-cost.md`), built on 2026-10-08 and its
+measurement of the part size run the day after. What `js-harness codex-review` does since, each behaviour
+with a test written first and the spending ones run on the real binary:
+
+- One model. `gpt-6.1-sol`, at the effort of `rule:review-effort` (`high` when this closed), passed by the command and held to what the rollout
+  file of the session says: a session that ran on another model, or whose file names none,
+  is no review and leaves no record.
+- Only code. Markdown and the paths a project marks `-codex-review` in `.gitattributes` are
+  in no part, and the plan says how many were left out. `check` reads the same definition,
+  so a commit of documents or of eval readings needs no record.
+- Nothing twice. A run reads the review records first and starts where they end; a range
+  they cover whole starts nothing and records nothing; `--again` reviews it on purpose. A
+  merge counts for the code somebody wrote in it. On this branch a run from its fork point
+  says there is nothing to review, where it would have been 12 parts and 5,880 changed
+  lines.
+- The cost first. `--plan` prints the parts, the lines and a range of input tokens from the
+  run log of the machine, and starts nothing; a run prints the same before its first
+  session and refuses more parts than `rule:review-parts-unflagged` without `--max-parts`; the plain `check` says at
+  every commit how much code waits for a review.
+
+What the reviews of the feature's own code measured, 7 runs in 22 parts over 8,528 changed
+lines, each inside the login proof (`evals/review/login-proof.mjs`: the real `auth.json` was
+the same file after every one):
+
+| Range | Parts | Changed lines | The plan said | Input tokens | Findings |
+| --- | ---: | ---: | --- | ---: | ---: |
+| `5663c8c..7936a1f` | 7 | 3,585 | about 1,045,000 | 2,314,747 | 1 |
+| `7936a1f..da71985` | 1 | 304 | about 200,000 | 287,707 | 1 |
+| `da71985..469e26f` | 2 | 739 | about 490,000 | 562,328 | 0 |
+| `469e26f..ed1fd0e` | 4 | 1,308 | about 890,000 | 1,956,411 | 4 |
+| `ed1fd0e..dbc71f0` | 2 | 642 | 490,000 to 1,460,000 | 803,690 | 1 |
+| `dbc71f0..47c3d02` | 5 | 1,595 | 1,030,000 to 3,160,000 | 1,704,421 | 1 |
+| `47c3d02..ce47f21` | 1 | 355 | 300,000 to 820,000 | 611,377 | 0 |
+
+Read plainly. The plan as one figure was under half the cost twice, the second time from
+runs at the review's own effort; given as a range, from the median and from the most a
+changed line cost, it held the three times since. What a part costs follows how far the
+session looks into the code more than its size: the measured parts at `high` cost from 296
+to 2,278 input tokens a changed line. The 8 findings were all real defects, each fixed with
+a test written first, and gentle-ai's on the same slices too.
+
+And the price. These reviews cost 8.24 million input tokens, more than the 6.12 million of
+the fifty reviews this feature was opened to cut. What it removed is the waste: the other
+model, the documents, the ranges reviewed twice. What is left is the effort: about 966 input
+tokens a changed line at `high`, where the run of 28 parts at `medium` on 2026-10-08 cost
+about 237 (other code, so a rough comparison; most of either is cached input). `high` is
+Sebastián's choice of 2026-10-08, and this is what it costs.
+
+The part size, measured on 2026-10-09 with one run: `469e26f..ed1fd0e` again, in 2 parts of
+up to 1,000 changed lines where the table has it in 4 of up to 400. It cost 1,241,978 input
+tokens against 1,956,411 (37% fewer) and 381 s against 660, and gave three of the four
+defects the first review found, with none it lacked. The one it missed is the one no single
+file shows: a review record read against marks that changed between two tips. One run of
+each size cannot say whether the larger parts miss it or that run did, so the bound stays
+at 400 lines, where the review found all four; `--part-lines` is there for a run where the
+cost matters more.
+
+Left open, in the feature document: its follow-ups.
+

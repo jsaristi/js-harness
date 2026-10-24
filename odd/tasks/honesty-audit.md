@@ -124,7 +124,7 @@ one line, and `evals/report.mjs` compares only `minimal` with `current` (`:201-2
 
 What the line is today. The words "checked, assumed or not known" are in no shipped file (`rg -i
 "checked, assumed|assumed or not known"` outside `odd/`, exit 1, read here); they are the
-roadmap's (`docs/ROADMAP.md:488-491`). `AGENTS.md:34-37` and the template
+roadmap's (`odd/tasks/subagent-model-routing.md, "Subagent models result"`). `AGENTS.md:34-37` and the template
 (`bin/lib/project.mjs:349-350`) carry "a claim carries its evidence". So the eval decides whether
 the line enters, not whether it leaves. And `AGENTS.md` is at 1,499 of its 1,500 tokens (JH 14's
 measure, `odd/tasks/future-model-protocol.md:70` on its branch, not re-run here): a line that
@@ -196,7 +196,7 @@ under it); the size of the configuration work; "leaves" read as "enters"; the ro
 
 What is settled. For this repository, S4: a sub-agent that writes code on Haiku 5.5, the rest on
 Opus 5.5 at high (`subagent-writer-model`, `subagent-reader-model`, `bin/lib/rules-data.mjs:134-150`,
-scope `repository`). For a project: not answered, open decision 6 (`docs/ROADMAP.md:1350-1352`).
+scope `repository`). For a project: not answered, open decision 6 (`docs/ROADMAP.md:616-618`).
 
 What the host gives. The hooks page (`code.claude.com/docs/en/hooks.md`, read by a reader) lists
 `Agent` as a `PreToolUse` tool name with the input `prompt`, `description`, `subagent_type`, `model`;

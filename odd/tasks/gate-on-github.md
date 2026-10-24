@@ -26,9 +26,9 @@ local check, with what it leaves unproven on his machine said beside it.
 - It is inside the first version: his tapped answer "Todo lo que pedí, sin fecha" to "¿qué
   entra en la primera versión (la 1.0.0)?" (the orchestrator's transcript
   `65318fd5-80e7-4bb8-92b5-06737140185b`, line 10519, read with `js-harness sessions --quote`).
-  The roadmap's order holds it as item 2 of "Session channel": "the same gate run by GitHub on
-  every pull request" (`docs/ROADMAP.md:770-771`), and "Open decisions", item 7, holds the
-  spend as his (`docs/ROADMAP.md:1343-1344`).
+  The order he asked for (`odd/tasks/session-channel.md`) holds it as item 2 of "Session channel": "the same gate run by GitHub on
+  every pull request" (`odd/tasks/session-channel.md, "Session channel"`), and "Open decisions", item 7, holds the
+  spend as his (`docs/ROADMAP.md:609-610`).
 - He chose to open this session: "Dos nuevas: cinco (Recomendada)" to "¿Cuántas sesiones
   nuevas abrimos ahora?" (same transcript, line 12000).
 - The one trial he allowed is spent: "La opción C" (same transcript, line 1504), whose third
@@ -551,7 +551,7 @@ version).**
 - 4. Several PRs ready at once: after the first merge each next needs close+reopen (~4 min + queue), may conflict and fall back to a local merge; N ready = N-1 runs in a row. Close+reopen leaves the PR CLOSED for a moment; the board reads only open PRs (bin/lib/sessions.mjs:1061). Reopen mechanism unproven. Should say the order, what the board shows, the fallback if a reopen does not recompute the merge.
 - 5. A red only on Linux: the four states give no action. Should say: red = no merge under the exchange; the session fixes it or merges main locally and the old rule applies; the cause is recorded. (Flake candidate: T6 review finding 1.)
 - 6. Going back must be one decision: record each merge made on a GitHub run (run URL, base, head; in the merge commit body or a relief line); the measure of the loss needs JH 8's gate log to tell a merge gate from a commit gate; on return every open branch that did not merge main merges it and gates once.
-- 7. Twice judged: no merge rule ships (bin/lib/manifest.mjs:30,51,59); an installed project's runner cannot fetch the private harness; the merges of main may be mostly this repository's cost (ROADMAP "Session channel" advice). Should say: a rule for this repository only.
+- 7. Twice judged: no merge rule ships (bin/lib/manifest.mjs:30,51,59); an installed project's runner cannot fetch the private harness; the merges of main may be mostly this repository's cost (`odd/tasks/session-channel.md`, "Session channel" advice). Should say: a rule for this repository only.
 - 8. A cheaper alternative not compared: the orchestrator already runs `git merge-tree` of each open branch against the new main (relief line 276). "Merge without the local merge gate when merge-tree is clean and the branch and the new main changed no code file in common" frees part of the same gates with no minutes and no reopen; gives up two code files that interact without overlapping. Weigh it against the exchange.
 - Question for him (judgment): answerable, but hides the account-wide stop (busiest pace about day 9 by the same arithmetic) and the automatic fallback on the day the quota ends; put both in the same question; settle "who repairs main" in the design.
 - Looked for and not a gap: Codex coverage is from the merge-base (bin/lib/codex-review-coverage.mjs:273-284); sameTree; only 2 of 24 merges of main since 97703f9 had a hand resolution (git show --remerge-diff); the month's arithmetic checks out.

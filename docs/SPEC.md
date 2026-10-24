@@ -271,7 +271,7 @@ proofs and by those tasks.
 
 **Problem:** The predecessor's 32 tasks could not tell configurations apart: the bare configuration scored 94%, 30 of 32 at the maximum, graded by text rubrics (`odd/tasks/evals.md`).
 **Requirement:** Tasks are graded by hidden tests copied in after the agent exits, in isolated homes that never touch the owner's memory, projects or review state, with auto-update and auto-memory off; tokens and time are recorded per trial with a clean stop on a cap; the verdict takes the score as the floor and lets cost decide between equal scores. Any spend is stated and approved first.
-**Reason:** "Every component must earn its place" needs data, not opinion. F5 found the current stack 1.68x to 2.54x the minimal one's cost for the same score (`docs/ROADMAP.md`).
+**Reason:** "Every component must earn its place" needs data, not opinion. F5 found the current stack 1.68x to 2.54x the minimal one's cost for the same score (`odd/tasks/evals.md`, "F5 result").
 **Proof:** `node --test evals/runner.test.mjs`, `node --test evals/tasks.test.mjs`
 **Discarded:** Text rubrics. A visible grader ("make these tests pass"). Discrimination by score alone.
 **Today:** `evals/runner.mjs`, `evals/suite.mjs`, `evals/report.mjs`, `evals/home.mjs`, `evals/tasks`

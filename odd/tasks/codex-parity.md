@@ -24,7 +24,7 @@ answer, and F7's protocol needs both hosts measured the same way.
   read whole. The matrix is closed at 28 of its 30 trials by Sebastián's answer of 2026-10-12
   (Tasks, T7): `--require-complete` on it exits 1 for the two cells of 2 trials, as it should,
   and was this condition until that answer
-- `docs/ROADMAP.md` records the F6 result (per task, at `medium`, the one effort the Codex
+- this document, `## F6 result`, records the F6 result (per task, at `medium`, the one effort the Codex
   matrix holds since the cut of 2026-10-05: both hosts' score, tokens, estimated list cost and
   wall time) and `node bin/js-harness.mjs progress` shows F6's two steps checked
 
@@ -195,7 +195,7 @@ merged history until slice C is pushed.
   to close with 13, run 15 new ones, or go back and run the two, he tapped "Cerrar con 13
   (Recomendada)" (the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 9794).
   Resolver #3 and spec-drift #3 were never run
-- [x] T8 The F6 result in `docs/ROADMAP.md`, F6's steps checked — "F6 result" there, written
+- [x] T8 The F6 result in this document (`## F6 result`), F6's steps checked — "F6 result" here, written
   on 15 trials of `minimal` and 13 of `current`, saying so (2026-10-13)
 
 ## Evidence from the exploration (2026-10-03, `main` at `535ef09`, codex-cli 0.159.1)
@@ -1091,7 +1091,7 @@ merged history until slice C is pushed.
 
 ## Next step
 F6 is closed: slices A and B merged on 2026-10-05 (#33, #34), and slice C on 13 of the 15
-trials of `current` by Sebastián's decision of 2026-10-12, its result written in the roadmap
+trials of `current` by Sebastián's decision of 2026-10-12, its result written in this document
 ("F6 result"). No task is open and nothing runs. What is left is not a task of this feature:
 his word on what is kept of the raw trial output that lives only on this machine (Progress,
 2026-10-13), after which the old branch `feat/codex-parity` and its worktree can go.
@@ -1099,3 +1099,49 @@ his word on what is kept of the raw trial output that lives only on this machine
 What he asked for next is a feature of its own, in its own session and branch from `main`:
 the review by Codex through an integration of this repository that loads only what a review
 needs, measured before and after. Its evidence is in Progress, 2026-10-06.
+
+## F6 result
+
+The same five tasks on the Codex CLI, at `medium`, the one effort the Codex matrix holds since
+he cut it on 2026-10-05: 15 trials of `minimal` and 13 of `current`, recorded on 2026-10-05
+and 06 on `gpt-6.1-sol` with codex-cli 0.160.0, gentle-ai 4.0.0 and engram 3.1.0. Two trials
+of `current` were never run, the third of resolver and of spec-drift: the usage cap stopped
+them, he paused the run on 2026-10-06 and closed F6 on 13 on 2026-10-12 (Next, item 1, with
+his line), so those two cells are means of 2 and the matrix is 28 of 30. Each value is the
+mean of its cell, Claude Code / Codex, from `node evals/report.mjs --codex-results-dir
+evals/results/codex`; the data is `evals/results/codex/`, and Claude Code's rows are F5's.
+
+| Task | Config | Trials | Score | Tokens | Cost, Codex's estimated | Wall time |
+|---|---|---|---|---|---|---|
+| format-v2 | minimal | 3 / 3 | 0.99 / 1.00 | 1.09M / 393.7k | $1.38 / $0.25 | 4m55s / 5m12s |
+| format-v2 | current | 3 / 3 | 0.99 / 0.50 | 3.43M / 750.3k | $2.50 / $0.21 | 7m24s / 8m02s |
+| house-rules | minimal | 3 / 3 | 0.98 / 1.00 | 312.7k / 202.8k | $0.40 / $0.12 | 1m17s / 2m10s |
+| house-rules | current | 3 / 3 | 0.98 / 0.84 | 1.04M / 948.3k | $1.01 / $0.26 | 2m20s / 7m39s |
+| lost-updates | minimal | 3 / 3 | 1.00 / 1.00 | 341.6k / 220.8k | $0.52 / $0.18 | 2m19s / 3m22s |
+| lost-updates | current | 3 / 3 | 1.00 / 0.95 | 967.6k / 891.4k | $1.03 / $0.25 | 2m55s / 9m56s |
+| resolver | minimal | 3 / 3 | 1.00 / 1.00 | 194.6k / 232.0k | $0.41 / $0.16 | 1m40s / 3m26s |
+| resolver | current | 3 / 2 | 1.00 / 1.00 | 824.1k / 1.06M | $1.01 / $0.27 | 2m52s / 10m31s |
+| spec-drift | minimal | 3 / 3 | 0.99 / 1.00 | 384.7k / 226.1k | $0.54 / $0.17 | 1m44s / 3m17s |
+| spec-drift | current | 3 / 2 | 1.00 / 1.00 | 1.15M / 1.17M | $1.21 / $0.29 | 3m01s / 13m57s |
+
+What it says, and what it does not. On Codex the minimal config scored 1.00 on all 15 trials.
+The current stack did not add score on any task and lowered it on three: format-v2 to 0.50,
+house-rules to 0.84, lost-updates to 0.95. The 0.50 is two sessions of three that ended at
+0.26, before writing anything, on a question the stack has the agent ask with nobody there to
+answer (the delivery strategy; `odd/tasks/codex-parity.md`, Progress, 2026-10-05 and 06). The
+current stack also sent about 1.9 to 5.2 times the tokens of the minimal one and took 1.5 to
+4.2 times as long. Its estimated cost moves less, from under the minimal one on format-v2,
+where two sessions ended early, to 2.2 times it.
+
+Between the hosts, with the limits of the measurement: a Codex trial's cost is an estimate,
+its tokens at the list price of its model, since Codex reports tokens and no cost; its wall
+time includes a download of about 60 MB at the start of each trial that a Claude Code trial
+does not have; the two hosts ran on different days, on stacks one engram version apart; and
+three trials a cell is a small sample. Within those limits: on the minimal config the two
+hosts score alike, and Codex's estimated cost is 0.2 to 0.4 times Claude Code's list cost; on
+the current config Claude Code keeps its score and Codex does not.
+
+Read plainly, it is F5's finding again and sharper on the second host: on tasks like these
+the stack's context and workflow add cost without adding score, and on Codex, run with no
+person to answer, a question the workflow asks can end the session.
+

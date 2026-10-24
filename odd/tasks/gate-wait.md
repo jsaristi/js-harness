@@ -112,7 +112,7 @@ GitHub says whether the gate can also run there and what a month of it would cos
 - The trial on GitHub runs only once it is written here, with its source, that it is free.
 - Zero dependencies and every operating system, because `check` and `codex-review` ship to
   any project. Anything that ships is judged twice: here, and in a project that installed
-  the harness (`docs/ROADMAP.md:709-710`). A behavior change arrives with its test, first.
+  the harness (`odd/tasks/rule-hierarchy.md, "Rule hierarchy"`). A behavior change arrives with its test, first.
 - Writers are sub-agents on Haiku 5.5, one narrow piece each; they never run the gate or wait
   for it. This session commits. Nothing is edited or committed in a worktree while a turn or
   a review of that worktree runs.
@@ -295,7 +295,7 @@ parts, the pinned head and the sentence about a turn's script are built all the 
   does not have a valid payment method on file, usage is blocked once you use up your
   quota." Source: https://docs.github.com/en/billing/concepts/product-billing/github-actions
   as it read on 2026-10-12. The plan itself cannot be read (the token has no `user` scope,
-  and none is asked for); `docs/ROADMAP.md:681-684` records that branch protection is
+  and none is asked for); `odd/tasks/rule-hierarchy.md, "Rule hierarchy"` records that branch protection is
   refused to this private repository, which is what Free does. 2,000 is the least it can be.
 - Used so far in October: one run in his ten private repositories, a Dependabot update of 0
   billable milliseconds (`gh api "repos/jsaristi/<name>/actions/runs?created=>=2026-10-01"`
