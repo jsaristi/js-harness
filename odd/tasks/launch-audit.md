@@ -76,9 +76,9 @@ Each verified against the bytes at the audit sha on 2026-10-23.
 ### harness-review
 - I-HR-T0 · open, carried to T10. Which open tasks close before 1.0.0 and which are carried with his yes. Its first list (harness-review L45) named v0.9.0 and v1.0.0; the tags since are v0.9.0, v0.95.0, v0.96.0, v0.97.0 (`git ls-remote --tags origin`), and 1.0.0 is release-095 T4. Open on the audit sha, from `js-harness progress`: backup-ready T9; conventions T8; F2 T5 and fixed-load T6 (gentle-ai #4036); future-model T8, T9; held-sessions T3; onboarding T4, T5; release-095 T4; rule-hierarchy T1, T8, T11, T16, T16f; session-channel T11; stack-install T6, T7; terminal-note T3; and the ROADMAP rows "The lead's manual steps are commands with tests", "Every command reviewed…" (I-RM-1), the VM rehearsal of "Memory that survives the machine", onboarding's design, conventions parts 1 and 2.
 - I-HR-L48a · closed by the skill and the board: the archive retry. The board lists `to archive` and the orchestrator skill archives again after turning Remote Control off (`bin/lib/manifest.mjs:209`); archiving is the desktop app's alone, so no command can retry it (harness-review L53).
-- I-HR-L48b · open, to stage 4 area c: the opening of a cleared session. The resume hook still fires on `compact` only (`bin/lib/manifest.mjs:416`); the probe of harness-review L12 found a clear starts with source `startup`.
-- I-HR-L48c · open, to stage 4 area b: the Codex meter (e4). No command reads `account/rateLimits/read` (`grep -rn "rateLimits\|app-server" bin` finds only clean's release folders and tests); the memory note `codex-meter-is-readable.md` points to a scratchpad script.
-- I-HR-L48d · open, to stage 4 area b: retargeting a stacked pull request after its base lands (e16). `merge-queue` lists only pull requests based on main (`bin/merge-queue.mjs:848`); nothing retargets (`grep -rn retarget bin`).
+- I-HR-L48b · closed by PR 536 (homes-resume slice, C-c-5; merge cb8e86b9): the opening of a cleared session. The resume hook was on `compact` only at the audit sha; it is registered for `compact|clear|startup` now (`bin/lib/manifest.mjs:424`), since the probe of harness-review L12 found a clear starts with source `startup`.
+- I-HR-L48c · closed by PR 554 (C-b-37; merge b6efac01): the Codex meter (e4). `js-harness codex-meter` reads `account/rateLimits/read` from `codex app-server` (`bin/lib/codex-meter.mjs`).
+- I-HR-L48d · closed by PR 557 (C-b-4, C-b-6; merge 120b50ef): retargeting a stacked pull request after its base lands (e16). `merge-queue` reads the default branch and retargets the open pull requests stacked on a branch it landed (`retargetStacked`, `bin/merge-queue.mjs:9`).
 - I-HR-L48e · fixed `cc55c749`: DEP0190. `bin/update.mjs:405` and `:531` pass an argument array with `shell: true`; `bin/lib/package-manager.mjs:22-27` already shows the form Node does not warn on.
 - I-HR-L48f · fixed `99ffa66c`: a committed test of the pre-push hook's `--ref` for a version tag. `.githooks/pre-push:21-23` passes it; `bin/pre-push-hook.test.mjs` has no case with a `refs/tags/v*` line (the check's own `--ref` is tested at `bin/check.test.mjs:5705`).
 - I-HR-L15 · closed: R1-001 (`bin/update.mjs:427` refuses `"` and `%` on Windows) and R1-002/R4 (`pnpmRunning`, `bin/update.mjs:158`) are in the code.
@@ -89,7 +89,7 @@ Each verified against the bytes at the audit sha on 2026-10-23.
 - I-RH-T16f · carried, his: the turn-start hook's reach. Stays in `odd/tasks/rule-hierarchy.md`.
 
 ### ROADMAP
-- I-RM-1 · open, to T3 and T7: "Every command reviewed against its help, README and SPEC, and every finding fixed or written down" (`docs/ROADMAP.md:220`). Stage 2's flag parity is its mechanical half; stage 4 its reading half.
+- I-RM-1 · closed by stages 2, 4 and 6: "Every command reviewed against its help, README and SPEC, and every finding fixed or written down" (`docs/ROADMAP.md:220`). Its mechanical half is stage 2's flag parity (M8 allowed with why, M10 allowed, M9 carried to stage 4); its reading half is stage 4's eleven area files (163 judged), whose findings stage 6 fixed or wrote down here. `node scripts/audit-flags.mjs` on 7394555d gives 23 unprobed findings, 7 more allowed (96 unprobed at the audit sha); each of the 23 is a probe limit a stage 4 row judged: loop's two (C-d-13), summary's (C-c-17, wrong), merge-queue's seven and guard's five (C-b-41, no defect), remote's seven and sessions' one (C-c-18, wrong). The ROADMAP box is left for T10, with I-HR-T0's list.
 
 ### The sweep of 2026-10-11
 47 items were open in `docs/sweep-2026-10-11.md`. Each was checked for its file and for the quoted "Says:" text (a scratch script; the counts: 17 still stand, 18 quotes gone, 8 files gone, 4 machine places).
@@ -246,3 +246,11 @@ Read on `f45e78c2` (the code of `fb9108c0`). Each finding is one line of its fil
   - session-board (docs/session-board-t7-close): one uncommitted change.
   - watch-share (feat/watch-notice-share, not on origin): two uncommitted changes.
   - The unpushed commits stay unpushed: a push needs their Codex records.
+- L28. 2026-10-24 (13:55Z), the lead (08:30): the housekeeping rows of stage 5, and the imported rows later slices settled.
+  - B20 and B21 · fixed by the lead at 08:29: the local branches feat/subagent-model-routing (f6382f05) and feat/gate-log (de50a402) deleted with `git branch -d`; both were merged into origin/main and are still on origin.
+  - B15 · carried, his: deleting the 350 files in D:/js-harness-worktrees/practice-project cannot be undone, so it goes on his return list.
+  - B16 and B17 · carried, his: copepod and medaka are Orca's workspaces, another tool's.
+  - B19 · carried, his: session-board's uncommitted change is already on his return list.
+  - C-e-15 · its own slice, PR 568 (the ledger line of the unused-exports slice).
+  - Closed with their PRs: I-HR-L48b (536), I-HR-L48c (554), I-HR-L48d (557); I-RM-1 by stages 2, 4 and 6 (each in its imported row).
+  - Next: T10, stage 7, on the final sha once PR 568 lands.
