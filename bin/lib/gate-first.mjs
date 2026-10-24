@@ -27,7 +27,7 @@ export const GATE_FIRST_MAX_MINUTES = 60;
 
 /** How many tickets may be open at once: one for a fix that unblocks, one for the batch run on main. A
  * third would make "first" mean little. */
-const GATE_FIRST_OPEN = 2;
+export const GATE_FIRST_OPEN = 2;
 
 const TICKET_VERSION = 1;
 /** What a ticket's id is: eight hex characters, which is also its file's name. */

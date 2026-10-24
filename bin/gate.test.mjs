@@ -9,7 +9,7 @@ import { GATE_MAX_MINUTES, GATE_NOT_RUN, PUSH_RECHECK_MS, USAGE as GATE_USAGE, c
 import { ruleValue } from './lib/rules.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { GATE_COMMAND_MAX, appendGateBusiest, appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
-import { readTickets } from './lib/gate-first.mjs';
+import { GATE_FIRST_MAX_MINUTES, GATE_FIRST_OPEN, readTickets } from './lib/gate-first.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -105,7 +105,7 @@ const USAGE = [
   "       --home <path>: the home that holds the gate lock, the gate log and the tickets (JS_HARNESS_HOME, else this user's home)",
   "       --cwd <path>: the folder the command runs in, the current one when not given; the push check reads the branch of that folder",
   "       log --last <n>: how many of the last runs are printed",
-  "       first --session <id> --reason <why>: a ticket that puts that session's next whole check before every gate that waits; two are open at most, for an hour at most (--minutes <n> sets it, 60 at most); --cancel <id> withdraws one",
+  `       first --session <id> --reason <why>: a ticket that puts that session's next whole check before every gate that waits; ${GATE_FIRST_OPEN} are open at most, each for ${GATE_FIRST_MAX_MINUTES} minutes at most (--minutes <n> sets fewer); --tree <path>: only a check of that tree spends it; --cancel <id> withdraws one`,
 ].join('\n');
 
 /** What a `gate` started with the mark of a held gate lock says, as `check` says it in a row. */
@@ -1929,7 +1929,9 @@ test('a gate claims the ticket its session issued for its folder, and leaves one
 }));
 
 test('gate usage explains every flag and form it names, not only --wait and --max', () => {
-  for (const line of [/^ {7}--home <path>: /m, /^ {7}--cwd <path>: /m, /^ {7}log --last <n>: /m, /^ {7}first --session <id> --reason <why>: /m]) {
+  for (const line of [/^ {7}--home <path>: /m, /^ {7}--cwd <path>: /m, /^ {7}log --last <n>: /m, /^ {7}first --session <id> --reason <why>: /m, /; --tree <path>: /]) {
     assert.match(GATE_USAGE, line);
   }
+  // The limits it states are the ones gate-first enforces, not a copy that can drift from them.
+  assert.match(GATE_USAGE, new RegExp(`; ${GATE_FIRST_OPEN} are open at most, each for ${GATE_FIRST_MAX_MINUTES} minutes at most `));
 });

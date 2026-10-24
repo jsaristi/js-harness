@@ -28,7 +28,7 @@ import path from 'node:path';
 import { GATE_HELD_ENV, GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, parseGateWait, runSensor, takeGateTurn, watchRun } from './check.mjs';
 import { isLoaded, loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { formatGates, gateLogSwitchedOff, gateRecord, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
-import { GateFirstError, TICKET_ID, cancelTicket, issueTicket, logTicket, readTickets } from './lib/gate-first.mjs';
+import { GATE_FIRST_MAX_MINUTES, GATE_FIRST_OPEN, GateFirstError, TICKET_ID, cancelTicket, issueTicket, logTicket, readTickets } from './lib/gate-first.mjs';
 import { launchersAlive, startLaunchers } from './lib/launcher.mjs';
 import { isPushOrMerge, pushWaiting } from './lib/push-waits.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -56,7 +56,7 @@ export const USAGE = [
   "       --home <path>: the home that holds the gate lock, the gate log and the tickets (JS_HARNESS_HOME, else this user's home)",
   "       --cwd <path>: the folder the command runs in, the current one when not given; the push check reads the branch of that folder",
   "       log --last <n>: how many of the last runs are printed",
-  "       first --session <id> --reason <why>: a ticket that puts that session's next whole check before every gate that waits; two are open at most, for an hour at most (--minutes <n> sets it, 60 at most); --cancel <id> withdraws one",
+  `       first --session <id> --reason <why>: a ticket that puts that session's next whole check before every gate that waits; ${GATE_FIRST_OPEN} are open at most, each for ${GATE_FIRST_MAX_MINUTES} minutes at most (--minutes <n> sets fewer); --tree <path>: only a check of that tree spends it; --cancel <id> withdraws one`,
 ].join('\n');
 
 /** How many gates `gate log` prints when `--last` does not say. */
