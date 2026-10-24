@@ -318,6 +318,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "reuse-first",
+    "subject": "before adding a command, an option, a function, a protocol, a rule or a document, a session searches for one that already does it, and amends that one",
+    "owner": "sebastian",
+    "since": "2026-10-24",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "search for one that already does it",
+      "amend that one instead of adding a second"
+    ]
+  },
+  {
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",

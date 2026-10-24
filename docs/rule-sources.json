@@ -475,6 +475,23 @@
       "by": "command"
     }
   },
+  "reuse-first": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "SIEMPRE que añadamos algo verifica que tenemos ya una funcionalidad o protocolo asi para no hacer trabajo doble, mete por favor todo esto al protocolo nucleo",
+        "date": "2026-10-23",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 26478
+      }
+    ],
+    "reading": "Before the harness gains a command, an option, a function, a protocol, a rule or a document, the session searches for what already does it (codegraph_explore, js-harness rules, the protocols and the skills) and amends that one instead of adding a second, so that work is not done twice. He asks that this be checked each time something is added, and that it be written into the core protocols, next to the earlier review of a new rule. It is the first bullet of protocol 8, and protocol 4 points to it by name.",
+    "accepted": "Not put to him as a reading: it is his own message of 2026-10-23 (908805db, line 26478), which asks for this check and for it to go into the core protocol; it is his to correct.",
+    "checked": {
+      "date": "2026-10-24",
+      "by": "command"
+    }
+  },
   "review-effort": {
     "kind": "words",
     "quotes": [

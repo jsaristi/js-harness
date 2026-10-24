@@ -136,4 +136,9 @@ test('section 8 points a session writing a new command, module or document at th
   assert.ok(body.includes('legacy list'), body);
   assert.ok(body.includes('never a conventions document'), body);
   assert.ok(body.includes('reviewer'), body);
+  // rule:reuse-first. Before a new command, module or document, a session searches for what already does it first.
+  const bullets = body.split('\n').filter((line) => line.startsWith('- '));
+  assert.ok(bullets[0].startsWith('- Before adding a command, an option, a function, a protocol, a rule or a document, search for one that already does it'), bullets[0]);
+  assert.ok(bullets[0].includes('amend that one instead of adding a second, and say in the commit what was searched.'), bullets[0]);
+  assert.ok(text.includes('can an existing one be amended, the search of `rule:reuse-first`;'), 'section 4 points to the rule by its name');
 });
