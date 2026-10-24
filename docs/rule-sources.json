@@ -517,9 +517,9 @@
       }
     ],
     "reading": "Whenever he asks what the lead has done (or how the work is going, which the status report already answers), the answer shows a table: each section of the report that holds items is a table with one row an item, not a list or a paragraph. \"Hazlo como protocolo dentro del arnés\" puts it in the orchestrator skill's \"The status report\", where the report's sections are already defined.",
-    "accepted": "Not put to him as a reading: written by the lead right after his message, and it is his to correct.",
+    "accepted": "Pregunta 73 (line 27757, tapped): status-report holds the shared sentence; report-table keeps only its own table line. The tap itself is not a quotation: his typed words of 2026-10-20 (line 13882) stay the source.",
     "checked": {
-      "date": "2026-10-20",
+      "date": "2026-10-24",
       "by": "command"
     }
   },

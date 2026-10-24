@@ -310,10 +310,9 @@ export const RULES = [
     "id": "report-table",
     "subject": "when the user asks what was done, the lead's status report shows each section that holds items as a table",
     "owner": "sebastian",
-    "since": "2026-10-20",
+    "since": "2026-10-24",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
-      "how much is done, or what you have done, the answer is a report",
       "Show each section that holds items as a table: one row an item"
     ]
   },
