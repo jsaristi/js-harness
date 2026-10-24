@@ -3,7 +3,7 @@
 Locator: `odd/tasks/codex-hook-trust.md` · Engram mirror: `odd/codex-hook-trust/tasks` · Branch: `feat/codex-hook-trust`,
 cut from `origin/main` at `3b1c8d89`, worktree `D:js-harness.claudeworktreeswonderful-gagarin-88a4cc` · Runner: `node --test` · Delivery: one slice, one PR.
 
-Next step (kept current): the four findings of L6 fixed (L7) and committed; then `js-harness codex-review --base daa97b8` on the fix, push, PR, tick T4.
+Next step (kept current): done; the PR is open. Follow-ups (a) and (b) of L4 are proposed as their own sessions.
 
 ## Goal
 A user whose Codex skips the harness's hooks is told so by `doctor` with the step that fixes it, and `uninstall` leaves
@@ -65,7 +65,7 @@ Nothing expected: no spend beyond the Codex review, nothing irreversible, no pro
 - [x] T1 (kind: build) S1, S4: the `codex-trust` check, tests first. Route: inline. RED/GREEN in L3.
 - [x] T2 (kind: build) S2, S4: `trustConfigs` at install and the trust edit of uninstall and of sync's prune, tests first. Route: inline. RED/GREEN in L3, L4.
 - [x] T3 (kind: docs) S3: README (the trust step after the install block, the row under doctor) and SPEC. Route: inline.
-- [ ] T4 (kind: verify) S4: `npm run check`, Codex review, PR. Route: inline.
+- [x] T4 (kind: verify) S4: `npm run check`, Codex review, PR. Route: inline. Evidence in L8.
 
 ## Log
 - L1. 2026-10-24, the task handed to this session by the lead session (`local_bd0ae465-dea2-48dc-91c5-964f400801be`), verbatim:
@@ -81,3 +81,4 @@ Nothing expected: no spend beyond the Codex review, nothing irreversible, no pro
 - L5. 2026-10-24, the first commit's gate failed three tests: `doctor.test.mjs` (a regex a heredoc unescaped), `clean-home.test.mjs` (a clean install now reports `codex-trust` missing, which is right: the test now asserts that gap and its five hooks instead of counting it among the rows with no gap), and the 1,000-line ceiling of `manifest.mjs` (the trust planning moved to `codex-trust.mjs`, `deepEqual` to `json-equal.mjs`). Commit message: `feat(codex): name untrusted harness hooks in doctor and move their trust on uninstall`.
 - L6. 2026-10-24, `js-harness codex-review --base 3b1c8d89` recorded (parts 1 and 3 correct, part 2 incorrect at 0.99), four findings, all accepted: [P1] a `"""` inside a comment opened a multi-line string, so a drop could take the tables after it; [P2] a header comment that repeats the key's suffix got the rename instead of the key; [P2] `["hooks"."state"]` and other quoted spellings escaped the refusal; [P2] an install under another `CODEX_HOME` replaced `trustConfig`, so the uninstall forgot the first file. Fixes: one scanner for strings, comments and brackets; the rename inside the parsed key; quoted spellings refused; `trustConfigs`, every file recorded so far, each edited.
 - L7. 2026-10-24, the fixes of L6, tests first. RED: three new tests of `bin/lib/codex-trust.test.mjs` (a `"""` in a comment and `[` and `'''` in one-line strings; a header comment repeating the key's end; quoted spellings of `hooks.state`, read as the same tables when they hold a trust key and refused in any other form) and two of `bin/codex-hook-trust.test.mjs` (`trustConfigs` at install; an install under a second `CODEX_HOME` then uninstall, both files emptied of harness trust) failed. GREEN: 551 of 551 across the contract's suites. The scanner is now one pass per line over strings, comments and brackets (`scanLine`) and a header parser (`headerKeys`) whose key end the rename uses; `trustConfigs` adds each install's file once (`withConfig`, the same path compare as the keys), so no file is moved twice.
+- L8. 2026-10-24, `js-harness codex-review --base daa97b82` recorded on daa97b8..7c30d23: correct at 0.96, a recheck of the four findings of L6, 4 fixed and 0 not fixed. The gate of 7c30d23 passed `npm run check` (16 rows; gentle-ai assess medium, under_budget, not due). Pushed `feat/codex-hook-trust` and opened the PR.
