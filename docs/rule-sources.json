@@ -941,5 +941,22 @@
       "date": "2026-10-11",
       "by": "session"
     }
+  },
+  "work-sessions-public": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "es que si el repositorio es publico se pueden como 12 sesiones",
+        "date": "2026-10-24",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 27593
+      }
+    ],
+    "reading": "In a public repository the most work sessions open at one time is 12: his words, typed while the session worked (line 27593), split from the one value work-sessions held, which gave 3 for every repository.",
+    "accepted": "Typed by him, queued while the session worked (line 27593); no question was asked, so there is no tap.",
+    "checked": {
+      "date": "2026-10-24",
+      "by": "command"
+    }
   }
 }

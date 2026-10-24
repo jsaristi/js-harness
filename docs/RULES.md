@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `978b5c995476`. In force: 58 (33 of Sebastián, 25 of the project). Retired: 0.
+Hash `99fc643046d4`. In force: 59 (34 of Sebastián, 25 of the project). Retired: 0.
 
 ## Sebastián's
 
@@ -186,6 +186,12 @@ The most work sessions open at one time: 3 sessions.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: none.
 - Since 2026-10-09. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+
+### work-sessions-public
+The most work sessions open at one time in a public repository: 12 sessions.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: none.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
 
 ## The project's
 

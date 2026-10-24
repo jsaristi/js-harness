@@ -646,5 +646,14 @@ export const RULES = [
       "^(?!.*\\bruleValue\\().*\\b(?:at most|up to|no more than)\\s+{amount}\\s*(?:work )?sessions\\b",
       "^(?!.*\\bruleValue\\().*{amount}\\s*work sessions\\b"
     ]
+  },
+  {
+    "id": "work-sessions-public",
+    "subject": "the most work sessions open at one time in a public repository",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-10-24",
+    "value": 12,
+    "unit": "sessions"
   }
 ];
