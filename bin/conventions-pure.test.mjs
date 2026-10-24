@@ -9,12 +9,12 @@
 //
 // Only direct static imports are read (`import ... from`, `import '...'`, `export ... from`), with or without the
 // `node:` prefix. LEGACY lists the modules whose header claims more than their imports keep, each with why; it
-// only shrinks (bin/lib/ratchet.mjs).
+// only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ratchet } from './lib/ratchet.mjs';
+import { ratchet } from './lib/ratchet.testkit.mjs';
 
 const LIB = path.join(import.meta.dirname, 'lib');
 const IMPURE = new Set(['fs', 'fs/promises', 'child_process', 'net', 'os']);

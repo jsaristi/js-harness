@@ -28,6 +28,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { endsUnterminated } from './jsonl-tail.mjs';
 import { ruleValue } from './rules.mjs';
 
 /** The version of a line, in each one as `v`. A reader skips the lines of another. */
@@ -61,29 +62,6 @@ const BUSIEST_CURRENT = 'busiest.jsonl';
 const BUSIEST_OLDER = 'busiest.1.jsonl';
 const TIMES_CURRENT = 'test-times.jsonl';
 const TIMES_OLDER = 'test-times.1.jsonl';
-
-/** Whether `file` is there, is not empty and does not end with a line break: what a write that was cut
- * short leaves. `false` for a file that cannot be looked at, since the line is appended all the same.
- * The channel's writer asks the same of its file (`endsUnterminated` of `./channel.mjs`). */
-function endsUnterminated(io, file) {
-  let fd;
-  try {
-    fd = io.openSync(file, 'r');
-    const { size } = io.fstatSync(fd);
-    if (size === 0) return false;
-    const last = Buffer.alloc(1);
-    io.readSync(fd, last, 0, 1, size - 1);
-    return last[0] !== 0x0a;
-  } catch {
-    return false;
-  } finally {
-    try {
-      if (fd !== undefined) io.closeSync(fd);
-    } catch {
-      // the look is over either way, and it must not cost the gate its line
-    }
-  }
-}
 
 /** Appends `event` to the log of `home` as a line of its own, making the folder: `{ ok: true }`, or
  * `{ error }` with what the system answered, in one sentence. It never throws.
@@ -119,7 +97,7 @@ function appendLine(home, [current, older], value, { maxBytes, io }) {
     } catch {
       // no file yet, or a rename refused: the line is appended all the same
     }
-    io.appendFileSync(file, `${endsUnterminated(io, file) ? '\n' : ''}${JSON.stringify(value)}\n`, 'utf8');
+    io.appendFileSync(file, `${endsUnterminated(file, io) ? '\n' : ''}${JSON.stringify(value)}\n`, 'utf8');
     return { ok: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

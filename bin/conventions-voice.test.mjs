@@ -1,4 +1,4 @@
-// Convention: the text js-harness ships names the person it works for "the user" (odd/tasks/conventions.md, S5).
+// Convention: the files js-harness writes whole name the person it works for "the user" (odd/tasks/conventions.md, S5).
 // A skill `install` writes is read on someone else's machine, by a model that knows nothing of the person who
 // built the harness, so it never names him, and never says "he", "him", "his", "the owner" or "the person": one
 // name for one role, the one the hosts use. `AGENTS.md` and the roadmap address Sebastián on purpose and are not
@@ -8,6 +8,8 @@
 //
 // What is read: every file the install manifest writes whole (`components` of bin/lib/manifest.mjs, the skills of
 // both hosts, the protocols skill of bin/lib/protocols-skill.mjs among them), rendered the way install renders it.
+// Profile text (bin/lib/profiles-data.mjs, printed to the model through bin/lib/profiles.mjs) is not read here: it still
+// says "the owner" in places, and rewording it is shipped prompt text, so it stays as it is.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { components } from './lib/manifest.mjs';

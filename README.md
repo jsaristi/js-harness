@@ -692,7 +692,7 @@ Map: docs/ROADMAP.md on origin/main  80/85  94%
 ```
 
 With `--mark`, the same report ends in one more line, `Recorded this report at <time>`, and the
-next report starts at that time.
+next report starts at that time, and at that commit for merges.
 
 ### js-harness throughput
 

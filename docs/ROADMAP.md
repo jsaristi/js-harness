@@ -252,7 +252,7 @@ Sebastián, 2026-10-21: the harness reads like a "frankestein", written one way 
 "como verificamos que de ahora a futuro va a ver uniformidad, sobretodo cuando no es mismo modelo a futuro?";
 Pregunta 40, "Sí, arrancala". No conventions document: each convention is held where code is written, by a test
 in `bin/` whose header states it, by a review line, or by a declared rule, and each test's legacy list only
-shrinks (`bin/lib/ratchet.mjs`; `odd/tasks/conventions.md`).
+shrinks (`bin/lib/ratchet.testkit.mjs`; `odd/tasks/conventions.md`).
 - [ ] Part 1, js-harness itself: the refused-argument wording, the error split, pure modules and the shipped voice held by tests; the review lines; the protocols skill's trigger
 - [ ] Part 2, onboarding profiles: the conventions a project picks at onboarding, after onboarding v4 closes
 

@@ -264,8 +264,6 @@ function adrsText(adrs) {
   return [...adrs].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([path, text]) => `## ${path}\n${text}`).join('\n');
 }
 
-/** The hashes an approval records (D2): of the answers, of the pre-plan, of the roadmap and of `docs/adr/` (`adrs`,
- * `Map(path -> text)`); `null` for what is missing. */
 /** `markdown` without its `## <title>` section, ended where the parser ends it (`tokenize`: indented headings count,
  * fenced ones do not); unchanged when it has none. */
 function withoutSection(markdown, title) {
@@ -277,6 +275,8 @@ function withoutSection(markdown, title) {
   return [...lines.slice(0, start), ...(next === -1 ? [] : lines.slice(next))].join('\n');
 }
 
+/** The hashes an approval records (D2): of the answers, of the pre-plan, of the roadmap and of `docs/adr/` (`adrs`,
+ * `Map(path -> text)`); `null` for what is missing. */
 export function hashes({ onboarding, origin, roadmap, adrs = null }) {
   return {
     answers: onboarding === null ? null : shortHash(answersText(onboarding)),
