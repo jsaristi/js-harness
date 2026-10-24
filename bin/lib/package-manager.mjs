@@ -112,11 +112,9 @@ export function checkoutOf(copyPath) {
 
 /** The package manager of the installs, resolved as `upgrade` resolves it: `--pm`, else `JS_HARNESS_PM`, else the one
  * that installed the running copy. Never read from the word `npm` on the path, which may run pnpm (odd/tasks/stack-install.md, D6).
- * A command line is split into its words, unless the whole line names a file: a path with a space in it stays one word
- * (Codex on 12e46c4..6a2b0ad). `exists` is the seam that looks. */
+ * A command line is split by `splitCommand`, which keeps a line that names a file one word (Codex on 12e46c4..6a2b0ad).
+ * `exists` is the seam that looks. */
 export function resolveStackPm(pm, env, copyPath = fileURLToPath(import.meta.url), exists = fs.existsSync) {
-  const command = pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath);
-  const line = command.trim();
-  const words = /\s/.test(line) && exists(line) ? [line] : splitCommand(line);
+  const words = splitCommand(pm ?? env.JS_HARNESS_PM ?? copyPackageManager(copyPath), exists);
   return { words, kind: pmKind(words) };
 }

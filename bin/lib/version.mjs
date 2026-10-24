@@ -93,9 +93,12 @@ export function latestFromSource(dir) {
   return best ? { version: best.version, file: path.join(dir, best.file) } : null;
 }
 
-/** Splits an injectable package-manager command string ("npm", "node cli.js") into argv. */
-export function splitCommand(pm) {
-  return pm.trim().split(/\s+/);
+/** Splits an injectable package-manager command string ("npm", "node cli.js") into argv, unless the whole line names a
+ * file: a path with a space (`C:\Program Files\nodejs\npm.cmd`) stays one word, for `upgrade --pm` and `stack` alike
+ * (odd/tasks/stack-install.md, T6). `exists` is the seam that looks. */
+export function splitCommand(pm, exists = fs.existsSync) {
+  const line = pm.trim();
+  return /\s/.test(line) && exists(line) ? [line] : line.split(/\s+/);
 }
 
 /** Which package manager a command's words name: `pnpm` when one word is pnpm itself (`pnpm`, `pnpm.exe`,

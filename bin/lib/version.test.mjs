@@ -69,6 +69,15 @@ test('splitCommand splits a package-manager command into argv', () => {
   assert.deepEqual(splitCommand('  node   cli.js  '), ['node', 'cli.js']);
 });
 
+test('splitCommand keeps a line that names a file one word, so a path with a space is not split (stack-install T6)', () => {
+  const npm = 'C:\\Program Files\\nodejs\\npm.cmd';
+  const exists = (file) => file === npm;
+  assert.deepEqual(splitCommand(npm, exists), [npm]);
+  assert.deepEqual(splitCommand(`  ${npm} `, exists), [npm]);
+  assert.deepEqual(splitCommand('node cli.js', exists), ['node', 'cli.js'], 'a line that names no file is split');
+  assert.deepEqual(splitCommand('npm', () => true), ['npm'], 'a line with no space is one word either way');
+});
+
 test('pmKind names pnpm when a word of the command is pnpm, and npm for anything else', () => {
   assert.equal(pmKind(['pnpm']), 'pnpm');
   assert.equal(pmKind(['pnpm.exe']), 'pnpm');
