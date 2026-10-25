@@ -3,7 +3,7 @@
 // an older js-harness on the path answers 2 to a command it does not know, and 2 blocks the host, so every hook
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
-import { guardHeld, ruleHere, ruleOf } from './rules.mjs';
+import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
  * `[{ alias, id, rule }]`, writer first; or null when the rules are not in force there (no rules file, or one that
@@ -31,7 +31,7 @@ export function modelRefusal(toolInput, allowed) {
   if (allowed.some(({ alias, id }) => model === alias || model === id)) return null;
   const rules = allowed.map(({ rule, alias, id }) => `${rule} gives "${alias}" (${id})`).join(', and ');
   return `js-harness guard: the model "${model}" is not one a sub-agent may run on here: ${rules}. `
-    + 'Launch it on one of those, or with no model to run on the parent\'s.' + allowed.map(({ note = '' }) => note).join('');
+    + 'Launch it on one of those, or with no model to run on the parent\'s.' + staleNote(allowed.filter(({ note }) => note).map(({ rule }) => rule));
 }
 
 // The tools that open a session in the app's Routines or in the cloud, where it runs at the effort it inherits and he

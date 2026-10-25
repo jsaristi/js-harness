@@ -87,7 +87,7 @@ test('where the rules are not in force, as in a project that installs the harnes
 
 /** The project's list with the value of the rule `id` changed, as a landed rule change leaves it ahead of the copy. */
 const changed = (id) => writeRules(RULES.map((rule) => (rule.id === id ? { ...rule, value: `${rule.value}-changed` } : rule)));
-const STALE = /declares rule ([a-z-]+) otherwise than the project's bin\/lib\/rules-data\.mjs, so it checked by its own.*merge-queue --land --refresh-copy.*js-harness install/s;
+const STALE = /declares rule ([a-z-]+) otherwise than the project's bin\/lib\/rules-data\.mjs, so it checked the call by its own declaration.*merge-queue --land --refresh-copy.*js-harness install/s;
 
 // 2026-10-23 to 25: each landed rule change made the installed copy's list differ from the project's, and every rule the
 // guard held went off with it, without a word (odd/tasks/behind-copy-guard.md, S1-S2).
@@ -112,6 +112,11 @@ test('behind a project whose list declares the rule, the guard refuses as here, 
     assert.match(reason, new RegExp(`rule ${id}`), id);
     assert.equal(STALE.exec(reason)?.[1], id, id);
   }
+  // Both model rules declared otherwise: one note names both.
+  const bothModels = writeRules(RULES.map((rule) => (rule.id.startsWith('subagent-') ? { ...rule, value: `${rule.value}-changed` } : rule)));
+  const both = modelRefusal({ model: 'sonnet' }, allowedModels(bothModels));
+  assert.equal(both.match(/This copy of js-harness/g)?.length, 1, both);
+  assert.match(both, /declares rules subagent-writer-model and subagent-reader-model otherwise/);
   // What passes here passes behind too: the note is only ever in a refusal.
   assert.equal(terminalNoteRefusal("npm test; Write-Host 'NOTE: runs the tests of this repository'", changed('terminal-note')), null);
   assert.equal(modelRefusal({ model: 'haiku' }, allowedModels(changed('subagent-reader-model'))), null);

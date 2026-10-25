@@ -92,3 +92,22 @@ Forecast: ~250 authored lines. Under the ~400 budget: one PR against `main`. Str
   declare the rule", since that was the gap. S3 decided by the session, not asked: the brief left the
   choice to it unless it was his, and refusing by the copy's own rule refuses nothing the project
   would pass when the declarations agree.
+- L3 (2026-10-25) 2bbdd346 committed through the gate (check PASS, 17 rows). gentle-ai: assessed high
+  by escalation (item 2, the guard), reviewed with the risk and reliability lenses, approved
+  (review-f5bba1442974c843, acknowledged, authority burned); four informational findings: the list is
+  read by slicing between `export const RULES = ` and the last `;`, as `readListText` of rules-reach
+  reads it; a copy behind a project that loosened a rule refuses what the project allows (S3, with the
+  note); `homeRuleValue` now gives the copy's value behind (its one caller is `guard --memory`); the
+  other readers of `ruleHere` are not shown unchanged by a test (the verifier's item 3). Codex over
+  b855b29..2bbdd34: incorrect (0.98), one P2: behind, a feedback note naming a rule the project declares
+  and the copy does not know yet was refused as undeclared. Fixed test-first: `projectListOf` in
+  rules.mjs reads the project's list, and `noteRefusal`/`homeOf` look `rule:<id>` up in it
+  (`declaredRules`), in the hook and in `guard --memory`.
+- L4 (2026-10-25) Independent verifier (Opus, risk item 2) on 2bbdd346: S1 and S3 met; S2 one blocker,
+  the same as Codex's P2 (fixed in L3); the differential (identical list, CRLF, none, unrelated text)
+  byte-identical at base and branch over 19 probes; every other reader of `ruleHere` branches only on
+  `.value` or `.off`; `behindOf`'s edge cases fall back to `{ off: 'behind' }`; `sessions start` now
+  holds the rules behind too, as S2 means. Its advisories fixed: two model rules declared otherwise
+  give one note naming both (`staleNote`), and the note reads "so it checked the call by its own
+  declaration". Left as it is: a rules file that is no list in the shape `writeRules` gives still holds
+  nothing, as at base.

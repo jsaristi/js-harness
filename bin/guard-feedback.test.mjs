@@ -73,6 +73,11 @@ test('behind a project whose list declares the rule, a feedback note with no hom
   assert.ok(stale.startsWith(here), stale);
   assert.match(stale, /declares rule memory-feedback-home otherwise than the project's bin\/lib\/rules-data\.mjs/);
   assert.deepEqual(await guard(note, { rulesText: writeRules(RULES.filter((rule) => rule.id !== 'memory-feedback-home')) }), quiet);
+  // A note may point to a rule the project declares and the copy does not know yet (Codex, 2bbdd34): its home is there.
+  const added = { ...RULES.find((rule) => rule.id === 'session-title'), id: 'brand-new-rule' };
+  const pointer = write(noteOf('He never compacts by hand: `rule:brand-new-rule`.'));
+  assert.deepEqual(await guard(pointer, { rulesText: writeRules([...RULES, added]) }), quiet);
+  assert.match(reasonOf(await guard(pointer)), /names rule:brand-new-rule, which no live rule declares/);
 });
 
 test('a feedback note that names a declared rule passes, and one naming only an undeclared rule is denied, naming it', async () => {

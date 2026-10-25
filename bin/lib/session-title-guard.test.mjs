@@ -43,7 +43,7 @@ test('behind a project whose list declares session-title, a free title is refuse
   const title = changed('session-title');
   const stale = sessionTitleRefusal(free, title, PROJECT) ?? '';
   assert.ok(stale.startsWith(sessionTitleRefusal(free, HERE, PROJECT)), stale);
-  assert.match(stale, /This copy of js-harness declares rule session-title otherwise than the project's bin\/lib\/rules-data\.mjs, so it checked by its own/);
+  assert.match(stale, /This copy of js-harness declares rule session-title otherwise than the project's bin\/lib\/rules-data\.mjs, so it checked the call by its own declaration/);
   assert.equal(sessionTitleRefusal(BRIEF, title, PROJECT), null);
   // A list that does not declare the rule, or that cannot be read as one, still turns it off.
   for (const off of [writeRules(RULES.filter((rule) => rule.id !== 'session-title')), 'an older list\n']) {
