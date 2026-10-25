@@ -4508,3 +4508,5 @@ podamos implementar todo"), each a feature of its own with its own document and 
 For the gate on GitHub, a fact found the same day: the repository is private
 (`gh repo view --json visibility`), so its runs count against the account's minutes.
 
+
+- gentle-ai on `3d0ab4d9` (rule sessions-open-in-sidebar, settling L4 of odd/tasks/background-sessions.md): assessed medium, not due (under budget).
