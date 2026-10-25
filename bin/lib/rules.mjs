@@ -402,7 +402,53 @@ export function ruleHere(id, unit, projectData, list = RULES) {
   }
   if (projectData === null || projectData === undefined) return { off: 'elsewhere' };
   if (typeof projectData === 'string' && lineFeeds(projectData) === lineFeeds(writeRules(list))) return { value: rule.value };
-  return { off: 'behind' };
+  return behindOf(rule, projectData);
+}
+
+/** What `ruleHere` says of the live scoped rule `rule` for a project whose rules file reads `projectData`, another text
+ * than the running list: `{ off: 'behind' }`, and where that file is a list in the shape `writeRules` gives that declares
+ * the rule live with the same scope, `held` (the running copy's value, which a guard holds there) and `same` (true when
+ * the project declares the rule with the keys the hash names as the copy does). Every landed rule change makes the
+ * installed copy differ, and a guard that passed every call then let three sessions open with free titles
+ * (odd/tasks/behind-copy-guard.md, S1). */
+function behindOf(rule, projectData) {
+  const project = projectListOf(projectData);
+  const declared = project === null ? undefined : project.find((item) => isObject(item) && item.id === rule.id);
+  if (declared === undefined || Object.hasOwn(declared, 'retired') || declared.scope !== rule.scope) return { off: 'behind' };
+  return { off: 'behind', held: rule.value, same: JSON.stringify(pick(declared, HASH_KEYS)) === JSON.stringify(pick(rule, HASH_KEYS)) };
+}
+
+/** The list a project's rules file `projectData` holds, read as JSON in the shape `writeRules` gives and never imported,
+ * or null when it is no text or not that shape. Its entries are not held to `readRules`: a reader keeps to what it needs. */
+export function projectListOf(projectData) {
+  if (typeof projectData !== 'string') return null;
+  const start = projectData.indexOf('export const RULES = ');
+  const end = projectData.lastIndexOf(';');
+  if (start < 0 || end < start) return null;
+  try {
+    const list = JSON.parse(projectData.slice(start + 'export const RULES = '.length, end));
+    return Array.isArray(list) ? list : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The value a guard holds for the rule `id` from `here`, what `ruleHere` gave for it, as `{ value, note }`, or null
+ * where it holds none. Where the copy is behind a project that declares the rule, the value is the copy's (`held`),
+ * and `note`, said after a refusal, names the update where the project declares the rule otherwise; else it is ''. */
+export function guardHeld(id, here) {
+  if (Object.hasOwn(here, 'value')) return { value: here.value, note: '' };
+  if (!Object.hasOwn(here, 'held')) return null;
+  return { value: here.held, note: here.same ? '' : staleNote([id]) };
+}
+
+/** The note said after a refusal by a copy that declares the rules `ids` otherwise than the project, or '' for none. */
+export function staleNote(ids) {
+  if (ids.length === 0) return '';
+  const rules = ids.length === 1 ? `rule ${ids[0]}` : `rules ${ids.join(' and ')}`;
+  return ` This copy of js-harness declares ${rules} otherwise than the project's bin/lib/rules-data.mjs, so it checked the call by its own declaration: `
+    + 'once the change is on main, bring the installed copy up to it (js-harness merge-queue --land --refresh-copy after a land, '
+    + "or pnpm add -g github:jsaristi/js-harness#<main's sha>, then js-harness install).";
 }
 
 /** A copy of the declaration of the live rule `id`, so that a caller cannot change the list it is read from.

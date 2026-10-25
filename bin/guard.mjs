@@ -200,9 +200,10 @@ async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoo
  * each, and exit 1; exit 0 when every one names its home, or when the project in the working directory does not
  * declare `rule:memory-feedback-home`. A folder that cannot be read exits 1 (odd/tasks/memory-feedback-home.md, S3). */
 async function memoryForm(folder, { projectRoot, readFile, stdout, stderr }) {
-  const { homeRuleValue, noteRefusal } = await import('./lib/memory-feedback-guard.mjs');
+  const { declaredRules, homeRuleValue, noteRefusal } = await import('./lib/memory-feedback-guard.mjs');
   const root = projectRoot(process.cwd());
-  const value = homeRuleValue(rulesTextOf(root, readFile));
+  const rulesText = rulesTextOf(root, readFile);
+  const value = homeRuleValue(rulesText);
   if (value === null) {
     stdout('rule memory-feedback-home is not in force in this project: nothing checked\n');
     return 0;
@@ -229,7 +230,7 @@ async function memoryForm(folder, { projectRoot, readFile, stdout, stderr }) {
     }
     if (memoryNoteType(text) !== 'feedback') continue;
     feedback += 1;
-    if (noteRefusal(name, text, agents, value) === null) continue;
+    if (noteRefusal(name, text, agents, value, declaredRules(rulesText)) === null) continue;
     homeless += 1;
     stdout(`${name}: a feedback note that names no home of its rule in the repository\n`);
   }

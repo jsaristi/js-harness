@@ -79,9 +79,47 @@ test('a model neither rule gives is refused, and the refusal names both rules an
 test('where the rules are not in force, as in a project that installs the harness, nothing is refused', () => {
   // A project with no rules file of its own: nothing is on by default (his answer, S5).
   assert.equal(allowedModels(null), null);
-  // A copy of the harness whose list is not the project's: the rules are not read as this project's.
-  assert.equal(allowedModels(`${HERE}\n// another list\n`), null);
+  // A copy of the harness whose list is not the project's, and a list that declares no model rule: nothing is read.
+  assert.equal(allowedModels('an older list\n'), null);
+  assert.equal(allowedModels(writeRules(RULES.filter((rule) => !rule.id.startsWith('subagent-')))), null);
   assert.equal(modelRefusal({ model: 'sonnet' }, null), null);
+});
+
+/** The project's list with the value of the rule `id` changed, as a landed rule change leaves it ahead of the copy. */
+const changed = (id) => writeRules(RULES.map((rule) => (rule.id === id ? { ...rule, value: `${rule.value}-changed` } : rule)));
+const STALE = /declares rule ([a-z-]+) otherwise than the project's bin\/lib\/rules-data\.mjs, so it checked the call by its own declaration.*merge-queue --land --refresh-copy.*js-harness install/s;
+
+// 2026-10-23 to 25: each landed rule change made the installed copy's list differ from the project's, and every rule the
+// guard held went off with it, without a word (odd/tasks/behind-copy-guard.md, S1-S2).
+test('behind a project whose list declares the rule, the guard refuses as here, and names the update where the project declares that rule otherwise', () => {
+  const ahead = changed('agents-budget');
+  const effort = { title: 'JH 1 · x', prompt: 'p', effort: 'max' };
+  for (const projectData of [HERE, ahead]) {
+    assert.deepEqual(allowedModels(projectData), allowedModels(HERE));
+    assert.equal(terminalNoteRefusal('npm test', projectData), terminalNoteRefusal('npm test', HERE));
+    assert.equal(openingRefusal('RemoteTrigger', projectData), openingRefusal('RemoteTrigger', HERE));
+    assert.equal(sessionEffortRefusal(effort, projectData), sessionEffortRefusal(effort, HERE));
+  }
+  assert.doesNotMatch(terminalNoteRefusal('npm test', ahead), STALE);
+  const cases = [
+    ['terminal-note', (data) => terminalNoteRefusal('npm test', data)],
+    ['sessions-open-in-sidebar', (data) => openingRefusal('RemoteTrigger', data)],
+    ['session-effort', (data) => sessionEffortRefusal(effort, data)],
+    ['subagent-writer-model', (data) => modelRefusal({ model: 'sonnet' }, allowedModels(data))],
+  ];
+  for (const [id, refusal] of cases) {
+    const reason = refusal(changed(id)) ?? '';
+    assert.match(reason, new RegExp(`rule ${id}`), id);
+    assert.equal(STALE.exec(reason)?.[1], id, id);
+  }
+  // Both model rules declared otherwise: one note names both.
+  const bothModels = writeRules(RULES.map((rule) => (rule.id.startsWith('subagent-') ? { ...rule, value: `${rule.value}-changed` } : rule)));
+  const both = modelRefusal({ model: 'sonnet' }, allowedModels(bothModels));
+  assert.equal(both.match(/This copy of js-harness/g)?.length, 1, both);
+  assert.match(both, /declares rules subagent-writer-model and subagent-reader-model otherwise/);
+  // What passes here passes behind too: the note is only ever in a refusal.
+  assert.equal(terminalNoteRefusal("npm test; Write-Host 'NOTE: runs the tests of this repository'", changed('terminal-note')), null);
+  assert.equal(modelRefusal({ model: 'haiku' }, allowedModels(changed('subagent-reader-model'))), null);
 });
 
 // odd/tasks/session-channel.md, layer 3: a session these tools open lands in the app's Routines or in the cloud, where he
@@ -107,10 +145,12 @@ test('in this repository a tool that opens a session in the Routines or the clou
   }
 });
 
-test('where the rule is not declared, as in an installed project or a copy whose list is not the project\'s, the four tools pass', () => {
+test('where the rule is not declared, as in an installed project or a list that does not declare it, the four tools pass', () => {
+  const without = writeRules(RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar'));
   for (const tool of OPENING) {
     assert.equal(openingRefusal(tool, null), null, `no list: ${tool}`);
-    assert.equal(openingRefusal(tool, `${HERE}\n// another list\n`), null, `another list: ${tool}`);
+    assert.equal(openingRefusal(tool, without), null, `a list without the rule: ${tool}`);
+    assert.equal(openingRefusal(tool, 'an older list\n'), null, `a text that is no list: ${tool}`);
   }
 });
 
@@ -146,7 +186,8 @@ test('a session started at the rule\'s effort or lower passes, and so do the cal
 
 test('where the rule session-effort is not declared, a session started with no effort passes', () => {
   assert.equal(sessionEffortRefusal(BRIEF, null), null);
-  assert.equal(sessionEffortRefusal(BRIEF, `${HERE}\n// another list\n`), null);
+  assert.equal(sessionEffortRefusal(BRIEF, writeRules(RULES.filter((rule) => rule.id !== 'session-effort'))), null);
+  assert.equal(sessionEffortRefusal(BRIEF, 'an older list\n'), null);
 });
 
 test('a refusal is the PreToolUse deny of the hooks contract, with its reason', () => {

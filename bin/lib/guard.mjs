@@ -3,22 +3,21 @@
 // an older js-harness on the path answers 2 to a command it does not know, and 2 blocks the host, so every hook
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
-import { ruleHere, ruleOf } from './rules.mjs';
+import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
- * `[{ alias, id, rule }]`, writer first; or null when the rules are not in force there (no rules file, or a copy of
- * the harness whose list is not the project's), and then no model is refused. The two model rules are read with
+ * `[{ alias, id, rule }]`, writer first; or null when the rules are not in force there (no rules file, or one that
+ * does not declare them), and then no model is refused. Behind a project that declares them the copy's own are held,
+ * each with a `note` where the project declares it otherwise (`guardHeld`). The two model rules are read with
  * `ruleHere`, by their ids written out so that `rules check` lists this file as their reader, because both are of
  * this repository only: a project that installs the harness turns nothing on by default (his answer of 2026-10-14,
  * odd/tasks/honesty-audit.md S5). */
 export function allowedModels(projectData) {
-  const writer = ruleHere('subagent-writer-model', undefined, projectData);
-  const reader = ruleHere('subagent-reader-model', undefined, projectData);
-  if (!Object.hasOwn(writer, 'value') || !Object.hasOwn(reader, 'value')) return null;
-  return [
-    { alias: ruleOf('subagent-writer-model').alias, id: writer.value, rule: 'subagent-writer-model' },
-    { alias: ruleOf('subagent-reader-model').alias, id: reader.value, rule: 'subagent-reader-model' },
-  ];
+  const writer = guardHeld('subagent-writer-model', ruleHere('subagent-writer-model', undefined, projectData));
+  const reader = guardHeld('subagent-reader-model', ruleHere('subagent-reader-model', undefined, projectData));
+  if (writer === null || reader === null) return null;
+  const entry = (rule, { value, note }) => ({ alias: ruleOf(rule).alias, id: value, rule, ...(note !== '' && { note }) });
+  return [entry('subagent-writer-model', writer), entry('subagent-reader-model', reader)];
 }
 
 /** Why the `Agent` call whose input is `toolInput` is refused, or null when it is not. A call with no `model`
@@ -32,7 +31,7 @@ export function modelRefusal(toolInput, allowed) {
   if (allowed.some(({ alias, id }) => model === alias || model === id)) return null;
   const rules = allowed.map(({ rule, alias, id }) => `${rule} gives "${alias}" (${id})`).join(', and ');
   return `js-harness guard: the model "${model}" is not one a sub-agent may run on here: ${rules}. `
-    + 'Launch it on one of those, or with no model to run on the parent\'s.';
+    + 'Launch it on one of those, or with no model to run on the parent\'s.' + staleNote(allowed.filter(({ note }) => note).map(({ rule }) => rule));
 }
 
 // The tools that open a session in the app's Routines or in the cloud, where it runs at the effort it inherits and he
@@ -47,16 +46,16 @@ export const OPENING_TOOLS = Object.freeze([
 /** Why the call of the tool `toolName` is refused, or null. The four tools of `OPENING_TOOLS` are refused in the project
  * whose rules file has the text `projectData`, where the rule `sessions-open-in-sidebar` gives a value (his answers of
  * 2026-10-15: only where the rule is declared, and even when he asked for the session): the reason names the tool, the
- * rule and the value to open a session with instead. In a project that does not declare the rule, and in a copy of the
- * harness whose list is not the project's, nothing is refused. The rule is read with `ruleHere`, by its id written out
- * so that `rules check` lists this file as its reader. */
+ * rule and the value to open a session with instead. In a project that does not declare the rule nothing is refused;
+ * behind one that declares it, the copy's value is held (`guardHeld`). The rule is read with `ruleHere`, by its id
+ * written out so that `rules check` lists this file as its reader. */
 export function openingRefusal(toolName, projectData) {
   if (!OPENING_TOOLS.includes(toolName)) return null;
-  const rule = ruleHere('sessions-open-in-sidebar', undefined, projectData);
-  if (!Object.hasOwn(rule, 'value')) return null;
+  const rule = guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
+  if (rule === null) return null;
   return `js-harness guard: ${toolName} opens a session in the app's Routines or in the cloud, where he does not see it `
     + `(rule sessions-open-in-sidebar). Open it with ${rule.value}, a row in his sidebar, or tell the lead; `
-    + 'it is refused even when he asked for it.';
+    + `it is refused even when he asked for it.${rule.note}`;
 }
 
 /** The tool that starts a session in the desktop app, a row in his sidebar. */
@@ -69,26 +68,33 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
  * the rule `session-effort` says high (odd/tasks/harness-review.md, T6c). Where that rule gives a value, a call that
  * carries a brief (`prompt`) is refused when it names no effort, a fork included since a fork cannot set its own, or
  * one above the rule's; a call with no brief (an offer's title, a proposal started as proposed) passes. Where the
- * rule is not declared nothing is refused. `cli` words the reasons for `js-harness sessions start`, which holds the
- * same rule over its `--effort` (odd/tasks/background-sessions.md, S5). */
+ * rule is not declared nothing is refused; behind a project that declares it, the copy's value is held (`guardHeld`).
+ * `cli` words the reasons for `js-harness sessions start`, which holds the same rule over its `--effort`
+ * (odd/tasks/background-sessions.md, S5). */
 export function sessionEffortRefusal(toolInput, projectData, { cli = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
-  const rule = ruleHere('session-effort', undefined, projectData);
-  if (!Object.hasOwn(rule, 'value')) return null;
+  const rule = guardHeld('session-effort', ruleHere('session-effort', undefined, projectData));
+  if (rule === null) return null;
+  const reason = effortReason(toolInput, rule.value, cli);
+  return reason === null ? null : `${reason}${rule.note}`;
+}
+
+/** Why `toolInput` is refused under the rule session-effort of value `value`, or null. */
+function effortReason(toolInput, value, cli) {
   const effort = toolInput.context === 'fork' ? undefined : toolInput.effort;
   const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
-  const pass = cli ? `Pass --effort ${rule.value} or lower` : `Pass effort "${rule.value}" or lower`;
+  const pass = cli ? `Pass --effort ${value} or lower` : `Pass effort "${value}" or lower`;
   if (effort === undefined || effort === null || effort === '') {
-    if (cli) return `${who} names no effort, so the new session would run at the host's default (rule session-effort: ${rule.value}). ${pass}.`;
+    if (cli) return `${who} names no effort, so the new session would run at the host's default (rule session-effort: ${value}). ${pass}.`;
     return `${who} names no effort, so the new session would run at this session's `
-      + `(rule session-effort: ${rule.value}). ${pass} with context "fresh"; a fork cannot set its own effort.`;
+      + `(rule session-effort: ${value}). ${pass} with context "fresh"; a fork cannot set its own effort.`;
   }
   const asked = EFFORTS.indexOf(effort);
   if (asked === -1) {
     return `${who} asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. ${pass}.`;
   }
-  if (asked <= EFFORTS.indexOf(rule.value)) return null;
-  return `${who} asks for effort "${effort}", above the rule session-effort: ${rule.value}. ${pass}; a higher one is his to set.`;
+  if (asked <= EFFORTS.indexOf(value)) return null;
+  return `${who} asks for effort "${effort}", above the rule session-effort: ${value}. ${pass}; a higher one is his to set.`;
 }
 
 // The hour a message stamps as the time it is sent: in its opening header, after nothing but the sender's label
@@ -252,14 +258,15 @@ const TERMINAL_NOTE = /;\s*(?:[Ww]rite-[Hh]ost|echo)\s+'NOTE: (?:[^'\s]+\s+){3}[
  * says what it does. His request of 2026-10-19 (odd/tasks/terminal-note.md, S1): he reads the note beside the command,
  * where it runs, and learns what it does. A comment cannot carry it: the tool refuses one. Only where the rule
  * terminal-note is declared (`projectData`, the text of the project's rules file) is the command checked, so a
- * project that does not declare it, or whose declaration is behind, types any command (his answer Q85, C-b-34). */
+ * project that does not declare it types any command (his answer Q85, C-b-34); behind one that declares it, the copy's
+ * value is held (`guardHeld`). */
 export function terminalNoteRefusal(command, projectData) {
-  const rule = ruleHere('terminal-note', undefined, projectData);
-  if (!Object.hasOwn(rule, 'value')) return null;
+  const rule = guardHeld('terminal-note', ruleHere('terminal-note', undefined, projectData));
+  if (rule === null) return null;
   if (TERMINAL_NOTE.test(String(command ?? ''))) return null;
   return 'js-harness guard: a command for the user\'s terminal ends with a note that says what it does, in everyday words: '
     + '<command>; Write-Host \'NOTE: <what it does>\' (echo instead of Write-Host in an SSH host\'s shell), four words '
-    + `or more, in single quotes and printable ASCII, so the user reads it beside the command where it runs (rule terminal-note: ${rule.value}).`;
+    + `or more, in single quotes and printable ASCII, so the user reads it beside the command where it runs (rule terminal-note: ${rule.value}).${rule.note}`;
 }
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
