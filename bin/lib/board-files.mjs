@@ -2,6 +2,8 @@
 
 import fs from 'node:fs';
 
+/** How many lines of the relief file the board prints: enough to see what the orchestrator noted last,
+ * and whoever needs the rest reads the file. */
 export const RELIEF_LINES = 5;
 
 /** The text of an orchestrator's relief file as the board shows it: how many lines it holds and the last

@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordedNamed, saidBy, startArgs, startPrompt, undoSession } from './lib/background.mjs';
+import { appendRecord, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, saidBy, startArgs, startPrompt, undoSession, within } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { nextSessionNumber } from './lib/channel.mjs';
@@ -25,11 +25,13 @@ export const START_USAGE = [
   '         of the brief that ends by telling it to report through js-harness notify --to orchestrator. It prints the id and records',
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
   '         usage error or a title or effort the rules session-title and session-effort refuse, where they are declared.',
+  '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
   '         The lead uses it only on a turn the user did not type, where start_session would leave a card: a background session',
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
   '         (a permission prompt included) and whether start recorded it; --watch returns when one starts waiting.',
   '         stop removes a session start recorded (claude stop, then claude rm; its transcript stays), and only such a one:',
-  '         exit 1 for any other id, or when claude refuses (unpushed commits in its worktree), which keeps it recorded.',
+  '         exit 1 for any other id, or when claude refuses (unpushed commits in its worktree), which keeps it recorded;',
+  '         a worktree with uncommitted changes stays, and stop says where.',
   '         js-harness uninstall machine removes every recorded session that is not at work, and fails while one is.',
 ].join('\n');
 
@@ -111,7 +113,8 @@ export function sessionsStartMain(argv, given = {}) {
   const cwd = path.resolve(deps.cwd, parsed.cwd ?? '.');
   const home = harnessHome({ given: parsed.home, env, cwd: deps.cwd, homedir: deps.homedir });
   const root = mainCheckout(run, cwd);
-  const rules = rulesText(topLevel(run, cwd), readFile);
+  const top = topLevel(run, cwd);
+  const rules = rulesText(top, readFile);
   const project = { codeOf: () => projectCode(root, readFile), next: (code) => nextSessionNumber(home, projectSlug(root), { code }) };
   const refusal = sessionEffortRefusal({ prompt: brief, effort: parsed.effort }, rules, { cli: true })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
@@ -125,10 +128,27 @@ export function sessionsStartMain(argv, given = {}) {
     return 1;
   }
 
+  // The record is opened before claude runs: a session started that cannot be recorded is one nothing undoes.
+  try {
+    fs.mkdirSync(backgroundDir(home), { recursive: true });
+    // Windows opens a folder for appending without an error, so a record that is not a file is refused by name.
+    if (fs.existsSync(recordFileOf(home)) && !fs.statSync(recordFileOf(home)).isFile()) throw Object.assign(new Error('not a file'), { code: 'EISDIR' });
+    fs.closeSync(fs.openSync(recordFileOf(home), 'a'));
+  } catch (err) {
+    stderr(`js-harness sessions start: could not write the record ${recordFileOf(home)} (${err.code ?? err.message}), so nothing was started`);
+    return 1;
+  }
   const briefs = briefsDirOf(home);
   const copy = path.join(briefs, `${new Date(now()).toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}.md`);
   fs.mkdirSync(briefs, { recursive: true });
   fs.writeFileSync(copy, briefCopyOf(brief));
+  // The sessions listed before the start, so a session found by its title afterwards is one this start made.
+  let before = null;
+  try {
+    before = new Set(listAgents(claude).map((item) => item.id));
+  } catch {
+    // Without it no session is taken by its title; one whose id claude prints is still recorded.
+  }
   let result;
   try {
     result = claude(startArgs({ ...parsed, briefs, prompt: startPrompt(copy) }), { cwd });
@@ -138,31 +158,41 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(`js-harness sessions start: claude was not started: ${err.message}`);
     return 1;
   }
-  if (result.error || result.status !== 0) {
+  // A run that began and did not finish (a timeout) may have started the session all the same: it is looked for.
+  const began = result.error !== undefined && result.error !== null && result.error.code !== 'ENOENT';
+  if (!began && (result.error || result.status !== 0)) {
     fs.rmSync(copy, { force: true });
     stderr(`js-harness sessions start: claude did not start the session (${result.error ? 'it could not run' : `exit ${result.status}`}), and nothing was recorded:\n${saidBy(result)}`);
     return 1;
   }
-  let id = idOfStart(result.stdout);
-  let sessionId = null;
+  if (began) stderr(`js-harness sessions start: claude did not finish (${result.error.message}); looking for the session in claude agents`);
+  let id = began ? null : idOfStart(result.stdout);
+  let agent;
   try {
     const agents = listAgents(claude);
-    const agent = id === null
-      ? agents.filter((item) => item.kind === 'background' && item.name === parsed.title).sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0]
-      : agents.find((item) => item.id === id);
-    id ??= agent?.id ?? null;
-    sessionId = agent?.sessionId ?? null;
+    if (id !== null) agent = agents.find((item) => item.id === id);
+    else {
+      const made = agents.filter((item) => item.kind === 'background' && item.name === parsed.title && before !== null && !before.has(item.id) && typeof item.cwd === 'string' && within(item.cwd, top));
+      if (made.length === 1) [agent] = made;
+      id = agent?.id ?? null;
+    }
   } catch {
-    // The session id is a convenience of the record; the short id is what stop and rm take.
+    // The session id and the worktree are conveniences of the record; the short id is what stop and rm take.
   }
   if (id === null) {
-    stderr(`js-harness sessions start: claude started a session and printed no id, and claude agents lists none titled ${JSON.stringify(parsed.title)}, so it is not recorded: find it with claude agents and remove it with claude stop <id> and claude rm <id>; its brief is ${copy}\n${saidBy(result)}`);
+    stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}\n${saidBy(result)}`);
     return 1;
   }
-  appendRecord(home, {
-    event: 'started', at: new Date(now()).toISOString(), id, sessionId, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
-  });
+  try {
+    appendRecord(home, {
+      event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
+      worktree: parsed.worktree ?? null, worktreePath: parsed.worktree ? agent?.cwd ?? null : null, model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    });
+  } catch (err) {
+    const undone = [claude(['stop', id]), claude(['rm', id])].every((step) => !step.error && step.status === 0);
+    stderr(`js-harness sessions start: the session ${id} started and could not be recorded (${err.code ?? err.message}), so ${undone ? 'it was stopped and removed' : `it still runs: claude stop ${id} and claude rm ${id} remove it`}`);
+    return 1;
+  }
   stdout(`started ${id} · ${parsed.title}`);
   stdout(`  js-harness sessions stop ${id} removes it; claude attach ${id} opens it here; js-harness sessions lists it`);
   if (parsed.remoteControl) stdout("  Remote Control is on: claude.ai/code and the user's phone reach it");
@@ -204,5 +234,6 @@ export function sessionsStopMain(argv, given = {}) {
     return 1;
   }
   stdout(done.outcome === 'gone' ? `${name} was already gone: its record is closed` : `removed ${name}: its transcript stays, as every session's does`);
+  if (done.worktreeKept) stdout(`  its worktree ${done.worktreeKept} stays: claude keeps a worktree with uncommitted changes, locked; git worktree remove --force twice removes it once they are not needed`);
   return 0;
 }

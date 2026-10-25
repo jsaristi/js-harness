@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionsMain } from './sessions.mjs';
+import { sessionsStartMain } from './sessions-background.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 // `js-harness sessions start` and `stop`, the board's background sessions and the machine uninstall, through the public
@@ -17,6 +18,7 @@ const RULES_DATA = fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url
 
 const FAKE = String.raw`
 import fs from 'node:fs';
+import path from 'node:path';
 const file = process.env.FAKE_CLAUDE_STATE;
 const state = JSON.parse(fs.readFileSync(file, 'utf8'));
 const argv = process.argv.slice(2);
@@ -29,7 +31,12 @@ if (argv.includes('--bg')) {
   if (state.refuseStart) { err(state.refuseStart); save(); process.exit(1); }
   const name = argv[argv.indexOf('-n') + 1];
   const id = state.nextId;
-  state.agents.push({ pid: 4242, id, cwd: process.cwd(), kind: 'background', startedAt: state.now, sessionId: id + '-0000-4000-8000-000000000000', name, status: 'busy', state: 'working' });
+  let cwd = process.cwd();
+  if (argv.includes('-w')) {
+    cwd = path.join(cwd, '.claude', 'worktrees', argv[argv.indexOf('-w') + 1]);
+    fs.mkdirSync(cwd, { recursive: true });
+  }
+  if (!state.ghost) state.agents.push({ pid: 4242, id, cwd, kind: 'background', startedAt: state.now, sessionId: id + '-0000-4000-8000-000000000000', name, status: 'busy', state: 'working' });
   save();
   out(state.quiet ? 'started' : 'backgrounded · ' + id + ' · ' + name);
   out('  claude agents             list sessions');
@@ -56,6 +63,8 @@ if (argv[0] === 'rm') {
   if (state.refuseRm) { out(state.refuseRm); save(); process.exit(1); }
   if (!agent) lost(argv[1]);
   state.agents = state.agents.filter((item) => item !== agent);
+  // claude rm keeps a worktree that holds uncommitted changes (odd/tasks/background-sessions.md, L10).
+  if (!state.keepWorktree && agent.cwd.includes(path.join('.claude', 'worktrees'))) fs.rmSync(agent.cwd, { recursive: true, force: true });
   save();
   out('removed ' + argv[1]);
   process.exit(0);
@@ -128,7 +137,7 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /^started 0db8bc5e · Build the thing$/m);
   assert.match(result.stdout, /js-harness sessions stop 0db8bc5e/);
-  const [call] = readState(world).calls;
+  const [call] = actions(world);
   const briefs = path.join(world.home, '.js-harness', 'background', 'briefs');
   assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--remote-control', 'Build the thing']);
   const prompt = call.at(-1);
@@ -149,7 +158,7 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
 test('sessions start --no-remote-control leaves Remote Control off', withWorld((world) => {
   const result = js(world, ['sessions', 'start', '--title', 'Quiet one', '--brief', world.brief, '--no-remote-control']);
   assert.equal(result.code, 0, result.stderr);
-  assert.ok(!readState(world).calls[0].includes('--remote-control'));
+  assert.ok(!actions(world)[0].includes('--remote-control'));
   assert.equal(recordLines(world)[0].remoteControl, false);
 }));
 
@@ -168,6 +177,51 @@ test('a start whose id claude does not print takes it from claude agents by the 
   const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
   assert.equal(result.code, 0, result.stderr);
   assert.equal(recordLines(world)[0].id, '0db8bc5e');
+}));
+
+test('a start without an id takes only a session claude agents did not list before it, and records none it cannot tell', withWorld((world) => {
+  const before = { id: 'aaaa1111', cwd: path.join(world.dir, 'elsewhere'), kind: 'background', startedAt: 0, sessionId: 'aaaa1111-0', name: 'Build the thing', status: 'busy' };
+  patchState(world, { quiet: true, agents: [before] });
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(recordLines(world).map((line) => line.id), ['0db8bc5e']);
+  patchState(world, { ghost: true, nextId: 'c779ed44' });
+  const none = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(none.code, 1);
+  assert.match(none.stderr, /claude agents lists no new session titled "Build the thing"/);
+  assert.equal(recordLines(world).length, 1);
+}));
+
+test('a start whose run of claude fails after it began records the session claude agents lists, and keeps the brief when it lists none', withWorld((world) => {
+  const agents = [];
+  let start = true;
+  const claude = (args) => {
+    if (args[0] === 'agents') return { status: 0, stdout: JSON.stringify(agents), stderr: '' };
+    if (start) agents.push({ id: 'e1e1e1e1', cwd: world.project, kind: 'background', startedAt: Date.now(), sessionId: 'e1e1e1e1-0', name: 'Slow', status: 'busy' });
+    return { status: null, stdout: '', stderr: '', error: Object.assign(new Error('spawnSync claude.cmd ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+  };
+  const out = [];
+  const err = [];
+  const deps = { cwd: world.project, env: envOf(world), claude, stdout: (line) => out.push(line), stderr: (line) => err.push(line) };
+  assert.equal(sessionsStartMain(['--title', 'Slow', '--brief', world.brief], deps), 0, err.join('\n'));
+  assert.deepEqual(recordLines(world).map((line) => line.id), ['e1e1e1e1']);
+  assert.match(err.join('\n'), /ETIMEDOUT/);
+  start = false;
+  assert.equal(sessionsStartMain(['--title', 'Slow', '--brief', world.brief], deps), 1);
+  const said = err.join('\n');
+  assert.match(said, /claude agents/);
+  const dir = path.join(world.home, '.js-harness', 'background', 'briefs');
+  const briefs = fs.readdirSync(dir).map((name) => path.join(dir, name));
+  assert.equal(briefs.length, 2);
+  assert.ok(briefs.some((copy) => said.includes(copy)), said);
+}));
+
+test('sessions start runs nothing when the record cannot be written', withWorld((world) => {
+  fs.mkdirSync(recordFile(world), { recursive: true });
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /could not write the record/);
+  assert.deepEqual(actions(world), []);
 }));
 
 test('sessions start refuses a missing brief, a missing title and an unknown flag before claude runs', withWorld((world) => {
@@ -236,6 +290,34 @@ test('sessions stop drops a session claude already lost, and keeps one whose rem
   assert.equal(recordLines(world).at(-1).event, 'started');
 }));
 
+test('sessions stop keeps the session recorded while its brief cannot be deleted, and finishes on a retry', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const { brief } = recordLines(world)[0];
+  fs.rmSync(brief);
+  fs.mkdirSync(brief);
+  fs.writeFileSync(path.join(brief, 'held'), 'x');
+  const held = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(held.code, 1);
+  assert.match(held.stderr, /still recorded/);
+  assert.equal(recordLines(world).at(-1).event, 'started');
+  fs.rmSync(brief, { recursive: true });
+  const retry = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(retry.code, 0, retry.stderr);
+  assert.equal(recordLines(world).at(-1).event, 'removed');
+}));
+
+test('sessions stop says so when claude keeps the session\'s worktree', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const worktree = path.join(world.project, '.claude', 'worktrees', 'thing');
+  patchState(world, { keepWorktree: true });
+  const result = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(result.stdout.includes(`its worktree ${worktree} stays`), result.stdout);
+  patchState(world, { keepWorktree: false, nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief, '--worktree', 'other']).code, 0);
+  assert.doesNotMatch(js(world, ['sessions', 'stop', 'c779ed44']).stdout, /worktree/);
+}));
+
 test('uninstall machine removes the recorded sessions that rest, keeps a working one and fails until it is stopped', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Busy', '--brief', world.brief]).code, 0);
   patchState(world, { nextId: 'c779ed44' });
@@ -254,6 +336,49 @@ test('uninstall machine removes the recorded sessions that rest, keeps a working
   const second = js(world, ['uninstall', 'machine', '--home', world.home]);
   assert.equal(second.code, 0, second.stderr);
   assert.equal(fs.existsSync(path.join(world.home, '.js-harness', 'background')), false);
+}));
+
+test('uninstall machine with a manifest that does not parse touches no background session', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const state = readState(world);
+  state.agents[0].status = 'idle';
+  state.agents[0].state = 'done';
+  writeState(world, state);
+  fs.writeFileSync(path.join(world.home, '.js-harness', 'manifest.json'), '{ not json');
+  const result = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /nothing was changed/);
+  assert.deepEqual(actions(world).slice(1), []);
+  assert.equal(recordLines(world).at(-1).event, 'started');
+}));
+
+test('uninstall machine keeps the record while it holds lines it cannot read', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const state = readState(world);
+  state.agents[0].status = 'idle';
+  state.agents[0].state = 'done';
+  writeState(world, state);
+  fs.appendFileSync(recordFile(world), '{ damaged\n');
+  const result = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(result.code, 1);
+  assert.match(result.stdout, /removed background session 0db8bc5e/);
+  assert.match(result.stderr, /1 line of .*sessions.jsonl is not an entry/);
+  assert.ok(fs.existsSync(recordFile(world)));
+}));
+
+test('uninstall machine says what to settle for a session it keeps: one claude refuses, one it cannot tell', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Unpushed', '--brief', world.brief]).code, 0);
+  const state = readState(world);
+  state.agents[0].status = 'idle';
+  state.agents[0].state = 'done';
+  state.refuseRm = 'Worktree has 2 unpushed commits';
+  writeState(world, state);
+  const refused = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(refused.code, 1);
+  assert.match(refused.stderr, /kept background session 0db8bc5e · Unpushed: claude rm 0db8bc5e: Worktree has 2 unpushed commits; settle what claude says, then run js-harness uninstall machine again/);
+  const blind = spawnSync(process.execPath, [BIN, 'uninstall', 'machine', '--home', world.home], { cwd: world.project, env: { ...envOf(world), PATH: path.dirname(process.execPath) }, encoding: 'utf8' });
+  assert.equal(blind.status, 1);
+  assert.match(blind.stderr, /kept background session 0db8bc5e · Unpushed: it cannot be told whether it is at work: claude is not on PATH; run js-harness uninstall machine again once claude runs/);
 }));
 
 /** The board of the world's project, in process, with a fake `git`/`gh` and the fake `claude` on PATH. */

@@ -138,27 +138,39 @@ export function recordedNamed(sessions, given) {
 
 const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(saidBy(result));
 
-/** Stops and removes the recorded session `entry` with `claude stop` and `claude rm`, then records the removal and
- * deletes the copy of its brief: `{ outcome: 'removed' }`, or `'gone'` when claude no longer knows it, or `{ outcome:
- * 'kept', why }` when claude refused, which keeps it recorded. */
+/** Stops and removes the recorded session `entry` with `claude stop` and `claude rm`, deletes the copy of its brief,
+ * then records the removal: `{ outcome: 'removed', worktreeKept }`, or `'gone'` when claude no longer knows it, or
+ * `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it recorded, so a
+ * second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps one that
+ * holds uncommitted changes (odd/tasks/background-sessions.md, L10). */
 export function undoSession(entry, { home, run, now }) {
   const stopped = run(['stop', entry.id]);
   if ((stopped.error || stopped.status !== 0) && !lostSaid(stopped)) return { outcome: 'kept', why: `claude stop ${entry.id}: ${saidBy(stopped)}` };
   const removed = run(['rm', entry.id]);
   if ((removed.error || removed.status !== 0) && !lostSaid(removed)) return { outcome: 'kept', why: `claude rm ${entry.id}: ${saidBy(removed)}` };
+  if (typeof entry.brief === 'string') {
+    try {
+      fs.rmSync(entry.brief, { force: true });
+    } catch (err) {
+      return { outcome: 'kept', why: `its brief ${entry.brief} could not be deleted (${err.code ?? err.message})` };
+    }
+  }
   appendRecord(home, { event: 'removed', at: new Date(now()).toISOString(), id: entry.id });
-  if (typeof entry.brief === 'string') fs.rmSync(entry.brief, { force: true });
-  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed' };
+  const worktreeKept = typeof entry.worktreePath === 'string' && fs.existsSync(entry.worktreePath) ? entry.worktreePath : null;
+  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept };
 }
 
 /** A session at work: busy, or waiting on something (a permission prompt). */
 export const atWork = (agent) => agent?.status === 'busy' || agent?.status === 'waiting' || agent?.state === 'working';
 
 /** The machine uninstall's part (S3): every recorded session undone as `sessions stop` does, except one at work, which
- * is kept; once none is left, the folder goes. `{ undone, kept, removedDir, failed }`. */
+ * is kept; once none is left and every line of the record was read, the folder goes. `{ undone, kept, removedDir,
+ * failed }`, each kept one with `settle`: `'at-work'`, `'refused'` (claude refused) or `'unknown'` (claude agents
+ * could not say whether it is at work). A line that is not an entry may name a session that still runs, so it keeps the
+ * folder and fails. */
 export function undoBackground(home, { run, now = Date.now } = {}) {
   const record = readRecord(home);
-  if (record.unavailable !== undefined) return { undone: [], kept: [], failed: `${recordFileOf(home)} could not be read (${record.unavailable})` };
+  if (record.unavailable !== undefined) return { undone: [], kept: [], failed: `${recordFileOf(home)} could not be read (${record.unavailable}): the background sessions it records are not undone; run js-harness uninstall machine again` };
   const undone = [];
   const kept = [];
   if (record.sessions.length > 0) {
@@ -166,31 +178,35 @@ export function undoBackground(home, { run, now = Date.now } = {}) {
     try {
       agents = listAgents(run);
     } catch (err) {
-      return { undone, kept: record.sessions.map((entry) => ({ entry, why: `it cannot be told whether it is at work: ${err.message}` })), failed: null };
+      return { undone, kept: record.sessions.map((entry) => ({ entry, settle: 'unknown', why: `it cannot be told whether it is at work: ${err.message}` })), failed: null };
     }
     for (const entry of record.sessions) {
       const agent = agents.find((item) => item.id === entry.id);
       if (atWork(agent)) {
-        kept.push({ entry, why: `it is ${agent.status ?? agent.state}` });
+        kept.push({ entry, settle: 'at-work', why: `it is ${agent.status ?? agent.state}` });
         continue;
       }
       const done = undoSession(entry, { home, run, now });
-      if (done.outcome === 'kept') kept.push({ entry, why: done.why });
-      else undone.push({ entry, outcome: done.outcome });
+      if (done.outcome === 'kept') kept.push({ entry, settle: 'refused', why: done.why });
+      else undone.push({ entry, outcome: done.outcome, worktreeKept: done.worktreeKept });
     }
   }
   const dir = backgroundDir(home);
+  if (record.skipped > 0) {
+    const lines = `${record.skipped} line${record.skipped === 1 ? '' : 's'} of ${recordFileOf(home)} ${record.skipped === 1 ? 'is not an entry' : 'are not entries'} it can read`;
+    return { undone, kept, removedDir: null, failed: `${lines}, so ${dir} is kept: a session such a line names may still run, and claude agents lists them` };
+  }
   if (kept.length > 0 || !fs.existsSync(dir)) return { undone, kept, removedDir: null, failed: null };
   try {
     fs.rmSync(dir, { recursive: true, force: true });
     return { undone, kept, removedDir: dir, failed: null };
   } catch (err) {
-    return { undone, kept, removedDir: null, failed: `could not remove ${dir} (${err.code ?? err.message})` };
+    return { undone, kept, removedDir: null, failed: `could not remove ${dir} (${err.code ?? err.message}); run js-harness uninstall machine again` };
   }
 }
 
 /** Whether `child` is `parent` or inside it, as Windows compares paths when `platform` is win32. */
-function within(child, parent, platform) {
+export function within(child, parent, platform = process.platform) {
   const paths = platform === 'win32' ? path.win32 : path;
   const fold = (text) => (platform === 'win32' ? paths.resolve(text).toLowerCase() : paths.resolve(text));
   const rel = paths.relative(fold(parent), fold(child));

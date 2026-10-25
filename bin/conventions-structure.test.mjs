@@ -68,7 +68,7 @@ const LEGACY = {
 
 // Today's size of each module over SIZE_LIMIT lines, measured on 2026-10-24: a ceiling that only goes down.
 const CEILINGS = {
-  'bin/lib/sessions.mjs': 3426,
+  'bin/lib/sessions.mjs': 3424,
   'bin/codex-review.mjs': 2284,
   'bin/lib/manifest.mjs': 2160,
   'bin/check.mjs': 2110,

@@ -3030,8 +3030,6 @@ function planLines(plans) {
   });
 }
 
-/** How many lines of the relief file the board prints: enough to see what the orchestrator noted last,
- * and whoever needs the rest reads the file. */
 export { RELIEF_LINES, reliefTail } from './board-files.mjs';
 
 /** The section that says whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5),

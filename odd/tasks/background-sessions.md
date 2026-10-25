@@ -120,3 +120,15 @@ one Codex review.
   `bin/lib/background.mjs`, and the board's file readers (`reliefTail`, `readRelief`, `tailOfFile`) to
   `bin/lib/board-files.mjs`, re-exported where callers import them, so `bin/sessions.mjs` (1055) and
   `bin/lib/sessions.mjs` (3426) are under their ceilings; "he/his" in the new text became "the user".
+- L10 (2026-10-24, the review of 54c7e391): gentle-ai approved it with four lenses (risk, resilience, readability,
+  reliability; lineage review-699f140966d35940, acknowledged) and ten advisories; Codex recorded six P2s. A haiku probe
+  answered R1: with an uncommitted change in an idle session's worktree, `claude rm` exits 0, removes the session and
+  keeps the worktree, locked by a pid that is gone, so no work is lost; `stop` now says where it stays. Refuted:
+  R3-everything (the exit code counts a kept session, so `--everything` stops before the folder), R3-board-spawns-real-claude
+  (the board's tests pass `env: {}`, and claude is found only on PATH). Codex's board-without-main-transcripts P2 is a
+  base limitation, kept as a follow-up. Fixed with a test each: the manifest is read before any session is undone; a
+  record with unreadable lines keeps its folder and fails; the brief is deleted before the removal is recorded; the
+  record is opened before claude runs, and a session that then cannot be recorded is stopped and removed; a session
+  without a printed id is taken only when it is new since the start and in the project; a run that does not finish is
+  looked for in `claude agents`, and its brief kept when none is found; a kept session is named with what settles it;
+  the board's listing times out at 15 s. Not changed: the two refusal functions name their caller differently (R2, a suggestion).

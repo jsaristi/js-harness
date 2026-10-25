@@ -552,13 +552,16 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // What `stack install` ran is undone with the probes and the runner of bin/lib/stack-run.mjs, each undo printed
   // before it runs; `deps.stackSpawn` is the runner's seam (odd/tasks/stack-install.md, D7).
   const undoTheStack = deps.undoStack ?? ((records) => undoStack(records, { home, env: { ...process.env, ...env }, spawn: deps.stackSpawn, log: (line) => console.log(line) }));
-  // The background sessions `sessions start` recorded (odd/tasks/background-sessions.md, S3), undone first: one at work
-  // is kept with the command that stops it, and the uninstall fails until it is.
+  // The background sessions `sessions start` recorded (odd/tasks/background-sessions.md, S3), undone first: one kept is
+  // named with what settles it, and the uninstall fails until it is. The manifest is read before, so one that does not
+  // parse is refused with nothing changed, as `uninstall` refuses it.
+  readManifest(home);
   const background = undoBackground(home, { run: deps.claude ?? claudeRunner({ env: { ...process.env, ...env } }) });
-  for (const { entry, outcome } of background.undone) console.log(outcome === 'gone' ? `background session ${entry.id} · ${entry.title} was already gone: its record is closed` : `removed background session ${entry.id} · ${entry.title}`);
-  for (const { entry, why } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; js-harness sessions stop ${entry.id} removes it, then run js-harness uninstall machine again`);
+  const settles = { 'at-work': (id) => `js-harness sessions stop ${id} removes it, then run js-harness uninstall machine again`, refused: () => 'settle what claude says, then run js-harness uninstall machine again', unknown: () => 'run js-harness uninstall machine again once claude runs' };
+  for (const { entry, outcome, worktreeKept } of background.undone) console.log(`${outcome === 'gone' ? `background session ${entry.id} · ${entry.title} was already gone: its record is closed` : `removed background session ${entry.id} · ${entry.title}`}${worktreeKept ? `; its worktree ${worktreeKept} stays, with what it holds` : ''}`);
+  for (const { entry, why, settle } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; ${settles[settle](entry.id)}`);
   if (background.removedDir) console.log(`removed ${background.removedDir}`);
-  if (background.failed) console.error(`${background.failed}: the background sessions it records are not undone; run js-harness uninstall machine again`);
+  if (background.failed) console.error(background.failed);
   const result = uninstall(home, { ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);

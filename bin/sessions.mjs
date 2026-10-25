@@ -542,7 +542,7 @@ export async function sessionsMain(
     // How a watch waits between two looks; with `now` it is all of its time, so a test waits for nothing.
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     // The background sessions `claude agents` lists, replaceable so a test lists its own; a failure is said on the board.
-    listBackground = () => listAgents(claudeRunner({ env, platform })),
+    listBackground = () => listAgents(claudeRunner({ env, platform, timeout: 15000 })),
   } = {},
 ) {
   // The two subcommands that start and remove a background session (odd/tasks/background-sessions.md) write, unlike the board.
