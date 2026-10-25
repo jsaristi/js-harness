@@ -145,3 +145,5 @@ one Codex review.
 - L13 (2026-10-24, delivery): pull request https://github.com/jsaristi/js-harness/pull/585 opened from
   `claude/sessions-start-bg-6abcb7`; every code commit has a Codex review record, the last one "correct"; the gentle-ai
   review of 54c7e391 is acknowledged and the commits after it are under budget. Left: T3, the lead's merge, and L4.
+
+- L14 (2026-10-24): settling L4 per the lead. `rules change sessions-open-in-sidebar` runs in worktree D:/js-harness-worktrees/rule-sidebar (branch rule/sessions-open-in-sidebar from origin/main; change JSON in the session scratchpad as change.json). It refuses: the 2026-10-15 transcript e152c9d8 of the two older quotes is no longer on disk, and the command re-reads every quote. The lead chose (20:43) to run it with the new quote as the one read source and the two old answers named verbatim in the reading, on a pull request of its own from rule/sessions-open-in-sidebar (commit 3d0ab4d9); PR 585 does not wait on it. L4 is settled there.
