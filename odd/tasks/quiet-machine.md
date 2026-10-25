@@ -60,7 +60,7 @@ Nothing: the brief carries his request; spend is one gate and one Codex review.
 - [x] T1 (kind: build) S2, S3: tests first through `quietMain` with a fake `claude` on PATH, then `bin/lib/quiet.mjs`,
   `bin/quiet.mjs`, the shared process listing. Route: inline (one understood change).
 - [x] T2 (kind: docs) S4: help, README, `docs/SPEC.md`, the orchestrator skill. Route: inline.
-- [ ] T3 (kind: verify) gate, one real look, gentle-ai assessment, Codex review, PR. Route: inline.
+- [x] T3 (kind: verify) gate, one real look, gentle-ai assessment, Codex review, PR. Route: inline.
 
 ## Log
 - L1 (2026-10-25, the lead's brief to this session, carrying his words of S1): "Build a js-harness feature that tells
@@ -95,3 +95,10 @@ Nothing: the brief carries his request; spend is one gate and one Codex review.
   lines counted pids 21, 23 and 24 as work, which is the RED. Under `--wait --json` the start line goes to stderr; the
   end says the quiet measured (`since HH:MM, N minutes`), not the settle given; the skill says what exit 1 asks; the
   listing script has its own test (`bin/lib/process-list.test.mjs`); `--for` is kept as `forMinutes`.
+
+- L8 (2026-10-25) Slice 2 (`af91e23f`): gate green in its hook; gentle-ai assessed it medium, `under_budget`, no
+  native review due; the Codex review of `5baf129..af91e23` is recorded: correct (0.97), its P2 fixed. The branch is
+  pushed and its pull request opened for the lead to land.
+
+## Next step
+None in this session: the lead lands the pull request with `js-harness merge-queue --land`.
