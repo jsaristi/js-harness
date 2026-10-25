@@ -118,5 +118,4 @@ Forecast: ~250 authored lines. Under the ~400 budget: one PR against `main`. Str
   note's wording changed as the verifier asked. Codex 2bbdd34..4957788: correct (0.97), its earlier P2
   fixed; 4957788..1b70037: correct (0.99). The Stop hook offered the whole branch: its read-only status
   was read and nothing started (AGENTS.md).
-- gentle-ai: 2bbdd346 high (item 2, escalated), approved, review-f5bba1442974c843; 4957788b high (item 2,
-  escalated), approved, review-a4bfeeb608e6e8e6; 1b70037f medium, not due (under_budget).
+- gentle-ai: 2bbdd346 high (item 2, escalated), approved, review-f5bba1442974c843; 4957788b high (item 2, escalated), approved, review-a4bfeeb608e6e8e6; 1b70037f medium, not due (under_budget).
