@@ -142,3 +142,6 @@ one Codex review.
   entry appended after a last line an interrupted write cut starts on a line of its own; an id claude printed before
   its run timed out is recorded even when `claude agents` fails; the tests of a missing claude put an empty folder on
   PATH, so a claude installed beside node is never run.
+- L13 (2026-10-24, delivery): pull request https://github.com/jsaristi/js-harness/pull/585 opened from
+  `claude/sessions-start-bg-6abcb7`; every code commit has a Codex review record, the last one "correct"; the gentle-ai
+  review of 54c7e391 is acknowledged and the commits after it are under budget. Left: T3, the lead's merge, and L4.
