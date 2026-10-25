@@ -166,7 +166,8 @@ export function sessionsStartMain(argv, given = {}) {
     return 1;
   }
   if (began) stderr(`js-harness sessions start: claude did not finish (${result.error.message}); looking for the session in claude agents`);
-  let id = began ? null : idOfStart(result.stdout);
+  // What claude printed before it was cut short counts: the id is then known without the listing.
+  let id = idOfStart(result.stdout ?? '');
   let agent;
   try {
     const agents = listAgents(claude);

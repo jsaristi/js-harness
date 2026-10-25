@@ -96,10 +96,28 @@ export function listAgents(run) {
   return agents;
 }
 
-/** Appends `entry` to the record under `home`, stamped with the schema. */
+/** Appends `entry` to the record under `home`, stamped with the schema, on a line of its own: after a last line an
+ * interrupted write cut, a newline first, so the entry is not read as part of it and skipped. */
 export function appendRecord(home, entry) {
   fs.mkdirSync(backgroundDir(home), { recursive: true });
-  fs.appendFileSync(recordFileOf(home), `${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
+  const file = recordFileOf(home);
+  let cut = false;
+  try {
+    const size = fs.statSync(file).size;
+    if (size > 0) {
+      const fd = fs.openSync(file, 'r');
+      const last = Buffer.alloc(1);
+      try {
+        fs.readSync(fd, last, 0, 1, size - 1);
+      } finally {
+        fs.closeSync(fd);
+      }
+      cut = last[0] !== 0x0a;
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  fs.appendFileSync(file, `${cut ? '\n' : ''}${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
 }
 
 /** The sessions the record under `home` holds, those started and not removed: `{ sessions }`, a list of their start

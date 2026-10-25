@@ -102,6 +102,12 @@ function makeWorld({ rules = false } = {}) {
   return world;
 }
 
+/** A folder of the world with nothing in it, for a PATH on which no claude can be found. */
+const emptyDir = (world) => {
+  const dir = path.join(world.dir, 'empty');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
 const readState = (world) => JSON.parse(fs.readFileSync(world.state, 'utf8'));
 /** The calls the fake got that act on a session: every listing left out. */
 const actions = (world) => readState(world).calls.filter((call) => call[0] !== 'agents');
@@ -222,6 +228,24 @@ test('a start whose run of claude fails after it began records the session claud
   assert.ok(briefs.some((copy) => said.includes(copy)), said);
 }));
 
+test('a start after a record whose last line was cut keeps its own entry whole', withWorld((world) => {
+  fs.mkdirSync(path.dirname(recordFile(world)), { recursive: true });
+  fs.writeFileSync(recordFile(world), '{"schema":"js-harness.background-session/v1","event":"star');
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const stop = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(stop.code, 0, stop.stderr);
+}));
+
+test('a start whose run of claude printed its id and then timed out records that id, even when claude agents fails', withWorld((world) => {
+  const claude = (args) => {
+    if (args[0] === 'agents') return { status: 1, stdout: '', stderr: 'boom' };
+    return { status: null, stdout: 'backgrounded · f0f0f0f0 · Slow\n', stderr: '', error: Object.assign(new Error('spawnSync claude.cmd ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+  };
+  const err = [];
+  assert.equal(sessionsStartMain(['--title', 'Slow', '--brief', world.brief], { cwd: world.project, env: envOf(world), claude, stdout: () => {}, stderr: (line) => err.push(line) }), 0, err.join('\n'));
+  assert.deepEqual(recordLines(world).map((line) => line.id), ['f0f0f0f0']);
+}));
+
 test('sessions start runs nothing when the record cannot be written', withWorld((world) => {
   fs.mkdirSync(recordFile(world), { recursive: true });
   const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
@@ -239,7 +263,7 @@ test('sessions start refuses a missing brief, a missing title and an unknown fla
 
 test('sessions start says so when claude is not on PATH', withWorld((world) => {
   const result = spawnSync(process.execPath, [BIN, 'sessions', 'start', '--title', 'x', '--brief', world.brief], {
-    cwd: world.project, env: { ...envOf(world), PATH: path.dirname(process.execPath) }, encoding: 'utf8',
+    cwd: world.project, env: { ...envOf(world), PATH: emptyDir(world) }, encoding: 'utf8',
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /claude is not on PATH/);
@@ -382,7 +406,7 @@ test('uninstall machine says what to settle for a session it keeps: one claude r
   const refused = js(world, ['uninstall', 'machine', '--home', world.home]);
   assert.equal(refused.code, 1);
   assert.match(refused.stderr, /kept background session 0db8bc5e · Unpushed: claude rm 0db8bc5e: Worktree has 2 unpushed commits; settle what claude says, then run js-harness uninstall machine again/);
-  const blind = spawnSync(process.execPath, [BIN, 'uninstall', 'machine', '--home', world.home], { cwd: world.project, env: { ...envOf(world), PATH: path.dirname(process.execPath) }, encoding: 'utf8' });
+  const blind = spawnSync(process.execPath, [BIN, 'uninstall', 'machine', '--home', world.home], { cwd: world.project, env: { ...envOf(world), PATH: emptyDir(world) }, encoding: 'utf8' });
   assert.equal(blind.status, 1);
   assert.match(blind.stderr, /kept background session 0db8bc5e · Unpushed: it cannot be told whether it is at work: claude is not on PATH; run js-harness uninstall machine again once claude runs/);
 }));

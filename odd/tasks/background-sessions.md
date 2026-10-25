@@ -138,3 +138,7 @@ one Codex review.
   in the folder asked for, the cwd or a worktree of the name given, with a test of a same-title start beside it);
   4 (the record's append and the rollback both failing) and 6 (the board without main-checkout transcripts, the base's
   behavior that existing tests pin) are recorded as follow-ups in docs/ROADMAP.md, Session board.
+- L12 (2026-10-24, Codex's full review of 7557a14..cae6c8f, with --again): three new P2s, fixed with a test each: an
+  entry appended after a last line an interrupted write cut starts on a line of its own; an id claude printed before
+  its run timed out is recorded even when `claude agents` fails; the tests of a missing claude put an empty folder on
+  PATH, so a claude installed beside node is never run.
