@@ -310,33 +310,8 @@ export function watchdogTaskXml(action) {
   ].join('\r\n');
 }
 
-const isFile = (file) => {
-  try {
-    return fs.statSync(file).isFile();
-  } catch {
-    return false;
-  }
-};
-
-/** Where the Claude CLI is, from the PATH of `env` and nothing else (nothing is run to find it):
- * `{ path, shell }`, or `null`. On Windows each directory is tried for `claude.exe`, then `claude.cmd`, in PATH
- * order; a `.cmd` is an npm shim that only a shell can start, hence `shell`. Elsewhere it is a plain `claude`. */
-export function resolveClaude({ env = process.env, platform = process.platform, exists = isFile } = {}) {
-  const windows = platform === 'win32';
-  const key = Object.keys(env).find((name) => (windows ? /^path$/i.test(name) : name === 'PATH'));
-  if (!key || typeof env[key] !== 'string') return null;
-  const join = windows ? path.win32.join : path.posix.join;
-  const names = windows ? ['claude.exe', 'claude.cmd'] : ['claude'];
-  for (const entry of env[key].split(windows ? ';' : ':')) {
-    const dir = entry.trim().replace(/^"|"$/g, '');
-    if (dir === '') continue;
-    for (const name of names) {
-      const file = join(dir, name);
-      if (exists(file)) return { path: file, shell: name.endsWith('.cmd') };
-    }
-  }
-  return null;
-}
+// Where the Claude CLI is: its own module, so the board and `sessions start` find it without loading this one.
+export { resolveClaude } from './claude-path.mjs';
 
 /** How long to wait before the next restart: `minMs` the first time, twice the previous wait after each quick
  * exit, never more than `maxMs`, and `minMs` again once a server ran for `healthyMs` (it was working; the exit

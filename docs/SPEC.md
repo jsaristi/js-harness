@@ -456,6 +456,15 @@ proofs and by those tasks.
 **Discarded:** Pasting the opening. The orchestrator opening sessions through a scheduled task: it lands where the owner does not see it.
 **Today:** `bin/notify.mjs`, `bin/sessions.mjs`, `bin/lib/channel.mjs`
 
+### The lead starts a session on a turn he did not type
+
+**Problem:** The desktop app's `start_session` starts a session only on a turn the owner typed; on a turn a notice, a background task or a compaction started, it leaves a card he must tap, so the lead waited on him for what he had asked it to do alone (his words of 2026-10-24: "Quiero que que puedas iniciarla sin el mensaje mio escrito").
+**Requirement:** `js-harness sessions start --title --brief` starts the session with `claude --bg`, with Remote Control on unless `--no-remote-control`, a copy of the brief that ends by telling it to report through `js-harness notify --to orchestrator`, and the title and effort the rules `session-title` and `session-effort` hold `start_session` to, where they are declared. Each start is recorded under the harness home; `sessions stop <id>` removes a recorded session (`claude stop`, `claude rm`) and no other, and `uninstall machine` removes every recorded one not at work and fails while one is. The board lists the project's background sessions from `claude agents --json --all` with what each waits for, and a watch returns when one starts waiting. The lead uses it only where `start_session` would leave a card.
+**Reason:** He asked the lead to start sessions itself, and a session the harness starts is undone exactly by the harness.
+**Proof:** `node --test bin/sessions-background.test.mjs`, `node --test bin/lib/background.test.mjs`
+**Discarded:** The brief as the prompt itself: a `.cmd` shim of the CLI runs through `cmd.exe`, which cannot carry a line break. Removing the transcript with the session: `claude rm` keeps it, as every session's is kept. Stopping a session at work from `uninstall`: its work would be lost unseen.
+**Today:** `bin/sessions-background.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/install.mjs`, `js-harness sessions`
+
 ### The owner's words, when they travel
 
 **Problem:** The owner decided on 2026-10-10 (relief file, line 149) that an answer he gives in the orchestrator's chat travels to the session that asked, with his exact words and where they are.

@@ -12,6 +12,7 @@ import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoo
 import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
+import { claudeRunner, undoBackground } from './lib/background.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -551,6 +552,13 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // What `stack install` ran is undone with the probes and the runner of bin/lib/stack-run.mjs, each undo printed
   // before it runs; `deps.stackSpawn` is the runner's seam (odd/tasks/stack-install.md, D7).
   const undoTheStack = deps.undoStack ?? ((records) => undoStack(records, { home, env: { ...process.env, ...env }, spawn: deps.stackSpawn, log: (line) => console.log(line) }));
+  // The background sessions `sessions start` recorded (odd/tasks/background-sessions.md, S3), undone first: one at work
+  // is kept with the command that stops it, and the uninstall fails until it is.
+  const background = undoBackground(home, { run: deps.claude ?? claudeRunner({ env: { ...process.env, ...env } }) });
+  for (const { entry, outcome } of background.undone) console.log(outcome === 'gone' ? `background session ${entry.id} · ${entry.title} was already gone: its record is closed` : `removed background session ${entry.id} · ${entry.title}`);
+  for (const { entry, why } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; js-harness sessions stop ${entry.id} removes it, then run js-harness uninstall machine again`);
+  if (background.removedDir) console.log(`removed ${background.removedDir}`);
+  if (background.failed) console.error(`${background.failed}: the background sessions it records are not undone; run js-harness uninstall machine again`);
   const result = uninstall(home, { ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
@@ -688,12 +696,16 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     result.channelKept.length === 0 &&
     result.remoteKept.length === 0 &&
     memoryKept.length === 0 &&
+    background.undone.length === 0 &&
+    background.kept.length === 0 &&
+    !background.removedDir &&
+    !background.failed &&
     !result.throughputKept
   ) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 ? 1 : 0;
+  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

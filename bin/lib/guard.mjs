@@ -69,24 +69,26 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
  * the rule `session-effort` says high (odd/tasks/harness-review.md, T6c). Where that rule gives a value, a call that
  * carries a brief (`prompt`) is refused when it names no effort, a fork included since a fork cannot set its own, or
  * one above the rule's; a call with no brief (an offer's title, a proposal started as proposed) passes. Where the
- * rule is not declared nothing is refused. */
-export function sessionEffortRefusal(toolInput, projectData) {
+ * rule is not declared nothing is refused. `cli` words the reasons for `js-harness sessions start`, which holds the
+ * same rule over its `--effort` (odd/tasks/background-sessions.md, S5). */
+export function sessionEffortRefusal(toolInput, projectData, { cli = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
   const rule = ruleHere('session-effort', undefined, projectData);
   if (!Object.hasOwn(rule, 'value')) return null;
   const effort = toolInput.context === 'fork' ? undefined : toolInput.effort;
+  const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
+  const pass = cli ? `Pass --effort ${rule.value} or lower` : `Pass effort "${rule.value}" or lower`;
   if (effort === undefined || effort === null || effort === '') {
-    return 'js-harness guard: start_session names no effort, so the new session would run at this session\'s '
-      + `(rule session-effort: ${rule.value}). Pass effort "${rule.value}" or lower with context "fresh"; a fork cannot set its own effort.`;
+    if (cli) return `${who} names no effort, so the new session would run at the host's default (rule session-effort: ${rule.value}). ${pass}.`;
+    return `${who} names no effort, so the new session would run at this session's `
+      + `(rule session-effort: ${rule.value}). ${pass} with context "fresh"; a fork cannot set its own effort.`;
   }
   const asked = EFFORTS.indexOf(effort);
   if (asked === -1) {
-    return `js-harness guard: start_session asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. `
-      + `Pass effort "${rule.value}" or lower.`;
+    return `${who} asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. ${pass}.`;
   }
   if (asked <= EFFORTS.indexOf(rule.value)) return null;
-  return `js-harness guard: start_session asks for effort "${effort}", above the rule session-effort: ${rule.value}. `
-    + `Pass effort "${rule.value}" or lower; a higher one is his to set.`;
+  return `${who} asks for effort "${effort}", above the rule session-effort: ${rule.value}. ${pass}; a higher one is his to set.`;
 }
 
 // The hour a message stamps as the time it is sent: in its opening header, after nothing but the sender's label

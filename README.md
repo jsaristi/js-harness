@@ -1143,6 +1143,28 @@ have no answer of his yet, read from the transcripts and joined by number to the
 (or `"<code> <role>"`) prints the opening stored for a session and records which session read it;
 a session keeps the title of its first reading, and `--peek` reads an opening and records nothing.
 
+`js-harness sessions start --title <title> --brief <file>` starts a work session in the background
+with `claude --bg`, from any turn: the desktop app's `start_session` starts one only on a turn the
+user typed, and leaves a card the user must tap on a turn a notice or a compaction started. The lead uses
+it only there, since a background session is not a row in the user's sidebar; Remote Control is on unless
+`--no-remote-control`, so claude.ai/code and the user's phone reach it. The session reads a copy of the
+brief under `~/.js-harness/background/briefs/` that ends by telling it to report through
+`js-harness notify --to orchestrator`; `--worktree <name>`, `--model` and `--effort` go to `claude`,
+and the title and effort are held to the rules `session-title` and `session-effort` where they are
+declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `js-harness sessions
+stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
+other, and `js-harness uninstall machine` removes every recorded one that is not at work and fails
+while one is. The board's `Background sessions` block lists the project's background sessions from
+`claude agents --json --all`, what each waits for (a permission prompt included) and whether `start`
+recorded it; `--watch` returns when one starts waiting.
+
+```console
+$ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing --effort high
+started 0db8bc5e · JH 45 · thing
+  js-harness sessions stop 0db8bc5e removes it; claude attach 0db8bc5e opens it here; js-harness sessions lists it
+  Remote Control is on: claude.ai/code and the user's phone reach it
+```
+
 ```console
 $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …

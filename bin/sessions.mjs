@@ -5,7 +5,7 @@
 // bin/lib/sessions.mjs; this file only finds the folders, reads them and runs `git`, `gh` and one process
 // listing. Read-only: it opens files for reading and signals no process, because it runs while other
 // sessions work in the same checkout. The one thing it writes is a line of the channel's record when a
-// session reads its opening (`--opening`), which says which session read which title.
+// session reads its opening (`--opening`), which says which session read which title; `start` and `stop` (./sessions-background.mjs) write theirs.
 // Zero dependencies; `--json` gives the same data as the text.
 // `--watch` takes the same board again and again and returns when two of them differ in a way that needs
 // a decision, so a session can wait on the others without spending anything while nothing happens.
@@ -63,8 +63,11 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, reliefTail, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { readRelief, tailOfFile } from './lib/board-files.mjs';
+import { backgroundChanges, boardBackground, claudeRunner, listAgents } from './lib/background.mjs';
+import { START_USAGE, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
 
 export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -96,6 +99,7 @@ export const USAGE = [
   '         the question, the options shown and whether they tapped one or typed their own; the result of any',
   '         other tool is not, and a question the user closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
+  START_USAGE.replace(/^Usage: /, '       '),
   '       js-harness sessions --measures [--hours <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
   '         prints, for each compaction of the transcripts in the window, whether the user asked for it and, for one the host',
   '         made, two facts: told (the session was told the pause before it) and kept (the feature document has a commit',
@@ -436,17 +440,6 @@ function measureSession(id, modifiedAt, file, readers, io, readings) {
   return { id, modifiedAt, title: shown.title ?? null, titleSource: shown.titleSource ?? null, measures };
 }
 
-/** The relief file at `file` as the board shows it: `{ path, exists: true, lineCount, lines }`, `{ path,
- * exists: false }` when there is none yet, or `{ path, unavailable }` with the reason when it is there
- * and cannot be read. */
-function readRelief(file, readFile) {
-  try {
-    return { path: file, exists: true, ...reliefTail(readFile(file)) };
-  } catch (err) {
-    return err.code === 'ENOENT' ? { path: file, exists: false } : { path: file, unavailable: err.code ?? err.message };
-  }
-}
-
 /** The sessions of a project's folder whose transcript changed in the last `hours`, read as the board reads them,
  * `{ generatedAt, since, sessions, record }`: the sessions most recent first (each one's facts, or `unavailable`
  * with the reason), where the window starts (ms), and the channel's record as its reader gives it. Or `{ unlisted }`
@@ -476,20 +469,6 @@ function heldOutsideWindow(file, changedAt, now, io) {
     return heldPastLimit(io.readFacts(text), now);
   } catch {
     return false;
-  }
-}
-
-/** The last `bytes` of `file` as text; its first line may be cut, and the transcript parser skips it. */
-function tailOfFile(file, bytes) {
-  const fd = fs.openSync(file, 'r');
-  try {
-    const size = fs.fstatSync(fd).size;
-    const start = Math.max(0, size - bytes);
-    const buffer = Buffer.alloc(size - start);
-    fs.readSync(fd, buffer, 0, buffer.length, start);
-    return buffer.toString('utf8');
-  } finally {
-    fs.closeSync(fd);
   }
 }
 
@@ -562,8 +541,14 @@ export async function sessionsMain(
     readApp = () => appSessions(appRoot(env, platform, homedir())),
     // How a watch waits between two looks; with `now` it is all of its time, so a test waits for nothing.
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    // The background sessions `claude agents` lists, replaceable so a test lists its own; a failure is said on the board.
+    listBackground = () => listAgents(claudeRunner({ env, platform })),
   } = {},
 ) {
+  // The two subcommands that start and remove a background session (odd/tasks/background-sessions.md) write, unlike the board.
+  if (argv[0] === 'start' || argv[0] === 'stop') {
+    return (argv[0] === 'start' ? sessionsStartMain : sessionsStopMain)(argv.slice(1), { cwd: defaultCwd, stdout, stderr, env, now, homedir, run });
+  }
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -729,6 +714,9 @@ export async function sessionsMain(
       // memory folder, which the host keeps beside the transcripts, and the journal `memory` keeps under the home.
       memory: boardMemory({ home: home, slug, folder: path.join(projectDir, 'memory'), now: now() }),
       notVisible: NOT_VISIBLE,
+      // The project's background sessions (odd/tasks/background-sessions.md, S4): what `claude agents` lists in its
+      // folders, each marked by whether `sessions start` recorded it. A listing that fails is unavailable, never none.
+      background: boardBackground({ home, root, worktrees, list: listBackground, platform, readFile }),
     };
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
@@ -1046,9 +1034,9 @@ export async function sessionsMain(
     await sleep(Math.min(parsed.interval * 1000, left));
     const board = look();
     if (board === null) return 1;
-    const changes = boardChanges(baseline, board, { self });
+    const changes = [...boardChanges(baseline, board, { self }), ...backgroundChanges(baseline.background, board.background)];
     if (changes.length === 0) {
-      baseline = watchBaseline(baseline, board);
+      baseline = { ...watchBaseline(baseline, board), background: board.background.available ? board.background : baseline.background };
       continue;
     }
     if (parsed.json) {
