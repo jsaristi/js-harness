@@ -145,7 +145,13 @@ test('guard --memory <folder> lists each feedback note with no home and exits 1,
     assert.equal(found.out, 'bare.md: a feedback note that names no home of its rule in the repository\n');
     fs.writeFileSync(path.join(folder, 'bare.md'), noteOf('AGENTS.md: "He never compacts by hand"'));
     assert.deepEqual(await guard(null, { args: ['--memory', folder] }), { code: 0, out: 'every feedback note names its home (2 feedback notes)\n', err: '' });
-    const off = await guard(null, { args: ['--memory', folder], rulesText: null });
+    // A rule the project declares and this copy does not know yet is a home (odd/tasks/behind-copy-guard.md, L3).
+    const added = writeRules([...RULES, { ...RULES.find((rule) => rule.id === 'session-title'), id: 'brand-new-rule' }]);
+    fs.writeFileSync(path.join(folder, 'bare.md'), noteOf('He never compacts by hand: `rule:brand-new-rule`.'));
+    assert.deepEqual(await guard(null, { args: ['--memory', folder], rulesText: added }), { code: 0, out: 'every feedback note names its home (2 feedback notes)\n', err: '' });
+    assert.equal((await guard(null, { args: ['--memory', folder] })).out, 'bare.md: a feedback note that names no home of its rule in the repository\n');
+    fs.writeFileSync(path.join(folder, 'bare.md'), noteOf('AGENTS.md: "He never compacts by hand"'));
+    const off =await guard(null, { args: ['--memory', folder], rulesText: null });
     assert.deepEqual(off, { code: 0, out: 'rule memory-feedback-home is not in force in this project: nothing checked\n', err: '' });
     fs.mkdirSync(path.join(folder, 'folder.md'));
     const unreadable = await guard(null, { args: ['--memory', folder] });
