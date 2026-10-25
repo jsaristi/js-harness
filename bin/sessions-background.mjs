@@ -172,7 +172,9 @@ export function sessionsStartMain(argv, given = {}) {
     const agents = listAgents(claude);
     if (id !== null) agent = agents.find((item) => item.id === id);
     else {
-      const made = agents.filter((item) => item.kind === 'background' && item.name === parsed.title && before !== null && !before.has(item.id) && typeof item.cwd === 'string' && within(item.cwd, top));
+      // In the folder asked for: the cwd itself, or a worktree of the name given (claude puts it under the main checkout).
+      const asked = (folder) => (parsed.worktree ? path.basename(folder) === parsed.worktree && (within(folder, root) || within(folder, top)) : within(folder, cwd) && within(cwd, folder));
+      const made = agents.filter((item) => item.kind === 'background' && item.name === parsed.title && before !== null && !before.has(item.id) && typeof item.cwd === 'string' && asked(item.cwd));
       if (made.length === 1) [agent] = made;
       id = agent?.id ?? null;
     }

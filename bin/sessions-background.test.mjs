@@ -36,6 +36,7 @@ if (argv.includes('--bg')) {
     cwd = path.join(cwd, '.claude', 'worktrees', argv[argv.indexOf('-w') + 1]);
     fs.mkdirSync(cwd, { recursive: true });
   }
+  if (state.sibling) state.agents.push({ ...state.sibling, kind: 'background', startedAt: state.now, name, status: 'busy' });
   if (!state.ghost) state.agents.push({ pid: 4242, id, cwd, kind: 'background', startedAt: state.now, sessionId: id + '-0000-4000-8000-000000000000', name, status: 'busy', state: 'working' });
   save();
   out(state.quiet ? 'started' : 'backgrounded · ' + id + ' · ' + name);
@@ -189,6 +190,11 @@ test('a start without an id takes only a session claude agents did not list befo
   const none = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
   assert.equal(none.code, 1);
   assert.match(none.stderr, /claude agents lists no new session titled "Build the thing"/);
+  assert.equal(recordLines(world).length, 1);
+  // A start of the same title in another folder of the checkout, at the same moment, is another caller's.
+  patchState(world, { sibling: { id: 'bbbb2222', cwd: path.join(world.project, 'sub'), sessionId: 'bbbb2222-0' } });
+  const beside = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(beside.code, 1);
   assert.equal(recordLines(world).length, 1);
 }));
 

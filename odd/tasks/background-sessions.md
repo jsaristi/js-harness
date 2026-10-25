@@ -132,3 +132,7 @@ one Codex review.
   without a printed id is taken only when it is new since the start and in the project; a run that does not finish is
   looked for in `claude agents`, and its brief kept when none is found; a kept session is named with what settles it;
   the board's listing times out at 15 s. Not changed: the two refusal functions name their caller differently (R2, a suggestion).
+- L11 (2026-10-24, Codex's recheck of e7aa7ec3): findings 1-3 fixed; 5 fixed now (a session found by its title must be
+  in the folder asked for, the cwd or a worktree of the name given, with a test of a same-title start beside it);
+  4 (the record's append and the rollback both failing) and 6 (the board without main-checkout transcripts, the base's
+  behavior that existing tests pin) are recorded as follow-ups in docs/ROADMAP.md, Session board.

@@ -195,6 +195,9 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] The status report: `js-harness report --mark` gives the facts since the last report, and the orchestrator skill answers "how is it going" from them in six sections (`odd/tasks/status-report.md`)
 - [x] The restart: before the user restarts or updates, the lead pauses every session at a safe point and only then says so in capitals (`rule:restart-announce`, the orchestrator skill's "The restart")
 - [x] The report as tables: when the user asks what was done, each section of the status report that holds items is a table (`rule:report-table`, the orchestrator skill's "The status report")
+- [x] Background sessions: `js-harness sessions start` runs `claude --bg` on a turn the user did not type, records it, and `sessions stop` and `uninstall machine` undo it; the board lists them (`odd/tasks/background-sessions.md`)
+- [ ] Follow-up (Codex, 54c7e39..e7aa7ec, finding 6): the board lists background sessions even when the main checkout has no transcripts folder, which today ends the board with exit 1 before it reads them, as it did before they were listed
+- [ ] Follow-up (Codex, finding 4): a start whose record cannot be appended after claude ran, and whose rollback claude refuses, leaves a durable entry that `sessions stop` and uninstall can act on, not only the commands that remove it
 
 ### F6 Codex parity
 - [x] The eval tasks run on Codex
