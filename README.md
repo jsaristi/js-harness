@@ -1388,6 +1388,44 @@ $ js-harness wake --at-login
 wake at login: on (wrote C:\Users\you\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\js-harness-wake-js-harness-0f3a5c2d9e1b.cmd); it runs at each login, and js-harness wake --at-login --remove removes it.
 ```
 
+### js-harness quiet
+
+Says whether anything still runs on this machine, so the owner can turn the PC off instead of
+leaving it on while nothing is left to do. One look reads each source of work the harness knows:
+the sessions `claude agents --json --all` lists (busy is work; waiting on a permission prompt or a
+question needs you, and is not work), the record of `js-harness sessions start`, the machine's gate
+lock (its live holder and the gates that wait for it) and the process listing (a
+`merge-queue --land`, a `codex exec` or `codex-review` process). The session that runs it
+(`--self`, else `CLAUDE_CODE_SESSION_ID`) is left out. Exit 0 quiet, 1 busy, 3 unknown: a source
+that could not be read is never quiet. A session the listing does not show is not seen.
+
+```console
+$ js-harness quiet
+quiet: nothing runs on this machine; 1 session needs you
+needs you:
+  session JH 12 · codex hook trust (aa914608) waits for permission prompt in D:\js-harness\.claude\worktrees\wonderful-gagarin-88a4cc
+left out:
+  session JH ORQ · js-harness (908805db), the session that runs this command
+```
+
+`--wait` looks at once, then every `--every` seconds (60), and exits 0 once nothing has run for
+`--settle` minutes (10; 0 ends at the first quiet look); a busy or unknown look starts the count
+again, and after `--for` minutes (720) with no settle it exits 1 with the last look. The lead runs it
+as a background task while the owner is away, and sends him a push notification when it ends:
+
+```console
+$ js-harness quiet --wait --settle 10
+js-harness quiet --wait: waits until nothing has run on this machine for 10 minutes, looking every 60 seconds; ends then, or after 720 minutes; stop it with TaskStop when it is no longer needed
+js-harness quiet --wait: nothing has run on this machine since 03:13, 10 minutes (11 looks); the PC can be turned off
+last work seen: session JH 48 · guard behind copy (b7e2c901) busy in D:\js-harness\.claude\worktrees\guard-6b1c (03:12)
+needs you: nothing
+```
+
+`--json` gives the same data, for one look and for the end of a wait; under `--wait` the line that says
+what it waits for then goes to standard error, so standard output is the JSON alone. A process is
+work by what it runs, never by an argument that only names a file: a `js-harness wait` for
+`bin/codex-review.mjs` on main is no review.
+
 ### js-harness wait
 
 Waits in the background for one condition and ends when it holds: a pull request merged, a

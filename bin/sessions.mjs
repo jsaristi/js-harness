@@ -50,7 +50,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { POWERSHELL_ROW_FUNCTION } from './lib/process-tree.mjs';
+import { listCommandLines } from './lib/process-list.mjs';
 import { boardMemory } from './lib/memory-hygiene.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
@@ -63,7 +63,7 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, parseProcessList, parsePsList, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { readRelief, tailOfFile } from './lib/board-files.mjs';
 import { backgroundChanges, boardBackground, claudeRunner, listAgents } from './lib/background.mjs';
@@ -261,47 +261,10 @@ function parseArgs(argv) {
   return { ...parsed, interval: parsed.interval ?? DEFAULT_INTERVAL, timeout: parsed.timeout ?? DEFAULT_TIMEOUT };
 }
 
-// One row of the shared listing (`Format-ProcessRow`, bin/lib/process-tree.mjs) and one `C` line per
-// process whose command line mentions `check.mjs`, or the dispatcher followed by `check`, or `--resume`;
-// `findGates` decides which of those are gates, and `hostsOf` which are Claude Code hosts and of what session. The last line is `OK` with the number of `C` lines written, which
-// `parseProcessList` compares with the lines it read: a listing that stopped half way, or lost a line, is
-// refused. Tabs and line breaks in a command line become spaces, so a line of output is always one fact.
-// Progress output is off: under `-EncodedCommand` it would arrive as CLIXML. The output is UTF-8 because
-// that is what `run` reads: left alone PowerShell writes in the code page of its console, 850 or 437 on
-// most machines, and a letter outside ASCII in a path would arrive as another. No byte order mark, which
-// would be read as the start of the first row.
-const GATE_LISTING_SCRIPT = String.raw`
-$ProgressPreference = 'SilentlyContinue'
-$ErrorActionPreference = 'Stop'
-${POWERSHELL_ROW_FUNCTION}
-try {
-  [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
-  $written = 0
-  foreach ($process in @(Get-CimInstance Win32_Process)) {
-    $line = $process.CommandLine
-    if (-not $line -or $line -notmatch 'check\.mjs|js-harness(\.mjs)?"?\s+"?check|--resume[= ]') { continue }
-    Format-ProcessRow $process
-    'C' + [char]9 + $process.ProcessId + [char]9 + ($line -replace '\s+', ' ')
-    $written += 1
-  }
-  'OK' + [char]9 + $written
-} catch {
-  [Console]::Error.WriteLine($_.Exception.Message)
-  exit 1
-}
-`;
-
-/** The processes a gate can be among, `[{ pid, createdAt, commandLine }]`. Throws when the listing could
- * not run or did not finish: "no gate is running" must never be read from "could not look". */
-function listGateCandidates(run, platform) {
-  const windows = platform === 'win32';
-  const result = windows
-    ? run('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(GATE_LISTING_SCRIPT, 'utf16le').toString('base64')], {})
-    : run('ps', ['-A', '-o', 'pid=,args='], {});
-  if (result.error) throw new Error(result.error.message);
-  if (result.status !== 0) throw new Error(String(result.stderr ?? '').trim().split(/\r?\n/)[0] || `exit ${result.status}`);
-  return windows ? parseProcessList(result.stdout) : parsePsList(result.stdout);
-}
+// The processes the board reads (./lib/process-list.mjs): those whose command line mentions `check.mjs`, or the
+// dispatcher followed by `check`, or `--resume`; `findGates` decides which of those are gates, and `hostsOf` which are
+// Claude Code hosts and of what session.
+const BOARD_PROCESSES = String.raw`check\.mjs|js-harness(\.mjs)?"?\s+"?check|--resume[= ]`;
 
 /** Whether the machine's gate lock has its library beside the script at `script`: `lib/gate-lock.mjs` in
  * the folder of `bin/check.mjs`, or of the dispatcher, which is where this version keeps it and where a
@@ -526,7 +489,7 @@ export async function sessionsMain(
     // listing, unless `listProcesses` replaces it); each is given a time limit so a stuck command becomes
     // an unavailable fact, not a board that never prints.
     run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 30000 }),
-    listProcesses = () => listGateCandidates(run, platform),
+    listProcesses = () => listCommandLines(run, platform, BOARD_PROCESSES),
     // Whether a gate's script has the lock's library beside it, replaceable so a test places none.
     lockLibraryBeside = (script) => lockLibraryBesideScript(script),
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
