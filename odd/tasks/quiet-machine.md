@@ -30,7 +30,7 @@ PC stays on for nothing; when a session waits for him, nothing moves until he an
 - A session waiting on a permission prompt or a question needs him, and is named as such, not as work — because
   that is what he can act on from his phone, and it would never end on its own.
 - The command reads only; it reuses the board's readers (`listAgents`, `readRecord`, `readGateLock`,
-  `readGateHolder`, `readGateWaiters`, `isSelf`) — because a second reader of the same facts drifts from the first.
+  `readGateHolder`, `readGateWaiters`, `sameSession`) — because a second reader of the same facts drifts from the first.
 
 ## Ask me before
 Nothing: the brief carries his request; spend is one gate and one Codex review.
@@ -82,3 +82,16 @@ Nothing: the brief carries his request; spend is one gate and one Codex review.
   absence was before the app titled it).
 - L5 (2026-10-25) T2: the S4 line of the orchestrator skill was written before its test in `bin/lib/manifest.test.mjs`
   (not test-first); the skill test names no pronoun for the user, as the skill's own test requires.
+- L6 (2026-10-25) Slice 1 (`5baf129b`): `npm run check` green in the commit's hook. gentle-ai assessed it high (item 3,
+  escalated: the board's process listing moved into a shared lib); consent granted by his standing selection; three
+  lenses (resilience, readability, reliability) approved it, and the acknowledgement burned its authority (lineage
+  `review-485dd1c851594e1c`). Its nine advisory findings: two warnings (the skill said nothing of exit 1; `--wait
+  --json` printed a prose line before the JSON) and seven suggestions. The Codex review of `4689d0c..5baf129` is
+  recorded, with one P2: a process was classified by any argument that named `codex-review.mjs` or `merge-queue`, so a
+  `js-harness wait --main-file bin/codex-review.mjs` counted as a review and the wait could never settle.
+- L7 (2026-10-25) Slice 2 fixes them: a process is work by its program, its node script or the dispatcher's word
+  (`workKindOf`, reusing `splitCommandLine` of `bin/lib/machine-busiest.mjs`); `--land --dry-run` and `codex-review
+  --unavailable` are not work. The classifier was changed before its test; run against `HEAD`'s classifier the test's
+  lines counted pids 21, 23 and 24 as work, which is the RED. Under `--wait --json` the start line goes to stderr; the
+  end says the quiet measured (`since HH:MM, N minutes`), not the settle given; the skill says what exit 1 asks; the
+  listing script has its own test (`bin/lib/process-list.test.mjs`); `--for` is kept as `forMinutes`.

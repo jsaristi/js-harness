@@ -192,6 +192,22 @@ test('quiet: a merge-queue land and a Codex review are work; a dry run and other
   assert.doesNotMatch(run.stdout, /pid 12|pid 15/);
 }));
 
+test('quiet: a process is work by what it runs, never by an argument that only names a file', withWorld(async (world) => {
+  const processes = [
+    proc(21, 'node D:\\js\\bin\\wait.mjs --main-file bin/codex-review.mjs --contains marker --for 720'),
+    proc(22, 'node D:\\js\\bin\\wait.mjs --main-file bin/merge-queue.mjs --contains "--land" --for 60'),
+    proc(23, 'node D:\\js\\bin\\js-harness.mjs merge-queue --land --dry-run'),
+    proc(24, 'node D:\\js\\bin\\js-harness.mjs codex-review --base main --unavailable "codex is down"'),
+    proc(25, 'git log --grep "codex exec"'),
+    proc(26, '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\me\\npm\\node_modules\\@openai\\codex\\bin\\codex.js" exec review --json'),
+  ];
+  const run = await quiet(world, [], { processes });
+  assert.equal(run.code, 1, run.stdout);
+  assert.match(run.stdout, /^busy: 1 thing runs/);
+  assert.match(run.stdout, /Codex review, pid 26: /);
+  assert.doesNotMatch(run.stdout, /pid 2[1-5]/);
+}));
+
 test('quiet: a listing claude could not give is unknown, never quiet, exit 3', withWorld(async (world) => {
   writeState(world, { agentsFail: 'boom' });
   const run = await quiet(world, []);
@@ -239,7 +255,8 @@ test('quiet --wait ends once the machine stayed quiet for the settle time, and s
   assert.deepEqual(run.slept, [60000, 60000, 60000]);
   const lines = run.stdout.split('\n');
   assert.match(lines[0], /^js-harness quiet --wait: waits until nothing has run on this machine for 2 minutes, looking every 60 seconds; ends then, or after 720 minutes; stop it with TaskStop/);
-  assert.match(run.stdout, /js-harness quiet --wait: nothing has run on this machine for 2 minutes \(4 looks\); the PC can be turned off/);
+  // Quiet from the look at 60 s to the one at 180 s: the two minutes measured, not the settle given.
+  assert.match(run.stdout, /js-harness quiet --wait: nothing has run on this machine since \d\d:\d\d, 2 minutes \(4 looks\); the PC can be turned off/);
   assert.match(run.stdout, /last work seen: session JH 3 · thing \(aaaa1111\) busy in D:\\proj/);
   assert.match(run.stdout, /needs you:\n {2}session JH 4 · asks \(dddd4444\) waits for permission prompt/);
 }));
@@ -270,8 +287,9 @@ test('quiet --wait ends with exit 1 after --for minutes with no settle, with the
   const run = await quiet(world, ['--wait', '--for', '3', '--every', '60', '--json']);
   assert.equal(run.code, 1);
   assert.deepEqual(run.slept, [60000, 60000, 60000]);
-  const lines = run.stdout.split('\n');
-  const result = JSON.parse(lines.slice(1).join('\n'));
+  // With --json the whole of stdout is the JSON; the line that says what it waits for goes to stderr.
+  const result = JSON.parse(run.stdout);
+  assert.match(run.stderr, /^js-harness quiet --wait: waits until nothing has run/);
   assert.equal(result.settled, false);
   assert.equal(result.looks, 4);
   assert.equal(result.look.state, 'busy');

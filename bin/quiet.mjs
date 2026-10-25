@@ -44,7 +44,7 @@ function wholeNumber(flag, value, what, min) {
   return Number(value);
 }
 
-const VALUED = new Map([['--self', 'self'], ['--home', 'home'], ['--settle', 'settle'], ['--for', 'minutes'], ['--every', 'every']]);
+const VALUED = new Map([['--self', 'self'], ['--home', 'home'], ['--settle', 'settle'], ['--for', 'forMinutes'], ['--every', 'every']]);
 
 function parseArgs(argv) {
   const values = {};
@@ -73,7 +73,7 @@ function parseArgs(argv) {
     self: values.self,
     home: values.home,
     settle: values.settle === undefined ? DEFAULT_SETTLE_MINUTES : wholeNumber('--settle', values.settle, 'a number of minutes', 0),
-    minutes: values.minutes === undefined ? DEFAULT_FOR_MINUTES : wholeNumber('--for', values.minutes, 'a number of minutes', 1),
+    forMinutes: values.forMinutes === undefined ? DEFAULT_FOR_MINUTES : wholeNumber('--for', values.forMinutes, 'a number of minutes', 1),
     every: values.every === undefined ? DEFAULT_EVERY_SECONDS : wholeNumber('--every', values.every, 'a number of seconds', 1),
   };
 }
@@ -129,9 +129,10 @@ export async function quietMain(
     return { quiet: 0, busy: 1, unknown: 3 }[seen.state];
   }
 
-  stdout(`js-harness quiet --wait: waits until nothing has run on this machine for ${parsed.settle} minutes, looking every ${parsed.every} seconds; ends then, or after ${parsed.minutes} minutes; stop it with TaskStop when it is no longer needed`);
+  // Under --json the whole of stdout is the JSON, so the line that says what the wait is goes to stderr.
+  (parsed.json ? stderr : stdout)(`js-harness quiet --wait: waits until nothing has run on this machine for ${parsed.settle} minutes, looking every ${parsed.every} seconds; ends then, or after ${parsed.forMinutes} minutes; stop it with TaskStop when it is no longer needed`);
   const began = now();
-  const deadline = began + parsed.minutes * 60_000;
+  const deadline = began + parsed.forMinutes * 60_000;
   let looks = 0;
   let quietSince = null;
   let lastWork = null;
@@ -146,11 +147,12 @@ export async function quietMain(
       if (parsed.json) {
         stdout(JSON.stringify({ settled, quietSince: quietSince === null ? null : new Date(quietSince).toISOString(), looks, lastWork, look: seen }, null, 2));
       } else if (settled) {
-        stdout(`js-harness quiet --wait: nothing has run on this machine for ${parsed.settle} minutes (${looks} looks); the PC can be turned off`);
+        const quietMinutes = Math.floor((Date.parse(seen.at) - quietSince) / 60_000);
+        stdout(`js-harness quiet --wait: nothing has run on this machine since ${hourOf(quietSince)}, ${quietMinutes} minute${quietMinutes === 1 ? '' : 's'} (${looks} looks); the PC can be turned off`);
         stdout(lastWork === null ? 'no work was seen since the wait began' : lastWork.items.map((item) => `last work seen: ${item.text} (${hourOf(Date.parse(lastWork.at))})`).join('\n'));
         stdout(seen.needsYou.length === 0 ? 'needs you: nothing' : ['needs you:', ...seen.needsYou.map((item) => `  ${item.text}`)].join('\n'));
       } else {
-        stdout(`js-harness quiet --wait: after ${parsed.minutes} minutes the machine had not been quiet for ${parsed.settle} minutes (${looks} looks); the last look:`);
+        stdout(`js-harness quiet --wait: after ${parsed.forMinutes} minutes the machine had not been quiet for ${parsed.settle} minutes (${looks} looks); the last look:`);
         stdout(lookLines(seen).join('\n'));
       }
       return settled ? 0 : 1;

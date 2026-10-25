@@ -2745,6 +2745,7 @@ test('the orchestrator skill keeps js-harness quiet --wait running while the use
   assert.ok(line, 'the skill has the line');
   assert.match(line, /When it exits 0, send the user a push notification \(the PushNotification tool\)/);
   assert.match(line, /names each session it says needs the user, or none, and that the PC can be turned off/);
+  assert.match(line, /When it exits 1 the machine never stayed quiet: if its last look says a source could not be read, push that to the user/);
 });
 
 // T8 of odd/tasks/session-channel.md: the orchestrator is the lead, not a watchman, and the twelve items of the

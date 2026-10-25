@@ -1416,12 +1416,15 @@ as a background task while the owner is away, and sends him a push notification 
 ```console
 $ js-harness quiet --wait --settle 10
 js-harness quiet --wait: waits until nothing has run on this machine for 10 minutes, looking every 60 seconds; ends then, or after 720 minutes; stop it with TaskStop when it is no longer needed
-js-harness quiet --wait: nothing has run on this machine for 10 minutes (14 looks); the PC can be turned off
+js-harness quiet --wait: nothing has run on this machine since 03:13, 10 minutes (11 looks); the PC can be turned off
 last work seen: session JH 48 · guard behind copy (b7e2c901) busy in D:\js-harness\.claude\worktrees\guard-6b1c (03:12)
 needs you: nothing
 ```
 
-`--json` gives the same data, for one look and for the end of a wait.
+`--json` gives the same data, for one look and for the end of a wait; under `--wait` the line that says
+what it waits for then goes to standard error, so standard output is the JSON alone. A process is
+work by what it runs, never by an argument that only names a file: a `js-harness wait` for
+`bin/codex-review.mjs` on main is no review.
 
 ### js-harness wait
 

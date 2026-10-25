@@ -3,6 +3,7 @@
 // in. The readers are the board's (./background.mjs, ./sessions.mjs, ./gate-lock.mjs); this file only sorts what they
 // give. A source that could not be read is never "nothing runs". Zero dependencies.
 
+import { splitCommandLine } from './machine-busiest.mjs';
 import { sameSession } from './sessions.mjs';
 
 /** The pattern of the process listing (./process-list.mjs) on Windows: the processes `workOfProcesses` may count. */
@@ -17,7 +18,7 @@ const needsUser = (agent) => agent?.status === 'waiting';
 
 /** The sessions of a listing sorted: `{ work, needsYou, leftOut }`. `self` is the id of the session that runs the
  * command, whole or its first eight characters or more, matched against both ids a session has; it is left out of
- * both lists and said. `recorded` is the ids the record of `js-harness sessions start` holds. */
+ * both lists, and said in `leftOut` when it is busy or waiting, which is when it would have counted. `recorded` is the ids the record of `js-harness sessions start` holds. */
 export function sortSessions(agents, { self = null, recorded = [] } = {}) {
   const ours = new Set(recorded);
   const work = [];
@@ -53,18 +54,42 @@ export function workOfGateLock(lock) {
   ];
 }
 
-// `merge-queue` as an argument (the dispatcher's word or its script) with `--land` after it; a `--dry-run` builds and pushes nothing.
-const LAND = /(?:^|[\s\\/"])merge-queue(?:\.mjs)?"?\s(?:.*\s)?--land(?:\s|$)/;
-// The Codex CLI's `exec` (`codex exec review ...`, the program or its node script), or the harness's `codex-review`.
-const CODEX = /(?:(?:^|[\s\\/"])codex(?:\.exe|\.js|\.cmd)?"?\s(?:.*\s)?exec(?:\s|$))|(?:(?:^|[\s\\/"])codex-review(?:\.mjs)?"?(?:\s|$))/i;
+/** The name of the program or script an argument names: its file name, in lower case, with no extension. */
+const nameOf = (argument) => argument.split(/[\\/]/).pop().toLowerCase().replace(/\.(exe|cmd|mjs|cjs|js)$/, '');
+
+/** What the command line of a process runs that is work: `'land'`, `'codex'` or null. It is told by what runs, never
+ * by an argument that only names a file: a wait for `bin/codex-review.mjs` on main is not a review (found in review,
+ * 2026-10-25). The program is the first argument; for `node`, the first argument that is no flag, its script; for the
+ * dispatcher (`js-harness`), the word after it. A land is `merge-queue` with `--land` and no `--dry-run`, which
+ * pushes nothing; a review is `codex-review` with no `--unavailable`, which only records a skip, or Codex's `exec`. */
+export function workKindOf(commandLine) {
+  const args = splitCommandLine(commandLine);
+  if (args.length === 0) return null;
+  let program = nameOf(args[0]);
+  let rest = args.slice(1);
+  if (program === 'node') {
+    const at = rest.findIndex((argument) => !argument.startsWith('-'));
+    if (at === -1) return null;
+    program = nameOf(rest[at]);
+    rest = rest.slice(at + 1);
+  }
+  if (program === 'js-harness' && rest.length > 0) {
+    program = rest[0];
+    rest = rest.slice(1);
+  }
+  if (program === 'merge-queue') return rest.includes('--land') && !rest.includes('--dry-run') ? 'land' : null;
+  if (program === 'codex-review') return rest.includes('--unavailable') ? null : 'codex';
+  if (program === 'codex') return rest.includes('exec') ? 'codex' : null;
+  return null;
+}
 
 /** The lands and Codex reviews among `processes` (`[{ pid, commandLine }]`), in the order listed. */
 export function workOfProcesses(processes) {
   const work = [];
   for (const { pid, commandLine } of processes) {
-    if (typeof commandLine !== 'string') continue;
-    if (LAND.test(commandLine)) work.push({ source: 'land', pid, commandLine, text: `merge-queue land, pid ${pid}: ${commandLine}` });
-    else if (CODEX.test(commandLine)) work.push({ source: 'codex', pid, commandLine, text: `Codex review, pid ${pid}: ${commandLine}` });
+    const kind = typeof commandLine === 'string' ? workKindOf(commandLine) : null;
+    if (kind === 'land') work.push({ source: 'land', pid, commandLine, text: `merge-queue land, pid ${pid}: ${commandLine}` });
+    else if (kind === 'codex') work.push({ source: 'codex', pid, commandLine, text: `Codex review, pid ${pid}: ${commandLine}` });
   }
   return work;
 }
@@ -100,9 +125,9 @@ export function lookAtMachine(read, { self = null, now }) {
     ({ needsYou, leftOut } = sorted);
   }
   const lock = attempt('gate lock', () => {
-    const read_ = read.gateLock();
-    if (!read_.available) throw new Error(read_.reason.replace(/^the gate lock: /, ''));
-    return read_;
+    const lockReading = read.gateLock();
+    if (!lockReading.available) throw new Error(lockReading.reason.replace(/^the gate lock: /, ''));
+    return lockReading;
   });
   if (lock !== undefined) work.push(...workOfGateLock(lock));
   const processes = attempt('processes', read.processes);
