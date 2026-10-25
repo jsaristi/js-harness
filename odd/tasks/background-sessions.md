@@ -70,6 +70,8 @@ one Codex review.
   Route: inline (one understood change; no writer reason). RED: 13 of 14 tests of bin/sessions-background.test.mjs
   failed before the code (the 14th, usage errors, already exited 2); GREEN: all 14, with bin/lib/background.test.mjs.
 - [x] T2 (S1, S2, S6, kind: verify): one real start with haiku through the command, listed, stopped; recorded here (L5).
+- [ ] T3 (follow-up, out of this pull request): Codex's findings 4 and 6 of the review of 54c7e39 (L11), each a line in
+  docs/ROADMAP.md, Session board, for a feature of its own.
 
 ## Log
 - L1 (2026-10-24, the lead's brief, quoting his request): "Quiero que que puedas iniciarla sin el mensaje mio
