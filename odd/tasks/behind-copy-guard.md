@@ -71,7 +71,7 @@ Forecast: ~250 authored lines. Under the ~400 budget: one PR against `main`. Str
 
 ## Tasks
 - [x] T1 (kind: build) (S1-S3) `held`/`same` in `ruleHere`, `guardHeld`, the six readers, tests first,
-  README. Route: inline. Commit: the first commit of the branch.
+  README. Route: inline. Commits: 2bbdd346, 4957788b (Codex fix), 1b70037f (test).
 
 ## Follow-ups
 - `doctor`'s `js-harness` row hashes only the unscoped rules, so in this repository it says `ok` while
@@ -111,3 +111,12 @@ Forecast: ~250 authored lines. Under the ~400 budget: one PR against `main`. Str
   give one note naming both (`staleNote`), and the note reads "so it checked the call by its own
   declaration". Left as it is: a rules file that is no list in the shape `writeRules` gives still holds
   nothing, as at base.
+- L5 (2026-10-25) 4957788b (the Codex fix and the verifier's advisories) through the gate (PASS).
+  gentle-ai reviewed it escalated (item 2) with the risk and reliability lenses: approved
+  (review-a4bfeeb608e6e8e6, acknowledged, authority burned), two informational findings: `guard
+  --memory`'s new lookup had no test (pinned in 1b70037f, RED against 2bbdd346's guard.mjs), and the
+  note's wording changed as the verifier asked. Codex 2bbdd34..4957788: correct (0.97), its earlier P2
+  fixed; 4957788..1b70037: correct (0.99). The Stop hook offered the whole branch: its read-only status
+  was read and nothing started (AGENTS.md).
+- gentle-ai: 2bbdd346 high (item 2, escalated), approved, review-f5bba1442974c843; 4957788b high (item 2,
+  escalated), approved, review-a4bfeeb608e6e8e6; 1b70037f medium, not due (under_budget).
