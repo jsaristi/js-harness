@@ -465,6 +465,15 @@ proofs and by those tasks.
 **Discarded:** The brief as the prompt itself: a `.cmd` shim of the CLI runs through `cmd.exe`, which cannot carry a line break. Removing the transcript with the session: `claude rm` keeps it, as every session's is kept. Stopping a session at work from `uninstall`: its work would be lost unseen.
 **Today:** `bin/sessions-background.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/install.mjs`, `js-harness sessions`
 
+### The machine says when nothing runs
+
+**Problem:** The owner leaves the lead alone for 8 hours or more; once every session has finished the PC stays on for nothing, and a session that waits for him moves only when he answers (his words of 2026-10-25: "cuando no haya nada ejecutandose me avises para ver que en vez de dejandote trabajar solo pueda apagar el pc").
+**Requirement:** `js-harness quiet` takes one look at the machine and says quiet (exit 0), busy (exit 1) or unknown (exit 3), with what runs: a session `claude agents --json --all` lists as busy, the gate lock's live holder and the gates that wait for it, a `merge-queue --land`, a `codex exec` or `codex-review` process. A session waiting on a permission prompt or a question is named as needing him and is not work; the session that runs the command (`--self`, else `CLAUDE_CODE_SESSION_ID`) is left out. A source that could not be read is never quiet. `quiet --wait` exits 0 once nothing has run for `--settle` minutes, with the last work it saw and what needs him, and exits 1 after `--for` minutes with no settle. The orchestrator skill keeps the wait running while he is away and sends him a push notification when it ends.
+**Reason:** A quiet that is wrong turns off a PC with work on it, so every source is read by the board's own reader, and an unread one keeps the count from settling.
+**Proof:** `node --test bin/quiet.test.mjs`
+**Discarded:** Sending the notification from the command: the push notification is a tool of the host, which no command can call. Counting a waiting session as work: it never ends on its own, and the wait would never settle while it waits for him.
+**Today:** `bin/quiet.mjs`, `bin/lib/quiet.mjs`, `bin/lib/process-list.mjs`, `js-harness quiet`
+
 ### The owner's words, when they travel
 
 **Problem:** The owner decided on 2026-10-10 (relief file, line 149) that an answer he gives in the orchestrator's chat travels to the session that asked, with his exact words and where they are.

@@ -2737,6 +2737,16 @@ test('the orchestrator skill lists what is checked before the user leaves', () =
   assert.ok(text.includes('- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.'));
 });
 
+// S4 of odd/tasks/quiet-machine.md: while the user is away the lead keeps the quiet wait running and, when it ends,
+// tells the user by a push notification what needs the user and that the PC can be turned off.
+test('the orchestrator skill keeps js-harness quiet --wait running while the user is away and pushes its end', () => {
+  const text = components[2].content('0.1.0');
+  const line = text.split('\n').find((one) => one.includes('While the user is away, keep `js-harness quiet --wait` running as a background task'));
+  assert.ok(line, 'the skill has the line');
+  assert.match(line, /When it exits 0, send the user a push notification \(the PushNotification tool\)/);
+  assert.match(line, /names each session it says needs the user, or none, and that the PC can be turned off/);
+});
+
 // T8 of odd/tasks/session-channel.md: the orchestrator is the lead, not a watchman, and the twelve items of the
 // sweep (docs/sweep-2026-10-11.md, "JH 5", the two lists of this file) said where the old text was wrong.
 test('the orchestrator skill describes the lead and its charter, not a watchman', () => {
