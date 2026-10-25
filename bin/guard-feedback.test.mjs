@@ -63,6 +63,18 @@ test('a Write of a feedback note that names no home of its rule is denied, and t
   assert.match(reason, /AGENTS\.md "<phrase>"/);
 });
 
+// odd/tasks/behind-copy-guard.md, S1-S2: a copy behind the project's list holds the rule where the project declares it.
+test('behind a project whose list declares the rule, a feedback note with no home is still denied, naming the update only where the rule differs', async () => {
+  const changed = (id) => writeRules(RULES.map((rule) => (rule.id === id ? { ...rule, value: `${rule.value}-changed` } : rule)));
+  const note = write(noteOf('He never compacts by hand; the lead sends the next prompt.'));
+  const here = reasonOf(await guard(note));
+  assert.equal(reasonOf(await guard(note, { rulesText: changed('session-title') })), here);
+  const stale = reasonOf(await guard(note, { rulesText: changed('memory-feedback-home') }));
+  assert.ok(stale.startsWith(here), stale);
+  assert.match(stale, /declares rule memory-feedback-home otherwise than the project's bin\/lib\/rules-data\.mjs/);
+  assert.deepEqual(await guard(note, { rulesText: writeRules(RULES.filter((rule) => rule.id !== 'memory-feedback-home')) }), quiet);
+});
+
 test('a feedback note that names a declared rule passes, and one naming only an undeclared rule is denied, naming it', async () => {
   assert.deepEqual(await guard(write(noteOf('Read it in the harness: `rule:restart-announce`.'))), quiet);
   const undeclared = await guard(write(noteOf('Read it in the harness: `rule:compact-never-by-hand`.')));

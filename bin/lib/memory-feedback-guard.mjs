@@ -7,17 +7,21 @@
 // nothing on by default (odd/tasks/honesty-audit.md S5). Loaded by bin/guard.mjs only for a feedback note.
 import { memoryNoteType } from './memory-index-guard.mjs';
 import { RULES } from './rules-data.mjs';
-import { ruleHere, ruleValue } from './rules.mjs';
+import { guardHeld, ruleHere, ruleValue } from './rules.mjs';
 
 const NAMED_RULE = /`rule:([a-z][a-z0-9-]*)`/g;
 const QUOTED = /"([^"]+)"|“([^”]+)”/g;
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
 
-/** The value of `rule:memory-feedback-home` where the project whose rules file reads `rulesText` declares it (the
- * rule is of this repository only), or null. */
+/** What the guard holds of `rule:memory-feedback-home` where the project whose rules file reads `rulesText` declares it
+ * (the rule is of this repository only), as `guardHeld` gives it, or null. */
+function homeRuleHeld(rulesText) {
+  return guardHeld('memory-feedback-home', ruleHere('memory-feedback-home', undefined, rulesText));
+}
+
+/** The value of `rule:memory-feedback-home` where the project whose rules file reads `rulesText` declares it, or null. */
 export function homeRuleValue(rulesText) {
-  const rule = ruleHere('memory-feedback-home', undefined, rulesText);
-  return Object.hasOwn(rule, 'value') ? rule.value : null;
+  return homeRuleHeld(rulesText)?.value ?? null;
 }
 
 /** Where the note `text` says its rule lives: `{ home }` the first home found (`rule:<id>` or `AGENTS.md "<phrase>"`),
@@ -57,7 +61,8 @@ export function noteRefusal(name, text, agentsText, value) {
 /** Why the memory note `name` that a Write or an Edit leaves as `text` is refused, or null, where the project's rules
  * file reads `rulesText` and its AGENTS.md `agentsText()` (read only when the rule is in force). */
 export function feedbackNoteRefusal(name, text, { rulesText, agentsText }) {
-  const value = homeRuleValue(rulesText);
-  if (value === null) return null;
-  return noteRefusal(name, text, agentsText(), value);
+  const held = homeRuleHeld(rulesText);
+  if (held === null) return null;
+  const reason = noteRefusal(name, text, agentsText(), held.value);
+  return reason === null ? null : `${reason}${held.note}`;
 }

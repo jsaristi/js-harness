@@ -1484,7 +1484,11 @@ opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 do
 14:44). A document also records earlier events, so an hour behind the clock passes; an `Edit` is
 judged by the lines of the file it leaves that were not already there. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
-as it was. One more Bash call runs with a hint the agent reads beside its result (the hook's
+as it was. A rule "declared" here is one the project's own `bin/lib/rules-data.mjs` declares: when the
+installed copy's list differs from that file, as it does after every landed rule change until the copy is
+brought up to main, the copy still holds each rule the project declares, by its own value, and where the
+project declares that rule otherwise the refusal ends by naming the update (on 2026-10-23 a copy that held
+nothing then let three sessions open with free titles). One more Bash call runs with a hint the agent reads beside its result (the hook's
 `additionalContext`): a `git commit` or `git merge` wrapped in `js-harness gate --`, which holds
 the machine's lock for the commit's whole gate, so the gate runs here and never goes to GitHub,
 while a plain commit waits for its turn by itself. It reads every command the wrapper runs, a

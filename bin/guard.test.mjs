@@ -104,6 +104,17 @@ test('a session started with no effort, or above the rule session-effort, is den
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: brief }, { rulesText: null }), passes, 'no rules');
 });
 
+// odd/tasks/behind-copy-guard.md, S1: the installed 0.97.0 passed "Codex hook trust" while the repository's copy denied it,
+// because PR 586 had changed sessions-open-in-sidebar in the project's list.
+test('a free title is denied by a copy whose list is behind the project\'s in another rule', async () => {
+  const ahead = writeRules(RULES.map((rule) => (rule.id === 'sessions-open-in-sidebar' ? { ...rule, value: `${rule.value} with its sidebar` } : rule)));
+  const tool_input = { initiation: 'own_initiative', title: 'Codex hook trust', prompt: 'Do it.', effort: 'high', context: 'fresh' };
+  const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input }, { rulesText: ahead });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: start_session titles the session "Codex hook trust".*rule session-title/s);
+});
+
 // odd/tasks/session-title.md, S1-S3: the orchestrator started three sessions with free titles, and one took a used number.
 test('a session started with a free title is denied where the rule session-title is declared, naming the project\'s next number', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-guard-title-'));

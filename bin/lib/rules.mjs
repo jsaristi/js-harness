@@ -402,7 +402,42 @@ export function ruleHere(id, unit, projectData, list = RULES) {
   }
   if (projectData === null || projectData === undefined) return { off: 'elsewhere' };
   if (typeof projectData === 'string' && lineFeeds(projectData) === lineFeeds(writeRules(list))) return { value: rule.value };
-  return { off: 'behind' };
+  return behindOf(rule, projectData);
+}
+
+/** What `ruleHere` says of the live scoped rule `rule` for a project whose rules file reads `projectData`, another text
+ * than the running list: `{ off: 'behind' }`, and where that file is a list in the shape `writeRules` gives that declares
+ * the rule live with the same scope, `held` (the running copy's value, which a guard holds there) and `same` (true when
+ * the project declares the rule with the keys the hash names as the copy does). Every landed rule change makes the
+ * installed copy differ, and a guard that passed every call then let three sessions open with free titles
+ * (odd/tasks/behind-copy-guard.md, S1). */
+function behindOf(rule, projectData) {
+  const start = projectData.indexOf('export const RULES = ');
+  const end = projectData.lastIndexOf(';');
+  let project;
+  try {
+    project = start < 0 || end < start ? null : JSON.parse(projectData.slice(start + 'export const RULES = '.length, end));
+  } catch {
+    project = null;
+  }
+  const declared = Array.isArray(project) ? project.find((item) => isObject(item) && item.id === rule.id) : undefined;
+  if (declared === undefined || Object.hasOwn(declared, 'retired') || declared.scope !== rule.scope) return { off: 'behind' };
+  return { off: 'behind', held: rule.value, same: JSON.stringify(pick(declared, HASH_KEYS)) === JSON.stringify(pick(rule, HASH_KEYS)) };
+}
+
+/** The value a guard holds for the rule `id` from `here`, what `ruleHere` gave for it, as `{ value, note }`, or null
+ * where it holds none. Where the copy is behind a project that declares the rule, the value is the copy's (`held`),
+ * and `note`, said after a refusal, names the update where the project declares the rule otherwise; else it is ''. */
+export function guardHeld(id, here) {
+  if (Object.hasOwn(here, 'value')) return { value: here.value, note: '' };
+  if (!Object.hasOwn(here, 'held')) return null;
+  if (here.same) return { value: here.held, note: '' };
+  return {
+    value: here.held,
+    note: ` This copy of js-harness declares rule ${id} otherwise than the project's bin/lib/rules-data.mjs, so it checked by its own: `
+      + 'once the change is on main, bring the installed copy up to it (js-harness merge-queue --land --refresh-copy after a land, '
+      + "or pnpm add -g github:jsaristi/js-harness#<main's sha>, then js-harness install).",
+  };
 }
 
 /** A copy of the declaration of the live rule `id`, so that a caller cannot change the list it is read from.

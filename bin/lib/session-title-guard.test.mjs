@@ -31,6 +31,26 @@ test('in this repository a session started with a title not of the shape <code> 
   assert.match(sessionTitleRefusal({ initiation: 'offer', title: 'T9' }, HERE, PROJECT) ?? '', /rule session-title/);
 });
 
+// 2026-10-23 to 25: three sessions opened with free titles while the installed copy's list was behind the project's,
+// because a change of another rule turned this one off (odd/tasks/behind-copy-guard.md, S1-S2).
+test('behind a project whose list declares session-title, a free title is refused as here, naming the update only where the project declares it otherwise', () => {
+  const changed = (id) => writeRules(RULES.map((rule) => (rule.id === id ? { ...rule, value: `${rule.value}-changed` } : rule)));
+  const free = { ...BRIEF, title: 'Codex hook trust' };
+  const sidebar = changed('sessions-open-in-sidebar');
+  assert.equal(sessionTitleRefusal(free, sidebar, PROJECT), sessionTitleRefusal(free, HERE, PROJECT));
+  assert.match(sessionTitleRefusal(free, sidebar, PROJECT) ?? '', /rule session-title/);
+  assert.equal(sessionTitleRefusal(BRIEF, sidebar, PROJECT), null);
+  const title = changed('session-title');
+  const stale = sessionTitleRefusal(free, title, PROJECT) ?? '';
+  assert.ok(stale.startsWith(sessionTitleRefusal(free, HERE, PROJECT)), stale);
+  assert.match(stale, /This copy of js-harness declares rule session-title otherwise than the project's bin\/lib\/rules-data\.mjs, so it checked by its own/);
+  assert.equal(sessionTitleRefusal(BRIEF, title, PROJECT), null);
+  // A list that does not declare the rule, or that cannot be read as one, still turns it off.
+  for (const off of [writeRules(RULES.filter((rule) => rule.id !== 'session-title')), 'an older list\n']) {
+    assert.equal(sessionTitleRefusal(free, off, PROJECT), null);
+  }
+});
+
 test('a refused title says when the next number is not known, and what it could not read', () => {
   const blind = sessionTitleRefusal({ ...BRIEF, title: 'T9' }, HERE, { ...PROJECT, next: (code) => ({ code, number: 6, unavailable: ['record x (EACCES)'] }) });
   assert.match(blind, /"JH 6 · <purpose>".*could not read record x \(EACCES\), so check it with js-harness sessions --next-number/s);
@@ -68,5 +88,5 @@ test('a session titled with the project\'s code passes, and so do a proposal, an
   const untouched = { codeOf: () => assert.fail('a proposal reads no code'), next: () => assert.fail('nor a number') };
   assert.equal(sessionTitleRefusal({ proposal_id: 'task_ab12cd34' }, HERE, untouched), null, 'a proposal starts as it was proposed');
   assert.equal(sessionTitleRefusal({ ...BRIEF, title: 'Install module for required third-party tools' }, null, untouched), null);
-  assert.equal(sessionTitleRefusal({ ...BRIEF, title: 'T9' }, `${HERE}\n// another list\n`, untouched), null);
+  assert.equal(sessionTitleRefusal({ ...BRIEF, title: 'T9' }, writeRules(RULES.filter((rule) => rule.id !== 'session-title')), untouched), null);
 });
