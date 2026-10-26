@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openingsDir, readNotices, recordPath, writeOpening } from './lib/channel.mjs';
-import { readManifest } from './lib/manifest.mjs';
+import { readManifest, recordOptionalFile } from './lib/manifest.mjs';
+import { hiddenLauncherCommand } from './lib/startup-file.mjs';
 import { remoteId } from './lib/remote.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { wakeMain } from './wake.mjs';
@@ -139,16 +140,17 @@ function atLogin() {
   fs.mkdirSync(dir, { recursive: true });
   const out = [];
   const options = { cwd, stdout: (text) => out.push(text), stderr: (text) => err.push(text), env: { APPDATA: appData, JS_HARNESS_HOME: home }, homedir: () => home, run: () => ({ status: 1, stdout: '', stderr: '' }), execPath: 'C:\\Program Files\\nodejs\\node.exe' };
-  const file = path.join(dir, `js-harness-wake-${remoteId(cwd)}.cmd`);
-  return { main: (...argv) => wakeMain(argv, options), out, err, home, file, dir, cwd, appData };
+  const file = path.join(dir, `js-harness-wake-${remoteId(cwd)}.vbs`);
+  const batch = path.join(dir, `js-harness-wake-${remoteId(cwd)}.cmd`);
+  return { main: (...argv) => wakeMain(argv, options), out, err, home, file, batch, dir, cwd, appData };
 }
 
-test('wake --at-login writes the Startup file that runs wake --notify for this project, and records it for uninstall', async () => {
+test('wake --at-login writes the Startup file that runs wake --notify for this project with no window, and records it for uninstall', async () => {
   const { main, out, home, file } = atLogin();
   assert.equal(await main('--at-login'), 0);
   const text = fs.readFileSync(file, 'utf8');
-  assert.match(text, /^@echo off\r\n/);
-  assert.match(text, /"C:\\Program Files\\nodejs\\node\.exe" .*wake\.mjs --notify --cwd /);
+  assert.match(text, /^' .*wake --at-login --remove removes it/);
+  assert.match(hiddenLauncherCommand(text), /^"C:\\Program Files\\nodejs\\node\.exe" .*wake\.mjs --notify --cwd /);
   assert.ok(text.endsWith('\r\n'), JSON.stringify(text));
   const record = readManifest(home).optional.find((entry) => entry.path === file);
   assert.ok(record, 'the file is recorded in the machine manifest');
@@ -172,17 +174,40 @@ test('wake --at-login --remove takes the file and its record away; a file js-har
   assert.match(err.join('\n'), /a file js-harness did not write/);
 });
 
+test('wake --at-login replaces the batch file of an earlier version, which opened a console window; one it did not write is kept and refused', async () => {
+  const { main, out, err, home, file, batch, dir } = atLogin();
+  const text = '@echo off\r\nrem Leaves each session of one project a note after a boot.\r\n"C:\\node.exe" D:\\js-harness\\bin\\wake.mjs --notify --cwd D:\\x\r\n';
+  fs.writeFileSync(batch, text);
+  recordOptionalFile(home, batch, text);
+  assert.equal(await main('--at-login'), 0, err.join('\n'));
+  assert.deepEqual(fs.readdirSync(dir), [path.basename(file)]);
+  assert.deepEqual(readManifest(home).optional.map((entry) => entry.path), [file]);
+  assert.match(out.join('\n'), new RegExp(`in place of ${batch.replace(/[\\.]/g, '\\$&')}, which opened a console window`));
+
+  // Removal takes both: a machine that never moved to the new file is undone too.
+  fs.writeFileSync(batch, text);
+  recordOptionalFile(home, batch, text);
+  assert.equal(await main('--at-login', '--remove'), 0, err.join('\n'));
+  assert.deepEqual(fs.readdirSync(dir), []);
+  assert.equal(readManifest(home), null);
+
+  fs.writeFileSync(batch, 'the user\'s own');
+  assert.equal(await main('--at-login'), 1);
+  assert.match(err.join('\n'), /not one js-harness recorded writing/);
+  assert.deepEqual(fs.readdirSync(dir), [path.basename(batch)], 'nothing written beside it');
+});
+
 test('a home and a Claude home set only in the shell are carried into the Startup file, and the default ones are not', async () => {
   const { file, home, cwd, appData } = atLogin();
   const claude = path.join(cwd, 'claude elsewhere');
   const options = (env, homedir) => ({ cwd, stdout: () => {}, stderr: () => {}, env: { APPDATA: appData, ...env }, homedir: () => homedir, run: () => ({ status: 1, stdout: '', stderr: '' }), execPath: 'C:\\node\\node.exe' });
   assert.equal(await wakeMain(['--at-login'], options({ JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: claude }, path.join(cwd, 'user'))), 0);
-  const carried = fs.readFileSync(file, 'utf8');
+  const carried = hiddenLauncherCommand(fs.readFileSync(file, 'utf8'));
   assert.ok(carried.includes(`--home ${home}`) || carried.includes(`--home "${home}"`), carried);
   assert.ok(carried.includes(`--claude-home "${claude}"`), carried);
   assert.equal(await wakeMain(['--at-login', '--remove'], options({ JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: claude }, path.join(cwd, 'user'))), 0);
   assert.equal(await wakeMain(['--at-login'], options({}, home)), 0);
-  const plain = fs.readFileSync(file, 'utf8');
+  const plain = hiddenLauncherCommand(fs.readFileSync(file, 'utf8'));
   assert.ok(!plain.includes('--home') && !plain.includes('--claude-home'), plain);
 });
 

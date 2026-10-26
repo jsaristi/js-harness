@@ -30,14 +30,14 @@ import {
   SPAWN_MODES, cleanServerEnv, launcherFileName, locate, logNote, loginLauncher, lookUpProcesses, readPersistentEnv, readState, remoteFiles, remoteId,
   resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml, whereabouts,
 } from './lib/remote.mjs';
-import { lookAt, startupLocation } from './lib/startup-file.mjs';
+import { disableLauncher, launcherLine, planLauncher, retireBatchLauncher, writeLauncher } from './lib/remote-launcher.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 
 export const USAGE =
-  'Usage: js-harness remote start|stop|status [--cwd <path>] [--home <path>]; start also takes [--name <name>] [--permission-mode <mode>] [--spawn same-dir|worktree|session] [--watchdog]; start and stop also take [--at-login] (start writes a launcher in the Windows Startup folder that starts the server at every login and registers a scheduled task that starts it again within five minutes when it is not running, stop removes both). A server stopped with stop stays stopped until the next start: start --watchdog, which is what the scheduled task runs, starts nothing then, and nothing when the server already runs';
+  'Usage: js-harness remote start|stop|status [--cwd <path>] [--home <path>]; start also takes [--name <name>] [--permission-mode <mode>] [--spawn same-dir|worktree|session] [--watchdog]; start and stop also take [--at-login] (start writes a launcher in the Windows Startup folder that starts the server at every login with no window, in place of the .cmd one of an earlier version, and registers a scheduled task that starts it again within five minutes when it is not running, stop removes them all). A server stopped with stop stays stopped until the next start: start --watchdog, which is what the scheduled task runs, starts nothing then, and nothing when the server already runs';
 
 class ArgError extends Error {}
 
@@ -115,7 +115,10 @@ function plainLines(text) {
 
 const SUPERVISOR_LINE = /^\[js-harness remote\] /;
 const SUPERVISOR_DOWN = /^\[js-harness remote\] (server exited|server could not start|stopped|could not stop)/;
-const CONNECTION = /\b(Connected|Connecting|Reconnecting|Disconnected|Offline)\b/i;
+/** The state words the server prints after its `·✔︎·` mark. `Ready` is what one with no pre-created session prints
+ * where one with a session prints `Connected` (`serverArgs`); it counts only as that word between `·` marks, where
+ * the server writes it, since `ready` is an ordinary word too. */
+const CONNECTION = /\b(Connected|Connecting|Reconnecting|Disconnected|Offline)\b|·\s*(Ready)\s*·/i;
 const ENVIRONMENT_URL = /https:\/\/claude\.ai\/code\?environment=[^\s"'<>)]+/;
 
 /** What the last lines of the server's log say: `connection` is `connected` when the latest connection state the
@@ -135,7 +138,7 @@ export function readServerState(text) {
       if (SUPERVISOR_DOWN.test(line)) connection = 'not connected';
       else if (!SUPERVISOR_LINE.test(line)) {
         const match = CONNECTION.exec(line);
-        if (match) connection = match[1] === 'Connected' ? 'connected' : 'not connected';
+        if (match) connection = match[1] === 'Connected' || match[2] !== undefined ? 'connected' : 'not connected';
       }
     }
     if (capacity === null) capacity = /Capacity:\s*(\d+\s*\/\s*\d+)/.exec(line)?.[1].replace(/\s/g, '') ?? null;
@@ -381,14 +384,6 @@ async function stopSpawnedSupervisor(child, lifetime) {
 
 // ---- the login launcher ----------------------------------------------------------------------------------------------
 
-const isDirectory = (dir) => {
-  try {
-    return fs.statSync(dir).isDirectory();
-  } catch {
-    return false;
-  }
-};
-
 /** Whether two paths name one folder on Windows, which does not tell `C:\Users\X` from `c:\users\x`. */
 const sameFolder = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 
@@ -399,125 +394,6 @@ function startOptions(opts, name, { deps, root, home }) {
     // At login the command finds the user's own home by itself; any other home has to be named.
     home: sameFolder(home, deps.homedir()) ? undefined : home,
   };
-}
-
-/** What `start --at-login` is to do with the launcher, decided before anything is written: `{ file, content,
- * found, same }`, or `{ refusal }`. Checked here: that `APPDATA` gives a Startup folder that exists, and that no
- * value the launcher holds (the node executable, this install, the project folder, the name, the modes, the home)
- * has what cmd.exe acts on (`loginLauncher`); the caller has already refused a name the server cannot take. A
- * file already at the path is left alone when it has the very content (`same`), replaced when it is one
- * js-harness recorded writing (an earlier start with other options), and refused otherwise: it is the user's, or
- * one they edited. */
-function planLauncher(options, { env, id, home }) {
-  const where = startupLocation(env, launcherFileName(id));
-  if (where.why) return { refusal: where.why };
-  if (!isDirectory(where.dir)) return { refusal: `the Windows Startup folder does not exist (${where.dir}), and js-harness does not create it` };
-  let content;
-  let found;
-  try {
-    content = Buffer.from(loginLauncher(options), 'utf8');
-    found = lookAt(home, where.file);
-  } catch (err) {
-    return { refusal: err.message };
-  }
-  const same = found.bytes !== null && found.bytes.equals(content);
-  if (found.bytes !== null && !same && !found.ours) {
-    const what = found.record ? `the launcher at ${where.file} was changed since js-harness wrote it` : `a file js-harness did not write is at ${where.file}`;
-    return { refusal: `${what}, and is left as it is; remove it by hand, then run this again` };
-  }
-  return { file: where.file, content, found, same };
-}
-
-/** Writes the launcher `planLauncher` decided on and records it in the machine manifest as an optional file, so
- * that `stop --at-login` and `uninstall` remove exactly it. Returns nothing with the launcher on, else why it is
- * not, with nothing of this command's left behind: a launcher that no record names would outlive every uninstall,
- * so when the file cannot be recorded what was there before is put back. A file this command created is removed
- * again, and one it replaced gets its earlier bytes, which its record still names. */
-function writeLauncher({ file, content, found, same }, { deps, home }) {
-  if (same && found.ours) return undefined;
-  try {
-    // `wx` for a new file: one that appeared since the look above is not this command's to overwrite.
-    if (!same) fs.writeFileSync(file, content, { flag: found.bytes === null ? 'wx' : 'w' });
-  } catch (err) {
-    return `${file} could not be written (${err.message})`;
-  }
-  try {
-    deps.recordOptionalFile(home, file, content);
-  } catch (err) {
-    const unrecorded = `it could not be recorded in the machine manifest (${err.message})`;
-    if (same) return `${unrecorded}; the file at ${file} was there before this command, and is left`;
-    if (found.bytes === null) {
-      try {
-        fs.rmSync(file, { force: true });
-      } catch (left) {
-        return `${unrecorded}, and the file written could not be removed again (${left.message}): remove ${file} by hand`;
-      }
-      return `${unrecorded}, so the file written was removed again`;
-    }
-    try {
-      fs.writeFileSync(file, found.bytes);
-    } catch (left) {
-      return `${unrecorded}, and the earlier launcher could not be put back (${left.message}): what is at ${file} is no longer what its record names, so neither js-harness remote stop --at-login nor uninstall removes it; remove it by hand`;
-    }
-    return `${unrecorded}, so the earlier launcher was put back: ${file} and its record are as they were`;
-  }
-  return undefined;
-}
-
-/** `stop --at-login`: removes the launcher and its record. Returns `true` with the launcher off (removed, or not
- * there: a record whose file is gone is forgotten), and `false` after saying why a file is kept: only one that is
- * still what js-harness recorded writing is removed. The file goes before its record, so a failure in between
- * leaves a record of a file that is gone, never a launcher that no record names. */
-function disableLauncher({ env, deps, log, error, id, home }) {
-  const where = startupLocation(env, launcherFileName(id));
-  if (where.why) {
-    error(`the login launcher could not be looked for: ${where.why}.`);
-    return false;
-  }
-  let found;
-  try {
-    found = lookAt(home, where.file);
-  } catch (err) {
-    error(`the login launcher could not be looked for: ${err.message}.`);
-    return false;
-  }
-  const there = found.bytes !== null;
-  if (there && !found.ours) {
-    error(found.record
-      ? `the login launcher at ${where.file} was changed since js-harness wrote it, so it is kept: remove it by hand, then run js-harness remote stop --at-login again to forget its record.`
-      : `the file at ${where.file} is not one js-harness recorded writing, so it is kept: remove it by hand if it is not wanted.`);
-    return false;
-  }
-  try {
-    if (there) fs.rmSync(where.file);
-  } catch (err) {
-    error(`the login launcher at ${where.file} could not be removed (${err.message}); it is kept, and still recorded.`);
-    return false;
-  }
-  try {
-    if (found.record) deps.forgetOptionalFile(home, where.file);
-  } catch (err) {
-    error(`the login launcher ${there ? 'was removed' : 'was already gone'}, but its record in the machine manifest could not be (${err.message}); run js-harness remote stop --at-login again.`);
-    return false;
-  }
-  if (there) log(`login launcher: off (removed ${where.file})`);
-  else log(`login launcher: off (${found.record ? 'its file was already gone, and its record was removed' : 'there was none'})`);
-  return true;
-}
-
-/** The line `status` adds: `on` when the launcher file is there and the machine manifest records it. */
-function launcherLine({ env, id, home }) {
-  const where = startupLocation(env, launcherFileName(id));
-  if (where.why) return `login launcher: unknown (${where.why})`;
-  let found;
-  try {
-    found = lookAt(home, where.file);
-  } catch (err) {
-    return `login launcher: unknown (${err.message})`;
-  }
-  if (found.bytes !== null && found.record) return `login launcher: on (${where.file}${found.ours ? '' : ', changed since js-harness wrote it'})`;
-  if (found.bytes !== null) return `login launcher: off (a file js-harness did not record is at ${where.file})`;
-  return `login launcher: off${found.record ? ` (recorded, but its file is gone: ${where.file})` : ''}`;
 }
 
 // ---- the watchdog task -----------------------------------------------------------------------------------------------
@@ -671,20 +547,25 @@ function retireTask({ name, record, look }, { deps, home }) {
   return undefined;
 }
 
-/** Puts back what a `start --at-login` that failed halfway changed: the launcher file, byte for byte as
- * `planLauncher` found it (removed, when there was none), and this project's two records in the machine manifest,
- * as the plans found them. Only those two records: the manifest is every project's, and has no lock, so it is
- * never written back whole, and what another project's command recorded meanwhile stays. Returns what could not
- * be put back (nothing, when all is as it was). */
+/** Puts back what a `start --at-login` that failed halfway changed: the launcher file and the batch launcher of an
+ * earlier version, byte for byte as `planLauncher` found them (removed, when there was none), and this project's
+ * records in the machine manifest, as the plans found them: the two files', and the task's when `task` is given.
+ * Only those records: the manifest is every project's, and has no lock, so it is never written back whole, and
+ * what another project's command recorded meanwhile stays. Returns what could not be put back (nothing, when all
+ * is as it was). */
 function takeBackAtLogin(launcher, task, home) {
-  const { bytes, record } = launcher.found;
-  const steps = [
-    [launcher.file, () => {
-      if (bytes === null) fs.rmSync(launcher.file, { force: true });
-      else if (!(fs.existsSync(launcher.file) && fs.readFileSync(launcher.file).equals(bytes))) fs.writeFileSync(launcher.file, bytes);
+  const fileBack = (file, { bytes, record }) => [
+    [file, () => {
+      if (bytes === null) fs.rmSync(file, { force: true });
+      else if (!(fs.existsSync(file) && fs.readFileSync(file).equals(bytes))) fs.writeFileSync(file, bytes);
     }],
-    [`the record of ${launcher.file} in the machine manifest`, () => putOptionalRecordBack(home, launcher.file, record)],
-    [`the record of the task ${task.name} in the machine manifest`, () => putTaskRecordBack(home, task.name, task.record)],
+    [`the record of ${file} in the machine manifest`, () => putOptionalRecordBack(home, file, record)],
+  ];
+  const steps = [
+    // The batch launcher first: should the rest fail, a login still starts the server.
+    ...fileBack(launcher.batch.file, launcher.batch),
+    ...fileBack(launcher.file, launcher.found),
+    ...(task ? [[`the record of the task ${task.name} in the machine manifest`, () => putTaskRecordBack(home, task.name, task.record)]] : []),
   ];
   return steps.flatMap(([what, put]) => {
     try {
@@ -727,6 +608,14 @@ function enableAtLogin(opts, name, context) {
     error(`the login launcher was not written: ${unwritten}. Nothing was started.`);
     return false;
   }
+  const replaced = launcher.batch.bytes !== null;
+  const unretired = replaced || launcher.batch.record ? retireBatchLauncher(launcher, context) : undefined;
+  if (unretired) {
+    const left = takeBackAtLogin(launcher, null, home);
+    const state = left.length === 0 ? 'Both launchers and their records are as they were before this command' : `What was there before this command could not be put back: ${left.join('; ')}`;
+    error(`the login launcher is not on: ${unretired}. ${state}. Nothing was started.`);
+    return false;
+  }
   const unregistered = task.skip ? retireTask(task, context) : registerTask(task, context);
   if (unregistered) {
     const left = takeBackAtLogin(launcher, task, home);
@@ -736,7 +625,7 @@ function enableAtLogin(opts, name, context) {
     error(`the watchdog task is not on: ${unregistered}. ${state}. Nothing was started.`);
     return false;
   }
-  log(`login launcher: on (${launcher.file})`);
+  log(`login launcher: on (${launcher.file}${replaced ? `, in place of ${launcher.batch.file}, which opened a console window` : ''})`);
   if (task.skip) log(`watchdog task: off, not registered: ${task.skip}; the login launcher still starts the server at every login${task.record ? `, and the task registered earlier, which ran the earlier options, was ${task.look.found === 'present' ? 'deleted' : 'already gone'}` : ''}`);
   else log(`watchdog task: on (${task.name})`);
   return true;

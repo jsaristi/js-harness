@@ -1094,11 +1094,15 @@ switch into `harness.json` and applies it: `codeMap` takes `auto`, `on-demand`, 
 
 Keeps Claude Code's remote-control server running for this git repository, so the Claude app
 can start sessions here: `start`, `stop` and `status`. `start --at-login` also starts it at
-every Windows login.
+every Windows login, through a launcher in the Startup folder that opens no window; it replaces the
+`.cmd` launcher of an earlier version, which opened a console, when js-harness still recorded writing
+it. The server pre-creates no session, so a restart adds no row to the app's sidebar; `status`
+reads its `Ready` as connected.
 
 `start` also takes `--name <name>`, `--permission-mode <mode>`, `--spawn same-dir|worktree|session` and
 `--watchdog`, which is what the scheduled task runs: it starts nothing when the server was stopped
-with `stop` or already runs. `stop --at-login` removes the login launcher and the scheduled task. A
+with `stop` or already runs. `stop --at-login` removes the login launcher, an earlier `.cmd` one
+too, and the scheduled task. A
 server stopped with `stop` stays stopped until the next `start`. It runs on Windows only.
 
 ```console
@@ -1380,12 +1384,13 @@ JH ORQ · js-harness  (last entry 2026-10-15T04:50:00.000Z, c47efdf7-a307-47ef-8
 
 `js-harness wake --at-login` writes a file in the Windows Startup folder that runs
 `wake --notify` for this project at each login. It records the file in the machine manifest,
-so `uninstall` removes it; `--at-login --remove` removes it now. A file at that path that
-js-harness did not write, or one changed since, is kept.
+so `uninstall` removes it; `--at-login --remove` removes it now. The file is a `.vbs` that opens no
+window, and it replaces the `.cmd` of an earlier version, which opened a console. A file at that path
+that js-harness did not write, or one changed since, is kept.
 
 ```console
 $ js-harness wake --at-login
-wake at login: on (wrote C:\Users\you\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\js-harness-wake-js-harness-0f3a5c2d9e1b.cmd); it runs at each login, and js-harness wake --at-login --remove removes it.
+wake at login: on (wrote C:\Users\you\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\js-harness-wake-js-harness-0f3a5c2d9e1b.vbs); it runs at each login with no window, and js-harness wake --at-login --remove removes it.
 ```
 
 ### js-harness quiet
