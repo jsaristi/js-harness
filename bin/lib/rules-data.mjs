@@ -335,6 +335,16 @@ export const RULES = [
     ]
   },
   {
+    "id": "reports-spanish-visual",
+    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source",
+    "owner": "sebastian",
+    "since": "2026-10-26",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "reaches them in their language as a visual, didactic page"
+    ]
+  },
+  {
     "id": "restart-announce",
     "subject": "before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals",
     "owner": "sebastian",

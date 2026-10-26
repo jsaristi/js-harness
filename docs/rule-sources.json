@@ -563,6 +563,23 @@
       "by": "command"
     }
   },
+  "reports-spanish-visual": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Siempre damela en español y que sea grafica y didactica osea que pueda entender visualmente",
+        "date": "2026-10-26",
+        "session": "4b935d4a-cbb8-47fe-a059-22a7c5bae931",
+        "line": 2645
+      }
+    ],
+    "reading": "He wrote it to the lead right after it sent him the 773-line English docs/proposals/harness-diet.md, and the lead had delivered the F8 research as a Spanish visual Artifact: anything he reads to understand or decide reaches him in Spanish and as a graphic, didactic page (an Artifact with diagrams, bars and cards), never as a raw English markdown file. Repository artifacts stay in English; the page is the Spanish visual rendering and the English document stays the source of truth. Written in js-harness-protocols section 6, the handoff, which speaks of the user's language because the skill ships to every user.",
+    "accepted": "A message he typed to the lead, sent as he wrote it; the reading is the lead's brief to this session.",
+    "checked": {
+      "date": "2026-10-26",
+      "by": "command"
+    }
+  },
   "restart-announce": {
     "kind": "words",
     "quotes": [
