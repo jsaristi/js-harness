@@ -11,6 +11,7 @@ import { forgetOptionalFile, forgetScheduledTask, manifestPath, readManifest, re
 import { identifyProcesses } from './lib/process-tree.mjs';
 import { LOG_KEEP_BYTES, LOG_MAX_BYTES, loginLauncher, remoteDir, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml } from './lib/remote.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
+import { hiddenLauncherCommand } from './lib/startup-file.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 const SELF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'remote.mjs');
@@ -835,6 +836,24 @@ test('readServerState reads the last connection state, capacity and address, thr
   assert.equal(readServerState(back).connection, 'connected');
 });
 
+// A server that pre-creates no session says `Ready` where one that does says `Connected` (CLI 2.1.310, probed on
+// 2026-10-26: odd/tasks/login-launchers.md, L2). This is that probe's log, its address shortened.
+test('readServerState reads Ready, what a server with no pre-created session prints, as connected', () => {
+  const ready = [
+    '·|· Connecting · js-harness · main',
+    `${ESC}[1A${ESC}[J·✔︎· Ready · js-harness · main`,
+    '    Capacity: 0/32 · New sessions will be created in the current directory',
+    '',
+    'Code anywhere with the Claude mobile app or https://claude.ai/code?environment=env_01JLvtc4',
+    '',
+  ].join('\n');
+  assert.deepEqual(readServerState(ready), { connection: 'connected', capacity: '0/32', environmentUrl: 'https://claude.ai/code?environment=env_01JLvtc4' });
+  assert.equal(readServerState(`${ready}[js-harness remote] server exited (code 1) after 600s; restarting in 5s\n`).connection, 'not connected');
+  assert.equal(readServerState(`${ready}${ESC}[2K· Reconnecting · proj\n`).connection, 'not connected');
+  // Only the state word: a line that only says `ready` somewhere is no state.
+  assert.equal(readServerState('Getting ready to connect\n').connection, 'unknown');
+});
+
 /** One repaint of the server's status, as the live log holds about one a second (its shape read from that log on
  * 2026-10-06; the address and the session are invented): the cursor goes back up over the last one, erases it,
  * and the whole status is printed again, the session as an OSC 8 link. */
@@ -1412,7 +1431,17 @@ function makeAppData({ startup = true } = {}) {
   fs.mkdirSync(startup ? startupDir : appData, { recursive: true });
   return { env: { APPDATA: appData, SystemRoot: path.join(base, 'Windows') }, startupDir };
 }
-const launcherOf = (startupDir, root) => path.join(startupDir, `js-harness-remote-${remoteId(root)}.cmd`);
+const launcherOf = (startupDir, root) => path.join(startupDir, `js-harness-remote-${remoteId(root)}.vbs`);
+/** Where the batch launcher of an earlier version is, which opened a console window at every login. */
+const batchLauncherOf = (startupDir, root) => path.join(startupDir, `js-harness-remote-${remoteId(root)}.cmd`);
+/** A batch launcher as the earlier version wrote it for `root`, recorded in the machine manifest as it recorded it. */
+function writeBatchLauncher(home, startupDir, root, { recorded = true } = {}) {
+  const file = batchLauncherOf(startupDir, root);
+  const text = `@echo off\r\nrem Starts the Claude remote-control server of one project at login.\r\n"${NODE}" ${SELF} start --cwd ${root} --name ${path.basename(root)}\r\n`;
+  fs.writeFileSync(file, text);
+  if (recorded) recordOptionalFile(home, file, text);
+  return file;
+}
 const launcherRecord = (file) => ({ path: file, sha256: sha256(fs.readFileSync(file)) });
 const taskNameOf = (root) => `js-harness-remote-${remoteId(root)}`;
 /** What the machine manifest records for the watchdog task of `root`: its name and the command it runs, which is
@@ -1494,7 +1523,7 @@ test('start --at-login anywhere but Windows refuses like any start, and writes n
   assert.deepEqual(fs.readdirSync(home), []);
 });
 
-test('start --at-login refuses, naming it, a value cmd.exe would act on in the launcher, before anything is written', { skip: WINDOWS_ONLY }, async () => {
+test('start --at-login refuses, naming it, a value the launcher\'s command line does not carry, before anything is written', { skip: WINDOWS_ONLY }, async () => {
   const cases = {
     'the project folder': { project: 'wow!', argv: [], message: /project folder/ },
     'the server name': { project: 'proj', argv: ['--name', 'ready!'], message: /server name/ },
@@ -1509,7 +1538,7 @@ test('start --at-login refuses, naming it, a value cmd.exe would act on in the l
     const world = fakeWorld();
     assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login', ...argv], env, { ...world.deps, execPath }), 1, what);
     assert.match(world.err(), message, what);
-    assert.match(world.err(), /cmd\.exe/, what);
+    assert.match(world.err(), /expands %/, what);
     assert.deepEqual(fs.readdirSync(startupDir), [], what);
     assert.equal(fs.existsSync(manifestPath(home)), false, what);
     assert.equal(world.spawned.length, 0, what);
@@ -1707,7 +1736,7 @@ test('start --at-login refuses a name it cannot use before the launcher is writt
   assert.equal(world.spawned.length, 0);
 
   assert.equal(await remoteMain([...argv, '--name', 'drive root'], env, deps), 0, world.err());
-  assert.match(fs.readFileSync(path.join(startupDir, fs.readdirSync(startupDir)[0]), 'utf8'), /start --cwd Q:\\ --name "drive root"/);
+  assert.match(hiddenLauncherCommand(fs.readFileSync(path.join(startupDir, fs.readdirSync(startupDir)[0]), 'utf8')), /start --cwd Q:\\ --name "drive root"/);
 });
 
 test('stop --at-login removes the launcher and its record, then stops the server: the home holds no manifest again', { skip: WINDOWS_ONLY }, async () => {
@@ -1881,6 +1910,98 @@ test('--at-login is a switch of start and stop only, and the usage line says wha
   assert.match(world.err(), /Startup folder/);
 });
 
+// ---- the batch launcher of an earlier version, which opened a console window at every login ---------------------------
+
+test('start --at-login replaces the batch launcher of an earlier version: its file and record go, the new launcher is written and recorded', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const batch = writeBatchLauncher(home, startupDir, root);
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  const file = launcherOf(startupDir, root);
+  assert.deepEqual(fs.readdirSync(startupDir), [path.basename(file)], 'one launcher, the one that opens no window');
+  assert.deepEqual(readManifest(home), onlyAtLogin(launcherRecord(file), taskRecord(env, root, { home })), 'the batch launcher\'s record is gone with it');
+  assert.ok(world.out().includes(`login launcher: on (${file}, in place of ${batch}, which opened a console window)`), world.out());
+  assert.equal(world.spawned.length, 1, 'then the ordinary start');
+
+  // Once replaced, another start says nothing of it.
+  const again = fakeWorld();
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], env, again.deps), 0, again.err());
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, again.deps), 0, again.err());
+  assert.ok(again.out().includes(`login launcher: on (${file})\n`), again.out());
+});
+
+test('start --at-login refuses a batch launcher at the old path that is not as js-harness wrote it, and writes, registers and starts nothing', { skip: WINDOWS_ONLY }, async () => {
+  const cases = {
+    'changed since js-harness wrote it': [(home, startupDir, root) => fs.appendFileSync(writeBatchLauncher(home, startupDir, root), 'rem mine\r\n'), /was changed since js-harness wrote it/],
+    'not one js-harness recorded writing': [(home, startupDir, root) => writeBatchLauncher(home, startupDir, root, { recorded: false }), /is not one js-harness recorded writing/],
+  };
+  for (const [what, [arrange, says]] of Object.entries(cases)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    arrange(home, startupDir, root);
+    const batch = batchLauncherOf(startupDir, root);
+    const before = { batch: bytesOf(batch), manifest: bytesOf(manifestPath(home)) };
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
+    assert.match(world.err(), says, what);
+    assert.ok(world.err().includes(batch), world.err());
+    assert.match(world.err(), /Nothing was started/, what);
+    assert.deepEqual(fs.readdirSync(startupDir), [path.basename(batch)], `${what}: no launcher written`);
+    assert.deepEqual({ batch: bytesOf(batch), manifest: bytesOf(manifestPath(home)) }, before, what);
+    assert.equal(world.tasks.store.size, 0, what);
+    assert.equal(world.spawned.length, 0, what);
+  }
+});
+
+test('all or nothing: a start --at-login whose task cannot be registered puts the batch launcher back with its record', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const batch = writeBatchLauncher(home, startupDir, root);
+  const before = { batch: bytesOf(batch), manifest: bytesOf(manifestPath(home)) };
+  const world = fakeWorld();
+  world.tasks.fail.create = 1;
+  assert.equal(await remoteMain(['start', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1);
+  assert.match(world.err(), /as they were before this command/);
+  assert.deepEqual(fs.readdirSync(startupDir), [path.basename(batch)], 'the new launcher is gone, the batch one back');
+  assert.deepEqual({ batch: bytesOf(batch), manifest: bytesOf(manifestPath(home)) }, before);
+});
+
+test('stop --at-login removes the batch launcher of an earlier version too: a machine that never moved to the new one is undone', { skip: WINDOWS_ONLY }, async () => {
+  // Only the batch launcher, as a machine keeps it until its next start --at-login.
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const batch = writeBatchLauncher(home, startupDir, root);
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
+  assert.deepEqual(fs.readdirSync(startupDir), []);
+  assert.equal(fs.existsSync(manifestPath(home)), false, 'its record is gone, and with it the manifest');
+  assert.ok(world.out().includes(`login launcher: off (removed ${batch})`), world.out());
+
+  // One the user changed is kept, said, and fails the stop, as the new launcher would.
+  const edited = writeBatchLauncher(home, startupDir, root);
+  fs.appendFileSync(edited, 'rem mine\r\n');
+  const kept = fakeWorld();
+  assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, kept.deps), 1);
+  assert.match(kept.err(), /was changed since js-harness wrote it, so it is kept/);
+  assert.equal(fs.existsSync(edited), true);
+});
+
+test('status names the batch launcher of an earlier version: on while it is there, and how to replace it', { skip: WINDOWS_ONLY }, async () => {
+  const root = makeProject('proj');
+  const home = tempDir();
+  const { env, startupDir } = makeAppData();
+  const batch = writeBatchLauncher(home, startupDir, root);
+  const world = fakeWorld();
+  assert.equal(await remoteMain(['status', '--cwd', root, '--home', home], env, world.deps), 0, world.err());
+  const line = world.out().split('\n').find((one) => one.startsWith('login launcher: '));
+  assert.equal(line, `login launcher: on (${batch}, a batch launcher that opens a console window at login: js-harness remote start --at-login replaces it with one that opens none)`);
+});
+
 // ---- the watchdog: the scheduled task --at-login registers beside the launcher -----------------------------------------
 
 /** One project with `--at-login` on: the launcher written, the task registered, both recorded, the server started. */
@@ -1955,7 +2076,7 @@ test('start --at-login with a value only the launcher can hold does what it did 
     const file = launcherOf(startupDir, root);
     assert.equal(world.err(), '', what);
     assert.deepEqual(readManifest(home), { version: null, files: [], entries: [], optional: [launcherRecord(file)] }, `${what}: the launcher is recorded, and no task is`);
-    assert.match(fs.readFileSync(file, 'utf8'), /chcp 65001/, `${what}: the launcher carries the value, as before`);
+    assert.match(fs.readFileSync(file, 'utf8'), /ChrW\(/, `${what}: the launcher carries the value, as before`);
     assert.equal(world.spawned.length, 1, `${what}: the server is started`);
     assert.ok(world.out().includes(`login launcher: on (${file})`), world.out());
     const [line, ...more] = watchdogLines(world);
@@ -1996,7 +2117,7 @@ test('a task recorded by an earlier start is not left running the earlier option
   assert.equal(await remoteMain([...on.argv, '--name', 'café'], on.env, on.world.deps), 0, on.world.err());
   assert.equal(on.world.tasks.store.size, 0, 'the earlier task, still as it was registered, is deleted');
   assert.deepEqual(readManifest(on.home), { version: null, files: [], entries: [], optional: [launcherRecord(on.file)] }, 'and its record forgotten');
-  assert.match(fs.readFileSync(on.file, 'utf8'), /--name "café"/, 'the launcher is the new one');
+  assert.match(hiddenLauncherCommand(fs.readFileSync(on.file, 'utf8')), /--name "café"/, 'the launcher is the new one');
   assert.match(watchdogLines(on.world).at(-1), /^watchdog task: off, not registered: .*"café".*the task registered earlier, which ran the earlier options, was deleted/);
 
   // What cannot be retired safely refuses the whole start, before anything is written.

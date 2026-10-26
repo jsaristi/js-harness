@@ -11,7 +11,7 @@
 // about once a second into the log, for as long as it runs, so the log is trimmed in place (`trimLog`).
 //
 // Everything that starts or times a process takes it as a parameter, so the tests run a fake server.
-// `loginLauncher` is the text of the batch file `remote start --at-login` leaves in the Startup folder, and
+// `loginLauncher` is the text of the launcher `remote start --at-login` leaves in the Startup folder, and
 // `watchdogTask` and `watchdogTaskXml` are the scheduled task it registers beside it, which runs the same command.
 //
 // The last section is what `remote` and `doctor` both read, and so lives here and not in the command: a project's
@@ -21,7 +21,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { killTree, takeSnapshot } from './process-tree.mjs';
-import { batchText } from './startup-file.mjs';
+import { hiddenLauncherCommand, hiddenLauncherText } from './startup-file.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './windows-args.mjs';
 
 /** Whether a variable of that name may be one a Claude session injected into what it starts. */
@@ -82,11 +82,22 @@ export function readPersistentEnv({ platform = process.platform, env = process.e
 export const SPAWN_MODES =['same-dir', 'worktree', 'session'];
 
 /** The arguments of `claude remote-control`: named `name`, sessions started in `spawnMode` (the project folder by
- * default), and `--permission-mode` only when one is given, so the user's own mode applies otherwise. */
+ * default), and `--permission-mode` only when one is given, so the user's own mode applies otherwise.
+ *
+ * No session is pre-created (`--no-create-session-in-dir`). A server that pre-creates one names it after the server,
+ * and every start (each login, each restart of the supervisor or the watchdog) left one more such row in the Claude
+ * app, disconnected once that run was gone (odd/tasks/login-launchers.md). Reattaching to the earlier session
+ * instead (`--session-id`, `--continue`) was measured on CLI 2.1.310: it cannot be combined with `--spawn` and turns
+ * the server into a single session, which is not what a phone that opens new sessions needs. The single-session mode
+ * (`--spawn session`) keeps its pre-created session: it is the one the server exists for. */
 export function serverArgs({ name, spawnMode = 'same-dir', permissionMode } = {}) {
   if (typeof name !== 'string' || name.trim() === '') throw new Error('The remote server needs a non-empty name.');
   if (!SPAWN_MODES.includes(spawnMode)) throw new Error(`Unknown spawn mode ${JSON.stringify(spawnMode)}: use one of ${SPAWN_MODES.join(', ')}.`);
-  return ['remote-control', '--name', name, '--spawn', spawnMode, ...(permissionMode ? ['--permission-mode', permissionMode] : [])];
+  return [
+    'remote-control', '--name', name, '--spawn', spawnMode,
+    ...(spawnMode === 'session' ? [] : ['--no-create-session-in-dir']),
+    ...(permissionMode ? ['--permission-mode', permissionMode] : []),
+  ];
 }
 
 /** What cmd.exe acts on in a line of a batch file, quoted or not: the operators, `%` (a variable, expanded inside
@@ -106,30 +117,28 @@ const LAUNCHER_LABELS = {
   home: 'the home',
 };
 
-/** The text of the login launcher: a batch file whose one command runs `node <script> start --cwd <root> --name
- * <name>`, with `--permission-mode`, `--spawn` and `--home` when given, so a login starts the same server `remote
- * start` did. Every line ends in CRLF. Throws, naming the value, when one holds what cmd.exe would act on: a
- * launcher that runs something else at every login is worse than none.
- *
- * The file is UTF-8 with no byte order mark (a mark makes the first line an unknown command). Measured with a
- * real cmd.exe on 2026-10-04: it reads a batch file in the console's code page, line by line, so a path with a
- * letter beyond ASCII is not found under code page 850, 437 or 1252, and is found once a `chcp 65001` line has
- * run before it. That line is written only when the command needs it: the console is the launcher's own. */
+/** The text of the login launcher: a VBScript file that runs `node <script> start --cwd <root> --name <name>` with
+ * no window (`hiddenLauncherText`), with `--permission-mode`, `--spawn` and `--home` when given, so a login starts
+ * the same server `remote start` did. Throws, naming the value, when one holds what the command line does not
+ * carry (`startCommandLine`): a launcher that runs something else at every login is worse than none. Until
+ * 2026-10-26 it was a batch file, which opened a console window at every login (`batchName` names it). */
 export function loginLauncher(options) {
   const command = startCommandLine(options);
-  return batchText('Starts the Claude remote-control server of one project at login. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.', command);
+  return hiddenLauncherText('Starts the Claude remote-control server of one project at login, with no window. Written by js-harness remote start --at-login; js-harness remote stop --at-login removes it.', command);
 }
 
 /** The one command line the launcher and the watchdog task both run: `"<node>" <script> start --cwd <root> --name
  * <name> ...`, then `more`. It is built from the values it checked, each of `LAUNCHER_LABELS`, and throws, naming
- * the value, when one holds what cmd.exe would act on. */
+ * the value, when one holds any of `UNSAFE_IN_BATCH`: the launcher's `Run` expands `%`, a quote cannot be carried
+ * inside a quoted argument, and the rest are refused as they were when the launcher was a batch file, so that no
+ * value a launcher once held reads differently now. */
 function startCommandLine(options, more = []) {
   const checked = {};
   for (const [key, label] of Object.entries(LAUNCHER_LABELS)) {
     const value = options[key];
     const found = value === undefined ? null : UNSAFE_IN_BATCH.exec(value);
     if (found) {
-      throw new Error(`the login launcher cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
+      throw new Error(`the login launcher cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and a launcher's command line holds none of & | < > ^ % " ! or a control character (the launcher expands %, and the watchdog task runs the same line)`);
     }
     checked[key] = value;
   }
@@ -146,13 +155,15 @@ function startCommandLine(options, more = []) {
   return windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, args);
 }
 
-/** The file name of the login launcher of the project `id`, in the Startup folder. */
-export const launcherFileName = (id) => `js-harness-remote-${id}.cmd`;
+/** The file name of the login launcher of the project `id`, in the Startup folder. The batch launcher of an
+ * earlier version had the same name with `.cmd` (`batchName`). */
+export const launcherFileName = (id) => `js-harness-remote-${id}.vbs`;
 
-/** Whether `file` is, by its name, a login launcher: what tells one from any other optional file the machine
- * manifest records. The folder is not looked at, and either separator ends it. */
+/** Whether `file` is, by its name, a login launcher, of this version or the batch one of an earlier version: what
+ * tells one from any other optional file the machine manifest records. The folder is not looked at, and either
+ * separator ends it. */
 export function isLoginLauncher(file) {
-  return typeof file === 'string' && /^js-harness-remote-.+\.cmd$/i.test(file.split(/[\\/]/).at(-1));
+  return typeof file === 'string' && /^js-harness-remote-.+\.(?:vbs|cmd)$/i.test(file.split(/[\\/]/).at(-1));
 }
 
 /** The arguments of one line as `startCommandLine` writes them: bare, or between double quotes, where the
@@ -195,9 +206,11 @@ function startOptions(words) {
  * wrote it: `{ root, args }`, the project folder (its `--cwd`) and every option of that line with its value, in
  * the line's order, so the same server can be started again by hand. `null` when no line of it is a `start`
  * that reads back whole (`startOptions`): nothing is made of half a command. A comment is not read, so nothing
- * is taken from what a launcher says of itself. */
+ * is taken from what a launcher says of itself. A launcher of this version is read through its `Run` line
+ * (`hiddenLauncherCommand`); the batch launcher of an earlier version, line by line. */
 export function launcherStart(text) {
-  for (const line of String(text).split(/\r?\n/)) {
+  const hidden = hiddenLauncherCommand(text);
+  for (const line of hidden === null ? String(text).split(/\r?\n/) : [hidden]) {
     if (/^\s*@?rem\b/i.test(line)) continue;
     const words = launcherArgs(line) ?? [];
     // The subcommand is the first `start` of the line; a later one is a value (a server named `start`).

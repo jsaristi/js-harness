@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { appendNotice, findOpenings, newNotice, NOTICE_TEXT_MAX, openingCommand, readNotices } from './lib/channel.mjs';
 import { remoteId, UNSAFE_IN_BATCH } from './lib/remote.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
-import { batchText, removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
+import { batchName, hiddenLauncherText, removeStartupFile, writeStartupFile } from './lib/startup-file.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { WAKE_WINDOW_MS, wakePlan, wakeText } from './lib/wake.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -25,7 +25,7 @@ export const USAGE = [
   'killed. With --notify it leaves each session whose title names a role a note in the channel, which the',
   'inbox hook tells it on its next tool call, and leaves the orchestrator the list of sessions to wake with',
   'send_message; a second run after the same boot records nothing. --boot-time replaces the boot the clock',
-  'and the uptime give. --at-login writes a file in the Windows Startup folder that runs wake --notify for this',
+  'and the uptime give. --at-login writes a file in the Windows Startup folder that runs wake --notify, with no window, for this',
   'project at each login, recorded in the machine manifest so that uninstall removes it; --at-login --remove',
   'removes it now. A file there that js-harness did not write, or one changed since, is kept.',
 ].join('\n');
@@ -33,18 +33,18 @@ export const USAGE = [
 /** This command's own file, which the Startup file runs. */
 const SELF = fileURLToPath(import.meta.url);
 
-/** The name of the Startup file of the project `id`. */
-const startupName = (id) => `js-harness-wake-${id}.cmd`;
+/** The name of the Startup file of the project `id`. Until 2026-10-26 it was a batch file, `batchName` of this one,
+ * which opened a console window at every login: the next `--at-login` replaces it, and `--remove` removes both. */
+const startupName = (id) => `js-harness-wake-${id}.vbs`;
 
-/** The text of the Startup file: a batch file whose one command runs `node <this file> --notify --cwd <root>`.
- * Every line ends in CRLF, and a `chcp 65001` line comes first when the command holds a letter beyond ASCII
- * (`loginLauncher` in bin/lib/remote.mjs says why). Throws, naming the value, when one holds what cmd.exe acts
- * on: a file that runs something else at every login is worse than none. */
+/** The text of the Startup file: a launcher that runs `node <this file> --notify --cwd <root>` with no window
+ * (`hiddenLauncherText`). Throws, naming the value, when one holds what a launcher's command line does not carry
+ * (`UNSAFE_IN_BATCH`): a file that runs something else at every login is worse than none. */
 function startupText({ node, root, home, claudeHome }) {
   const values = { 'the node executable': node, 'this install of js-harness': SELF, 'the project folder': root, 'the home': home, 'the Claude home': claudeHome };
   for (const [label, value] of Object.entries(values)) {
     const found = value === undefined ? null : UNSAFE_IN_BATCH.exec(value);
-    if (found) throw new Error(`the Startup file cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and cmd.exe acts on & | < > ^ % " ! and control characters in a batch file`);
+    if (found) throw new Error(`the Startup file cannot hold ${label} ${JSON.stringify(value)}: it has ${JSON.stringify(found[0])}, and a launcher's command line holds none of & | < > ^ % " ! or a control character (the launcher expands %)`);
   }
   const quoted = quoteWindowsArg(node);
   const command = windowsCommandLine(quoted.startsWith('"') ? quoted : `"${quoted}"`, [
@@ -54,7 +54,7 @@ function startupText({ node, root, home, claudeHome }) {
     ...(home === undefined ? [] : ['--home', home]),
     ...(claudeHome === undefined ? [] : ['--claude-home', claudeHome]),
   ]);
-  return batchText('Leaves each session of one project a note after a boot. Written by js-harness wake --at-login; js-harness wake --at-login --remove removes it.', command);
+  return hiddenLauncherText('Leaves each session of one project a note after a boot, with no window. Written by js-harness wake --at-login; js-harness wake --at-login --remove removes it.', command);
 }
 
 /** Two reads of the boot an uptime gives differ by seconds; notes this close to the boot are of the same one. */
@@ -142,13 +142,13 @@ export async function wakeMain(
   if (parsed.atLogin) {
     const name = startupName(remoteId(root));
     if (parsed.remove) {
-      const removed = removeStartupFile({ env, home, name });
-      if (removed.refusal) {
-        stderr(`js-harness wake: ${removed.refusal}.`);
-        return 1;
-      }
-      stdout(`wake at login: off (${removed.removed ? `removed ${removed.file}` : 'there was none'})`);
-      return 0;
+      // The batch file of an earlier version too: a machine keeps it until its next --at-login.
+      const removed = [removeStartupFile({ env, home, name }), removeStartupFile({ env, home, name: batchName(name) })];
+      const refused = removed.filter((one) => one.refusal);
+      for (const one of refused) stderr(`js-harness wake: ${one.refusal}.`);
+      const gone = removed.filter((one) => one.removed).map((one) => one.file);
+      if (gone.length > 0 || refused.length === 0) stdout(`wake at login: off (${gone.length > 0 ? `removed ${gone.join(' and ')}` : 'there was none'})`);
+      return refused.length === 0 ? 0 : 1;
     }
     let content;
     try {
@@ -163,12 +163,13 @@ export async function wakeMain(
       stderr(`js-harness wake: ${err.message}.`);
       return 1;
     }
-    const written = writeStartupFile({ env, home, name, content });
+    const written = writeStartupFile({ env, home, name, content, replaces: batchName(name) });
     if (written.refusal) {
       stderr(`js-harness wake: ${written.refusal}.`);
       return 1;
     }
-    stdout(`wake at login: on (${written.written ? 'wrote' : 'already there:'} ${written.file}); it runs at each login, and js-harness wake --at-login --remove removes it.`);
+    const replaced = written.replaced ? `, in place of ${written.replaced}, which opened a console window` : '';
+    stdout(`wake at login: on (${written.written ? 'wrote' : 'already there:'} ${written.file}${replaced}); it runs at each login with no window, and js-harness wake --at-login --remove removes it.`);
     return 0;
   }
   const slug = projectSlug(root);
