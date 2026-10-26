@@ -560,6 +560,8 @@ reasons, is under [Session channel](#session-channel). Also open:
 
 Concluded: a zero-token notice is a `systemMessage` of a `SessionStart` hook, since plain stdout costs model tokens, and Codex has no command status line. Full text: [odd/tasks/stack-doctor.md](../odd/tasks/stack-doctor.md).
 
+- 2026-10-26, stack update reviewed: codex 0.163.0 → 0.164.0 ([release](https://github.com/openai/codex/releases/tag/rust-v0.164.0)), engram 3.5.4 → 3.6.0 ([release](https://github.com/Gentleman-Programming/engram/releases/tag/v3.6.0)). Nothing the harness uses broke, and no code changed. Codex: hook trust works as on 0.163.0 (a scratch-`CODEX_HOME` `codex exec` probe ran none of the five harness hooks without trust and all five, exit 0, with `--dangerously-bypass-hook-trust`; the hook input keeps `session_id`, `turn_id`, `cwd`, `hook_event_name`); #54619 binds trust of plugin hooks to their contents, which does not touch `hooks.json` entries; `codex-meter` still reads the limits from `codex app-server`; `codex-review --help` runs. engram: the only MCP change is that `mem_save` now reports `candidate_detection_status: "incomplete"` when conflict detection fails, and `obsidian-export --limit` is refused; the harness uses neither. `npm run check` passed on the new versions. Still open, not caused by the update: four harness Codex hooks have no trust record (the `codex-trust` row, his step), and engram's doctor reports 13 foreign sync targets and two active sessions for one directory, checks 3.6.0 did not change.
+
 ## Open decisions (Sebastián's, asked one at a time)
 
 1. Disconnecting the unused Magnific connector (the largest single per-turn item).
