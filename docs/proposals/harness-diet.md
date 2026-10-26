@@ -476,7 +476,7 @@ Each step is one commit or one setting, measured before and after, and undone by
 | S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one reaches `correction_required`, one hits a typed stop; then three real slices | the 28 KB of lifecycle prose stops being needed |
 | S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json`, together with S3. A desktop worktree session reads it from `D:\js-harness\.claude\` only, so it acts when merged to `main` and pulled into the main checkout, for every session at once; the undo is a revert on `main` | `/context` shows no user file; first turn ~30k lower; replay and 3-task eval no worse; one desktop session confirms | ~30.7k per turn and per subagent |
 | S3 The kept lines | the ~25 lines of Appendix A go into the file decision 3 picks; the budget row counts it | `/context` from a real worktree shows one copy of each file | −2.5k |
-| S4 Contradictions to zero | `commit-msg` hook strips attribution lines (no refusal); contract-first as a `check` refusal for new docs; the output style's conflicting lines | conflicts row 0; attribution 0 on new commits | small |
+| S4 Contradictions to zero | `commit-msg` hook strips attribution lines (no refusal); contract-first as a `check` refusal for new docs; the output style's conflicting lines, rewritten in a project copy at `D:\js-harness\.claude\output-styles\` selected by the project's `outputStyle` (gentle-ai rewrites `~/.claude/output-styles/gentleman.md`; project settings take precedence over the user's, [output styles](https://code.claude.com/docs/en/output-styles)) | conflicts row 0; attribution 0 on new commits | small |
 | S5 Skills and memory | protocols skill trigger without "closing a reply"; each js-harness skill body ≤ 3k; `MEMORY.md` ≤ 0.5k | skill loads per session | ~2-5k per turn |
 | S6 Read surface | roadmap Next and Decided ≤ 10k, evidence to `docs/decisions/`; a `## State` head ≤ 2k on any feature doc over 100 KB; relief file split by month | read-surface row ≤ 15k | ~20k per session start |
 | S7 Topology and routing | lead cut at phase close or after two compactions; Haiku helpers with `omitClaudeMd`; Sonnet writer prompts with the damping and real-check paragraphs | lead transcript size; writer over-scope in review | ~7k per lead turn |
@@ -520,6 +520,12 @@ and `review_due` decides whether it is reviewed.
   checkout, so S2 changes every session when it reaches `main`. Guard: land S2 and S3 as one merge with nothing else in it, run the
   measures the same day, and revert on `main` if any is worse.
 - **gentle-ai's Stop hook may assume its prose is loaded.** Guard: S1 lands first.
+- **A gentle-ai update may write instructions where the exclusion does not reach** (a new file, a
+  rules folder). Editing its file after each update was weighed and rejected: gentle-ai rewrites
+  its marked blocks on every `sync`, and the file is global, so an edit would change every project.
+  Guard: the `fixed load` row of `check`, made by S2 to count what loads with the exclusion and made
+  to fail by decision 4, catches the growth; each gentle-ai update also reruns the short
+  certification and one session's `/context`.
 - **The kept lines of Appendix A are a judgment.** A rule that lived only in the global file and
   was missed would be lost without anyone noticing. Guard: the replay set, and Appendix A read
   again against the file's headings before S2.
