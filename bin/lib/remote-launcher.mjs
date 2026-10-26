@@ -103,7 +103,8 @@ export function writeLauncher({ file, content, found, same }, { deps, home }) {
 /** `stop --at-login`: removes the launcher and its record, and so the batch launcher of an earlier version
  * (`batchName`), which a machine keeps until its next `start --at-login`. Returns `true` with both off (removed, or
  * not there: a record whose file is gone is forgotten), and `false` after saying why a file is kept: only one that
- * is still what js-harness recorded writing is removed. The batch launcher is said only when there was one. */
+ * is still what js-harness recorded writing is removed. The batch launcher is said only when there was one, and a
+ * launcher that was never there is not said while a batch launcher is kept. */
 export function disableLauncher({ env, deps, log, error, id, home }) {
   const where = startupLocation(env, launcherFileName(id));
   if (where.why) {
@@ -113,7 +114,8 @@ export function disableLauncher({ env, deps, log, error, id, home }) {
   const launcher = removeLauncherFile(where.file, { deps, error, home });
   const batch = removeLauncherFile(startupLocation(env, batchName(launcherFileName(id))).file, { deps, error, home });
   const batchSaid = batch.line !== undefined && !batch.nothing;
-  if (launcher.line && !(launcher.nothing && batchSaid)) log(launcher.line);
+  // "there was none" is false while a batch launcher that is kept still starts the server at login.
+  if (launcher.line && !(launcher.nothing && (batchSaid || !batch.ok))) log(launcher.line);
   if (batchSaid) log(batch.line);
   return launcher.ok && batch.ok;
 }

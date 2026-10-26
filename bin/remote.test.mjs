@@ -1763,6 +1763,7 @@ test('stop --at-login removes the launcher and its record, then stops the server
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 0, world.err());
   assert.equal(world.err(), '');
   assert.match(world.out(), /watchdog task: off \(there was none\)/);
+  assert.match(world.out(), /login launcher: off \(there was none\)/);
 });
 
 test('a plain stop leaves the launcher and its record alone', { skip: WINDOWS_ONLY }, async () => {
@@ -1981,6 +1982,7 @@ test('stop --at-login removes the batch launcher of an earlier version too: a ma
   assert.deepEqual(fs.readdirSync(startupDir), []);
   assert.equal(fs.existsSync(manifestPath(home)), false, 'its record is gone, and with it the manifest');
   assert.ok(world.out().includes(`login launcher: off (removed ${batch})`), world.out());
+  assert.doesNotMatch(world.out(), /login launcher: off \(there was none\)/, 'the batch launcher\'s line only: the launcher that was never there is not said');
 
   // One the user changed is kept, said, and fails the stop, as the new launcher would.
   const edited = writeBatchLauncher(home, startupDir, root);
@@ -1989,6 +1991,27 @@ test('stop --at-login removes the batch launcher of an earlier version too: a ma
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, kept.deps), 1);
   assert.match(kept.err(), /was changed since js-harness wrote it, so it is kept/);
   assert.equal(fs.existsSync(edited), true);
+});
+
+test('stop --at-login that keeps the batch launcher of an earlier version never says the login launcher is off', { skip: WINDOWS_ONLY }, async () => {
+  // With no launcher its line would be "off (there was none)": false while the batch launcher still starts the server.
+  const cases = {
+    'it was edited since': ({ batch }) => fs.appendFileSync(batch, 'rem mine\r\n'),
+    'no record names it': ({ home, batch }) => forgetOptionalFile(home, batch),
+  };
+  for (const [what, arrange] of Object.entries(cases)) {
+    const root = makeProject('proj');
+    const home = tempDir();
+    const { env, startupDir } = makeAppData();
+    const batch = writeBatchLauncher(home, startupDir, root);
+    arrange({ home, batch });
+    const world = fakeWorld();
+    assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home, '--at-login'], env, world.deps), 1, what);
+    assert.doesNotMatch(world.out(), /login launcher: off/, what);
+    assert.ok(world.err().includes(batch), `${what}: ${world.err()}`);
+    assert.match(world.err(), /kept/, what);
+    assert.equal(fs.existsSync(batch), true, what);
+  }
 });
 
 test('status names the batch launcher of an earlier version: on while it is there, and how to replace it', { skip: WINDOWS_ONLY }, async () => {
