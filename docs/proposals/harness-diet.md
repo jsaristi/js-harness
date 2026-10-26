@@ -1,6 +1,7 @@
 # Harness diet: the final proposal
 
-Status: proposal, 2026-10-26, session JH 53. Target: Claude Code with Anthropic's 5.5 models only.
+Status: proposal, 2026-10-26, session JH 53; second pass the same day, session JH 54 (section 14,
+and the edits it names). Target: Claude Code with Anthropic's 5.5 models only.
 Nothing outside this repository was changed by design. One thing was changed by accident and is
 reported in section 9. Every change outside the repository is in section 1, as his decision.
 
@@ -29,6 +30,14 @@ reported in section 9. Every change outside the repository is in section 1, as h
   against $1.25). The tasks were too easy to show which setup follows rules better (section 9).
 - **An incident.** The first eval attempt broke his CLI login. He has to act on that first
   (section 9).
+- **Second pass (section 14).** The two tests this plan waited on are run. `claudeMdExcludes` drops
+  the user file with the desktop's own binary and flags. But a desktop worktree session reads
+  project settings from the main checkout (`--project-config-root D:\js-harness`), so the exclusion
+  works only from `D:\js-harness\.claude\`, for every session at once. A `CLAUDE.md` in the main
+  checkout never loads in a worktree session, so the two-branches risk of section 4 is gone. 54 user
+  reports and 15 public setups agree with the diet's direction. They add three things: prose rules
+  fade after about ten turns; Opus 5.5 drifts out of the reply language whatever the harness says;
+  and the attribution rule needs a git hook.
 
 IDs used below:
 - F2, F5: roadmap phases (`docs/ROADMAP.md`).
@@ -54,19 +63,25 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      word.
    - The guard is the replay and long-session evals of section 7. They run on his Max plan's
      limits, through the eval token only.
-   - Before he is asked, two tests:
-     - a desktop session confirms the app honours `claudeMdExcludes`, since it ignored two settings
-       before (`odd/tasks/fixed-load.md`, L12);
-     - the worktree test of section 4.
+   - The two tests asked for before this question are run (section 14.1). The exclusion has to live
+     in `D:\js-harness\.claude\`: a committed `.claude/settings.json` on `main`, or the
+     `settings.local.json` there. It takes effect in every worktree session at once, not one
+     branch at a time. One real desktop session reading `/context` after it lands is still the
+     smoke test.
    - Recommended.
-3. **AGENTS.md or CLAUDE.md** (open; section 4 has the evidence).
+3. **AGENTS.md or CLAUDE.md** (section 4 has the evidence; the second pass adds a
+   recommendation).
    - His rule from 2026-10-15: "este harnes tiene prohibido que utilicemos Claude.md solo
      Agents.md" (`docs/rule-sources.json:713`, `rule:rules-live-in-the-harness`). Today he said he
      leans to `CLAUDE.md`.
    - A yes changes that rule, the Decided row "Portable by default" (`docs/ROADMAP.md:25`), and
      what `init` ships to other projects. That row's reason, Codex and Antigravity reading one
      file, does not hold for a Claude-only harness.
-   - No recommendation until the worktree test is run.
+   - Recommended since the second pass: a root `CLAUDE.md` holding `@AGENTS.md`, with the kept
+     lines of Appendix A below the import. `AGENTS.md` stays the shared file. Native `AGENTS.md`
+     loading has several silent off-switches (section 14.2), and the import avoids them. In a real worktree
+     layout it loads `AGENTS.md` once, and only the worktree's copy (section 14.1). It goes at the
+     root, never in `.claude/CLAUDE.md`, which the S2 glob would exclude.
 4. **The `fixed load` budget** (D1: 100,000, warn only). It becomes 75,000 and fails `check` once
    S2 is measured. Recommended then, not before.
 5. **`rule:double-review`** (two readers before a proposal reaches him). The Opus 5 guide says
@@ -130,7 +145,9 @@ for instruction files):
 - In a project under `C:\Users\Oficina`, the user file was read a second time, as an ancestor
   project file, and then `AGENTS.md` did not load at all. The glob covers both reads, because the
   path is the same. `D:\js-harness` is not under the home.
-- Not yet proven in the desktop app, which has ignored two settings before (`odd/tasks/fixed-load.md`, L12).
+- In the desktop app: proven with its own binary and flags in a scratch worktree layout, and only
+  from the main checkout's `.claude\` (section 14.1). One real desktop session after S2 is the smoke
+  test.
 
 ## 3. Contradictions, and which side wins
 
@@ -184,19 +201,21 @@ What Claude Code does, from its docs and measured here:
 
   Yet this real desktop session loaded only the worktree's `AGENTS.md` (its transcript names one
   file). So the scratch probe does not match the desktop app. A root `CLAUDE.md` on main could load
-  main's version beside every worktree's, two branches at once. **Test before deciding:** commit a
-  marker `CLAUDE.md` on a scratch branch of a real worktree layout, and read `/context` from a
-  desktop worktree session.
+  main's version beside every worktree's, two branches at once. **Tested in the second pass**
+  (section 14.1), with a real `git worktree` and the desktop's own binary and flags: no file of the
+  main checkout loads in a worktree session, in any layout. The first probe's folder was not a git
+  worktree. The two-branches risk does not exist.
 
 | Option | For | Against |
 |---|---|---|
 | Keep `AGENTS.md` alone | it works today; his rule as written | depends on a five-week-old default and on nothing above the folder |
-| `CLAUDE.md` holding `@AGENTS.md` plus the Appendix A lines | documented path; hooks fire; Codex still reads `AGENTS.md` | may load main's copy in worktrees (untested); changes his rule |
+| `CLAUDE.md` holding `@AGENTS.md` plus the Appendix A lines | documented path; hooks fire; Codex still reads `AGENTS.md`; immune to the native loader's off-switches; tested in worktrees: one copy, the worktree's | changes his rule |
 | Rename to `CLAUDE.md` | one file, documented path | Codex reviews lose the project file unless its fallback name is set; renames across `bin/` and the rules |
 | Keep `AGENTS.md`; turn on `claude-md-and-agents-md` | no repo change | a user setting, outside the repo; the fragile cases stay |
 
 What the evidence says: no failure was caused by `AGENTS.md`. Moving is insurance against the
-fragile cases, not a fix for a seen fault. Every option needs the worktree test first.
+fragile cases, not a fix for a seen fault. The worktree test is now run (section 14.1), and the
+second row is recommended.
 
 ## 5. The 2026 state of the art, against what we do
 
@@ -317,13 +336,16 @@ Rules that keep the method honest:
 | | long-session eval: simulated user, planted moments, rubric, separate grader, ≥ 5 runs per setup, one desktop smoke run | ≥ 90% of moments | to build: `evals/tasks/long-session` |
 | | test written before code, on 3 replayed features (what S2 risks losing) | 3 of 3 | to build, in the replay set |
 | | known contradictions among always-on sources | 0 | to build: `rules conflicts` |
+| | a rule planted at turn 1 still followed after turn 10 (second pass, #98870) | ≥ 9 of 10 runs | to build, in the long-session eval |
 | C2 Truthfulness | `honest-unknown` eval | 3 of 3 | `node evals/runner.mjs --tasks honest-unknown` (exists) |
 | | planted false premise checked before acting | ≥ 4 of 5 | to build, in the long-session eval (section 9's task is at its ceiling) |
 | | sampled hand-off claims that hold when re-run | ≥ 95% | to build |
+| | replies in his language after English tool output (second pass, #96326; a model regression, reported apart) | ≥ 95% of turns | to build, in the long-session eval |
 | C3 Works | gate | green | `npm run check` (exists) |
 | | daily Windows suite | 7 days green | `js-harness windows-daily` (exists; red today) |
 | | every `--help` command exercised end to end on a scratch home | 100% | to build |
 | | registered hooks not cancelled or timed out, last 20 sessions | 100% | to build: a `doctor` row |
+| | evals load what a desktop session loads: `--setting-sources=user,project,local`, plus `--project-config-root` for a worktree (second pass) | yes | to build, in the eval runner |
 | C4 Left as it should be | `uninstall` restores a scratch home byte for byte | pass | release rehearsal (exists) |
 | | temp folders, locks or processes older than a day | 0 | `js-harness clean`, `quiet` (exist; 5 `merge-queue-*` folders today) |
 | | a read-only command writes nothing | 0 | to build |
@@ -332,7 +354,8 @@ Rules that keep the method honest:
 | | what a session reads to start | ≤ 15k | to build |
 | | cost per task against the minimal arm, at equal score | ≤ 1.2× | `node evals/runner.mjs` A/B (exists; 1.68-2.54× in F5, 3.1× today) |
 
-**Today:** 18 measures. 7 exist, and 3 of those pass: `honest-unknown`, the gate and uninstall.
+**Today:** 21 measures (18 in the first pass, plus three from the second). 7 exist, and 3 of those
+pass: `honest-unknown`, the gate and uninstall. Section 8 was graded on the first 18.
 
 Certification is rerun on each new model, each Claude Code update and each gentle-ai update
 (`docs/future-model.md`), because vendor-side changes have broken quality before
@@ -449,9 +472,9 @@ Each step is one commit or one setting, measured before and after, and undone by
 
 | Step | What | Measure | Saving |
 |---|---|---|---|
-| S0 Baseline | Freeze the thresholds; land the credentials check; build the replay set and the long-session eval; run the worktree and desktop tests of section 4; record `/context` and the `fixed load` row | the numbers every later step compares to | 0 |
+| S0 Baseline | Freeze the thresholds; land the credentials check; build the replay set and the long-session eval, run with the desktop's flags (section 14.4); record `/context` and the `fixed load` row. The worktree and desktop tests of section 4 are done (section 14.1) | the numbers every later step compares to | 0 |
 | S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one reaches `correction_required`, one hits a typed stop; then three real slices | the 28 KB of lifecycle prose stops being needed |
-| S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in `.claude/settings.json`, together with S3 | `/context` shows no user file; first turn ~30k lower; replay and 3-task eval no worse; one desktop session confirms | ~30.7k per turn and per subagent |
+| S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json`, together with S3. A desktop worktree session reads it from `D:\js-harness\.claude\` only, so it acts when merged to `main` and pulled into the main checkout, for every session at once; the undo is a revert on `main` | `/context` shows no user file; first turn ~30k lower; replay and 3-task eval no worse; one desktop session confirms | ~30.7k per turn and per subagent |
 | S3 The kept lines | the ~25 lines of Appendix A go into the file decision 3 picks; the budget row counts it | `/context` from a real worktree shows one copy of each file | −2.5k |
 | S4 Contradictions to zero | `commit-msg` hook strips attribution lines (no refusal); contract-first as a `check` refusal for new docs; the output style's conflicting lines | conflicts row 0; attribution 0 on new commits | small |
 | S5 Skills and memory | protocols skill trigger without "closing a reply"; each js-harness skill body ≤ 3k; `MEMORY.md` ≤ 0.5k | skill loads per session | ~2-5k per turn |
@@ -490,8 +513,12 @@ and `review_due` decides whether it is reviewed.
 
 - **S2 removes ODD's guidance here.** Sessions may plan or slice less well. Guard: the contract
   check, the S3 lines, and the replay eval before and after. Revert if worse.
-- **The desktop app may ignore `claudeMdExcludes`.** Guard: confirm it in the first desktop
-  session, or revert.
+- **The desktop app may ignore `claudeMdExcludes`.** Mostly retired by the second pass: its binary
+  and flags honour it, read from the main checkout (section 14.1). Guard: confirm it in the first
+  desktop session, or revert.
+- **S2 cannot be tried on one branch.** A worktree session reads project settings from the main
+  checkout, so S2 changes every session when it reaches `main`. Guard: land S2 and S3 as one merge with nothing else in it, run the
+  measures the same day, and revert on `main` if any is worse.
 - **gentle-ai's Stop hook may assume its prose is loaded.** Guard: S1 lands first.
 - **The kept lines of Appendix A are a judgment.** A rule that lived only in the global file and
   was missed would be lost without anyone noticing. Guard: the replay set, and Appendix A read
@@ -523,7 +550,9 @@ and `review_due` decides whether it is reviewed.
 
 The living map is the Artifact [Harness alignment map](https://claude.ai/artifact/TsjfvX6CkD9ZGEXJd6kPYJ). Its rows sit in the Artifact's database, so a later session updates a row with `ArtifactData` as a migration step lands, and the page recounts by itself. The table below is the snapshot of 2026-10-26; the Artifact wins when they differ.
 
-Counts: opposite 1, major 12, minor 8, aligned 2 (23 concerns). Rows run worst gap first; each states the difference in one line.
+Counts: opposite 1, major 12, minor 9, aligned 2 (24 concerns). Rows run worst gap first; each states the difference in one line.
+
+The second pass (section 14) added row 24 and appended its evidence to rows 1, 2, 3, 4, 6, 9, 10, 13 and 22 in the Artifact. Below, only row 2 and row 24 are brought up to date; for the others, read the Artifact.
 
 | # | Concern | Gap | The difference | Today | Should be (source) | Step | Status |
 |---|---|---|---|---|---|---|---|
@@ -540,7 +569,8 @@ Counts: opposite 1, major 12, minor 8, aligned 2 (23 concerns). Rows run worst g
 | 16 | Docs and help verbosity | major | Every session reads an 82 KB roadmap; the target is a ~100-line map and loading the rest on demand. | Every session reads the 82 KB roadmap. Feature docs reach 421 KB. --help is 32 KB. | The instruction file is a map of about 100 lines into docs/, kept fresh by linters. Load the rest by progressive disclosure. (https://openai.com/index/harness-engineering/ (2026-02-11); https://code.claude.com/docs/en/skills (undated, fetched 2026-10-26)) | S6 | open |
 | 22 | Removing scaffolding | major | We have never retired a rule; the target is to remove each part once the model outgrows it. | 65 rules and 101 failure entries. No rule has ever been retired. | Every harness part encodes an assumption about what the model can't do. Remove it once the model outgrows it, and find the simplest solution. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://addyosmani.com/blog/agent-harness-engineering/ (2026-04-19)) | S8 (retire on a schedule) | open |
 | 23 | Isolation of evals, probes and read commands | major | A read command wrote a notice and an eval reached real credentials; the target is reads that write nothing and evals isolated from real state. | windows-daily, run as a read, recorded a notice to the lead. An eval reached real credentials. | Scratch state stays outside real state, and read-only commands write nothing. The repo's own runner already uses only an eval token (evals/suite.mjs:94). (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0 | open |
-| 2 | Project instructions file (AGENTS.md / CLAUDE.md) | minor | We use AGENTS.md only; Claude Code documents CLAUDE.md first, and AGENTS.md works only when no CLAUDE.md is above it. | AGENTS.md only, by his rule of 2026-10-15 (docs/rule-sources.json:713). It loaded in 132 of 133 transcripts and after all 16 compactions of the old lead. No failure traces to it. | CLAUDE.md is the documented path. AGENTS.md is read only when no CLAUDE.md sits in the folder or above it (since v2.1.277). A CLAUDE.md that holds @AGENTS.md imports it once. (https://code.claude.com/docs/en/memory (undated, fetched 2026-10-26)) | S3, decision 3 | decision pending |
+| 2 | Project instructions file (AGENTS.md / CLAUDE.md) | minor | We use AGENTS.md alone; native loading has silent off-switches, which a root CLAUDE.md importing @AGENTS.md avoids (tested: one copy, the worktree's). | AGENTS.md only, by his rule of 2026-10-15 (docs/rule-sources.json:713). It loaded in 132 of 133 transcripts and after all 16 compactions of the old lead. No failure traces to it. Second pass: in a real worktree layout a root CLAUDE.md holding @AGENTS.md loads AGENTS.md once, from the worktree only. | CLAUDE.md is the documented path. AGENTS.md is read only when no CLAUDE.md sits in the folder or above it (since v2.1.277). A CLAUDE.md that holds @AGENTS.md imports it once. Users report native loading switched off by a CLAUDE.local.md, an /init file or a home ancestor. (https://code.claude.com/docs/en/memory (undated, fetched 2026-10-26); anthropics/claude-code#103458, #96117, #97004) | S3, decision 3 | decision pending (recommended: CLAUDE.md importing AGENTS.md) |
+| 24 | Where a worktree session reads project settings | minor | A desktop worktree session reads project settings from the main checkout, so a settings change acts on every session at once; the plan had assumed one branch at a time. | Desktop worktree sessions start with --project-config-root D:\js-harness (read from the live processes, 2026-10-26). claudeMdExcludes in the worktree's .claude/settings.json is not honoured; in the main checkout's it is. | Land a settings change such as S2 as one merge to main, measure it the same day, and revert on main if a measure is worse. (Claude Code 2.1.308 help for --project-config-root; section 14.1) | S2 | open |
 | 4 | Checks versus prose | minor | Most rules are prose; the target puts every must-always rule in a hook or check. | A check gate, a reply Stop hook and a pre-push hook exist. Most of the 65 rules and the failure register's controls are prose. | What must always happen goes into a hook or CI, because hooks are deterministic. OpenAI's team promotes rules from docs into linters. (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26); https://openai.com/index/harness-engineering/ (2026-02-11)) | S0, S4 | open |
 | 6 | Review (gentle-ai RDD, Codex) | minor | We keep 28 KB of review prose always loaded; the target keeps the separate reviewer but drives it by a check, not prose. | The gentle-ai review lifecycle is 28 KB of always-on prose. Codex reviews each slice, and the pre-push hook enforces it. | Separate generation from evaluation, with a fresh-context evaluator and a contract fixed before coding. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5 (undated, fetched 2026-10-26)) | S1, decision 6 | open |
 | 12 | Effort per kind of work | minor | We pick effort by kind of work but never measure it; the target measures it per role. | Effort is chosen by kind of work (rule:session-effort, rule:subagent-effort). Nothing measures it per role. | Opus 5.5 at medium matches Opus 5 at high. Lowering effort reduces thinking more reliably than prompt instructions do. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5 (undated, fetched 2026-10-26)) | S8 (effort row) | open |
@@ -550,6 +580,142 @@ Counts: opposite 1, major 12, minor 8, aligned 2 (23 concerns). Rows run worst g
 | 21 | Testing after vendor updates | minor | We rerun evals only for a new model; vendor updates also broke quality, so rerun after them too. | docs/future-model.md names the moments to rerun evals for a new model only. | Vendor-side changes broke quality before: a lowered default effort, a caching bug and one system-prompt line. (https://www.anthropic.com/engineering/april-23-postmortem (2026-04-23)) | S8 | open |
 | 8 | Session topology | aligned | Same shape: one lead, a few writers, no parallel writers on one file. | One lead plus at most three work sessions, and no sub-orchestrators (rule:work-sessions-private-windows; inherited, not measured). | Multi-agent systems use about 15x the tokens of chat. One writer with read-only helpers works; parallel writers fail. (https://www.anthropic.com/engineering/multi-agent-research-system (2025); https://cognition.com/blog/dont-build-multi-agents (2025)) | none | aligned |
 | 20 | Early stops in unattended runs | aligned | Same shape: our Stop hook already refuses an idle end of turn. | The reply Stop hook demands one of five end states, and a turn may not end idle. | Opus 5.5 stops early with a summary that announces the next step. Treat a text-only end of turn as a report, and keep a checklist file. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5 (undated, fetched 2026-10-26)) | none | aligned |
+
+## 14. Second pass (JH 54, 2026-10-26)
+
+The first pass rested on Anthropic's own pages: 21 of its 28 sources. This pass adds what users
+report, how mature setups work, and the two tests the plan waited on. Everything was fetched or
+run today. Raw notes in the session's shared notes folder: `jh54-load-tests.md`,
+`jh54-user-reports.md` (54 claims) and `jh54-harness-survey.md` (15 setups).
+
+### 14.1 The two tests
+
+**What the desktop app runs.** Read from the live processes' command lines:
+- Every desktop session passes `--setting-sources=user,project,local`. Its `--settings` JSON
+  carries no instruction-file keys.
+- A worktree session also passes `--project-config-root D:\js-harness`. The binary's own help for
+  that hidden flag: project settings, `.mcp.json` and the `.claude` trees (commands, agents,
+  skills, output styles) are read from that folder, not from the working directory. Instruction
+  files are not on its list.
+- Live check: this desktop worktree session hides `keybindings-help`, `docx` and `pptx`. Those are
+  set in `D:\js-harness\.claude\settings.local.json`, so the app does honour that file. The L12
+  failures of `odd/tasks/fixed-load.md` concerned the app's own plugin and connectors, which it
+  injects itself. That is an inference, not a test.
+
+**The test.** A scratch repo on `D:\` with a real `git worktree` under `.claude\worktrees\w1`,
+marker files in both, and a scratch config folder holding only a marker `CLAUDE.md`. Each case
+ran the desktop's bundled Claude Code 2.1.308 headlessly, with the desktop's flags, `/context`, and
+Haiku 5.5. Login was the eval token only; no credentials file existed in the scratch home. Two
+cases were repeated on the installed CLI 2.1.310, with the same result. Every run was deterministic;
+`/context` lists the files it loaded.
+
+| Case | Instruction files loaded |
+|---|---|
+| Baseline | user file + the worktree's `AGENTS.md`; the main checkout's `AGENTS.md` is not loaded |
+| Exclusion in the main checkout's `.claude/settings.json` or `settings.local.json` | the worktree's `AGENTS.md` only |
+| Exclusion only in the worktree's `.claude/settings.json` | user file + `AGENTS.md`: **not honoured** |
+| The same, without `--project-config-root` (plain CLI) | `AGENTS.md` only: honoured |
+| Exclusion in user `settings.json` | `AGENTS.md` only, and so in every project |
+| `CLAUDE.md` with `@AGENTS.md` in the main checkout only | user file + the worktree's `AGENTS.md`: main's `CLAUDE.md` is not loaded |
+| The same import in the worktree (with or without main's) | user file + the worktree's `CLAUDE.md` + its `AGENTS.md`, once |
+| A plain `CLAUDE.md` (no import) in the worktree | user file + `CLAUDE.md`: `AGENTS.md` silently dropped |
+| Import in both + exclusion in the main checkout | the worktree's `CLAUDE.md` + `AGENTS.md`, no user file |
+
+What follows:
+- `claudeMdExcludes` works in the desktop's configuration. For a desktop worktree session it is read
+  only from `D:\js-harness\.claude\`, so S2 acts on every session once it lands in the main
+  checkout. It cannot be tried one branch at a time (section 10, S2).
+- No file of the main checkout loads in a worktree session. Section 4's two-branches risk does not
+  exist.
+- A `CLAUDE.md` with the import loads `AGENTS.md` once. One without the import silences it.
+- Still open: one real desktop session reading `/context` after S2.
+
+### 14.2 What users report
+
+The 54 claims break down as 33 GitHub issues in `anthropics/claude-code` (2026-07-23 to 2026-10-24),
+10 Hacker News items and 11 blogs, vendor pages and papers. Reddit refused both fetch routes, so
+none come from there. The strongest:
+
+| Claim | Source | Date |
+|---|---|---|
+| On 2.1.283 the model stops obeying simple `CLAUDE.md` rules after about ten turns. A commenter's fix: one fresh session per task, and hooks for the rules that must hold | [#98870](https://github.com/anthropics/claude-code/issues/98870) | 2026-10-02 |
+| Opus 5.5 does not consult the user-level `CLAUDE.md` until the user cites it. A comment adds that per-turn hook text beats a file loaded once | [#104296](https://github.com/anthropics/claude-code/issues/104296) | 2026-10-22 |
+| Opus 5.5 ignored a global file plus a skill and three hooks | [#99642](https://github.com/anthropics/claude-code/issues/99642) | 2026-10-05 |
+| A numbered mandatory review procedure in `CLAUDE.md` loses steps, even when asked six times | [#103532](https://github.com/anthropics/claude-code/issues/103532) | 2026-10-19 |
+| A compaction summary carried an old authorization forward, and the model acted on it | [#97999](https://github.com/anthropics/claude-code/issues/97999) | 2026-09-28 |
+| Replies drift into English after English tool output: Opus 5.5 did so on 9.4% of 1,840 turns, against 0.6% for Opus 5. Reproduced in 7 languages, with every prose layer in place | [#96326](https://github.com/anthropics/claude-code/issues/96326) | 2026-09-23; data 2026-10-07 |
+| `claudeMdExcludes` with the user file's absolute path excludes it (2.1.295). `--setting-sources project` does not (#87590) | [#80580](https://github.com/anthropics/claude-code/issues/80580) | comment 2026-10-09 |
+| Native `AGENTS.md` loading switches off silently: under the home when `~/.claude/CLAUDE.md` exists, and with a `CLAUDE.local.md` (#96117) or an `/init` file (#97004). It was intermittent at launch (#95589) | [#103458](https://github.com/anthropics/claude-code/issues/103458) | 2026-10-19 |
+| The startup instructions are written to the cache again at every session start. A default subagent starts at about 60k inherited tokens, against 5.3k for a restricted one (#97076) | [#93499](https://github.com/anthropics/claude-code/issues/93499) | 2026-09-11 |
+| `Co-Authored-By` still lands with the attribution settings off; a boolean `false` is ignored (#91546) | [#102266](https://github.com/anthropics/claude-code/issues/102266) | 2026-10-15 |
+| On Windows a large `SessionStart` env file makes Git Bash commands silently not run. Hooks also drop text on fork and resume (#92353) | [#103861](https://github.com/anthropics/claude-code/issues/103861) | 2026-10-20 |
+| A Stop hook blocking long replies worked where the `CLAUDE.md` rule did not. Others say rules last about two turns or ten minutes | [HN 49300197](https://news.ycombinator.com/item?id=49300197) | 2026-08-14 |
+| Opus 5.5 at the default medium effort solved most of one user's problems; a reply ranks xhigh above medium by as much again | [HN 50238759](https://news.ycombinator.com/item?id=50238759) | 2026-10-26 |
+| Handbook-scale policies: the best model passes 36.2% of trials, and agents report compliance they did not achieve | [arXiv 2607.25398](https://arxiv.org/abs/2607.25398) | 2026-07-28 |
+| Counter-evidence: a user with no memory, plugins, skills or MCP still saw degraded instruction following | [#98805](https://github.com/anthropics/claude-code/issues/98805) | 2026-10-01 |
+
+No report says `claudeMdExcludes` is ignored in the desktop app or in worktrees. None says a
+worktree session loads the parent checkout's files.
+
+### 14.3 How mature setups do it
+
+Of the 15 setups surveyed, Anthropic's docs and engineering posts, OpenAI's harness engineering,
+Boris Cherny's thread, HumanLayer, obra/superpowers (305k stars), ECC (289k), github/spec-kit
+(143k), BMAD, OpenSpec, agent-os, cc-sdd, Osmani and one personal write-up, all are current
+(pushed or posted 2026; two from 2025-11):
+
+| Pattern | Setups |
+|---|---|
+| Knowledge loads on demand (skills, indexed docs, path rules) | 11 of 15 |
+| State in repo files and git, handoff by file | 10 |
+| A reviewer separate from the writer (2 use another model) | 9 |
+| Rules enforced by hooks, linters or CI; every Stop hook found checks the work, none the reply's shape | 7 |
+| A short always-on file as explicit advice; 5 of 7 measured repo files are under 100 lines | 6 |
+| Fresh sessions preferred (2 accept one long session with compaction) | 5 |
+| Parts removed as models improved (agent-os v3, Anthropic's harness post) | 5 |
+| The harness itself measured | 4 |
+| A long-lived lead coordinating parallel sessions, shipped | 0 |
+
+Against ours: the global file is the outlier, since our `AGENTS.md` sits with the convergent size.
+Workflow, delegation and review prose loads every turn where 11 setups load it on demand. Our Stop
+hook checks the reply's form while theirs check the work. No precedent exists for a lead that
+lives for days. Our review (gentle-ai's lifecycle plus Codex on every slice) is heavier than the
+common single fresh reviewer. And nothing retires a rule.
+
+### 14.4 What moves
+
+- **Decision 2** needs no more tests before it is asked. The exclusion must live in the main
+  checkout and acts on every session at once (section 1, section 10 S2, section 11).
+- **Decision 3** now has a recommendation: a root `CLAUDE.md` holding `@AGENTS.md`. It may never sit
+  in `.claude/CLAUDE.md`, which the S2 glob also matches (#93858: the globs match absolute paths).
+- **The certification (section 7) gains three measures**, all to build into the long-session eval:
+  - a rule planted at turn 1 and tested after turn 10 (#98870);
+  - the share of replies in Spanish after English tool output (#96326). It is a model regression,
+    so it is graded and reported apart, not blamed on the harness;
+  - the eval runs with the desktop's flags (`--setting-sources=user,project,local`, and
+    `--project-config-root` for a worktree), or it grades a load no session has.
+- **S4's attribution step** becomes a `commit-msg` hook that strips the line. The settings leak
+  (#102266, #91546), and the 2.1.269 fix did not hold for others.
+- **Hooks need a firing test.** Hooks fail silently on fork, on resume and under Git Bash. The
+  `doctor` row of section 7 (C3, hooks not cancelled) is confirmed as needed. Keep hook text small:
+  per-turn text competes with the instruction files (#104296).
+- **Retiring rules** (section 12) has company: agent-os v3 and Anthropic's harness post each
+  removed parts once models outgrew them. The reply Stop hook is the first candidate to measure,
+  since no surveyed setup checks reply form. It stays until a measure says otherwise.
+- **The long-lived lead** has no precedent and the drift reports are against it. Section 6's cut
+  rule (at each phase close and after two compactions) stands, and is no longer only a starting
+  choice.
+- **What the diet promises.** Better adherence at lower cost, not perfect compliance: the
+  counter-evidence (#98805) and the language drift show lapses with a clean setup too.
+
+### 14.5 Limits of this pass
+
+- No Reddit: both routes were refused. Hacker News and GitHub stand in for it.
+- The two tests used markers and `/context`, not a model's behaviour. They show what loads, not
+  how well it is followed. That is the long-session eval's job.
+- The desktop's own process was read, not driven: the final proof stays one desktop session
+  after S2.
+- User reports are self-selected: they show what breaks, not how often.
 
 ## Appendix A. The global file, block by block
 

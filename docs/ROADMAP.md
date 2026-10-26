@@ -98,6 +98,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | Procedure written 2026-10-14: [future-model.md](future-model.md), version 2 after one reader (`odd/tasks/future-model-protocol.md`); it cannot run on a new model until its gaps are built: G5, G6, G3 and G2 cleared for that feature, G1, G4 and G7 later |
+| F8 Harness reorganization | The 21 measures of [the diet's section 7](proposals/harness-diet.md#7-certification-how-it-works-is-proven) exist and pass at thresholds frozen before the baseline, run with the desktop's own flags; a Claude audit and a Codex audit, three runs each, are graded side by side against the baseline; every row of the [alignment map](https://claude.ai/artifact/TsjfvX6CkD9ZGEXJd6kPYJ) is aligned or kept by his decision. Its six steps run in order, under [Next](#next) | Opened 2026-10-26 by his order. Steps 0-1 in progress: the research is written (`docs/proposals/harness-diet.md`, sections 1-14). It takes over F2's two open steps |
 
 ## Checklist
 
@@ -144,6 +145,14 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [ ] Block exclusion via gentle-ai #4036, if it ships
 - [x] The fixed load of a session measured per part and owner, and a `fixed load` row in `check` that warns over `rule:fixed-load-budget` (`odd/tasks/fixed-load.md`)
 - [ ] The cuts that document recommends, one at a time: moved, never deleted, measured before and after, proven by an eval, each undoable (his decisions D1-D7 there)
+
+### F8 Harness reorganization
+- [ ] 0. His CLI login restored (`claude auth login`, his): `claude auth status` shows him signed in and one `claude -p` answers
+- [ ] 1. Research complete: the diet proposal with its second pass merged to `main` (PR 593 and the second-pass PR), and the map's rows current
+- [ ] 2. His decisions, one at a time, in the proposal's section 1 order (2, 3, 5, 6, 7, 8); each answer recorded in the roadmap or the proposal with his words and the transcript line
+- [ ] 3. Certification built first and today's harness graded as the baseline: credentials guard landed; thresholds frozen in a commit; the replay set and the long-session eval built and run with the desktop's flags; all 21 measures read, the missing ones counted as missing
+- [ ] 4. Migration, one reversible step at a time (S1, then S2 with S3 as one merge to `main`, then S4-S7): each step measured against the baseline the same day, its map row updated, reverted if a measure is worse; decision 4 (the budget) asked once S2 is measured
+- [ ] 5. Final certification: section 7 in full, a Claude audit and a Codex audit three runs each, graded side by side with the baseline and their spread; decision 9 (whether `init` offers the exclusion) asked after it
 
 ### Project init
 - [x] A git-spec global install works through the pnpm shim
@@ -289,6 +298,38 @@ Designed on 2026-10-10: rules that do not act are to be given a check, in a rank
 Designed on 2026-10-10 and built in [odd/tasks/session-channel.md](../odd/tasks/session-channel.md). The order he asked for on 2026-10-09 (items 1 to 5, each a feature of its own) moved there as `## Session channel`.
 
 ## Next
+
+**First: reorganize the harness (F8), in order, by his word of 2026-10-26.** Told that sessions
+lose judgment and break rules, he asked for one order over everything in flight: "necesito que
+trabajes en orden osea de todo lo que estamos haciendo, que debe ir primero que despues y como
+vamos a llegar al objetivo que es el de poder organizar el arnes como deberia ir por que esta
+funcionando muy mal" (relayed by the lead to session JH 54). The objective is the harness of
+[the diet proposal](proposals/harness-diet.md), and F8 is that order. Its steps are the F8
+checkboxes under [Checklist](#checklist), each closed by the condition written there. Work that
+does not serve a step waits, unless it breaks shipped behaviour.
+
+1. **His CLI login (step 0).** First because it is one command of his. It blocks only headless runs
+   on the CLI's own login: the evals and today's tests ran on the eval token
+   (`JS_HARNESS_EVAL_OAUTH_TOKEN`, `evals/suite.mjs:94`).
+2. **Research (step 1).** Two passes. The second (section 14) ran the two tests the plan waited on:
+   - The exclusion works in the desktop's configuration, read from `D:\js-harness\.claude\` only.
+     The reason: a desktop worktree session starts with `--project-config-root D:\js-harness`.
+   - A root `CLAUDE.md` importing `AGENTS.md` loads once, and only the worktree's copy.
+   - 54 user reports and 15 public setups point the same way as the diet.
+3. **His decisions (step 2).** Before certification, because two of them set what it costs and
+   measures: the eval spend (decision 2) and the project file (decision 3). Decision 4 needs S2's
+   measure, so it moves into step 4. Decision 9 needs the final grade, so it moves into step 5.
+   That is the one change to the lead's order, made on the proposal's own conditions.
+4. **Certification before any cut (step 3).** A step cannot be judged better or worse without a
+   baseline. The credentials guard lands first, because an eval broke his login. The evals pass
+   the desktop's flags, or they grade a load no session has.
+5. **Migration (step 4).** One step at a time, in the proposal's section 10 order:
+   - The review driver (S1) comes before the exclusion, because gentle-ai's Stop hook assumes its
+     prose is loaded.
+   - S2 and S3 land as one merge to `main`. The setting is read from the main checkout, so it
+     changes every session at once and cannot be tried on a branch.
+6. **Final certification (step 5).** The same measures as the baseline, then the two audits side
+   by side. It runs again on each new model, Claude Code update and gentle-ai update.
 
 **Scope frozen, by his answer of 2026-10-16.** On 2026-10-15 the sessions ticked 70 tasks and
 opened 56 new ones (counted from the feature documents' history on `main`), so the open count
