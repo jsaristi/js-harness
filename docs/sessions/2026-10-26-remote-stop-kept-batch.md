@@ -11,7 +11,7 @@ None in this session: it ran from the lead's brief, started with `js-harness ses
 
 ## Delivered
 - PR #591 (open, ready to land): commit `e5ed506b` `fix(remote): stop --at-login never says off while it keeps a
-  batch launcher`, plus this summary.
+  batch launcher`, its feature document `odd/tasks/remote-stop-kept-batch.md`, plus this summary.
 - `bin/lib/remote-launcher.mjs` `disableLauncher`: the launcher's "nothing" line is held back when the batch
   launcher is kept (`!batch.ok`), as it already was when the batch launcher's own line was said.
 - `bin/remote.test.mjs`: new test `stop --at-login that keeps the batch launcher of an earlier version never says the
@@ -27,6 +27,11 @@ None in this session: it ran from the lead's brief, started with `js-harness ses
 ## Failures and lessons
 - A first pin (`doesNotMatch /there was none/`) also matched the watchdog line "watchdog task: off (there was
   none)"; narrowed to the launcher's line before the fix.
+- `notify --kind ready --pr 591` was refused: "no written gentle-ai evidence for e5ed506b on this branch: name it,
+  or its range, on a gentle-ai line of its feature document". The brief said no feature document was needed, but the
+  merge door (`bin/lib/gentle-ai-evidence.mjs`) needs one for every code commit. Fixed with
+  `odd/tasks/remote-stop-kept-batch.md` (39cc8659), shaped like `odd/tasks/compact-window-suffix.md`. The `closed`
+  notice had gone out in the same command chain before the refusal was read; the `ready` was sent again after.
 
 ## Left
 - Landing PR #591, by the lead under the repository's rules.
