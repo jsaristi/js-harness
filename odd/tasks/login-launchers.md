@@ -50,19 +50,13 @@ Nothing: the brief carries his request; spend is one gate and one Codex review.
   server into a single session.
 
 ## Next step
-T1 done, wake tests green (12/12). Next: T3 docs, then `npm run check`, commit, codex-review, PR. Was: T1 wake part: `bin/wake.mjs` `startupName` -> `.vbs`, write with `replaces: batchName(name)` (writeStartupFile
-takes it), `--remove` removes both names; update `bin/wake.test.mjs` `atLogin` (file `.vbs`, `@echo off` assertions
--> `hiddenLauncherCommand`) and add a migration test. Then T3 docs (README, docs/SPEC.md, usage in js-harness.mjs and
-remote USAGE), `npm run check`, commit, `js-harness codex-review --base main`, PR. Done so far: startup-file.mjs
-(hiddenLauncherText, hiddenLauncherCommand, batchName, writeStartupFile replaces), lib/remote.mjs (VBS loginLauncher,
-serverArgs --no-create-session-in-dir, isLoginLauncher, launcherStart), remote.mjs (planLauncher batch,
-retireBatchLauncher, disableLauncher both, launcherLine, Ready); their tests green.
+None in this repo: the pull request is open. On his machine, after the merge: pull the main checkout, run `js-harness remote start --at-login` and `js-harness wake --at-login` once (they replace the two `.cmd` files), and archive the disconnected rows already in the sidebar (L4). The server takes `--no-create-session-in-dir` at its next start.
 
 ## Tasks
-- [ ] T1 (build, inline) S2, S3: hidden launchers for remote and wake, with the migration. Remote done; wake next.
-- [x] T2 (build, inline) S4, S5: no pre-created session; `Ready` is connected.
-- [ ] T3 (docs, inline) README, SPEC, usage lines.
-- [ ] T4 (verify) `npm run check`, Codex review, PR.
+- [x] T1 (build, inline) S2, S3: hidden launchers for remote and wake, with the migration. 76ae7e11.
+- [x] T2 (build, inline) S4, S5: no pre-created session; `Ready` is connected. 76ae7e11.
+- [x] T3 (docs, inline) README, SPEC, usage lines. 76ae7e11.
+- [x] T4 (verify) `npm run check` (the pre-commit gate of 76ae7e11), Codex review, PR.
 
 ## Log
 - L1. 2026-10-26, the brief from the lead (JH ORQ): fix the two consoles with a hidden launcher and migrate the `.cmd`
@@ -95,3 +89,8 @@ retireBatchLauncher, disableLauncher both, launcherLine, Ready); their tests gre
   remote-control `session_01...`. Those rows live on claude.ai, and the app's own session tools do not list them
   either. So nothing archives them from here; with S4 no new row appears, and the rows already there are archived by
   hand from the sidebar, once.
+- L5. 2026-10-26, verification: the pre-commit gate of 76ae7e11 passed (the first try refused bin/remote.mjs at 1289 lines
+  over its 1229 ceiling; the launcher file functions moved to `bin/lib/remote-launcher.mjs` and the ceiling went to
+  1118). gentle-ai assess of 45e8084..76ae7e11: medium, `review_due` false (`under_budget`), so no gentle-ai review.
+  Codex review of 45e8084..76ae7e1, 3 parts, gpt-6.1-sol medium: all correct (0.86, 0.86, 0.88), no findings; part 3
+  was asked twice, the first time refused with `Selected model is at capacity`.
