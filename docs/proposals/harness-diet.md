@@ -23,40 +23,65 @@ reported in section 9. Every change outside the repository is in section 1, as h
   `CLAUDE.md` in this repo that imports `AGENTS.md`. gentle-ai's global blocks excluded here with
   `claudeMdExcludes`, which leaves his file untouched. Review driven by a command, not 28 KB of
   prose. One lead, cut at each phase.
-- **Grades today.** Codex, blind: 5.0/10. On the certification of section 7, 4 of 17 measures
-  exist and pass. Section 8 has the detail.
+- **Grades today.** Codex, auditing blind, gave 5.0/10. Of section 7's 18 measures, 7 exist and 3
+  of those pass. Section 8 has the detail.
+- **The eval run today.** Both setups scored 9/9, but today's payload cost 3.1× as much ($3.82
+  against $1.25). The tasks were too easy to show which setup follows rules better (section 9).
+- **An incident.** The first eval attempt broke his CLI login. He has to act on that first
+  (section 9).
+
+IDs used below:
+- F2, F5: roadmap phases (`docs/ROADMAP.md`).
+- D1-D7: his decisions in `odd/tasks/fixed-load.md`.
+- S0-S8: migration steps (section 10).
+- C1-C5: certification criteria (section 7).
 
 ## 1. What is his to decide
 
 Asked one at a time, in this order. Each says which earlier decision it changes.
 
-1. **Log the CLI back in** (`claude auth login`). This session's eval broke the login (section 9).
-   Nothing headless runs until he does.
-2. **Exclude gentle-ai's global file in this repo now** (S2). His D2 (`odd/tasks/fixed-load.md:116`)
-   said: exclude only the orchestrator and routing blocks, and only once gentle-ai #4036 ships.
-   #4036 has been open since 2026-09-01 with no comments, and 4.2.0 has no exclude flag. This
-   proposal asks him to replace D2. Excluding the whole file loses its small blocks too. Every
-   line he needs moves into the repo's `CLAUDE.md` (Appendix A). Recommended.
-3. **`CLAUDE.md` as the entry file** (S3): a short `CLAUDE.md` that imports `@AGENTS.md` and holds
-   his rules, instead of `AGENTS.md` alone. This changes the Decided row "Portable by default"
-   (`docs/ROADMAP.md:25`), whose reason, Codex and Antigravity reading one file, no longer holds
-   for the 5.5-only target. Recommended. Section 4 has the evidence.
-4. **The `fixed load` budget** (D1: 100,000, warn only). It should become 75,000 and fail `check`
-   once S2 lands. Recommended after S2 is measured, not before.
-5. **Spend on evals** (D7: no paid eval; each cut accepted on its measured saving). Two runs are
-   proposed:
-   - the 3-task eval of section 9, about 18 short runs on the plan;
-   - the long-session eval of S0, about 5 runs × 2 setups × 3 hours.
-
-   Both run on his Max plan's limits, not on dollars, and only through a login path he approves
-   (section 9). Recommended for S2 only, since it removes
-   ODD's guidance and a measured saving does not show what it costs in quality.
-6. **Codex as the slice reviewer** (`AGENTS.md:54-58`). It stays, or Claude reviewers in a fresh
+1. **Log the CLI back in** (`claude auth login`). This session's first eval attempt broke the
+   login (section 9). Headless runs on the CLI login fail until he does. The eval token and the
+   desktop app still work.
+2. **Exclude gentle-ai's global file in this repo, with eval spend to guard it** (S0, S2 and S3
+   together; none is safe alone).
+   - This replaces two of his earlier decisions:
+     - D2 (`odd/tasks/fixed-load.md:108`, answered at :116): exclude only the orchestrator and
+       routing blocks, and only once gentle-ai #4036 ships. #4036 has been open since 2026-09-01
+       with no comments, and 4.2.0 has no exclude flag.
+     - D7: no paid eval.
+   - The whole file stops loading here. The ~25 lines of Appendix A move into the repo, word for
+     word.
+   - The guard is the replay and long-session evals of section 7. They run on his Max plan's
+     limits, through the eval token only.
+   - Before he is asked, two tests:
+     - a desktop session confirms the app honours `claudeMdExcludes`, since it ignored two settings
+       before (`odd/tasks/fixed-load.md`, L12);
+     - the worktree test of section 4.
+   - Recommended.
+3. **AGENTS.md or CLAUDE.md** (open; section 4 has the evidence).
+   - His rule from 2026-10-15: "este harnes tiene prohibido que utilicemos Claude.md solo
+     Agents.md" (`docs/rule-sources.json:713`, `rule:rules-live-in-the-harness`). Today he said he
+     leans to `CLAUDE.md`.
+   - A yes changes that rule, the Decided row "Portable by default" (`docs/ROADMAP.md:25`), and
+     what `init` ships to other projects. That row's reason, Codex and Antigravity reading one
+     file, does not hold for a Claude-only harness.
+   - No recommendation until the worktree test is run.
+4. **The `fixed load` budget** (D1: 100,000, warn only). It becomes 75,000 and fails `check` once
+   S2 is measured. Recommended then, not before.
+5. **`rule:double-review`** (two readers before a proposal reaches him). The Opus 5 guide says
+   verification instructions cause over-verification. Keep it, or narrow it to proposals that
+   change one of his decisions. Recommended: narrow it.
+6. **Codex as the slice reviewer** (`AGENTS.md:56-60`). It stays, or Claude reviewers in a fresh
    context replace it. Section 6 has the tradeoffs. Recommended: keep it.
-7. **The output style.** Keep Gentleman, or a shorter one without its "STOP" and "concepts first"
-   lines, which fight "keep moving" (section 5).
-8. **The engram prompt hook** (his install): turn it off. It adds about 0.5k per prompt, a false
-   "CRITICAL FIRST ACTION", and tool names that do not exist here.
+7. **His reply rules.** "Default to short answers" and "Ask at most one question ... STOP" sit in
+   the Rules block of the global file and in the output style. They fight "keep moving" and the
+   closing recap.
+   - Option: "one question at a time; keep doing what does not depend on the answer", which is the
+     Opus 5.5 guide's advice.
+   - The Gentleman voice stays either way (section 5).
+8. **The engram prompt hook** (his install): turn it off. It costs ~0.4k per prompt (chars/4),
+   prints a false "CRITICAL FIRST ACTION", and names tools that do not exist here.
 9. Later, a product choice: whether `js-harness init` offers the same exclusion in other projects.
 
 gentle-ai stays installed. Its review CLI, skills and engram install keep working. Only its
@@ -67,13 +92,13 @@ always-on prose stops loading in this project.
 First turn of this session: 105,505 input tokens (transcript `ce36ab2d`). Three `SessionStart`
 hooks were cancelled in this session, so a normal desktop session loads somewhat more. Token
 figures are Claude Code's own `/context` count where one exists. Otherwise they are the repo's
-estimate of characters / 4 (`bin/lib/payload.mjs:10`), which runs about a third under Claude's
-count for this text.
+estimate of characters / 4 (`bin/lib/payload.mjs:10`), which runs about a quarter under
+Claude's count for this text (23.0k against 30.7k for the global file).
 
 | Source | Tokens | Loads | Owner |
 |---|---:|---|---|
 | Host system prompt, tools, deferred-tool list | residual, ~60k | every turn | Anthropic, the desktop app |
-| `~/.claude/CLAUDE.md` | 30.7k (Claude) | every turn, every subagent | gentle-ai ~95%, graphify, his rules |
+| `~/.claude/CLAUDE.md` | 30.7k (Claude) | every turn, every subagent | gentle-ai ~99% (his Rules list sits inside its persona block), graphify |
 | Skill list | ~3.2k (chars/4) | every turn | his skills folder, plugins |
 | Output style `gentleman.md` | ~1.8k (chars/4) | every request | gentle-ai persona |
 | MCP server instructions | ~1.8k (chars/4) | every turn | codegraph, engram, Chrome |
@@ -88,18 +113,20 @@ prompt and the tool list. That comes to about 43k by Claude's count, about 48k w
 skill loaded.
 
 **Why F2 did not shrink it.** F2 (`docs/ROADMAP.md:93`) measured the load and then waited on
-gentle-ai #4036. Meanwhile the global file grew from ~17.5k (chars/4, `docs/origin.md`, 2026-09-26)
-to 91,994 characters today. gentle-ai 4.2.0 writes the orchestrator and routing blocks whatever is
+gentle-ai #4036. Meanwhile the global file grew from ≈17.6k tokens (wire capture, `docs/origin.md:41`,
+2026-09-26) to 30.7k by Claude's count today (23.0k by chars/4). gentle-ai 4.2.0 writes the orchestrator and routing blocks whatever is
 selected: `install --components context7` alone wrote 82,675 bytes of them in a scratch home.
 `--claude-orchestrator-modules` moves only 6,166 bytes. The fixed-load work was right that a hand
 edit is overwritten by the next `gentle-ai sync`. What it missed is a switch on the reading side:
 `claudeMdExcludes`, which tells Claude Code to skip the file in one project and leaves gentle-ai's
 file alone.
 
-**Tested** (scratch `CLAUDE_CONFIG_DIR`, headless `/context`):
-- In `.claude/settings.local.json` with the absolute path: memory files fell from 61.3k to 30.7k.
-- In a committed `.claude/settings.json` with `{"claudeMdExcludes":["**/.claude/CLAUDE.md"]}`: the
-  total was 38.1k, and only `AGENTS.md` loaded.
+**Tested** (scratch `CLAUDE_CONFIG_DIR`, headless `/context`; "memory files" is `/context`'s line
+for instruction files):
+- The absolute path in `.claude/settings.local.json`: memory files fell from 61.3k to 30.7k. That
+  project sat under the home, so the user file had loaded twice; one copy was left.
+- `{"claudeMdExcludes":["**/.claude/CLAUDE.md"]}` in a committed `.claude/settings.json`, project
+  outside the home: memory files 1.9k, only `AGENTS.md`; whole context 38.1k.
 - In a project under `C:\Users\Oficina`, the user file was read a second time, as an ancestor
   project file, and then `AGENTS.md` did not load at all. The glob covers both reads, because the
   path is the same. `D:\js-harness` is not under the home.
@@ -124,38 +151,52 @@ global file against `AGENTS.md`.
 | 9 | three ways to ask (plain text then STOP, `AskUserQuestion`, `wrap_up`) | `rule:questions-one-place` | the `reply --hook` Stop check |
 | 10 | "never for size" (`CLAUDE.md:227`); Opus 5: no subagents "to verify or double-check your own work" ([guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5)) | `rule:double-review` | the repo's rule, at a cost |
 
-The rule that holds: a check wins every time. Prose that states its own precedence wins most of
-the time. Everything else is a coin toss.
+The pattern: with a check, the sightings drop; prose that states its own precedence mostly
+wins; everything else is a coin toss. Row 1 shows a check can still be met only halfway.
 
 ## 4. AGENTS.md or CLAUDE.md
 
-What Claude Code does, from its docs and measured here:
-- It has read `AGENTS.md` natively only since v2.1.277 (2026-09-18), and only when no `CLAUDE.md`
-  or `CLAUDE.local.md` sits in the working directory or above it
-  ([memory docs](https://code.claude.com/docs/en/memory)).
-- **Measured, it worked here.** `AGENTS.md` is the first instructions attachment in 132 of 133
-  session transcripts. The exception is a probe folder. It was re-injected after each of the old
-  lead's 16 compactions. No failure in the register traces to the choice.
-- **Where it is fragile.**
-  - A `CLAUDE.md` or `CLAUDE.local.md` anywhere above the working directory turns it off. So does
-    the home-ancestor case of section 2.
-  - The docs promise re-injection after compaction only for the root `CLAUDE.md`.
-  - `InstructionsLoaded` hooks do not fire for `AGENTS.md`, `--bare` skips it, the desktop docs
-    name only `CLAUDE.md`, and `/init` writes `CLAUDE.md`.
-- **The documented way to use both:** a `CLAUDE.md` with `@AGENTS.md` imports it once
-  ([memory docs](https://code.claude.com/docs/en/memory)). A symlink is the alternative, and it
-  fails on Windows.
+His rule today is AGENTS.md only: "este harnes tiene prohibido que utilicemos Claude.md solo
+Agents.md" (2026-10-15, `docs/rule-sources.json:713`). Today he said he leans to `CLAUDE.md`. Both
+are his, so this stays open for him. Here is the evidence.
 
-Options:
+What Claude Code does, from its docs and measured here:
+- By default, `AGENTS.md` is read natively, but only since v2.1.277 (2026-09-18, about five weeks
+  ago), and only when no `CLAUDE.md` or `CLAUDE.local.md` sits in the working directory or above
+  it. The "Project instructions" setting `claude-md-and-agents-md` loads both files; it lives in his
+  user settings ([memory docs](https://code.claude.com/docs/en/memory)).
+- **It has worked here.** `AGENTS.md` was the first instructions attachment in 132 of 133 session
+  transcripts; the exception is a probe folder. It was re-injected after each of the old lead's 16
+  compactions. No failure in the register traces to the choice.
+- **Where it is fragile.**
+  - A `CLAUDE.md` or `CLAUDE.local.md` anywhere above the working directory turns it off, and so
+    does the home-ancestor case of section 2.
+  - The docs promise re-injection after compaction only for the root `CLAUDE.md`.
+  - `InstructionsLoaded` hooks do not fire for `AGENTS.md`, and `/init` writes `CLAUDE.md`.
+- **The documented way to use both:** a `CLAUDE.md` that holds `@AGENTS.md` imports it once. A
+  symlink fails on Windows.
+- **Worktrees: untested, and this decides the option.** Work sessions run in
+  `D:\js-harness\.claude\worktrees\<name>\`, under the main checkout. A scratch probe (Haiku 5.5,
+  eval token, one run per layout, the model listing marker lines it could see) gave:
+  - `AGENTS.md` in parent and worktree: both loaded, the parent's and the worktree's.
+  - A `CLAUDE.md` shim in both: both `CLAUDE.md` files loaded, and only the worktree's import.
+  - A shim only in the worktree: only the worktree's files.
+
+  Yet this real desktop session loaded only the worktree's `AGENTS.md` (its transcript names one
+  file). So the scratch probe does not match the desktop app. A root `CLAUDE.md` on main could load
+  main's version beside every worktree's, two branches at once. **Test before deciding:** commit a
+  marker `CLAUDE.md` on a scratch branch of a real worktree layout, and read `/context` from a
+  desktop worktree session.
 
 | Option | For | Against |
 |---|---|---|
-| Keep `AGENTS.md` alone | it works today; no change | depends on a two-month-old fallback and on nothing above the directory |
-| Rename to `CLAUDE.md` | the documented path for every feature | Codex reviews lose the project file unless its fallback-filename setting is changed; renames across `bin/` and the rules |
-| **`CLAUDE.md` = `@AGENTS.md` + his rules (recommended)** | documented path; hooks fire; Codex still reads `AGENTS.md`; his rules get a Claude-only home | one more file; the budget row must count both |
+| Keep `AGENTS.md` alone | it works today; his rule as written | depends on a five-week-old default and on nothing above the folder |
+| `CLAUDE.md` holding `@AGENTS.md` plus the Appendix A lines | documented path; hooks fire; Codex still reads `AGENTS.md` | may load main's copy in worktrees (untested); changes his rule |
+| Rename to `CLAUDE.md` | one file, documented path | Codex reviews lose the project file unless its fallback name is set; renames across `bin/` and the rules |
+| Keep `AGENTS.md`; turn on `claude-md-and-agents-md` | no repo change | a user setting, outside the repo; the fragile cases stay |
 
-So his worry is reasonable as insurance, not as a diagnosis. The evidence shows no failure caused
-by `AGENTS.md`. The `@AGENTS.md` shim removes the fragile cases for about 1k tokens.
+What the evidence says: no failure was caused by `AGENTS.md`. Moving is insurance against the
+fragile cases, not a fix for a seen fault. Every option needs the worktree test first.
 
 ## 5. The 2026 state of the art, against what we do
 
@@ -190,9 +231,9 @@ that fight the project rules:
   understand the concepts" (line 69) fight "keep moving". The Opus 5.5 guide also says to carry on
   with whatever does not depend on the answer.
 - "Default to short answers" (lines 15-16) fights the closing recap with spend.
-- "Close with impact" (lines 92-95) fights ending in one of the five states.
+- "Close with impact only when it fits" (line 95) sits well enough with the five states. Keep it.
 
-The voice can stay. Those lines should go.
+The voice can stay. The first three should be reworded (decision 7).
 
 ## 6. Models, host features, sessions
 
@@ -216,8 +257,9 @@ All three have a 1M window and 128k output. Claude Code compacts 1M models at ab
   ([sub-agents](https://code.claude.com/docs/en/sub-agents), v2.1.271), so a 30.7k file does not
   ride along into the model that the guide says stops early under long prompts.
 
-**Host-native features that js-harness duplicates.** None fully. 13 commands are partly covered,
-including:
+**Host-native features that js-harness duplicates.** None fully. `bin/js-harness.mjs` registers 42
+commands. The research classified 37 of them; 5 were not looked at. Of the 37, 13 are partly
+covered, including:
 - `sessions` by agent view, `claude agents`;
 - `notify` and `wait` by `SendMessage`, `notify_when_idle` and Monitor;
 - `contract` by `/goal`;
@@ -236,7 +278,7 @@ phase close and after two compactions (a starting choice). The lead reads a curr
 
 **Topology.** One lead plus at most three work sessions. That is inherited
 (`rule:work-sessions-private-windows`), not measured. No sub-orchestrators: no study shows that a
-deeper hierarchy helps coding, multi-agent systems use about 15× the tokens of chat
+deeper hierarchy helps coding, multi-agent systems use about 15× the tokens of chat (2025, *older*)
 ([Anthropic](https://www.anthropic.com/engineering/multi-agent-research-system)), and Cognition
 reports that one writer with read-only helpers works and parallel writers fail
 ([Cognition](https://cognition.com/blog/dont-build-multi-agents)).
@@ -250,75 +292,95 @@ reports that one writer with read-only helpers works and parallel writers fail
 
 ## 7. Certification: how "it works" is proven
 
-He asked for judgment, truthfulness, works and does not fail, left as it should be, and optimized.
-Each criterion gets measures with a threshold and a command. Every threshold is a starting choice,
-to tune once data exists.
+He asked for judgment, truthfulness, that it works and does not fail, that it is left as it
+should be, and that it is optimized. Each criterion gets measures, each with a threshold and a
+command.
 
-Two numbers are reported apart, never multiplied together:
-- **coverage**: how many measures exist;
-- **pass rate**: how many of the existing measures pass.
+Rules that keep the method honest:
+- **Thresholds are frozen** in a commit before S0 runs and change only by his decision. That way
+  no number moves after the results are seen.
+- **Two numbers, reported apart:** coverage (how many measures exist) and pass rate (how many of
+  those pass). A missing measure is never counted as a pass.
+- **A criterion passes when all its measures pass.**
+- **Blind where it can be.**
+  - The replay set runs in a home without the repo's history, memory or transcripts, so the
+    answers cannot be read.
+  - Codex picks its decisions, not the author.
+  - A second model grades it.
+- **Lists only grow.** The contradiction list starts from section 3's ten pairs and is append-only.
+- **Format is not truth.** A claim check samples claims and re-runs them.
+- **The grade comes last.** An LLM audit runs 3 times and reports its spread, after the measures.
 
 | Criterion | Measure | Pass | Command |
 |---|---|---|---|
-| C1 Judgment | replay set: 20 past decisions from transcripts (which side of a contradiction, whose decision, cut or not), replayed and graded blind by a second model against what he decided | ≥ 17 of 20 | to build: `evals/tasks/replay` |
-| | long-session eval: a simulated user, planted moments, a rubric, a separate grader, ≥ 5 runs per setup, plus one desktop smoke run | ≥ 90% of moments per rubric | to build: `evals/tasks/long-session` |
-| | known contradictions among always-on sources | 0 | to build: `rules conflicts` over a list of pairs |
+| C1 Judgment | replay set: 20 past decisions (which side of a contradiction, whose call it was, cut or not) | ≥ 17 of 20 | to build: `evals/tasks/replay` |
+| | long-session eval: simulated user, planted moments, rubric, separate grader, ≥ 5 runs per setup, one desktop smoke run | ≥ 90% of moments | to build: `evals/tasks/long-session` |
+| | test written before code, on 3 replayed features (what S2 risks losing) | 3 of 3 | to build, in the replay set |
+| | known contradictions among always-on sources | 0 | to build: `rules conflicts` |
 | C2 Truthfulness | `honest-unknown` eval | 3 of 3 | `node evals/runner.mjs --tasks honest-unknown` (exists) |
-| | planted false premise checked before being acted on | ≥ 4 of 5 runs | section 9's task, in the long-session eval |
-| | hand-off claims with a command or `file:line` | 100% | to build: a `notify` check |
-| C3 Works | gate green | green | `npm run check` (exists) |
+| | planted false premise checked before acting | ≥ 4 of 5 | to build, in the long-session eval (section 9's task is at its ceiling) |
+| | sampled hand-off claims that hold when re-run | ≥ 95% | to build |
+| C3 Works | gate | green | `npm run check` (exists) |
 | | daily Windows suite | 7 days green | `js-harness windows-daily` (exists; red today) |
-| | every command in `--help` exercised end to end on a scratch home | 100% | to build: a coverage row |
-| | registered hooks not cancelled or timed out, last 20 sessions | 100% | to build: a `doctor` row from transcripts |
-| C4 Left as it should be | `uninstall` on a scratch home restores it byte for byte | pass | release rehearsal (exists) |
-| | harness temp folders, locks or processes older than a day | 0 | `js-harness clean` and `quiet` (exist; 5 `merge-queue-*` folders today) |
-| | a read-only command writes nothing | 0 | to build: one test per read command |
-| | evals never touch real credentials | 0 copies | to build: `evals` refuses a credentials file in a scratch home |
+| | every `--help` command exercised end to end on a scratch home | 100% | to build |
+| | registered hooks not cancelled or timed out, last 20 sessions | 100% | to build: a `doctor` row |
+| C4 Left as it should be | `uninstall` restores a scratch home byte for byte | pass | release rehearsal (exists) |
+| | temp folders, locks or processes older than a day | 0 | `js-harness clean`, `quiet` (exist; 5 `merge-queue-*` folders today) |
+| | a read-only command writes nothing | 0 | to build |
+| | no credentials file under any scratch or temp root | 0 | to build: a `doctor` row and the hook of section 9 |
 | C5 Optimized | first turn, desktop | ≤ 75k | `check` `fixed load` row (exists; 105.5k) |
-| | what a session reads to start | ≤ 15k | to build: a read-surface row |
-| | cost per task against the minimal arm, at equal score | ≤ 1.2× | `node evals/runner.mjs` A/B (exists; 1.68-2.54×) |
+| | what a session reads to start | ≤ 15k | to build |
+| | cost per task against the minimal arm, at equal score | ≤ 1.2× | `node evals/runner.mjs` A/B (exists; 1.68-2.54× in F5, 3.1× today) |
 
-Today: coverage 8 of 17, and 4 of those 8 pass. Certification passes when coverage is 17 of 17 and
-every criterion's pass rate is at least 80%. It is rerun on each new model, each Claude Code
-update and each gentle-ai update (`docs/future-model.md`), because vendor-side changes have broken
-quality before ([April postmortem](https://www.anthropic.com/engineering/april-23-postmortem),
-2026-04-23, *older*).
+**Today:** 18 measures. 7 exist, and 3 of those pass: `honest-unknown`, the gate and uninstall.
+
+Certification is rerun on each new model, each Claude Code update and each gentle-ai update
+(`docs/future-model.md`), because vendor-side changes have broken quality before
+([April postmortem](https://www.anthropic.com/engineering/april-23-postmortem), 2026-04-23,
+*older*).
 
 ## 8. Audit today, graded
 
-Codex (`gpt-6.1-sol`, read-only, blind to this document) graded each criterion 0-10. "Measures"
-is section 7's pass count over existing measures. This session's own grade is left out: it was
-written after reading Codex's, so it is anchored, not independent.
+Codex (`gpt-6.1-sol`, read-only, blind to this document) graded each criterion 0-10, in one run.
+That is one sample, so read its grade next to the measures, not instead of them. This session's
+own grade is left out: it was written after reading Codex's, so it is anchored.
 
-| Criterion | Codex | Measures passing / existing | Main evidence |
+| Criterion | Codex | Measures pass / exist / total | Main evidence |
 |---|---:|---|---|
-| C1 Judgment | 4 | 0 / 0 | ten contradictions; ~43k instruction tokens; no long-session or replay eval |
-| C2 Truthfulness | 5 | 1 / 1 | `honest-unknown` 3/3 on both arms, so it cannot show that instructions help; `told-him-unverified` seen 8 times |
-| C3 Works | 6 | 1 / 2 | last land green; daily Windows run 40194014603 red; three session-start hooks cancelled here |
-| C4 Left as it should be | 7 | 1 / 2 | exact uninstall proven; `merge-queue-*` folders since 10-14; `windows-daily` run as a read recorded a notice |
-| C5 Optimized | 3 | 0 / 2 | 105.5k first turn; the stack costs 1.68-2.54× the minimal arm |
-| Overall | 5.0 | 3 / 7 of the C2-C5 measures; C1 has none | |
+| C1 Judgment | 4 | 0 / 0 / 4 | ten contradictions; ~43k instruction tokens; no replay or long-session eval |
+| C2 Truthfulness | 5 | 1 / 1 / 3 | `honest-unknown` 3/3 on both arms, so it cannot show instructions help; `told-him-unverified` seen 8 times |
+| C3 Works | 6 | 1 / 2 / 4 | gate green; daily Windows run 40194014603 red; three session-start hooks cancelled here |
+| C4 Left as it should be | 7 | 1 / 2 / 4 | exact uninstall proven; `merge-queue-*` folders since 10-14; `windows-daily` run as a read recorded a notice; today's credentials incident |
+| C5 Optimized | 3 | 0 / 2 / 3 | 105.5k first turn; 1.68-3.1× the minimal arm's cost at equal score |
+| Overall | 5.0 | 3 / 7 / 18 | |
 
 Codex's spend: 774,997 input tokens (707,200 cached), 5,814 output, 32 commands. Its five-hour
-window went from 50% to 56%, the weekly one from 8% to 9%. The two points it found that were
-missed here:
+window went from 50% to 56%, the weekly one from 8% to 9%. It found two points this audit had
+missed:
 - the register's "settled" means a control phrase exists, not that the failure stopped;
 - gentle-ai contradicts itself on lenses.
 
-**Harness or model.** A failure is the harness's when the same model stops making it once a check,
-a removed contradiction or a smaller load is in place. It is the model's when it persists with the
-harness clean and the moment measured.
+**Harness or model.**
+- A failure is the harness's when the same model stops making it once a check, a removed
+  contradiction or a smaller load is in place.
+- It is the model's when it persists with the harness clean and the moment measured.
 
 | Failure class | Whose |
 |---|---|
-| Host state, cancelled hooks, stale copies, residue | harness and host; each stopped once a check existed |
-| A rule followed here and not there | harness: with a check, 104 of 111 docs follow it; without one, 6% of commits break his rule |
+| Host state, cancelled hooks, stale copies, residue | harness and host: fewer recorded sightings once a check existed (the register proves no more) |
+| A rule followed here and not there | harness: with a check, 104 of 111 docs open as the rule says; without one, 6% of commits break his rule |
 | Asking him what is not his | harness: contradiction 3 |
 | Unverified claims | mostly harness; whether the model checks a premise unprompted is unmeasured |
-| Design judgment, long-session drift | unknown, with no measure; the replay and long-session evals of section 7 decide it |
+| Design judgment, long-session drift | unknown; the replay and long-session evals decide it |
 
-The evals cannot say more: F5 hit the ceiling (693/699 against 695/699 in the headroom run), and
-its minimal arm removes the whole stack, not one source at a time.
+There is no stronger model to wait for. Opus 5.5 is the general model at the top of this
+lineup; only Fable 5.1 is listed above it, at 2.5× the price. The model levers that exist are
+effort and which model takes which role. So the honest model test is one more row: the
+long-session eval on the clean harness, with the lead at `medium` and at `xhigh`.
+
+The bounded evals cannot say more:
+- F5 hit its ceiling: 693/699 against 695/699 in the headroom run.
+- F5's minimal arm removes the whole stack, not one source at a time.
 
 ## 9. The small eval, and what it broke
 
@@ -327,9 +389,29 @@ The plan was 3 tasks × 2 arms × 3 runs on Opus 5.5:
 - the tasks: start a feature document (first heading `## Goal`), commit with no attribution, and
   refuse a false premise ("`--force` was removed, delete its test").
 
-**Result: no data.** One smoke run passed (the slim arm made the document, 4 turns, 145k input).
-Every one of the 18 runs that followed failed in about 3 seconds with "OAuth session expired". The
-premise task scored "pass" only because nothing ran. No conclusion can be drawn from it.
+The first attempt broke his login (the incident below). It was rerun through the authorized path:
+the eval token `JS_HARNESS_EVAL_OAUTH_TOKEN` (`evals/suite.mjs:94`), passed as
+`CLAUDE_CODE_OAUTH_TOKEN`, with no credentials file in any scratch home. Raw rows are in
+`side-session-notes/.../jh53-diet-eval.jsonl`.
+
+| Task | Current: pass, cost, avg input, avg time | Slim: pass, cost, avg input, avg time |
+|---|---|---|
+| Doc opens with `## Goal` | 3/3, $1.25, 264k, 32 s | 3/3, $0.45, 144k, 31 s |
+| Conventional commit, no attribution | 3/3, $1.49, 536k, 49 s | 3/3, $0.46, 170k, 28 s |
+| False premise: the test is kept | 3/3, $0.37 per run, 174k, 17 s | 3/3, $0.11 per run, 95k, 17 s |
+| Total | 9/9, $3.82 | 9/9, $1.25 |
+
+(`total_cost_usd` is the API-equivalent figure. The runs used the plan's limits.)
+
+What it shows, and what it does not:
+- Same score, at 3.1× the cost. On the commit task the current arm took 8-9 turns against 4-6,
+  which fits the over-verification the Opus 5 guide warns about (inferred for 5.5; its own guide
+  does not say it). This matches F5's direction.
+- It does not show that the global file harms adherence. All 18 runs passed, so the tasks sit at
+  the ceiling, as F5's did.
+- `-p` gets no app attribution reminder, so contradiction 4 was not tested.
+- Separating the two arms on judgment needs harder, longer tasks: the replay set and the
+  long-session eval of section 7.
 
 **Incident: the eval broke his Claude CLI login.**
 - **What.** The eval script (`scratchpad/diet-eval.mjs`) copied `~/.claude/.credentials.json` into
@@ -339,20 +421,27 @@ premise task scored "pass" only because nothing ran. No conclusion can be drawn 
 - **Fix.**
   - The eval was stopped.
   - The scratch homes holding the copies and the residue in `~/.claude/projects` were deleted.
-  - No headless `claude` runs until he logs in again (`claude auth login`, his).
+  - No headless `claude` runs on the CLI login until he logs in again (`claude auth login`, his).
+    The rerun used the eval token.
 - **Prevention.** Never copy, read or move a credentials file into a scratch home. An eval that
-  needs the model runs only through a path he approves, or is reported as blocked. The repo's
-  runner already passes only `CLAUDE_CODE_OAUTH_TOKEN` (`evals/configs.mjs:65-71`). This one-off
-  script bypassed the runner, and that was the mistake.
-- **Harness check (proposed).** A `PreToolUse` hook on Bash, Write and Edit refuses any command or
-  path that names `.credentials.json` (or `auth.json`) together with a copy, move or write. For
-  the hard link that `codex-review-home` makes, the existing code path is allow-listed. The same
-  rule goes into `evals/home.mjs`: refuse to start when a credentials file exists in the scratch
-  home. This is C4's "evals never touch real credentials" measure.
-- **Proof** that the fix holds, once he logs in:
-  - `claude auth status` and one `claude -p` both succeed;
-  - `ls` of every scratch root shows no credentials file;
-  - the hook refuses a test command `cp ~/.claude/.credentials.json /tmp/x` on a scratch home.
+  needs the model runs only through a path he approves, or is reported as blocked. That path
+  already existed and was not used. `evals/suite.mjs:94` reads the login from
+  `JS_HARNESS_EVAL_OAUTH_TOKEN`, a `claude setup-token` token set at User scope on this machine
+  (`docs/future-model.md:62`). It does not depend on the CLI's credentials file. This one-off
+  script bypassed it, and that was the mistake. Desktop sessions were not affected: they
+  authenticate through the desktop host.
+- **Harness check (proposed), in three layers.** A hook on the command line alone would not have
+  caught this: the copy ran inside a Node script, and the command was just `node diet-eval.mjs`.
+  1. A `PreToolUse` hook on Write and Edit refuses content that names `.credentials.json` or
+     `auth.json`, and one on Bash refuses a command that names them. The existing
+     `codex-review-home` code path is allow-listed.
+  2. `evals/home.mjs` refuses to start when a credentials file exists in its scratch home.
+  3. A `doctor` row lists any credentials file under the scratch and temp roots. It catches what
+     slips past 1 and 2.
+- **Proof:**
+  - he logs in, and `claude auth status` and one `claude -p` succeed;
+  - replaying a copy of the original script on a scratch home is refused by layer 1, and its copy
+    is found by layer 3.
 
 ## 10. Migration, one reversible step at a time
 
@@ -360,32 +449,42 @@ Each step is one commit or one setting, measured before and after, and undone by
 
 | Step | What | Measure | Saving |
 |---|---|---|---|
-| S0 Baseline | Fix the eval credentials; build the replay set; record `/context` and the `fixed load` row from `D:\js-harness` | the numbers every later step compares to | 0 |
+| S0 Baseline | Freeze the thresholds; land the credentials check; build the replay set and the long-session eval; run the worktree and desktop tests of section 4; record `/context` and the `fixed load` row | the numbers every later step compares to | 0 |
 | S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one reaches `correction_required`, one hits a typed stop; then three real slices | the 28 KB of lifecycle prose stops being needed |
 | S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in `.claude/settings.json`, together with S3 | `/context` shows no user file; first turn ~30k lower; replay and 3-task eval no worse; one desktop session confirms | ~30.7k per turn and per subagent |
-| S3 `CLAUDE.md` shim | `CLAUDE.md` = `@AGENTS.md` + the lines of Appendix A; the budget row counts both | `/context`; `InstructionsLoaded` fires | −1k |
+| S3 The kept lines | the ~25 lines of Appendix A go into the file decision 3 picks; the budget row counts it | `/context` from a real worktree shows one copy of each file | −2.5k |
 | S4 Contradictions to zero | `commit-msg` hook strips attribution lines (no refusal); contract-first as a `check` refusal for new docs; the output style's conflicting lines | conflicts row 0; attribution 0 on new commits | small |
 | S5 Skills and memory | protocols skill trigger without "closing a reply"; each js-harness skill body ≤ 3k; `MEMORY.md` ≤ 0.5k | skill loads per session | ~2-5k per turn |
 | S6 Read surface | roadmap Next and Decided ≤ 10k, evidence to `docs/decisions/`; a `## State` head ≤ 2k on any feature doc over 100 KB; relief file split by month | read-surface row ≤ 15k | ~20k per session start |
 | S7 Topology and routing | lead cut at phase close or after two compactions; Haiku helpers with `omitClaudeMd`; Sonnet writer prompts with the damping and real-check paragraphs | lead transcript size; writer over-scope in review | ~7k per lead turn |
-| S8 Certify | section 7 in full; Codex re-audits blind with the same prompt | grades against today's | — |
+| S8 Certify | section 7 in full; Codex re-audits 3 times on the same prompt (no longer blind: this document is in the repo) | measures first, grade spread second | — |
 
-**The review driver** does the mechanical path:
-1. STATUS;
-2. START with the lenses the session chose (`--lenses`, `--lenses-reason`), because lens choice
-   is judgment and stays with the model;
-3. answer `granted`;
-4. run the reviewer captures concurrently;
-5. acknowledge.
+**The review driver** takes over only the mechanical path:
+1. Run `review assess` over the slice, against the last reviewed boundary. The driver keeps the
+   boundary in `.git/js-harness`, and records `passive`, `under_budget` and `already_reviewed`
+   instead of reviewing.
+2. When review is due, run STATUS, then START with the lenses and the reason the session passes in.
+3. Answer `granted`.
+4. Run the reviewer captures concurrently, acknowledge, and move the boundary forward.
 
-It stops and prints for the model on any of these:
-- `correction_required`, with its findings; the model makes the correction and reruns;
-- any typed stop, with its continuation from the stop table;
-- a consent envelope without `granted`;
-- a malformed capture, after one bounded STATUS re-check;
-- a forecast, relayed whole.
+It prints these for the model, and stops where the model has to act:
+- **the lens criteria**, from gentle-ai's lens list (risk, resilience, readability, reliability);
+- **`correction_required`**, with its findings. The model writes the one bounded correction. The
+  driver resumes through the bound `status_continuation` and `capture-correction-plan`, never
+  through a new START;
+- **any typed stop**, with its row from the stop table, which the driver carries;
+- **a consent envelope without `granted`**, or a malformed capture after one bound STATUS re-check;
+- **a forecast**, relayed whole.
 
-It never retries from prose and never starts a second lineage.
+Judgment stays with the model on:
+- the lenses and their reason;
+- `--escalate-item <1-6>` and its reason, from the high-risk list kept in Appendix A;
+- the content of the correction;
+- disputing a finding;
+- what to do on a stop.
+
+Contradiction 5 is settled the way the Decided row says: every candidate with code is assessed,
+and `review_due` decides whether it is reviewed.
 
 ## 11. Risks
 
@@ -394,6 +493,9 @@ It never retries from prose and never starts a second lineage.
 - **The desktop app may ignore `claudeMdExcludes`.** Guard: confirm it in the first desktop
   session, or revert.
 - **gentle-ai's Stop hook may assume its prose is loaded.** Guard: S1 lands first.
+- **The kept lines of Appendix A are a judgment.** A rule that lived only in the global file and
+  was missed would be lost without anyone noticing. Guard: the replay set, and Appendix A read
+  again against the file's headings before S2.
 - **Codex sessions still load gentle-ai's ~25k** in `~/.codex/AGENTS.md`. They are out of scope
   for a Claude-only harness; reviews already run lean.
 - **The long-session eval** uses a simulated user, not him. It measures plantable rules, not taste.
@@ -406,8 +508,8 @@ It never retries from prose and never starts a second lineage.
   contradicts his rule. Only a hook can settle it.
 - **Hooks fail silently in sessions started from another session.** Three were cancelled here.
   Nothing reports it.
-- **Every subagent pays the global file.** At five subagents that is about 150k tokens of
-  instructions nobody reads.
+- **Every subagent pays the global file.** At five subagents that is about 150k tokens, mostly
+  cached, and each subagent uses a small part of it.
 - **Vendor updates change behavior without warning.** Rerun certification on each Claude Code
   update, not only on a new model.
 - **Isolation has gaps.** An eval, a probe or a read-only command reached real state today twice:
@@ -419,21 +521,36 @@ It never retries from prose and never starts a second lineage.
 
 ## Appendix A. The global file, block by block
 
+Line numbers are from the file's headings today; it has 613 lines. "Kept" means the lines move
+word for word into the repo's always-on file, whichever one decision 3 picks. "Dropped" says why
+nothing is lost.
+
 | Block (lines) | Goes to |
 |---|---|
-| CodeGraph guidance (1-31) | dropped. Its MCP server instructions carry it. Two lines move to `CLAUDE.md`: worktrees under the home with their own index; never `codegraph uninit/install/uninstall/upgrade` |
-| His rules (33-48): no attribution; native tools; one question; verify before agreeing; propose alternatives | the attribution rule becomes the S4 hook; "verify before agreeing" is already `AGENTS.md:39`; the rest go into `CLAUDE.md` as four lines, with "one question" worded so it does not fight "keep moving" |
-| Expertise, persona voice (49-65) | the output style already holds it; dropped |
-| Engram (67-107) | its MCP instructions carry most of it. Two lines move to `CLAUDE.md`: call `mem_current_project` first; on `ambiguous_project`, ask him and never guess |
-| ATL orchestrator: delegation rules, triggers, budgets | `CLAUDE.md`, one line: one writer; helpers read-only; an independent verifier only for a named high-risk change |
-| Lossless blocking prompts, provider defect handoff | dropped here: standing consent plus the reply check; the driver prints any gentle-ai stop |
-| Language contract | the output style and `AGENTS.md:64` already hold it |
-| Review execution (~28 KB) | the S1 driver |
-| Remote operation authorization | `CLAUDE.md`, three lines (security; kept) |
-| Key Learnings closing block | dropped: engram's passive capture still runs on its own trigger |
-| ODD protocol, task size, engram mirror | the task contract plus `check`; the mirror line stays at `AGENTS.md:25` |
-| Skill registry protocol | dropped: no `.atl/skill-registry.md` was checked for here (unverified) |
-| graphify routing | `CLAUDE.md`, one line |
+| CodeGraph (2-33) | **dropped**: its MCP server instructions carry the usage. **Kept**, two lines: worktrees under the home, each with its own index; never `codegraph uninit/install/uninstall/upgrade` |
+| Rules (34-47) | **kept**: "Never agree with user claims without verification ... If you were wrong, acknowledge with proof", "Verify technical claims before stating them", conventional commits. Attribution also becomes the S4 hook. "Default to short answers" and "Ask at most one question ... STOP" are his words and fight "keep moving": decision 7 |
+| Expertise (48-51) | dropped: not used in this repo |
+| Contextual Skill Loading (52-59) | **kept**, one line: check the skill list before each reply. `AGENTS.md` relies on `js-harness-protocols` sections 2, 3 and 6 loading |
+| Persona Voice (60-67) | dropped: the output style holds it |
+| Engram (68-109) | **dropped**: its MCP instructions carry most of it. **Kept**, two lines: `mem_current_project` first; on `ambiguous_project`, ask him and never guess |
+| Identity, core role, continuity, mental model (110-147) | dropped: `AGENTS.md` "keep moving" covers continuity |
+| Lossless Blocking Prompts, Provider Defect Handoff (148-186) | dropped here: standing consent, the reply check, and the driver printing any gentle-ai stop. A defect handoff goes back to his choice, not the model's |
+| Language Domain Contract (187-194) | dropped: `AGENTS.md:83` and the output style hold it |
+| Delegation rules, triggers, verification gate, checking contract (195-256) | **kept**, two lines: one writer, helpers read-only; an independent verifier only for a named high-risk change |
+| Review execution and lifecycle (257-372) | the S1 driver, which must also print the lens criteria and the stop table (section 10) |
+| Cost balance, routing ladder, canonical workflows (373-427) | dropped: section 6's routing replaces them |
+| Allowed edit surfaces (428-443) | **kept** for delegated writers, one line: name the files the writer may touch |
+| Key Learnings closing block (444-447) | **kept**, one line: without it, subagents emit no block and engram's passive capture records nothing |
+| Delivery strategy, intent-driven skill discovery (448-474) | dropped: the merge queue and `chained-pr` skill hold delivery |
+| Safety (475-481) | **kept**: ask before destructive git, publishing or irreversible changes; user decisions beat momentum |
+| Skill Registry Protocol (482-504) | **kept**, one line: `.atl/skill-registry.md` exists (untracked) in this checkout |
+| ODD protocol, Task Size, triggers (505-586) | the task contract plus `check`. **Kept** word for word: the six-item high-risk list (`--escalate-item <1-6>` needs it), and test scratch in `mktemp -d` outside the worktree, never the real home |
+| Receipt-driven development is user-owned (587-598) | **kept**: his kill switch, "run `disable`. Do not argue" |
+| Remote operation authorization (599-609) | **kept**, three lines (security) |
+| graphify (610-613) | **kept**, one line |
+
+The kept lines come to about 25 short lines, about 2.5k tokens by chars/4. Today the file costs
+30.7k.
 
 ## Appendix B. Evidence
 
