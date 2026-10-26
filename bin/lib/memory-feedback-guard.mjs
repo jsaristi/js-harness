@@ -7,26 +7,30 @@
 // nothing on by default (odd/tasks/honesty-audit.md S5). Loaded by bin/guard.mjs only for a feedback note.
 import { memoryNoteType } from './memory-index-guard.mjs';
 import { RULES } from './rules-data.mjs';
-import { ruleHere, ruleValue } from './rules.mjs';
+import { guardHeld, projectListOf, ruleHere, ruleValue } from './rules.mjs';
 
 const NAMED_RULE = /`rule:([a-z][a-z0-9-]*)`/g;
 const QUOTED = /"([^"]+)"|“([^”]+)”/g;
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
 
-/** The value of `rule:memory-feedback-home` where the project whose rules file reads `rulesText` declares it (the
- * rule is of this repository only), or null. */
+/** What the guard holds of `rule:memory-feedback-home` where the project whose rules file reads `rulesText` declares it
+ * (the rule is of this repository only), as `guardHeld` gives it, or null. */
+function homeRuleHeld(rulesText) {
+  return guardHeld('memory-feedback-home', ruleHere('memory-feedback-home', undefined, rulesText));
+}
+
+/** The value of `rule:memory-feedback-home` where the project whose rules file reads `rulesText` declares it, or null. */
 export function homeRuleValue(rulesText) {
-  const rule = ruleHere('memory-feedback-home', undefined, rulesText);
-  return Object.hasOwn(rule, 'value') ? rule.value : null;
+  return homeRuleHeld(rulesText)?.value ?? null;
 }
 
 /** Where the note `text` says its rule lives: `{ home }` the first home found (`rule:<id>` or `AGENTS.md "<phrase>"`),
- * else `{ home: null, undeclared }` with the ids it names that no live rule declares. `agentsText` is the text of the
- * project's AGENTS.md, or null. A phrase counts at `rule:control-phrase-min` characters or more, whitespace squashed,
- * as `rules check` matches a rule's phrases. */
-export function homeOf(text, agentsText) {
+ * else `{ home: null, undeclared }` with the ids it names that no live rule of `declared` declares. `agentsText` is the
+ * text of the project's AGENTS.md, or null. A phrase counts at `rule:control-phrase-min` characters or more, whitespace
+ * squashed, as `rules check` matches a rule's phrases. */
+export function homeOf(text, agentsText, declared = RULES) {
   const named = [...new Set([...text.matchAll(NAMED_RULE)].map((match) => match[1]))];
-  const live = named.find((id) => RULES.some((rule) => rule.id === id && !Object.hasOwn(rule, 'retired')));
+  const live = named.find((id) => declared.some((rule) => isLive(rule) && rule.id === id));
   if (live !== undefined) return { home: `rule:${live}` };
   if (typeof agentsText === 'string') {
     const agents = squash(agentsText);
@@ -41,10 +45,19 @@ export function homeOf(text, agentsText) {
   return { home: null, undeclared: named };
 }
 
-/** Why the note `text`, named `name`, is refused, or null when it is no feedback note or names its home. */
-export function noteRefusal(name, text, agentsText, value) {
+const isLive = (rule) => rule !== null && typeof rule === 'object' && !Object.hasOwn(rule, 'retired');
+
+/** The rules a note's `rule:<id>` is looked up in for the project whose rules file reads `rulesText`: its own list,
+ * which a copy behind it may not hold yet (Codex on 2bbdd34), else the running copy's. */
+export function declaredRules(rulesText) {
+  return projectListOf(rulesText) ?? RULES;
+}
+
+/** Why the note `text`, named `name`, is refused, or null when it is no feedback note or names its home among the live
+ * rules of `declared` (`declaredRules`). */
+export function noteRefusal(name, text, agentsText, value, declared = RULES) {
   if (memoryNoteType(text) !== 'feedback') return null;
-  const found = homeOf(text, agentsText);
+  const found = homeOf(text, agentsText, declared);
   if (found.home !== null) return null;
   const undeclared = found.undeclared.length === 0 ? '' : ` It names ${found.undeclared.map((id) => `rule:${id}`).join(', ')}, which no live rule declares.`;
   return `js-harness guard: ${name} is a feedback note, a rule he stated, and it names no home of that rule in the `
@@ -57,7 +70,8 @@ export function noteRefusal(name, text, agentsText, value) {
 /** Why the memory note `name` that a Write or an Edit leaves as `text` is refused, or null, where the project's rules
  * file reads `rulesText` and its AGENTS.md `agentsText()` (read only when the rule is in force). */
 export function feedbackNoteRefusal(name, text, { rulesText, agentsText }) {
-  const value = homeRuleValue(rulesText);
-  if (value === null) return null;
-  return noteRefusal(name, text, agentsText(), value);
+  const held = homeRuleHeld(rulesText);
+  if (held === null) return null;
+  const reason = noteRefusal(name, text, agentsText(), held.value, declaredRules(rulesText));
+  return reason === null ? null : `${reason}${held.note}`;
 }

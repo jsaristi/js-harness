@@ -5,7 +5,7 @@
 // session board's module it reads the title shape from costs nothing on the other calls the guard checks.
 
 import { roleOfTitle } from './sessions.mjs';
-import { ruleHere } from './rules.mjs';
+import { guardHeld, ruleHere } from './rules.mjs';
 
 /** Why the `start_session` call whose input is `toolInput` is refused, or null. Where the rule `session-title` is
  * declared (`projectData`, the text of the project's rules file), a call that carries a `title` is refused when that
@@ -16,24 +16,31 @@ import { ruleHere } from './rules.mjs';
  * not checked. `project.codeOf()` gives `{ code }`, the project's code from harness.json (`projectCode` of
  * ./sessions.mjs), `null` where it declares none, and throws where it cannot be read: then every title is refused and
  * told to declare it (S5). `project.next(code)` gives the project's next free number (`nextSessionNumber` of
- * ./channel.mjs) and is called only to word a refusal, so a good title reads no record. */
-export function sessionTitleRefusal(toolInput, projectData, project) {
+ * ./channel.mjs) and is called only to word a refusal, so a good title reads no record. `who` names the caller in the
+ * reasons: `js-harness sessions start` holds its `--title` to the same rule (odd/tasks/background-sessions.md, S5).
+ * Behind a project that declares the rule, the copy's value is held (`guardHeld`), and its note ends the refusal. */
+export function sessionTitleRefusal(toolInput, projectData, project, who = 'js-harness guard: start_session') {
   if (!Object.hasOwn(toolInput ?? {}, 'title')) return null;
-  const rule = ruleHere('session-title', undefined, projectData);
-  if (!Object.hasOwn(rule, 'value')) return null;
-  const title = toolInput.title;
+  const held = guardHeld('session-title', ruleHere('session-title', undefined, projectData));
+  if (held === null) return null;
+  const reason = titleReason(toolInput.title, held.value, project, who);
+  return reason === null ? null : `${reason}${held.note}`;
+}
+
+/** Why the session titled `title` is refused under the rule session-title of value `value`, or null. */
+function titleReason(title, value, project, who) {
   const shown = typeof title === 'string' ? JSON.stringify(title) : 'with no text';
   let code;
   try {
     ({ code } = project.codeOf());
   } catch (err) {
-    return `js-harness guard: start_session titles the session ${shown}, and the code of this project could not be read (${err.message}), so no title can be checked (rule session-title: ${rule.value}). Fix "code" in harness.json, the project's own identifier such as "JH", then title it "<code> <n> · <purpose>" with the number js-harness sessions --next-number prints.`;
+    return `${who} titles the session ${shown}, and the code of this project could not be read (${err.message}), so no title can be checked (rule session-title: ${value}). Fix "code" in harness.json, the project's own identifier such as "JH", then title it "<code> <n> · <purpose>" with the number js-harness sessions --next-number prints.`;
   }
   if (code === null) {
-    return `js-harness guard: start_session titles the session ${shown}, and this project declares no code for it (rule session-title: ${rule.value}). Add "code" to harness.json, the project's own identifier such as "JH", then title it "<code> <n> · <purpose>" with the number js-harness sessions --next-number prints.`;
+    return `${who} titles the session ${shown}, and this project declares no code for it (rule session-title: ${value}). Add "code" to harness.json, the project's own identifier such as "JH", then title it "<code> <n> · <purpose>" with the number js-harness sessions --next-number prints.`;
   }
   if (roleOfTitle(title)?.code === code) return null;
-  const refused = `js-harness guard: start_session titles the session ${shown}, not ${rule.value}, which is ${code} here (rule session-title; a new lead is ${code} ORQ · <purpose>). `;
+  const refused = `${who} titles the session ${shown}, not ${value}, which is ${code} here (rule session-title; a new lead is ${code} ORQ · <purpose>). `;
   let found;
   try {
     found = project.next(code);

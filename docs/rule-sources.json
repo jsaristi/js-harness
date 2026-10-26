@@ -282,6 +282,12 @@
         "date": "2026-10-15",
         "session": "220663e4-8fae-47cd-92f0-0f2014761721",
         "line": 3081
+      },
+      {
+        "quote": "Inicia por favor las sesiones automaticamente, no me preguntes, se 100% autonomo",
+        "date": "2026-10-24",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 36483
       }
     ],
     "reading": "He approved the charter the lead proposed (\"listo te apruebo todo\", \"te apruebo todo lo que me pides\"): the lead does alone, and tells him after, which feature starts next within the order, up to three work sessions, plan steps and notices, pushes and pull requests once the gate and both reviews are green, and merges by the rules, code included (\"fusioná vos el código\"); it opens, wakes and acts on sessions without asking him. What stays his is asked one at a time and never while work runs: spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or its order, a new protocol (odd/tasks/session-channel.md, \"The charter: more autonomy\"). His condition on it: every session watches its context and cuts only at the end of a task, never just to cut, and work goes on without stopping for what is not his (bin/lib/protocols-skill.mjs, \"A cut comes at the end of a task\", \"Decide everything else, say what it costs, and go on.\"). The Codex cost parts are rule:codex-review-rate and its neighbours.",
@@ -884,23 +890,17 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Solo donde se declara (Recomendada)",
-        "date": "2026-10-15",
-        "session": "e152c9d8-53bc-4366-8fa5-526b1576bcb6",
-        "line": 3689
-      },
-      {
-        "quote": "Rechazar y nombrar start_session (Recomendada)",
-        "date": "2026-10-15",
-        "session": "e152c9d8-53bc-4366-8fa5-526b1576bcb6",
-        "line": 3702
+        "quote": "Quiero que que puedas iniciarla sin el mensaje mio escrito",
+        "date": "2026-10-24",
+        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
+        "line": 37182
       }
     ],
-    "reading": "His two answers to the lead's question tool on T16 layer 3 (odd/tasks/session-channel.md, section 17, \"Open for him\"): the guard refuses the tools that open a session in the app's Routines or in the cloud only in a project that declares this rule, which is why it is of this repository only; and a scheduled task he asks for himself is refused too, with start_session named as the way. The value is that way: the one tool whose session is a row in his sidebar.",
-    "accepted": "Each answer is an option the lead offered under its question, picked as it was.",
+    "reading": "His words of 2026-10-24 ask that a session can start another without his typed message: start_session stays the way a session opens another wherever it starts one, and js-harness sessions start (claude --bg) is the way where start_session would only leave a card. The rule's purpose, that he can see every session, is kept by Remote Control and the session board. They extend his two answers of 2026-10-15 to the lead's question tool on T16 layer 3 (odd/tasks/session-channel.md, section 17, \"Open for him\"), \"Solo donde se declara (Recomendada)\" and \"Rechazar y nombrar start_session (Recomendada)\" (transcript e152c9d8-53bc-4366-8fa5-526b1576bcb6, lines 3689 and 3702, no longer on disk, so not quoted here): the guard refuses the tools that open a session in the app's Routines or in the cloud only in a project that declares this rule, and a scheduled task he asks for himself is refused too, with start_session named as the way.",
+    "accepted": "A message he typed to the lead, sent as he wrote it.",
     "checked": {
-      "date": "2026-10-15",
-      "by": "session"
+      "date": "2026-10-24",
+      "by": "command"
     }
   },
   "status-report": {

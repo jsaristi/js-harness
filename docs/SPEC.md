@@ -456,6 +456,24 @@ proofs and by those tasks.
 **Discarded:** Pasting the opening. The orchestrator opening sessions through a scheduled task: it lands where the owner does not see it.
 **Today:** `bin/notify.mjs`, `bin/sessions.mjs`, `bin/lib/channel.mjs`
 
+### The lead starts a session on a turn he did not type
+
+**Problem:** The desktop app's `start_session` starts a session only on a turn the owner typed; on a turn a notice, a background task or a compaction started, it leaves a card he must tap, so the lead waited on him for what he had asked it to do alone (his words of 2026-10-24: "Quiero que que puedas iniciarla sin el mensaje mio escrito").
+**Requirement:** `js-harness sessions start --title --brief` starts the session with `claude --bg`, with Remote Control on unless `--no-remote-control`, a copy of the brief that ends by telling it to report through `js-harness notify --to orchestrator`, and the title and effort the rules `session-title` and `session-effort` hold `start_session` to, where they are declared. Each start is recorded under the harness home; `sessions stop <id>` removes a recorded session (`claude stop`, `claude rm`) and no other, and `uninstall machine` removes every recorded one not at work and fails while one is. The board lists the project's background sessions from `claude agents --json --all` with what each waits for, and a watch returns when one starts waiting. The lead uses it only where `start_session` would leave a card.
+**Reason:** He asked the lead to start sessions itself, and a session the harness starts is undone exactly by the harness.
+**Proof:** `node --test bin/sessions-background.test.mjs`, `node --test bin/lib/background.test.mjs`
+**Discarded:** The brief as the prompt itself: a `.cmd` shim of the CLI runs through `cmd.exe`, which cannot carry a line break. Removing the transcript with the session: `claude rm` keeps it, as every session's is kept. Stopping a session at work from `uninstall`: its work would be lost unseen.
+**Today:** `bin/sessions-background.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/install.mjs`, `js-harness sessions`
+
+### The machine says when nothing runs
+
+**Problem:** The owner leaves the lead alone for 8 hours or more; once every session has finished the PC stays on for nothing, and a session that waits for him moves only when he answers (his words of 2026-10-25: "cuando no haya nada ejecutandose me avises para ver que en vez de dejandote trabajar solo pueda apagar el pc").
+**Requirement:** `js-harness quiet` takes one look at the machine and says quiet (exit 0), busy (exit 1) or unknown (exit 3), with what runs: a session `claude agents --json --all` lists as busy, the gate lock's live holder and the gates that wait for it, a `merge-queue --land`, a `codex exec` or `codex-review` process. A session waiting on a permission prompt or a question is named as needing him and is not work; the session that runs the command (`--self`, else `CLAUDE_CODE_SESSION_ID`) is left out. A source that could not be read is never quiet. `quiet --wait` exits 0 once nothing has run for `--settle` minutes, with the last work it saw and what needs him, and exits 1 after `--for` minutes with no settle. The orchestrator skill keeps the wait running while he is away and sends him a push notification when it ends.
+**Reason:** A quiet that is wrong turns off a PC with work on it, so every source is read by the board's own reader, and an unread one keeps the count from settling.
+**Proof:** `node --test bin/quiet.test.mjs`
+**Discarded:** Sending the notification from the command: the push notification is a tool of the host, which no command can call. Counting a waiting session as work: it never ends on its own, and the wait would never settle while it waits for him.
+**Today:** `bin/quiet.mjs`, `bin/lib/quiet.mjs`, `bin/lib/process-list.mjs`, `js-harness quiet`
+
 ### The owner's words, when they travel
 
 **Problem:** The owner decided on 2026-10-10 (relief file, line 149) that an answer he gives in the orchestrator's chat travels to the session that asked, with his exact words and where they are.

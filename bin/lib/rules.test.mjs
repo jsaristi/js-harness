@@ -687,6 +687,22 @@ test('ruleHere says elsewhere for a scoped rule when the project holds no list, 
   assert.deepEqual(ruleHere('alpha-value', 'characters', 'an older list\n', list), { off: 'behind' });
 });
 
+// 2026-10-23 to 25: each landed rule change made the installed copy's list differ from the project's, so every rule of
+// this repository the guard held went off with it, and three sessions opened with free titles (odd/tasks/behind-copy-guard.md).
+test('ruleHere, behind a project whose list declares the rule, gives the copy\'s value as held, and whether the project declares it the same', () => {
+  const list = [valueRule('alpha-value', { scope: 'repository' }), valueRule('beta-value', { scope: 'repository' })];
+  const otherBeta = writeRules([list[0], { ...list[1], value: 13 }]);
+  assert.deepEqual(ruleHere('alpha-value', 'characters', otherBeta, list), { off: 'behind', held: 12, same: true });
+  assert.deepEqual(ruleHere('beta-value', 'characters', otherBeta, list), { off: 'behind', held: 12, same: false });
+  // A wording the hash does not name leaves the declaration the same.
+  const reworded = writeRules([{ ...list[0], subject: 'another subject' }, { ...list[1], value: 13 }]);
+  assert.deepEqual(ruleHere('alpha-value', 'characters', reworded, list), { off: 'behind', held: 12, same: true });
+  // A list that does not declare the rule live, of this repository, holds nothing: it is not of the rule.
+  for (const project of [[list[1]], [{ ...list[0], scope: undefined }, list[1]], [{ ...list[0], retired: '2026-10-20' }, list[1]]]) {
+    assert.deepEqual(ruleHere('alpha-value', 'characters', writeRules(project.map((rule) => JSON.parse(JSON.stringify(rule)))), list), { off: 'behind' });
+  }
+});
+
 test('ruleHere throws for a scoped rule when projectData is neither a text nor nothing, and reads an unscoped rule whatever it is', () => {
   const list = [valueRule('alpha-value', { scope: 'repository' }), valueRule('beta-value')];
   for (const projectData of [Buffer.from('x'), 7, {}]) {

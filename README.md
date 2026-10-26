@@ -1158,6 +1158,28 @@ have no answer of his yet, read from the transcripts and joined by number to the
 (or `"<code> <role>"`) prints the opening stored for a session and records which session read it;
 a session keeps the title of its first reading, and `--peek` reads an opening and records nothing.
 
+`js-harness sessions start --title <title> --brief <file>` starts a work session in the background
+with `claude --bg`, from any turn: the desktop app's `start_session` starts one only on a turn the
+user typed, and leaves a card the user must tap on a turn a notice or a compaction started. The lead uses
+it only there, since a background session is not a row in the user's sidebar; Remote Control is on unless
+`--no-remote-control`, so claude.ai/code and the user's phone reach it. The session reads a copy of the
+brief under `~/.js-harness/background/briefs/` that ends by telling it to report through
+`js-harness notify --to orchestrator`; `--worktree <name>`, `--model` and `--effort` go to `claude`,
+and the title and effort are held to the rules `session-title` and `session-effort` where they are
+declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `js-harness sessions
+stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
+other, and `js-harness uninstall machine` removes every recorded one that is not at work and fails
+while one is. The board's `Background sessions` block lists the project's background sessions from
+`claude agents --json --all`, what each waits for (a permission prompt included) and whether `start`
+recorded it; `--watch` returns when one starts waiting.
+
+```console
+$ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing --effort high
+started 0db8bc5e · JH 45 · thing
+  js-harness sessions stop 0db8bc5e removes it; claude attach 0db8bc5e opens it here; js-harness sessions lists it
+  Remote Control is on: claude.ai/code and the user's phone reach it
+```
+
 ```console
 $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
@@ -1381,6 +1403,44 @@ $ js-harness wake --at-login
 wake at login: on (wrote C:\Users\you\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\js-harness-wake-js-harness-0f3a5c2d9e1b.cmd); it runs at each login, and js-harness wake --at-login --remove removes it.
 ```
 
+### js-harness quiet
+
+Says whether anything still runs on this machine, so the owner can turn the PC off instead of
+leaving it on while nothing is left to do. One look reads each source of work the harness knows:
+the sessions `claude agents --json --all` lists (busy is work; waiting on a permission prompt or a
+question needs you, and is not work), the record of `js-harness sessions start`, the machine's gate
+lock (its live holder and the gates that wait for it) and the process listing (a
+`merge-queue --land`, a `codex exec` or `codex-review` process). The session that runs it
+(`--self`, else `CLAUDE_CODE_SESSION_ID`) is left out. Exit 0 quiet, 1 busy, 3 unknown: a source
+that could not be read is never quiet. A session the listing does not show is not seen.
+
+```console
+$ js-harness quiet
+quiet: nothing runs on this machine; 1 session needs you
+needs you:
+  session JH 12 · codex hook trust (aa914608) waits for permission prompt in D:\js-harness\.claude\worktrees\wonderful-gagarin-88a4cc
+left out:
+  session JH ORQ · js-harness (908805db), the session that runs this command
+```
+
+`--wait` looks at once, then every `--every` seconds (60), and exits 0 once nothing has run for
+`--settle` minutes (10; 0 ends at the first quiet look); a busy or unknown look starts the count
+again, and after `--for` minutes (720) with no settle it exits 1 with the last look. The lead runs it
+as a background task while the owner is away, and sends him a push notification when it ends:
+
+```console
+$ js-harness quiet --wait --settle 10
+js-harness quiet --wait: waits until nothing has run on this machine for 10 minutes, looking every 60 seconds; ends then, or after 720 minutes; stop it with TaskStop when it is no longer needed
+js-harness quiet --wait: nothing has run on this machine since 03:13, 10 minutes (11 looks); the PC can be turned off
+last work seen: session JH 48 · guard behind copy (b7e2c901) busy in D:\js-harness\.claude\worktrees\guard-6b1c (03:12)
+needs you: nothing
+```
+
+`--json` gives the same data, for one look and for the end of a wait; under `--wait` the line that says
+what it waits for then goes to standard error, so standard output is the JSON alone. A process is
+work by what it runs, never by an argument that only names a file: a `js-harness wait` for
+`bin/codex-review.mjs` on main is no review.
+
 ### js-harness wait
 
 Waits in the background for one condition and ends when it holds: a pull request merged, a
@@ -1477,7 +1537,11 @@ opens with the date or the date follows "written" (`- 2026-10-14 14:50 — T3 do
 14:44). A document also records earlier events, so an hour behind the clock passes; an `Edit` is
 judged by the lines of the file it leaves that were not already there. A
 refusal is printed as the hook's deny, with the reason and the right value; any other call runs
-as it was. One more Bash call runs with a hint the agent reads beside its result (the hook's
+as it was. A rule "declared" here is one the project's own `bin/lib/rules-data.mjs` declares: when the
+installed copy's list differs from that file, as it does after every landed rule change until the copy is
+brought up to main, the copy still holds each rule the project declares, by its own value, and where the
+project declares that rule otherwise the refusal ends by naming the update (on 2026-10-23 a copy that held
+nothing then let three sessions open with free titles). One more Bash call runs with a hint the agent reads beside its result (the hook's
 `additionalContext`): a `git commit` or `git merge` wrapped in `js-harness gate --`, which holds
 the machine's lock for the commit's whole gate, so the gate runs here and never goes to GitHub,
 while a plain commit waits for its turn by itself. It reads every command the wrapper runs, a

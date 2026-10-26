@@ -541,6 +541,23 @@ configuration to bare.
 - Control: check — bin/js-harness.test.mjs — "run from the pre-commit hook of a linked worktree,
   this file leaves the repository being committed as it was" — since 2026-10-04
 
+### guard-off-when-copy-behind
+The guard let sessions open with a title that carried no project code and number, because the
+installed copy the hooks run was behind the project's rules file: `ruleHere` gave `off: 'behind'`
+whenever the two lists differed by a byte, and every rule of this repository the guard holds
+(session-title, the model, opening and effort rules) went off without a word after each landed rule
+change. The free titles of 2026-10-19 came before the title guard existed; these came with it.
+- Class: rule-not-acting
+- Seen: 2026-10-23 — the lead's transcript 908805db, line 23255 — "Audit · ledger, inventory and
+  checks" started with no JH number
+- Seen: 2026-10-24 — the lead's transcript 908805db, line 36441 — "Codex hook trust: doctor,
+  uninstall, README" proposed and started with no JH number
+- Seen: 2026-10-24 — the lead's transcript 908805db, line 37307 — "Start sessions without his typed
+  message" started with no JH number; the installed guard (pnpm global 0.97.0 at 9cb4eb28) passed a
+  free title that the repository's guard refused
+- Control: check — bin/lib/session-title-guard.test.mjs — "behind a project whose list declares
+  session-title, a free title is refused as here" — since 2026-10-25
+
 ### heavy-run-beside-gate
 A test run or a count started while a gate, or a batch that measures durations, was running.
 - Class: rule-not-acting

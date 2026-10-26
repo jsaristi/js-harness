@@ -6,6 +6,7 @@ import path from 'node:path';
 import { parseSnapshot } from './process-tree.mjs';
 import { parseFeature, tokenize } from './progress.mjs';
 import { ruleValue } from './rules.mjs';
+import { backgroundLines } from './background.mjs';
 
 const TITLE_LENGTH = 60;
 
@@ -3029,16 +3030,7 @@ function planLines(plans) {
   });
 }
 
-/** How many lines of the relief file the board prints: enough to see what the orchestrator noted last,
- * and whoever needs the rest reads the file. */
-export const RELIEF_LINES = 5;
-
-/** The text of an orchestrator's relief file as the board shows it: how many lines it holds and the last
- * `count` of them. It is one dated line per event, so a blank line is not one. */
-export function reliefTail(text, count = RELIEF_LINES) {
-  const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
-  return { lineCount: lines.length, lines: lines.slice(lines.length - Math.min(count, lines.length)) };
-}
+export { RELIEF_LINES, reliefTail } from './board-files.mjs';
 
 /** The section that says whether a memory hygiene pass is due for the project (odd/tasks/memory-hygiene.md, D5),
  * with the ids of its reasons; `memory status` says why, and the pass is the orchestrator's, at a task boundary. */
@@ -3421,6 +3413,7 @@ export function renderBoard(board, { now }) {
       const line = `  ${tree.path}  ${tree.branch ?? (tree.bare ? '(bare)' : '(detached)')}  ${(tree.head ?? '').slice(0, 7)}  ${counted(tree.aheadOfMain, 'not on origin/main')}, ${upstream}, ${counted(tree.changed, 'changed')}`;
       return [line, ...planLines(tree.plans)];
     }),
+    ...(board.background ? backgroundLines(board.background, (iso) => ago(iso, now)) : []),
     ...gateLines(board, now),
     ...sectionLines('Pull requests', board.pullRequests, 'none open', (pr) => `  #${pr.number}  ${pr.title}  (${pr.branch})`),
     ...(board.memory ? memoryLines(board.memory) : []),
