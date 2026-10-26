@@ -14,7 +14,8 @@ import { GAP_STATES } from './lib/digest.mjs';
 
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 // The rows of `doctor` that are the harness's own. The others are tools of the stack (gentle-ai, engram, Codex...),
-// whose state is the machine's, not the install's.
+// whose state is the machine's, not the install's. `codex-trust` is the harness's, and a gap on a clean install by
+// design: trusting the Codex hooks is the user's step, which install never takes (odd/tasks/codex-hook-trust.md).
 const OWN_ROWS = ['memory-rules', 'session-classes', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'host-update', 'stack-update', 'gentle-ai-sync', 'clean'];
 // Every state a row reports in, so a row whose state is not one of these is a failure of the run, not a pass.
 const STATES = new Set([...GAP_STATES, 'ok', 'n/a', 'unknown']);
@@ -121,6 +122,10 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
         assert.ok(!GAP_STATES.has(row[column]), `${id} ${column} is a gap: ${row[column]}; fix: ${JSON.stringify(row.fix)}`);
       }
     }
+    // Codex runs none of the five harness hooks until the user trusts them, and doctor says so.
+    const trust = rows.find((row) => row.id === 'codex-trust');
+    assert.equal(trust.codex, 'missing');
+    assert.equal(trust.fix.codex.filter((line) => line.startsWith('  ')).length, 5, JSON.stringify(trust.fix));
     // The commands the installed hooks run answered: they reached this checkout through the shim.
     assert.equal(rows.find((row) => row.id === 'hook-commands').claude, 'ok');
 

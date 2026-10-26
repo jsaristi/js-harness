@@ -18,6 +18,8 @@ import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
+import { moveTrustRecords, planTrustMoves, withConfig } from './codex-trust.mjs';
+import { deepEqual } from './json-equal.mjs';
 
 /** Minutes as the hours a skill states, to one decimal place at most: rule wait-for's 480 reads "8". */
 export const statedHours = (minutes) => String(Math.round(minutes / 6) / 10);
@@ -577,24 +579,6 @@ export function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
 
-/** Structural equality for plain JSON values (objects/arrays/primitives) — used to recognize "the
- * same entry" regardless of key order, so a file re-saved by another tool still matches. */
-function deepEqual(a, b) {
-  if (a === b) return true;
-  if (typeof a !== typeof b || a === null || b === null) return false;
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    return a.every((v, i) => deepEqual(v, b[i]));
-  }
-  if (typeof a === 'object') {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-    if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
-  }
-  return false;
-}
-
 /** R3-003 (accepted T4 review follow-up): true when `value` holds nothing but our own `pointers`: every key
  * must lead, along one of them, to what we wrote, and every key that ends a pointer must hold the empty array we
  * left behind after removing our entry. Any other key, even one with an empty-looking value like `{}` or `null`,
@@ -868,7 +852,7 @@ function isBelow(inner, outer) {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function installEntries(home, previousManifest, missingBefore = new Map()) {
+function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined) {
   const createdByTarget = new Map();
   const foldersByTarget = new Map();
   const ours = oursContainers(previousManifest?.entries);
@@ -896,6 +880,9 @@ function installEntries(home, previousManifest, missingBefore = new Map()) {
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
+      // A Codex entry names every config.toml Codex may keep its trust in, as each install resolved it, so the
+      // uninstall edits those files whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
+      ...(codexConfig && component.id.startsWith('codex-') ? { trustConfigs: withConfig(previousEntry?.trustConfigs ?? [], codexConfig) } : {}),
     };
     // Not enumerable, like `pruneKept`: that the host file already held the entry is this run's report, not part of
     // the manifest the record goes into.
@@ -1491,7 +1478,7 @@ export function install(home, version, deps = {}) {
       // else: never installed before, so there is nothing to carry forward or report as orphaned.
     }
   }
-  const entries = installEntries(home, previous, missingBefore);
+  const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
@@ -1539,14 +1526,18 @@ export function sync(home, version, deps = {}) {
     Object.defineProperty(manifest, 'pruneKept', { value: pruneKept, enumerable: false });
 
     const keptEntries = manifest.entries ?? [];
-    for (const entry of previous.entries ?? []) {
-      if (entry.skipped) continue;
-      const stillDeclared = keptEntries.some(
-        (e) => e.path === entry.path && deepEqual(e.pointer, entry.pointer) && deepEqual(e.entry, entry.entry),
-      );
-      if (stillDeclared) continue;
+    const pruned = (previous.entries ?? []).filter((entry) => !entry.skipped && !keptEntries.some(
+      (e) => e.path === entry.path && deepEqual(e.pointer, entry.pointer) && deepEqual(e.entry, entry.entry),
+    ));
+    // An entry no longer shipped moves the Codex hooks after it as an uninstall does, so its trust goes the same way.
+    const trustPlans = planTrustMoves(pruned);
+    for (const entry of pruned) {
       removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile, entry.createdContainers, pointersIn(previous.entries, entry.path));
     }
+    const trust = moveTrustRecords(trustPlans, deps.writeFile);
+    // Not enumerable, like `pruneKept`: this run's report.
+    Object.defineProperty(manifest, 'trustMoved', { value: trust.trustMoved, enumerable: false });
+    Object.defineProperty(manifest, 'trustKept', { value: trust.trustKept, enumerable: false });
   }
 
   return manifest;
@@ -1598,6 +1589,10 @@ export function sync(home, version, deps = {}) {
  * the caller has to say that the file is left for the human to remove. `deps.removeFile` (default `fs.rmSync`)
  * is the seam that removes a component or an optional file, so a test can make a removal fail without relying
  * on file permissions (the same reason as `install`'s `deps.writeFile`).
+ *
+ * Codex keys a hook's trust by its place, so each config.toml recorded on a Codex entry (`trustConfigs`) loses the trust
+ * of the entries removed and moves that of the hooks after them (bin/lib/codex-trust.mjs): `trustMoved` and
+ * `trustKept`, there only when not empty, say per file what went and moved, and why a file was left as it was.
  *
  * A recorded scheduled task is deleted only while it still runs the recorded command (`removeScheduledTask`):
  * `tasksRemoved` names those, and `tasksKept` says why each other one that is still registered was left, as
@@ -1707,6 +1702,9 @@ function uninstallInstalled(home, deps) {
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
   const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
 
+  // Codex keys a hook's trust by its place, so where each group of a Codex hooks.json goes is read before any entry
+  // of it is taken out, and the trust follows the entries once they are out.
+  const trustPlans = planTrustMoves(manifest.entries ?? []);
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
@@ -1715,6 +1713,7 @@ function uninstallInstalled(home, deps) {
     if (result.status === 'removed') entriesRemoved.push(entry.path);
     else if (result.status === 'kept') entriesKept.push(entry.path);
   }
+  const trust = moveTrustRecords(trustPlans, deps.writeFile);
 
   const tasksRemoved = [];
   const tasksKept = [];
@@ -1769,7 +1768,7 @@ function uninstallInstalled(home, deps) {
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...settingsResult, ...stackResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
