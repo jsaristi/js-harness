@@ -36,6 +36,7 @@ test('an answer that is not one complete object is still refused, and says what 
     ['two objects, each fenced', `\`\`\`json\n${object}\n\`\`\`\n\`\`\`json\n${object}\n\`\`\``, /it holds 2/],
     ['the object and a second fenced block', `\`\`\`json\n${object}\n\`\`\`\n\n\`\`\`diff\n- a\n+ b\n\`\`\``, /fence/],
     ['a bare object and a fenced block', `${object}\n\n\`\`\`\nnode --test\n\`\`\``, /fence/],
+    ['a bare object and a tilde-fenced block', `${object}\n\n~~~diff\n- a\n+ b\n~~~`, /fence/],
     ['prose with no object', 'Looks good to me.', /not one JSON object: it holds none/],
     ['an object cut short', object.slice(0, -40), /not closed/],
     // A quote left unescaped in a string is the likely break; the why shows the text where it breaks, since the record
