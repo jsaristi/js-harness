@@ -73,6 +73,22 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [ ] T7 (kind: build) the Rules block, once question 99 is answered — S5; waits
 
+Reviews:
+- gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
+- Codex on `d6867d8..883747f`, 2 parts: correct (0.93, 0.88), no finding; 228,432 input tokens.
+- Lenses on `d6867d86..883747f2`: next (not run yet).
+
+## Next step
+Slice 1 (`a1a84d74`, `883747f2`) has gentle-ai and Codex; run `js-harness lens-review --base d6867d86
+--lenses risk,reliability,readability --reason "notify question check, output style and two ported skills as
+install components, hook entries moved"`, then push and open PR 1 of the chain. Then T4: first a pure-move
+commit of `readSettings`, `acceptSessionMessages` and `restoreSettings` (manifest.mjs lines ~980-1085) to a new
+`bin/lib/user-settings.mjs` (export `keepRecord` and `removeEmptyDirsUpTo` from manifest; keep
+`NEW_SETTINGS_STYLE`, `userSettingsPath`, `SESSION_MESSAGES` in manifest, since `settings-key.mjs` reads the
+first at load; function-only cycle), lowering the 2008 ceiling; then the permissions hold/release beside them
+(design in L4 and the Constraints), recorded as `manifest.permissions`, released before the hook entries in
+`uninstallInstalled`, and a `doctor` row. Then T5, T6; T7 waits on question 99.
+
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
   permissions ... G8 and G10n are taken by default (the diet's register): two skills,
