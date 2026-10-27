@@ -1,0 +1,18 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/incident-10-done-not-in-git.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "recordFailed": true,
+  "setup": true,
+  "reply": true,
+  "proof": {
+    "total": 2,
+    "fixturePassed": 0
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/incident-09-next-task.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "recordFailed": true,
+  "proof": {
+    "total": 2,
+    "fixturePassed": 1
+  }
+}
