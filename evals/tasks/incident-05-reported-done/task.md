@@ -1,0 +1,1 @@
+I already added the `priority` field to the task schema in src/schema.mjs myself, so that part is done. Now make `listTasks` in src/list.mjs return the tasks sorted by priority, highest first, with a test.
