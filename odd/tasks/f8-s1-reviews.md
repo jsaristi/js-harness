@@ -211,6 +211,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
 - gentle-ai on `9e81839b..e35eb7dc` (4834997f, 023eceb9, e35eb7dc): medium, reviewed and approved (lineage review-31b6ff71575dd070, lens reliability), one suggestion: the `review` row's catch for a spawn that throws has no test since the gentle-ai row's went, left for the next slice; Codex correct on parts 1 and 2, its P2 fixed in e35eb7dc and rechecked correct (0.98); lenses no finding (L10, L11).
 - gentle-ai on `2d20b75..42a4225c` (4df603e0): medium, reviewed and approved (lineage review-4adc6c14fd575602, lens reliability), a warning refuted and two suggestions taken in 96ffb9f9; Codex on `2d20b75..96ffb9f9` correct (0.97); lenses no finding (L13).
+- gentle-ai on `2d20b75..b6e2fbff` (4df603e0, 96ffb9f9): medium, reviewed and approved (lineage review-dff84825d3dcac2d, lens reliability), one suggestion left as is: an empty answer prints `it answered: ""`, which reads right.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -232,7 +233,7 @@ run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 ## Next step
 State at 2026-10-27 ~22:25Z. S1 is built: T1 to T6 done, PRs 607, 608 and 613 landed, PR 614 (`f8-s1-close`) ready
 and told. Its pass is met (`## Probe`). Left: PR 614's land by the queue, gentle-ai's review of 96ffb9f9 when the Stop
-hook offers it, the session summary in `docs/sessions/` and the closed notice. Open for later work, not S1's: the
+hook offers it (approved, the line above), the session summary and the closed notice. Open for later work, not S1's: the
 `notify` check that refuses a `Pregunta <m>: ` prefix other than the number it assigns (`docs/FAILURES.md`,
 question-numbered-by-hand). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave
 it, never force-push.
