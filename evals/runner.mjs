@@ -11,6 +11,7 @@ import {
 } from '../bin/lib/process-tree.mjs';
 import { isWithin } from './paths.mjs';
 import { readClaudeOutput } from './agent-output.mjs';
+import { REPLY_FILE, runTaskScript } from './task-script.mjs';
 
 // What an agent printed is read by the reader its config carries (see `readerOf`); this file knows no CLI's
 // output format, only which reader a config without one gets. These three are Claude Code's, kept under the
@@ -81,9 +82,20 @@ export function loadTask(dir) {
   // which questions failed and not only how many. Absent on every task that does not ask, so their records keep their
   // shape.
   if (spec.recordFailed !== undefined && typeof spec.recordFailed !== 'boolean') throw bad('recordFailed', 'must be true or false');
+  // `setup`: the task's `setup/setup.mjs` runs in the workspace after the config's `prepare` and before the agent, for
+  // state a fixture cannot hold (git history, branches, a remote). `reply`: the agent's final answer is written to
+  // `REPLY_FILE` in the workspace before grading, for a case whose evidence is what the agent said. Both absent on
+  // every task that does not ask, so their records keep their shape.
+  for (const option of ['setup', 'reply']) {
+    if (spec[option] !== undefined && typeof spec[option] !== 'boolean') throw bad(option, 'must be true or false');
+  }
+  const setup = path.join(dir, 'setup', 'setup.mjs');
+  if (spec.setup === true && !fs.statSync(setup, { throwIfNoEntry: false })?.isFile()) throw new Error(`task ${id}: setup/setup.mjs is missing in ${dir}, and task.json asks for it`);
   return {
     id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir,
     ...(spec.recordFailed === true && { recordFailed: true }),
+    ...(spec.setup === true && { setup }),
+    ...(spec.reply === true && { reply: true }),
   };
 }
 
@@ -707,6 +719,8 @@ export async function runTrial({
     // simply not started, and the `finally` below removes what was made.
     if (signal?.aborted) return { status: 'interrupted' };
     const agent = resolveAgent(config, { effort, task, home, workspace, prepared });
+    // Under the agent's own env, so its git reads the sandbox's identity and nothing of the real shell's.
+    if (task.setup) runTaskScript(task, task.setup, workspace, childEnv(agent.env));
     const cliVersion = await readVersion(config, agent.env);
     if (signal?.aborted) return { status: 'interrupted' };
     const began = clock();
@@ -741,6 +755,9 @@ export async function runTrial({
     // trial, and what the agent printed is still there to be read again once the reader is fixed.
     const reading = assertReading(read(run), config.name);
     if (reading.stop) return { status: 'stopped', reason: reading.stop.kind, message: reading.stop.message };
+    // Written over whatever the agent left under that name, so the grader reads this trial's answer and no other;
+    // empty when the agent printed none.
+    if (task.reply) fs.writeFileSync(path.join(workspace, REPLY_FILE), typeof reading.reply === 'string' ? reading.reply : '');
 
     const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal, runProcess: start });
     if (graderAborted) return { status: 'interrupted' };

@@ -224,10 +224,11 @@ test('a minimal-with arm is the minimal arm under its own name, with the server 
   assert.throws(() => minimalWithConfig({ ...OPTIONS, name: 'minimal-with-mcp-context7' }), /seed/);
 });
 
-test('current passes only the shared flags, and --effort is the one flag that varies', () => {
+test('current passes the shared flags and the setting sources a desktop session loads, and --effort is the one flag that varies', () => {
   const config = currentConfig(OPTIONS);
-  assert.deepEqual(config.args({ effort: 'medium', home: HOME }), sharedArgs('medium'));
-  assert.deepEqual(config.args({ effort: 'high', home: HOME }), sharedArgs('high'));
+  const desktop = ['--setting-sources', 'user,project,local'];
+  assert.deepEqual(config.args({ effort: 'medium', home: HOME }), [...sharedArgs('medium'), ...desktop]);
+  assert.deepEqual(config.args({ effort: 'high', home: HOME }), [...sharedArgs('high'), ...desktop]);
   const medium = config.args({ effort: 'medium' });
   const high = config.args({ effort: 'high' });
   assert.deepEqual(medium.filter((arg, index) => arg !== high[index]), ['medium']);
@@ -469,7 +470,7 @@ for (const [name, build] of BUILDERS) {
       assert.notEqual(report.env.ENGRAM_PORT, String(REAL_ENGRAM_PORT), 'the inherited port is replaced, not passed on');
       const stray = Object.keys(report.env).filter((key) => !allowed.has(fold(key)) && !key.startsWith('FAKE_AGENT_'));
       assert.deepEqual(stray, [], 'only the allowlist, the paths and the switches');
-      assert.deepEqual(report.argv, name === 'minimal' ? [...sharedArgs('high'), ...MINIMAL_ONLY] : sharedArgs('high'), 'the argv as the child saw it');
+      assert.deepEqual(report.argv, name === 'minimal' ? [...sharedArgs('high'), ...MINIMAL_ONLY] : [...sharedArgs('high'), '--setting-sources', 'user,project,local'], 'the argv as the child saw it');
     });
     for (const home of homes) assert.ok(!fs.existsSync(home), 'the home is removed after the trial');
     assert.deepEqual(fs.readdirSync(workRoot), []);

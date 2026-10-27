@@ -148,6 +148,23 @@ test('a valid task has no problems and the three scores the rules ask for', asyn
   assert.deepEqual(fs.readdirSync(workRoot), [], 'every workspace is removed');
 });
 
+test('a task with setup is proven on set-up workspaces, and its reference script runs after the overlay', async () => {
+  const marker = "const read = () => { try { return fs.readFileSync(new URL('../marker.txt', import.meta.url), 'utf8'); } catch { return ''; } };";
+  const files = {
+    ...validFiles(),
+    'task.json': `${JSON.stringify({ grader: { command: 'node', args: GRADER_ARGS }, timeoutMs: 30000, setup: true, proof: { total: 5, fixturePassed: 3 } }, null, 2)}\n`,
+    'grader/calc.grade.mjs': `${GRADER.replace("import assert from 'node:assert/strict';", "import assert from 'node:assert/strict';\nimport fs from 'node:fs';")}${marker}
+test('setup ran first', () => assert.ok(read().startsWith('set')));
+test('the reference script ran after it', () => assert.equal(read(), 'set ref'));
+`,
+    'setup/setup.mjs': "import fs from 'node:fs';\nfs.writeFileSync('marker.txt', 'set');\n",
+    'setup/reference.mjs': "import fs from 'node:fs';\nif (!fs.readFileSync('calc.mjs', 'utf8').includes('a * b')) process.exit(1);\nfs.appendFileSync('marker.txt', ' ref');\n",
+  };
+  const result = await prove(files);
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual([result.fixture.passed, result.reference.passed, result.empty.passed], [3, 5, 0]);
+});
+
 test('the answered runs give the valid task the very results its real graders and visible suite give', async () => {
   const result = await proveFiles(validFiles());
   assert.deepEqual(result.problems, []);

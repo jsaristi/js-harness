@@ -93,11 +93,14 @@ export function classifyAgentFailure({ stdout = '', stderr = '', exitCode = null
   return null;
 }
 
+/** The agent's final answer as a reading carries it in `reply`: the text, or `null` when there is none. */
+const replyOf = (text) => (typeof text === 'string' ? text : null);
+
 /** The reader of Claude Code's output, and the one a config without a `reader` gets: the three functions
  * above, put together exactly as the runner used them before a config could carry its own. */
 export function readClaudeOutput(run) {
   const output = parseAgentOutput(run.stdout);
-  return { stop: classifyAgentFailure(run), parsed: output !== null, failed: output?.is_error === true, usage: summarizeUsage(output) };
+  return { stop: classifyAgentFailure(run), parsed: output !== null, failed: output?.is_error === true, usage: summarizeUsage(output), reply: replyOf(output?.result) };
 }
 
 // ---- Codex: `codex exec --json` ----------------------------------------------------------------------
@@ -277,5 +280,6 @@ export function readCodexOutput(run) {
     parsed: output !== null,
     failed: output !== null && (output.turnFailed || output.turns.length === 0),
     usage: summarizeCodexUsage(output),
+    reply: replyOf(output?.result),
   };
 }
