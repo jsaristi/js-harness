@@ -118,3 +118,32 @@ test('sessions live --help prints its usage and exits 0, through the sessions co
   assert.equal(code, 0);
   assert.match(out.join('\n'), /Usage: js-harness sessions live/);
 }));
+
+// Codex, f074443..4c71f21: the first send started the cursor at the record's first notice, so the notices older than
+// the --hours window came back pending on the next run.
+test('the notices before the --hours window stay out once the first batch was sent', withFolders(async (dirs) => {
+  note(dirs.home, dirs.slug, '2026-10-25T01:00:00.000Z', 'too old for 24 hours');
+  note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
+  assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
+  const files = fs.readdirSync(dirs.out);
+  assert.equal(files.length, 1);
+  assert.equal((await live(['--sent', path.join(dirs.out, files[0])], dirs)).code, 0);
+  assert.match((await live([], dirs)).out, /^0 rows wait/m);
+  fs.rmSync(dirs.out, { recursive: true });
+  assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
+  assert.deepEqual(fs.readdirSync(dirs.out), [], 'a second run exports nothing');
+}));
+
+// Codex, f074443..4c71f21: the route's section held the progress too, so hiding it for an empty route hid the progress.
+test('the board page hides the route section only when it has no steps and no valid progress', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const source = page.match(/function routeShown\([\s\S]*?\n}\n/)?.[0];
+  assert.ok(source, 'the page defines routeShown');
+  const routeShown = new Function(`${source}; return routeShown;`)();
+  assert.equal(routeShown({ route: [], progress: { done: 3, total: 10 } }), true);
+  assert.equal(routeShown({ progress: { done: 0, total: 4 } }), true);
+  assert.equal(routeShown({ route: [{ step: 'F1', state: 'now', label: 'x' }] }), true);
+  assert.equal(routeShown({ route: [], progress: { total: 0 } }), false);
+  assert.equal(routeShown({ route: [] }), false);
+  assert.equal(routeShown(null), false);
+});

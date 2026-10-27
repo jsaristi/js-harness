@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { channelDir, readNotices } from './lib/channel.mjs';
-import { batchesOf, cursorAfter, pendingRows, positionOf } from './lib/live-rows.mjs';
+import { batchesOf, cursorAfter, cursorFrom, pendingRows, positionOf } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 
@@ -162,6 +162,11 @@ export async function sessionsLiveMain(argv, {
   stdout(`${rows.length} ${rows.length === 1 ? 'row waits' : 'rows wait'} for the live board`);
   stdout(url === null ? 'board: none recorded; name it with --url <board>' : `board: ${url}`);
   if (parsed.out === undefined) return 0;
+  // With nothing sent yet, the notices before the window count as sent from the first batch on, so a later run does
+  // not export them.
+  if (cursorOf(saved) === null) {
+    writeCursor(cursorFile, withCursor({ ...saved, url: url ?? undefined }, cursorFrom(pendingRows(record.notices, null, new Date(0).toISOString()), since)));
+  }
 
   const out = path.resolve(defaultCwd, parsed.out);
   fs.mkdirSync(out, { recursive: true });

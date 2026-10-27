@@ -274,6 +274,14 @@ function renderTimeline() {
   }));
 }
 
+/** Whether the route's section shows: it holds the route's steps and the progress, so it hides only with neither. */
+function routeShown(summary) {
+  const route = Array.isArray(summary?.route) ? summary.route : [];
+  const total = Number(summary?.progress?.total);
+  const done = Number(summary?.progress?.done);
+  return route.length > 0 || (total > 0 && done >= 0);
+}
+
 function renderSummary(asking) {
   const lead = $('lead');
   lead.hidden = !summary?.now;
@@ -282,7 +290,7 @@ function renderSummary(asking) {
   $('yours').hidden = items.length === 0;
   $('yours-list').replaceChildren(...items.map((item) => el('li', '', item)));
   const route = Array.isArray(summary?.route) ? summary.route : [];
-  $('route-box').hidden = route.length === 0;
+  $('route-box').hidden = !routeShown(summary);
   $('route').replaceChildren(...route.map((step) => {
     const state = ['done', 'now', 'next'].includes(step?.state) ? step.state : 'next';
     const box = el('div', `st ${state}`);

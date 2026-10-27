@@ -81,6 +81,12 @@ export function batchesOf(rows) {
   return batches;
 }
 
+/** The cursor before anything was sent: the rows of the record (`pendingRows` with no cursor) at or before `since`
+ * count as sent, so the first batch starts at the `--hours` window and the notices before it never come back. */
+export function cursorFrom(rows, since) {
+  return cursorAfter({ upto: 0, sent: [] }, rows.filter((row) => Date.parse(row.time) <= Date.parse(since)));
+}
+
 /** The cursor once `rows` were sent after `cursor` (position form, or none): their indexes join those sent, and
  * `upto` moves over every index sent with none missing below it. A batch sent ahead of an earlier one leaves the gap
  * pending until that one is sent. */
