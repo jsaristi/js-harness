@@ -131,3 +131,18 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
+
+## Next step
+State at 2026-10-27 ~18:00Z (context pause). PR 607 (branch `f8-s1-runner`, slices 1+2) is ready and told.
+T4 is written and uncommitted in this worktree: `reviewCoverage` takes `read`/`isValid` and drops a record whose
+`subjectHash` no longer matches (`stale`); `bin/lib/lens-review-rows.mjs` (`checkLensReviews`, `LENS_CUTOVER`
+2026-10-27T18:00Z) with its test (6 pass); `check --push` runs it (`bin/check.mjs`, same line count, re-exported by
+`codex-review-rows.mjs`); Codex records gain `subjectHash` (`withSubjectHash` in `codex-reviews.mjs`, used at
+`codex-review.mjs`'s one write). Left in T4: about ten tests of `bin/codex-review.test.mjs` deepEqual a written record
+and now see `subjectHash`: make them expect it, run that file and `check-codex-reviews.test.mjs` one at a time (the
+merge queue may hold the lock), commit, then Codex and lenses on the T4 range, PR 2 of 3 from a new branch.
+Then T5: the `review` row (`checkReview`, gentle-ai, `bin/check.mjs:1721`) replaced by a debt row of both reviews and
+their skips, from `lens-review-rows.mjs`; a `doctor` row of skips; `reviewEvidence` (`bin/merge-queue.mjs:307`) adds
+`checkLensReviews` and refuses a skip; `AGENTS.md` "says whether the pending change is due a gentle-ai review" and
+`CLAUDE.md`'s review lines. Then T6: the probe (six behaviours) and the incident rerun, asked first through the
+orchestrator (about $11 to $22).
