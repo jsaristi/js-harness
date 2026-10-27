@@ -102,7 +102,7 @@
   },
   "claude-md-budget": {
     "kind": "design",
-    "path": "docs/proposals/harness-diet.md"
+    "path": "odd/tasks/f8-directives.md"
   },
   "codex-review-floor": {
     "kind": "words",
