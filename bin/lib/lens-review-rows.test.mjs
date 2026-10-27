@@ -10,8 +10,8 @@ import { appendLensReview, LENS_REVIEW_SCHEMA } from './lens-reviews.mjs';
 import { withSubjectHash } from './codex-reviews.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 
-// Every commit of these repositories is after this cut-over, so each code commit asks for a lens record.
-const EARLY = '2000-01-01T00:00:00Z';
+// The project turns the lens review on in the first commit, so every code commit after it asks for a lens record.
+const LENS_ON = '{ "functions": { "lensReview": "on" } }\n';
 
 let dir;
 const git = (...args) => {
@@ -30,7 +30,7 @@ const record = (base, head, over = {}) => {
   const { subjectHash } = lensCandidate(dir, { base, head });
   appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: new Date().toISOString(), outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }], ...over });
 };
-const row = (cutover = EARLY) => checkLensReviews(dir, 'HEAD', { cutover });
+const row = () => checkLensReviews(dir, 'HEAD');
 
 let base;
 let head;
@@ -40,6 +40,7 @@ beforeEach(() => {
     git('init', '-q', '--initial-branch=main');
     git('config', 'user.email', 't@example.com');
     git('config', 'user.name', 'T');
+    fs.writeFileSync(path.join(dir, 'harness.json'), LENS_ON);
     base = commit('a.mjs', 'export const a = 1;\n', 'first');
     git('remote', 'add', 'origin', 'https://example.invalid/r.git');
     git('update-ref', 'refs/remotes/origin/main', base);
@@ -109,8 +110,22 @@ test('a Codex record gains the subject hash of its range, the same identity a le
   assert.equal(withSubjectHash(dir, { base: 'f'.repeat(40), head }).subjectHash, undefined);
 });
 
-test('code commits committed before the cut-over ask for no record', () => {
-  const said = row('2999-01-01T00:00:00Z');
-  assert.equal(said.pass, true);
-  assert.match(said.detail, /no code commits since origin\/main that ask for a lens record/);
+// L9: a commit is asked by the switch its own tree holds, so the commits of a branch made before the lens review was
+// turned on are never asked, wherever that branch lands, and a project that never turns it on is never asked.
+test('a code commit asks for a lens record only where its own tree turns the lens review on', () => {
+  withoutAutoMaintenance(() => {
+    git('reset', '-q', '--hard', base);
+    fs.writeFileSync(path.join(dir, 'harness.json'), '{}\n');
+    commit('a.mjs', 'export const a = 3;\n', 'feat: three, the lens review off');
+  });
+  const off = row();
+  assert.equal(off.pass, true);
+  assert.match(off.detail, /^no code commits since origin\/main that ask for a lens record$/);
+  withoutAutoMaintenance(() => {
+    fs.writeFileSync(path.join(dir, 'harness.json'), LENS_ON);
+    commit('a.mjs', 'export const a = 4;\n', 'feat: four, the lens review on');
+  });
+  const on = row();
+  assert.equal(on.pass, false);
+  assert.deepEqual([on.detail.split(' since ')[0], on.lines[0].replace(/^\w+ /, '')], ['1 of 1 code commit', 'feat: four, the lens review on']);
 });

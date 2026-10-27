@@ -12,16 +12,19 @@ import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, remoteHo
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './project-functions.mjs';
 import { isValidLensReview, readLensReviews } from './lens-reviews.mjs';
 
-// Code commits committed before this moment need no lens record: the gate landed after it, and a branch begun before
-// it was reviewed as the rules of its day asked, as the merge door's gentle-ai cut-over did (`./gentle-ai-evidence.mjs`).
-export const LENS_CUTOVER = '2026-10-27T18:00:00Z';
-
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
+/** Whether the lens review is on at the commit `id`, read from that commit's own `harness.json` (`lensReview`), so a
+ * commit is asked by the switch it was made under: a branch made before a project turned the review on is never asked
+ * wherever it lands, nor is a project that never turns it on (odd/tasks/f8-s1-reviews.md, L9). A time cut-over did
+ * neither: it asked the commits of every session that had no `lens-review` yet. The files are not listed, since the
+ * switch's `auto` does not read them. */
+const lensOnAt = (git, id) => functionsOf(harnessOfCommit(git, id), { paths: [] }).resolved.lensReview.value === 'on';
+
 /** What the lens records say of the code commits between the default branch of `remote` and `head`: `{ unknown }`
- * when it cannot be told, else `{ base, codeCommits, uncovered, skips, note }`, the code commits being those committed
- * from `cutover` on. */
-export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', cutover = LENS_CUTOVER } = {}) {
+ * when it cannot be told, else `{ base, codeCommits, uncovered, skips, note }`, the code commits being those whose own
+ * tree turns the lens review on (`lensOnAt`). */
+export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin' } = {}) {
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
   if (!tip) return { unknown: `cannot resolve ${head} to a commit` };
   const branch = defaultBranch(spawn, cwd, remote);
@@ -29,11 +32,9 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   const coverage = reviewCoverage(cwd, { from: branch.ref, tip, spawn, read: readLensReviews, isValid: isValidLensReview });
   if (coverage.unknown === MARKS_UNREAD) return { unknown: 'cannot read which files a review leaves out (`git check-attr --source` needs git 2.40 or later)' };
   if (coverage.unknown) return { unknown: `cannot list the commits in ${branch.label}..${head}` };
-  const dates = gitOut(spawn, cwd, ['log', '--format=%H%x09%cI', `${branch.ref}..${tip}`]);
-  if (dates === null) return { unknown: `cannot read when the commits in ${branch.label}..${head} were committed` };
-  const committed = new Map(dates.split('\n').filter(Boolean).map((line) => line.split('\t')));
-  const since = Date.parse(cutover);
-  const due = (commit) => Date.parse(committed.get(commit.id) ?? '') >= since;
+  const git = gitIn(cwd, spawn);
+  const asked = new Map(coverage.codeCommits.map((commit) => [commit.id, lensOnAt(git, commit.id)]));
+  const due = (commit) => asked.get(commit.id) === true;
   const codeCommits = coverage.codeCommits.filter(due);
   const uncovered = coverage.uncovered.filter(due);
   // A skip is debt only while a code commit it covers has no complete review: one made later pays it.
@@ -60,10 +61,10 @@ export const skipLine = (rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(
 
 /** The `--push` row: refuses a code commit no complete lens record covers, listing each with the command that makes
  * the record; passes with a line for each skip that covers one. A project with its review switched off asks for none. */
-export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin', cutover = LENS_CUTOVER } = {}) {
+export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
   const name = 'lens-review';
   if (reviewOffAt(cwd, head, spawn)) return { name, pass: true, detail: 'the review is off at the pushed commit, so no lens record is asked for' };
-  const state = lensCoverage(cwd, head, { spawn, remote, cutover });
+  const state = lensCoverage(cwd, head, { spawn, remote });
   if (state.unknown && remoteHoldsNoBranch(cwd, { spawn, remote })) {
     return { name, pass: true, detail: `${remote} holds no branch yet, so this first push passes with no lens record, as the codex-review row says of its own` };
   }

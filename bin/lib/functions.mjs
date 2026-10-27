@@ -1,7 +1,7 @@
-// The functions a project can turn off and on: the code map, the language server, the Codex review and pushing
-// unasked, declared under `harness.json` `"functions"`. This module only reads what is declared and says what each
-// switch resolves to; it spawns nothing and reads no file, so the rules are all testable as data. The
-// commands that act on a switch (check, init, sync, doctor, codex-review) ask it. See
+// The functions a project can turn off and on: the code map, the language server, the Codex review, pushing
+// unasked and the Claude lens review, declared under `harness.json` `"functions"`. This module only reads what is
+// declared and says what each switch resolves to; it spawns nothing and reads no file, so the rules are all
+// testable as data. The commands that act on a switch (check, init, sync, doctor, codex-review) ask it. See
 // odd/tasks/on-demand-functions.md.
 
 /** What the Codex review is where a project says nothing. One constant, because it is Sebastián's to
@@ -16,6 +16,7 @@ export const SWITCHES = {
   languageServer: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
   codexReview: { values: ['auto', 'on', 'off'], fallback: CODEX_REVIEW_DEFAULT, strict: 'on' },
   pushUnasked: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'off' },
+  lensReview: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
 };
 
 const quoted = (names) => names.map((name) => `"${name}"`).join(', ');
@@ -130,6 +131,8 @@ export function resolveFunctions(values, tree) {
     codexReview: () => byProgram('on'),
     // Auto asks: a project pushes unasked only where its owner declares it on.
     pushUnasked: () => ({ value: 'off', because: 'the project asks until its owner turns it on' }),
+    // Auto is off: a project asks for a lens record only once it turns the review on (odd/tasks/f8-s1-reviews.md, L9).
+    lensReview: () => ({ value: 'off', because: 'a commit asks for a lens record only where the project turns the lens review on' }),
   };
 
   return Object.fromEntries(

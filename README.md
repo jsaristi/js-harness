@@ -1107,7 +1107,9 @@ Shows each function the project can turn off and on in `harness.json` under `"fu
 value here and why. `doctor` follows them: where `languageServer` is off it shows no row for the
 TypeScript plugin, and where `codexReview` is off no row for Codex. `pushUnasked` says whether a
 session pushes without asking: a project that says nothing is asked before each push, and the
-switch is turned on by its owner (js-harness declares it on).
+switch is turned on by its owner (js-harness declares it on). `lensReview` says whether a code commit
+asks for a Claude lens record (`js-harness lens-review`) at the push: a commit is asked only where its own
+`harness.json` turns it on, which a project that says nothing does not (js-harness does).
 
 ```console
 $ js-harness functions
@@ -1115,13 +1117,14 @@ codeMap         off        auto: no file of the project is a program
 languageServer  off        auto: no file of the project is TypeScript
 codexReview     off        auto: no file of the project is a program
 pushUnasked     off        auto: the project asks until its owner turns it on
+lensReview      off        auto: a commit asks for a lens record only where the project turns the lens review on
 ```
 
 `js-harness functions apply` makes this clone what the switches ask: the code map index, the
 pre-push check, and the keys of `.claude/settings.local.json`, each recorded in the project manifest
 so `uninstall` undoes it. It needs no pin. `js-harness functions set <name> <value>` writes one
 switch into `harness.json` and applies it: `codeMap` takes `auto`, `on-demand`, `always` or `off`;
-`languageServer`, `codexReview` and `pushUnasked` take `auto`, `on` or `off`. `--json` prints the list and `--cwd
+`languageServer`, `codexReview`, `pushUnasked` and `lensReview` take `auto`, `on` or `off`. `--json` prints the list and `--cwd
 <path>` names another project. A `--cwd` with no path, or followed by another flag, exits 2 with `--cwd requires a value`.
 
 ### js-harness remote
