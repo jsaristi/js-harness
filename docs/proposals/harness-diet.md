@@ -762,10 +762,10 @@ document, section 11): what this plan decides here is how js-harness works in ev
 | Step | What | Reaches a project through | Probe and expected result | Pass, against the baseline |
 |---|---|---|---|---|
 | S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row | — | the guard refuses a planted credentials file; both runs complete | the baseline and its spread recorded |
-| S3 Split, kept lines, interim exclusion | the root `CLAUDE.md` importing `@AGENTS.md`, with A.1's kept lines; a `claude-md-budget` row (D3). **Interim:** `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json` on `main`, and the `payload` row taught to read it (`bin/lib/payload.mjs:91-100`, `218-246`). Undo: revert that commit on `main`, pull into the main checkout, restart sessions | `init` writes the split; the exclusion is this repo's only | a restarted desktop worktree session's `/context` shows each project file once and no user file; `check` green with the budget row | incident set no worse; `fixed load` ≤ 80k over 5 sessions; ~30.7k saved per turn and subagent |
+| S3 Split, kept lines, interim exclusion | the root `CLAUDE.md` importing `@AGENTS.md`, with A.1's kept lines; a `claude-md-budget` row (D3). **Interim:** `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json` on `main`, and the `payload` row taught to read it (`bin/lib/payload.mjs:232-246`, where it reads the global `CLAUDE.md`). Undo: revert that commit on `main`, pull into the main checkout, restart sessions | `init` writes the split; the exclusion is this repo's only | a restarted desktop worktree session's `/context` shows each project file once and no user file; `check` green with the budget row | incident set no worse; `fixed load` ≤ 80k over 5 sessions; ~30.7k saved per turn and subagent |
 | S1 Two reviews, always | Codex as today, plus the Claude lens runner specified below, with the four lens prompts ported here under our names; the pre-push gate and the skip debt; `AGENTS.md`'s review paragraph and `check`'s `review` row stop naming gentle-ai | `install` installs the lens prompts; `init` installs the pre-push check | in a scratch repo: a range with both complete records pushes; one with an incomplete lens result is refused; one amended after its review is refused; one with a recorded skip pushes, is listed by `check` and `doctor`, and its PR is refused by the merge path until reviewed; then three real slices | 6 of 6 behave as stated; tokens per lens recorded (D2); incident set no worse |
 | S10 Port | our output style (neutral, tú; name G10n); in `CLAUDE.md`, only the ODD sizing test and the feature document's order; two skills (G8), each for its stated need, with license notices and `THIRD_PARTY_NOTICES`; the whole `permissions` object taken over (allow, `defaultMode`, the 24 denies; recorded; a `doctor` row for a missing entry) and the deny paths into `guard`; G12's Rules block | `install` writes style, skills, permissions and the Rules block at user level; `init` selects the style and writes the deny list into the project's settings; all recorded | a restarted session's `/context` shows our style active (one style is active at a time) and our skills listed; five Spanish prompts get replies in tú with no voseo form (`vos`, `tenés`, `podés`, `querés`, `sabés`); `guard` refuses a read of a planted credentials path | 5 of 5 replies pass; incident set no worse |
-| S11 Take over the complements | `stack`'s engram, engram-plugin, codegraph and context7 rows install and register with their own commands; context7 required and on here (G11); presets (G14); the `gentle-ai` and `gentle-ai-sync` rows and `gentle-ai-update.mjs`'s install watch leave; **the sweep covers `bin/` and `evals/`**: 32 source and 51 test files under `bin/` and 20 files under `evals/` name gentle-ai today (`grep -rl`), among them the block arms of `evals/arms.mjs:23-47` and the state copy of `evals/home.mjs:238`; the block arms become historical fixtures, named in a list | `stack install`; `init` with a preset enables context7 and runs `codegraph init`; `doctor` flags a project with context7 off | `stack` on a scratch home with no gentle-ai lists each complement with its own command and undo; `grep -rl gentle-ai bin evals` lists only the idea watch, the named fixtures and tests that assert its absence | `check` green; `doctor` green with gentle-ai still installed |
+| S11 Take over the complements | `stack`'s engram, engram-plugin, codegraph and context7 rows install and register with their own commands; context7 required and on here (G11); presets (G14); the `gentle-ai` and `gentle-ai-sync` rows and `gentle-ai-update.mjs`'s install watch leave; **the sweep covers `bin/` and `evals/`**: 32 source and 51 test files under `bin/` and 20 files under `evals/` name gentle-ai today (`grep -rl`), among them the block arms of `evals/arms.mjs:23-47` and the state copy of `evals/home.mjs:238`; the block arms become historical fixtures, named in a list | `stack install`; `init` with a preset enables context7 and runs `codegraph init` (except `lean`, which has no codegraph); `doctor` flags a project with context7 off | `stack` on a scratch home with no gentle-ai lists each complement with its own command and undo; `grep -rl gentle-ai bin evals` lists only the idea watch, the named fixtures and tests that assert its absence | `check` green; `doctor` green with gentle-ai still installed |
 | S13 Rehearsal on a scratch project (before S12 and S2) | the reverse-engineering document's section 11 walked on a scratch project in a scratch home: `install` with a preset, `stack install`, `init`, a feature, a slice with both reviews, a push to a local bare remote; then `uninstall project` and `uninstall machine`; the day-to-day guide (§11.3) checked there | this step proves it | every row of §11.1 does what it says; nothing of gentle-ai, Orca or herdr takes part; after the uninstalls, **every path the manifests recorded** is gone or back to its prior bytes (feature work and review records are not compared) | 9 of 9 rows; exact undo of what js-harness owns |
 | S12 Move his projects | **to build:** the migration of an existing project (below); then each project on a list frozen in the feature document before the first move | the migration | the migration on a copy of a project initialized by an old release keeps the user's edits and records each write; each moved project's session shows its `CLAUDE.md`, our style and context7 | every listed project moved, or named as left with his yes; incident set not rerun (S2's measure covers it) |
 | S2 Remove gentle-ai, Orca and herdr | below: quiesce, a full backup, a restore drill that proves function, then each removal asked first; the interim exclusion removed; a smoke test after | removal is machine-wide; projects already moved keep working | the verification and smoke test below | incident set no worse; hooks 32 → 14; `fixed load` ≤ 80k over 5 sessions |
@@ -805,14 +805,16 @@ subject hash, the ordered path manifest and each path's patch (`~/.claude/agents
 6. **Records:** per lens, the range, subject hash, lens, findings, outcome, input and output tokens
    and duration, in the git common directory beside `codex-review-runs.jsonl`; Codex's record
    gains the same range and subject hash.
-7. **Invalidation:** a record covers its subject hash only. An amend or rebase changes the hash,
-   and the range is unreviewed again.
+7. **Invalidation:** a record covers its head commit and its subject hash, both. An amend or rebase
+   changes the head commit even when the patch is unchanged (a message-only amend keeps the subject
+   hash), and the range is unreviewed again.
 8. **The gate:** pre-push refuses a code commit that is not covered by a complete Codex record and a
-   complete Claude record of the same subject hash, or by a recorded skip.
+   complete Claude record of the same head commit and subject hash, or by a recorded skip.
 9. **Skips are a debt** (G13, the lead's decision, for his "revision siempre"): `--unavailable
    <reason>` lets the push through; a `check` row and a `doctor` row list every skip without a
    later complete review; the merge path (`js-harness merge-queue`) refuses a PR whose commits
-   hold one.
+   hold one. A merge from GitHub's web page bypasses `merge-queue`; that path stays open, named:
+   he merges through `merge-queue`, and the `doctor` row keeps listing the skip after any merge.
 
 **S12, the migration of an existing project (to build).** Neither command refreshes a project
 today: `js-harness update` only reports a newer release (`bin/update.mjs:373-397`), and `init`
@@ -832,6 +834,12 @@ stops there and leaves the machine as it is.
    CLI. Engram stopped: `tasklist /FI "IMAGENAME eq engram.exe"` shows none (its MCP server exits
    with the sessions [i]). The lead confirms this through the channel and tells each session to
    stop first; 14 worktrees and the running sessions (JH 56 among them) use today's configuration.
+   **Who runs steps 1-3:** with every session closed there is no lead running, so he runs them from
+   a plain terminal with one command S2 builds, `js-harness stack backup` [to build], which prints
+   each check and stops at the first that fails. The drill reads engram through its own CLI on the
+   scratch home [i: the subcommand is confirmed at S2], not through the `mem_search` MCP tool. The
+   lead writes the command and the feature document's state before closing, and a new session
+   resumes from that document after step 3 for step 4 on.
 2. **One full backup,** outside the repo, recorded in the machine manifest: `~/.claude`,
    `~/.claude.json`, `~/.codex`, `~/.engram` (his memory: `engram.db`, 69 MB),
    `~/.gentle-ai`, `~/.orca` and `%APPDATA%\orca`, `~/.herdr` and herdr's `%APPDATA%` and
@@ -845,7 +853,7 @@ stops there and leaves the machine as it is.
    files and never opened, printed, listed with contents or committed; the backup is never shown.
 3. **A restore drill that proves function,** on a scratch home: the backup restored there hashes as
    the originals, **and** works: engram started on the restored `~/.engram` returns, through
-   `mem_search`, an observation recorded before the backup (its id and title written into the
+   its CLI search (the store `mem_search` reads), an observation recorded before the backup (its id and title written into the
    feature document first); the restored `settings.json` parses with a `permissions` object equal
    to the backup's; the restored MCP entries list engram, codegraph and context7. Only then does
    removal start.
@@ -918,6 +926,11 @@ failures (Appendix B). Less prose does not move them; each keeps its own control
 | machine: load and leftovers | 17 | `clean`, `quiet` and C4's leftover-folders row | `failures check --settled` lists no `machine` entry; the leftover-folders row green |
 | unseen-state: a tool showed a state that was not the real one | 20 | a `doctor` row per state: C3's hooks-not-cancelled row, the credentials-file row (section 9), the complements' rows, the permissions row (S10) and the skip-debt row (S1) | `failures check --settled` lists no `unseen-state` entry |
 
+Per entry, not only per class: S5's pass assigns each of the 68 entries by id to its class repair,
+or names it open. An entry with no control today gets one there; for example `engram-writes-lost`
+(tool, `docs/FAILURES.md:422-426`) gets a `doctor` row that writes an observation and reads it back
+after a compaction [to build].
+
 What stays open, named: an entry whose cause is the host (Claude Code, Codex or Windows) and has no
 control we can build stays open with its upstream issue linked, and S8 lists it by id. Model
 regressions, such as replies drifting out of his language (section 14.2), are measured and reported
@@ -946,6 +959,10 @@ apart, not fixed.
 - **Between S3 and S1, gentle-ai's review runs without its prose.** Its hooks still fire, but the
   lifecycle text is excluded. Guard: Codex stays the enforced gate (pre-push) through that stretch;
   a gentle-ai review that stalls is recorded as a skip, not chased; S1 follows S3 directly.
+- **Between S3 and S10, this repo runs without gentle-ai's ODD and delegation text.** The interim
+  exclusion hides it before S10 ports what we copy. Guard: our task contract, feature documents and
+  `AGENTS.md` keep the work tracked; S3's incident measure catches a drop; S10 follows the review
+  runner without waiting on anything else.
 - **The interim exclusion also hides G12's Rules block** if it is kept after S2. Guard: S2 step 7
   removes it.
 - **The plan lives on branches.** New sessions read `main`, so none of this takes effect for
@@ -1354,6 +1371,14 @@ the kept text. What changed, by the lead's letters:
 - **K.** The register is split into blocking and by-default decisions; the style's name defaults to
   `js-harness`.
 - **L.** The TUI has a completion boundary and a dependency map; slice 1 is PR #596.
+
+Limited recheck of `18785956`: **Claude 7.4, Codex 8.0.** Claude: all twelve fixed. Codex: ten
+fixed, D and J partly. The lead fixed the residuals directly: the review identity holds the head
+commit as well as the subject hash (a message-only amend keeps the hash); the GitHub web merge is
+named as open; S2 names who runs steps 1-3 with every session closed and reads engram through its
+CLI; S5 assigns each failure entry by id (`engram-writes-lost` gets a control); the S3 citation
+points at `payload.mjs:232-246`; `lean` skips `codegraph init`; the S3-to-S10 ODD gap is a named
+risk.
 
 Rejected or adjusted: Claude's count of 31 source and 52 test files under `bin/` naming gentle-ai
 classifies one testkit file differently; by file name (`*.test.mjs` or not) the count is 32 and
