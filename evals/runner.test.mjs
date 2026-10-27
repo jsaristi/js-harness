@@ -11,6 +11,7 @@ import {
   assertReading, checkFixtureLinks, childEnv, classifyAgentFailure, gradeWorkspace, killByPath, loadTask, parseAgentOutput, parseTap, planTrials, probeVersion, readResults, resolveAgent, runProcess,
   runSuite, runTrial, summarizeUsage, trialKey,
 } from './runner.mjs';
+import { runTaskScript } from './task-script.mjs';
 import { parseCodexOutput, readClaudeOutput, readCodexOutput } from './agent-output.mjs';
 import { trialListCost } from './transcript-usage.mjs';
 import { createReaper, sweptLater } from '../bin/lib/process-tree.testkit.mjs';
@@ -245,6 +246,62 @@ test('loadTask rejects a task directory missing its prompt, fixture or grader', 
   const empty = makeTask();
   fs.writeFileSync(path.join(empty, 'task.md'), '  \n');
   assert.throws(() => loadTask(empty), /task\.md.*empty/);
+});
+
+/** A task directory like `makeTask`'s, with a `setup/` of the given scripts and a grader of `graderSource`. */
+function makeOptionTask(json, { scripts = {}, graderSource } = {}) {
+  const dir = makeTask({ grader: { command: 'node', args: ['--test', '--test-reporter=tap', '.eval-grader/sample.grade.mjs'] }, timeoutMs: 30000, ...json });
+  for (const [name, source] of Object.entries(scripts)) {
+    fs.mkdirSync(path.join(dir, 'setup'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'setup', name), source);
+  }
+  if (graderSource !== undefined) fs.writeFileSync(path.join(dir, 'grader', 'sample.grade.mjs'), graderSource);
+  return dir;
+}
+
+test('loadTask takes the two options of a task that needs them, setup and reply, and refuses either malformed', () => {
+  const plain = loadTask(SAMPLE);
+  assert.equal(plain.setup, undefined, 'a task without the option keeps its shape');
+  assert.equal(plain.reply, undefined);
+  const dir = makeOptionTask({ setup: true, reply: true }, { scripts: { 'setup.mjs': '' } });
+  const task = loadTask(dir);
+  assert.equal(task.setup, path.join(dir, 'setup', 'setup.mjs'));
+  assert.equal(task.reply, true);
+  assert.throws(() => loadTask(makeOptionTask({ setup: true })), /setup\/setup\.mjs is missing/);
+  assert.throws(() => loadTask(makeOptionTask({ setup: 'yes' }, { scripts: { 'setup.mjs': '' } })), /task\.json "setup" must be true or false/);
+  assert.throws(() => loadTask(makeOptionTask({ reply: 1 })), /task\.json "reply" must be true or false/);
+});
+
+test('runTaskScript runs a task\'s setup script in the workspace and throws, naming the task and the script, when it fails', () => {
+  const ok = loadTask(makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': "import fs from 'node:fs';\nfs.writeFileSync('MADE.txt', process.cwd());\n" } }));
+  const workspace = tmp('workspace');
+  runTaskScript(ok, ok.setup, workspace, childEnv());
+  assert.equal(fs.realpathSync(fs.readFileSync(path.join(workspace, 'MADE.txt'), 'utf8')), fs.realpathSync(workspace));
+  const bad = loadTask(makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': "console.error('no git here');\nprocess.exit(3);\n" } }));
+  assert.throws(() => runTaskScript(bad, bad.setup, tmp('workspace'), childEnv()), /task [^:]+: setup\/setup\.mjs failed \(exit 3\): no git here/);
+});
+
+test('a task loaded from a relative path still finds its setup script once it runs in the workspace', () => {
+  const dir = makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': "import fs from 'node:fs';\nfs.writeFileSync('MADE.txt', 'ran');\n" } });
+  const before = process.cwd();
+  let task;
+  try {
+    process.chdir(path.dirname(dir));
+    task = loadTask(path.basename(dir));
+  } finally {
+    process.chdir(before);
+  }
+  assert.ok(path.isAbsolute(task.setup), task.setup);
+  const workspace = tmp('workspace');
+  runTaskScript(task, task.setup, workspace, childEnv());
+  assert.equal(fs.readFileSync(path.join(workspace, 'MADE.txt'), 'utf8'), 'ran');
+});
+
+test('runTaskScript runs a script without the git variables of its caller, so a hook\'s repository is never touched', () => {
+  const task = loadTask(makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': "import fs from 'node:fs';\nfs.writeFileSync('ENV.json', JSON.stringify(Object.keys(process.env).filter((key) => /^git_/i.test(key))));\n" } }));
+  const workspace = tmp('workspace');
+  runTaskScript(task, task.setup, workspace, childEnv({ GIT_DIR: path.join(workspace, 'not-this'), GIT_INDEX_FILE: 'index', git_work_tree: workspace, KEEP: '1' }));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(workspace, 'ENV.json'), 'utf8')), []);
 });
 
 // ---- one trial, end to end against the fake agent ---------------------------------------------------
@@ -544,6 +601,41 @@ test('a task with recordFailed keeps the names of its failed top-level tests; a 
   assert.equal('recordFailed' in plain, false);
   assert.deepEqual(await gradeWorkspace(plain, tmp('failed-plain'), { runProcess }), { score: 1 / 3, passed: 1, total: 3, error: null });
   assert.throws(() => loadTask(makeTask({ grader: { command: 'node' }, timeoutMs: 1000, recordFailed: 'yes' })), /task\.json "recordFailed" must be true or false/);
+});
+
+test('a task with setup runs its script after the config\'s prepare and before the agent, and one with reply hands the grader the agent\'s answer', async () => {
+  const grader = [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import fs from 'node:fs';",
+    "const read = (name) => fs.readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');",
+    "test('setup saw the fixture and the prepared workspace', () => assert.equal(read('SETUP.txt'), 'fixture prepared'));",
+    "test('the reply is the agent\\'s answer', () => assert.equal(read('.eval-reply.md'), 'done'));",
+    '',
+  ].join('\n');
+  const setup = "import fs from 'node:fs';\nfs.writeFileSync('SETUP.txt', [fs.existsSync('calc.mjs') ? 'fixture' : 'none', fs.existsSync('PREPARED.txt') ? 'prepared' : 'raw'].join(' '));\n";
+  const task = loadTask(makeOptionTask({ setup: true, reply: true }, { scripts: { 'setup.mjs': setup }, graderSource: grader }));
+  const prepare = ({ workspace }) => fs.writeFileSync(path.join(workspace, 'PREPARED.txt'), '');
+  const { options } = trialEnv('solve', { task, configExtra: { prepare } });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.status, 'recorded');
+  assert.equal(outcome.record.score, 1, JSON.stringify(outcome.record));
+});
+
+test('a reply task whose agent printed no answer gets an empty reply file, never the one of another trial', async () => {
+  const grader = "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\ntest('empty', () => assert.equal(fs.readFileSync(new URL('../.eval-reply.md', import.meta.url), 'utf8'), ''));\n";
+  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: grader }));
+  const { options } = trialEnv('garbage', { task });
+  const outcome = await runTrial(options);
+  assert.equal(outcome.record.score, 1, JSON.stringify(outcome.record));
+});
+
+test('a setup script that fails stops the trial before the agent runs, and the workspace is removed', async () => {
+  const task = loadTask(makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': 'process.exit(2);\n' } }));
+  const { options, workRoot, countFile } = trialEnv('solve', { task });
+  await assert.rejects(runTrial(options), /setup\/setup\.mjs failed \(exit 2\)/);
+  assert.ok(!fs.existsSync(countFile), 'the agent never ran');
+  assert.deepEqual(entriesOf(workRoot), []);
 });
 
 test('the workspace is removed even when the trial throws', async () => {
@@ -2502,6 +2594,7 @@ test('a Claude Code result with subagents and per-model usage is a reading the r
   assert.deepEqual(reading, {
     stop: null, parsed: true, failed: false,
     usage: { inputTokens: 60, outputTokens: 5, turns: 7, usage, costUsd: 0.75, modelUsage, subagents: 2, subagentStats: { spawned: 2 } },
+    reply: 'done',
   });
   // The same session as an array of messages, which newer CLIs print: the result is its last `result` element.
   const listed = JSON.stringify([{ type: 'system', subtype: 'init' }, JSON.parse(stdout)]);

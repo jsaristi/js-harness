@@ -294,8 +294,13 @@ export function minimalWithConfig({ name, seed, ...options } = {}) {
  * own piece of work (`home.mjs`). An arm of one component (`evals/arms.mjs`) is this config under its own
  * `name`, with a seed that takes its component out. */
 export function currentConfig({ seed, name = 'current', ...options } = {}) {
-  return buildConfig(name, options, [], seed);
+  return buildConfig(name, options, DESKTOP_FLAGS, seed);
 }
+
+/** The setting sources a desktop session passes (diet section 7, C3: "evals load what a desktop session loads"),
+ * named so the current arm states them instead of relying on the CLI's default, which is the same list today. A
+ * desktop worktree session also passes `--project-config-root`; a trial workspace is no worktree, so it is not. */
+const DESKTOP_FLAGS = ['--setting-sources', 'user,project,local'];
 
 // ---- the subagent configs --------------------------------------------------------------------------
 // What `odd/tasks/subagent-model-routing.md` measures: the same orchestrator with its subagents forced onto

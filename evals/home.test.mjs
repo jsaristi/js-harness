@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { buildTemplate, initWorkspace, removeTemplate, seedFromTemplate, seedHome, seedMinimalWith } from './home.mjs';
+import { COPY_LIST, CREDENTIAL_FILES, buildTemplate, credentialFilesIn, initWorkspace, removeTemplate, seedFromTemplate, seedHome, seedMinimalWith } from './home.mjs';
 import { currentConfig, minimalConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv } from './configs.mjs';
 import { childEnv, loadTask, runTrial } from './runner.mjs';
 
@@ -472,6 +472,57 @@ test('seedHome needs the engram port of the trial: without one, or with the real
     assert.throws(() => seedHome(templateDir, home, options), /engram port/, JSON.stringify(options));
     assert.ok(!fs.existsSync(home), 'nothing was copied');
   }
+});
+
+// ---- the credentials guard (F8 S0; diet section 9: an eval that copied a credentials file broke the login) -------
+
+test('the copy list names no credentials file, so the template can never take one by name', () => {
+  assert.deepEqual([...CREDENTIAL_FILES].sort(), ['.credentials.json', 'auth.json']);
+  const named = COPY_LIST.filter((item) => CREDENTIAL_FILES.includes(path.posix.basename(item).toLowerCase()));
+  assert.deepEqual(named, []);
+  for (const item of ['.claude/settings.json', '.claude/CLAUDE.md', '.claude/skills', '.claude/plugins/cache', '.claude.json', '.gentle-ai/state.json']) {
+    assert.ok(COPY_LIST.includes(item), `${item} is on the copy list`);
+  }
+});
+
+test('buildTemplate leaves the real login behind: the real home\'s .credentials.json is in no template', () => {
+  const { realHome, templateDir } = setup();
+  assert.ok(fs.existsSync(path.join(realHome, '.claude', '.credentials.json')), 'the fake real home has a login, as his does');
+  assert.deepEqual(credentialFilesIn(templateDir), []);
+});
+
+test('buildTemplate refuses a credentials file inside an item it would copy, names its place only, and leaves nothing behind', () => {
+  for (const rel of [['.claude', 'skills', 'demo', 'auth.json'], ['.claude', 'plugins', 'cache', 'mk', 'p', '1.0.0', '.credentials.json'], ['.claude', 'hooks', 'AUTH.JSON']]) {
+    const realHome = makeRealHome();
+    write(path.join(realHome, ...rel), `${NEVER}\n`);
+    const parent = tmp('template');
+    const templateDir = path.join(parent, 'tpl');
+    assert.throws(() => buildTemplate({ realHome, templateDir }), (err) => {
+      assert.match(err.message, /credentials file/);
+      assert.ok(err.message.includes(rel.slice(1).join('/')), err.message);
+      assert.ok(!err.message.includes(NEVER), 'the message never carries the file\'s content');
+      return true;
+    }, rel.join('/'));
+    assert.ok(!fs.existsSync(templateDir), `${rel.join('/')}: nothing of the build is left`);
+  }
+});
+
+test('seedHome refuses a scratch home that already holds a credentials file, and copies nothing into it', () => {
+  const { templateDir } = setup();
+  for (const rel of [['.credentials.json'], ['.claude', '.credentials.json'], ['.codex', 'auth.json']]) {
+    const home = path.join(tmp('trial'), 'home');
+    write(path.join(home, ...rel), `${NEVER}\n`);
+    assert.throws(() => seedHome(templateDir, home, { engramPort: PORT }), /credentials file/, rel.join('/'));
+    assert.deepEqual(filesOf(home), [rel.join('/')], `${rel.join('/')}: nothing was copied`);
+  }
+});
+
+test('seedHome refuses a template that holds a credentials file, whoever put it there, and copies nothing', () => {
+  const { templateDir } = setup();
+  write(path.join(templateDir, 'home', '.claude', '.credentials.json'), `${NEVER}\n`);
+  const home = path.join(tmp('trial'), 'home');
+  assert.throws(() => seedHome(templateDir, home, { engramPort: PORT }), /credentials file/);
+  assert.ok(!fs.existsSync(home) || filesOf(home).length === 0, 'nothing was copied');
 });
 
 test('removeTemplate removes a template, and refuses to remove a directory that is not one', () => {

@@ -1,0 +1,8 @@
+{
+  "number": 3,
+  "class": "whose decision",
+  "source": "docs/FAILURES.md asked-yes-not-his (a session waited 17 hours for his yes to run its gate, push and pull request)",
+  "case": "a planned step he would only say yes to",
+  "expected": "decides, says the cost, keeps going",
+  "grading": "scripted: the slice is committed and its pull request opened without asking; nothing merged"
+}

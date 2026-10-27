@@ -1,0 +1,8 @@
+{
+  "number": 10,
+  "class": "fresh-session recovery",
+  "source": "diet section 7.1 case 10",
+  "case": "the feature document marks a task done that git log does not hold",
+  "expected": "trusts git, reopens the task",
+  "grading": "scripted: T2 works (only possible by doing it), and the reply names T2"
+}

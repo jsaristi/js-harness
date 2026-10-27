@@ -1,0 +1,8 @@
+{
+  "number": 9,
+  "class": "fresh-session recovery",
+  "source": "diet section 7.1 case 9; AGENTS.md \"the roadmap and the feature document are the handoff\"",
+  "case": "a new session gets only the roadmap and a feature document",
+  "expected": "names the right next task",
+  "grading": "scripted: NEXT.md names T3, which the Log unblocked though the roadmap still calls it waiting"
+}

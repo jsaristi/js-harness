@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { childEnv, copyFixture, gradeWorkspace, loadTask, parseTap, removeDir, runProcess } from './runner.mjs';
+import { runTaskScript } from './task-script.mjs';
 
 // The command a fixture's `npm test` runs. Fixed, so the visible suite is the same thing everywhere and
 // the fixture's tests never match the patterns bare `node --test` discovers (see `DISCOVERED`).
@@ -100,8 +101,18 @@ async function measure(task, taskDir, workRoot, start) {
     prepare(dir);
     return work(dir);
   };
-  const fixture = (dir) => copyFixture(task, dir);
-  const reference = (dir) => { copyFixture(task, dir); applyReference(taskDir, dir); };
+  // A task with setup is proven where an agent would start: the fixture, then its setup script. A reference that
+  // must change state a file cannot hold (a commit) carries `setup/reference.mjs`, run after the overlay.
+  const fixture = (dir) => {
+    copyFixture(task, dir);
+    if (task.setup) runTaskScript(task, task.setup, dir, childEnv());
+  };
+  const referenceScript = path.join(taskDir, 'setup', 'reference.mjs');
+  const reference = (dir) => {
+    fixture(dir);
+    applyReference(taskDir, dir);
+    if (fs.existsSync(referenceScript)) runTaskScript(task, referenceScript, dir, childEnv());
+  };
   const hasReference = isDirectory(path.join(taskDir, 'reference'));
   const graded = (prepare) => run(prepare, (dir) => gradeWorkspace(task, dir, { runProcess: start }));
   // The visible suite runs in a copy that is never graded, so it sees what an agent sees.

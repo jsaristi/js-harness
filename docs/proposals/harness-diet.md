@@ -93,7 +93,7 @@ document; he can reverse any of them. Each removal of S2 is also asked, at that 
 
 | ID | Decision | Kind | Status | Recommended default | Asked at |
 |---|---|---|---|---|---|
-| D2 | The eval spend | blocking | answered 2026-10-26: "Hasta $200" (transcript `e41d1e8d`, line 3678) | at most $200 API-equivalent for F8's evals (the table below) | step 2, first |
+| D2 | The eval spend | blocking | answered 2026-10-26: "Hasta $200" (transcript `e41d1e8d`, line 3678); changed 2026-10-27: "pero entonces 200 son muy poco, creo que deberia ser mas" (line 4068), then "Sin tope fijo" (line 4083, his answer to the question at 4081) | no fixed cap: each run reports its `total_cost_usd`, the orchestrator gives him the total weekly, and he can stop it; the table below forecasts, it does not cap | step 2, first |
 | D5 | `rule:double-review` | blocking (his rule) | answered 2026-10-26: "Acotarla" (transcript `e41d1e8d`, line 3709) | narrow it to proposals that change one of his decisions; applied at S3 | step 2 |
 | D7 | His reply rules and the lines that join them | blocking (his rules) | answered 2026-10-26: "Aceptar todo" (transcript `e41d1e8d`, line 3733): every default of item 7 below | one choice: accept every default listed below, or edit them; applied at S3 | step 2, before S3 |
 | D8 | The engram prompt hook | blocking (his configuration) | answered 2026-10-26: "Apagarlo" (transcript `e41d1e8d`, line 3740) | off, backed up and recorded so it can be turned back on; applied at S4a with the hook-count row, after S0's baseline has measured it on | step 2 |
@@ -143,10 +143,12 @@ changes.
      on `main` (section 14.1). The untracked `settings.local.json` there would also work, but git
      cannot revert it and no manifest records it, so it is not used (fourth pass, Claude regrade
      criterion 4). It takes effect in every worktree session at once, not one branch at a time.
-   - **Still his: the eval spend**, which replaces FL7 (no paid eval). It is now one bounded
-     envelope: at most **$200 API-equivalent** (`total_cost_usd`) for all of F8, on the eval
-     token, so it draws on his Max plan's limits. **The checks and their cost, one table** (the
-     only one; the roadmap and the pages point here):
+   - **Still his: the eval spend**, which replaces FL7 (no paid eval). It has **no fixed cap**
+     (D2, changed 2026-10-27 from $200): it is measured in `total_cost_usd`, API-equivalent, on the
+     eval token, so it draws on his Max plan's limits, not on money. Each run reports its cost, the
+     orchestrator gives him the total weekly, and he can stop it. **The checks and their cost, one
+     table** (the only one; the roadmap and the pages point here); its forecasts are a guide, not a
+     cap, and nothing stops at $200:
 
      | Check | When | Runs | Forecast |
      |---|---|---|---:|
@@ -158,7 +160,7 @@ changes.
      | S8 certification | at the end | the S0 and S8 measures, twice | ~$25 |
      | Long-session eval | built beside, run at S8 | 5 runs per setup and one desktop smoke run | ≤ $50 |
      | Slack | | one failed checkpoint rerun | ~$14 |
-     | **F8 total** | | | **≤ $200** |
+     | **F8 total** | | | **~$200 forecast, no cap** |
      | Recurring certification, **outside the envelope** | each Claude Code or Codex CLI update, after F8 | the S8 measures; Claude and Codex audits, 3 runs each | ~$25 a run [i], plus Codex's window; G7 caps it |
 
      S4a, S7, S9 and S11 use their own probes and spend nothing. Grading: a script grades the
@@ -614,6 +616,20 @@ agreement is reported beside the score.
 **Run twice.** The baseline runs twice, on two days. The spread between the two runs is the noise
 band of the rule above. About $12 per run (section 9's trials averaged $0.28; incident prompts are
 longer).
+
+**The baseline, run (2026-10-27).** Three runs on one day, not two runs on two days (the lead's
+decision once D2 lost its cap; `odd/tasks/f8-s0-baseline.md`, L3 and L4), with the commands above.
+All ten cases ended up scripted, so the Codex rubric grader and its Sonnet agreement check did not
+run. The full record is that document's `## Baseline`.
+- Incident set: 13, 14 and 13 of 20. From runs a and b, as frozen: **L 13, s 1, a step is worse
+  below 10, the S8 target is 17 of 20**. Cases 01, 02 and 05 fail every trial; case 10 fails 2 of 6.
+- False premise: 2 of 4 in every run, below its ≥ 3 of 4 line; case 05 checks the premise and then
+  asks instead of building, and the case grades the build.
+- `honest-unknown` 3 of 3 and the 3-task eval 3 of 3 per task, on both arms: both lines met, and
+  the three tasks do not separate the arms.
+- First turn 105,565 tokens (median of five sessions); read surface 13,413 tokens.
+- Cost: $54.58 for the three runs, $59.64 with the $5.06 set aside for faulty graders; an incident
+  trial costs about $0.55.
 
 ### 7.2 The long-session eval, designed now and built in parallel
 
@@ -1295,7 +1311,7 @@ was scheduled "any time after S0". What changed, in one correction batch:
   herdr 1, codegraph 1; `Stop` 6 from three owners), and S4a's row fails on growth (both).
 - **The target:** S8's incident score at least `max(17, min(20, L + 3))`, frozen before S2; F8 is
   judged on it as well as on tokens (Claude).
-- **The paid checkpoints** are named, with their cost against the $200 envelope (Codex).
+- **The paid checkpoints** are named, with their cost against the $200 envelope (Codex; D2 has had no fixed cap since 2026-10-27).
 - **One rerun rule** in section 7.2, the reverse-engineering document's 5.5 and the roadmap (Codex).
 - **Local dates:** D3 was answered on 2026-10-26, local time (Claude).
 - The TUI, in the other document: every gentle-ai screen mapped, seven sized slices, action-level

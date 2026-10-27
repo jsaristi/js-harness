@@ -45,6 +45,44 @@ const PLUGIN_STATE_FILES = ['installed_plugins.json', 'known_marketplaces.json']
 // to clone again at startup, which is network and a write. Unverified until the real run (T2c).
 const PLUGIN_DIRS = ['cache', 'marketplaces'];
 
+/** Everything a template may take from a real home, by its place there: the whole copy list, so a test can
+ * pin that no credentials file is ever on it. */
+export const COPY_LIST = [
+  ...CLAUDE_ITEMS.map((item) => `.claude/${item}`),
+  ...PLUGIN_STATE_FILES.map((name) => `.claude/plugins/${name}`),
+  ...PLUGIN_DIRS.map((dir) => `.claude/plugins/${dir}`),
+  '.claude.json',
+  '.gentle-ai/state.json',
+];
+
+/** The names of a login file, Claude Code's and Codex's, matched case-insensitively. An eval that copied
+ * `~/.claude/.credentials.json` into scratch homes rotated the refresh token inside a copy and killed the real
+ * login (diet section 9), so no template or Claude trial home may hold one: the trial logs in with the eval
+ * token only. */
+export const CREDENTIAL_FILES = ['.credentials.json', 'auth.json'];
+const isCredentialFile = (name) => CREDENTIAL_FILES.includes(name.toLowerCase());
+
+/** The `/`-separated paths, relative to `root`, of every credentials file below it, walked without following
+ * links; `[]` for a root that does not exist. Only names are read, never a file's content. */
+export function credentialFilesIn(root) {
+  const found = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (isCredentialFile(entry.name)) found.push(path.relative(root, full).split(path.sep).join('/'));
+    }
+  };
+  if (isDirectory(root)) walk(root);
+  return found.sort();
+}
+
+/** Throws when `root` holds a credentials file, naming each by its place and never by its content. */
+function refuseCredentials(root, what) {
+  const found = credentialFilesIn(root);
+  if (found.length > 0) throw new Error(`${what} holds a credentials file (${found.join(', ')}): an eval logs in with the eval token only, so it refuses to start`);
+}
+
 // What a real-home path becomes inside the template (`HOME_TOKEN`, from `without.mjs`, which reads it back): the
 // trial's home is not known until a trial seeds itself, so `seedHome` swaps this prefix for it. The template then
 // names no path of the real machine.
@@ -120,6 +158,9 @@ export function copyEntry(source, target, ctx, label) {
     for (const entry of fs.readdirSync(from)) copyEntry(path.join(from, entry), path.join(target, entry), ctx, `${label}/${entry}`);
     ctx.active.delete(real);
   } else if (stat.isFile()) {
+    if (ctx.refuseCredentials && isCredentialFile(path.basename(source))) {
+      throw new Error(`${ctx.what} holds a credentials file at ${label}: it would be copied, so the template is refused (an eval logs in with the eval token only)`);
+    }
     fs.mkdirSync(path.dirname(target), { recursive: true });
     (ctx.copyFile ?? fs.copyFileSync)(from, target);
   }
@@ -211,7 +252,7 @@ function writeTemplate({ realHome, templateDir, claude, copyFile }) {
   fs.mkdirSync(payload, { recursive: true });
   const warnings = [];
   const copy = (source, target, what) => {
-    if (exists(source)) copyEntry(source, target, { followLinks: true, active: new Set(), warnings, what, copyFile }, what);
+    if (exists(source)) copyEntry(source, target, { followLinks: true, refuseCredentials: true, active: new Set(), warnings, what, copyFile }, what);
   };
   const claudeTarget = path.join(payload, '.claude');
   for (const item of CLAUDE_ITEMS) copy(path.join(claude, item), path.join(claudeTarget, item), item);
@@ -347,7 +388,9 @@ export function seedHome(templateDir, home, { engramPort } = {}) {
   requireAbsolute('home', home);
   assertTrialPort(engramPort);
   readTemplate(templateDir);
-  copyEntry(path.join(templateDir, PAYLOAD), home, { followLinks: false, active: new Set(), warnings: [], what: 'the template' }, PAYLOAD);
+  refuseCredentials(home, `the trial home ${home}`);
+  refuseCredentials(path.join(templateDir, PAYLOAD), `the template ${templateDir}`);
+  copyEntry(path.join(templateDir, PAYLOAD), home, { followLinks: false, refuseCredentials: true, active: new Set(), warnings: [], what: 'the template' }, PAYLOAD);
 
   const plugins = path.join(home, '.claude', 'plugins');
   for (const name of PLUGIN_STATE_FILES) {
