@@ -7,6 +7,7 @@ import { appendNotice, newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { liveCursorPath, sessionsLiveMain } from './sessions-live.mjs';
 import { sessionsMain } from './sessions.mjs';
+import { WAIT_FOR_MINUTES } from './wait.mjs';
 
 // odd/tasks/live-board.md, S3: `js-harness sessions live` turns the channel record into the live board's batches and
 // moves its cursor once a batch was sent. Every test has a home, a project folder and an output folder of its own in
@@ -30,6 +31,9 @@ function withFolders(body) {
     }
   };
 }
+
+/** The batch files of `out`: each `--out` also writes the time it read the record, `board-checked.json`. */
+const batchFiles = (out) => fs.readdirSync(out).filter((name) => name.startsWith('live-'));
 
 const note = (home, slug, at, text, kind = 'note') => appendNotice(home, slug, newNotice({ at, from: FROM, to: 'orchestrator', kind, text }));
 
@@ -57,7 +61,7 @@ test('--out writes one batch file a document, prints the ArtifactData call and -
   const url = 'https://claude.ai/artifact/LAMAVwx92GosturPiuKbTD';
   const written = await live(['--out', dirs.out, '--url', url], dirs);
   assert.equal(written.code, 0, written.err);
-  const files = fs.readdirSync(dirs.out);
+  const files = batchFiles(dirs.out);
   assert.equal(files.length, 1);
   assert.doesNotMatch(files[0], /:/, 'a file name Windows takes');
   const file = path.join(dirs.out, files[0]);
@@ -89,7 +93,7 @@ test('a cursor of the form before is placed in the record once, and a notice tha
   note(dirs.home, dirs.slug, '2026-10-27T04:00:00.000Z', 'stamped before, appended after');
   assert.match((await live([], dirs)).out, /^1 row waits/m, 'an older time appended later is not lost');
   const written = await live(['--out', dirs.out], dirs);
-  const file = path.join(dirs.out, fs.readdirSync(dirs.out)[0]);
+  const file = path.join(dirs.out, batchFiles(dirs.out)[0]);
   assert.equal(written.code, 0, written.err);
   assert.equal((await live(['--sent', file], dirs)).code, 0);
   assert.deepEqual(JSON.parse(fs.readFileSync(liveCursorPath(dirs.home, dirs.slug), 'utf8')), { schema: 'js-harness.live-cursor/v1', url: 'u', upto: 3, sent: [] });
@@ -125,13 +129,13 @@ test('the notices before the --hours window stay out once the first batch was se
   note(dirs.home, dirs.slug, '2026-10-25T01:00:00.000Z', 'too old for 24 hours');
   note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
   assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
-  const files = fs.readdirSync(dirs.out);
+  const files = batchFiles(dirs.out);
   assert.equal(files.length, 1);
   assert.equal((await live(['--sent', path.join(dirs.out, files[0])], dirs)).code, 0);
   assert.match((await live([], dirs)).out, /^0 rows wait/m);
   fs.rmSync(dirs.out, { recursive: true });
   assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
-  assert.deepEqual(fs.readdirSync(dirs.out), [], 'a second run exports nothing');
+  assert.deepEqual(batchFiles(dirs.out), [],'a second run exports nothing');
 }));
 
 // Codex, f074443..4c71f21: the route's section held the progress too, so hiding it for an empty route hid the progress.
@@ -147,4 +151,46 @@ test('the board page hides the route section only when it has no steps and no va
   assert.equal(routeShown({ route: [], progress: { total: 0 } }), false);
   assert.equal(routeShown({ route: [] }), false);
   assert.equal(routeShown(null), false);
+});
+
+// JH 61: a quiet stretch has no new notice, so a header that counts only the newest row said nobody updated the board
+// while the lead sent everything. Each --out also writes the time the lead read the record, for board/summary.
+test('--out writes the time it read the record for board/summary, after the batches, even with no row to send', withFolders(async (dirs) => {
+  const url = 'https://claude.ai/artifact/LAMAVwx92GosturPiuKbTD';
+  const quiet = await live(['--out', dirs.out, '--url', url], dirs);
+  assert.equal(quiet.code, 0, quiet.err);
+  const stamp = path.join(dirs.out, 'board-checked.json');
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false }, 'it holds until the heartbeat wakes the lead');
+  assert.ok(quiet.out.includes(`ArtifactData update: url ${url}, collection board, doc_id summary, file_path ${stamp}`), quiet.out);
+
+  note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
+  const busy = (await live(['--out', dirs.out], dirs)).out;
+  assert.ok(busy.indexOf('ArtifactData set:') < busy.indexOf('ArtifactData update:'), 'the stamp goes after the rows it vouches for');
+  assert.equal((await live([], dirs)).out.includes('ArtifactData update'), false, 'counting stamps nothing');
+
+  // Codex, 59df62f..bc72c2e: a resting lead waits for a notice up to wait-for, not a half-hour heartbeat.
+  assert.equal((await live(['--out', dirs.out, '--resting'], dirs)).code, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString(), resting: true });
+  assert.equal((await live(['--resting'], dirs)).code, 2, '--resting stamps, so it takes --out');
+}));
+
+test('the board page counts the lead\'s check of the record apart from the newest row', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const limit = page.match(/^const FRESH_MS = .*;\r?$/m)?.[0];
+  const source = page.match(/function freshness\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(limit, 'the page defines FRESH_MS');
+  assert.ok(source, 'the page defines freshness');
+  const freshness = new Function(`${limit}\n${source}; return freshness;`)();
+  const now = Date.parse('2026-10-27T12:00:00.000Z');
+  const at = (minutes) => new Date(now - minutes * 60_000).toISOString();
+  const check = (minutes, holds, resting = false) => ({ checked: at(minutes), until: at(minutes - holds), resting });
+  assert.equal(freshness(at(5), null, now), 'rows');
+  assert.equal(freshness(at(48), check(10, 45), now), 'checked', 'a quiet stretch the lead checked');
+  assert.equal(freshness(null, check(10, 45), now), 'checked');
+  assert.equal(freshness(at(48), check(90, 45), now), 'stale', 'nobody sent the record');
+  assert.equal(freshness(at(300), check(200, 480, true), now), 'resting', 'a resting lead waits for a notice');
+  assert.equal(freshness(at(48), null, now), 'stale');
+  assert.equal(freshness(at(48), { checked: at(10) }, now), 'stale', 'a check with no until holds nothing');
+  assert.equal(freshness(null, null, now), 'none');
+  assert.equal(freshness(null, { checked: 'not a time', until: 'no' }, now), 'none');
 });
