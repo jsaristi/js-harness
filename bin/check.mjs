@@ -13,7 +13,7 @@ import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
-import { readRules, ruleValue } from './lib/rules.mjs';
+import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesOfText } from './lib/rules-change-run.mjs';
 import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
@@ -35,7 +35,7 @@ import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGa
 import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
 import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
-import { ruleHere, ruleOf } from './lib/rules.mjs';
+import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs';
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
@@ -44,7 +44,7 @@ import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews, codexSwitchHere } from './lib/codex-review-rows.mjs';
 
-export { estimateTokens };
+export { CLAUDE_MD_BUDGET, checkClaudeBudget, estimateTokens };
 export { failingTests } from './lib/flaky.mjs';
 export { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, takeGateTurn } from './lib/gate-turn.mjs';
 export { checkCodexReviewDebt, checkCodexReviews, codexReviewOffAt } from './lib/codex-review-rows.mjs';
@@ -2016,7 +2016,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

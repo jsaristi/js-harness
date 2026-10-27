@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
-import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
+import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET, CLAUDE_MD_BUDGET, checkClaudeBudget } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -26,6 +26,33 @@ test('estimateTokens divides length by 4, rounding up', () => {
   assert.equal(estimateTokens('abcd'), 1);
   assert.equal(estimateTokens('abcde'), 2);
   assert.equal(estimateTokens('a'.repeat(6000)), 1500);
+});
+
+// F8 S3 (docs/proposals/harness-diet.md, D3): Claude works from a root CLAUDE.md that imports AGENTS.md, and pays it
+// on every turn too, so it has a budget of its own, rule:claude-md-budget. A project with no CLAUDE.md has no row.
+test('checkClaudeBudget passes at exactly its limit, fails one token over, and counts a CRLF checkout as LF', () => {
+  const dir = makeTmpDir();
+  try {
+    const file = path.join(dir, 'CLAUDE.md');
+    fs.writeFileSync(file, 'a'.repeat(CLAUDE_MD_BUDGET * 4));
+    assert.deepEqual(checkClaudeBudget(dir), [{ name: 'claude-md budget', pass: true, detail: `${CLAUDE_MD_BUDGET} estimated tokens (budget ${CLAUDE_MD_BUDGET})` }]);
+    fs.writeFileSync(file, 'a'.repeat((CLAUDE_MD_BUDGET + 1) * 4));
+    assert.equal(checkClaudeBudget(dir)[0].pass, false);
+    fs.writeFileSync(file, `${'a'.repeat(79)}
+`.repeat(Math.floor((CLAUDE_MD_BUDGET * 4) / 80)));
+    assert.equal(checkClaudeBudget(dir)[0].pass, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkClaudeBudget gives no row where the project has no CLAUDE.md', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(checkClaudeBudget(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('checkBudget passes at exactly the token limit', () => {

@@ -240,7 +240,7 @@ How long a commit gate sent to GitHub waits for its run to end, from the push, b
 
 ### claude-md-budget
 The most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn: 2,300 estimated tokens.
-- Read by: none.
+- Read by: `bin/lib/claude-md-budget.mjs`.
 - Since 2026-10-27. Row: reports. Source: design, `docs/proposals/harness-diet.md`.
 
 ### contract-run-timeout
