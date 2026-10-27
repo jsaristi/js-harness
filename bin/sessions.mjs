@@ -67,7 +67,7 @@ import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFA
 import { harnessHome } from './lib/home.mjs';
 import { readRelief, tailOfFile } from './lib/board-files.mjs';
 import { backgroundChanges, boardBackground, claudeRunner, listAgents } from './lib/background.mjs';
-import { START_USAGE, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
+import { LIVE_USAGE, START_USAGE, sessionsLiveMain, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
 
 export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -99,7 +99,7 @@ export const USAGE = [
   '         the question, the options shown and whether they tapped one or typed their own; the result of any',
   '         other tool is not, and a question the user closed without answering is exit 1',
   '         a file is quoted only from the project\'s sessions folder, where the board reads the transcripts: exit 2 for any other',
-  START_USAGE.replace(/^Usage: /, '       '),
+  START_USAGE.replace(/^Usage: /, '       '), LIVE_USAGE.replace(/^Usage: /, '       '),
   '       js-harness sessions --measures [--hours <n>] [--json] [--cwd <path>] [--claude-home <path>] [--tmp <path>]',
   '         prints, for each compaction of the transcripts in the window, whether the user asked for it and, for one the host',
   '         made, two facts: told (the session was told the pause before it) and kept (the feature document has a commit',
@@ -508,9 +508,9 @@ export async function sessionsMain(
     listBackground = () => listAgents(claudeRunner({ env, platform, timeout: 15000 })),
   } = {},
 ) {
-  // The two subcommands that start and remove a background session (odd/tasks/background-sessions.md) write, unlike the board.
-  if (argv[0] === 'start' || argv[0] === 'stop') {
-    return (argv[0] === 'start' ? sessionsStartMain : sessionsStopMain)(argv.slice(1), { cwd: defaultCwd, stdout, stderr, env, now, homedir, run });
+  // Start and stop a background session (odd/tasks/background-sessions.md), and live, the live board's rows (live-board.md), write.
+  if (argv[0] === 'start' || argv[0] === 'stop' || argv[0] === 'live') {
+    return ({ start: sessionsStartMain, stop: sessionsStopMain, live: sessionsLiveMain })[argv[0]](argv.slice(1), { cwd: defaultCwd, stdout, stderr, env, now, homedir, run });
   }
   let parsed;
   try {

@@ -296,7 +296,7 @@ test('a board read is found behind sh -c and wsl.exe, and an echo, --help or --o
   for (const command of ['sh -c "js-harness sessions --watch"', 'bash -lc "cd x && js-harness sessions"', 'wsl.exe -- js-harness sessions', 'node bin/js-harness.mjs sessions --json']) {
     assert.match(warn(command) ?? '', /^js-harness sessions reads the board outside a turn/, command);
   }
-  for (const command of ['echo bin/js-harness.mjs sessions', 'js-harness sessions --help', 'js-harness sessions -h', 'js-harness sessions --opening=Audit', 'js-harness sessions --peek "Audit"', 'js-harness sessions --measures', 'node bin/js-harness.mjs sessions --peek "Audit"', 'sh -c "js-harness sessions --quote x"']) {
+  for (const command of ['echo bin/js-harness.mjs sessions', 'js-harness sessions --help', 'js-harness sessions -h', 'js-harness sessions --opening=Audit', 'js-harness sessions --peek "Audit"', 'js-harness sessions --measures', 'node bin/js-harness.mjs sessions --peek "Audit"', 'sh -c "js-harness sessions --quote x"', 'js-harness sessions live --out x', 'node bin/js-harness.mjs sessions live --sent x.json']) {
     assert.equal(warn(command), null, command);
   }
   const batch = () => ({ cwd: 'D:\\js-harness-worktrees\\evals', batch: true });

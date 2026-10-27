@@ -15,6 +15,8 @@ import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { nextSessionNumber } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+// bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
+export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
 export const START_USAGE = [
   'Usage: js-harness sessions start --title <title> --brief <file> [--worktree <name>] [--model <model>] [--effort <level>]',
