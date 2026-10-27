@@ -157,6 +157,15 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     orchestrator says the land ended.
   - A mistake: a failed commit was run again to read its failing test, a second CI run of about 165 s
     (`docs/FAILURES.md`, diagnostic-whole-gate).
+- L10 (2026-10-27): the host compacted this session by itself at ~20:49Z; the record was committed before it but for
+  the next-step note, written again here. `f8-s1-debt` was rebased on PR 608's head, 9e81839b, with no conflict.
+  - Lenses on 4834997f (the review row, `9e81839b..4834997f`): risk, reliability and readability complete with no
+    finding, about 24,950 input tokens each.
+  - Lenses on 023eceb9 (doctor and the door, `4834997f..023eceb9`): risk and reliability complete with no finding,
+    about 14,060 input tokens each; readability answered with something that was not one JSON object, so the run
+    was incomplete and covered nothing. Run once more alone: complete, no finding.
+  - A gap for T6: an incomplete lens keeps only its `why`, not a line of what it answered, so "read why before it
+    runs again" could not be done past the parser's verdict. The fence is already accepted (`lens-result.test.mjs`).
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -164,17 +173,11 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
 
 ## Next step
-State at 2026-10-27 ~19:50Z (context pause). The worktree is on branch `f8-s1-debt`, three commits on 7f107aad (PR
-608's head): 8233cf84 the L9 fix (`lensReview` switch, per-commit), lenses risk/reliability/resilience clean, Codex
-NOT run; 55660144 and c390dc7e, cherry-picks of f6025a45 (review row) and 0dd4c450 (doctor, door), lenses run on
-f6025a45 only, Codex on neither. Codex runs wait for the orchestrator's go (memory; its note of 14:20). Then: push
-8233cf84 to `f8-s1-gate` (PR 608, a draft until then), Codex on `7f107aad..8233cf84`, gentle-ai line, ready
-notice; then PR 3 from `f8-s1-debt` (lenses and Codex on `8233cf84..c390dc7e`), then `CLAUDE.md`'s review lines,
-T6. Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave it, never force-push.
-Earlier: PR 607 (slices 1+2) merged at 17:45Z. T4 is done and reviewed (L7): e4375922 and its fix d5c722f6.
-Next, T5: the `review` row (`checkReview`, gentle-ai, `bin/check.mjs:1721`, at its 2110-line ceiling) replaced by a
-debt row of both reviews and their skips, from `lens-review-rows.mjs`; a `doctor` row of skips; `reviewEvidence`
-(`bin/merge-queue.mjs:307`, at its 1057-line ceiling) adds
-`checkLensReviews` and refuses a skip; `AGENTS.md` "says whether the pending change is due a gentle-ai review" and
-`CLAUDE.md`'s review lines. Then T6: the probe (six behaviours) and the incident rerun, asked first through the
-orchestrator (about $11 to $22).
+State at 2026-10-27 ~20:55Z, after the host's compaction at ~20:49Z. PR 608 (`f8-s1-gate`, 8233cf84 the L9 fix and
+9e81839b its record) is ready and told: Codex correct (0.87), lenses clean. The worktree is on `f8-s1-debt`, rebased
+on 9e81839b: 4834997f the review row (was 55660144, from f6025a45) and 023eceb9 doctor and the door (was c390dc7e,
+from 0dd4c450), then 02a128b3 this document. Next: lenses on each of the two code commits, Codex on
+`9e81839b..023eceb9`, gentle-ai lines, PR 3 and its ready notice; then `CLAUDE.md`'s review lines; then T6, the probe
+(six behaviours), three real slices with tokens per lens, and the incident rerun asked first through the orchestrator
+(about $11 to $22). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave it, never
+force-push. The wait on the orchestrator's notices runs in the background until a notice comes or 240 minutes pass.
