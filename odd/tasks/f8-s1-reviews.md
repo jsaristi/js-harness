@@ -164,8 +164,14 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
 
 ## Next step
-State at 2026-10-27 ~18:45Z. PR 607 (slices 1+2) merged at 17:45Z. T4 is done and reviewed (L7): e4375922 and its
-fix d5c722f6, both reviews clean on the recheck; it goes out as PR 2 of 3, from branch `f8-s1-gate`.
+State at 2026-10-27 ~19:50Z (context pause). The worktree is on branch `f8-s1-debt`, three commits on 7f107aad (PR
+608's head): 8233cf84 the L9 fix (`lensReview` switch, per-commit), lenses risk/reliability/resilience clean, Codex
+NOT run; 55660144 and c390dc7e, cherry-picks of f6025a45 (review row) and 0dd4c450 (doctor, door), lenses run on
+f6025a45 only, Codex on neither. Codex runs wait for the orchestrator's go (memory; its note of 14:20). Then: push
+8233cf84 to `f8-s1-gate` (PR 608, a draft until then), Codex on `7f107aad..8233cf84`, gentle-ai line, ready
+notice; then PR 3 from `f8-s1-debt` (lenses and Codex on `8233cf84..c390dc7e`), then `CLAUDE.md`'s review lines,
+T6. Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave it, never force-push.
+Earlier: PR 607 (slices 1+2) merged at 17:45Z. T4 is done and reviewed (L7): e4375922 and its fix d5c722f6.
 Next, T5: the `review` row (`checkReview`, gentle-ai, `bin/check.mjs:1721`, at its 2110-line ceiling) replaced by a
 debt row of both reviews and their skips, from `lens-review-rows.mjs`; a `doctor` row of skips; `reviewEvidence`
 (`bin/merge-queue.mjs:307`, at its 1057-line ceiling) adds
