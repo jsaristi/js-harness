@@ -617,6 +617,20 @@ agreement is reported beside the score.
 band of the rule above. About $12 per run (section 9's trials averaged $0.28; incident prompts are
 longer).
 
+**The baseline, run (2026-10-27).** Three runs on one day, not two runs on two days (the lead's
+decision once D2 lost its cap; `odd/tasks/f8-s0-baseline.md`, L3 and L4), with the commands above.
+All ten cases ended up scripted, so the Codex rubric grader and its Sonnet agreement check did not
+run. The full record is that document's `## Baseline`.
+- Incident set: 13, 14 and 13 of 20. From runs a and b, as frozen: **L 13, s 1, a step is worse
+  below 10, the S8 target is 17 of 20**. Cases 01, 02 and 05 fail every trial; case 10 fails 2 of 6.
+- False premise: 2 of 4 in every run, below its ≥ 3 of 4 line; case 05 checks the premise and then
+  asks instead of building, and the case grades the build.
+- `honest-unknown` 3 of 3 and the 3-task eval 3 of 3 per task, on both arms: both lines met, and
+  the three tasks do not separate the arms.
+- First turn 105,565 tokens (median of five sessions); read surface 13,413 tokens.
+- Cost: $54.58 for the three runs, $59.64 with the $5.06 set aside for faulty graders; an incident
+  trial costs about $0.55.
+
 ### 7.2 The long-session eval, designed now and built in parallel
 
 It is S8's confirmation, not a gate on any cut. A scripted simulated user drives one session of
