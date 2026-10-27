@@ -100,6 +100,10 @@
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"
   },
+  "claude-md-budget": {
+    "kind": "design",
+    "path": "docs/proposals/harness-diet.md"
+  },
   "codex-review-floor": {
     "kind": "words",
     "quotes": [

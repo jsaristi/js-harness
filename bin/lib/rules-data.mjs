@@ -60,6 +60,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "claude-md-budget",
+    "subject": "the most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn",
+    "owner": "project",
+    "since": "2026-10-27",
+    "value": 2300,
+    "unit": "estimated tokens"
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
