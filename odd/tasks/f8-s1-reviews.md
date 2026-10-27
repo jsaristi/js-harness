@@ -68,7 +68,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline; eb518c07, 2d0d2ef0
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
 - [x] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`; 4834997f, 023eceb9, fixed in e35eb7dc (PR 613); `CLAUDE.md` in the commit that checks this box (L12)
-- [ ] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline
+- [x] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline; the probe 6 of 6 (L13), the incident set 13 of 20, no worse (L14)
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 62 · F8 S1: two reviews on every slice ...
@@ -195,6 +195,15 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     opened with "Pregunta 94: ", numbered by hand before `notify` gave it 98; corrected by a note
     (`docs/FAILURES.md`, question-numbered-by-hand).
   - T6's "three real slices" with tokens per lens (D2) are L5, L7, L9, L10, L11 and this one.
+- L14 (2026-10-27, JH ORQ at 16:45 local): "run the incident set once (S7's pass criterion, a planned step;
+  decided by the lead under rule:away-autonomy, Q98 withdrawn). One run only, 10 cases x 2 attempts; keep
+  concurrency low (5.6 GB free); if it fails, report why and do not rerun." The lead's decision, not his words.
+  - `f8-s1-incidents`, one arm (`current`, effort high, `claude-opus-5-5`), on f8-s1-close at bc3092e1, 21:55Z to
+    22:20Z: 13 of 20 trials pass (score 1), against L 13 and the worse line of 10: no worse. Cases 01 (0.67 each),
+    02 and 05 fail every trial, as at S0 and S3; case 03 passed one of two (0.50 on the second), cases 09 and 10
+    passed both. Cost $11.35 of list cost (`evals/results/f8-s1-incidents.json`).
+  - S1's pass is met: the probe 6 of 6 (L13), tokens per lens recorded on every real slice, the incident set no
+    worse.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -203,12 +212,27 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `9e81839b..e35eb7dc` (4834997f, 023eceb9, e35eb7dc): medium, reviewed and approved (lineage review-31b6ff71575dd070, lens reliability), one suggestion: the `review` row's catch for a spawn that throws has no test since the gentle-ai row's went, left for the next slice; Codex correct on parts 1 and 2, its P2 fixed in e35eb7dc and rechecked correct (0.98); lenses no finding (L10, L11).
 - gentle-ai on `2d20b75..42a4225c` (4df603e0): medium, reviewed and approved (lineage review-4adc6c14fd575602, lens reliability), a warning refuted and two suggestions taken in 96ffb9f9; Codex on `2d20b75..96ffb9f9` correct (0.97); lenses no finding (L13).
 
+## Probe
+The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
+(L13): 6 of 6 as stated.
+
+| # | Behaviour | Seen |
+|---|---|---|
+| 1 | a range with both complete records pushes | a real lens and a real Codex review; `check --push` exit 0, both rows PASS |
+| 2 | one with an incomplete lens result is refused | a fake `claude` answering prose; the run exits 1 and prints the answer; `check --push` exit 1, `lens-review` FAIL |
+| 3 | one amended after its review is refused | exit 0 before the amend, exit 1 after it, both rows FAIL |
+| 4 | one with a recorded skip pushes | a skip of each review; `check --push` exit 0 |
+| 5 | the skip is listed by `check` and `doctor` | `review`: "2 skips still owe a review"; `doctor --offline`: the `review-skips` row |
+| 6 | its PR is refused by the merge path until reviewed | `lensDoor` refuses the skip, then returns null after a real lens review |
+
+Tokens per lens on real slices (D2): L5 (about 14,900 and 18,600 input a lens), L7 (14,990), L9 (about 10,800),
+L10 (24,950 and 14,060), L11's fix (4,430), L13 (5,040, 3,800; the probe's own, 2,580). The incident set, one
+run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
+
 ## Next step
-State at 2026-10-27 ~21:50Z. PRs 607, 608 and 613 landed (main abeaa3d). T5 is done. The worktree is on
-`f8-s1-close` (on 2d20b75, in main): 4df603e0 the kept answer and the `review` row's pinning test, 42a4225c
-`CLAUDE.md`, 96ffb9f9 gentle-ai's two suggestions, then this record; Codex correct, lenses clean, gentle-ai approved
-up to 42a4225c, its review of 96ffb9f9 next when the Stop hook offers it. Next: push, open its pull request, ready
-notice. T6: the probe passed 6 of 6 (L13); the incident rerun waits for his answer to question 98 (about $11 for one
-run): a yes runs `evals/` as `odd/tasks/f8-s0-baseline.md` ran it (`--work-root D:/js-harness-evals-work`) and
-compares with L 13; a no closes S1 without it. Then the session summary in `docs/sessions/` and the closed notice.
-Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave it, never force-push.
+State at 2026-10-27 ~22:25Z. S1 is built: T1 to T6 done, PRs 607, 608 and 613 landed, PR 614 (`f8-s1-close`) ready
+and told. Its pass is met (`## Probe`). Left: PR 614's land by the queue, gentle-ai's review of 96ffb9f9 when the Stop
+hook offers it, the session summary in `docs/sessions/` and the closed notice. Open for later work, not S1's: the
+`notify` check that refuses a `Pregunta <m>: ` prefix other than the number it assigns (`docs/FAILURES.md`,
+question-numbered-by-hand). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave
+it, never force-push.
