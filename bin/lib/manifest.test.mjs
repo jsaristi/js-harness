@@ -2711,7 +2711,7 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('`js-harness permit lease` at your start; `js-harness wait --notice-to orchestrator` renews it on each tick while you hold it'));
   assert.ok(text.includes('`js-harness permit deny <id> --reason "<why>"` when it is obsolete or unsafe'));
   // odd/tasks/held-sessions.md, S9: a card that is his is brought to him with a recommendation; he chooses.
-  assert.ok(text.includes('A card that touches what is the user\'s (spend, publishing, anything irreversible outside the project, credentials, their security settings), or is important enough to be their call, you never decide alone: bring it to them in the orchestrator\'s chat that turn, through the question tool'));
+  assert.ok(text.includes('A card that touches what is the user\'s (spend, publishing, anything irreversible outside the project, credentials, their security settings), or is important enough to be their call, you never decide alone (while they are away, `rule:away-autonomy` says what waits and the spend that is yours): bring it to them in the orchestrator\'s chat that turn, through the question tool'));
   assert.ok(text.includes('then apply their choice with `js-harness permit allow <id>` or `js-harness permit deny <id> --reason'));
   assert.ok(text.includes('`js-harness permit lease --off`'));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
@@ -2874,7 +2874,10 @@ test('the orchestrator skill says what every recap carries and how a block waits
     '- when a stretch or a session ends, that it ended and which session to return to.',
     '- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.',
     '- Before the user leaves, ask in that reply for everything the stretch will need',
+    '- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back',
+    'a step the charter does not name, waits for their return with no question; a work session\'s question that is theirs is recorded and held, never answered for them',
   ]) assert.ok(text.includes(line), line);
+  assert.ok(text.includes('ask before anything it does not name; while the user is away it waits instead, as `rule:away-autonomy` says.'));
 });
 
 test('the orchestrator skill closes a work session with the notify command and keeps notices out of the relief file', () => {

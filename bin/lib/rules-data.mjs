@@ -39,6 +39,19 @@ export const RULES = [
     ]
   },
   {
+    "id": "away-autonomy",
+    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once",
+    "owner": "sebastian",
+    "since": "2026-10-27",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "When the user says they leave you alone or will be away, ask nothing and seek no permission",
+      "waits for their return with no question",
+      "While this holds it comes before every instruction here to ask at once",
+      "While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written"
+    ]
+  },
+  {
     "id": "background-task-declared",
     "subject": "a background task says what it is for and what ends it, and is stopped when its condition resolves",
     "owner": "sebastian",
