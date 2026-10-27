@@ -69,7 +69,7 @@ read it.
 - [x] T2 (kind: build) protocols 3, 5, 6 and 7 in `CLAUDE.md`, 4 and 8 in `AGENTS.md` — S2, S3; inline; 10e1b4d7 and the `CLAUDE.md` commit
 - [x] T3 (kind: docs) this document and the roadmap's F8 step 4 — all; inline; 10e1b4d7 and the `CLAUDE.md` commit
 - [x] T4 (kind: build) `claude-md-budget` 2500 → 3200 by question 97's answer, `rules change` on `rule/f8-directives` — S2; inline; 3c70f91c
-- [ ] T5 (kind: verify) `npm run check`, Codex per slice, push, pull request, ready notice — all; inline
+- [x] T5 (kind: verify) `npm run check`, Codex per slice, push, pull request, ready notice — all; inline; PR 606
 
 Reviews:
 - gentle-ai on `59df62f7..10e1b4d7`: medium, not due (under_budget, 104 lines); Markdown only, so no Codex record is due.
