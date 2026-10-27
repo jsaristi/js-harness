@@ -36,9 +36,16 @@ export function rowOf(notice) {
   return notice.kind === 'ready' ? { ...row, pr: notice.pr } : row;
 }
 
-/** The rows of `notices` the board has not been sent, oldest first: those after the cursor's time, and those at its
- * time whose id it does not hold. With no cursor, those after `since`. Two rows that would share an id (one sender,
- * one millisecond) get `-2`, `-3` after it, in the record's order. */
+/** How far before the cursor's time a notice may still land: `notify` stamps a notice's time before it appends it, and
+ * other sessions append meanwhile, so the record's order is not its time's order. The cursor holds every id it sent in
+ * this window; a notice that lands later than this after one already sent is lost to the board. */
+export const LATE_MS = 30 * 60 * 1000;
+
+const timeOfId = (id) => Date.parse(id.slice(0, id.indexOf('Z') + 1));
+
+/** The rows of `notices` the board has not been sent, oldest first: those after the cursor's time, and those within
+ * LATE_MS before it whose id it does not hold. With no cursor, those after `since`. Two rows that would share an id
+ * (one sender, one millisecond) get `-2`, `-3` after it, in the record's order. */
 export function pendingRows(notices, cursor, since) {
   const seen = new Map();
   const rows = [...notices]
@@ -53,7 +60,7 @@ export function pendingRows(notices, cursor, since) {
   if (cursor === null || cursor === undefined) return rows.filter((row) => Date.parse(row.time) > Date.parse(since));
   const through = Date.parse(cursor.through);
   const sent = new Set(cursor.ids);
-  return rows.filter((row) => Date.parse(row.time) > through || (Date.parse(row.time) === through && !sent.has(row.id)));
+  return rows.filter((row) => Date.parse(row.time) > through - LATE_MS && !sent.has(row.id));
 }
 
 /** `rows` cut into batches of `BATCH_ROWS`: `[{ docId, time, rows }]`, each named by its last row and timed by it. */
@@ -67,15 +74,14 @@ export function batchesOf(rows) {
   return batches;
 }
 
-/** The cursor once `rows` were sent after `cursor`: the latest time and every id sent at it. A batch sent after a
- * later one leaves the cursor where it is. */
+/** The cursor once `rows` were sent after `cursor`: the latest time, and every id sent within LATE_MS before it,
+ * oldest first. A batch sent after a later one never moves the time back. */
 export function cursorAfter(cursor, rows) {
   if (rows.length === 0) return cursor;
   const last = rows.reduce((latest, row) => (Date.parse(row.time) > Date.parse(latest) ? row.time : latest), rows[0].time);
-  const atLast = rows.filter((row) => row.time === last).map((row) => row.id);
-  if (cursor === null || cursor === undefined) return { through: last, ids: atLast };
-  const through = Date.parse(cursor.through);
-  if (Date.parse(last) < through) return cursor;
-  if (Date.parse(last) === through) return { through: cursor.through, ids: [...cursor.ids, ...atLast.filter((id) => !cursor.ids.includes(id))] };
-  return { through: last, ids: atLast };
+  const through = cursor && Date.parse(cursor.through) >= Date.parse(last) ? cursor.through : last;
+  const ids = [...new Set([...(cursor?.ids ?? []), ...rows.map((row) => row.id)])]
+    .filter((id) => timeOfId(id) > Date.parse(through) - LATE_MS)
+    .sort((a, b) => timeOfId(a) - timeOfId(b) || a.localeCompare(b));
+  return { through, ids };
 }

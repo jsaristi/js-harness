@@ -18,6 +18,8 @@
   --run:#7ea0ff; --run-soft:#1d2a4a; --ok:#5fd394; --ok-soft:#163222;
   --you:#c99bff; --you-soft:#2c1f40; --wait:#f0a356; --wait-soft:#3a2a17; --late:#ff8a80; --late-soft:#3d1a18; --quiet:#a7b1c2; --quiet-soft:#262e3b; color-scheme:dark}
 *{box-sizing:border-box}
+/* The flex layouts below would override the hidden attribute the script sets on empty sections. */
+[hidden]{display:none !important}
 body{background:var(--bg);color:var(--ink);font:17px/1.6 var(--body);margin:0}
 .wrap{max-width:820px;margin:0 auto;padding-block:26px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:30px}
 h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
