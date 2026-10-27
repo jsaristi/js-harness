@@ -51,3 +51,5 @@ Nothing: the budget is the project's; the rewrite carries his typed words.
   change one of his decisions (line 42 of `bin/lib/protocols-skill.mjs`; its two phrases unchanged). Its earlier
   source keeps the quote whose transcript is still on this machine; the one at line 14210 of e152c9d8 is gone from the
   sessions folder, so the command cannot check it again, and it stays in git history.
+- gentle-ai on `e86a3530..5e464397`: medium, not due (under_budget); the slice is this pull request.
+- L5. 2026-10-27, Codex on e86a353..5e46439 (D5): the patch is correct (0.9), no actionable defects, recorded.
