@@ -961,7 +961,8 @@ gave the question another, so the text he would see named a question that does n
 - Class: wrong-information
 - Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L13 — JH 62 sent "Pregunta 94: ..." and `notify` recorded
   it as question 98 (its reply: `prefix: "Pregunta 98: "`); corrected by a note to the orchestrator at 21:42Z
-- Control: owed — odd/tasks/f8-s1-reviews.md — "numbered by hand before `notify` gave it 98"
+- Control: check — bin/lib/channel.test.mjs — "the record numbers it, and a number guessed by hand named another" — since 2026-10-27
+- Was: owed — odd/tasks/f8-s1-reviews.md — "numbered by hand before `notify` gave it 98"
 
 ### question-tool-holds-asker
 The question tool holds the session that asks until he answers, so a question asked while he was
