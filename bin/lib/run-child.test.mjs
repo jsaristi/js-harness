@@ -37,8 +37,9 @@ test('an abort stops the child and what it started, and the result says it was c
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-run-child-'));
   try {
     const marker = path.join(dir, 'grandchild-ran');
-    // The child starts a grandchild that writes the marker after 1.5 s, then waits forever itself.
-    const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 1500)`;
+    // The child starts a grandchild that writes the marker after 4 s, then waits forever itself; the kill reads
+    // the process table first (bin/lib/process-tree.mjs), which takes a moment on Windows.
+    const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 4000)`;
     const script = `require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); console.log('started'); setInterval(() => {}, 1000)`;
     const controller = new AbortController();
     const started = Date.now();
@@ -49,8 +50,8 @@ test('an abort stops the child and what it started, and the result says it was c
       },
     });
     assert.equal(result.cancelled, true);
-    assert.ok(Date.now() - started < 1500, 'the child stopped before the grandchild would have written');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.ok(Date.now() - started < 4000, 'the child stopped before the grandchild would have written');
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, started + 4500 - Date.now())));
     assert.equal(fs.existsSync(marker), false, 'the grandchild was stopped with it');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

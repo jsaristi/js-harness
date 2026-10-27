@@ -2,29 +2,24 @@
 // and its output piped, so the menu keeps drawing while it works and nothing it prints lands on the menu; an
 // abort stops it with everything it started. `handOff` gives a command that asks its own questions the terminal
 // itself, so each of its per-action prompts reaches the user exactly as on the command line.
-import os from 'node:os';
 import { spawn as nodeSpawn } from 'node:child_process';
+import { killTree } from './process-tree.mjs';
 
-/** Stops `child` and its descendants: on Windows `taskkill /T` walks the tree (a package manager started by
- * `update` would outlive its parent otherwise); elsewhere the child leads its own process group. */
-function stopTree(child, { spawn, platform }) {
+/** Stops `child` and its descendants through the shared `killTree` (bin/lib/process-tree.mjs): a package
+ * manager started by `update` would outlive its parent otherwise, and a pid alone may name someone else's process
+ * on Windows. If the tree cannot be read, the child itself is still stopped. */
+function stopTree(child, lifetime, kill) {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  if (platform === 'win32') {
-    // From the temp folder: a process started in the user's folder would hold it until it ends.
-    const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { cwd: os.tmpdir(), stdio: 'ignore', windowsHide: true });
-    killer.on?.('error', () => child.kill());
-    return;
-  }
   try {
-    process.kill(-child.pid, 'SIGTERM');
+    kill(child, lifetime);
   } catch {
-    child.kill('SIGTERM');
+    child.kill();
   }
 }
 
 /** Runs `command args` with output to `onOutput(text)`; resolves to `{ code, cancelled }`, plus `error` when it
  * could not start. Aborting `signal` stops the child and its tree, and the result says `cancelled`. */
-export function runChild(command, args, { env = process.env, cwd, onOutput = () => {}, signal, spawn = nodeSpawn, platform = process.platform } = {}) {
+export function runChild(command, args, { env = process.env, cwd, onOutput = () => {}, signal, spawn = nodeSpawn, platform = process.platform, kill = (child, lifetime) => killTree(child, lifetime, { platform }) } = {}) {
   if (signal?.aborted) return Promise.resolve({ code: null, cancelled: true });
   return new Promise((resolve) => {
     let cancelled = false;
@@ -35,10 +30,11 @@ export function runChild(command, args, { env = process.env, cwd, onOutput = () 
       signal?.removeEventListener('abort', onAbort);
       resolve(result);
     };
+    const lifetime = { startedAt: Date.now() };
     const child = spawn(command, args, { env, cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: platform !== 'win32' });
     function onAbort() {
       cancelled = true;
-      stopTree(child, { spawn, platform });
+      stopTree(child, lifetime, kill);
     }
     signal?.addEventListener('abort', onAbort, { once: true });
     for (const stream of [child.stdout, child.stderr]) {
