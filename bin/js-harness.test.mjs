@@ -297,9 +297,10 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
       // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
-      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, and
+      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, then
+      // `review-skips` (odd/tasks/f8-s1-reviews.md, T5), and
       // `memory-backup` (odd/tasks/memory-backup.md) follows it. `clean` (odd/tasks/clean.md) follows `stack-update`.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'memory-backup', 'host-update', 'stack-update', 'clean', 'gentle-ai-sync'],
+      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'review-skips', 'memory-backup', 'host-update', 'stack-update', 'clean', 'gentle-ai-sync'],
     );
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.

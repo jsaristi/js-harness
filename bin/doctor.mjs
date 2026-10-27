@@ -23,6 +23,7 @@ import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
 import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
+import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
@@ -210,7 +211,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   });
   const withUnseenOnly = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
-  const withUnseen = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
+  const withTrees = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
+  // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
+  const withUnseen = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now, project)] : withBackup;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
@@ -297,7 +300,24 @@ function worktreesRow(worktrees, project) {
   return { ...row, project: 'stale', fix: { project: [`${count} on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them`, ...found.map((tree) => `${tree.path} (${tree.branch})`)] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update, clean and gentle-ai-sync rows. Their checks are
+/** The review-skips row (odd/tasks/f8-s1-reviews.md, T5): the skips of both reviews on the branch that still owe a
+ * review (`owedSkipLines`), `stale` with each while any does, since the door refuses a pull request that holds a lens
+ * skip. `ok` with none, `unknown` when they cannot be read. */
+function reviewSkipsRow(reviewSkips, project) {
+  const row = { id: 'review-skips', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = reviewSkips(project);
+  } catch {
+    found = null;
+  }
+  if (!Array.isArray(found)) return { ...row, project: 'unknown' };
+  if (found.length === 0) return row;
+  const count = `${found.length} review skip${found.length === 1 ? ' still owes' : 's still owe'} a review`;
+  return { ...row, project: 'stale', fix: { project: [`${count}, and a pull request that holds a lens skip does not land: run the review it skipped`, ...found] } };
+}
+
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, host-update, clean and gentle-ai-sync rows. Their checks are
  * given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
@@ -306,6 +326,7 @@ export function doctorCommand(argv) {
     gentleAiSnapshots: (home) => claudeMdSnapshots(home),
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
+    reviewSkips: (cwd) => owedSkipLines(cwd),
     backup: (home, now) => backupHealth(home, now),
     clean: { start: backgroundMeasure(process.env, argv) },
   });

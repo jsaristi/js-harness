@@ -122,9 +122,9 @@ each feature, such as install's hook lines or check's rows, is shown in part and
 ### js-harness check
 
 Runs the project's gate: the budget of `AGENTS.md`, the task contracts, the declared sensors
-(tests, lint, typecheck) and whether the pending change is due a review. The pre-commit hook
+(tests, lint, typecheck) and what code still waits for its two reviews. The pre-commit hook
 runs it, so a red check means the commit is not ready yet. A gate that passes prints one line,
-`PASS  check  <n> rows passed`, with the review's verdict where it was assessed; a gate that fails
+`PASS  check  <n> rows passed`, with what the `review` row says of that debt; a gate that fails
 prints every row. A check a gate's own sensor starts carries `JS_HARNESS_CHECK_INNER=1` and runs no
 sensor and takes no lock; its line ends `sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)`,
 so the variable left set in a shell never passes for a gate. `--verbose` prints every row of a passing gate too, and so does
@@ -529,7 +529,8 @@ it, and the command that fixes what is missing. `--offline` skips the check for 
 It also says whether Claude Code and the desktop app are signed into the same account (neither
 identifier is printed) and whether the remote server of each recorded login launcher is running.
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
-`worktrees` row for the worktrees on branches main already holds. `--json` prints the rows.
+`worktrees` row for the worktrees on branches main already holds and a `review-skips` row for the
+skips of both reviews that still owe one (a pull request holding a lens skip does not land). `--json` prints the rows.
 
 Its `codex-trust` row reads the `config.toml` of the Codex home (`CODEX_HOME` when the home is the
 real one and it is set, else `~/.codex`) for a `trusted_hash` of each harness hook of
@@ -999,7 +1000,7 @@ merged into it in order of number, and names each one it leaves out and why. The
 the one origin's HEAD names, else the one `gh repo view` names; when neither does, the queue refuses
 and names both commands, so a project whose default is not `main` lands on its own branch.
 Ready means the pull request is open, not a draft, mergeable, based on the default branch and with a
-gentle-ai line in its body, has a Codex review record for every code commit, and merges into the
+gentle-ai line in its body, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
 candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and, at the same time, on GitHub Actions (`.github/workflows/gate.yml`) on a
 `queue/*` branch pushed before the suite starts, so the run's checkout is the candidate, main as it would become, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).

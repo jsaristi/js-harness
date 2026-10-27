@@ -4,10 +4,10 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkLensReviews } from './lens-review-rows.mjs';
+import { checkLensReviews, checkReviewDebt, lensDoor, owedSkipLines } from './lens-review-rows.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA } from './lens-reviews.mjs';
-import { withSubjectHash } from './codex-reviews.mjs';
+import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 
 // The project turns the lens review on in the first commit, so every code commit after it asks for a lens record.
@@ -108,6 +108,69 @@ test('a Codex record gains the subject hash of its range, the same identity a le
   const rec = withSubjectHash(dir, { base, head, outcome: 'reviewed' });
   assert.equal(rec.subjectHash, lensCandidate(dir, { base, head }).subjectHash);
   assert.equal(withSubjectHash(dir, { base: 'f'.repeat(40), head }).subjectHash, undefined);
+});
+
+const debt = () => checkReviewDebt(dir);
+const codexRecord = (over) => appendCodexReview(dir, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: new Date().toISOString(), ...over });
+
+test('the review row informs: a code commit with no lens record is named with the command, and nothing fails', () => {
+  const said = debt();
+  assert.deepEqual([said.name, said.pass, said.info], ['review', true, true]);
+  assert.match(said.detail, /^no Claude lens record for 1 of 1 code commit since origin\/main$/);
+  assert.match(said.lines.join('\n'), /feat: two[\s\S]*js-harness lens-review --base \w+\^ --lenses/);
+  assert.doesNotMatch(JSON.stringify(said), /gentle-ai/);
+});
+
+test('the review row lists the skips of both reviews that still owe one, and drops each once a review pays it', () => {
+  record(base, head, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  codexRecord({ outcome: 'unavailable', reason: 'codex is down' });
+  const said = debt();
+  assert.equal(said.detail, 'every one of 1 code commit since origin/main has a Claude lens record; 2 skips still owe a review');
+  const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
+  assert.deepEqual(said.lines, [`lens: unavailable ${range}: out of turns`, `codex: unavailable ${range}: codex is down`]);
+  record(base, head);
+  codexRecord({ outcome: 'reviewed' });
+  assert.deepEqual([debt().detail, debt().lines], ['every one of 1 code commit since origin/main has a Claude lens record', undefined]);
+});
+
+test('with the Codex review off, the lenses are the one review: their debt is still said, and no push is refused for it (S9)', () => {
+  withoutAutoMaintenance(() => commit('harness.json', '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n', 'chore: codex review off'));
+  assert.equal(debt().detail, 'no Claude lens record for 2 of 2 code commits since origin/main; the Codex review is off here, so the lenses are the one review, and no push is refused for it');
+  assert.equal(row().pass, true);
+});
+
+test('the review row says when it cannot tell, and fails nothing', () => {
+  git('remote', 'remove', 'origin');
+  const said = debt();
+  assert.equal(said.pass, true);
+  assert.match(said.detail, /^cannot tell what waits for a review: no default branch of origin/);
+});
+
+test('the skips doctor lists are those the review row lists, and none where it cannot tell', () => {
+  assert.deepEqual(owedSkipLines(dir), []);
+  record(base, head, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  assert.deepEqual(owedSkipLines(dir), debt().lines.filter((line) => line.startsWith('lens: ')));
+  git('remote', 'remove', 'origin');
+  assert.equal(owedSkipLines(dir), null);
+});
+
+test('the merge door refuses a lens skip until a review pays it, and a range with no lens record', () => {
+  assert.match(lensDoor(dir, 'HEAD').detail, /^lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  record(base, head, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  assert.match(lensDoor(dir, 'HEAD').detail, /^it holds a lens review skip, which owes a review before it lands: unavailable /);
+  record(base, head);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
+// L11: the push lets the lens debt through where the Codex review is off; the merge path does not (S7).
+test('the merge door asks for the lens review with the Codex review off: that exemption is the push row\'s alone', () => {
+  const tip = withoutAutoMaintenance(() => commit('harness.json', '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n', 'chore: codex review off'));
+  assert.equal(row().pass, true);
+  assert.match(lensDoor(dir, 'HEAD').detail, /^lens review: 2 of 2 code commits since origin\/main have no complete Claude lens record/);
+  record(base, tip, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  assert.match(lensDoor(dir, 'HEAD').detail, /^it holds a lens review skip, which owes a review before it lands: unavailable /);
+  record(base, tip);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
 });
 
 // L9: a commit is asked by the switch its own tree holds, so the commits of a branch made before the lens review was

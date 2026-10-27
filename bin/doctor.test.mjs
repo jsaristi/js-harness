@@ -2489,6 +2489,33 @@ test('doctorMain shows the worktrees row ok with none, unknown when it cannot te
   }
 });
 
+// The review-skips row (odd/tasks/f8-s1-reviews.md, T5; S7: a skip is listed by `check` and `doctor`): the skips of both
+// reviews that still owe one, read only by the interactive report, as the worktrees row is.
+test('doctorMain lists the review skips that still owe a review, ok with none, unknown when it cannot tell, and its hook never reads them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (reviewSkips, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, reviewSkips });
+
+    const owed = await run(() => ['lens: unavailable 1234567..89abcde: the plan is out of turns']);
+    assert.match(owed.output, /^review-skips\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(owed.output.includes('  review-skips (project):\n    1 review skip still owes a review, and a pull request that holds a lens skip does not land: run the review it skipped\n    lens: unavailable 1234567..89abcde: the plan is out of turns\n'), owed.output);
+    assert.match((await run(() => [])).output, /^review-skips\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.match((await run(() => null)).output, /^review-skips\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await run(() => { asked = true; return []; }, ['--hook']);
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook read the review skips');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The clean row (odd/tasks/clean.md, S8): the last measure of the regenerable leftovers, a gap once its total reaches
 // the threshold, named in the hook's notice; a due measure is started in the background, never run in the hook.
 test('doctorMain shows the clean row stale past the threshold, names its size in the hook, and starts a due measure', async () => {

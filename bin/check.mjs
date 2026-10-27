@@ -42,12 +42,14 @@ import { readRecords, recordFolders } from './subagents.mjs';
 import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';
-import { checkCodexReviewDebt, checkCodexReviews, checkLensReviews, codexSwitchHere } from './lib/codex-review-rows.mjs';
+import { checkCodexReviewDebt, checkCodexReviews, checkLensReviews } from './lib/codex-review-rows.mjs';
+import { checkReviewDebt } from './lib/lens-review-rows.mjs';
 
 export { CLAUDE_MD_BUDGET, checkClaudeBudget, estimateTokens };
 export { failingTests } from './lib/flaky.mjs';
 export { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, takeGateTurn } from './lib/gate-turn.mjs';
 export { checkCodexReviewDebt, checkCodexReviews, codexReviewOffAt } from './lib/codex-review-rows.mjs';
+export { checkReviewDebt, lensDoor } from './lib/lens-review-rows.mjs';
 
 // The budget AGENTS.md is held to: the declared rule `agents-budget` (bin/lib/rules-data.mjs).
 export const TOKEN_BUDGET = ruleValue('agents-budget', 'estimated tokens');
@@ -1690,86 +1692,6 @@ async function testsOnCi(cwd, lock, deps, local = null) {
   return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
 }
 
-/** One `gentle-ai <args>` run as `{ status, stdout, stderr, error? }`; a spawn that throws is an `error`. */
-function runGentleAi(spawn, args, timeout) {
-  try {
-    return spawn('gentle-ai', args, { encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024 }) ?? { error: new Error('no result') };
-  } catch (error) {
-    return { error };
-  }
-}
-
-/** Parses `text` as a JSON object, else `null`. */
-function jsonObject(text) {
-  try {
-    const value = JSON.parse(text);
-    return isObject(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Why a gentle-ai run gave nothing usable, in a few words. */
-function whyNoAssessment(result, timeout) {
-  if (result.error?.code === 'ETIMEDOUT') return `timed out after ${Math.round(timeout / 1000)}s`;
-  if (result.error) return result.error.message;
-  const said = String(result.stderr ?? '').trim().split('\n')[0];
-  const exit = result.status === null ? `killed by ${result.signal ?? 'a signal'}` : `exit ${result.status}`;
-  return said ? `${exit}: ${said}` : `${exit}, no assessment on stdout`;
-}
-
-/** The `review` row: whether the pending change is due a gentle-ai review by risk, so the answer shows
- * at every commit instead of depending on anyone remembering to ask. Informational and fail-open: gentle-ai
- * owns review and RDD is the user's switch, so a missing, failing or slow gentle-ai never turns a commit red.
- * Only an explicit `off` skips the assessment; an unreadable mode counts as on, the switch's default. */
-export function checkReview(cwd, { spawn = spawnSync, git = spawnSync, timeout = 20000 } = {}) {
-  const row = (detail, lines) => ({ name: 'review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
-  // With the Codex review off here, gentle-ai's is the one review of the code: it is said due from medium risk up,
-  // his rule (odd/tasks/on-demand-functions.md, S9), and its absence is said too.
-  const codexOff = codexSwitchHere(cwd, git).value === 'off';
-  const notFound = () => row('gentle-ai was not found, so review by risk was not assessed');
-  const isMissing = (result) => result.error?.code === 'ENOENT';
-
-  const mode = runGentleAi(spawn, ['review', 'mode', 'status', '--cwd', cwd, '--json'], timeout);
-  if (isMissing(mode)) return notFound();
-  const status = mode.error || mode.status !== 0 ? null : jsonObject(mode.stdout)?.status;
-  if (isObject(status) && status.effective === 'off') {
-    const off = `RDD is off (${status.source ?? 'unknown source'}), so no review was assessed`;
-    return row(codexOff ? `${off}, and the Codex review is off here: no review reads this project's code` : off);
-  }
-
-  // Parsed whatever the exit code: on a clean tree gentle-ai exits non-zero and still prints the JSON.
-  const result = runGentleAi(spawn, ['review', 'assess', '--cwd', cwd, '--json'], timeout);
-  if (isMissing(result)) return notFound();
-  const assessed = result.error ? null : jsonObject(result.stdout);
-  if (assessed?.schema !== 'gentle-ai.review-assessment/v1') {
-    const reason = assessed ? 'unexpected schema' : whyNoAssessment(result, timeout);
-    return row(`gentle-ai review assess gave no assessment (${reason})`);
-  }
-  const { risk, changed_paths: paths, changed_lines: changed, review_due: due, review_due_reason: dueReason } = assessed;
-  const wellFormed = typeof risk === 'string' && Number.isInteger(paths) && Number.isInteger(changed) &&
-    typeof due === 'boolean' && typeof dueReason === 'string';
-  if (!wellFormed) return row('gentle-ai review assess gave no assessment (unexpected shape)');
-  const reasons = (Array.isArray(assessed.reasons) ? assessed.reasons : []).filter((reason) => isObject(reason) && typeof reason.code === 'string');
-  const lines = reasons.map((reason) => `${reason.code} ${reason.path ?? reason.detail ?? ''}`.trim());
-  if (paths === 0) {
-    // gentle-ai answers high and due both for a clean tree and for a candidate it could not build;
-    // only its explicit "no pending changes" reason is the clean tree, which is no finding.
-    const clean = reasons.some((reason) => reason.code === 'unassessable' && /no pending changes/.test(String(reason.detail)));
-    return clean ? row('no pending change to assess') : row('gentle-ai could not assess the pending change', lines);
-  }
-
-  const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
-  // His answer (S9) is high and medium: gentle-ai may call a high change not due (under its budget), and with
-  // no Codex review it is due all the same.
-  const dueHere = !due && codexOff && (risk === 'medium' || risk === 'high');
-  const why = dueHere ? `${risk} risk and the Codex review is off here` : dueReason;
-  const detail = `${risk} risk, ${count(paths, 'path')}, ${count(changed, 'line')}: review ${due || dueHere ? 'due' : 'not due'} (${why})`;
-  const next = assessed.next_transition?.command;
-  if (due && typeof next === 'string') lines.push(`next: ${next}`);
-  return row(detail, lines);
-}
-
 /** The `functions` row (odd/tasks/on-demand-functions.md): a switch of `harness.json` "functions" that cannot be
  * read fails the gate, as `sameTree` does, since every switch is then read as on and nothing says so but this;
  * a clone that is not what its switches ask is said so, one line a difference, and passes, since a gate writes
@@ -1968,7 +1890,7 @@ export const VERBOSE_ENV = 'JS_HARNESS_CHECK_VERBOSE';
 /** The one line a gate that passes prints in place of its rows, unless `--verbose` asks for them: a passing
  * commit printed dozens of lines, the name of every contract among them (finding 5 of JH 43,
  * odd/tasks/quiet-gate.md). It counts the rows, says how many only inform, and carries the verdict of the
- * `review` row, which a commit shows so that nobody has to remember to ask (`checkReview`), and says when an inner check
+ * `review` row, which a commit shows so that nobody has to remember to ask (`checkReviewDebt`), and says when an inner check
  * ran no sensor, so a `JS_HARNESS_CHECK_INNER` left set in a shell never passes for a gate. */
 export function passLine(rows) {
   const info = rows.filter((row) => row.info).length;
@@ -2058,8 +1980,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
       rows.push({ name: 'first', pass: true, info: true, detail: `ticket ${unclaimed.id} was cancelled: this gate ran no sensor under the lock, so it claimed none` });
     }
     stopped = sensed.some((row) => row.stopped === true);
-    // `deps.gentleAi` stands in for `spawnSync` here only, so a test can fake gentle-ai without touching the sensors.
-    if (!stopped) rows.push(checkReview(cwd, { spawn: deps.gentleAi, git: deps.git }));
+    if (!stopped) rows.push(checkReviewDebt(cwd, { spawn: deps.git, remote }));
   } else if (!push) {
     rows.push({ name: 'inner', pass: true, info: true, inner: true, detail: 'none ran, an inner check (JS_HARNESS_CHECK_INNER=1)' });
   }

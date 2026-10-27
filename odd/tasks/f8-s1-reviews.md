@@ -20,7 +20,7 @@ are worth keeping, but they read only what gentle-ai's provider builds, so S1 bu
 - `node --test bin/lib/lens-candidate.test.mjs bin/lib/lens-result.test.mjs bin/lib/lens-reviews.test.mjs bin/lens-review.test.mjs bin/lib/lens-review-rows.test.mjs` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s1-reviews.md` exits 0
 - `npm run check` exits 0, and its `review` row names no gentle-ai
-- `grep -c gentle-ai AGENTS.md` prints 0
+- `grep -ci "gentle-ai.*review\|review.*gentle-ai" AGENTS.md` prints 0
 - `## Probe` below records the diet's six behaviours in a scratch repo, 6 of 6, and three real slices with tokens per lens
 - `js-harness merge-queue --dry-run` lists each pull request as ready, and Codex has no open finding
 
@@ -67,7 +67,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T2 (kind: build) the candidate and its packager: identity (base, head, subject hash), ordered manifest, each path's patch; the four lens prompts from one text with four scopes; result validation; test first — S1, S2; inline; 6bc94451, fixed in 7ccc7033 and 2d0d2ef0
 - [x] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline; eb518c07, 2d0d2ef0
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
-- [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline
+- [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`
 - [ ] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline
 
 ## Log
@@ -136,18 +136,57 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     function, `remoteHoldsNoBranch`, both rows ask.
   - Rechecks of `e4375922..d5c722f6`: Codex correct (0.97), both fixed; lenses reliability and resilience
     complete with no finding, about 7,080 input tokens each.
+- L8 (2026-10-27): T5 in two slices, the `review` row with `AGENTS.md` first (it removes about 300 lines of
+  gentle-ai code and tests), then `doctor`, the door and `CLAUDE.md`. Decisions in it:
+  - His S9 (odd/tasks/on-demand-functions.md: with the Codex review off, gentle-ai reviews high and medium risk,
+    and nothing refuses a push for it) is ported, not dropped: with the Codex review off the `review` row still
+    names the lens debt and says the lenses are the one review, and the push asks for none. Its risk tiers leave,
+    since his answer of 2026-10-26 ("revision siempre") gives every slice both reviews whatever its risk.
+  - The contract's `grep -c gentle-ai AGENTS.md` asked more than S4: `AGENTS.md` still names gentle-ai for the
+    workflow and the ODD documents, which leave with gentle-ai itself at S2. It now asks that no line of it name
+    gentle-ai for review, what S4 says.
+- L9 (2026-10-27): evidence from the land of PRs 608 and 609 (the orchestrator's note of 14:20): it ran green, but
+  its push was refused by PR 608's own lens push row, since the queue's push meets the gate a candidate brings, and
+  PR 609's commits, made after the 18:00Z cut-over by a session with no `lens-review`, had Codex records only. The
+  fixed cut-over is the fault: once 608 is on main, every pull request of a session on v0.97 would be refused the
+  same way, and every project with the Codex review on would be at its update, before S12. The fix goes into PR 608
+  as a commit of its own: a code commit asks for a lens record only where its own tree turns the lens review on, a
+  switch of `harness.json` "functions", off unless declared and declared on in this repository, so the commits of a
+  branch made before 608 are never asked. 608 stays a draft until then (asked of the orchestrator, 14:2x).
+  - The Codex review of f6025a45 was stopped by the host for low memory (no record); it runs again when the
+    orchestrator says the land ended.
+  - A mistake: a failed commit was run again to read its failing test, a second CI run of about 165 s
+    (`docs/FAILURES.md`, diagnostic-whole-gate).
+- L10 (2026-10-27): the host compacted this session by itself at ~20:49Z; the record was committed before it but for
+  the next-step note, written again here. `f8-s1-debt` was rebased on PR 608's head, 9e81839b, with no conflict.
+  - Lenses on 4834997f (the review row, `9e81839b..4834997f`): risk, reliability and readability complete with no
+    finding, about 24,950 input tokens each.
+  - Lenses on 023eceb9 (doctor and the door, `4834997f..023eceb9`): risk and reliability complete with no finding,
+    about 14,060 input tokens each; readability answered with something that was not one JSON object, so the run
+    was incomplete and covered nothing. Run once more alone: complete, no finding.
+  - A gap for T6: an incomplete lens keeps only its `why`, not a line of what it answered, so "read why before it
+    runs again" could not be done past the parser's verdict. The fence is already accepted (`lens-result.test.mjs`).
+- L11 (2026-10-27): Codex on `9e81839b..7ae48b0c`, three parts. Part 3 died first when the orchestrator refreshed
+  the installed copy mid-run (`no-test-outside-turn.cjs` not found); run again alone, parts 1 and 2 kept. Parts 1 and
+  2 correct (0.93, 0.92); part 3 incorrect (0.93), one P2 the lenses missed: the merge door read the lens debt
+  through the push row, which passes where the Codex review is off, so a pull request with a lens skip or no lens
+  record could land there, against S7. Fixed test first: `lensDoor` reads `lensCoverage` itself. 347,875 input
+  tokens in all. PR 3 is not rebased on main (the orchestrator's note of 15:57): 9e81839b is in main, `merge-tree`
+  shows no conflict, and a rebase would void both reviews' records.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
 - gentle-ai on `b6ef6f38..e4375922`: medium, not due (under_budget, 243 lines); on `e4375922..d5c722f6`: medium, not due (under_budget, 72 lines).
 - gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
+- gentle-ai on `9e81839b..e35eb7dc` (4834997f, 023eceb9, e35eb7dc): medium, reviewed and approved (lineage review-31b6ff71575dd070, lens reliability), one suggestion: the `review` row's catch for a spawn that throws has no test since the gentle-ai row's went, left for the next slice; Codex correct on parts 1 and 2, its P2 fixed in e35eb7dc and rechecked correct (0.98); lenses no finding (L10, L11).
 
 ## Next step
-State at 2026-10-27 ~18:45Z. PR 607 (slices 1+2) merged at 17:45Z. T4 is done and reviewed (L7): e4375922 and its
-fix d5c722f6, both reviews clean on the recheck; it goes out as PR 2 of 3, from branch `f8-s1-gate`.
-Next, T5: the `review` row (`checkReview`, gentle-ai, `bin/check.mjs:1721`, at its 2110-line ceiling) replaced by a
-debt row of both reviews and their skips, from `lens-review-rows.mjs`; a `doctor` row of skips; `reviewEvidence`
-(`bin/merge-queue.mjs:307`, at its 1057-line ceiling) adds
-`checkLensReviews` and refuses a skip; `AGENTS.md` "says whether the pending change is due a gentle-ai review" and
-`CLAUDE.md`'s review lines. Then T6: the probe (six behaviours) and the incident rerun, asked first through the
-orchestrator (about $11 to $22).
+State at 2026-10-27 ~21:20Z. PR 608 landed (main bce0e41). PR 3 is branch `f8-s1-debt` against main, not rebased
+(L11): 4834997f the review row, 023eceb9 doctor and the door, e35eb7dc the door's fix, every one reviewed by Codex,
+the lenses and gentle-ai. Next: push it, open PR 3, dry-run, ready notice. Then the last slice of T5 and the start of
+T6: `CLAUDE.md`'s review lines (Codex and the lenses on every slice; a skip of either is debt), the test gentle-ai
+suggested for the `review` row's catch, and a lens's incomplete answer keeping a line of what it said (L10). Then
+the probe (six behaviours), three real slices with tokens per lens, and the incident rerun asked first through the
+orchestrator (about $11 to $22). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450:
+leave it, never force-push. The wait on the orchestrator's notices runs in the background until a notice comes or
+240 minutes pass.
