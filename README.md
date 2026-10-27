@@ -530,7 +530,8 @@ it, and the command that fixes what is missing. `--offline` skips the check for 
 It also says whether Claude Code and the desktop app are signed into the same account (neither
 identifier is printed) and whether the remote server of each recorded login launcher is running.
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
-`worktrees` row for the worktrees on branches main already holds. `--json` prints the rows.
+`worktrees` row for the worktrees on branches main already holds and a `review-skips` row for the
+skips of both reviews that still owe one (a pull request holding a lens skip does not land). `--json` prints the rows.
 
 Its `codex-trust` row reads the `config.toml` of the Codex home (`CODEX_HOME` when the home is the
 real one and it is set, else `~/.codex`) for a `trusted_hash` of each harness hook of
@@ -1000,7 +1001,7 @@ merged into it in order of number, and names each one it leaves out and why. The
 the one origin's HEAD names, else the one `gh repo view` names; when neither does, the queue refuses
 and names both commands, so a project whose default is not `main` lands on its own branch.
 Ready means the pull request is open, not a draft, mergeable, based on the default branch and with a
-gentle-ai line in its body, has a Codex review record for every code commit, and merges into the
+gentle-ai line in its body, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
 candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and, at the same time, on CircleCI on a `queue/*` branch pushed
 before the suite starts, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).

@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { removableWorktrees } from './lib/worktrees.mjs';
-import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
+import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF, lensDoor } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
@@ -31,7 +31,7 @@ export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refres
 
 Builds the candidate the default branch would be: origin's default branch (what origin's HEAD names, else what gh names)
 with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a gentle-ai line in its body, a Codex
-review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
+review record and a complete Claude lens record (no lens skip) for every code commit, and no conflict with the candidate so far. A pull request GitHub
 has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
 Each code commit committed after the cut-over (${GENTLE_AI_CUTOVER}) needs gentle-ai's evidence on its own branch: its
@@ -304,13 +304,14 @@ function markdownlessCommits(cwd, main, head) {
 }
 
 /** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
- * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused when a code commit
- * committed after `cutover` has no gentle-ai line on its branch (`gentleAiEvidence`), and, when it passes, `lines`: one
- * for each code commit, with the Codex record that covers it and the gentle-ai line that names it, so the lead reads the
- * coverage commit by commit and needs no look of their own. */
+ * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused as `lensDoor` refuses
+ * (no complete lens record, or a lens skip), or when a code commit committed after `cutover` has no gentle-ai line on its
+ * branch (`gentleAiEvidence`), and, when it passes, `lines`: one for each code commit, with the Codex record that covers it
+ * and the gentle-ai line that names it, so the lead reads the coverage commit by commit and needs no look of their own. */
 export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } = {}) {
   const codex = checkCodexReviews(cwd, head);
-  if (!codex.pass) return codex;
+  const refused = codex.pass ? lensDoor(cwd, head) : codex;
+  if (refused) return refused;
   const off = codexReviewOffAt(cwd, head);
   const coverage = off ? null : reviewCoverage(cwd, { from: main, tip: head });
   const codeCommits = off ? markdownlessCommits(cwd, main, head) : coverage.unknown ? null : coverage.codeCommits;
@@ -319,7 +320,6 @@ export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } 
   if (evidence.unknown) return { pass: false, detail: 'its gentle-ai lines could not be read' };
   const refusal = evidenceRefusal(evidence);
   if (refusal !== null) return { pass: false, detail: refusal };
-  const due = new Set(evidence.due.map((commit) => commit.id));
   const lines = codeCommits.map((commit) => {
     const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;
     const codexSaid = off ? 'the Codex review is off'

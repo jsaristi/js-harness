@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkLensReviews, checkReviewDebt } from './lens-review-rows.mjs';
+import { checkLensReviews, checkReviewDebt, lensDoor, owedSkipLines } from './lens-review-rows.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA } from './lens-reviews.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
@@ -144,6 +144,22 @@ test('the review row says when it cannot tell, and fails nothing', () => {
   const said = debt();
   assert.equal(said.pass, true);
   assert.match(said.detail, /^cannot tell what waits for a review: no default branch of origin/);
+});
+
+test('the skips doctor lists are those the review row lists, and none where it cannot tell', () => {
+  assert.deepEqual(owedSkipLines(dir), []);
+  record(base, head, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  assert.deepEqual(owedSkipLines(dir), debt().lines.filter((line) => line.startsWith('lens: ')));
+  git('remote', 'remove', 'origin');
+  assert.equal(owedSkipLines(dir), null);
+});
+
+test('the merge door refuses a lens skip until a review pays it, and a range with no lens record', () => {
+  assert.match(lensDoor(dir, 'HEAD').detail, /^lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  record(base, head, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  assert.match(lensDoor(dir, 'HEAD').detail, /^it holds a lens review skip, which owes a review before it lands: unavailable /);
+  record(base, head);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
 });
 
 // L9: a commit is asked by the switch its own tree holds, so the commits of a branch made before the lens review was

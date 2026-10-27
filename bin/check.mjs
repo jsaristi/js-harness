@@ -49,7 +49,7 @@ export { CLAUDE_MD_BUDGET, checkClaudeBudget, estimateTokens };
 export { failingTests } from './lib/flaky.mjs';
 export { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, takeGateTurn } from './lib/gate-turn.mjs';
 export { checkCodexReviewDebt, checkCodexReviews, codexReviewOffAt } from './lib/codex-review-rows.mjs';
-export { checkReviewDebt } from './lib/lens-review-rows.mjs';
+export { checkReviewDebt, lensDoor } from './lib/lens-review-rows.mjs';
 
 // The budget AGENTS.md is held to: the declared rule `agents-budget` (bin/lib/rules-data.mjs).
 export const TOKEN_BUDGET = ruleValue('agents-budget', 'estimated tokens');

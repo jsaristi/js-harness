@@ -8,6 +8,8 @@ import * as queue from './merge-queue.mjs';
 import { circleciState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
 import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
+import { lensCandidate } from './lib/lens-candidate.mjs';
+import { appendLensReview, LENS_REVIEW_SCHEMA } from './lib/lens-reviews.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
@@ -756,17 +758,26 @@ test('the main worktree is made beside the candidate, and removed with it: on su
 
 const REVIEWED_AT = '2026-10-16T12:00:00.000Z';
 
-/** Appends to the Codex review records of the clone at `root` one review of `base..head`. */
-function writeRecord(root, { base, head }) {
+/** Appends to the Codex review records of the clone at `root` one review of `base..head`, and to its lens records one
+ * whose outcome is `lens` (`reviewed`, `unavailable` with a reason, or none when `null`). */
+function writeRecord(root, { base, head, lens = 'reviewed' }) {
   fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
   const rec = { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: REVIEWED_AT, outcome: 'reviewed' };
   fs.appendFileSync(path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl'), `${JSON.stringify(rec)}\n`, 'utf8');
+  if (lens) writeLensRecord(root, { base, head, outcome: lens });
+}
+
+/** Appends to the lens records of the clone at `root` one of `base..head` with `outcome`, as `lens-review` writes it. */
+function writeLensRecord(root, { base, head, outcome }) {
+  const { subjectHash } = lensCandidate(root, { base, head });
+  const said = outcome === 'reviewed' ? { results: [{ lens: 'risk', outcome: 'complete', findings: [] }] } : { reason: 'the plan is out of turns' };
+  appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: REVIEWED_AT, outcome, ...said });
 }
 
 /** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, whose second line is
  * `line({ code, short, main })`. With `codex` on, main's harness.json turns the Codex review on and a record covers
- * main..feat/g. `{ root, origin, main, code, head }`. */
-function makeEvidenceRepo(line, { codex = true } = {}) {
+ * main..feat/g, and a lens record whose outcome is `lens` (`writeRecord`). `{ root, origin, main, code, head }`. */
+function makeEvidenceRepo(line, { codex = true, lens = 'reviewed' } = {}) {
   const made = makeQueueRepo();
   const { root } = made;
   const commit = (file, text, message) => {
@@ -778,7 +789,7 @@ function makeEvidenceRepo(line, { codex = true } = {}) {
   };
   let main = made.main;
   if (codex) {
-    main = commit('harness.json', `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'main turns the Codex review on');
+    main = commit('harness.json', `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'main turns the Codex and lens reviews on');
     git(root, 'push', '--quiet', 'origin', 'HEAD:main');
   }
   git(root, 'checkout', '--quiet', '-b', 'feat/g', main);
@@ -786,7 +797,7 @@ function makeEvidenceRepo(line, { codex = true } = {}) {
   const head = commit('odd/tasks/g.md', `# G\n${line({ code, short: code.slice(0, 7), main })}\n`, 'feat/g evidence');
   git(root, 'push', '--quiet', 'origin', 'feat/g');
   git(root, 'checkout', '--quiet', '--detach', main);
-  if (codex) writeRecord(root, { base: main, head });
+  if (codex) writeRecord(root, { base: main, head, lens });
   return { ...made, main, code, head };
 }
 
@@ -809,6 +820,21 @@ test('a code commit named by its short hash on a gentle-ai line of the branch\'s
     `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}; gentle-ai odd/tasks/g.md:2`,
     `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`,
   ]);
+});
+
+test('a code commit no complete lens record covers leaves the pull request out (odd/tasks/f8-s1-reviews.md, T5)', async () => {
+  const { root, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short} approved`, { lens: null });
+  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.match(out[0], /^PR 1 is left out: lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
+});
+
+test('a lens skip leaves the pull request out until a review of the same commits pays it (S7)', async () => {
+  const { root, main, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short} approved`, { lens: 'unavailable' });
+  const skipped = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.match(skipped.out[0], new RegExp(`^PR 1 is left out: it holds a lens review skip, which owes a review before it lands: unavailable ${main.slice(0, 7)}\\.\\.${head.slice(0, 7)}: the plan is out of turns`));
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
+  const paid = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.ok(paid.out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), paid.out.join('\n'));
 });
 
 test('a commit named only on a line that does not say gentle-ai, or named nowhere, leaves the pull request out', async () => {

@@ -366,6 +366,9 @@ machine for nothing.
 - Class: machine
 - Seen: 2026-10-10 — relief file, line 83 — the third run, 03:21 to 03:41 (claimed); also
   odd/tasks/session-board.md:1350-1351
+- Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L9 — JH 62 ran a failed commit again to read its failing
+  test, a second CI run of about 165 s, when the first run's output, cut by `tail`, already pointed at the
+  failure; the name of the failing test is on the gate's `✖ failing tests:` lines, read from the first run
 
 ### doctor-lock-mtime-ms
 A test of `bin/doctor.test.mjs`, "doctorMain shows the pnpm-lock row stale for a global bin lock left over

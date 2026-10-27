@@ -70,6 +70,29 @@ function reviewOffAt(cwd, head, spawn) {
 /** The line a skip is listed with. */
 export const skipLine = (rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`;
 
+/** The line of each skip of both reviews that still owes one, lens skips first, from `state`, what `lensCoverage` said. */
+function skipLinesOf(cwd, state, spawn) {
+  const codexSkips = codexSkipsOwed(cwd, { from: state.baseRef, tip: state.tip, spawn }) ?? [];
+  return [...state.skips.map((rec) => `lens: ${skipLine(rec)}`), ...codexSkips.map((rec) => `codex: ${skipLine(rec)}`)];
+}
+
+/** The skips of both reviews that still owe one on the branch at HEAD, each as its line (`doctor`'s `review-skips` row);
+ * `null` when it cannot be told. */
+export function owedSkipLines(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
+  const state = lensCoverage(cwd, 'HEAD', { spawn, remote });
+  return state.unknown ? null : skipLinesOf(cwd, state, spawn);
+}
+
+/** The merge door's word on the lens review of the pull request at `head` (odd/tasks/f8-s1-reviews.md, T5; S7: a skip is
+ * refused by the merge path until reviewed): `null` when it may land, else `{ pass: false, detail }` for a code commit
+ * no complete lens record covers, or for a lens skip that still owes a review. A Codex skip stays the door's to take, as
+ * it was: the Codex review's own rules let a skip through when Codex cannot run. */
+export function lensDoor(cwd, head, { spawn = spawnSync, remote = 'origin' } = {}) {
+  const row = checkLensReviews(cwd, head, { spawn, remote });
+  if (!row.pass) return { pass: false, detail: `lens review: ${row.detail}` };
+  return row.lines?.length ? { pass: false, detail: `it holds a lens review skip, which owes a review before it lands: ${row.lines[0]}` } : null;
+}
+
 /** The lines that name the `uncovered` commits since `base` and the command that makes their record. */
 const uncoveredLines = (uncovered, base) => {
   const oldest = uncovered[uncovered.length - 1];
@@ -89,9 +112,8 @@ export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = 
   try {
     const state = lensCoverage(cwd, 'HEAD', { spawn, remote });
     if (state.unknown) return row(`cannot tell what waits for a review: ${state.unknown}`);
-    const { tip, baseRef, base, codeCommits, uncovered, skips, note } = state;
-    const codexSkips = codexSkipsOwed(cwd, { from: baseRef, tip, spawn }) ?? [];
-    const skipLines = [...skips.map((rec) => `lens: ${skipLine(rec)}`), ...codexSkips.map((rec) => `codex: ${skipLine(rec)}`)];
+    const { base, codeCommits, uncovered, note } = state;
+    const skipLines = skipLinesOf(cwd, state, spawn);
     const owing = skipLines.length ? `; ${plural(skipLines.length, 'skip')} still owe${skipLines.length === 1 ? 's' : ''} a review` : '';
     const off = reviewOffAt(cwd, 'HEAD', spawn) ? '; the Codex review is off here, so the lenses are the one review, and no push is refused for it' : '';
     if (uncovered.length) return row(`no Claude lens record for ${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base}${owing}${off}${note}`, [...uncoveredLines(uncovered, base), ...skipLines]);

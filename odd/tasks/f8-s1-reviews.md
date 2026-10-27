@@ -145,6 +145,18 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   - The contract's `grep -c gentle-ai AGENTS.md` asked more than S4: `AGENTS.md` still names gentle-ai for the
     workflow and the ODD documents, which leave with gentle-ai itself at S2. It now asks that no line of it name
     gentle-ai for review, what S4 says.
+- L9 (2026-10-27): evidence from the land of PRs 608 and 609 (the orchestrator's note of 14:20): it ran green, but
+  its push was refused by PR 608's own lens push row, since the queue's push meets the gate a candidate brings, and
+  PR 609's commits, made after the 18:00Z cut-over by a session with no `lens-review`, had Codex records only. The
+  fixed cut-over is the fault: once 608 is on main, every pull request of a session on v0.97 would be refused the
+  same way, and every project with the Codex review on would be at its update, before S12. The fix goes into PR 608
+  as a commit of its own: a code commit asks for a lens record only where its own tree turns the lens review on, a
+  switch of `harness.json` "functions", off unless declared and declared on in this repository, so the commits of a
+  branch made before 608 are never asked. 608 stays a draft until then (asked of the orchestrator, 14:2x).
+  - The Codex review of f6025a45 was stopped by the host for low memory (no record); it runs again when the
+    orchestrator says the land ended.
+  - A mistake: a failed commit was run again to read its failing test, a second CI run of about 165 s
+    (`docs/FAILURES.md`, diagnostic-whole-gate).
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
