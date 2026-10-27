@@ -60,6 +60,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "claude-md-budget",
+    "subject": "the most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn",
+    "owner": "project",
+    "since": "2026-10-27",
+    "value": 2500,
+    "unit": "estimated tokens"
+  },
+  {
     "id": "codex-review-floor",
     "subject": "the most input tokens a Codex review may cost however small its commit",
     "owner": "sebastian",
@@ -135,9 +143,9 @@ export const RULES = [
   },
   {
     "id": "double-review",
-    "subject": "a design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it",
+    "subject": "a proposal that changes one of his decisions passes two read-only readers that did not write it",
     "owner": "sebastian",
-    "since": "2026-10-16",
+    "since": "2026-10-27",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "first passes two read-only readers that did not write it",
@@ -463,7 +471,7 @@ export const RULES = [
     "id": "rules-live-in-the-harness",
     "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory",
     "owner": "sebastian",
-    "since": "2026-10-22",
+    "since": "2026-10-27",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A rule is recorded only where something acts on it",

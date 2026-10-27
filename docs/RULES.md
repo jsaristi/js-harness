@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `424639864f73`. In force: 65 (40 of Sebastián, 25 of the project). Retired: 2.
+Hash `ed5a2ab05d8b`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 2.
 
 ## Sebastián's
 
@@ -46,10 +46,10 @@ The share of its context window at which a session pauses, writes its state and 
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
 ### double-review
-A design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it: "- A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
+A proposal that changes one of his decisions passes two read-only readers that did not write it: "- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
-- Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+- Since 2026-10-27. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-27, checked by the command on 2026-10-27.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
@@ -134,9 +134,9 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### rules-live-in-the-harness
-A rule he gives is cemented in the harness where something acts on it, never only in memory: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`AGENTS.md\`, a protocol."
+A rule he gives is cemented in the harness where something acts on it, never only in memory: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, checked by the command on 2026-10-22.
+- Since 2026-10-27. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, checked by the command on 2026-10-27.
 
 ### session-effort
 The effort a session runs at: high.
@@ -237,6 +237,11 @@ The most estimated tokens AGENTS.md may hold, since every session pays it on eve
 How long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine: 8 minutes.
 - Read by: `bin/lib/ci-gate.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/commit-gates-first.md`.
+
+### claude-md-budget
+The most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn: 2,500 estimated tokens.
+- Read by: `bin/lib/claude-md-budget.mjs`.
+- Since 2026-10-27. Row: reports. Source: design, `docs/proposals/harness-diet.md`.
 
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
