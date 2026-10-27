@@ -93,7 +93,7 @@ function tildePath(filePath, home) {
 export function checkPayload(cwd, home) {
   return measurePayload({ home, cwd }).hosts.map((host) => {
     const sources = host.sources.map((s) => {
-      const tokens = s.tokens === null ? 'not found' : String(s.tokens);
+      const tokens = s.excluded ? 'excluded (claudeMdExcludes)' : s.tokens === null ? 'not found' : String(s.tokens);
       return `${s.name.padEnd(18)} ${tokens.padStart(9)}  ${tildePath(s.path, home)}`;
     });
     // A plugin's hook names the plugin it comes from; a settings hook keeps its row as it was.

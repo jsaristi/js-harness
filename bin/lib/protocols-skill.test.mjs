@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
 import { RULES } from './rules-data.mjs';
-import { agentsTemplate } from './project.mjs';
+import { claudeTemplate } from './project.mjs';
 
 const TEXT = protocolsSkillContent('0.1.0');
 
@@ -132,7 +132,7 @@ test('a proposal reaches the user only after two readers, and a handoff names th
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
   assert.ok(handoff.includes('- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (`rule:reports-spanish-visual`)'), handoff);
-  assert.ok(squash(agentsTemplate('project')).includes('one attacks its claims, one looks only for what is missing'));
+  assert.ok(squash(claudeTemplate()).includes('one attacks its claims, one looks only for what is missing'));
 });
 
 test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {

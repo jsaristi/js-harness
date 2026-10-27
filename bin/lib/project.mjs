@@ -17,6 +17,7 @@ import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
+import { TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 
 /** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what an
  * older copy cannot undo: format 1 its `settings`, which a copy older than the switches does not know, and
@@ -357,62 +358,24 @@ function excludeFile(root, spawn) {
   return { file };
 }
 
-/** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
- * file loads on every turn — see "T2 design"), titled with the project's own folder name. Placeholder
- * prompts are left in angle brackets for the project to fill in. The harness's lines are in their marked block. */
-export function agentsTemplate(root) {
-  const name = path.basename(path.resolve(root));
-  const body = templateBlock();
-  return `<!-- Written by \`js-harness init\`. This file loads on every turn: keep it short. -->
-# ${name}
+/** The base `AGENTS.md` template `init` writes when a project has none of its own (`agentsFile`): with `split`, the
+ * reviewer's half of the harness's lines, since `CLAUDE.md` holds the rest (odd/tasks/f8-s3-split.md, S3); without it,
+ * the whole block, for a project whose own `CLAUDE.md` does not hold the harness's half. */
+export const agentsTemplate = (root, { split = true } = {}) => agentsFile(root, split ? agentsBlock() : templateBlock());
+/** The base `CLAUDE.md` template `init` writes beside it (`claudeFile`), with the half Claude works from. */
+export const claudeTemplate = () => claudeFile(claudeBlock());
+/** `text` with the harness's block rendered as `body`, the whole block unless given (`renderBlock`). */
+export const renderTemplateBlock = (text, body = templateBlock()) => renderBlock(text, body);
 
-## What this project is
-<what this project does, and who it is for, in one or two lines>
-
-## How it works
-<where the work lives: the code, the data, the documents>. The single command that checks a change:
-\`<command>\`.
-
-${templateBlockMark(body)}
-${body}${TEMPLATE_BLOCK_END}
-
-## Constraints
-- <a real constraint> — <the reason behind it>
-
-A constraint the gate must hold gets an id in docs/rules.json (\`js-harness rules\`).
-`;
-}
-
-/** The mark that ends the harness's block of `AGENTS.md`. */
-const TEMPLATE_BLOCK_END = '<!-- js-harness block end -->';
-/** The mark that opens it, carrying the hash of its lines: lines that no longer match it were edited. */
-const TEMPLATE_BLOCK_MARK = /^<!-- js-harness block ([0-9a-f]{12}): .*-->\r?$/m;
-/** The hash a block's mark carries: of its lines with LF line ends, so a checkout with CRLF ones reads as unedited. */
-const blockHash = (body) => sha256(body.replace(/\r\n/g, '\n')).slice(0, 12);
-const templateBlockMark = (body) => `<!-- js-harness block ${blockHash(body)}: sync renders the lines to the end mark again while they are unedited -->`;
-
-/** `text`, an `AGENTS.md`, with the harness's block rendered as this version writes it: `{ text, state }`. The state
- * is `rendered` when the block's lines matched the hash of its mark and differed from this version's, `current` when
- * they are this version's already, `edited` when they no longer match their mark (or the block has no end mark), and
- * `none` when the file has no block. Every line outside the block is kept, and the file's line ends with them. */
-export function renderTemplateBlock(text) {
-  const opened = TEMPLATE_BLOCK_MARK.exec(text);
-  if (opened === null) return { text, state: 'none' };
-  const after = opened.index + opened[0].length;
-  const from = after + (text.startsWith('\n', after) ? 1 : 0);
-  const to = text.indexOf(TEMPLATE_BLOCK_END, from);
-  if (to === -1 || blockHash(text.slice(from, to)) !== opened[1]) return { text, state: 'edited' };
-  const body = templateBlock();
-  if (text.slice(from, to).replace(/\r\n/g, '\n') === body) return { text, state: 'current' };
-  const lineEnd = text.includes('\r\n') ? '\r\n' : '\n';
-  const block = `${templateBlockMark(body)}\n${body}`.replace(/\n/g, lineEnd);
-  return { text: text.slice(0, opened.index) + block + text.slice(to), state: 'rendered' };
-}
-
-/** The harness's lines of the base `AGENTS.md` template: the ones that hold in any project, whose wording is the
- * owner's yes (odd/tasks/rule-hierarchy.md, T9). They sit in a marked block that `sync` renders again while the project
- * has not edited them (`renderTemplateBlock`, T16f). */
+/** The harness's lines that hold in any project, whose wording is the owner's yes (odd/tasks/rule-hierarchy.md, T9):
+ * the whole block, the two halves of the split as an `AGENTS.md` written before it holds them. They sit in a marked
+ * block that `sync` renders again while the project has not edited them (`renderTemplateBlock`, T16f). */
 export function templateBlock() {
+  return `${agentsBlock()}\n${claudeBlock()}`;
+}
+
+/** The half of the harness's lines a reviewer needs, the block of a split `AGENTS.md`: what good looks like. */
+export function agentsBlock() {
   return `## What good looks like
 Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated
 that was not checked; what is passed on is complete and true; and each mistake leaves a control, of
@@ -423,8 +386,12 @@ A finding arrives with the evidence that proves it, and every claim is checked, 
 as \`js-harness-protocols\` section 6 says.
 Where the Codex review is off (\`js-harness functions\`), gentle-ai's assessment decides when a change
 is reviewed.
+`;
+}
 
-## Working with the owner
+/** The half of the harness's lines Claude works from, the block of the `CLAUDE.md` `init` writes: working with the owner. */
+export function claudeBlock() {
+  return `## Working with the owner
 The owner decides spend outside the plan, anything installed or changed on a machine, a product
 choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
 published outside this project. Ask those one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
@@ -852,20 +819,30 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
 
     // AGENTS.md: only when the project has none of its own. `isOccupied` (not `fs.existsSync`)
     // so a dangling symlink there is kept, not silently written through (T2d item 1).
+    // With it, CLAUDE.md, the split of odd/tasks/f8-s3-split.md (S3), and only when the project has neither file: a
+    // project with its own CLAUDE.md gets the whole block in AGENTS.md, so no line is lost, and one with its own
+    // AGENTS.md is moved to the split by the migration, not here.
     const agentsPath = path.join(root, 'AGENTS.md');
     const agentsRel = toRepoRelative(root, agentsPath);
+    const claudePath = path.join(root, 'CLAUDE.md');
+    const claudeRel = toRepoRelative(root, claudePath);
+    const ownClaude = isOccupied(claudePath);
+    if (ownClaude) actions.push(kept(claudeRel, clone ? 'committed' : 'exists'));
     if (isOccupied(agentsPath)) {
       actions.push(kept(agentsRel, clone ? 'committed' : 'exists'));
     } else if (clone) {
       // T4 design: sync never creates an AGENTS.md (init does, once); a clone without one only reports it.
       actions.push({ kind: 'skip', path: agentsRel, reason: 'not in this clone; sync does not create one' });
     } else {
-      const content = agentsTemplate(root);
-      createdPaths.push(agentsPath);
-      writeFile(agentsPath, content, 'utf8');
-      const hash = sha256(content);
-      files.push({ path: agentsRel, sha256: hash });
-      actions.push(wrote(agentsRel, hash));
+      const written = [[agentsPath, agentsRel, agentsTemplate(root, { split: !ownClaude })]];
+      if (!ownClaude) written.push([claudePath, claudeRel, claudeTemplate()]);
+      for (const [target, rel, content] of written) {
+        createdPaths.push(target);
+        writeFile(target, content, 'utf8');
+        const hash = sha256(content);
+        files.push({ path: rel, sha256: hash });
+        actions.push(wrote(rel, hash));
+      }
     }
 
     // The failures register, empty, under the same terms as AGENTS.md: only when the project has none, and
@@ -1913,36 +1890,54 @@ export function syncProject(cwd, version, deps = {}) {
   return syncTemplateBlock(root, syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps), writeFile, lstat);
 }
 
-/** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` rendered
- * again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md, T16f): a `rendered`
- * action, and no longer up to date. An edited block is a `kept` action, said on every sync, and writes nothing. The file
- * is a committed one, so git is what undoes the write; no manifest records it. A refusal is returned as it is. */
+/** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` and its
+ * `CLAUDE.md` rendered again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md,
+ * T16f): a `rendered` action each, and no longer up to date. A project whose `CLAUDE.md` holds a block has the split
+ * (odd/tasks/f8-s3-split.md, S3), and each file gets its half; any other keeps the whole block in `AGENTS.md`, so a
+ * project not yet moved loses no line. An edited block is a `kept` action, said on every sync, and writes nothing. The
+ * files are committed ones, so git is what undoes the write; no manifest records it. A refusal is returned as it is. */
 function syncTemplateBlock(root, result, writeFile, lstat = fs.lstatSync) {
   if (result.code !== 0) return result;
-  const agents = path.join(root, 'AGENTS.md');
-  let text;
+  const claude = blockFileOf(root, 'CLAUDE.md', lstat);
+  const split = claude.text !== undefined && TEMPLATE_BLOCK_MARK.test(claude.text);
+  let synced = renderBlockIn(root, 'AGENTS.md', blockFileOf(root, 'AGENTS.md', lstat), split ? agentsBlock() : templateBlock(), result, writeFile);
+  if (split) synced = renderBlockIn(root, 'CLAUDE.md', claude, claudeBlock(), synced, writeFile);
+  return synced;
+}
+
+/** The file `name` of `root` as a block can be rendered in: `{ text }`, `{ link: true, text }` for a link (read, never
+ * written through: git holds the link, not its target, so it could not give the target back; Codex, 2026-10-17), or
+ * `{}` when there is no regular file to read. */
+function blockFileOf(root, name, lstat) {
+  const file = path.join(root, name);
+  let link;
   try {
-    // A link is not written through: git holds the link, not its target, so it could not give the target back
-    // (Codex, 2026-10-17).
-    const stat = lstat(agents);
-    if (stat.isSymbolicLink()) return { ...result, actions: [...result.actions, kept('AGENTS.md', 'it is a link, so sync does not write through it')] };
-    if (!stat.isFile()) return result;
-    text = fs.readFileSync(agents, 'utf8');
+    const stat = lstat(file);
+    if (!stat.isSymbolicLink() && !stat.isFile()) return {};
+    link = stat.isSymbolicLink();
+    return { ...(link && { link }), text: fs.readFileSync(file, 'utf8') };
   } catch {
-    return result; // No AGENTS.md, or none that can be read: there is no block to render.
+    return link ? { link } : {}; // No file, or none that can be read: there is no block to render.
   }
-  const rendered = renderTemplateBlock(text);
+}
+
+/** `result` with the block of the file `name` rendered as `body`, as `syncTemplateBlock` says. */
+function renderBlockIn(root, name, file, body, result, writeFile) {
+  if (result.code !== 0) return result;
+  if (file.link) return { ...result, actions: [...result.actions, kept(name, 'it is a link, so sync does not write through it')] };
+  if (file.text === undefined) return result;
+  const rendered = renderTemplateBlock(file.text, body);
   if (rendered.state === 'edited') {
-    return { ...result, actions: [...result.actions, kept('AGENTS.md', "its block of the harness's lines was edited, so sync does not render it again")] };
+    return { ...result, actions: [...result.actions, kept(name, "its block of the harness's lines was edited, so sync does not render it again")] };
   }
   if (rendered.state !== 'rendered') return result;
   try {
-    writeFile(agents, rendered.text, 'utf8');
+    writeFile(path.join(root, name), rendered.text, 'utf8');
   } catch (err) {
     // The sync did not finish, so it exits non-zero and is not up to date.
-    return { ...result, code: 1, upToDate: false, actions: [...result.actions, { kind: 'problem', path: 'AGENTS.md', reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
+    return { ...result, code: 1, upToDate: false, actions: [...result.actions, { kind: 'problem', path: name, reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
   }
-  return { ...result, actions: [...result.actions, { kind: 'rendered', path: 'AGENTS.md' }], upToDate: false };
+  return { ...result, actions: [...result.actions, { kind: 'rendered', path: name }], upToDate: false };
 }
 
 /** Runs `js-harness functions apply` against the git repository at `cwd`'s top-level: makes this clone what

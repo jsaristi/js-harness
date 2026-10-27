@@ -229,18 +229,63 @@ function claudeHooks(home, cwd) {
   return [...settingsHooks, ...pluginHooks(home, cwd, settingsPaths)];
 }
 
+/** The regular expression of a `claudeMdExcludes` glob, matched against a forward-slashed absolute
+ * path: `**` crosses folders, `*` and `?` stay inside one; Windows paths compare case-insensitively. */
+function globPattern(glob) {
+  const body = glob.replace(/\\/g, '/').replace(/\*\*\/|\*\*|\*|\?|[.+^${}()|[\]]/g, (token) => {
+    if (token === '**/') return '(?:.*/)?';
+    if (token === '**') return '.*';
+    if (token === '*') return '[^/]*';
+    if (token === '?') return '[^/]';
+    return `\\${token}`;
+  });
+  return new RegExp(`^${body}$`, process.platform === 'win32' ? 'i' : '');
+}
+
+/** The first `claudeMdExcludes` glob, across the settings layers (odd/tasks/f8-s3-split.md, S8), that
+ * matches `filePath`, or `null`: Claude Code merges the arrays of every layer and skips a CLAUDE.md any
+ * of them matches. A missing or malformed layer, or an entry that is not a string, adds nothing. */
+function excludingGlob(settingsPaths, filePath) {
+  const target = path.resolve(filePath).replace(/\\/g, '/');
+  for (const settingsPath of settingsPaths) {
+    const globs = readJson(settingsPath)?.claudeMdExcludes;
+    if (!Array.isArray(globs)) continue;
+    const glob = globs.find((entry) => typeof entry === 'string' && globPattern(entry).test(target));
+    if (glob !== undefined) return glob;
+  }
+  return null;
+}
+
+/** A `CLAUDE.md` source, which counts nothing when a `claudeMdExcludes` glob keeps it from loading. */
+function claudeMdSource(name, filePath, settingsPaths) {
+  const glob = excludingGlob(settingsPaths, filePath);
+  return glob === null ? source(name, filePath) : { name, path: filePath, tokens: 0, excluded: glob };
+}
+
 /** Claude's per-turn sources, in load order: global `CLAUDE.md`, the active output style, the
- * project's `AGENTS.md` and (if present) `CLAUDE.md`, and the auto-memory index. */
+ * project's `AGENTS.md` and (if present) `CLAUDE.md`, and the auto-memory index. A `CLAUDE.md` that
+ * a `claudeMdExcludes` glob matches is listed as excluded and counts nothing. */
 function claudeHost(home, cwd) {
-  const sources = [source('global CLAUDE.md', path.join(home, '.claude', 'CLAUDE.md'))];
+  const settingsPaths = [
+    path.join(home, '.claude', 'settings.json'),
+    path.join(cwd, '.claude', 'settings.json'),
+    path.join(cwd, '.claude', 'settings.local.json'),
+  ];
+  const sources = [claudeMdSource('global CLAUDE.md', path.join(home, '.claude', 'CLAUDE.md'), settingsPaths)];
 
   const style = outputStyleSource(home);
   if (style) sources.push(style);
 
-  sources.push(source('project AGENTS.md', path.join(cwd, 'AGENTS.md')));
+  const agents = source('project AGENTS.md', path.join(cwd, 'AGENTS.md'));
+  sources.push(agents);
 
+  // An excluded CLAUDE.md that imports AGENTS.md takes it along: the import is how Claude loads that file.
   const projectClaudeMd = path.join(cwd, 'CLAUDE.md');
-  if (fs.existsSync(projectClaudeMd)) sources.push(source('project CLAUDE.md', projectClaudeMd));
+  if (fs.existsSync(projectClaudeMd)) {
+    const claudeMd = claudeMdSource('project CLAUDE.md', projectClaudeMd, settingsPaths);
+    if (claudeMd.excluded && /^@AGENTS\.md\s*$/m.test(fs.readFileSync(projectClaudeMd, 'utf8'))) Object.assign(agents, { tokens: 0, excluded: claudeMd.excluded });
+    sources.push(claudeMd);
+  }
 
   sources.push(
     source('memory index', path.join(home, '.claude', 'projects', memorySlug(cwd), 'memory', 'MEMORY.md')),

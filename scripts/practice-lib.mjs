@@ -518,10 +518,10 @@ export const JOURNEY = Object.freeze([
  * from the commit, but for an `AGENTS.md` that is exactly the candidate's template (`template`). `init` writes the
  * template of the copy that runs it, and the project committed the one of an earlier candidate, so a candidate that
  * changes the template shows it here once; the next run's `commit-passes` commits it. */
-export function secondInitProblem(porcelainText, agentsText, template) {
-  const lines = porcelainText.split('\n').filter(Boolean);
-  const onlyTemplate = lines.length === 1 && lines[0] === ' M AGENTS.md' && agentsText === template;
-  return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
+export function secondInitProblem(porcelainText, agentsText, template, claudeText, claudeTemplate) {
+  const lines = porcelainText.split('\n').filter(Boolean); // AGENTS.md, and CLAUDE.md since the split (odd/tasks/f8-s3-split.md, S3)
+  const templated = (line) => (line === ' M AGENTS.md' && agentsText === template) || (line === ' M CLAUDE.md' && claudeText !== undefined && claudeText === claudeTemplate);
+  return lines.every(templated) ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
 }
 
 /** The sorted `git status --porcelain` lines the practice project should show after `uninstall`, from the lines it
@@ -549,7 +549,7 @@ export function uninstallExpected(before, manifestText) {
     if (entry.createdDir === true) recorded.add(entry.path.replace(/\/[^/]*$/, ''));
   }
   const gone = (line) => line.startsWith('?? ') && recorded.has(line.slice(3).replace(/\/+$/, ''));
-  return [...before.filter((line) => !gone(line)), ' D AGENTS.md', ' D harness.json'].sort();
+  return [...before.filter((line) => !gone(line)), ' D AGENTS.md', ...(manifest.files?.some?.((entry) => entry?.path === 'CLAUDE.md') ? [' D CLAUDE.md'] : []), ' D harness.json'].sort(); // CLAUDE.md since the split, S3
 }
 
 /** The sections `agentsTemplate` gained with the lines that hold in any project (odd/tasks/rule-hierarchy.md, T9), whose

@@ -631,6 +631,10 @@ run. The full record is that document's `## Baseline`.
 - Cost: $54.58 for the three runs, $59.64 with the $5.06 set aside for faulty graders; an incident
   trial costs about $0.55.
 
+**S3, run against it (2026-10-27).** `f8-s3-incidents`, both arms in one run (the suite runs an arm `current-without-X` only beside `current`), on `b94f525f` with the split in the tree, before T10, T11 and D7's lines (`odd/tasks/f8-s3-split.md`, L13):
+- Incident set: `current` 13 of 20 and `current-without-claude-md` 13 of 20, both at L and above the worse line of 10; false premise 2 of 4 on each arm, as in the baseline. Cases 01, 02 and 05 still fail every trial.
+- Cost: $16.95 for the 40 trials ($11.22 `current`, $5.73 without `CLAUDE.md`), about $0.42 a trial.
+
 ### 7.2 The long-session eval, designed now and built in parallel
 
 It is S8's confirmation, not a gate on any cut. A scripted simulated user drives one session of
