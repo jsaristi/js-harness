@@ -178,13 +178,15 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
 - gentle-ai on `b6ef6f38..e4375922`: medium, not due (under_budget, 243 lines); on `e4375922..d5c722f6`: medium, not due (under_budget, 72 lines).
 - gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
+- gentle-ai on `9e81839b..e35eb7dc` (4834997f, 023eceb9, e35eb7dc): medium, reviewed and approved (lineage review-31b6ff71575dd070, lens reliability), one suggestion: the `review` row's catch for a spawn that throws has no test since the gentle-ai row's went, left for the next slice; Codex correct on parts 1 and 2, its P2 fixed in e35eb7dc and rechecked correct (0.98); lenses no finding (L10, L11).
 
 ## Next step
-State at 2026-10-27 ~20:55Z, after the host's compaction at ~20:49Z. PR 608 (`f8-s1-gate`, 8233cf84 the L9 fix and
-9e81839b its record) is ready and told: Codex correct (0.87), lenses clean. The worktree is on `f8-s1-debt`, rebased
-on 9e81839b: 4834997f the review row (was 55660144, from f6025a45) and 023eceb9 doctor and the door (was c390dc7e,
-from 0dd4c450), then 02a128b3 this document. Next: lenses on each of the two code commits, Codex on
-`9e81839b..023eceb9`, gentle-ai lines, PR 3 and its ready notice; then `CLAUDE.md`'s review lines; then T6, the probe
-(six behaviours), three real slices with tokens per lens, and the incident rerun asked first through the orchestrator
-(about $11 to $22). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave it, never
-force-push. The wait on the orchestrator's notices runs in the background until a notice comes or 240 minutes pass.
+State at 2026-10-27 ~21:20Z. PR 608 landed (main bce0e41). PR 3 is branch `f8-s1-debt` against main, not rebased
+(L11): 4834997f the review row, 023eceb9 doctor and the door, e35eb7dc the door's fix, every one reviewed by Codex,
+the lenses and gentle-ai. Next: push it, open PR 3, dry-run, ready notice. Then the last slice of T5 and the start of
+T6: `CLAUDE.md`'s review lines (Codex and the lenses on every slice; a skip of either is debt), the test gentle-ai
+suggested for the `review` row's catch, and a lens's incomplete answer keeping a line of what it said (L10). Then
+the probe (six behaviours), three real slices with tokens per lens, and the incident rerun asked first through the
+orchestrator (about $11 to $22). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450:
+leave it, never force-push. The wait on the orchestrator's notices runs in the background until a notice comes or
+240 minutes pass.
