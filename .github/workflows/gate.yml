@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # v4.4.0, with the node the CircleCI image runs (cimg/node:24.21.0).
+      # v4.4.0, with the node windows-daily.yml sets up too (held by scripts/github-workflows.test.mjs).
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0

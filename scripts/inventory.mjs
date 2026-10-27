@@ -58,7 +58,7 @@ const CLASS_RULES = [
   ['history', [/^odd\//, /^docs\/sessions\//, /^docs\/origin\.md$/, /^docs\/sweep-2026-10-11\.md$/, /^docs\/model-effort\.md$/, /^docs\/research\//, /^evals\/proofs\//]],
   ['generated', [/^docs\/RULES\.md$/, /^evals\/results\//]],
   ['fixture', [/^evals\/tasks\//, /^evals\/fixtures\//, /^evals\/review\/seeded\//, /^scripts\/fixtures\//, /^bin\/(?:.*\/)?fixtures\//]],
-  ['internal', [TEST_FILE, /^scripts\//, /^evals\//, /^\.github\//, /^\.circleci\//]],
+  ['internal', [TEST_FILE, /^scripts\//, /^evals\//, /^\.github\//]],
 ];
 
 function classOf(file) {

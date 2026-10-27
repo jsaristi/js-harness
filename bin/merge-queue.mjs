@@ -160,8 +160,8 @@ const RED = new Set(['failure', 'cancelled', 'timed_out', 'action_required', 'st
 
 /** GitHub Actions' result on the candidate: the newest run of .github/workflows/gate.yml (`CI_WORKFLOW`) for the push
  * of `branch`, its `queue/*` branch, at the commit `sha` (odd/tasks/drop-circleci.md, S2). No other workflow's run
- * decides it, as a windows-daily.yml run dispatched by hand on that branch would (Codex, 2026-10-27); the newest is a
- * re-run's. `{ state: 'green' | 'red' | 'pending', name, conclusion, url }`; pending while there is no such run or it
+ * decides it, as a windows-daily.yml run dispatched by hand on that branch would (Codex, 2026-10-27). A re-run keeps its
+ * run's id and GitHub reports its latest attempt, so the newest id is the newest push's run. `{ state: 'green' | 'red' | 'pending', name, conclusion, url }`; pending while there is no such run or it
  * is still running. */
 export function actionsState(workflowRuns, { branch, sha }) {
   const [run] = (workflowRuns ?? [])

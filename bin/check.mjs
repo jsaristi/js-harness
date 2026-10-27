@@ -1263,7 +1263,7 @@ const PLAIN_PATH = /^[A-Za-z0-9._/-]+$/;
  * kept below it on every system, so a selection runs the same way wherever it is asked. */
 const COMMAND_LINE_MAX = 7000;
 
-/** Whether `env` says the gate runs on CI: CircleCI and GitHub Actions both set `CI`, and a `CI` of `false`
+/** Whether `env` says the gate runs on CI: GitHub Actions sets `CI`, and a `CI` of `false`
  * or `0` says it does not. */
 export function onCi(env) {
   const value = env.CI?.trim().toLowerCase();
