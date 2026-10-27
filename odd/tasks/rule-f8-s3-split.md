@@ -57,3 +57,7 @@ Nothing: the budget is the project's; the rewrite carries his typed words.
 - L6. 2026-10-27: the feature branch's T10 and T11 (`7e069cdc`) put the two every-turn protocols and the session
   handoff in the root `CLAUDE.md`, which now measures 2383 estimated tokens; with D7's four lines, about 100, that is
   2483, so `rules change claude-md-budget` sets 2500.
+- gentle-ai on `f5d18e91..df4b1043`: medium, not due (under_budget); the slice is this pull request.
+- L7. 2026-10-27, Codex on f5d18e9..df4b104 (the budget at 2500): the patch is correct (0.98), recorded. D7 has
+  since been answered (question 96) and its four lines are back in the feature branch's `CLAUDE.md`, which measures
+  2483 estimated tokens.
