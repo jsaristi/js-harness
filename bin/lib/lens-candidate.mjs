@@ -24,8 +24,9 @@ export const CONTEXT_END = 'JS_HARNESS_LENS_CONTEXT_END';
 // an added one, as Codex reads it), and the patch's own shape fixed rather than left to the configuration.
 const DIFF = ['--no-renames', '--no-relative', '--no-ext-diff', '--no-textconv', '--no-color', '--submodule=short'];
 // `--full-index`: the `index` line of a section names its blobs in full, since an abbreviation's length follows
-// `core.abbrev` and the size of the repository, and would move the hash (the reliability lens, 2026-10-27).
-const PATCH = [...DIFF, '--unified=3', '--diff-algorithm=myers', '--indent-heuristic', '--full-index', '--src-prefix=a/', '--dst-prefix=b/'];
+// `core.abbrev` and the size of the repository, and would move the hash (the reliability lens, 2026-10-27);
+// `--inter-hunk-context=0`, since `diff.interHunkContext` joins nearby hunks into one (Codex, the same day).
+const PATCH = [...DIFF, '--unified=3', '--inter-hunk-context=0', '--diff-algorithm=myers', '--indent-heuristic', '--full-index', '--src-prefix=a/', '--dst-prefix=b/'];
 
 /** `git <args>` in `cwd`: its stdout as it is, or `null` when git failed. A patch is hashed, so nothing is trimmed. */
 function gitRaw(spawn, cwd, args) {

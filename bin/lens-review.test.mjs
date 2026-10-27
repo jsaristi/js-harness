@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { claudeArgs, lensEnv, lensReviewMain } from './lens-review.mjs';
+import { claudeArgs, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
 import { readLensReviews } from './lib/lens-reviews.mjs';
 import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
@@ -91,6 +91,37 @@ test('a skip is recorded with its reason and runs no lens; a range with no code 
   assert.equal(run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens }).code, 0);
   assert.equal(readLensReviews(dir).at(-1).outcome, 'nothing-to-review');
   assert.equal(claude.calls.length, 0);
+});
+
+test('--plan records nothing over a range with no code either, and does not go with --unavailable', () => {
+  const before = readLensReviews(dir).length;
+  const docs = run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r', '--plan']);
+  assert.equal(docs.code, 0);
+  assert.match(docs.out, /nothing to review/i);
+  assert.equal(run(['--base', 'HEAD~1', '--unavailable', 'out of turns', '--plan']).code, 2);
+  assert.equal(readLensReviews(dir).length, before);
+});
+
+// The shim is found by its file on a Windows PATH, so the test runs where such a path is a path: the daily Windows suite.
+test('a Claude CLI that is an npm shim runs as one quoted command line: the empty --tools value and the prompt path survive', { skip: process.platform !== 'win32' && 'a .cmd shim is found only on Windows' }, () => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'lens shim '));
+  try {
+    fs.writeFileSync(path.join(bin, 'claude.cmd'), '');
+    const calls = [];
+    const spawn = (command, args, options) => {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: '{}', stderr: '' };
+    };
+    runLens({ prompt: 'p', block: 'b', env: { PATH: bin } }, { spawn, platform: 'win32' });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.shell, true);
+    assert.equal(calls[0].options.input, 'b');
+    assert.match(calls[0].command, /--tools "" /);
+    // The path is quoted when it holds a space, as `quoteWindowsArg` quotes any argument.
+    assert.match(calls[0].command, /--system-prompt-file ("[^"]*js-harness-lens-[^"]*prompt\.md"|\S*js-harness-lens-\S*prompt\.md) --model/);
+  } finally {
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
 });
 
 test('--plan starts nothing and records nothing; a usage error is exit 2', () => {

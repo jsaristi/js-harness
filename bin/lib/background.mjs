@@ -65,12 +65,13 @@ export function idOfStart(stdout) {
 }
 
 /** A runner of the Claude CLI found on the PATH of `env` (`resolveClaude`), or null when there is none: `run(args, {
- * cwd })` gives `{ status, stdout, stderr, error }`. A `.cmd` shim runs as one command line through the shell. */
-export function claudeRunner({ env = process.env, platform = process.platform, spawn = spawnSync, timeout = 60000 } = {}) {
+ * cwd, input })` gives `{ status, stdout, stderr, error }`, `input` what the CLI reads on stdin (the lens review hands
+ * it its block so). A `.cmd` shim runs as one command line through the shell. */
+export function claudeRunner({ env = process.env, platform = process.platform, spawn = spawnSync, timeout = 60000, maxBuffer = 1024 * 1024 } = {}) {
   const claude = resolveClaude({ env, platform });
   if (claude === null) return null;
-  return (args, { cwd } = {}) => {
-    const options = { cwd, env, encoding: 'utf8', windowsHide: true, timeout };
+  return (args, { cwd, input } = {}) => {
+    const options = { cwd, env, encoding: 'utf8', windowsHide: true, timeout, maxBuffer, ...(input !== undefined && { input }) };
     const result = claude.shell
       ? spawn(windowsCommandLine(quoteWindowsArg(claude.path), args), [], { ...options, shell: true })
       : spawn(claude.path, args, options);

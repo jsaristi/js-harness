@@ -71,11 +71,13 @@ test('the block a lens reads opens with the subject line, holds the manifest and
 
 test('the subject hash does not move with the git configuration: the abbreviation of the index lines is fixed', () => {
   const first = lensCandidate(dir, { base, head }).subjectHash;
-  git('config', 'core.abbrev', '12');
-  try {
-    assert.equal(lensCandidate(dir, { base, head }).subjectHash, first);
-  } finally {
-    git('config', '--unset', 'core.abbrev');
+  for (const [key, value] of [['core.abbrev', '12'], ['diff.interHunkContext', '1000'], ['diff.noprefix', 'true']]) {
+    git('config', key, value);
+    try {
+      assert.equal(lensCandidate(dir, { base, head }).subjectHash, first, key);
+    } finally {
+      git('config', '--unset', key);
+    }
   }
 });
 

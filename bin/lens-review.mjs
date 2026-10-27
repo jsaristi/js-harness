@@ -9,12 +9,11 @@
 // block `./lib/lens-candidate.mjs` packages, and what it answers counts only as `./lib/lens-result.mjs` says. One
 // record a run (`./lib/lens-reviews.mjs`); `--unavailable <reason>` records a skip, which the push lets through and
 // `check`, `doctor` and the merge door keep listing until a review covers it.
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { unknownArgument } from './lib/args.mjs';
-import { resolveClaude } from './lib/claude-path.mjs';
+import { claudeRunner } from './lib/background.mjs';
 import { NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
@@ -52,17 +51,19 @@ export function claudeArgs(promptFile) {
 }
 
 /** One lens run with the real CLI: `{ status, stdout, stderr, error, durationMs }`. The prompt goes in a file of its
- * own, since a prompt of many lines cannot cross `cmd.exe` as an argument; the block goes on stdin. */
-function runLens({ prompt, block, env }) {
-  const claude = resolveClaude({ env });
-  if (!claude) return { error: new Error('the Claude CLI was not found on the PATH') };
+ * own, since a prompt of many lines cannot cross `cmd.exe` as an argument; the block goes on stdin. The CLI is run
+ * as `claudeRunner` runs it, which quotes every argument when it is an npm shim, the empty `--tools` value among
+ * them. `deps` (`spawn`, `platform`) are for the tests. */
+export function runLens({ prompt, block, env }, deps = {}) {
+  const run = claudeRunner({ env, timeout: LENS_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, ...deps });
+  if (!run) return { error: new Error('the Claude CLI was not found on the PATH') };
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-lens-'));
   const promptFile = path.join(folder, 'prompt.md');
   const started = Date.now();
   try {
     fs.writeFileSync(promptFile, prompt, 'utf8');
-    const ran = spawnSync(claude.path, claudeArgs(promptFile), { cwd: folder, env, input: block, encoding: 'utf8', timeout: LENS_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, shell: claude.shell, windowsHide: true });
-    return { status: ran.status, stdout: ran.stdout, stderr: ran.stderr, error: ran.error, durationMs: Date.now() - started };
+    const ran = run(claudeArgs(promptFile), { cwd: folder, input: block });
+    return { ...ran, durationMs: Date.now() - started };
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
@@ -121,6 +122,7 @@ function parseArgs(argv) {
   const base = value('--base');
   if (!base) throw new LensReviewArgError('--base <rev> is required');
   const options = { base, head: value('--head') ?? 'HEAD', cwd: path.resolve(value('--cwd') ?? process.cwd()), skip: value('--unavailable'), plan: argv.includes('--plan') };
+  if (options.skip !== undefined && options.plan) throw new LensReviewArgError('--plan records nothing, so it does not go with --unavailable');
   if (options.skip !== undefined) return options;
   const lenses = value('--lenses');
   if (lenses === undefined) throw new LensReviewArgError('--lenses <lens,...> is required: pick the lenses pertinent to what the range touched');
@@ -169,6 +171,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   }
   if (candidate.manifest.length === 0) {
     const reason = `no path a review reads changes in ${range}`;
+    if (options.plan) {
+      stdout(`Nothing to review: ${reason}. Nothing was started or recorded.`);
+      return 0;
+    }
     const file = write({ outcome: NOTHING_TO_REVIEW, reason });
     stdout(`Nothing to review: ${reason}. Recorded in ${file}; no lens was started.`);
     return 0;
