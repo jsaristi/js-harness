@@ -63,9 +63,9 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   (D2); incident set no worse".
 
 ## Tasks
-- [ ] T1 (kind: docs) this document, the forecast and the chain question to the orchestrator — all; inline
-- [ ] T2 (kind: build) the candidate and its packager: identity (base, head, subject hash), ordered manifest, each path's patch; the four lens prompts from one text with four scopes; result validation; test first — S1, S2; inline
-- [ ] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline
+- [x] T1 (kind: docs) this document, the forecast and the chain question to the orchestrator — all; inline; 82412009
+- [x] T2 (kind: build) the candidate and its packager: identity (base, head, subject hash), ordered manifest, each path's patch; the four lens prompts from one text with four scopes; result validation; test first — S1, S2; inline; 6bc94451, fixed in 7ccc7033 and 2d0d2ef0
+- [x] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline; eb518c07, 2d0d2ef0
 - [ ] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline
 - [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline
 - [ ] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline
@@ -110,3 +110,24 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - L3 (2026-10-27): forecast about 2,000 to 2,500 changed lines with tests over five slices (T2 to T5,
   each 400 to 600), past the 400 a slice; the chain strategy asked of the orchestrator, with chained pull
   requests as the default this session works by meanwhile.
+- L4 (2026-10-27, JH ORQ): "Chain strategy: yes, chained PRs, one a slice, each based on main and landed in
+  order with merge-queue as it becomes ready (stacked-to-main). Send a ready notice per PR."
+- L5 (2026-10-27): the first real runs, which are the probe's "three real slices" (T6) as they happen.
+  - Lenses on slice 1, `82412009..6bc94451` (risk, reliability, readability): complete, about 14,900 input and
+    815 to 2,204 output tokens a lens; reliability found that the subject hash moved with `core.abbrev`, fixed
+    test first in 7ccc7033 (`--full-index`). The answer came in Spanish, so the prompts now ask for English.
+  - Lenses on slice 2, `6bc94451..7ccc7033` (all four): complete, about 18,600 input tokens a lens; three of them
+    found `--plan` with `--unavailable` writing a skip, and reliability that the empty `--tools` value is lost
+    through an npm shim.
+  - Codex on `82412009..7ccc7033`, three parts, 319,251 input tokens: incorrect (0.99) on two parts, with the
+    same two faults (P1 the shim, P2 `--plan`) and a third, P2: `diff.interHunkContext` moves the hash. All three
+    fixed test first in 2d0d2ef0; the shim's run goes through `claudeRunner`, which already quoted for it.
+  - Rechecks of `7ccc7033..2d0d2ef0`: Codex correct (0.97), every finding fixed; lenses risk and reliability
+    complete with no finding, about 7,550 input tokens each.
+  - The two reviews agreed on two of three faults, and each found one the other did not: what his "criterio y
+    solidez" asked for.
+- L6 (2026-10-27): the first pull request holds slices 1 and 2: slice 2 carries the fixes of slice 1's findings,
+  so slice 1 alone would land with known faults. Every later slice is a pull request of its own, as L4 says.
+- gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
+- gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
+- gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
