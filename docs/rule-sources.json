@@ -297,6 +297,41 @@
       "by": "command"
     }
   },
+  "live-board": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Mantenme informado de que hemos estado cambiando y como vamos avanzando",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4186
+      },
+      {
+        "quote": "tu como arnes siempre debes mostrarle al usuario que se esta haciendo por que recuerda que eres como una caja negra, no se que esta pasando por atras",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4186
+      },
+      {
+        "quote": "Esto se podria hacer de una forma dinamica para estar informado en tiempo real?",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4325
+      },
+      {
+        "quote": "debes colocar aproximadamente cuando dudara una tarea y tratar de actualizarlo a partir de esa tarea o de nuevas cosas que vayan apareciendo y tambien cada cierto tiempo para ver que algo a cambiado",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4409
+      }
+    ],
+    "reading": "He wrote it to the lead while he watched several sessions at once and felt lost (\"veo la pantalla y quedo completamente perdido\"), after the lead had published a status page by hand; the second line, sent while the lead worked, asks for it to be live, and the third asks that it say about how long a task will take and update on each task, on what comes up, and every so often. The harness shows him what is being done, always: every work session writes each event as a channel notice (it starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends the record to the live board, an Artifact on the shared db that updates by itself (js-harness sessions live), and every reply of the lead points to the board. Only a Claude session can write the board's db, through ArtifactData; no command or hook reaches it (odd/tasks/live-board.md, S4). The estimates and the timed push he asked for in the third line are proposed and wait for his yes.",
+    "accepted": "Messages he typed to the lead, sent as he wrote them, each confirmed with js-harness sessions --quote; the reading is the lead's brief to the session that built it.",
+    "checked": {
+      "date": "2026-10-27",
+      "by": "command"
+    }
+  },
   "memory-feedback-home": {
     "kind": "design",
     "path": "odd/tasks/memory-feedback-home.md"
