@@ -80,13 +80,15 @@ Reviews:
   than one JSON object, reliability one WARNING refuted (it says THIRD_PARTY_NOTICES.md is not in the range;
   `git show --stat 883747f2` lists it: the packager leaves Markdown out), readability 0 findings; run 2 risk 0
   findings, readability 0, reliability answered more than one JSON object. Each lens answered clean once.
+  The record keeps 300 characters of a refused answer, and both start as the object, so why `JSON.parse`
+  refused them cannot be read; a skip is recorded (`--unavailable`), not a third run, and the lead has it (note,
+  23:16Z).
+- gentle-ai on `d90cd206..70e396b3`: medium, not due (under_budget, 245 lines).
+- Codex on `d90cd20..70e396b`: correct (0.97), no finding; 69,913 input tokens.
+- Lenses on `d90cd20..70e396b` (reliability, readability): complete, 0 findings.
 
 ## Next step
-The lens record of slice 1 is owed: the same lens answers "not one JSON object" on alternate runs, which looks
-like the result reader, not the code (read `lens-reviews.jsonl`'s last two records first; report it to the lead
-as a `note` and do not loop). Then push and open PR 1. `26381e6e` already moved `readSettings`,
-`acceptSessionMessages` and `restoreSettings` to `bin/lib/user-settings.mjs` (ceiling 1904); next the
-permissions hold/release beside them
+PR 1 holds `a1a84d74..70e396b3`. Next the permissions hold/release in `bin/lib/user-settings.mjs`
 (design in L4 and the Constraints), recorded as `manifest.permissions`, released before the hook entries in
 `uninstallInstalled`, and a `doctor` row. Then T5, T6; T7 waits on question 99.
 
