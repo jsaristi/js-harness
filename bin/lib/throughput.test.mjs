@@ -355,6 +355,19 @@ test('a merged pull request is ready from the newest ready notice naming it befo
   assert.match(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { channel: 'no channel record' } })]), 'ready to merged').value, /^not read: 2026-10-17 no channel record$/);
 });
 
+// odd/tasks/drop-circleci.md, L4: a land record before 2026-10-27 names its CI phase `circleci`, a later one `actions`;
+// a day that holds both counts each by its name.
+test('the land phases count a record\'s CircleCI phase and a later record\'s GitHub Actions phase, each by its name', () => {
+  const land = (startedAt, phases) => ({ v: 1, startedAt, endedAt: new Date(Date.parse(startedAt) + 300_000).toISOString(), considered: [1], landed: [1], phases, exit: 0 });
+  const records = [
+    land('2026-10-27T05:00:00Z', [{ phase: 'suite', seconds: 270, ok: true }, { phase: 'circleci', seconds: 280, ok: true }]),
+    land('2026-10-27T21:00:00Z', [{ phase: 'suite', seconds: 250, ok: true }, { phase: 'actions', seconds: 190, ok: false }]),
+  ];
+  const lands = landFacts(records, dayBounds('2026-10-27'));
+  const row = rowOf(throughputRows([dayOf({ day: '2026-10-27', lands })]), 'land phases');
+  assert.match(row.value, /; circleci 1, median 280 s; actions 1, median 190 s, red 1$/);
+});
+
 test('a land record of the day gives its phases, and a land that ran none is still a land', () => {
   const land = (startedAt, exit, phases) => ({ v: 1, startedAt, endedAt: new Date(Date.parse(startedAt) + 300_000).toISOString(), considered: [1, 2], landed: exit === 0 ? [1] : [], phases, exit });
   const records = [

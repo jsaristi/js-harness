@@ -101,7 +101,7 @@ test('the merge-queue help says each pull request merged into the candidate pass
 });
 
 test('the merge-queue help says a candidate of documents alone runs no suite on this machine (the throughput plan\'s item 7)', () => {
-  assert.match(run(['--help']).stdout, /merge-queue .*A candidate whose every changed path is a document main's harness\.json declares runs no suite on this machine, and CircleCI's run is its test\./);
+  assert.match(run(['--help']).stdout, /merge-queue .*A candidate whose every changed path is a document main's harness\.json declares runs no suite on this machine, and its GitHub Actions run is its test\./);
 });
 
 test('the backup help says run exports the js-harness project unless the scope of its config is all (launch audit C-backup-3)', () => {

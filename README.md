@@ -1002,25 +1002,25 @@ and names both commands, so a project whose default is not `main` lands on its o
 Ready means the pull request is open, not a draft, mergeable, based on the default branch and with a
 gentle-ai line in its body, has a Codex review record for every code commit, and merges into the
 candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
-this machine under the gate lock and, at the same time, on CircleCI on a `queue/*` branch pushed
-before the suite starts, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).
+this machine under the gate lock and, at the same time, on GitHub Actions (`.github/workflows/gate.yml`) on a
+`queue/*` branch pushed before the suite starts, so the run's checkout is the candidate, main as it would become, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).
 After a land, each open pull request whose base is a branch that land merged is retargeted to the default branch
 (`gh pr edit <n> --base`), so the next land takes it as a candidate; a retarget gh refuses is named, and the land still exits 0.
 A candidate whose every changed path is a document main's `harness.json` declares (`documents`) runs
 no suite on this machine, as a commit of documents alone runs none, and takes no turn of the gate
-lock: CircleCI's run of the whole gate is its test.
-No GitHub workflow runs for a pull request: the one workflow, the gate of a commit (`js-harness check`),
-runs for a push to a `gate/` branch alone.
+lock: the GitHub Actions run of the whole gate is its test.
+No GitHub workflow runs for a pull request: the gate workflow runs for a push to a `gate/` branch (a
+commit's gate, `js-harness check`) or a `queue/` branch (a candidate) alone.
 A candidate red on this machine is bisected: the pull request that turns it red is left out and
 named, and the rest is landed. The land asks `js-harness gate first` for a ticket of the running
 session, so its gate goes first in the line; with no session id or a refused ticket it waits its turn
 and says so. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped
 before it ended is no red: the land exits 5, with main not pushed and nothing bisected
 (`odd/tasks/land-unattended.md`). The `queue/*` branch is removed as soon as its answer no longer
-matters: when the candidate is red or untested on this machine, or once CircleCI answered. Starting
-CircleCI with the suite saves the minutes the two took in series; its cost is one CircleCI run spent
+matters: when the candidate is red or untested on this machine, or once GitHub Actions answered. Starting
+the run with the suite saves the minutes the two took in series; its cost is one GitHub Actions run spent
 on each candidate this machine turns red or does not test, since removing the branch does not
-cancel its build. A land killed before it ends leaves its `queue/*` branch on origin, to be removed
+cancel its run. A land killed before it ends leaves its `queue/*` branch on origin, to be removed
 by hand. A `--land` run from a copy whose `bin/` is not origin/main's, after its fetch (any file that
 differs, line ends aside, or is on one side only), names those files and stops before it builds anything,
 exit 1: it would land with code main no longer has. The pre-push hook refuses every other push of main from a clone; a
@@ -1036,8 +1036,8 @@ obtained; the landing itself stands. Only pnpm installs the copy this way.
 Each `--land` appends one JSON line to `lands.jsonl` under the git directory's `js-harness` folder:
 the pull requests it looked at, each one left out with its reason (`not-ready`, `review`, `door`,
 `conflict`, `merge` or `red`, with what the suite said), the start and seconds of each suite run,
-of CircleCI (from the push of the `queue/*` branch, so it spans the local suite) and of the push,
-the CircleCI build, what landed and the exit. A `--dry-run` writes none,
+of GitHub Actions (from the push of the `queue/*` branch, so it spans the local suite; `circleci` in a
+record before 2026-10-27) and of the push, the GitHub Actions run, what landed and the exit. A `--dry-run` writes none,
 and a record that cannot be written is said and changes no exit.
 A land also tells the work session of each pull request it left out why, with the failing tests of a red
 as the gate log names them, by a note to that session's number in the channel, which ends its
