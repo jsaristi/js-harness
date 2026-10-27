@@ -11,7 +11,8 @@ import { recordPath } from '../bin/lib/channel.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
 import { OPENING_TOOLS as GUARD_OPENING_TOOLS } from '../bin/lib/guard.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
-import { agentsTemplate } from '../bin/lib/project.mjs';
+import { agentsTemplate, claudeTemplate } from '../bin/lib/project.mjs';
+import { estimateTokens } from '../bin/lib/payload.mjs';
 
 // No test here starts a process, reads the clock or touches the disk: every fact is handed in, and the
 // platform is a parameter, so the Windows and the POSIX behaviour are both proven on any machine.
@@ -1266,6 +1267,15 @@ test('after a second init, only an AGENTS.md that is the candidate template may 
   assert.equal(secondInitProblem(' M AGENTS.md', template, template), null);
   assert.equal(secondInitProblem(' M AGENTS.md', '# edited\n', template), 'tracked files differ after the second js-harness init:\n M AGENTS.md');
   assert.equal(secondInitProblem(' M AGENTS.md\n M add.mjs', template, template), 'tracked files differ after the second js-harness init:\n M AGENTS.md\n M add.mjs');
+  // Since the split, CLAUDE.md too, and only as this candidate's template (odd/tasks/f8-s3-split.md, S3).
+  assert.equal(secondInitProblem(' M AGENTS.md\n M CLAUDE.md', template, template, '@AGENTS.md\n', '@AGENTS.md\n'), null);
+  assert.equal(secondInitProblem(' M CLAUDE.md', template, template, '# edited\n', '@AGENTS.md\n'), 'tracked files differ after the second js-harness init:\n M CLAUDE.md');
+  assert.equal(secondInitProblem(' M CLAUDE.md', template, template), 'tracked files differ after the second js-harness init:\n M CLAUDE.md');
+});
+
+test('uninstall is expected to delete the committed CLAUDE.md when init recorded writing it', () => {
+  const manifest = JSON.stringify({ files: [{ path: 'AGENTS.md' }, { path: 'CLAUDE.md' }, { path: 'harness.json' }] });
+  assert.deepEqual(uninstallExpected([], manifest), [' D AGENTS.md', ' D CLAUDE.md', ' D harness.json']);
 });
 
 // The step `template-lines` (odd/tasks/rule-hierarchy.md, T12): the AGENTS.md the installed `init` wrote is the
@@ -1293,8 +1303,8 @@ test('templateLinesProblem finds nothing wrong with the template, as init wrote 
 });
 
 test("templateLinesProblem finds the five states in the template init writes today, so the step and the template agree", () => {
-  const template = agentsTemplate('project');
-  assert.equal(templateLinesProblem({ agentsText: template, template, tokens: 0, budget: 1500 }), null);
+  const template = agentsTemplate('project') + claudeTemplate();
+  assert.equal(templateLinesProblem({ agentsText: template, template, tokens: estimateTokens(template), budget: 1500 }), null);
 });
 
 test('templateLinesProblem names a project with no AGENTS.md, and one whose AGENTS.md is not the template', () => {

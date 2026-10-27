@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RULES } from './rules-data.mjs';
-import { countFindings, inForceLines, registerFindings, scanLines } from './rules-scan.mjs';
+import { countFindings, inForceLines, isTextInForce, registerFindings, scanLines } from './rules-scan.mjs';
 
 const WAIT = { id: 'gate-wait', subject: 'the wait for a turn of the gate lock', owner: 'project', since: '2026-10-11', value: 60, unit: 'minutes', patterns: ['wait.{0,40}{amount}'] };
 const PAUSE = { id: 'context-pause', subject: 'the pause', owner: 'project', since: '2026-10-11', value: 88, unit: 'percent' };
@@ -136,4 +136,12 @@ test('a pattern that is no regular expression is not scanned, so the scan never 
   const files = [{ path: 'docs/ROADMAP.md', text: 'wait 60 minutes\n' }];
   assert.deepEqual(countFindings([broken, { ...PAUSE, patterns: ['['] }], files), { counts: { 'gate-wait': 1, 'context-pause': 0 }, unscanned: [] });
   assert.deepEqual(scanLines([{ ...WAIT, patterns: [')', 7] }], inForceLines('docs/ROADMAP.md', 'wait 60 minutes\n')), []);
+});
+
+// F8 S3 (odd/tasks/f8-s3-split.md, S1): the root CLAUDE.md is a text in force beside AGENTS.md, so a value it states
+// stale is found as one in AGENTS.md would be.
+test('the root CLAUDE.md is a text in force, and one under a folder is not', () => {
+  assert.equal(isTextInForce('CLAUDE.md'), true);
+  assert.equal(isTextInForce('AGENTS.md'), true);
+  assert.equal(isTextInForce('.claude/CLAUDE.md'), false);
 });

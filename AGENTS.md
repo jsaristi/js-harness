@@ -7,8 +7,10 @@ adds is the thin layer those leave open — a few lines of context and the check
 true.
 
 The design bet is that a stronger model needs a smaller harness. Every line in this file is paid
-on every turn of every session, so it carries only what an agent cannot learn from the code: what
-the project is for, what good work looks like here, and the reason behind each real constraint.
+on every turn of every session (Claude loads it through the import in `CLAUDE.md`, which holds how
+sessions work with Sebastián; a reviewer such as Codex reads this file alone), so it carries only
+what an agent cannot learn from the code: what the project is for, what good work looks like here,
+and the reason behind each real constraint.
 When something can be checked by a command, it belongs in `bin/`, not in prose.
 
 ## How the repo works
@@ -43,42 +45,6 @@ rule exists to prevent.
 `D:\harness`, `D:\harness-lab` and `D:\harness-backups` are read-only references from earlier
 attempts. Mine them for evidence and ideas and rewrite what earns a place here; building on them
 would bring back the doctrine this rebuild exists to shrink.
-
-## Working with Sebastián
-
-He decides spend, anything irreversible, and product choices; ask those one at a time and wait.
-Review is not one of them: the consent he granted for every candidate here is his standing
-selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
-invocation without asking. Consent stays his and the review always runs; only the question is
-skipped, because his answer is always yes and the question only stalls the work. If the envelope
-has no `granted` choice or does not parse, ask him instead. A candidate is a work-unit commit or a
-slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the branch, run its read-only status and
-start nothing, because with consent pre-granted nothing would stop a review that size. Every slice
-with code goes through Codex, whether or not gentle-ai reviewed it: `js-harness codex-review --base
-<boundary>` records the review, and the pre-push hook refuses a branch whose code commits no record
-covers. Treat its findings like gentle-ai's. If Codex cannot run, report that and record the skip
-with `--unavailable <reason>`.
-
-Everything else, keep moving: name the next few units of work and do them without stopping to
-report between them. Reports open with a short plain summary and close with a recap of
-the whole stretch, including what was spent. He often answers from his phone by tapping the
-suggested prompt, so a step he reports doing outside the session is checked before anything is
-built on it.
-
-A session holds one feature, because the conversation is lost on a new session or a compaction
-and only files survive. So every decision made in the conversation is written to the roadmap or
-the feature document and committed on the feature branch in the same session; that record is
-part of the work and needs no separate request. While he is here, say when to cut: a new session
-when a feature closes, a PR merges or a phase starts. Near `rule:context-pause` of its window a session
-writes its state to the feature document and keeps working; the host compacts it by itself, and it
-resumes from the summary checked against that document. What he is given at that point is the pause
-notice's (`cutRule` in `bin/lib/sessions.mjs`). End each reply in one of the five states of `js-harness-protocols`
-section 2. A planned step he would only say yes to is decided and its cost said, as its section 1
-says. A question reaches him as `rule:questions-one-place` says; a cut
-carries what he sends, in one code block of only that text, under what it is, where
-it goes, what sending it does: two blocks out of order cost a session. Before it, say what was
-done, what is next and why, and for which session: he runs several. Then the map: each phase's
-share and the total, from `js-harness progress`; if it fails, say so.
 
 Artifacts — code, docs, commits — are in English. Commits follow Conventional Commits, with a body
 that explains why.
