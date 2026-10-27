@@ -16,7 +16,7 @@ Sebastián, 2026-10-26: "necesito traerme todo el sistema completo de tui que ti
 
 ## In scope / Out of scope
 - In: `bin/tui.mjs`, `bin/tui.test.mjs`, new `bin/lib/terminal.mjs` and `bin/lib/run-child.mjs` with their tests, `scripts/tui-walk.mjs` where the run screen changes what it reads, this document.
-- Out: multi-select, the doctor detail screen, read-only views, a palette, the "open gentle-ai" item (later slices, proposed below); `bin/stack.mjs`'s own prompts, which stay exactly as they are.
+- Out: multi-select, the doctor detail screen, read-only views, a palette (later slices, proposed below); anything that opens or needs gentle-ai (L3); `bin/stack.mjs`'s own prompts, which stay exactly as they are.
 
 ## Constraints
 - Zero dependencies — because `AGENTS.md` says every command runs without an install step.
@@ -33,13 +33,35 @@ Nothing in this slice: the scope is the lead's brief. The next slices' dispositi
 - S3. Key parser: split chunks into keys (CSI and SS3 arrows, PgUp/PgDn, Home/End, Space, Tab, a lone Esc after a short timeout); Esc means Back, q quits, like gentle-ai.
 - S4. Run screen: each command runs as a child (`node bin/js-harness.mjs <cmd> ...`) with piped output, so the menu never blocks and nothing prints over it; a spinner, a scrollable log, keys other than ctrl+c locked while it runs, a result screen with the exit code and the next step; on cancel, the child is killed and the result says so (fixes cause 2). Commands that ask questions keep their per-action confirmation.
 - S5. First draw before slow work: draw at once, then fill the update check and the stack block asynchronously (cause 4).
-- S6. If time allows, propose (do not build) the next slices as a capability/disposition table: every gentle-ai TUI screen marked native (ours), delegated (open gentle-ai's own TUI), excluded, or deferred, with sizes.
+- S6. If time allows, propose (do not build) the next slices as a capability/disposition table: every gentle-ai TUI screen marked native (ours), excluded, or deferred, with sizes. (Rewritten by L3: "delegated", opening gentle-ai's own TUI, is dropped.)
 
 ## Tasks
-- [ ] T1 (kind: build) S1-S3: `bin/lib/terminal.mjs` (guard, key reader, layout) and the TUI on it. Route: inline.
-- [ ] T2 (kind: build) S4-S5: `bin/lib/run-child.mjs`, the run and result screens, deferred loaders. Route: inline.
-- [ ] T3 (kind: design) S6: the disposition table, below. Route: inline.
+- [x] T1 (kind: build) S1-S3: `bin/lib/terminal.mjs` (guard, key reader, layout) and the TUI on it. Route: inline. Commit 73410bd4.
+- [x] T2 (kind: build) S4-S5: `bin/lib/run-child.mjs`, the run and result screens, deferred loaders. Route: inline. Commits 73410bd4, d188d377.
+- [x] T3 (kind: design) S6: the disposition table, below. Route: inline.
 - [ ] T4 (kind: verify) the real-console walk, below. Sebastián's; not done by this session.
+
+## Next slices: disposition of gentle-ai's screens (S6, a proposal, not built)
+Sizes are code lines plus their tests, inferred from slice 1 (about 700 code lines for the foundation). Screen names are gentle-ai's `Screen` enum (`internal/tui/model.go:576-637` at 2b56327e).
+
+| gentle-ai screen(s) | Disposition | Ours | Size |
+|---|---|---|---|
+| Welcome menu | native (done, slice 1) | the menu by location | — |
+| UpdatePrompt | native, header only | the header note; an "Upgrade now" hint on it | ~20 |
+| Detection | native | Doctor detail: one row per tool, Enter shows its fix command | ~150 |
+| Installing / Upgrade / Sync / UpgradeSync (`RenderOperationRunning`) | native (done, slice 1) | the run and result screens | — |
+| Agents, SkillPicker, CommunityTools (multi-select) | native, as two screens | `functions` on/off; `stack install` choosing tools, each still asked y/N in the CLI or confirmed per tool on a TUI confirm screen over IPC | ~250 |
+| DependencyTree + Review summary | native | what `install`/`init` will write and record for undo, before it runs | ~200 |
+| Claude/Codex model pickers, ModelConfig | native | a picker per host for the models js-harness writes | ~150 |
+| Review mode toggle, InstallReviewMode | native | the review switch of our merged harness, on/off with our y/N | ~80 |
+| Persona, Preset, Kiro/OpenCode pickers, Review store reset | excluded | gentle-ai's persona and hosts we do not ship; no review store of theirs | — |
+| Backups, Restore, Delete | native | js-harness's own `backup`: a list with restore, our y/N confirm | ~200 |
+| Uninstall flow (Mode → Agents → Components → Confirm → Result) | native (have it) | the Uninstall submenu with our y/N | — |
+| Agent builder, Gentle Shell (rose animation), logo | excluded | gentle-ai's product and trademarks | — |
+| Read-only views: `progress`, `sessions`, `codex-meter`, `quiet`, `report`, `failures`, `rules` | native, ours (no gentle-ai screen) | a scrollable view on the result screen's log | ~150 |
+| Theme | native | a small palette with `NO_COLOR`, our name, no logo | ~80 |
+
+Order proposed: Doctor detail, multi-select (`stack install` choosing codegraph, context7 and engram), read-only views, palette, review summary, model pickers, review switch, backups. Nothing here depends on gentle-ai being installed (L3).
 
 ## Real-console walk (Sebastián's, not run by this session)
 Run `js-harness` with no arguments in Windows Terminal, then again in a plain conhost window (`conhost.exe cmd`), in a git repository and outside one:
@@ -53,6 +75,8 @@ Run `js-harness` with no arguments in Windows Terminal, then again in a plain co
 8. Quit with q, then again with ctrl+c on the menu, then close a run by killing the window's process from another terminal (`taskkill /pid`): each time the prompt comes back with a visible cursor, normal echo and the screen as it was before.
 
 ## Log
+- L4. 2026-10-26, `npm run check` failed: `process-tree.test.mjs` forbids signalling a process by number, and `run-child.mjs` used `process.kill(-pid)` and `taskkill /T` (both can hit a process that only reuses a pid). Cancel now goes through the shared `killTree` (pid plus creation time); the abort test's grandchild waits 4 s, since the kill reads the process table first. GREEN: the five TUI-related test files 193/193.
+- L3. 2026-10-26, from the lead, Sebastián's direction: "no Orca ni Herdr lovamos a volver a utilizar y gentle-ai tampoco la idea es copiar la forma de funcionar con sus complementos osea traernos codegraph, context7 y engram y nuestro arnes fusionado de gentle con js-harnes mas funcionalidades de nuestras caracteristicas con ajustado a nuestras necesidades". Option (e), the item that opens gentle-ai's TUI, is dropped; the table's delegated rows are now native or excluded. Slice 1's scope is unchanged; its code calls no gentle-ai (the stack block's gentle-ai row is doctor's data).
 - L2. 2026-10-26, T1+T2 built: `bin/lib/terminal.mjs` (splitKeys, createKeyReader, wrapLine, layoutFrame, paint, cleanLine, createTerminalGuard), `bin/lib/run-child.mjs` (runChild with tree kill, handOff), `bin/tui.mjs` (run/result screens, commandArgv, childCommands, latestRelease in a child, loaders after the first draw). RED was the missing modules; GREEN: `node --test bin/tui.test.mjs bin/lib/terminal.test.mjs bin/lib/run-child.test.mjs` 124/124 in 15 s. Found and fixed on the way: a frame drawn after restore on SIGINT; a header that hid the menu in 24 rows (the top now gives way to a menu, keeping its first row); the tag lookup and taskkill held the user's folder (now run from the temp folder).
-- Next step: `scripts/tui-walk.mjs` is half done (screenOf on frames, resultOf, runToResult, step() and the 200x2000 stdout are in). Left: (a) after `draws() === 0` near line 181, wait until `screenOf(out)[0]` no longer contains "checking for updates" before reading the header; (b) the Uninstall everything block near line 226: replace `child.stdin.write(KEY.yes)` with `const said = (await runToResult(KEY.yes)).join('\n'); child.stdin.write(KEY.enter);` then await the exit, and drop the old `said = out.slice(start)`; (c) add `resultOf` to nothing else; run `node --test scripts/tui-walk.test.mjs`. Then `npm run check`, commit, `js-harness codex-review --base b3399e9e`, T3 table, push, PR, `js-harness notify --to orchestrator`. The walk itself is not run (real npm and `claude remote-control`).
+- Next step: `scripts/tui-walk.mjs` reads frames and result screens (`node --test scripts/tui-walk.test.mjs` 4/4); the walk itself is not run (real npm and `claude remote-control`). T3's table is written. Left: `npm run check`, commit, `js-harness codex-review --base b3399e9e`, push, PR, `js-harness notify --to orchestrator`.
 - L1. 2026-10-26, the brief from the lead (JH ORQ): "Build slice 1 of the TUI rewrite: our `bin/tui.mjs` brought to gentle-ai's interaction design, starting with the shipped defects." with the five items quoted in S1-S5 and S6.
