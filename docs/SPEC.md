@@ -89,12 +89,12 @@ proofs and by those tasks.
 
 ### Whether a change is due a review
 
-**Problem:** Whether a change was due a review was known only if the agent remembered to ask gentle-ai (`odd/tasks/sensors.md`).
-**Requirement:** Every gate shows gentle-ai's risk tier and whether the pending change is due a review. It informs and fails open: no gentle-ai, review switched off or no change are said, never a failure. Where the rule `reviewed-commit-lines` is in force, the gate fails a staged change with more changed lines a review reads than that rule gives, so it is split before it is made, not refused by the reviewer after (`docs/FAILURES.md`, commit-too-large-to-review).
-**Reason:** Review is gentle-ai's; a missing or failing gentle-ai must not turn a commit red.
-**Proof:** `node --test bin/check.test.mjs`, `node --test bin/check-commit-size.test.mjs`
-**Discarded:** A review that blocks a commit or a push: review is the owner's switch, and a slice under budget is committed before it is reviewed.
-**Today:** `bin/check.mjs`
+**Problem:** Whether a change was due a review was known only if the agent remembered to ask gentle-ai (`odd/tasks/sensors.md`); since every slice gets two reviews (`odd/tasks/f8-s1-reviews.md`), what matters is which code still waits for them.
+**Requirement:** Every gate's `review` row names the code commits since the default branch that no Claude lens record covers, with the command that makes one, and the skips of both reviews that still owe one; with the Codex review off it says the lenses are the one review. It informs and fails open: a debt it cannot read is said, never a failure. Where the rule `reviewed-commit-lines` is in force, the gate fails a staged change with more changed lines a review reads than that rule gives, so it is split before it is made, not refused by the reviewer after (`docs/FAILURES.md`, commit-too-large-to-review).
+**Reason:** The push refuses the debt (`lens-review`, `codex-review`); a commit only shows it, so a slice is committed before it is reviewed and the debt is in sight before the push.
+**Proof:** `node --test bin/lib/lens-review-rows.test.mjs`, `node --test bin/check.test.mjs`, `node --test bin/check-commit-size.test.mjs`
+**Discarded:** A review that blocks a commit: a slice is committed before it is reviewed. Asking gentle-ai for a risk tier: every slice gets both reviews whatever its risk (his answer of 2026-10-26), and gentle-ai leaves at F8's S2.
+**Today:** `bin/check.mjs`, `bin/lib/lens-review-rows.mjs`
 
 ### Contracts and citations
 

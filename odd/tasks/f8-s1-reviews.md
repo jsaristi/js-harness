@@ -20,7 +20,7 @@ are worth keeping, but they read only what gentle-ai's provider builds, so S1 bu
 - `node --test bin/lib/lens-candidate.test.mjs bin/lib/lens-result.test.mjs bin/lib/lens-reviews.test.mjs bin/lens-review.test.mjs bin/lib/lens-review-rows.test.mjs` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s1-reviews.md` exits 0
 - `npm run check` exits 0, and its `review` row names no gentle-ai
-- `grep -c gentle-ai AGENTS.md` prints 0
+- `grep -ci "gentle-ai.*review\|review.*gentle-ai" AGENTS.md` prints 0
 - `## Probe` below records the diet's six behaviours in a scratch repo, 6 of 6, and three real slices with tokens per lens
 - `js-harness merge-queue --dry-run` lists each pull request as ready, and Codex has no open finding
 
@@ -67,7 +67,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T2 (kind: build) the candidate and its packager: identity (base, head, subject hash), ordered manifest, each path's patch; the four lens prompts from one text with four scopes; result validation; test first — S1, S2; inline; 6bc94451, fixed in 7ccc7033 and 2d0d2ef0
 - [x] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline; eb518c07, 2d0d2ef0
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
-- [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline
+- [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`
 - [ ] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline
 
 ## Log
@@ -136,6 +136,15 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     function, `remoteHoldsNoBranch`, both rows ask.
   - Rechecks of `e4375922..d5c722f6`: Codex correct (0.97), both fixed; lenses reliability and resilience
     complete with no finding, about 7,080 input tokens each.
+- L8 (2026-10-27): T5 in two slices, the `review` row with `AGENTS.md` first (it removes about 300 lines of
+  gentle-ai code and tests), then `doctor`, the door and `CLAUDE.md`. Decisions in it:
+  - His S9 (odd/tasks/on-demand-functions.md: with the Codex review off, gentle-ai reviews high and medium risk,
+    and nothing refuses a push for it) is ported, not dropped: with the Codex review off the `review` row still
+    names the lens debt and says the lenses are the one review, and the push asks for none. Its risk tiers leave,
+    since his answer of 2026-10-26 ("revision siempre") gives every slice both reviews whatever its risk.
+  - The contract's `grep -c gentle-ai AGENTS.md` asked more than S4: `AGENTS.md` still names gentle-ai for the
+    workflow and the ODD documents, which leave with gentle-ai itself at S2. It now asks that no line of it name
+    gentle-ai for review, what S4 says.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).

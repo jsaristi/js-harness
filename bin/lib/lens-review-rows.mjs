@@ -37,15 +37,26 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin' }
   const due = (commit) => asked.get(commit.id) === true;
   const codeCommits = coverage.codeCommits.filter(due);
   const uncovered = coverage.uncovered.filter(due);
-  // A skip is debt only while a code commit it covers has no complete review: one made later pays it.
-  const reviewed = new Set(coverage.covers.filter(({ rec }) => rec.outcome === 'reviewed').flatMap(({ covered }) => [...covered]));
-  const owed = codeCommits.filter((commit) => !reviewed.has(commit.id));
-  const skips = notReviews({ covers: coverage.covers, codeCommits: owed }).filter((rec) => rec.outcome === 'unavailable');
   const noteParts = [
     coverage.stale ? `${plural(coverage.stale, 'record')} whose range no longer hashes as reviewed` : '',
     coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run among them)` : '',
   ].filter(Boolean);
-  return { base: branch.label, codeCommits, uncovered, skips, note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
+  return { tip, baseRef: branch.ref, base: branch.label, codeCommits, uncovered, skips: owedSkips(coverage, codeCommits), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
+}
+
+/** The skips (`--unavailable`) among `coverage`'s records that still owe a review: a skip is debt only while a code
+ * commit of `codeCommits` it covers has no `reviewed` record, so a review made later pays it. */
+function owedSkips(coverage, codeCommits) {
+  const reviewed = new Set(coverage.covers.filter(({ rec }) => rec.outcome === 'reviewed').flatMap(({ covered }) => [...covered]));
+  const owed = codeCommits.filter((commit) => !reviewed.has(commit.id));
+  return notReviews({ covers: coverage.covers, codeCommits: owed }).filter((rec) => rec.outcome === 'unavailable');
+}
+
+/** The Codex skips that still owe a review over `from..tip`, read as `owedSkips` reads the lens ones; `null` when git
+ * cannot list the commits. */
+export function codexSkipsOwed(cwd, { from, tip, spawn = spawnSync }) {
+  const coverage = reviewCoverage(cwd, { from, tip, spawn });
+  return coverage.unknown ? null : owedSkips(coverage, coverage.codeCommits);
 }
 
 /** Whether the review is switched off at the commit `head`, read from that commit's own files as the Codex rows read it
@@ -59,6 +70,38 @@ function reviewOffAt(cwd, head, spawn) {
 /** The line a skip is listed with. */
 export const skipLine = (rec) => `${NOT_A_REVIEW[rec.outcome]} ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`;
 
+/** The lines that name the `uncovered` commits since `base` and the command that makes their record. */
+const uncoveredLines = (uncovered, base) => {
+  const oldest = uncovered[uncovered.length - 1];
+  return [
+    ...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`),
+    `make the record with: js-harness lens-review --base ${oldest.isRoot ? base : `${oldest.shortId}^`} --lenses <lens,...> --reason "<what it touched and how>"`,
+  ];
+};
+
+/** The `review` row every commit's gate shows, informing and failing nothing (odd/tasks/f8-s1-reviews.md, T5; it
+ * replaced the row that asked gentle-ai whether a review was due): the code commits since the default branch that
+ * no lens record covers, and the skips of both reviews that still owe one, so the debt shows before the push that
+ * refuses it. With the Codex review off the lenses are the one review, and its debt is still said; the push asks
+ * for none (his answer S9 of odd/tasks/on-demand-functions.md, its risk tiers dropped by "revisión siempre"). */
+export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
+  const row = (detail, lines) => ({ name: 'review', pass: true, info: true, detail, ...(lines?.length ? { lines } : {}) });
+  try {
+    const state = lensCoverage(cwd, 'HEAD', { spawn, remote });
+    if (state.unknown) return row(`cannot tell what waits for a review: ${state.unknown}`);
+    const { tip, baseRef, base, codeCommits, uncovered, skips, note } = state;
+    const codexSkips = codexSkipsOwed(cwd, { from: baseRef, tip, spawn }) ?? [];
+    const skipLines = [...skips.map((rec) => `lens: ${skipLine(rec)}`), ...codexSkips.map((rec) => `codex: ${skipLine(rec)}`)];
+    const owing = skipLines.length ? `; ${plural(skipLines.length, 'skip')} still owe${skipLines.length === 1 ? 's' : ''} a review` : '';
+    const off = reviewOffAt(cwd, 'HEAD', spawn) ? '; the Codex review is off here, so the lenses are the one review, and no push is refused for it' : '';
+    if (uncovered.length) return row(`no Claude lens record for ${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base}${owing}${off}${note}`, [...uncoveredLines(uncovered, base), ...skipLines]);
+    const said = codeCommits.length ? `every one of ${plural(codeCommits.length, 'code commit')} since ${base} has a Claude lens record` : `no code commits since ${base} that ask for a lens record`;
+    return row(`${said}${owing}${off}${note}`, skipLines);
+  } catch (err) {
+    return row(`cannot tell what waits for a review: reading the commits or their records failed (${err instanceof Error ? err.message : String(err)})`);
+  }
+}
+
 /** The `--push` row: refuses a code commit no complete lens record covers, listing each with the command that makes
  * the record; passes with a line for each skip that covers one. A project with its review switched off asks for none. */
 export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
@@ -71,16 +114,11 @@ export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote
   if (state.unknown) return { name, pass: false, detail: state.unknown };
   const { base, codeCommits, uncovered, skips, note } = state;
   if (uncovered.length) {
-    const oldest = uncovered[uncovered.length - 1];
     return {
       name,
       pass: false,
       detail: `${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base} have no complete Claude lens record${note}`,
-      lines: [
-        ...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`),
-        `make the record with: js-harness lens-review --base ${oldest.isRoot ? base : `${oldest.shortId}^`} --lenses <lens,...> --reason "<what it touched and how>"`,
-        'an amend or a rebase after a review leaves its commits uncovered: review the range again',
-      ],
+      lines: [...uncoveredLines(uncovered, base), 'an amend or a rebase after a review leaves its commits uncovered: review the range again'],
     };
   }
   const detail = codeCommits.length ? `${plural(codeCommits.length, 'code commit')} since ${base}, all covered by a Claude lens record${note}` : `no code commits since ${base} that ask for a lens record${note}`;

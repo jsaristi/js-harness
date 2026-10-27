@@ -1,7 +1,7 @@
 # js-harness
 
 js-harness is a small package that sets up Claude Code and Codex for AI-assisted development, on
-top of a stack it does not rebuild: gentle-ai owns the workflow, task documents, TDD and review;
+top of a stack it does not rebuild: gentle-ai owns the workflow, task documents and TDD;
 engram owns memory; codegraph owns code structure; `/goal` owns the autonomy loop. What this repo
 adds is the thin layer those leave open — a few lines of context and the checks that make them
 true.
@@ -17,7 +17,7 @@ When something can be checked by a command, it belongs in `bin/`, not in prose.
 `bin/` holds plain Node commands with zero dependencies, so they run in any host on any machine
 without an install step. Each command sits next to its `*.test.mjs`; `node --test` runs them all.
 `npm run check` is the single gate: it runs the tests, holds this file to its token budget, and
-says whether the pending change is due a gentle-ai review.
+says what code still waits for its two reviews, Codex's and the Claude lenses'.
 The pre-commit hook runs the same gate (`npm run hooks` wires it in a fresh clone), so a red check
 means the commit is not ready yet.
 
