@@ -258,6 +258,15 @@ proofs and by those tasks.
 **Discarded:** The Codex plugin's review: it passes no per-thread setting and returns only text. Reading gentle-ai's or the plugin's own state as the record: pruned, opaque and free to change.
 **Today:** `bin/codex-review.mjs`, `bin/lib/codex-reviews.mjs`, `bin/lib/codex-review-coverage.mjs`, `bin/lib/codex-review-turns.mjs`, `.githooks/pre-push`, `js-harness codex-review`
 
+### The Claude lens review
+
+**Problem:** One review by a second model is not enough: he asked for Claude's own review as well, on every slice (G9, 2026-10-26: "revision siempre ... una segunda opinion con un segundo modelo pero tambien una revision del mismo claude"). gentle-ai's four lens prompts were worth keeping, but they read only what gentle-ai's provider builds, and gentle-ai leaves at F8's S2 (`odd/tasks/f8-s1-reviews.md`).
+**Requirement:** A command runs one to four Claude lenses the session picks by consequence (risk, resilience, readability, reliability) over a commit range, each a fresh tool-less `claude -p` on the user's CLI login, never the eval token, reading only the packaged range: its two commits, a subject hash of its patch, the paths a review reads and each path's patch. A result counts only when it echoes the hash and inspected every path; a run with an incomplete lens is recorded and covers nothing; an explicit skip is recorded with its reason.
+**Reason:** Codex is the second opinion; the lenses are Claude's own criterion, recorded so a check can hold it.
+**Proof:** `node --test bin/lens-review.test.mjs`, `node --test bin/lib/lens-candidate.test.mjs`, `node --test bin/lib/lens-result.test.mjs`, `node --test bin/lib/lens-reviews.test.mjs`
+**Discarded:** Installing the prompts as agents under `~/.claude/agents`: a second copy no runner reads. `--bare`: it reads only an API key, never his login. gentle-ai's refuter and judgment-day agents: the lens findings go to the session and Codex is the second opinion.
+**Today:** `bin/lens-review.mjs`, `bin/lib/lens-candidate.mjs`, `bin/lib/lens-prompts.mjs`, `bin/lib/lens-result.mjs`, `bin/lib/lens-reviews.mjs`, `js-harness lens-review`
+
 ### The Codex meter
 
 **Problem:** No command read Codex's rate limits, so the five-hour window, the weekly one and the reset credits could be seen only in the app (`odd/tasks/launch-audit/b.md`, C-b-37). The owner's note `codex-meter-is-readable.md` named a scratchpad script that no longer exists; `grep -rn "rateLimits\|rate_limits\|app-server" bin --include=*.mjs` found no reader outside the release cleanup.

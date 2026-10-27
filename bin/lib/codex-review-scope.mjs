@@ -203,6 +203,14 @@ export function leftOutSaid({ files, changedLines, documents, marked }) {
  * lines a review is held to though they were left out, or not held to though they were not. */
 export function patchOfRead(patch, paths, why) {
   if (!paths.some((path) => why.has(path))) return patch;
+  return patchSections(patch, paths).filter((_, at) => !why.has(paths[at])).join('');
+}
+
+/** The patch of a range cut into one section a file, in the order of `paths`, as `patchOfRead` cuts it: the
+ * sections are told apart by their place, and a file whose type changed keeps its two sections as one.
+ * Throws when the patch is not one section a file. The Claude lenses read each file's section on its own
+ * (`./lens-candidate.mjs`). */
+export function patchSections(patch, paths) {
   const starts = [...patch.matchAll(/^diff --git .*$/gm)];
   if (starts.length > 0 ? starts[0].index !== 0 : patch.trim() !== '') {
     throw new Error('The patch of the range holds text before its first section, so its sections cannot be told apart.');
@@ -217,5 +225,5 @@ export function patchOfRead(patch, paths, why) {
   if (sections.length !== paths.length) {
     throw new Error(`The patch of the range holds ${counted(sections.length, 'section')} for its ${counted(paths.length, 'file')}, so which of them are of the files a review leaves out cannot be told.`);
   }
-  return sections.filter((_, at) => !why.has(paths[at])).map((section) => section.text).join('');
+  return sections.map((section) => section.text);
 }

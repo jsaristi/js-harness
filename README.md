@@ -953,6 +953,25 @@ weekly: 8% used, resets at 2026-10-30 13:38
 reset credits left: 1
 ```
 
+### js-harness lens-review
+
+The Claude half of the two reviews every slice gets; Codex is the other. The session picks one to four
+lenses (risk, resilience, readability, reliability) by the consequence of what `<base>..HEAD` touched
+and says why with `--reason`. Each lens is a fresh `claude -p` run with no tools and none of your
+customizations, on your own CLI login, never on the eval token or an API key, and it reads only the
+range as a block: its two commits, its subject hash, the paths a review reads and each path's patch.
+A result counts only when it echoes the hash and inspected every path; otherwise the run is recorded
+as incomplete, exits 1 and covers nothing. Runs are recorded in `<git common dir>/js-harness/lens-reviews.jsonl`.
+`--plan` prints the candidate and starts nothing; `--unavailable <reason>` records a skip, which the
+push lets through and `check`, `doctor` and `merge-queue` list until a review covers the range.
+
+```console
+$ js-harness lens-review --base 3f2a9c1 --lenses risk,reliability --reason "changes how a record is validated"
+risk: complete, 0 findings, 9120 input and 410 output tokens
+reliability: complete, 1 finding, 9120 input and 650 output tokens
+  WARNING bin/lib/a.mjs:40: an empty list is read as valid
+```
+
 ### js-harness windows-daily
 
 The gates run on Linux, so the whole suite also runs once a day on GitHub's Windows machines
