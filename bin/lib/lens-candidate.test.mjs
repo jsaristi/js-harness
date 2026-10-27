@@ -69,6 +69,16 @@ test('the block a lens reads opens with the subject line, holds the manifest and
   assert.ok(!block.includes('README.md'));
 });
 
+test('the subject hash does not move with the git configuration: the abbreviation of the index lines is fixed', () => {
+  const first = lensCandidate(dir, { base, head }).subjectHash;
+  git('config', 'core.abbrev', '12');
+  try {
+    assert.equal(lensCandidate(dir, { base, head }).subjectHash, first);
+  } finally {
+    git('config', '--unset', 'core.abbrev');
+  }
+});
+
 test('the subject hash is of the patch alone: a message-only amend keeps it, a changed line does not', () => {
   const first = lensCandidate(dir, { base, head });
   withoutAutoMaintenance(() => git('commit', '-q', '--amend', '-m', 'second, said again'));

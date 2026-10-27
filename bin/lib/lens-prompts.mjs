@@ -99,7 +99,7 @@ Return one JSON object and no prose, in exactly this shape:
 
 {"subject_hash":"<the subject line's subject_hash>","inspection":{"status":"completed","paths":["<every manifest path>"]},"findings":[{"location":"path:line or path:start-end","severity":"CRITICAL","claim":"observable incorrect behavior","evidence_class":"deterministic","causal_disposition":"introduced","proof_refs":["concrete proof"]}],"evidence":["what was inspected"]}
 
-Copy subject_hash from the subject line; never compute or invent it.
+Copy subject_hash from the subject line; never compute or invent it. Write every text field in English.
 
 Status "completed" requires every manifest path, each once, in any order. Listing means lens triage of the manifest, not that every byte was loaded. Otherwise return "incomplete" and stop.
 
