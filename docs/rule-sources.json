@@ -297,29 +297,6 @@
       "by": "command"
     }
   },
-  "live-board": {
-    "kind": "words",
-    "quotes": [
-      {
-        "quote": "tu como arnes siempre debes mostrarle al usuario que se esta haciendo por que recuerda que eres como una caja negra, no se que esta pasando por atras",
-        "date": "2026-10-27",
-        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
-        "line": 4186
-      },
-      {
-        "quote": "Esto se podria hacer de una forma dinamica para estar informado en tiempo real?",
-        "date": "2026-10-27",
-        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
-        "line": 4325
-      }
-    ],
-    "reading": "He wrote it to the lead while he watched several sessions at once and felt lost (\"veo la pantalla y quedo completamente perdido\"), after the lead had published a status page by hand; the second line, sent while the lead worked, asks for it to be live. The harness shows him what is being done, always: every work session writes each event as a channel notice (it starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends the record to the live board, an Artifact on the shared db that updates by itself (js-harness sessions live), and every reply of the lead points to the board. Only a Claude session can write the board's db, through ArtifactData; no command or hook reaches it (odd/tasks/live-board.md, S4).",
-    "accepted": "Messages he typed to the lead, sent as he wrote them, both confirmed with js-harness sessions --quote; the reading is the lead's brief to this session.",
-    "checked": {
-      "date": "2026-10-27",
-      "by": "command"
-    }
-  },
   "memory-feedback-home": {
     "kind": "design",
     "path": "odd/tasks/memory-feedback-home.md"

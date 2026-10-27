@@ -217,17 +217,6 @@ export const RULES = [
     ]
   },
   {
-    "id": "live-board",
-    "subject": "the harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it",
-    "owner": "sebastian",
-    "since": "2026-10-27",
-    "path": "bin/lib/manifest.mjs",
-    "phrases": [
-      "Every event of your work reaches the user's live board as a notice",
-      "point every reply of yours to the board's link"
-    ]
-  },
-  {
     "id": "memory-feedback-home",
     "subject": "where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise",
     "owner": "project",

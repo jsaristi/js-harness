@@ -2655,18 +2655,6 @@ test('the orchestrator skill lets both reviews run beside a gate, and keeps a su
   ));
 });
 
-// odd/tasks/live-board.md, S5: work sessions write each event as a notice, and the lead sends the record to the
-// live board and points every reply to it (rule:live-board).
-test('the orchestrator skill has work sessions notify each event and the lead feed the live board and point to it', () => {
-  const text = components[2].content('0.1.0');
-  const [lead, work] = text.split('\n## A work session\n');
-  assert.ok(work.includes('\n- Every event of your work reaches the user\'s live board as a notice: '), work);
-  assert.match(work, /`opened` when you start, `note` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend/);
-  assert.ok(lead.includes(' lines still open. The live board (`rule:live-board`): '), lead);
-  assert.match(lead, /run `js-harness sessions live --out <dir>`, add to each row of each batch file a `sesion` field .* and a `texto` field .*, both in the user's language since the record stays in English, send each batch with `ArtifactData` set from its file, then `js-harness sessions live --sent <file>`/);
-  assert.match(lead, /point every reply of yours to the board's link/);
-});
-
 // The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user
 // copies, and it leads the new session back to this skill.
 test('the orchestrator skill carries its fixed opening prompt as its one fenced block, and the prompt names the skill', () => {

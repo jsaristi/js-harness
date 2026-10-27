@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `424639864f73`. In force: 65 (40 of Sebastián, 25 of the project). Retired: 2.
+Hash `ed860a29fed2`. In force: 64 (39 of Sebastián, 25 of the project). Retired: 2.
 
 ## Sebastián's
 
@@ -60,11 +60,6 @@ The fixed load of a session at its first turn, the median of its latest sessions
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
-
-### live-board
-The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
-- Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-27. Row: reports. Source: his words of 2026-10-27, 2026-10-27, checked by the command on 2026-10-27.
 
 ### mistake-report
 A mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later: "What stops it from happening again: a check before a line, a line before a protocol."
