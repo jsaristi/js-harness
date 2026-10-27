@@ -61,6 +61,9 @@ function objectOf(text) {
   const fences = (part) => part.split('\n').filter((line) => /^\s*```/.test(line)).length;
   const [before, after] = [fences(text.slice(0, start)), fences(text.slice(end))];
   if (before + after !== 0 && (before !== 1 || after !== 1)) return { why: `its Markdown fences are not one block around the object (${before} before it, ${after} after)` };
+  // An object that is an element of a JSON array is not the result the prompt asks for, so it is not read as one.
+  const beside = (part) => part.replace(/^\s*```.*$/gm, '').trim();
+  if (/[[,]$/.test(beside(text.slice(0, start))) || /^[\],]/.test(beside(text.slice(end)))) return { why: 'its object is an element of a JSON array' };
   return { value };
 }
 

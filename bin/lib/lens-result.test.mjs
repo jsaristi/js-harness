@@ -23,6 +23,9 @@ test('the one object is read with prose before or after it, bare or in its fence
     `${object}\n`,
   ];
   for (const text of shapes) assert.deepEqual(lensResult(text, candidate), { complete: true, findings: [], evidence: ['read both'] }, text);
+  // Braces, escaped quotes and a backslash before a closing quote inside its strings do not split or join the object.
+  const quoting = { ...finding, claim: 'the `{` in "a}b" stays \\', proof_refs: ['p {x} "y"'] };
+  assert.deepEqual(lensResult(`Done.\n${JSON.stringify(answer({ findings: [quoting] }))}\nThat is all.`, candidate), { complete: true, findings: [quoting], evidence: ['read both'] });
 });
 
 test('an answer that is not one complete object is still refused, and says what it holds', () => {
@@ -34,8 +37,11 @@ test('an answer that is not one complete object is still refused, and says what 
     ['a bare object and a fenced block', `${object}\n\n\`\`\`\nnode --test\n\`\`\``, /fence/],
     ['prose with no object', 'Looks good to me.', /not one JSON object: it holds none/],
     ['an object cut short', object.slice(0, -40), /not closed/],
-    // A quote left unescaped in a string is the likely break; the why names where, since the record keeps only the start.
-    ['an object that does not parse', object.replace('"read both"', '"read "both" paths"'), /does not parse at character \d+, near ".*both/],
+    // A quote left unescaped in a string is the likely break; the why shows the text where it breaks, since the record
+    // keeps only the start: near the character the parser names, or in the parser's own words when it names none.
+    ['an object that does not parse', object.replace('"read both"', '"read "both" paths"'), /does not parse( at character \d+, near "|: ).*both/],
+    ['the object as the element of an array', `[${object}]`, /element of a JSON array/],
+    ['the object as the element of a fenced array', `\`\`\`json\n[\n${object}\n]\n\`\`\``, /element of a JSON array/],
     ['prose holding braces beside the object', `The {placeholder} stays.\n${object}`, /does not parse/],
   ];
   for (const [shape, text, why] of cases) {
