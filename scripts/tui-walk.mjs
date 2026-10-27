@@ -178,6 +178,11 @@ async function main() {
       if (Date.now() > until || child.exitCode !== null) throw new Error(`the menu never opened:\n${out}`);
       await sleep(50);
     }
+    // The update check fills the header after the first draw (odd/tasks/tui-gentle-level.md, S5).
+    while (screenOf(out)[0].includes('checking for updates')) {
+      if (Date.now() > until || child.exitCode !== null) throw new Error(`the update check never ended:\n${screenOf(out)[0]}`);
+      await sleep(50);
+    }
     const header = screenOf(out)[0];
     const headerOk = header === `js-harness ${current}  (update available: ${newer})`;
     results.push({ name: 'header', ok: headerOk, faults: headerOk ? [] : [`header is ${JSON.stringify(header)}`], said: header });
@@ -216,16 +221,15 @@ async function main() {
     fs.writeFileSync(path.join(kept, 'walk.md'), 'a note the normal uninstall keeps\n');
     await uninstallKind('Uninstall everything, answered no', 'Everything', { answer: KEY.no });
     {
-      // Its yes removes the folder and, since this menu runs from a checkout, keeps the program; then the menu ends
-      // by itself, with nothing left to offer.
-      const start = out.length;
+      // Its yes removes the folder and, since this menu runs from a checkout, keeps the program; its result says the
+      // menu is gone too, and Enter closes it, with nothing left to offer.
       await select(M, 'Uninstall');
       await press(KEY.enter);
       await select('uninstall', 'Everything');
       await press(KEY.enter);
-      child.stdin.write(KEY.yes);
+      const said = (await runToResult(KEY.yes)).join('\n');
+      child.stdin.write(KEY.enter);
       const exit = await Promise.race([exited, sleep(60_000).then(() => 'still running')]);
-      const said = out.slice(start);
       const faults = [];
       if (exit !== 0) faults.push(`exit ${exit}`);
       if (fs.existsSync(path.join(dirs.home, '.js-harness'))) faults.push('the .js-harness folder is still there');
