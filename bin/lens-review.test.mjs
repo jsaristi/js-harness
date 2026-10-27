@@ -84,12 +84,17 @@ test('one incomplete lens makes the run incomplete: recorded, exit 1, and no rev
   assert.match(err, /risk: incomplete, the answer is not one JSON object; it answered: "Looks fine\."/);
 });
 
-test('an incomplete answer is kept on one line and cut at its first characters', () => {
-  const long = `Here is my review.\n\n${'x'.repeat(1000)}`;
+test('an incomplete answer is kept on one line and cut at its first characters, never inside one', () => {
+  const head = 'Here is my review. ';
+  // A character of two UTF-16 units across the cut is kept whole or left out, never split.
+  const long = `Here is my review.\n\n${'x'.repeat(LENS_ANSWER_KEPT - head.length - 1)}🙂${'y'.repeat(1000)}`;
   const claude = fakeClaude(() => long);
-  run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens });
+  const { code, err } = run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens });
+  assert.equal(code, 1);
   const [rec] = readLensReviews(dir).slice(-1);
-  assert.equal(rec.results[0].answered, `Here is my review. ${'x'.repeat(LENS_ANSWER_KEPT - 'Here is my review. '.length)}`);
+  const kept = `${head}${'x'.repeat(LENS_ANSWER_KEPT - head.length - 1)}🙂`;
+  assert.equal(rec.results[0].answered, kept);
+  assert.ok(err.split('\n').some((line) => line === `risk: incomplete, the answer is not one JSON object; it answered: ${JSON.stringify(kept)}`), err);
 });
 
 test('a skip is recorded with its reason and runs no lens; a range with no code records nothing to review', () => {

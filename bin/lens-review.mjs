@@ -99,8 +99,9 @@ function lensOutcome(lens, ran, candidate) {
     : { lens, outcome: INCOMPLETE, why: read.why, answered: answerKept(out.result), findings: [], ...spent };
 }
 
-/** The start of an answer the lens result could not read, on one line, as its record keeps it. */
-const answerKept = (text) => text.replace(/\s+/g, ' ').trim().slice(0, LENS_ANSWER_KEPT);
+/** The start of an answer the lens result could not read, on one line, as its record keeps it: cut by characters, not
+ * UTF-16 units, so the cut never leaves half of one. */
+const answerKept = (text) => [...text.replace(/\s+/g, ' ').trim()].slice(0, LENS_ANSWER_KEPT).join('');
 
 class LensReviewArgError extends Error {}
 
