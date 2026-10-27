@@ -41,6 +41,7 @@ Nothing: a rule of his, briefed by the lead.
 - [x] T1 (kind: build) `sessions live`: rows, batch files, cursor, test first; the board-read guard lets it run beside an eval batch. Route: inline.
 - [x] T2 (kind: build) the rule `live-board`: declaration and its text in the orchestrator skill, test first. Route: inline.
 - [x] T3 (kind: build) the board page on `db`, republished to the same URL, seeded from the record; its source is `docs/live-board.html`. Route: inline.
+- [ ] T4 (kind: build) the cursor finding Codex left open in its recheck of d56e9ec (delivery hung on a timestamp), fixed by position in a3b5c0cb; `codex-review` refuses a second recheck, so it is read again from f074443 with `--again`. Route: inline.
 
 ## Log
 - L1. 2026-10-27, the brief (JH 58): make the board live on the artifact's shared `db`, events and per-session status, refreshing by itself; find out whether a command or hook can write the rows; declare a rule from his two lines: work sessions write their events, the lead's replies point to the board.
