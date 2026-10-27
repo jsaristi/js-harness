@@ -76,16 +76,17 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
 - Codex on `d6867d8..883747f`, 2 parts: correct (0.93, 0.88), no finding; 228,432 input tokens.
-- Lenses on `d6867d86..883747f2`: next (not run yet).
+- Lenses on `d6867d8..d90cd20`, two runs, each incomplete (no record covers it): run 1 risk answered more
+  than one JSON object, reliability one WARNING refuted (it says THIRD_PARTY_NOTICES.md is not in the range;
+  `git show --stat 883747f2` lists it: the packager leaves Markdown out), readability 0 findings; run 2 risk 0
+  findings, readability 0, reliability answered more than one JSON object. Each lens answered clean once.
 
 ## Next step
-Slice 1 (`a1a84d74`, `883747f2`) has gentle-ai and Codex; run `js-harness lens-review --base d6867d86
---lenses risk,reliability,readability --reason "notify question check, output style and two ported skills as
-install components, hook entries moved"`, then push and open PR 1 of the chain. Then T4: first a pure-move
-commit of `readSettings`, `acceptSessionMessages` and `restoreSettings` (manifest.mjs lines ~980-1085) to a new
-`bin/lib/user-settings.mjs` (export `keepRecord` and `removeEmptyDirsUpTo` from manifest; keep
-`NEW_SETTINGS_STYLE`, `userSettingsPath`, `SESSION_MESSAGES` in manifest, since `settings-key.mjs` reads the
-first at load; function-only cycle), lowering the 2008 ceiling; then the permissions hold/release beside them
+The lens record of slice 1 is owed: the same lens answers "not one JSON object" on alternate runs, which looks
+like the result reader, not the code (read `lens-reviews.jsonl`'s last two records first; report it to the lead
+as a `note` and do not loop). Then push and open PR 1. `26381e6e` already moved `readSettings`,
+`acceptSessionMessages` and `restoreSettings` to `bin/lib/user-settings.mjs` (ceiling 1904); next the
+permissions hold/release beside them
 (design in L4 and the Constraints), recorded as `manifest.permissions`, released before the hook entries in
 `uninstallInstalled`, and a `doctor` row. Then T5, T6; T7 waits on question 99.
 
