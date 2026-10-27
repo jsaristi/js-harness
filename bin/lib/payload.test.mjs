@@ -593,3 +593,36 @@ test('a relative model_instructions_file value resolves against the config.toml 
     assert.equal(source.tokens, estimateTokens('relative-instructions'));
   });
 });
+
+// --- claudeMdExcludes (odd/tasks/f8-s3-split.md, S8) ---
+// Claude Code skips a CLAUDE.md whose absolute path a `claudeMdExcludes` glob of any settings layer matches, so the
+// payload counts it as excluded, not as a file that loads on each turn.
+
+test('a global CLAUDE.md that a claudeMdExcludes glob of the project settings matches is excluded from the total', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'CLAUDE.md'), 'a'.repeat(400));
+    write(path.join(cwd, 'AGENTS.md'), 'b'.repeat(40));
+    write(path.join(cwd, 'CLAUDE.md'), '@AGENTS.md\n' + 'c'.repeat(40));
+    write(path.join(cwd, '.claude', 'settings.json'), JSON.stringify({ claudeMdExcludes: ['**/.claude/CLAUDE.md'] }));
+    const [claude] = measurePayload({ home, cwd }).hosts;
+    const global = findSource(claude, 'global CLAUDE.md');
+    assert.equal(global.tokens, 0);
+    assert.equal(global.excluded, '**/.claude/CLAUDE.md');
+    assert.equal(findSource(claude, 'project CLAUDE.md').excluded, undefined, 'the root CLAUDE.md is not under .claude/');
+    assert.equal(claude.total, estimateTokens('b'.repeat(40)) + estimateTokens('@AGENTS.md\n' + 'c'.repeat(40)));
+  });
+});
+
+test('claudeMdExcludes is read from the local and user layers too, and a glob that matches nothing excludes nothing', () => {
+  withFixture((home, cwd) => {
+    write(path.join(home, '.claude', 'CLAUDE.md'), 'a'.repeat(400));
+    write(path.join(cwd, '.claude', 'settings.local.json'), JSON.stringify({ claudeMdExcludes: ['**/elsewhere/CLAUDE.md'] }));
+    let [claude] = measurePayload({ home, cwd }).hosts;
+    assert.equal(findSource(claude, 'global CLAUDE.md').tokens, 100);
+    assert.equal(findSource(claude, 'global CLAUDE.md').excluded, undefined);
+
+    write(path.join(home, '.claude', 'settings.json'), JSON.stringify({ claudeMdExcludes: ['**/.claude/CLAUDE.md'] }));
+    [claude] = measurePayload({ home, cwd }).hosts;
+    assert.equal(findSource(claude, 'global CLAUDE.md').excluded, '**/.claude/CLAUDE.md');
+  });
+});

@@ -930,6 +930,25 @@ test('checkPayload reports each host with its sources, a missing one and its hoo
   }
 });
 
+// F8 S3 (odd/tasks/f8-s3-split.md, S8): a CLAUDE.md that a claudeMdExcludes glob matches does not load, so its row says so.
+test('checkPayload shows a CLAUDE.md that claudeMdExcludes keeps out as excluded and leaves it out of the total', () => {
+  const dir = makeTmpDir();
+  const home = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400)); // 100 tokens
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'a'.repeat(8000)); // 2000 tokens, excluded
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), JSON.stringify({ claudeMdExcludes: ['**/.claude/CLAUDE.md'] }));
+    const [claude] = checkPayload(dir, home);
+    assert.match(claude.detail, /^100 estimated tokens/);
+    assert.ok(claude.lines.some((line) => /global CLAUDE\.md +excluded \(claudeMdExcludes\)/.test(line)), claude.lines.join('\n'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('checkPayload prefixes a plugin hook with its plugin id and leaves a settings hook as it was', () => {
   const dir = makeTmpDir();
   const home = makeTmpDir();
