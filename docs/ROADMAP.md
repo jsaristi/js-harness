@@ -147,12 +147,12 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [ ] The cuts that document recommends, one at a time: moved, never deleted, measured before and after, proven by an eval, each undoable (his decisions D1-D7 there)
 
 ### F8 Harness reorganization
-- [ ] 0. His CLI login restored (`claude auth login`, his): `claude auth status` shows him signed in and one `claude -p` answers
-- [ ] 1. Research complete: the diet proposal with its second pass merged to `main` (PR 593 and the second-pass PR), and the map's rows current
-- [ ] 2. His decisions, one at a time, in the proposal's section 1 order (2, 3, 5, 6, 7, 8); each answer recorded in the roadmap or the proposal with his words and the transcript line
-- [ ] 3. Certification built first and today's harness graded as the baseline: credentials guard landed; thresholds frozen in a commit; the replay set and the long-session eval built and run with the desktop's flags; all 21 measures read, the missing ones counted as missing
-- [ ] 4. Migration, one reversible step at a time (S1, then S2 with S3 as one merge to `main`, then S4-S7): each step measured against the baseline the same day, its map row updated, reverted if a measure is worse; decision 4 (the budget) asked once S2 is measured
-- [ ] 5. Final certification: section 7 in full, a Claude audit and a Codex audit three runs each, graded side by side with the baseline and their spread; decision 9 (whether `init` offers the exclusion) asked after it
+- [x] 0. His CLI login restored (`claude auth login`, his): done and verified 2026-10-26, `claude auth status` shows `loggedIn` and a refresh token is present
+- [ ] 1. Research complete: the diet proposal with its second and third passes merged to `main` (PR 593 and PR 594), and the map's rows current
+- [ ] 2. His decisions, one at a time, in the proposal's section 1 order (2, 3, 5, 6, 7, 8); each answer recorded in the roadmap or the proposal with his words and the transcript line. Decision 2's exclusion half is answered ("Ok listo hagamoslo asi", transcript `4b935d4a-cbb8-47fe-a059-22a7c5bae931` line 3210); only its eval spend envelope (at most $200 API-equivalent) stays his
+- [ ] 3. A small baseline before any cut (S0): thresholds frozen in a commit; the credentials guard in `evals/home.mjs`; the gentle-ai Stop-hook probe run with the exclusion on; the 3-task eval, `honest-unknown`, `/context`, the `fixed load` row and the 10-case incident set run twice with the desktop's flags, their spread recorded. The long-session eval is designed now and built in parallel; it is S8's confirmation, not a gate
+- [ ] 4. Migration, one reversible step at a time, each against the baseline with its own probe and pass line (the proposal's section 10): S3, then every active worktree carrying S3's lines, then S2 with a session restart and a revert drill; the S4a attribution hook; S1 (first instead, if the Stop-hook probe failed); S4b; S5 with the rule pass; S6; S7. S9, the gentle-ai update guard, lands any time after S0. Decision 4 (the budget: 80k once S2 is measured, 75k after S5 and S6) asked once S2 is measured
+- [ ] 5. Final certification (S8): the S0 and S8 measures of section 7, a Claude audit and a Codex audit three runs each, graded side by side with the baseline and their spread; decision 9 (whether `init` offers the exclusion) asked after it
 
 ### Project init
 - [x] A git-spec global install works through the pnpm shim
@@ -308,28 +308,38 @@ funcionando muy mal" (relayed by the lead to session JH 54). The objective is th
 checkboxes under [Checklist](#checklist), each closed by the condition written there. Work that
 does not serve a step waits, unless it breaks shipped behaviour.
 
-1. **His CLI login (step 0).** First because it is one command of his. It blocks only headless runs
-   on the CLI's own login: the evals and today's tests ran on the eval token
-   (`JS_HARNESS_EVAL_OAUTH_TOKEN`, `evals/suite.mjs:94`).
-2. **Research (step 1).** Two passes. The second (section 14) ran the two tests the plan waited on:
+1. **His CLI login (step 0).** Done: he logged in again on 2026-10-26, and `claude auth status`
+   shows him signed in with a refresh token present. The evals and tests run on the eval token
+   (`JS_HARNESS_EVAL_OAUTH_TOKEN`, `evals/suite.mjs:94`) either way.
+2. **Research (step 1).** Three passes. The second (section 14) ran the two tests the plan waited on:
    - The exclusion works in the desktop's configuration, read from `D:\js-harness\.claude\` only.
      The reason: a desktop worktree session starts with `--project-config-root D:\js-harness`.
    - A root `CLAUDE.md` importing `AGENTS.md` loads once, and only the worktree's copy.
    - 54 user reports and 15 public setups point the same way as the diet.
-3. **His decisions (step 2).** Before certification, because two of them set what it costs and
-   measures: the eval spend (decision 2) and the project file (decision 3). Decision 4 needs S2's
-   measure, so it moves into step 4. Decision 9 needs the final grade, so it moves into step 5.
-   That is the one change to the lead's order, made on the proposal's own conditions.
-4. **Certification before any cut (step 3).** A step cannot be judged better or worse without a
-   baseline. The credentials guard lands first, because an eval broke his login. The evals pass
-   the desktop's flags, or they grade a load no session has.
+
+   The third (section 15) followed two blind grades, about 5.5 of 10 each from a Claude reviewer
+   and Codex: right direction, wrong order. He approved its seven improvements on 2026-10-26.
+3. **His decisions (step 2).** Before the baseline, because two of them set what it costs and
+   measures: the eval spend envelope (decision 2; its exclusion half is already answered) and the
+   project file (decision 3). Decision 4 needs S2's measure, so it moves into step 4. Decision 9
+   needs the final grade, so it moves into step 5.
+4. **A small baseline before any cut (step 3).** A step cannot be judged better or worse without
+   one, but the baseline only needs what a step depends on: the 3-task eval, `honest-unknown`,
+   `/context`, the `fixed load` row and a 10-case incident set, run twice so "worse" means beyond
+   their spread. The credentials guard lands first, inside `evals/home.mjs`, because an eval broke
+   his login. A probe runs gentle-ai's Stop hooks and one review with the exclusion on. The
+   long-session eval is built in parallel and confirms at the end.
 5. **Migration (step 4).** One step at a time, in the proposal's section 10 order:
-   - The review driver (S1) comes before the exclusion, because gentle-ai's Stop hook assumes its
-     prose is loaded.
-   - S2 and S3 land as one merge to `main`. The setting is read from the main checkout, so it
-     changes every session at once and cannot be tried on a branch.
-6. **Final certification (step 5).** The same measures as the baseline, then the two audits side
-   by side. It runs again on each new model, Claude Code update and gentle-ai update.
+   - S3 lands first; every active worktree merges `main` or closes; then S2 alone, a restart of
+     every session and a revert drill. The setting is read from the main checkout, so it changes
+     every session at once and cannot be tried on a branch.
+   - The S4a attribution hook follows at once: it is cheap and safe.
+   - The review driver (S1) comes after S2 if the Stop-hook probe passed, and before S3 if not.
+   - Then S4b, S5 (with the rule-by-rule pass), S6 and S7, each with its own probe and pass line.
+     S9, the gentle-ai update guard, lands any time after the baseline.
+6. **Final certification (step 5).** The baseline and release measures, then a Claude audit and a
+   Codex audit, three runs each, side by side. It runs again on each new model and Claude Code
+   update, and through S9 on each gentle-ai update.
 
 **Scope frozen, by his answer of 2026-10-16.** On 2026-10-15 the sessions ticked 70 tasks and
 opened 56 new ones (counted from the feature documents' history on `main`), so the open count
