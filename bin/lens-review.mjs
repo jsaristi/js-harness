@@ -27,6 +27,9 @@ export const LENS_MODEL = 'sonnet';
 export const LENS_INPUT_LIMIT = 150_000;
 // A lens answers in under two minutes on a slice; a run past this has stalled.
 export const LENS_TIMEOUT_MS = 10 * 60 * 1000;
+// How many characters of an answer that is no lens result its record keeps: enough to tell prose from a broken
+// object, so why it failed is read before the lens runs again (odd/tasks/f8-s1-reviews.md, L10).
+export const LENS_ANSWER_KEPT = 300;
 // What the child must not inherit: a review runs on the user's CLI login, never on the eval token or a key.
 const NOT_INHERITED = ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
 
@@ -93,8 +96,11 @@ function lensOutcome(lens, ran, candidate) {
   const read = lensResult(out.result, candidate);
   return read.complete
     ? { lens, outcome: 'complete', findings: read.findings, evidence: read.evidence, ...spent }
-    : { lens, outcome: INCOMPLETE, why: read.why, findings: [], ...spent };
+    : { lens, outcome: INCOMPLETE, why: read.why, answered: answerKept(out.result), findings: [], ...spent };
 }
+
+/** The start of an answer the lens result could not read, on one line, as its record keeps it. */
+const answerKept = (text) => text.replace(/\s+/g, ' ').trim().slice(0, LENS_ANSWER_KEPT);
 
 class LensReviewArgError extends Error {}
 
@@ -200,7 +206,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results });
   for (const result of results) {
     if (result.outcome !== 'complete') {
-      stderr(`${result.lens}: incomplete, ${result.why}`);
+      stderr(`${result.lens}: incomplete, ${result.why}${result.answered === undefined ? '' : `; it answered: ${JSON.stringify(result.answered)}`}`);
       continue;
     }
     stdout(`${result.lens}: complete, ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}, ${result.inputTokens} input and ${result.outputTokens} output tokens`);

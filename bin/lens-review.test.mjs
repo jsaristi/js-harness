@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { claudeArgs, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
+import { claudeArgs, LENS_ANSWER_KEPT, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
 import { readLensReviews } from './lib/lens-reviews.mjs';
 import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
@@ -79,6 +79,17 @@ test('one incomplete lens makes the run incomplete: recorded, exit 1, and no rev
   const [rec] = readLensReviews(dir).slice(-1);
   assert.equal(rec.outcome, 'incomplete');
   assert.deepEqual(rec.results.map((r) => r.outcome), ['incomplete', 'complete']);
+  // What it answered is kept and shown, cut short, so why it failed can be read before it runs again (L10).
+  assert.equal(rec.results[0].answered, 'Looks fine.');
+  assert.match(err, /risk: incomplete, the answer is not one JSON object; it answered: "Looks fine\."/);
+});
+
+test('an incomplete answer is kept on one line and cut at its first characters', () => {
+  const long = `Here is my review.\n\n${'x'.repeat(1000)}`;
+  const claude = fakeClaude(() => long);
+  run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens });
+  const [rec] = readLensReviews(dir).slice(-1);
+  assert.equal(rec.results[0].answered, `Here is my review. ${'x'.repeat(LENS_ANSWER_KEPT - 'Here is my review. '.length)}`);
 });
 
 test('a skip is recorded with its reason and runs no lens; a range with no code records nothing to review', () => {

@@ -146,6 +146,13 @@ test('the review row says when it cannot tell, and fails nothing', () => {
   assert.match(said.detail, /^cannot tell what waits for a review: no default branch of origin/);
 });
 
+// gentle-ai's suggestion on PR 613: the gentle-ai row had this test, and the debt row keeps its promise.
+test('the review row says when git cannot even be spawned, and fails nothing', () => {
+  const said = checkReviewDebt(dir, { spawn: () => { throw new Error('spawn failed'); } });
+  assert.deepEqual([said.name, said.pass, said.info], ['review', true, true]);
+  assert.match(said.detail, /^cannot tell what waits for a review: /);
+});
+
 test('the skips doctor lists are those the review row lists, and none where it cannot tell', () => {
   assert.deepEqual(owedSkipLines(dir), []);
   record(base, head, { outcome: 'unavailable', reason: 'out of turns', results: undefined });

@@ -962,7 +962,8 @@ and says why with `--reason`. Each lens is a fresh `claude -p` run with no tools
 customizations, on your own CLI login, never on the eval token or an API key, and it reads only the
 range as a block: its two commits, its subject hash, the paths a review reads and each path's patch.
 A result counts only when it echoes the hash and inspected every path; otherwise the run is recorded
-as incomplete, exits 1 and covers nothing. Runs are recorded in `<git common dir>/js-harness/lens-reviews.jsonl`.
+as incomplete, exits 1 and covers nothing, and the start of an answer it could not read is kept and
+printed, so why it failed is read before it runs again. Runs are recorded in `<git common dir>/js-harness/lens-reviews.jsonl`.
 `--plan` prints the candidate and starts nothing; `--unavailable <reason>` records a skip, which the
 push lets through and `check`, `doctor` and `merge-queue` list until a review covers the range.
 
