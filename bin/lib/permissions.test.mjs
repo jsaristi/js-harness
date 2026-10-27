@@ -164,7 +164,65 @@ test('a settings file that does not parse is left alone and reported, and the re
     assert.deepEqual(manifest.permissionsHeld, { status: 'skipped', path: m.settings, reason: 'malformed JSON' });
     assert.equal(m.read(), '{ not json');
     assert.deepEqual(readManifest(m.home).permissions, record);
-    assert.equal(permissionsHealth(m.home).state, 'unknown');
+    // The denies are not there: a gap the session-start hook announces, never the `unknown` it stays quiet on
+    // (the verifier of T4, finding 1).
+    const health = permissionsHealth(m.home);
+    assert.equal(health.state, 'stale');
+    assert.match(health.fix[0], /cannot hold the permissions \(malformed JSON\): fix it, then run js-harness install$/);
+  } finally {
+    m.done();
+  }
+});
+
+test('a list broken after a recorded install is a gap too, and permissions set to null are left as they are', () => {
+  const m = machine();
+  try {
+    install(m.home, '1.0.0');
+    m.write({ ...m.data(), permissions: { deny: 'Read(.env)' } });
+    assert.equal(sync(m.home, '1.0.1').permissionsHeld.status, 'skipped');
+    assert.equal(permissionsHealth(m.home).state, 'stale');
+  } finally {
+    m.done();
+  }
+  const n = machine();
+  try {
+    n.write('{"permissions":null}');
+    assert.match(install(n.home, '1.0.0').permissionsHeld.reason, /"permissions" is not an object/);
+    n.remove();
+    assert.equal(n.read(), '{"permissions":null}');
+  } finally {
+    n.done();
+  }
+});
+
+test('an entry found twice loses one copy to uninstall, and a record edited by hand takes out only entries of the lists', () => {
+  const m = machine();
+  try {
+    install(m.home, '1.0.0');
+    const data = m.data();
+    m.write({ ...data, permissions: { ...data.permissions, deny: [...data.permissions.deny, 'Read(.env)', 'Bash(curl)'] } });
+    const manifest = readManifest(m.home);
+    manifest.permissions.added.deny = [...manifest.permissions.added.deny, 'Bash(curl)', 42];
+    fs.writeFileSync(path.join(m.home, '.js-harness', 'manifest.json'), JSON.stringify(manifest));
+    m.remove();
+    assert.deepEqual(m.data(), { permissions: { deny: ['Read(.env)', 'Bash(curl)'] } });
+  } finally {
+    m.done();
+  }
+});
+
+test('a record kept by a failed uninstall still takes the file away after a reinstall', () => {
+  const m = machine();
+  try {
+    install(m.home, '1.0.0');
+    const failing = (file, ...rest) => {
+      if (file === m.settings) throw Object.assign(new Error('locked'), { code: 'EBUSY' });
+      return fs.writeFileSync(file, ...rest);
+    };
+    uninstall(m.home, { schtasks: fakeSchtasks, writeFile: failing });
+    install(m.home, '1.0.0');
+    m.remove();
+    assert.deepEqual(fs.readdirSync(m.home), [], 'no {} left behind (the verifier of T4, finding 3)');
   } finally {
     m.done();
   }

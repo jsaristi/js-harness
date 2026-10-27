@@ -26,7 +26,7 @@ const union = (a, b) => [...new Set([...a, ...b])];
 
 /** The user's `permissions` in `data`, or why it cannot be held: `{ permissions }` or `{ reason }`. */
 function permissionsOf(data) {
-  const permissions = data.permissions ?? {};
+  const permissions = data.permissions === undefined ? {} : data.permissions;
   if (!isObject(permissions)) return { reason: '"permissions" is not an object' };
   const bad = Object.keys(LISTS).find((name) => permissions[name] !== undefined && !Array.isArray(permissions[name]));
   return bad ? { reason: `"permissions.${bad}" is not a list` } : { permissions };
@@ -92,11 +92,13 @@ export function holdPermissions(home, previous) {
 
 /** Takes out of the settings what `record` says `install` wrote: its entries, the `defaultMode` it wrote back while it
  * is still that value, and a list, the object or the file it made once nothing else is in them. Returns `{ status,
- * path }`: `released` with `removed`, the count taken out; `gone` with nothing of it left to take; `kept` with a
- * `reason` when the file cannot be read, left as it is; `failed` with a `code` when it cannot be written, and then the
- * caller keeps the record for a second run. */
+ * path }`: `released` with `removed`, the count taken out (one copy of each recorded entry of the lists); `gone` with
+ * nothing of it left to take; `kept` with a `reason` when the file cannot be read, or is not the user settings of `home`,
+ * left as it is; `failed` with a `code` when it cannot be written, and then the caller keeps the record for a second
+ * run. */
 export function releasePermissions(record, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
-  const at = record.path;
+  const at = userSettingsPath(home);
+  if (record.path !== at) return { status: 'kept', path: String(record.path), reason: 'the record names another file than the user settings' };
   let settings;
   try {
     settings = readSettings(at);
@@ -107,9 +109,16 @@ export function releasePermissions(record, home, listDir, { writeFile = fs.write
   if (!existed || !isObject(data.permissions)) return { status: 'gone', path: at };
   const permissions = { ...data.permissions };
   let removed = 0;
-  for (const name of Object.keys(LISTS)) {
+  for (const [name, known] of Object.entries(LISTS)) {
     if (!Array.isArray(permissions[name])) continue;
-    const left = permissions[name].filter((entry) => !(record.added?.[name] ?? []).includes(entry));
+    // One copy of each entry recorded, and only an entry of the lists: a copy someone added again stays, and a
+    // manifest edited by hand cannot name the user's own entries (the verifier of T4, findings 4 and 5).
+    const ours = Array.isArray(record.added?.[name]) ? record.added[name].filter((entry) => known.includes(entry)) : [];
+    const left = [...permissions[name]];
+    for (const entry of new Set(ours)) {
+      const index = left.indexOf(entry);
+      if (index !== -1) left.splice(index, 1);
+    }
     removed += permissions[name].length - left.length;
     permissions[name] = left;
     if (left.length === 0 && (record.createdLists ?? []).includes(name)) delete permissions[name];
@@ -134,9 +143,24 @@ export function releasePermissions(record, home, listDir, { writeFile = fs.write
   return { status: 'released', path: at, removed };
 }
 
+/** Once the hook entries are out too, removes the settings file `record` says install made when it holds nothing at
+ * all, with the folders it leaves empty: the case of a record a failed uninstall kept, whose file the hooks of a later
+ * install found there (the verifier of T4, finding 3). A file that holds anything, or cannot be read, stays. */
+export function removeMadeFile(record, home, listDir, removeFile = fs.rmSync) {
+  if (!record.createdFile || record.path !== userSettingsPath(home)) return;
+  try {
+    const { data, existed } = readSettings(record.path);
+    if (!existed || Object.keys(data).length > 0) return;
+    removeFile(record.path);
+    removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
+  } catch {
+    // Tidying after the work is done: a file that cannot be read or removed is left.
+  }
+}
+
 /** The doctor row's reading (`{ state, fix }`): `n/a` where js-harness is not installed; `ok` while the settings hold
- * every entry and the adopted `defaultMode`; `stale` naming each one missing, or when nothing holds them yet;
- * `unknown` when the settings cannot be read. */
+ * every entry and the adopted `defaultMode`; `stale` naming each one missing, when nothing holds them yet, or when the
+ * settings cannot hold them (a file that does not parse, a `permissions` of another shape). */
 export function permissionsHealth(home) {
   const manifest = readManifest(home);
   if (!manifest?.version) return { state: 'n/a', fix: [] };
@@ -146,10 +170,11 @@ export function permissionsHealth(home) {
   let found;
   try {
     found = permissionsOf(readSettings(target).data);
-  } catch {
-    return { state: 'unknown', fix: [] };
+  } catch (err) {
+    found = { reason: err.message };
   }
-  if (found.reason) return { state: 'unknown', fix: [] };
+  // A file that cannot hold them holds none of them: a gap, never the `unknown` the hook stays quiet on.
+  if (found.reason) return { state: 'stale', fix: [`permissions: ${target} cannot hold the permissions (${found.reason}): fix it, then ${run}`] };
   const { permissions } = found;
   const missing = Object.entries(LISTS).flatMap(([name, wanted]) => wanted.filter((entry) => !(permissions[name] ?? []).includes(entry)).map((entry) => `${name} ${entry}`));
   if (manifest.permissions.defaultMode !== null && permissions.defaultMode === undefined) missing.push(`defaultMode ${manifest.permissions.defaultMode}`);

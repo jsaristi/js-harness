@@ -17,7 +17,7 @@ import { SHARE_TOLERANCE } from './audit.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';
-import { holdPermissions, releasePermissions } from './permissions.mjs';
+import { holdPermissions, releasePermissions, removeMadeFile } from './permissions.mjs';
 import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
 import { chainedPrsSkillContent, workUnitsSkillContent } from './ported-skills.mjs';
 import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, webFailureHookEntry } from './hook-entries.mjs';
@@ -1491,10 +1491,9 @@ function uninstallInstalled(home, deps) {
   if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
-    const keptSettings = settings.failedRecords.map(madeFile);
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
-      ...(keptSettings.length > 0 && { settings: keptSettings }),
+      ...(settings.failedRecords.length > 0 && { settings: settings.failedRecords.map(madeFile) }),
       ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
     });
   } else {
@@ -1502,6 +1501,7 @@ function uninstallInstalled(home, deps) {
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
   removeCreatedFolders(manifest.entries, home, listDir);
+  if (permissions?.status === 'released') removeMadeFile(manifest.permissions, home, listDir, removeFile);
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
