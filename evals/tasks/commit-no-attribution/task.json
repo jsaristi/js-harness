@@ -1,0 +1,17 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/commit-no-attribution.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "recordFailed": true,
+  "setup": true,
+  "proof": {
+    "total": 4,
+    "fixturePassed": 0
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/false-premise-flag.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "recordFailed": true,
+  "reply": true,
+  "proof": {
+    "total": 3,
+    "fixturePassed": 2
+  }
+}
