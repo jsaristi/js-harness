@@ -2,7 +2,8 @@
 
 Status: proposal, 2026-10-26, session JH 53; second pass the same day, session JH 54 (section 14,
 and the edits it names); third pass the same day, after two blind grades (section 15, and the
-edits it names); fourth pass the same day, after a second blind grade (section 16). Target: Claude
+edits it names); fourth pass the same day, after a second blind grade (section 16); fifth pass the same day, after
+a third blind grade and with the gentle-ai reverse-engineering (section 17). Target: Claude
 Code with Anthropic's 5.5 models only.
 Nothing outside this repository was changed by design. One thing was changed by accident and is
 reported in section 9. Every change outside the repository is in section 1, as his decision.
@@ -117,7 +118,7 @@ changes.
      | After S3, S2, S1, S4b, S5 | one incident-set run each (section 10's "no worse") | 5 × ~$13 = ~$65 |
      | S8 | the S0 and S8 measures, twice | ~$25 |
      | Long-session eval | 5 runs per setup and one desktop smoke run | ≤ $60 |
-     | Reserve | S6's two-case run (~$3); then at most one or two reruns after a gentle-ai update (section 7.2) | ~$25 |
+     | Reserve | S6's two-case run (~$3); then at most one rerun after a gentle-ai update (~$13, section 7.2); a second one would pass the envelope and is asked first | ~$25 |
      | **Total** | | **≤ $200** |
 
      S4a, S7 and S9 use their own probes and spend nothing. Grading: a script grades the

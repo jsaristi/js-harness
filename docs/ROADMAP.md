@@ -436,8 +436,9 @@ Codex.
   design to zero-dependency Node in `bin/tui.mjs`, plus one item that opens `gentle-ai`'s own TUI, and
   maps every gentle-ai screen to native, delegated, excluded or deferred in seven sized slices
   (`docs/proposals/gentle-ai-reverse-engineering.md`, section 4). Not a phase: a feature with its own
-  document. Two of its causes are defects in shipped behaviour, not new scope: long lines make the menu
-  duplicate, and commands print over the menu. Under the freeze those two may be fixed now as one
+  document. Two of its causes are defects in shipped behaviour, not new scope: the menu very likely
+  duplicates when a line is wider than the terminal (inferred from the code, not yet reproduced in
+  a real console), and commands print over the menu. Under the freeze those two may be fixed now as one
   defect task (slice 1's terminal guard, frame model and run screen, about 250 lines, touching only
   `bin/tui.mjs` and its tests); the rest waits for G3.
 
