@@ -70,7 +70,7 @@ IDs used below:
 - F2, F5: roadmap phases (`docs/ROADMAP.md`).
 - FL1-FL7: his decisions in `odd/tasks/fixed-load.md` (named D1-D7 there).
 - S0-S13: migration steps (section 10); S9 is the idea watch.
-- D1-D9: his decisions of this plan; G1-G13: those raised by
+- D1-D9: his decisions of this plan; G1-G14: those raised by
   [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md). One register, section 1.
 - C1-C5: certification criteria (section 7).
 
@@ -96,13 +96,14 @@ reasons are in the reverse-engineering document, section 7. Dates are local (Ame
 | G3 | TUI priority against F8 | slice 1 in progress (JH 56); the rest open | beside F8, in its own session, after slice 1 | step 2 |
 | G4 | The skill-registry prompt hook | closed by his words: leaves with gentle-ai | — | — |
 | G5 | gentle-ai skills to hide here | closed: replaced by G8 | — | — |
-| G6 | GGA | closed by his words: leaves with gentle-ai | — | — |
+| G6 | GGA | closed by his words: leaves with gentle-ai; `~/bin/gga` and any project hook of it go at S2 | — | — |
 | G7 | Spend on following gentle-ai | reframed: the idea watch installs nothing | no per-release eval spend | step 5 |
-| G8 | Which gentle-ai skills to copy | open | six: `work-unit-commits`, `chained-pr`, `branch-pr` adapted, `comment-writer`, `cognitive-doc-design`, `skill-creator` | S10 |
+| G8 | Which gentle-ai skills to copy | open, to confirm | two, each for a stated need: `work-unit-commits`, `chained-pr` (his rule: "ok entonces copiamos e implementamos solo lo que nos sirve el resto no", line 2646) | S10 |
 | G9 | The review that replaces gentle-ai's engine | answered 2026-10-26 (line 2351): Codex and Claude's lenses on every candidate, always | — | — |
 | G10 | The persona | answered 2026-10-26 (line 2466): our own style, neutral Spanish with tú, no voseo; its name still his | a proposed name, asked once | S10 |
 | G11 | context7 | answered 2026-10-26 (line 2466): always enabled in projects, this repo included | — | — |
 | G12 | What his other projects load once gentle-ai's global file is gone | open | `install` writes a small recorded block of his Rules lines (per D7) into `~/.claude/CLAUDE.md` | S10 |
+| G14 | The names of our presets | open | complete (engram, codegraph, context7, the two reviews, the split), minimal (engram only), custom | S11 |
 | G13 | When a review cannot run | open | record the skip with its reason; the missing review runs before the PR merges | S1 |
 
 His words for G9, G10 and G11, verbatim (transcript `e41d1e8d-8264-45a4-b16c-f9279f7b6076`):
@@ -744,8 +745,8 @@ every project (line 2382).
 | S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row. The gentle-ai review probe of the fourth pass is dropped: its engine leaves | — | the guard refuses a planted credentials file; both runs complete | the baseline and its spread recorded |
 | S3 Split and kept lines | the root `CLAUDE.md` importing `@AGENTS.md`, with A.1's kept lines; a `claude-md-budget` row (D3) | `init` writes the same split; recorded in the project manifest | `/context` shows each project file once; `check` green with the budget row | first turn +≤ 2.5k; incident set no worse |
 | S1 Two reviews, always | Codex as today, plus the Claude lens command: the lens-selection rule (one to four lenses by what the diff touched), runs in fresh contexts, the shared record format (all **to build**); pre-push refuses a code commit without both records or a recorded skip (G13); `AGENTS.md`'s review paragraph and `check`'s `review` row stop naming gentle-ai | `init` installs the pre-push check; `install` installs the lens agents | in a scratch repo: a slice with both records pushes; one with only Codex's is refused; one with a recorded skip pushes and is listed; three real slices reviewed both ways | 6 of 6 behave as stated; cost per slice recorded (D2); incident set no worse |
-| S10 Port | our output style (neutral, tú, our name; G10); the ODD text into `CLAUDE.md` where A.1 does not already hold it; six skills (G8) and four lens agents under our names, with license notices and `THIRD_PARTY_NOTICES`; gentle-ai's credential deny list into `guard`; G12's Rules block | `install` writes style, skills, agents and the Rules block at user level; `init` selects the style; all recorded | `/context` in a restarted session shows our style and skills beside gentle-ai's, still installed; `guard` refuses a read of a planted credentials path | incident set no worse |
-| S11 Take over the complements | `stack`'s engram, engram-plugin, codegraph and context7 rows install and register with their own commands; context7 becomes required and on here (G11); the `gentle-ai` and `gentle-ai-sync` rows and `gentle-ai-update.mjs`'s install watch leave; the 32 source files stop depending on gentle-ai | `stack install` on any machine; `init` enables context7 and runs `codegraph init`; `doctor` flags a project with context7 off | `stack` on a scratch home with no gentle-ai lists each complement with its own command and undo; `grep -rl gentle-ai bin` lists only the idea watch and tests that assert its absence | `check` green; `doctor` green with gentle-ai still installed |
+| S10 Port | our output style (neutral, tú, our name; G10); the ODD text into `CLAUDE.md` where A.1 does not already hold it; two skills (G8) and four lens agents under our names, each for its stated need, with license notices and `THIRD_PARTY_NOTICES`; the 24-entry `permissions.deny` list gentle-ai wrote, taken over (recorded, applied by `init`, a `doctor` row for a missing entry) and its paths into `guard`; G12's Rules block | `install` writes style, skills, agents and the Rules block at user level; `init` selects the style; all recorded | `/context` in a restarted session shows our style and skills beside gentle-ai's, still installed; `guard` refuses a read of a planted credentials path | incident set no worse |
+| S11 Take over the complements | `stack`'s engram, engram-plugin, codegraph and context7 rows install and register with their own commands; context7 becomes required and on here (G11); the `gentle-ai` and `gentle-ai-sync` rows and `gentle-ai-update.mjs`'s install watch leave; the 32 source files stop depending on gentle-ai; presets of our own (complete, minimal, custom; G14) in `install`, `init` and the TUI | `stack install` on any machine; `init` enables context7 and runs `codegraph init`; `doctor` flags a project with context7 off | `stack` on a scratch home with no gentle-ai lists each complement with its own command and undo; `grep -rl gentle-ai bin` lists only the idea watch and tests that assert its absence | `check` green; `doctor` green with gentle-ai still installed |
 | S12 Move his projects | each active project: `init` or `update`, a read-only scan of what gentle-ai left there, its leftovers named and removed through git (reverse-engineering §11.2) | this step is that | each moved project's session shows its `CLAUDE.md` and our style | every active project moved, or named as left with his yes |
 | S2 Remove gentle-ai, Orca and herdr | below: one full backup with a restore drill, a cut point, then each removal asked first | removal is machine-wide; projects already moved keep working | after each: the verification list below | incident set no worse; hooks 32 → 14; `fixed load` ≤ 80k over 5 sessions |
 | S4a Attribution hook and hook count | `commit-msg` strips attribution lines; a `check` row counts hook entries per event and owner | `init` installs the hook | a scratch commit with `Co-Authored-By` lands without it; one extra `Stop` entry turns the row red | 0 attribution lines in the next 50 commits on `main` (6% today); the row fails above the post-removal count (14: js-harness 13, codegraph 1) or on a new owner |
@@ -782,9 +783,9 @@ stops there and leaves the machine as it is.
    data scope (the TUI's EngramScope); `~/.engram` stays. Then by hand, each after the backup: the
    PowerShell skill-registry hook, which its uninstall does not match
    (`internal/components/uninstall/service.go:1355-1360` matches only the bash form; [c] by
-   string comparison, not run); the binary `~/go/bin/gentle-ai.exe`; `~/.gentle-ai`. Its
+   string comparison, not run); the binary `~/go/bin/gentle-ai.exe`; `~/.gentle-ai`; GGA's binary `~/bin/gga`, after checking each of his projects for its pre-commit hook and running `gga uninstall` in any that has it. Its
    uninstall also removes engram's and context7's registrations (`service.go:991-1009`,
-   `:1101-1120`), so `js-harness stack install` re-registers them at once (S11).
+   `:1101-1120`), so `js-harness stack install` re-registers them at once (S11). It also removes the 24 `permissions.deny` entries its `permissions` component wrote, so `js-harness install` re-applies ours (S10) in the same sitting.
 5. **Orca.** `orca agent hooks off` ("Disable Orca-managed agent status hooks and remove local hook
    entries", its CLI spec in `resources/app.asar.unpacked/out/cli/specs/agent-hooks.js`) [c], then
    `%LOCALAPPDATA%\Programs\orca\Uninstall Orca.exe` [c]. **Not established:** which entries
@@ -798,7 +799,7 @@ stops there and leaves the machine as it is.
    14 hook entries (js-harness 13, codegraph 1); `~/.claude/agents`, `skills` and
    `output-styles` hold nothing of gentle-ai; `~/.codex/AGENTS.md` (109 KB, 35 gentle-ai mentions
    today), `~/.codex/skills` and `~/.codex/hooks.json` hold nothing of gentle-ai or herdr;
-   `claude mcp list` shows engram, codegraph and context7 connected; `js-harness doctor` is
+   all 24 `permissions.deny` entries are in `~/.claude/settings.json`; `claude mcp list` shows engram, codegraph and context7 connected; `js-harness doctor` is
    green; `~/.engram` hashes as before.
 8. **Every session restarts;** the lead checks each.
 9. **Undo:** restore the backup (the drill proved it), then `go install
@@ -1215,6 +1216,10 @@ always on, and "lo coloquemos todo" for the gaps below). What changed:
 - **The register:** G1, G4, G5, G6, D9 closed; D6, G9, G10, G11 answered; G7 reframed; G8, G12,
   G13 new.
 - **First turn after removal:** about 75.8k (D4).
+- **Only what serves us** (line 2646): every "copy" in the matrix states its need; four skills
+  and the Risk line had none and moved to drop.
+- **The lead's verdicts on four more components:** the permission deny list is kept and taken
+  over (S10; verified at S2); presets are copied as an idea (G14); GGA and the theme are dropped.
 
 The lead's nine gaps, each placed:
 
