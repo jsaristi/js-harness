@@ -67,7 +67,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T2 (kind: build) the candidate and its packager: identity (base, head, subject hash), ordered manifest, each path's patch; the four lens prompts from one text with four scopes; result validation; test first — S1, S2; inline; 6bc94451, fixed in 7ccc7033 and 2d0d2ef0
 - [x] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline; eb518c07, 2d0d2ef0
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
-- [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`
+- [x] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`; 4834997f, 023eceb9, fixed in e35eb7dc (PR 613); `CLAUDE.md` in the commit that checks this box (L12)
 - [ ] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline
 
 ## Log
@@ -173,6 +173,12 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   record could land there, against S7. Fixed test first: `lensDoor` reads `lensCoverage` itself. 347,875 input
   tokens in all. PR 3 is not rebased on main (the orchestrator's note of 15:57): 9e81839b is in main, `merge-tree`
   shows no conflict, and a rebase would void both reviews' records.
+- L12 (2026-10-27): PR 613 opened against main at 21:17Z, ready and told; its dry run built main bce0e41 plus PR 613.
+  The last slice of T5 is branch `f8-s1-close`, on `f8-s1-debt`: 4df603e0 keeps the start of an answer a lens
+  result could not read (the L10 gap) and pins the `review` row's promise for a git it cannot spawn (gentle-ai's
+  suggestion; `gitOut` already catches the throw, so the row says "cannot tell" before its own catch); then
+  `CLAUDE.md`'s review paragraph asks for Codex and the lenses on every slice and names a skip of either as a debt
+  the merge door refuses, his "revision siempre" of 2026-10-26 (L1). PR 613 landed at 21:29Z (main abeaa3d).
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
