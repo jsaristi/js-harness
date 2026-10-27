@@ -93,10 +93,10 @@ document; he can reverse any of them. Each removal of S2 is also asked, at that 
 
 | ID | Decision | Kind | Status | Recommended default | Asked at |
 |---|---|---|---|---|---|
-| D2 | The eval spend | blocking | open | at most $200 API-equivalent for F8's evals (the table below) | step 2, first |
-| D5 | `rule:double-review` | blocking (his rule) | open | narrow it to proposals that change one of his decisions | step 2 |
-| D7 | His reply rules and the lines that join them | blocking (his rules) | open | one choice: accept every default listed below, or edit them | step 2, before S3 |
-| D8 | The engram prompt hook | blocking (his configuration) | open | off | step 2 |
+| D2 | The eval spend | blocking | answered 2026-10-26: "Hasta $200" (transcript `e41d1e8d`, line 3678) | at most $200 API-equivalent for F8's evals (the table below) | step 2, first |
+| D5 | `rule:double-review` | blocking (his rule) | answered 2026-10-26: "Acotarla" (transcript `e41d1e8d`, line 3709) | narrow it to proposals that change one of his decisions; applied at S3 | step 2 |
+| D7 | His reply rules and the lines that join them | blocking (his rules) | answered 2026-10-26: "Aceptar todo" (transcript `e41d1e8d`, line 3733): every default of item 7 below | one choice: accept every default listed below, or edit them; applied at S3 | step 2, before S3 |
+| D8 | The engram prompt hook | blocking (his configuration) | answered 2026-10-26: "Apagarlo" (transcript `e41d1e8d`, line 3740) | off, backed up and recorded so it can be turned back on; applied at S4a with the hook-count row, after S0's baseline has measured it on | step 2 |
 | G3 | The rest of the TUI, against F8 | blocking (priority) | slice 1 is PR #596, open | beside F8, in its own session, after #596 merges | when #596 merges |
 | G7 | Recurring certification spend after F8 | blocking (spend) | open | at most one certification a week, batching CLI updates, ~$25 each, ≤ $100 a month | after S8 |
 | G12 | What his other projects load once gentle-ai's global file is gone | blocking (his global file) | open | `install` writes a small recorded block of his Rules lines (per D7) into `~/.claude/CLAUDE.md` | S10 |
