@@ -179,20 +179,36 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   suggestion; `gitOut` already catches the throw, so the row says "cannot tell" before its own catch); then
   `CLAUDE.md`'s review paragraph asks for Codex and the lenses on every slice and names a skip of either as a debt
   the merge door refuses, his "revision siempre" of 2026-10-26 (L1). PR 613 landed at 21:29Z (main abeaa3d).
+- L13 (2026-10-27): the probe of S7, with the branch's CLI in a scratch repository and a bare remote (the script
+  and its output in the job's scratch folder, `probe.mjs`): 6 of 6 behave as stated. (1) both complete records,
+  a real lens and a real Codex review, push; (2) an incomplete lens, from a fake `claude` that answers prose, is
+  refused, and its answer is printed ("Looks fine to me."); (3) the range amended after its review is refused by
+  both rows; (4) a skip of each review pushes; (5) `check`'s `review` row lists "2 skips still owe a review" and
+  `doctor --offline` its `review-skips` row; (6) `lensDoor` refuses the lens skip, then lets it land once a real
+  lens review pays it. The probe's lens runs: about 2,580 input and 160 output tokens each, $0.006.
+  - The slice `2d20b75..96ffb9f9`: lenses reliability, readability and resilience on 4df603e0 and reliability on
+    96ffb9f9, no finding; gentle-ai approved (lineage review-4adc6c14fd575602, lens reliability) with a warning
+    refuted (`lensOutcome` returns before a result that is not a string reaches `answerKept`) and two suggestions,
+    both taken test first in 96ffb9f9: the cut by characters, and the printed line pinned; Codex correct (0.97),
+    63,165 input tokens.
+  - The incident rerun asked through the orchestrator as question 98, about $11 for one run. A mistake: its text
+    opened with "Pregunta 94: ", numbered by hand before `notify` gave it 98; corrected by a note
+    (`docs/FAILURES.md`, question-numbered-by-hand).
+  - T6's "three real slices" with tokens per lens (D2) are L5, L7, L9, L10, L11 and this one.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
 - gentle-ai on `b6ef6f38..e4375922`: medium, not due (under_budget, 243 lines); on `e4375922..d5c722f6`: medium, not due (under_budget, 72 lines).
 - gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
 - gentle-ai on `9e81839b..e35eb7dc` (4834997f, 023eceb9, e35eb7dc): medium, reviewed and approved (lineage review-31b6ff71575dd070, lens reliability), one suggestion: the `review` row's catch for a spawn that throws has no test since the gentle-ai row's went, left for the next slice; Codex correct on parts 1 and 2, its P2 fixed in e35eb7dc and rechecked correct (0.98); lenses no finding (L10, L11).
+- gentle-ai on `2d20b75..42a4225c` (4df603e0): medium, reviewed and approved (lineage review-4adc6c14fd575602, lens reliability), a warning refuted and two suggestions taken in 96ffb9f9; Codex on `2d20b75..96ffb9f9` correct (0.97); lenses no finding (L13).
 
 ## Next step
-State at 2026-10-27 ~21:20Z. PR 608 landed (main bce0e41). PR 3 is branch `f8-s1-debt` against main, not rebased
-(L11): 4834997f the review row, 023eceb9 doctor and the door, e35eb7dc the door's fix, every one reviewed by Codex,
-the lenses and gentle-ai. Next: push it, open PR 3, dry-run, ready notice. Then the last slice of T5 and the start of
-T6: `CLAUDE.md`'s review lines (Codex and the lenses on every slice; a skip of either is debt), the test gentle-ai
-suggested for the `review` row's catch, and a lens's incomplete answer keeping a line of what it said (L10). Then
-the probe (six behaviours), three real slices with tokens per lens, and the incident rerun asked first through the
-orchestrator (about $11 to $22). Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450:
-leave it, never force-push. The wait on the orchestrator's notices runs in the background until a notice comes or
-240 minutes pass.
+State at 2026-10-27 ~21:50Z. PRs 607, 608 and 613 landed (main abeaa3d). T5 is done. The worktree is on
+`f8-s1-close` (on 2d20b75, in main): 4df603e0 the kept answer and the `review` row's pinning test, 42a4225c
+`CLAUDE.md`, 96ffb9f9 gentle-ai's two suggestions, then this record; Codex correct, lenses clean, gentle-ai approved
+up to 42a4225c, its review of 96ffb9f9 next when the Stop hook offers it. Next: push, open its pull request, ready
+notice. T6: the probe passed 6 of 6 (L13); the incident rerun waits for his answer to question 98 (about $11 for one
+run): a yes runs `evals/` as `odd/tasks/f8-s0-baseline.md` ran it (`--work-root D:/js-harness-evals-work`) and
+compares with L 13; a no closes S1 without it. Then the session summary in `docs/sessions/` and the closed notice.
+Branch `worktree-f8-s1-reviews` (on origin) holds the old f6025a45 and 0dd4c450: leave it, never force-push.
