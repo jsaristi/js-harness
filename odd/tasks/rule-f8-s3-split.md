@@ -14,14 +14,15 @@ e41d1e8d-8264-45a4-b16c-f9279f7b6076, lines 1665, 1697 and 1733), checked by `ru
 
 ## Done when
 - `npm run check` exits 0
-- `js-harness rules claude-md-budget` prints the rule at 2300 estimated tokens
+- `js-harness rules claude-md-budget` prints the rule at 2500 estimated tokens
 - `node --test bin/check.test.mjs` exits 0, with the `checkClaudeBudget` tests
 
 ## In scope / Out of scope
 - In: `claude-md-budget` (declaration, `bin/lib/claude-md-budget.mjs`, its row in `bin/check.mjs`, tests);
   `rules-live-in-the-harness` (line 71 of `bin/lib/protocols-skill.mjs`, its source with every earlier quote kept and
   the three D3 lines added), and the memory-hygiene line of `bin/lib/manifest.mjs` that says the same.
-- Out: D5 (`rule:double-review`), blocked on his typed words (`odd/tasks/f8-s3-split.md`, L3); the split itself.
+- In since L4: D5 (`rule:double-review`), from his typed words (L4).
+- Out: the split itself.
 
 ## Constraints
 - `bin/check.mjs` stays at its ceiling of 2110 lines: the row lives in its own module, and two imports of
@@ -53,3 +54,6 @@ Nothing: the budget is the project's; the rewrite carries his typed words.
   sessions folder, so the command cannot check it again, and it stays in git history.
 - gentle-ai on `e86a3530..5e464397`: medium, not due (under_budget); the slice is this pull request.
 - L5. 2026-10-27, Codex on e86a353..5e46439 (D5): the patch is correct (0.9), no actionable defects, recorded.
+- L6. 2026-10-27: the feature branch's T10 and T11 (`7e069cdc`) put the two every-turn protocols and the session
+  handoff in the root `CLAUDE.md`, which now measures 2383 estimated tokens; with D7's four lines, about 100, that is
+  2483, so `rules change claude-md-budget` sets 2500.

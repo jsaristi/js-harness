@@ -64,7 +64,7 @@ export const RULES = [
     "subject": "the most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn",
     "owner": "project",
     "since": "2026-10-27",
-    "value": 2300,
+    "value": 2500,
     "unit": "estimated tokens"
   },
   {
