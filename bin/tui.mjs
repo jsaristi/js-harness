@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { cleanLine, createKeyReader, createTerminalGuard, layoutFrame, paint, splitKeys, splitOutput } from './lib/terminal.mjs';
+import { cleanLine, createKeyReader, createTerminalGuard, layoutFrame, paint, scrollRange, splitKeys, splitOutput } from './lib/terminal.mjs';
 import { handOff, runChild } from './lib/run-child.mjs';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
 import { initMain } from './init.mjs';
@@ -233,6 +233,8 @@ const MENU_KEYS = 'Up/Down move, Enter select, Esc back, q quit';
 const RUN_KEYS = 'ctrl+c cancels it; the other keys wait until it ends';
 const SCROLL_KEYS = 'Up/Down/PgUp/PgDn/Home/End scroll';
 const RESULT_KEYS = 'Enter or Esc back to the menu, q quit';
+// On the version line while the menu reads again what a command may have changed.
+export const REFRESHING = '  (reading what it changed...)';
 
 /** What a run is called on its screen: the item's label, with its section where the label alone is ambiguous. */
 function titleOf(command) {
@@ -244,30 +246,43 @@ function titleOf(command) {
 
 /** Pure: the state of a command that has just started; the menu stays underneath, untouched, for the way back. */
 export function startRun(state, command) {
-  return { ...state, mode: 'running', run: { command, title: titleOf(command), log: [], partial: '', frame: 0, scroll: 0, notes: [] } };
+  return { ...state, mode: 'running', run: { command, title: titleOf(command), log: [], partials: {}, frame: 0, scroll: 0, notes: [] } };
 }
 
-/** Pure: `text` from the running command added to its log, each line made safe to draw. */
-export function appendRunOutput(state, text) {
-  const { lines, partial } = splitOutput(state.run.partial, text);
-  if (lines.length === 0) return { ...state, run: { ...state.run, partial } };
+// The most characters an unfinished line keeps: a progress bar redrawn with `\r` never ends its line.
+const MAX_PARTIAL = 4096;
+
+/** An unfinished line, kept short: only what its last carriage return left, and at most `MAX_PARTIAL`. */
+function boundPartial(partial) {
+  const shown = partial.length > MAX_PARTIAL ? partial.slice(partial.lastIndexOf('\r') + 1) : partial;
+  return shown.slice(-MAX_PARTIAL);
+}
+
+/** Pure: `text` from the running command's `stream` added to its log, each line made safe to draw. Each stream
+ * keeps its own unfinished line, so a line of stderr never lands in the middle of one of stdout. */
+export function appendRunOutput(state, text, stream = 'stdout') {
+  const { lines, partial } = splitOutput(state.run.partials[stream] ?? '', text);
+  const partials = { ...state.run.partials, [stream]: boundPartial(partial) };
+  if (lines.length === 0) return { ...state, run: { ...state.run, partials } };
   const log = [...state.run.log, ...lines.map(cleanLine)].slice(-MAX_LOG);
-  return { ...state, run: { ...state.run, log, partial } };
+  return { ...state, run: { ...state.run, log, partials } };
 }
 
-/** Pure: the run ended, as `{ code, cancelled, error }`; the result screen shows it from the top of its tail. */
-export function finishRun(state, { code = null, cancelled = false, error = null } = {}) {
-  const tail = state.run.partial ? [cleanLine(state.run.partial)] : [];
+/** The unfinished lines of a run, safe to draw. */
+const unfinished = (run) => Object.values(run.partials).filter(Boolean).map(cleanLine);
+
+/** Pure: the run ended, as `{ code, cancelled, error, signal }`; the result screen shows it from the top of its tail. */
+export function finishRun(state, { code = null, cancelled = false, error = null, signal = null } = {}) {
   const closeOnLeave = state.run.command === 'uninstall-everything' && code === 0 && !cancelled;
-  return { ...state, mode: 'result', run: { ...state.run, log: [...state.run.log, ...tail], partial: '', code, cancelled, error, closeOnLeave, scroll: 0 } };
+  return { ...state, mode: 'result', run: { ...state.run, log: [...state.run.log, ...unfinished(state.run)], partials: {}, code, cancelled, error, signal, closeOnLeave, scroll: 0 } };
 }
 
 const quitting = (state) => ({ state: { ...state, mode: 'done' }, effect: { type: 'quit' } });
 
-/** Keys on the result screen: scroll the log, go back to the menu, or quit. */
-function resultKey(state, key, rows) {
-  const page = Math.max(1, rows - 6);
-  const max = state.run.log.length;
+/** Keys on the result screen: scroll the log, go back to the menu, or quit. The log scrolls by the rows the window
+ * draws, a wrapped line counting each of its rows, so Home reaches its first row and a page is what it shows. */
+function resultKey(state, key, { columns = 80, rows = 24 }) {
+  const { page, max } = scrollRange(sections(state), { columns, rows });
   const scrollBy = { up: 1, down: -1, pgup: page, pgdn: -page }[key];
   if (scrollBy !== undefined) return { state: { ...state, run: { ...state.run, scroll: Math.min(max, Math.max(0, state.run.scroll + scrollBy)) } }, effect: null };
   if (key === 'home' || key === 'end') return { state: { ...state, run: { ...state.run, scroll: key === 'home' ? max : 0 } }, effect: null };
@@ -281,14 +296,14 @@ function resultKey(state, key, rows) {
  * `{ type: 'cancel' }` or `{ type: 'quit' }` — the shell performs it, the reducer never does. While a command runs,
  * only ctrl+c is read, and it cancels the command. Esc is Back, as in gentle-ai: it leaves the Uninstall submenu
  * (`state.parent` holds the menu it was opened from) and does nothing on the main menu; q and ctrl+c quit.
- * `rows` is the window's height, for PgUp/PgDn on the result screen.
+ * `size` is the window's `{ columns, rows }`, for scrolling the result screen's log.
  */
-export function handleKey(state, key, { rows = 24 } = {}) {
+export function handleKey(state, key, size = {}) {
   if (state.mode === 'running') {
     if (key === 'ctrl-c' && !state.run.cancelling) return { state: { ...state, run: { ...state.run, cancelling: true } }, effect: { type: 'cancel' } };
     return { state, effect: null };
   }
-  if (state.mode === 'result') return resultKey(state, key, rows);
+  if (state.mode === 'result') return resultKey(state, key, size);
   if (state.mode === 'confirm') {
     if (key === 'y') return { state: state.parent ? leaveSubmenu(state) : { ...state, mode: 'menu', pending: undefined }, effect: { type: 'run', command: state.pending } };
     if (key === 'ctrl-c') return quitting(state);
@@ -325,7 +340,7 @@ function headerLines(state) {
   if (reopen) updateNote = `  (${state.installedCopy} installed: quit and open js-harness again to use it)`;
   else if (state.updateAvailable) updateNote = `  (update available: ${state.updateAvailable})`;
   else if (state.checkingUpdate) updateNote = '  (checking for updates...)';
-  const lines = [`js-harness ${state.installedVersion}${updateNote}`];
+  const lines = [`js-harness ${state.installedVersion}${updateNote}${state.refreshing ? REFRESHING : ''}`];
   if (Array.isArray(state.stack)) {
     for (const row of state.stack) {
       lines.push(`  ${row.id.padEnd(16)}${String(row.version).padEnd(10)}${row.state}`);
@@ -343,12 +358,13 @@ function resultLines(run) {
   let title;
   if (run.error) title = `${run.command} failed: ${run.error}`;
   else if (run.cancelled) title = `${run.title}: cancelled; the command was stopped before it finished`;
+  else if (run.signal) title = `${run.title}: failed (stopped by ${run.signal})`;
   else if (run.code === 0 || run.code === undefined) title = `${run.title}: done (exit 0)`;
   else title = `${run.title}: failed (exit ${run.code})`;
   let next;
   if (run.closeOnLeave) next = 'Everything js-harness kept is removed, this menu included: Enter, Esc or q closes it.';
   else if (run.cancelled) next = 'It may have done part of its work: run it again from the menu to finish it.';
-  else if (run.error || (run.code !== 0 && run.code !== undefined)) next = 'The log above is its whole output: fix what it names, then run it again from the menu.';
+  else if (run.error || run.signal || (run.code !== 0 && run.code !== undefined)) next = 'The log above is its whole output: fix what it names, then run it again from the menu.';
   else next = 'Back in the menu, Status and Doctor show what changed.';
   return { title, next };
 }
@@ -358,8 +374,10 @@ function resultLines(run) {
 export function sections(state) {
   if (state.mode === 'running' || state.mode === 'result') {
     const { run } = state;
-    const head = `js-harness ${state.installedVersion}`;
-    const body = run.log.length ? run.log : [run.partial ? cleanLine(run.partial) : '(no output yet)'];
+    const head = `js-harness ${state.installedVersion}${state.refreshing ? REFRESHING : ''}`;
+    // While it runs, the line it is still writing (a progress bar redrawn in place) shows as the last row.
+    const shown = [...run.log, ...unfinished(run)];
+    const body = shown.length ? shown : ['(no output yet)'];
     if (state.mode === 'running') {
       const status = run.cancelling ? `${run.title}: cancelling...` : `${SPINNER[run.frame % SPINNER.length]} ${run.title}: running`;
       return { top: [head, '', status, ''], body, scroll: 0, bottom: ['', RUN_KEYS] };
@@ -431,7 +449,8 @@ export function runTui({
   let state = { ...initialState({ installedVersion, updateAvailable, stack, stackGap, location, installedCopy }), checkingUpdate };
   const size = () => ({ columns: stdout.columns || 80, rows: stdout.rows || 24 });
   // Once the menu has ended, the main screen is back: nothing more is drawn over it.
-  const draw = () => finished || stdout.write(paint(frame(state, size())));
+  // While a command owns the terminal (`handedOff`), nothing is drawn either: a frame would clear its prompts.
+  const draw = () => finished || handedOff || stdout.write(paint(frame(state, size())));
   let drawQueued = false;
   const drawSoon = () => {
     if (drawQueued) return;
@@ -445,6 +464,7 @@ export function runTui({
   // Stops what the loaders still run (a tag lookup over the network) once the menu ends.
   const loading = new AbortController();
   let afterHandoff = null;
+  let handedOff = false;
   let finished = false;
 
   return new Promise((resolve, reject) => {
@@ -452,10 +472,11 @@ export function runTui({
       stdin,
       stdout,
       proc,
-      // A signal from outside ends the menu like q does, a running command with it.
+      // A signal from outside ends the menu like q does, a running command with it: the terminal first, since
+      // stopping the command reads the process table, which takes a moment on Windows.
       onSignal: (signal) => {
-        controller?.abort();
         finish(signal === 'SIGINT' ? 130 : 143);
+        controller?.abort();
       },
     });
     const reader = createKeyReader({ onKey, timeoutMs: escapeMs });
@@ -470,30 +491,31 @@ export function runTui({
     };
     const onResize = () => draw();
 
-    function finish(code) {
-      if (finished) return;
+    /** Ends the menu: the terminal is given back first, then what still runs is stopped. */
+    function end() {
       finished = true;
-      loading.abort();
       reader.dispose();
       stdin.removeListener('data', onData);
       stdout.removeListener?.('resize', onResize);
       guard.restore();
       stdin.pause();
+      loading.abort();
+    }
+    function finish(code) {
+      if (finished) return;
+      end();
       resolve(code);
     }
     function fail(err) {
       if (finished) return;
-      finished = true;
-      loading.abort();
-      reader.dispose();
-      stdin.removeListener('data', onData);
-      stdout.removeListener?.('resize', onResize);
-      guard.restore();
+      end();
       reject(err);
     }
 
     /** Reads what a command may have changed: the location, the stack block, the version note. A read that fails
-     * keeps what was there, and says so under the result. */
+     * keeps what was there, and says so under the result. The reads may finish after the user left the result
+     * screen, so what they found is applied to the state as it is then: the menu is rebuilt only where nothing is
+     * open on it, and a submenu or a confirm prompt is left as it is, its menu rebuilt once the user leaves it. */
     async function refresh() {
       const notes = [];
       const attempt = async (what, read) => {
@@ -503,22 +525,36 @@ export function runTui({
           notes.push(`${what} failed: ${oneLine(err)}`);
         }
       };
-      if (readLocation) await attempt('reading the project', async () => { state = withLocation(state, await readLocation()); });
+      const found = {};
+      if (readLocation) await attempt('reading the project', async () => { found.location = await readLocation(); });
       if (readStackView) {
         await attempt('refreshing the stack', async () => {
           const view = await readStackView();
-          state = withLocation({ ...state, stack: view.stack, stackGap: view.stackGap }, state.location);
+          found.data = { stack: view.stack, stackGap: view.stackGap };
         });
       } else if (readStack) {
-        await attempt('refreshing the stack', async () => { state = { ...state, stack: await readStack() }; });
+        await attempt('refreshing the stack', async () => { found.data = { stack: await readStack() }; });
       }
       if (readUpdate) {
         await attempt('reading the installed version', async () => {
           const { updateAvailable: available = null, installedCopy: copy = null } = (await readUpdate()) ?? {};
-          state = { ...state, updateAvailable: available, installedCopy: copy };
+          found.update = { updateAvailable: available, installedCopy: copy };
         });
       }
-      if (notes.length && state.mode === 'result') state = { ...state, run: { ...state.run, notes } };
+      if (finished) return;
+      let next = { ...state, ...found.data, ...found.update, refreshing: false };
+      if ('location' in found) next.location = found.location;
+      next = rebuildIfFree({ ...next, menuStale: true });
+      if (notes.length && next.mode === 'result') next = { ...next, run: { ...next.run, notes } };
+      state = next;
+    }
+
+    /** The menu built again for the current location and stack, when nothing is open on it (the result screen
+     * keeps it underneath); a state with a submenu or a confirm prompt open keeps its menu, marked stale. */
+    function rebuildIfFree(current) {
+      if (!current.menuStale) return current;
+      if (current.mode === 'result' || (current.mode === 'menu' && !current.parent)) return withLocation({ ...current, menuStale: false }, current.location);
+      return current;
     }
 
     async function runCommand(command) {
@@ -526,39 +562,54 @@ export function runTui({
       state = startRun(state, command);
       draw();
       controller = new AbortController();
-      const ticker = setInterval(() => {
+      // The spinner turns only on the run screen: a command handed the terminal is never drawn over.
+      const ticker = run?.handoff ? null : setInterval(() => {
         state = { ...state, run: { ...state.run, frame: state.run.frame + 1 } };
         draw();
       }, tickMs);
       let result;
       try {
         if (run?.handoff) {
-          guard.suspend();
+          // Keys stop being read before they turn cooked, so the command gets its first keystroke.
           stdin.pause();
-          result = await run(state.location, { signal: controller.signal });
-          stdout.write(`\r\n${titleOf(command)} ended (exit ${result?.code ?? result ?? 'unknown'}). Press Enter to go back to the menu.`);
-          await new Promise((back) => {
-            afterHandoff = back;
-            stdin.resume();
-          });
-          guard.resume();
+          handedOff = true;
+          guard.suspend();
+          try {
+            result = await run(state.location, { signal: controller.signal });
+            if (finished) return;
+            stdout.write(`\r\n${titleOf(command)} ended (exit ${result?.code ?? result ?? 'unknown'}). Press Enter to go back to the menu.`);
+            await new Promise((back) => {
+              afterHandoff = back;
+              stdin.resume();
+            });
+          } finally {
+            // The menu takes the terminal back however the command ended, a throw included.
+            if (!finished) {
+              stdin.resume();
+              guard.resume();
+              handedOff = false;
+            }
+          }
           state = appendRunOutput(state, 'It ran on the terminal itself: its output is on the main screen, which comes back when the menu quits.\n');
         } else {
-          result = await run(state.location, { output: (text) => { state = appendRunOutput(state, text); drawSoon(); }, signal: controller.signal });
+          result = await run(state.location, { output: (text, stream) => { state = appendRunOutput(state, text, stream); drawSoon(); }, signal: controller.signal });
         }
       } catch (err) {
         result = { code: null, error: oneLine(err) };
       } finally {
-        clearInterval(ticker);
+        if (ticker) clearInterval(ticker);
         controller = null;
       }
       if (finished) return;
       // A main that returns nothing ended well, as on the command line, where it exits 0.
       const outcome = typeof result === 'object' && result !== null ? result : { code: result ?? 0 };
       state = finishRun(state, outcome);
+      // Once everything is gone, the program included, there is nothing left to read again. The first result
+      // frame already says the menu is reading, so nothing reading the screen takes it for settled.
+      const rereads = !state.run.closeOnLeave;
+      if (rereads) state = { ...state, refreshing: true };
       draw();
-      // Once everything is gone, the program included, there is nothing left to read again.
-      if (!state.run.closeOnLeave) {
+      if (rereads) {
         await refresh();
         draw();
       }
@@ -568,10 +619,11 @@ export function runTui({
       if (finished) return;
       try {
         const { state: next, effect } = handleKey(state, key, size());
-        state = next;
+        state = rebuildIfFree(next);
         if (effect?.type === 'cancel') {
-          controller?.abort();
+          // "cancelling" shows before the kill, which reads the process table first.
           draw();
+          controller?.abort();
           return;
         }
         if (effect?.type === 'quit') {
@@ -668,7 +720,7 @@ export function childCommands({ home, cwd = process.cwd(), env = process.env, so
     commands[command] = async (location, { output, signal } = {}) => run(process.execPath, [CLI, ...commandArgv(command, { home, cwd, source, location })], { env: childEnv, cwd, onOutput: output, signal });
   }
   commands['stack-install'] = Object.assign(
-    async (location) => hand(process.execPath, [CLI, ...commandArgv('stack-install', { home, cwd, source, location })], { env: childEnv, cwd }),
+    async (location, { signal } = {}) => hand(process.execPath, [CLI, ...commandArgv('stack-install', { home, cwd, source, location })], { env: childEnv, cwd, signal }),
     { handoff: true },
   );
   return commands;
@@ -726,7 +778,7 @@ export async function latestRelease({ source, repo, env = process.env, signal })
   if (source) return resolveLatest({ source, repo });
   const script = `import(${JSON.stringify(UPDATE_URL)}).then((m) => process.stdout.write(JSON.stringify(m.resolveLatest({ repo: process.argv[1] || undefined }))))`;
   let out = '';
-  const { code, cancelled, error } = await runChild(process.execPath, ['--input-type=module', '-e', script, repo ?? ''], { env, cwd: os.tmpdir(), signal, onOutput: (text) => { out += text; } });
+  const { code, cancelled, error } = await runChild(process.execPath, ['--input-type=module', '-e', script, repo ?? ''], { env, cwd: os.tmpdir(), signal, onOutput: (text, stream) => { if (stream === 'stdout') out += text; } });
   if (code !== 0) throw new Error(error ?? (cancelled ? 'cancelled' : `the tag lookup exited ${code}`));
   return JSON.parse(out);
 }

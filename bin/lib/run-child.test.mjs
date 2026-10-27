@@ -33,29 +33,63 @@ test('runChild reports a program it cannot start as an error, with no exit code'
   assert.match(result.error, /ENOENT/);
 });
 
-test('an abort stops the child and what it started, and the result says it was cancelled', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-run-child-'));
-  try {
-    const marker = path.join(dir, 'grandchild-ran');
-    // The child starts a grandchild that writes the marker after 4 s, then waits forever itself; the kill reads
-    // the process table first (bin/lib/process-tree.mjs), which takes a moment on Windows.
-    const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 4000)`;
-    const script = `require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); console.log('started'); setInterval(() => {}, 1000)`;
-    const controller = new AbortController();
-    const started = Date.now();
-    const result = await runChild(node, ['-e', script], {
-      signal: controller.signal,
-      onOutput: (text) => {
-        if (text.includes('started')) setTimeout(() => controller.abort(), 200);
-      },
-    });
-    assert.equal(result.cancelled, true);
-    assert.ok(Date.now() - started < 4000, 'the child stopped before the grandchild would have written');
-    await new Promise((resolve) => setTimeout(resolve, Math.max(0, started + 4500 - Date.now())));
-    assert.equal(fs.existsSync(marker), false, 'the grandchild was stopped with it');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+/** Whether process `pid` is gone, probed (signal 0 sends nothing) for up to `ms`. */
+async function goneWithin(pid, ms = 5000) {
+  const until = Date.now() + ms;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    if (Date.now() > until) return false;
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
+}
+
+/** Runs a child that starts a grandchild that waits forever, with `stdio` for it, and prints its pid; the child
+ * itself waits too, or exits at once when `childStays` is false. Aborts once the pid is printed, and, when the
+ * child exits at once, only once it is gone. */
+async function abortTree(stdio, childStays) {
+  const grandchild = 'setInterval(() => {}, 1000)';
+  const script = `const g = require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: '${stdio}' }); console.log('started ' + g.pid + ' ' + process.pid);${childStays ? ' setInterval(() => {}, 1000);' : ''}`;
+  const controller = new AbortController();
+  let pid = null;
+  const result = await runChild(node, ['-e', script], {
+    signal: controller.signal,
+    onOutput: (text) => {
+      const found = /started (\d+) (\d+)/.exec(text);
+      if (found && pid === null) {
+        pid = Number(found[1]);
+        if (childStays) controller.abort();
+        else goneWithin(Number(found[2])).then(() => controller.abort());
+      }
+    },
+  });
+  return { result, pid };
+}
+
+test('an abort stops the child and what it started, and the result says it was cancelled', async () => {
+  const { result, pid } = await abortTree('ignore', true);
+  assert.equal(result.cancelled, true);
+  assert.ok(pid > 0);
+  assert.equal(await goneWithin(pid), true, 'the grandchild was stopped with it');
+});
+
+test('an abort after the child exited still stops what it left holding its output, and the run ends', async () => {
+  // The grandchild shares the child's output, so the run stays open after the child exits, until it is stopped.
+  const { result, pid } = await abortTree('inherit', false);
+  assert.equal(result.cancelled, true);
+  assert.equal(await goneWithin(pid), true, 'the survivor was stopped');
+});
+
+test('an abort stops a command that was handed the terminal, and its result says it was cancelled', async () => {
+  const controller = new AbortController();
+  const started = Date.now();
+  setTimeout(() => controller.abort(), 300);
+  const result = await handOff(node, ['-e', 'setInterval(() => {}, 1000)'], { signal: controller.signal, spawn: (cmd, args, opts) => realSpawn(cmd, args, { ...opts, stdio: 'ignore' }) });
+  assert.equal(result.cancelled, true);
+  assert.ok(Date.now() - started < 4000);
 });
 
 test('an abort before the start runs nothing', async () => {

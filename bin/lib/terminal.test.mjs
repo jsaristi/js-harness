@@ -7,6 +7,7 @@ import {
   splitKeys,
   createKeyReader,
   wrapLine,
+  cellWidth,
   layoutFrame,
   paint,
   splitOutput,
@@ -213,6 +214,36 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     assert.deepEqual(got, [[signal, false, LEAVE_SCREEN]]);
   });
 }
+
+test('rows are measured in terminal cells: a wide character takes two, a combining mark none, and a pair is never split', () => {
+  assert.equal(cellWidth('abc'), 3);
+  assert.equal(cellWidth('文件'), 4);
+  assert.equal(cellWidth('é'), 1);
+  assert.equal(cellWidth('😀'), 2);
+  assert.equal(cellWidth('🚀🪐'), 4);
+  for (const width of [3, 5, 9]) {
+    for (const row of wrapLine('文件名 '.repeat(6) + '😀'.repeat(5), width)) {
+      assert.ok(cellWidth(row) <= width, `${JSON.stringify(row)} is ${cellWidth(row)} cells, wider than ${width}`);
+      assert.ok(!/[�-�](?![�-�])|(?<![�-�])[�-�]/.test(row), `${JSON.stringify(row)} splits a pair`);
+    }
+  }
+  for (const row of layoutFrame({ body: ['日本語のファイル名 '.repeat(8)] }, { columns: 20, rows: 30 })) assert.ok(cellWidth(row) <= 19);
+});
+
+test('while suspended, a termination or a hangup still ends the menu: only ctrl+c goes to the command', () => {
+  for (const signal of ['SIGTERM', 'SIGHUP']) {
+    const { stdin, stdout, out, proc } = fakeTerminal();
+    const got = [];
+    const guard = createTerminalGuard({ stdin, stdout, proc, onSignal: (sig) => got.push(sig) });
+    guard.enter();
+    guard.suspend();
+    const writes = out.length;
+    proc.emit(signal);
+    assert.deepEqual(got, [signal]);
+    assert.equal(out.length, writes, 'the main screen is already back: nothing more is written');
+    assert.equal(stdin.raw, false);
+  }
+});
 
 test('while suspended for a command that owns the terminal, the guard is on the main screen and ignores ctrl+c', () => {
   const { stdin, stdout, out, proc } = fakeTerminal();
