@@ -1,40 +1,56 @@
 @AGENTS.md
 
+## How sessions run
+
+A session holds one feature, because the conversation is lost on a new session or a compaction and
+only files survive. It starts at the roadmap; to resume a feature it reads that feature's document,
+mirrored in engram. The two are the handoff, and nothing else is: a new session's opening prompt
+only points to them. The task contract comes first in a feature document, as this project's order
+over gentle-ai's; `js-harness contract goal <doc>` prints the `/goal` condition that runs it.
+Every decision made in the conversation is written to the roadmap or the feature document and
+committed on the feature branch in the same session; that record is part of the work and needs no
+separate request. Near `rule:context-pause` of its window a session writes its state to the feature
+document and keeps working; the host compacts it by itself, and it resumes from the summary checked
+against that document. What he is given at that point is the pause notice's (`cutRule` in
+`bin/lib/sessions.mjs`). A claim's evidence takes the form `js-harness-protocols` section 6 gives.
+
 ## Working with Sebastián
 
-He decides spend, anything irreversible, and product choices; ask those one at a time and wait.
-Review is not one of them: the consent he granted for every candidate here is his standing
+He decides spend, anything irreversible, and product choices. Everything else, keep moving: name
+the next few units of work and do them without stopping to report between them. He often answers
+from his phone by tapping the suggested prompt, so a step he reports doing outside the session is
+checked before anything is built on it.
+
+Asking him (`js-harness-protocols` section 1): ask only what is his. A planned step he would only
+say yes to is decided and its cost said, not asked. Before the question, say in everyday words what
+a yes covers, what it does not authorize and what the other option means. One decision a question,
+one question at a time, never while work runs; it reaches him as `rule:questions-one-place` says,
+through the host's question tool and recorded before it is asked.
+
+Closing a reply (section 2): every reply ends on a line that names one of its five states, in the
+words the Stop hook checks (`bin/lib/reply.mjs`): working on
+alone, saying what wakes the session and what it reports next; his decision; a question he answers
+in writing; a cut; or finished, naming the session to return to. Before a decision or a cut, say
+what was done, what is next and why, and for which session: he runs several. Then the map: each
+phase's share and the total, from `js-harness progress`; if it fails, say so. A cut comes when a
+feature closes, a PR merges or a phase starts, and carries what he sends in one code block of only
+that text, under what it is, where it goes and what sending it does: two blocks out of order cost a
+session. Reports open with a short plain summary and close with a recap of the whole stretch,
+including what was spent.
+
+## Review
+
+Review is not his to decide: the consent he granted for every candidate here is his standing
 selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
 invocation without asking. Consent stays his and the review always runs; only the question is
 skipped, because his answer is always yes and the question only stalls the work. If the envelope
 has no `granted` choice or does not parse, ask him instead. A candidate is a work-unit commit or a
-slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the branch, run its read-only status and
-start nothing, because with consent pre-granted nothing would stop a review that size. Every slice
-with code goes through Codex, whether or not gentle-ai reviewed it: `js-harness codex-review --base
-<boundary>` records the review, and the pre-push hook refuses a branch whose code commits no record
-covers. Treat its findings like gentle-ai's. If Codex cannot run, report that and record the skip
-with `--unavailable <reason>`.
-
-Everything else, keep moving: name the next few units of work and do them without stopping to
-report between them. Reports open with a short plain summary and close with a recap of
-the whole stretch, including what was spent. He often answers from his phone by tapping the
-suggested prompt, so a step he reports doing outside the session is checked before anything is
-built on it.
-
-A session holds one feature, because the conversation is lost on a new session or a compaction
-and only files survive. So every decision made in the conversation is written to the roadmap or
-the feature document and committed on the feature branch in the same session; that record is
-part of the work and needs no separate request. While he is here, say when to cut: a new session
-when a feature closes, a PR merges or a phase starts. Near `rule:context-pause` of its window a session
-writes its state to the feature document and keeps working; the host compacts it by itself, and it
-resumes from the summary checked against that document. What he is given at that point is the pause
-notice's (`cutRule` in `bin/lib/sessions.mjs`). End each reply in one of the five states of `js-harness-protocols`
-section 2. A planned step he would only say yes to is decided and its cost said, as its section 1
-says. A question reaches him as `rule:questions-one-place` says; a cut
-carries what he sends, in one code block of only that text, under what it is, where
-it goes, what sending it does: two blocks out of order cost a session. Before it, say what was
-done, what is next and why, and for which session: he runs several. Then the map: each phase's
-share and the total, from `js-harness progress`; if it fails, say so.
+slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the
+branch, run its read-only status and start nothing, because with consent pre-granted nothing would
+stop a review that size. Every slice with code goes through Codex, whether or not gentle-ai
+reviewed it: `js-harness codex-review --base <boundary>` records the review, and the pre-push hook
+refuses a branch whose code commits no record covers. Treat its findings like gentle-ai's. If Codex
+cannot run, report that and record the skip with `--unavailable <reason>`.
 
 ## Kept from the global file
 

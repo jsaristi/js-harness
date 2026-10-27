@@ -6,11 +6,10 @@ engram owns memory; codegraph owns code structure; `/goal` owns the autonomy loo
 adds is the thin layer those leave open — a few lines of context and the checks that make them
 true.
 
-The design bet is that a stronger model needs a smaller harness. Every line in this file is paid
-on every turn of every session (Claude loads it through the import in `CLAUDE.md`, which holds how
-sessions work with Sebastián; a reviewer such as Codex reads this file alone), so it carries only
-what an agent cannot learn from the code: what the project is for, what good work looks like here,
-and the reason behind each real constraint.
+The design bet is that a stronger model needs a smaller harness. This file is what a reviewer such
+as Codex reads, and Claude loads it on every turn through the import in `CLAUDE.md`, so it carries
+only what an agent cannot learn from the code: what the project is for, how the repo works and what
+good work looks like here. How Claude works with Sebastián lives in `CLAUDE.md`.
 When something can be checked by a command, it belongs in `bin/`, not in prose.
 
 ## How the repo works
@@ -22,20 +21,15 @@ says whether the pending change is due a gentle-ai review.
 The pre-commit hook runs the same gate (`npm run hooks` wires it in a fresh clone), so a red check
 means the commit is not ready yet.
 
-The plan is `docs/ROADMAP.md`: what is decided, done, next and still open. A session starts there;
-`docs/origin.md`, frozen, keeps the reasoning it came from. Feature work is tracked in
-`odd/tasks/<feature>.md`, the gentle-ai ODD document, mirrored in engram. Read it before resuming
-a feature; together with the roadmap it is the handoff, and nothing else is: a new session's opening
-prompt only points to them.
-
-A new feature document opens with the task contract (`js-harness contract template`), which comes
-first here as this project's order over gentle-ai's, so its end is a set of commands that exit 0, not an opinion. `check` validates every contract; `js-harness
-contract goal <doc>` prints the `/goal` condition that runs them.
+The plan is `docs/ROADMAP.md`: what is decided, done, next and still open; `docs/origin.md`,
+frozen, keeps the reasoning it came from. Feature work is tracked in `odd/tasks/<feature>.md`, the
+gentle-ai ODD document. It opens with the task contract (`js-harness contract template`), so its
+end is a set of commands that exit 0, not an opinion; `check` validates every contract.
 
 ## What good looks like
 
 A behavior change arrives with the test that proves it, written first. A claim about this repo
-carries its evidence, as `js-harness-protocols` section 6 says.
+carries its evidence.
 
 Anything the harness writes outside this repo, such as a host's config or a project's files, is
 recorded so it can be undone exactly: by `uninstall`, by deleting one file, or by git. The
