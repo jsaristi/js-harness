@@ -74,6 +74,8 @@ read it.
 Reviews:
 - gentle-ai on `59df62f7..10e1b4d7`: medium, not due (under_budget, 104 lines); Markdown only, so no Codex record is due.
 - gentle-ai on `10e1b4d7..3c70f91c`: medium, not due (under_budget, 19 lines).
+- gentle-ai on `59df62f7..cfe1291f`: medium, not due (under_budget).
+- Codex on `10e1b4d..cfe1291` (the one code commit, 3c70f91c): the patch is correct (0.98), no findings, recorded; 57,314 input tokens.
 
 ## Log
 - L1 (2026-10-27, S3 promise check, session started on 59df62f): the instruction files this session's
@@ -98,3 +100,6 @@ Reviews:
 - L4 (2026-10-27): the engram mirror saved under the project "f8-directives" (observation 5843):
   the hook bound this session to the worktree's folder name, and a save with `project: js-harness`
   is refused as `session_project_mismatch`. The file here is the copy that counts.
+- L5 (2026-10-27, 11:18 local): the machine ran critically low on memory and the host killed the
+  `CLAUDE.md` commit mid-gate; nothing was half-written (the slice stayed staged). Restarted on the
+  orchestrator's "go" (11:35, 6.4 GB free) as cfe1291f.
