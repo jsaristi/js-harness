@@ -38,11 +38,12 @@ before any run.
 - Never copy, read, print or move `~/.claude/.credentials.json` or any `auth.json` — same reason.
 - No `gentle-ai sync`, `install`, `update` or `review start` — because S0 must not change what it
   measures.
-- Spend: S0's line of the diet's cost table is about $25 of F8's $200 (D2); each run reports its
-  cost, and a run that would take F8 past $200 stops and asks through the orchestrator.
+- Spend: S0's line of the diet's cost table forecasts about $25 (three runs, about $37); D2 has
+  no fixed cap since 2026-10-27, so each run records its `total_cost_usd` here for the
+  orchestrator's weekly total, and he can stop it.
 
 ## Ask me before
-Spend past the $200 envelope; any change to a frozen threshold.
+Any change to a frozen threshold.
 
 ## Specs
 - S1 (brief, JH ORQ, 2026-10-26): "the thresholds frozen in a commit BEFORE any result is seen;"
@@ -113,3 +114,15 @@ A trial of an incident case passes only when every hidden test of its grader pas
   - The desktop's flags: the current arm gets `--setting-sources user,project,local`, as the
     desktop passes; `--project-config-root` applies to a worktree session and a trial workspace is
     not one, so it is not passed.
+- L3 (2026-10-27, from JH ORQ, the lead): D2 changed. Sebastián, transcript `e41d1e8d`, line 4068:
+  "pero entonces 200 son muy poco, creo que deberia ser mas"; line 4083, his answer to the
+  question at 4081: "Sin tope fijo" (no dollar limit; each run reports its cost, the orchestrator
+  gives him the total weekly, and he can stop it). Lines checked in the transcript by this session.
+  The lead's decision, with its reason: since spend no longer binds, S0 runs the baseline three
+  times instead of twice, for a better spread (S8 too, later). How it meets the frozen line, which
+  names two runs and changes only by his decision: L and s are read from runs a and b exactly as
+  frozen; run c is recorded beside them with the range of all three, and is not used in the line
+  unless he decides it. Each run records its `total_cost_usd` here.
+- L4 (2026-10-27): the three tasks and the ten incident cases are all scripted and proven
+  (`node --test evals/tasks.test.mjs`); the score is `node evals/incident-score.mjs <a> <b> [c]`.
+  The two baseline runs fall on one day, not two as section 7.1 says: a deviation, said here.
