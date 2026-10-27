@@ -86,12 +86,18 @@ export function owedSkipLines(cwd, { spawn = spawnSync, remote = 'origin' } = {}
 /** The merge door's word on the lens review of the pull request at `head` (odd/tasks/f8-s1-reviews.md, T5; S7: a skip is
  * refused by the merge path until reviewed): `null` when it may land, else `{ pass: false, detail }` for a code commit
  * no complete lens record covers, or for a lens skip that still owes a review. A Codex skip stays the door's to take, as
- * it was: the Codex review's own rules let a skip through when Codex cannot run. */
+ * it was: the Codex review's own rules let a skip through when Codex cannot run. It reads the lens records itself, not
+ * through the push row: that row passes where the Codex review is off and on a first push, and neither lets a pull
+ * request land with its lens debt (L11). */
 export function lensDoor(cwd, head, { spawn = spawnSync, remote = 'origin' } = {}) {
-  const row = checkLensReviews(cwd, head, { spawn, remote });
-  if (!row.pass) return { pass: false, detail: `lens review: ${row.detail}` };
-  return row.lines?.length ? { pass: false, detail: `it holds a lens review skip, which owes a review before it lands: ${row.lines[0]}` } : null;
+  const state = lensCoverage(cwd, head, { spawn, remote });
+  if (state.unknown) return { pass: false, detail: `lens review: ${state.unknown}` };
+  if (state.uncovered.length) return { pass: false, detail: `lens review: ${uncoveredDetail(state)}` };
+  return state.skips.length ? { pass: false, detail: `it holds a lens review skip, which owes a review before it lands: ${skipLine(state.skips[0])}` } : null;
 }
+
+/** What a range with code commits no complete lens record covers is said to hold, from `lensCoverage`'s `state`. */
+const uncoveredDetail = ({ uncovered, codeCommits, base, note }) => `${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base} have no complete Claude lens record${note}`;
 
 /** The lines that name the `uncovered` commits since `base` and the command that makes their record. */
 const uncoveredLines = (uncovered, base) => {
@@ -139,7 +145,7 @@ export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote
     return {
       name,
       pass: false,
-      detail: `${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base} have no complete Claude lens record${note}`,
+      detail: uncoveredDetail(state),
       lines: [...uncoveredLines(uncovered, base), 'an amend or a rebase after a review leaves its commits uncovered: review the range again'],
     };
   }

@@ -166,6 +166,13 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     was incomplete and covered nothing. Run once more alone: complete, no finding.
   - A gap for T6: an incomplete lens keeps only its `why`, not a line of what it answered, so "read why before it
     runs again" could not be done past the parser's verdict. The fence is already accepted (`lens-result.test.mjs`).
+- L11 (2026-10-27): Codex on `9e81839b..7ae48b0c`, three parts. Part 3 died first when the orchestrator refreshed
+  the installed copy mid-run (`no-test-outside-turn.cjs` not found); run again alone, parts 1 and 2 kept. Parts 1 and
+  2 correct (0.93, 0.92); part 3 incorrect (0.93), one P2 the lenses missed: the merge door read the lens debt
+  through the push row, which passes where the Codex review is off, so a pull request with a lens skip or no lens
+  record could land there, against S7. Fixed test first: `lensDoor` reads `lensCoverage` itself. 347,875 input
+  tokens in all. PR 3 is not rebased on main (the orchestrator's note of 15:57): 9e81839b is in main, `merge-tree`
+  shows no conflict, and a rebase would void both reviews' records.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).

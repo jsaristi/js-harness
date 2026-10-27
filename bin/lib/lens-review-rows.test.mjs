@@ -162,6 +162,17 @@ test('the merge door refuses a lens skip until a review pays it, and a range wit
   assert.equal(lensDoor(dir, 'HEAD'), null);
 });
 
+// L11: the push lets the lens debt through where the Codex review is off; the merge path does not (S7).
+test('the merge door asks for the lens review with the Codex review off: that exemption is the push row\'s alone', () => {
+  const tip = withoutAutoMaintenance(() => commit('harness.json', '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n', 'chore: codex review off'));
+  assert.equal(row().pass, true);
+  assert.match(lensDoor(dir, 'HEAD').detail, /^lens review: 2 of 2 code commits since origin\/main have no complete Claude lens record/);
+  record(base, tip, { outcome: 'unavailable', reason: 'out of turns', results: undefined });
+  assert.match(lensDoor(dir, 'HEAD').detail, /^it holds a lens review skip, which owes a review before it lands: unavailable /);
+  record(base, tip);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
 // L9: a commit is asked by the switch its own tree holds, so the commits of a branch made before the lens review was
 // turned on are never asked, wherever that branch lands, and a project that never turns it on is never asked.
 test('a code commit asks for a lens record only where its own tree turns the lens review on', () => {
