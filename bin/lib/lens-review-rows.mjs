@@ -5,9 +5,10 @@
 // What a code commit is and which records cover it is the one definition both reviews share (`reviewCoverage`, with
 // the lens records read in place of Codex's). A record covers its own head commit, so an amend or a rebase leaves the
 // range uncovered, and only while its range still hashes to its subject hash. A skip (`--unavailable`) covers, and
-// is listed on every row that reads it until a review covers the same commits.
+// is listed on every row that reads it until a complete review covers the same commits. A first push to a remote
+// that holds no branch passes, as the `codex-review` row lets it.
 import { spawnSync } from 'node:child_process';
-import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, reviewCoverage } from './codex-review-coverage.mjs';
+import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, remoteHoldsNoBranch, reviewCoverage } from './codex-review-coverage.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './project-functions.mjs';
 import { isValidLensReview, readLensReviews } from './lens-reviews.mjs';
 
@@ -35,7 +36,10 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   const due = (commit) => Date.parse(committed.get(commit.id) ?? '') >= since;
   const codeCommits = coverage.codeCommits.filter(due);
   const uncovered = coverage.uncovered.filter(due);
-  const skips = notReviews({ covers: coverage.covers, codeCommits }).filter((rec) => rec.outcome === 'unavailable');
+  // A skip is debt only while a code commit it covers has no complete review: one made later pays it.
+  const reviewed = new Set(coverage.covers.filter(({ rec }) => rec.outcome === 'reviewed').flatMap(({ covered }) => [...covered]));
+  const owed = codeCommits.filter((commit) => !reviewed.has(commit.id));
+  const skips = notReviews({ covers: coverage.covers, codeCommits: owed }).filter((rec) => rec.outcome === 'unavailable');
   const noteParts = [
     coverage.stale ? `${plural(coverage.stale, 'record')} whose range no longer hashes as reviewed` : '',
     coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run among them)` : '',
@@ -60,6 +64,9 @@ export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote
   const name = 'lens-review';
   if (reviewOffAt(cwd, head, spawn)) return { name, pass: true, detail: 'the review is off at the pushed commit, so no lens record is asked for' };
   const state = lensCoverage(cwd, head, { spawn, remote, cutover });
+  if (state.unknown && remoteHoldsNoBranch(cwd, { spawn, remote })) {
+    return { name, pass: true, detail: `${remote} holds no branch yet, so this first push passes with no lens record, as the codex-review row says of its own` };
+  }
   if (state.unknown) return { name, pass: false, detail: state.unknown };
   const { base, codeCommits, uncovered, skips, note } = state;
   if (uncovered.length) {

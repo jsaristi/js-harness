@@ -345,6 +345,23 @@ export function defaultBranch(spawn, cwd, remote) {
   return ref ? { ref, label: ref.replace(/^refs\/remotes\//, '') } : null;
 }
 
+/** Whether `remote` holds no branch at all, so a push to it is the project's first (odd/tasks/on-demand-functions.md,
+ * S10). It is asked of the remote itself (`git ls-remote`), since a clone that never fetched holds no refs of a remote
+ * that has branches, and only where no ref of the remote is here, so once a project. A remote that is not one of
+ * `cwd`'s, or does not answer in 20 s, holds branches as far as a push row can tell: it is `false`. */
+export function remoteHoldsNoBranch(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
+  const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
+  if (!remotes.includes(remote)) return false;
+  if (gitOut(spawn, cwd, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/${remote}/`]) !== '') return false;
+  let listed;
+  try {
+    listed = spawn('git', ['ls-remote', '--heads', remote], { cwd, encoding: 'utf8', timeout: 20000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+  } catch {
+    return false;
+  }
+  return Boolean(listed && !listed.error && listed.status === 0 && listed.stdout.trim() === '');
+}
+
 /** The base of a review, when it is a code commit of the branch that no Codex review record covers: `{ id,
  * shortId, subject }` of `from`, with `merged`, the label of the default branch, when `from` is a merge of it;
  * else `null`. `from` is the full id of the commit a review's range starts at (`js-harness codex-review --base`). A git range starts after its base, so the base itself is never read,

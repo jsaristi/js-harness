@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { numstatFiles, reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
-import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
+import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { mergeTurn, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
@@ -223,22 +223,10 @@ const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 /** The push row of the first push of a project to an empty repository, or `null` when it is not one. His
  * answer (odd/tasks/on-demand-functions.md, S10): it passes and says so, with what went unread and the
- * command that reviews it, which plans its cost first. It is one only where the remote holds no branch at all,
- * asked of the remote itself (`git ls-remote`), since a clone that never fetched holds no refs of a remote that
- * has branches; a remote that cannot be asked is no first push, and the row fails as before. */
+ * command that reviews it, which plans its cost first. It is one only where the remote holds no branch at all
+ * (`remoteHoldsNoBranch`); a remote that cannot be asked is no first push, and the row fails as before. */
 function firstPushRow(cwd, head, { spawn, remote }) {
-  const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
-  if (!remotes.includes(remote)) return null;
-  if (gitOut(spawn, cwd, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/${remote}/`]) !== '') return null;
-  let listed;
-  try {
-    // Asked only where no ref of the remote is here, so once a project; a remote that does not answer in 20 s is
-    // no first push, and the row fails as before rather than hold the push.
-    listed = spawn('git', ['ls-remote', '--heads', remote], { cwd, encoding: 'utf8', timeout: 20000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
-  } catch {
-    return null;
-  }
-  if (!listed || listed.error || listed.status !== 0 || listed.stdout.trim() !== '') return null;
+  if (!remoteHoldsNoBranch(cwd, { spawn, remote })) return null;
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
   const commits = tip && gitOut(spawn, cwd, ['rev-list', '--count', tip]);
   const roots = tip && gitOut(spawn, cwd, ['rev-list', '--max-parents=0', tip])?.split('\n').filter(Boolean);

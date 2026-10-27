@@ -81,6 +81,28 @@ test('an incomplete run covers nothing; a skip covers and is listed with its rea
   assert.deepEqual(said.lines, [`unavailable ${base.slice(0, 7)}..${head.slice(0, 7)}: the plan is out of turns`]);
 });
 
+test('a skip a complete review later covers is no longer listed', () => {
+  record(base, head, { outcome: 'unavailable', reason: 'the plan is out of turns', results: undefined });
+  record(base, head);
+  const said = row();
+  assert.equal(said.pass, true);
+  assert.equal(said.lines, undefined);
+});
+
+test('the first push to a remote that holds no branch passes, as the Codex row lets it', () => {
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-rows-bare-'));
+  try {
+    spawnSync('git', ['init', '-q', '--bare', bare]);
+    git('remote', 'set-url', 'origin', bare);
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+    const said = row();
+    assert.equal(said.pass, true);
+    assert.match(said.detail, /origin holds no branch yet/);
+  } finally {
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
+
 test('a Codex record gains the subject hash of its range, the same identity a lens record carries', () => {
   const rec = withSubjectHash(dir, { base, head, outcome: 'reviewed' });
   assert.equal(rec.subjectHash, lensCandidate(dir, { base, head }).subjectHash);
