@@ -36,31 +36,38 @@ export function rowOf(notice) {
   return notice.kind === 'ready' ? { ...row, pr: notice.pr } : row;
 }
 
-/** How far before the cursor's time a notice may still land: `notify` stamps a notice's time before it appends it, and
- * other sessions append meanwhile, so the record's order is not its time's order. The cursor holds every id it sent in
- * this window; a notice that lands later than this after one already sent is lost to the board. */
-export const LATE_MS = 30 * 60 * 1000;
+/** The cursor in its position form, `{ upto, sent }`: every notice of the record below the index `upto` was sent,
+ * and `sent` lists, in order, the indexes above it that were sent ahead of an earlier one. `notify` stamps a
+ * notice's time before it appends it and other sessions append meanwhile, so the record's order is not its time's
+ * order; the record is only ever appended to, so a notice's index never changes and the cursor goes by it. A cursor
+ * of the form before, `{ through, ids }`, counts as sent the rows before its time and those it names, once: `rows`
+ * are the record's rows (`pendingRows` with no cursor), which it needs to place them. */
+export function positionOf(cursor, rows) {
+  if (cursor === null || cursor === undefined) return null;
+  if (Number.isSafeInteger(cursor.upto) && Array.isArray(cursor.sent)) return cursor;
+  const through = Date.parse(cursor.through);
+  const named = new Set(cursor.ids);
+  return cursorAfter({ upto: 0, sent: [] }, rows.filter((row) => Date.parse(row.time) < through || named.has(row.id)));
+}
 
-const timeOfId = (id) => Date.parse(id.slice(0, id.indexOf('Z') + 1));
-
-/** The rows of `notices` the board has not been sent, oldest first: those after the cursor's time, and those within
- * LATE_MS before it whose id it does not hold. With no cursor, those after `since`. Two rows that would share an id
- * (one sender, one millisecond) get `-2`, `-3` after it, in the record's order. */
+/** The rows of `notices` the board has not been sent, oldest first, each with its index in the record (`seq`): with a
+ * cursor, those it does not count as sent (`positionOf`); with none, those after `since`. Two rows that would share
+ * an id (one sender, one millisecond) get `-2`, `-3` after it, in the record's order. */
 export function pendingRows(notices, cursor, since) {
   const seen = new Map();
   const rows = [...notices]
-    .map((notice, order) => ({ notice, order }))
-    .sort((a, b) => Date.parse(a.notice.at) - Date.parse(b.notice.at) || a.order - b.order)
-    .map(({ notice }) => {
-      const row = rowOf(notice);
+    .map((notice, seq) => ({ notice, seq }))
+    .sort((a, b) => Date.parse(a.notice.at) - Date.parse(b.notice.at) || a.seq - b.seq)
+    .map(({ notice, seq }) => {
+      const row = { ...rowOf(notice), seq };
       const count = (seen.get(row.id) ?? 0) + 1;
       seen.set(row.id, count);
       return count === 1 ? row : { ...row, id: `${row.id}-${count}` };
     });
-  if (cursor === null || cursor === undefined) return rows.filter((row) => Date.parse(row.time) > Date.parse(since));
-  const through = Date.parse(cursor.through);
-  const sent = new Set(cursor.ids);
-  return rows.filter((row) => Date.parse(row.time) > through - LATE_MS && !sent.has(row.id));
+  const position = positionOf(cursor, rows);
+  if (position === null) return rows.filter((row) => Date.parse(row.time) > Date.parse(since));
+  const sent = new Set(position.sent);
+  return rows.filter((row) => row.seq >= position.upto && !sent.has(row.seq));
 }
 
 /** `rows` cut into batches of `BATCH_ROWS`: `[{ docId, time, rows }]`, each named by its last row and timed by it. */
@@ -74,14 +81,12 @@ export function batchesOf(rows) {
   return batches;
 }
 
-/** The cursor once `rows` were sent after `cursor`: the latest time, and every id sent within LATE_MS before it,
- * oldest first. A batch sent after a later one never moves the time back. */
+/** The cursor once `rows` were sent after `cursor` (position form, or none): their indexes join those sent, and
+ * `upto` moves over every index sent with none missing below it. A batch sent ahead of an earlier one leaves the gap
+ * pending until that one is sent. */
 export function cursorAfter(cursor, rows) {
-  if (rows.length === 0) return cursor;
-  const last = rows.reduce((latest, row) => (Date.parse(row.time) > Date.parse(latest) ? row.time : latest), rows[0].time);
-  const through = cursor && Date.parse(cursor.through) >= Date.parse(last) ? cursor.through : last;
-  const ids = [...new Set([...(cursor?.ids ?? []), ...rows.map((row) => row.id)])]
-    .filter((id) => timeOfId(id) > Date.parse(through) - LATE_MS)
-    .sort((a, b) => timeOfId(a) - timeOfId(b) || a.localeCompare(b));
-  return { through, ids };
+  const sent = new Set([...(cursor?.sent ?? []), ...rows.map((row) => row.seq)]);
+  let upto = cursor?.upto ?? 0;
+  while (sent.has(upto)) sent.delete(upto++);
+  return { upto, sent: [...sent].filter((seq) => seq > upto).sort((a, b) => a - b) };
 }

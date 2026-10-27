@@ -1195,7 +1195,8 @@ ones `notify`, the merge queue and the permit hook already write: each one's tim
 text and the state its kind gives. With no flag it says how many rows the board has not been sent;
 `--out <dir>` writes them as batch files, one database document of the `events` collection each,
 and prints the `ArtifactData` set that sends one; `--sent <file>` moves the cursor past that file.
-Only a Claude session can make that call: no command or hook reaches an artifact's database. The
+The cursor goes by each notice's place in the record, not its time, so a notice stamped before a
+later one but appended after it still waits. Only a Claude session can make that call: no command or hook reaches an artifact's database. The
 cursor and the board's link (`--url`) are kept in `~/.js-harness/channel/live/`, which `uninstall`
 deletes with the channel. The page's source is `docs/live-board.html`.
 

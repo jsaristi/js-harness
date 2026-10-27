@@ -70,13 +70,30 @@ test('--out writes one batch file a document, prints the ArtifactData call and -
   assert.match((await live([], dirs)).out, /^2 rows wait/m, 'nothing moves until the batch is said sent');
   const sent = await live(['--sent', file], dirs);
   assert.equal(sent.code, 0, sent.err);
-  assert.match(sent.out, /2026-10-27T05:30:00\.000Z/);
+  assert.match(sent.out, /every notice before number 3 of the record$/m);
   const after = await live([], dirs);
   assert.match(after.out, /^0 rows wait/m);
   assert.ok(after.out.includes(`board: ${url}`), 'the recorded url is printed back');
 
   note(dirs.home, dirs.slug, '2026-10-27T05:45:00.000Z', 'closed', 'closed');
   assert.match((await live([], dirs)).out, /^1 row waits/m);
+}));
+
+test('a cursor of the form before is placed in the record once, and a notice that lands late still waits', withFolders(async (dirs) => {
+  note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
+  note(dirs.home, dirs.slug, '2026-10-27T05:30:00.000Z', 'PR opened');
+  fs.mkdirSync(path.dirname(liveCursorPath(dirs.home, dirs.slug)), { recursive: true });
+  fs.writeFileSync(liveCursorPath(dirs.home, dirs.slug), JSON.stringify({ schema: 'js-harness.live-cursor/v1', url: 'u', through: '2026-10-27T05:30:00.000Z', ids: ['2026-10-27T05:30:00.000Z-aaaaaaaa'] }));
+  assert.match((await live([], dirs)).out, /^0 rows wait/m);
+  assert.deepEqual(JSON.parse(fs.readFileSync(liveCursorPath(dirs.home, dirs.slug), 'utf8')), { schema: 'js-harness.live-cursor/v1', url: 'u', upto: 2, sent: [] }, 'placed once, on the first run');
+  note(dirs.home, dirs.slug, '2026-10-27T04:00:00.000Z', 'stamped before, appended after');
+  assert.match((await live([], dirs)).out, /^1 row waits/m, 'an older time appended later is not lost');
+  const written = await live(['--out', dirs.out], dirs);
+  const file = path.join(dirs.out, fs.readdirSync(dirs.out)[0]);
+  assert.equal(written.code, 0, written.err);
+  assert.equal((await live(['--sent', file], dirs)).code, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(liveCursorPath(dirs.home, dirs.slug), 'utf8')), { schema: 'js-harness.live-cursor/v1', url: 'u', upto: 3, sent: [] });
+  assert.match((await live([], dirs)).out, /^0 rows wait/m);
 }));
 
 test('it refuses an unknown argument, a missing value and a file that is no batch', withFolders(async (dirs) => {

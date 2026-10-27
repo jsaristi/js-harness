@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BATCH_ROWS, batchesOf, cursorAfter, LATE_MS, pendingRows, rowOf, STATES } from './live-rows.mjs';
+import { BATCH_ROWS, batchesOf, cursorAfter, pendingRows, rowOf, STATES } from './live-rows.mjs';
 
 // odd/tasks/live-board.md, S2-S3: the channel's notices as the live board's rows, and the cursor that says which
 // were sent. Everything here is pure: the notices are synthetic.
@@ -57,30 +57,21 @@ test('rows are cut into batches of BATCH_ROWS, each one document named by its la
   assert.deepEqual(batchesOf([]), []);
 });
 
-test('the cursor after a sent batch is its last time, with every id sent at that time', () => {
+test('the cursor after a sent batch holds the record position below which every notice was sent', () => {
   const rows = pendingRows([notice('2026-10-27T01:00:00.000Z'), notice('2026-10-27T02:00:00.000Z'), notice('2026-10-27T02:00:00.000Z', 'note', { from: { ...FROM, id: 'cccccccc-3' } })], null, '2026-10-27T00:00:00.000Z');
-  assert.deepEqual(cursorAfter(null, rows), { through: '2026-10-27T02:00:00.000Z', ids: ['2026-10-27T02:00:00.000Z-aaaaaaaa', '2026-10-27T02:00:00.000Z-cccccccc'] });
-  const earlier = { through: '2026-10-27T02:00:00.000Z', ids: ['2026-10-27T02:00:00.000Z-aaaaaaaa'] };
-  assert.deepEqual(cursorAfter(earlier, rows.slice(2)), { through: '2026-10-27T02:00:00.000Z', ids: ['2026-10-27T02:00:00.000Z-aaaaaaaa', '2026-10-27T02:00:00.000Z-cccccccc'] });
-  const later = { through: '2026-10-27T05:00:00.000Z', ids: ['2026-10-27T05:00:00.000Z-aaaaaaaa'] };
-  assert.deepEqual(cursorAfter(later, rows), later, 'a file sent late never moves the cursor back');
+  assert.deepEqual(rows.map((row) => row.seq), [0, 1, 2]);
+  assert.deepEqual(cursorAfter(null, rows), { upto: 3, sent: [] });
+  const ahead = cursorAfter({ upto: 0, sent: [] }, rows.slice(2));
+  assert.deepEqual(ahead, { upto: 0, sent: [2] }, 'a file sent ahead of an earlier one leaves the gap pending');
+  assert.deepEqual(pendingRows([notice('2026-10-27T01:00:00.000Z'), notice('2026-10-27T02:00:00.000Z'), notice('2026-10-27T02:00:00.000Z', 'note', { from: { ...FROM, id: 'cccccccc-3' } })], ahead, '2026-10-27T00:00:00.000Z').map((row) => row.seq), [0, 1]);
+  assert.deepEqual(cursorAfter(ahead, rows.slice(0, 2)), { upto: 3, sent: [] });
 });
 
-// `notify` stamps a notice's time before it appends it, so a notice can land after a later one was sent. The cursor
-// holds every id it sent within LATE_MS of its time, and such a notice is still pending; one older than that is not.
-test('a notice appended after a later one was sent is still pending, within LATE_MS of the cursor', () => {
-  const sent = pendingRows([notice('2026-10-27T03:00:00.000Z'), notice('2026-10-27T02:50:00.000Z', 'note', { from: { ...FROM, id: 'cccccccc-3' } })], null, '2026-10-27T00:00:00.000Z');
-  const cursor = cursorAfter(null, sent);
-  assert.equal(LATE_MS, 30 * 60 * 1000);
-  assert.deepEqual(cursor, { through: '2026-10-27T03:00:00.000Z', ids: ['2026-10-27T02:50:00.000Z-cccccccc', '2026-10-27T03:00:00.000Z-aaaaaaaa'] });
-  const record = [notice('2026-10-27T03:00:00.000Z'), notice('2026-10-27T02:50:00.000Z', 'note', { from: { ...FROM, id: 'cccccccc-3' } }), notice('2026-10-27T02:45:00.000Z', 'ready', { pr: 7 }), notice('2026-10-27T02:00:00.000Z', 'closed')];
-  const late = pendingRows(record, cursor, '2026-10-27T00:00:00.000Z');
-  assert.deepEqual(late.map((row) => row.id), ['2026-10-27T02:45:00.000Z-aaaaaaaa']);
-  const after = cursorAfter(cursor, late);
-  assert.equal(after.through, '2026-10-27T03:00:00.000Z', 'a late row never moves the cursor back');
-  assert.ok(after.ids.includes('2026-10-27T02:45:00.000Z-aaaaaaaa'));
-  assert.deepEqual(pendingRows(record, after, '2026-10-27T00:00:00.000Z'), []);
-  // Ids older than LATE_MS before the cursor's time are dropped as it moves on, so the cursor stays small.
-  const moved = cursorAfter(after, pendingRows([notice('2026-10-27T04:00:00.000Z')], after, '2026-10-27T00:00:00.000Z'));
-  assert.deepEqual(moved, { through: '2026-10-27T04:00:00.000Z', ids: ['2026-10-27T04:00:00.000Z-aaaaaaaa'] });
+// notify stamps a notice's time before it appends it, so the record's order is not its time's order: the cursor goes
+// by position in the record, and a notice that lands after a later one was sent is still pending, however late.
+test('a notice appended after a later one was sent is still pending, however old its time', () => {
+  const record = [notice('2026-10-27T03:00:00.000Z'), notice('2026-10-26T01:00:00.000Z', 'ready', { pr: 7 })];
+  const cursor = cursorAfter(null, pendingRows(record.slice(0, 1), null, '2026-10-27T00:00:00.000Z'));
+  assert.deepEqual(cursor, { upto: 1, sent: [] });
+  assert.deepEqual(pendingRows(record, cursor, '2026-10-27T00:00:00.000Z').map((row) => [row.seq, row.kind]), [[1, 'ready']]);
 });

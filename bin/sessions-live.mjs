@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { channelDir, readNotices } from './lib/channel.mjs';
-import { batchesOf, cursorAfter, pendingRows } from './lib/live-rows.mjs';
+import { batchesOf, cursorAfter, pendingRows, positionOf } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 
@@ -75,7 +75,15 @@ function writeCursor(file, saved) {
   fs.writeFileSync(file, `${JSON.stringify({ ...saved, schema: CURSOR_SCHEMA })}\n`, 'utf8');
 }
 
-const cursorOf = (saved) => (typeof saved.through === 'string' && Array.isArray(saved.ids) ? { through: saved.through, ids: saved.ids } : null);
+/** The saved cursor: its position form, `{ upto, sent }`, or the form before it, `{ through, ids }`, which
+ * `positionOf` places in the record once; `null` when there is none. */
+const cursorOf = (saved) => {
+  if (Number.isSafeInteger(saved.upto) && Array.isArray(saved.sent)) return { upto: saved.upto, sent: saved.sent };
+  return typeof saved.through === 'string' && Array.isArray(saved.ids) ? { through: saved.through, ids: saved.ids } : null;
+};
+
+/** `saved` with `cursor` in place of the cursor it held, in either form. */
+const withCursor = ({ through, ids, upto, sent, ...rest }, cursor) => ({ ...rest, ...cursor });
 
 /** A batch's file name: its document id with what Windows refuses in a name (the colons of a time) made dashes. */
 const fileNameOf = (docId) => `live-${docId.replace(/[^A-Za-z0-9.-]/g, '-')}.json`;
@@ -111,6 +119,18 @@ export async function sessionsLiveMain(argv, {
     stderr(`js-harness sessions live: ${cursorFile} cannot be read (${err.code ?? err.message})`);
     return 1;
   }
+  // A cursor of the form before is placed in the record and saved in the position form on the first run, so a notice
+  // that lands after it is counted by its place.
+  const old = cursorOf(saved);
+  if (old !== null && old.upto === undefined) {
+    const record = readNotices(home, slug);
+    if (record.unavailable !== undefined) {
+      stderr(`js-harness sessions live: ${record.path} cannot be read (${record.unavailable})`);
+      return 1;
+    }
+    saved = withCursor(saved, positionOf(old, pendingRows(record.notices, null, new Date(0).toISOString())));
+    writeCursor(cursorFile, saved);
+  }
 
   if (parsed.sent !== undefined) {
     let rows;
@@ -120,13 +140,13 @@ export async function sessionsLiveMain(argv, {
       stderr(`js-harness sessions live: ${parsed.sent} cannot be read (${err.code ?? err.message})`);
       return 1;
     }
-    if (!Array.isArray(rows) || rows.some((row) => typeof row?.id !== 'string' || !Number.isFinite(Date.parse(row?.time)))) {
-      stderr(`js-harness sessions live: ${parsed.sent} is no batch this command wrote: it has no rows with an id and a time`);
+    if (!Array.isArray(rows) || rows.some((row) => typeof row?.id !== 'string' || !Number.isSafeInteger(row?.seq) || row.seq < 0)) {
+      stderr(`js-harness sessions live: ${parsed.sent} is no batch this command wrote: it has no rows with an id and a place in the record`);
       return 1;
     }
     const cursor = cursorAfter(cursorOf(saved), rows);
-    writeCursor(cursorFile, { ...saved, ...cursor });
-    stdout(`the live board has been sent the notices through ${cursor?.through ?? 'none yet'}`);
+    writeCursor(cursorFile, withCursor(saved, cursor));
+    stdout(`the live board has been sent every notice before number ${cursor.upto + 1} of the record${cursor.sent.length === 0 ? '' : `, and ${cursor.sent.length} after it`}`);
     return 0;
   }
 
