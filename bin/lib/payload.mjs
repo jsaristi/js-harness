@@ -276,10 +276,16 @@ function claudeHost(home, cwd) {
   const style = outputStyleSource(home);
   if (style) sources.push(style);
 
-  sources.push(source('project AGENTS.md', path.join(cwd, 'AGENTS.md')));
+  const agents = source('project AGENTS.md', path.join(cwd, 'AGENTS.md'));
+  sources.push(agents);
 
+  // An excluded CLAUDE.md that imports AGENTS.md takes it along: the import is how Claude loads that file.
   const projectClaudeMd = path.join(cwd, 'CLAUDE.md');
-  if (fs.existsSync(projectClaudeMd)) sources.push(claudeMdSource('project CLAUDE.md', projectClaudeMd, settingsPaths));
+  if (fs.existsSync(projectClaudeMd)) {
+    const claudeMd = claudeMdSource('project CLAUDE.md', projectClaudeMd, settingsPaths);
+    if (claudeMd.excluded && /^@AGENTS\.md\s*$/m.test(fs.readFileSync(projectClaudeMd, 'utf8'))) Object.assign(agents, { tokens: 0, excluded: claudeMd.excluded });
+    sources.push(claudeMd);
+  }
 
   sources.push(
     source('memory index', path.join(home, '.claude', 'projects', memorySlug(cwd), 'memory', 'MEMORY.md')),

@@ -626,3 +626,20 @@ test('claudeMdExcludes is read from the local and user layers too, and a glob th
     assert.equal(findSource(claude, 'global CLAUDE.md').excluded, '**/.claude/CLAUDE.md');
   });
 });
+
+test('a project CLAUDE.md that a glob excludes takes the AGENTS.md it imports with it, and one it does not import stays', () => {
+  withFixture((home, cwd) => {
+    write(path.join(cwd, 'AGENTS.md'), 'b'.repeat(400));
+    write(path.join(cwd, 'CLAUDE.md'), '@AGENTS.md\n' + 'c'.repeat(40));
+    write(path.join(cwd, '.claude', 'settings.json'), JSON.stringify({ claudeMdExcludes: ['**/CLAUDE.md'] }));
+    let [claude] = measurePayload({ home, cwd }).hosts;
+    assert.equal(findSource(claude, 'project CLAUDE.md').excluded, '**/CLAUDE.md');
+    assert.equal(findSource(claude, 'project AGENTS.md').excluded, '**/CLAUDE.md', 'it loads only through that import');
+    assert.equal(findSource(claude, 'project AGENTS.md').tokens, 0);
+
+    write(path.join(cwd, 'CLAUDE.md'), 'c'.repeat(40));
+    [claude] = measurePayload({ home, cwd }).hosts;
+    assert.equal(findSource(claude, 'project AGENTS.md').excluded, undefined);
+    assert.equal(findSource(claude, 'project AGENTS.md').tokens, 100);
+  });
+});
