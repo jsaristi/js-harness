@@ -21,6 +21,7 @@ test('the one object is read with prose before or after it, bare or in its fence
     `Here is the review of the range.\n\n${object}`,
     `Here is the review:\n\n\`\`\`json\n${object}\n\`\`\`\n\nNothing blocks the change.`,
     `${object}\n`,
+    `The review [risk lens] is below.\n${object}\n(see [1] above)`,
   ];
   for (const text of shapes) assert.deepEqual(lensResult(text, candidate), { complete: true, findings: [], evidence: ['read both'] }, text);
   // Braces, escaped quotes and a backslash before a closing quote inside its strings do not split or join the object.
@@ -42,6 +43,9 @@ test('an answer that is not one complete object is still refused, and says what 
     ['an object that does not parse', object.replace('"read both"', '"read "both" paths"'), /does not parse( at character \d+, near "|: ).*both/],
     ['the object as the element of an array', `[${object}]`, /element of a JSON array/],
     ['the object as the element of a fenced array', `\`\`\`json\n[\n${object}\n]\n\`\`\``, /element of a JSON array/],
+    // A comma beside the object is read as an array's too: refusing a valid answer costs a run, reading one does not.
+    ['the object first of two elements', `[${object}, 1]`, /element of a JSON array/],
+    ['the object last of two elements', `[1, ${object}]`, /element of a JSON array/],
     ['prose holding braces beside the object', `The {placeholder} stays.\n${object}`, /does not parse/],
   ];
   for (const [shape, text, why] of cases) {
