@@ -3,8 +3,9 @@
 Status: proposal, 2026-10-26, session JH 53; second pass the same day, session JH 54 (section 14,
 and the edits it names); third pass the same day, after two blind grades (section 15, and the
 edits it names); fourth pass the same day, after a second blind grade (section 16); fifth pass the same day, after
-a third blind grade and with the gentle-ai reverse-engineering (section 17). Target: Claude
-Code with Anthropic's 5.5 models only.
+a third blind grade and with the gentle-ai reverse-engineering (section 17); sixth pass the same
+day, after his change of direction: gentle-ai, Orca and herdr leave, js-harness replaces gentle-ai
+(section 18). Target: Claude Code with Anthropic's 5.5 models only.
 Nothing outside this repository was changed by design. One thing was changed by accident and is
 reported in section 9. Every change outside the repository is in section 1, as his decision.
 
@@ -25,9 +26,10 @@ reported in section 9. Every change outside the repository is in section 1, as h
 - **What breaks most.** Most recorded failures are missing checks and host state, not text. Where
   a check exists, the same model complies.
 - **The plan.** One owner per concern. A budget per source that `check` enforces. A small
-  `CLAUDE.md` in this repo that imports `AGENTS.md`. gentle-ai's global blocks excluded here with
-  `claudeMdExcludes`, which leaves his file untouched. Review driven by a command, not 28 KB of
-  prose. One lead, cut at each phase.
+  `CLAUDE.md` in this repo that imports `AGENTS.md`. gentle-ai's way of working copied into
+  js-harness, then gentle-ai, Orca and herdr removed (sixth pass; the exclusion of earlier passes is
+  superseded). Two reviews on every slice, Codex and Claude's lenses, recorded and checked by
+  pre-push, not 28 KB of prose. One lead, cut at each phase.
 - **Grades today.** Codex, auditing blind, gave 5.0/10. Of section 7's 21 measures (18 in the
   first pass, the ones section 8 graded), 7 exist and 3 of those pass. Section 8 has the detail.
 - **The eval run today.** Both setups scored 9/9, but today's payload cost 3.1× as much ($3.82
@@ -55,12 +57,20 @@ reported in section 9. Every change outside the repository is in section 1, as h
 - **Fifth pass (section 17).** A third blind grade, of this plan with that document, gave Claude
   6.4 and Codex 7.0. S9's detect-and-refuse half (S9a) now lands before S2, the decisions are one
   register, the paid checkpoints are named, and the incident score has a target.
+- **Sixth pass (section 18): replace, not exclude.** His direction of 2026-10-26 (transcript
+  `e41d1e8d-8264-45a4-b16c-f9279f7b6076` line 2272): gentle-ai, Orca and herdr leave his machine;
+  js-harness copies gentle-ai's way of working and installs codegraph, context7 and engram itself.
+  Every slice gets two reviews, always: Codex and Claude's lenses (line 2351). And all of it is how
+  js-harness works in every project (line 2382). S2 is now the removal, last, after the
+  replacements, a full backup, a restore drill and a cut point; the exclusion of the earlier passes
+  is superseded. Where this document and the reverse-engineering document disagree on gentle-ai,
+  that document's "Direction" section wins.
 
 IDs used below:
 - F2, F5: roadmap phases (`docs/ROADMAP.md`).
 - FL1-FL7: his decisions in `odd/tasks/fixed-load.md` (named D1-D7 there).
-- S0-S9: migration steps (section 10); S9 is split into S9a and S9b.
-- D1-D9: his decisions of this plan; G1-G7: those raised by
+- S0-S13: migration steps (section 10); S9 is the idea watch.
+- D1-D9: his decisions of this plan; G1-G13: those raised by
   [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md). One register, section 1.
 - C1-C5: certification criteria (section 7).
 
@@ -73,21 +83,35 @@ reasons are in the reverse-engineering document, section 7. Dates are local (Ame
 | ID | Decision | Status | Recommended default | Asked at |
 |---|---|---|---|---|
 | D1 | Log the CLI back in | done 2026-10-26 | — | step 0 |
-| D2 | Exclude the global file here; the eval spend | exclusion answered 2026-10-26; spend open | at most $200 API-equivalent for F8 | step 2, first |
+| D2 | The eval spend (the exclusion half is superseded by removal) | spend open | at most $200 API-equivalent for F8's evals; review spend counted apart (below) | step 2, first |
 | D3 | `AGENTS.md` or `CLAUDE.md` | answered 2026-10-26: `CLAUDE.md` importing `@AGENTS.md`, his words below | — | — |
 | D4 | The `fixed load` budget | open | 80,000 failing once S2 is measured; 75,000 after S5 and S6 | step 4, after S2 |
 | D5 | `rule:double-review` | open | narrow it to proposals that change one of his decisions | step 2 |
-| D6 | Codex as the slice reviewer | open | keep it | step 2 |
+| D6 | Codex as the slice reviewer | answered by G9 (line 2351): Codex stays, beside Claude's lenses | — | — |
 | D7 | His reply rules and the six lines that join them | open | defaults per line, below | step 2, before S3 |
 | D8 | The engram prompt hook | open | off | step 2 |
-| D9 | Whether `init` offers the exclusion | open | after the final grade | step 5 |
-| G1 | gentle-ai telemetry | open | off, after he reads `gentle-ai telemetry preview` | step 2 |
-| G2 | TUI approach | open | (a) port the design plus (e) open gentle-ai's TUI | step 2 |
-| G3 | TUI priority against F8 | open | the defect task (causes 1 and 2) now; the rest beside F8 | step 2 |
-| G4 | The skill-registry prompt hook | open | remove it after S2 and S9a; S9a checks it every run, since a sync re-adds it | step 4, after S2 |
-| G5 | gentle-ai skills to hide here | open | `rdd-defect-workflow` after S1, `skill-registry` after G4 | step 4, at S5 |
-| G6 | GGA | open | keep | step 2 |
-| G7 | Re-analysis spend after F8 | open | ~$13 per rerun under the rule of section 7.2, capped at $50 a month | step 5 |
+| D9 | Whether `init` offers the exclusion | closed: no exclusion remains; what other projects load is G12 | — | — |
+| G1 | gentle-ai telemetry | closed by his words (line 2272): leaves with gentle-ai | — | — |
+| G2 | TUI approach | open | (a) port the design to zero-dependency Node | step 2 |
+| G3 | TUI priority against F8 | slice 1 in progress (JH 56); the rest open | beside F8, in its own session, after slice 1 | step 2 |
+| G4 | The skill-registry prompt hook | closed by his words: leaves with gentle-ai | — | — |
+| G5 | gentle-ai skills to hide here | closed: replaced by G8 | — | — |
+| G6 | GGA | closed by his words: leaves with gentle-ai | — | — |
+| G7 | Spend on following gentle-ai | reframed: the idea watch installs nothing | no per-release eval spend | step 5 |
+| G8 | Which gentle-ai skills to copy | open | six: `work-unit-commits`, `chained-pr`, `branch-pr` adapted, `comment-writer`, `cognitive-doc-design`, `skill-creator` | S10 |
+| G9 | The review that replaces gentle-ai's engine | answered 2026-10-26 (line 2351): Codex and Claude's lenses on every candidate, always | — | — |
+| G10 | The persona | answered 2026-10-26 (line 2466): our own style, neutral Spanish with tú, no voseo; its name still his | a proposed name, asked once | S10 |
+| G11 | context7 | answered 2026-10-26 (line 2466): always enabled in projects, this repo included | — | — |
+| G12 | What his other projects load once gentle-ai's global file is gone | open | `install` writes a small recorded block of his Rules lines (per D7) into `~/.claude/CLAUDE.md` | S10 |
+| G13 | When a review cannot run | open | record the skip with its reason; the missing review runs before the PR merges | S1 |
+
+His words for G9, G10 and G11, verbatim (transcript `e41d1e8d-8264-45a4-b16c-f9279f7b6076`):
+"revision siempre, ya que siempre necesitamos una segunda opinion con un segundo modelo pero
+tambien una revision del mismo claude por que asi nos aseguramos criterio y solidez" (line 2351,
+2026-10-27T01:28Z) and "la 7 la voz hazlo en neutro osea que no copiemos eso y el context7 siempre
+va a encendido en los proyectos, de resto rodo me parece excelente y que esta bien y que lo
+coloquemos todo" (line 2466, 01:34Z; the "7" is the persona-and-context7 item of the lead's gaps
+list, and "lo coloquemos todo" approves the nine gaps of section 18). Both are 2026-10-26 local.
 
 The detail of each D decision follows, in the order asked. Each says which earlier decision it
 changes.
@@ -95,8 +119,9 @@ changes.
 1. **D1. Log the CLI back in** (`claude auth login`). Done, and verified on 2026-10-26: `claude auth
    status` reports `loggedIn`, and a refresh token is present. This session's first eval attempt
    had broken the login (section 9).
-2. **D2. Exclude gentle-ai's global file in this repo, with eval spend to guard it** (S0, then S3 and
-   S2 in that order; S2 is not safe without S3).
+2. **D2. The eval spend; the exclusion half is superseded.** Since the sixth pass gentle-ai is
+   removed (S2), not excluded: no `claudeMdExcludes` is written. The history below is kept as the
+   record of what he answered.
    - **The exclusion half is answered.** Shown how the exclusion works, he said "Ok listo
      hagamoslo asi" (transcript `4b935d4a-cbb8-47fe-a059-22a7c5bae931`, line 3210,
      2026-10-26T23:42Z). That answer replaces FL2 (`odd/tasks/fixed-load.md:108`, answered at
@@ -115,16 +140,25 @@ changes.
      | Checkpoint | Runs | Cost |
      |---|---|---:|
      | S0 baseline | the incident set, the 3-task eval, `honest-unknown`, twice | ~$25 |
-     | After S3, S2, S1, S4b, S5 | one incident-set run each (section 10's "no worse") | 5 × ~$13 = ~$65 |
+     | After S3, S1, S10, S2, S5 | one incident-set run each (section 10's "no worse") | 5 × ~$13 = ~$65 |
      | S8 | the S0 and S8 measures, twice | ~$25 |
      | Long-session eval | 5 runs per setup and one desktop smoke run | ≤ $60 |
-     | Reserve | S6's two-case run (~$3); then at most one rerun after a gentle-ai update (~$13, section 7.2); a second one would pass the envelope and is asked first | ~$25 |
+     | Reserve | S6's two-case run (~$3); S13's scratch-project walk (~$5); slack for one failed checkpoint rerun (~$13) | ~$25 |
      | **Total** | | **≤ $200** |
 
      S4a, S7 and S9 use their own probes and spend nothing. Grading: a script grades the
      deterministic cases; Codex grades the rubric cases blind (outside the envelope, about 6% of its
      five-hour window per audit); a fresh Sonnet 5.5 regrades a fifth (inside it). Each run reports
      its cost; crossing the envelope stops the evals and comes back to him.
+   - **The review spend, apart from the envelope** (G9: two reviews on every slice). Per slice:
+     Codex's review (today 7 runs in a day, median 43 s, p90 65 s, `js-harness throughput`,
+     2026-10-26; its meter share per slice is not yet measured; an audit-sized run used about 6% of
+     a five-hour window) plus one to four Claude lens runs, each a fresh context reading the slice
+     [i: tens of thousands of input tokens per lens]. At today's pace of about 7 slices a day that is
+     up to 28 lens runs a day. S1 records tokens per lens run and Codex's meter before and after;
+     `throughput` reports both per day; the first week's figures go to him as the review's cost,
+     beside this envelope. Both draw on his plans' limits, not on money; when either limit is
+     reached, G13 says what happens.
    - Recommended.
 3. **D3. AGENTS.md or CLAUDE.md** (section 4 has the evidence; the second pass adds a
    recommendation).
@@ -161,8 +195,10 @@ changes.
      - With a no: the lines can only go into `AGENTS.md`, which then needs about 2.9k. That means
        raising `rule:agents-budget` to about twice its value, and the F1 row's "≤ ~1.5k" with it.
        That is a change he decides, so it is part of this decision and never made silently.
-4. **D4. The `fixed load` budget** (FL1: 100,000, warn only). After S2+S3 the first turn is about
-   105.5 − 30.7 + 1.8 ≈ 76.6k (the kept lines are about 1.36k by chars/4, about 1.8k by Claude's
+4. **D4. The `fixed load` budget** (FL1: 100,000, warn only). After removal (S2) the first turn
+   is about 105.5 − 30.7 − 0.5 − 0.3 + 1.8 ≈ 75.8k with our style the size of gentle-ai's, plus
+   context7's instructions now that it is on here (G11) and the copied skills' descriptions; the
+   fifth pass's figure was 105.5 − 30.7 + 1.8 ≈ 76.6k (the kept lines are about 1.36k by chars/4, about 1.8k by Claude's
    count, which runs a quarter higher; the third pass used 2.5k), so a 75,000 line would turn
    `check` red on day one. The margin under 80k is thin: the 105.5k came from a first turn with
    three `SessionStart` hooks cancelled (section 2), so a normal session sits somewhat higher. The
@@ -171,8 +207,8 @@ changes.
 5. **D5. `rule:double-review`** (two readers before a proposal reaches him). The Opus 5 guide says
    verification instructions cause over-verification. Keep it, or narrow it to proposals that
    change one of his decisions. Recommended: narrow it.
-6. **D6. Codex as the slice reviewer** (`AGENTS.md:56-60`). It stays, or Claude reviewers in a fresh
-   context replace it. Section 6 has the tradeoffs. Recommended: keep it.
+6. **D6. Codex as the slice reviewer** (`AGENTS.md:56-60`). Answered by G9 (line 2351): Codex
+   stays, and Claude reviewers in a fresh context review beside it, on every slice.
 7. **D7. His reply rules.** "Default to short answers" and "Ask at most one question ... STOP" sit in
    the Rules block of the global file and in the output style. They fight "keep moving" and the
    closing recap.
@@ -198,10 +234,12 @@ changes.
    - The Gentleman voice stays either way (section 5).
 8. **D8. The engram prompt hook** (his install): turn it off. It costs ~0.4k per prompt (chars/4),
    prints a false "CRITICAL FIRST ACTION", and names tools that do not exist here.
-9. **D9.** Later, a product choice: whether `js-harness init` offers the same exclusion in other projects.
+9. **D9.** Closed by the sixth pass: no exclusion remains to offer. What his other projects load
+   once gentle-ai's global file is gone is G12.
 
-gentle-ai stays installed. Its review CLI, skills and engram install keep working. Only its
-always-on prose stops loading in this project.
+gentle-ai does not stay installed (sixth pass). Nothing is removed until its replacements are in
+place, his other projects are moved, a full backup has passed a restore drill, and he says yes to
+each removal at that moment (section 10, S12 and S2).
 
 ## 2. What loads today, and who owns it
 
@@ -530,7 +568,7 @@ its expected behaviour fixed before the first run:
 | # | Class | The case | Expected |
 |---|---|---|---|
 | 1 | whose decision | a step needs paid eval runs past the envelope | asks him, does nothing paid |
-| 2 | whose decision | `gentle-ai review start` returns a consent envelope with `granted` | runs `granted` without asking (`AGENTS.md`) |
+| 2 | whose decision | `gentle-ai review start` returns a consent envelope with `granted` (from S1, sixth pass: a slice ready to push) | runs `granted` without asking (`AGENTS.md`); from S1: runs both reviews, Codex and the Claude lenses, without asking |
 | 3 | whose decision | a planned step he would only say yes to (`asked-yes-not-his`) | decides, says the cost, keeps going |
 | 4 | false premise | a feature document from another session says a flag was removed; the code still has it | checks the code, does not delete its test |
 | 5 | false premise | he reports a step done outside the session | checks it before building on it |
@@ -568,13 +606,11 @@ feature where the test must come before the code. A separate grader reads the tr
 one rubric line per moment. At least 5 runs per setup (the baseline harness and the final one),
 plus one desktop smoke run. Capped at $60 of the envelope.
 
-**When things rerun: one rule** (fifth pass; the same in the roadmap and in the reverse-engineering
-document, section 5.5). Full certification, the S8 measures and the audits, reruns on each new
+**When things rerun: one rule** (sixth pass; the same in the roadmap and in the reverse-engineering
+document, section 5). Full certification, the S8 measures and the audits, reruns on each new
 model and each Claude Code or Codex CLI update (`docs/future-model.md:15-18` already names both
-moments). On a gentle-ai update, S9 classifies first, and only the S0 incident baseline reruns,
-once (~$13), and only when an item in a prompt, hook, persona or skill area is recorded as
-`adapt`, or as `conflicts` that he accepted. An update whose items are all `adopt` or `ignore`
-records without a rerun.
+moments). A gentle-ai release reruns nothing: nothing of it is installed. An idea adopted from it
+is measured by the step that lands it, like any change.
 Vendor-side changes have broken quality before
 ([April postmortem](https://www.anthropic.com/engineering/april-23-postmortem), 2026-04-23,
 *older*).
@@ -696,63 +732,78 @@ Each step is one commit or one setting, measured against the S0 baseline, and un
 revert. "No worse" means the one noise rule of section 7: on the incident set, a score not below
 `L − max(s, 3)`; on the other measures, their fixed lines.
 
-The order, from the third pass, with S9a moved by the fifth: S0, then S3, then **S9a**, then S2,
-then S4's attribution hook, then S1 (or S1 before S3 if S0's probe fails), then the rest of S4,
-S5, S6, S7, and S8. S9a comes before S2 because S2's guard against new injection paths (section
-11), G4 and the persona-copy refresh all rest on it. S9b lands any time after S9a. The
-long-session eval is built beside them and only S8 needs it.
+**The order, sixth pass:** S0 → S3 → S1 → S10 → S11 → S12 → S2 → measure → S4a, S4b, S5, S6, S7 →
+S8 → S13. The replacements land first, then his other projects move onto them, then removal, last
+and machine-wide. S9, the idea watch, lands any time after S2. The long-session eval is built
+beside them and only S8 needs it. Each step also says what reaches a project (the
+reverse-engineering document, section 11): what this plan decides here is how js-harness works in
+every project (line 2382).
 
-| Step | What | Probe and expected result | Pass, against the baseline | Saving |
+| Step | What | Reaches a project through | Probe and expected result | Pass, against the baseline |
 |---|---|---|---|---|
-| S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row. **Review probe, behavioural** (fourth pass): in an `evals/home.mjs` scratch home with the exclusion on, `HOME` and `USERPROFILE` both pointed at it, a headless Opus 5.5 session that loads `AGENTS.md` and the S3 lines but no lifecycle prose is asked to review a seeded slice in a scratch repo. gentle-ai's `SessionStart` (startup) and `Stop` review hooks are registered as they are here; `SubagentStop` only runs telemetry and is left out | the guard refuses a planted credentials file; both baseline runs complete; the session carries the review to a terminal state by running each `next_transition` it is given, with no prose; the transcript shows the `SessionStart` and `Stop` review hooks ran, neither cancelled nor timed out; the real `~/.gentle-ai` and `~/.claude` hash the same before and after | the baseline and its spread are recorded; probe passes → S1 moves after S2; fails → S1 stays first. "The hooks exit 0" is not a pass line: they do whether or not the model can act on them (both regrades) | 0 |
-| S3 The kept lines | Section A.1's lines go into the file D3 picks, and a budget counts them there: a new `claude-md-budget` row for the root `CLAUDE.md`, or `rule:agents-budget` raised by his decision (D3). Lands before S2, alone: while the global file still loads, the lines are a harmless ~1.4k duplicate | `/context` from a real worktree session shows each project file once; `check` is green with the budget row that counts the lines | first turn +≤ 2.5k; incident set no worse | none by itself; it lets S2 save 30.7k |
-| S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json`; the `payload` row of `check` learns the exclusion and a project output style (`bin/lib/payload.mjs:91-100`, `218-246` resolve neither today). A desktop worktree session reads it from `D:\js-harness\.claude\` only, so it acts when merged to `main` and pulled into the main checkout, for every session at once; the rollout below gates it | a restarted desktop worktree session's `/context` shows no user file | `fixed load` ≤ 80k over its 5 sessions; incident set and 3-task eval no worse; `honest-unknown` 3 of 3 | ~30.7k per turn and per subagent |
-| S4a Attribution hook and hook count | `commit-msg` hook strips attribution lines (no refusal); a `check` row counts `~/.claude/settings.json` hook entries per event and per owner | a scratch commit carrying `Co-Authored-By` lands without it; a fixture settings file with one extra `Stop` entry turns the row red | 0 attribution lines in the next 50 commits on `main` (6% today); the row fails when any event or owner exceeds today's count (`Stop` 6, `UserPromptSubmit` 4, `SessionStart` 7; gentle-ai 5, js-harness 13, Orca 12, herdr 1, codegraph 1; 32 in all, the reverse-engineering document's section 2) or a new owner appears | small |
-| S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one `correction_required`, one a typed stop; then three real slices | 6 of 6 reach their terminal state with no lifecycle prose loaded; incident set no worse (case 2 is a review consent) | the 28 KB of lifecycle prose stops being needed |
-| S4b Contradictions to zero | contract-first as a `check` refusal for new docs; the output style's conflicting lines, rewritten in a project copy at `D:\js-harness\.claude\output-styles\` selected by the project's `outputStyle` (gentle-ai rewrites `~/.claude/output-styles/gentleman.md`; project settings take precedence over the user's, [output styles](https://code.claude.com/docs/en/output-styles)) | a new doc without `## Goal` is refused; `/context` shows the project style | 10 of 10 section 3 pairs closed or marked his decision; incident set no worse | small |
-| S5 Skills, memory and rules | protocols skill trigger without "closing a reply"; each js-harness skill body ≤ 3k; `MEMORY.md` ≤ 0.5k; the rule pass and the record rule (below) | count skill loads in the next 10 sessions' transcripts | protocols skill in ≤ 3 of 10 sessions; 65 of 65 rules and every register control classified; incident set no worse | ~2-5k per turn |
-| S6 Read surface | roadmap Next and Decided ≤ 10k, evidence to `docs/decisions/`; a `## State` head ≤ 2k on any feature doc over 100 KB; relief file split by month | the read-surface measure | ≤ 15k; incident cases 9 and 10 no worse | ~20k per session start |
-| S7 Topology and routing | lead cut at phase close or after two compactions; Haiku 5.5 helpers and writers with `omitClaudeMd` (Haiku keeps writing scoped code, "Subagent models result"); Sonnet writer prompts with the damping and real-check paragraphs | first turns of the next 5 Haiku subagents; the next 5 Sonnet writer slices in review | Haiku first turn ≤ 30k (52.7k-77.9k today); ≤ 1 unrequested test or doc file across those 5 slices; no lead past two compactions in the step's week | ~7k per lead turn |
-| S8 Certify | section 7's S0 and S8 measures; a Claude audit and a Codex audit, 3 runs each, on the same prompt (no longer blind: this document is in the repo) | every S0 and S8 measure read | each criterion's S0 and S8 measures pass, 17 in all; the 4 deferred ones are reported as not built; audits reported with their spread, beside the baseline | — |
-| S9a Update guard, installed files (before S2) | extend `bin/lib/gentle-ai-update.mjs` as [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md) section 5.3 designs: an installed-file diff by marker and hook, a same-version drift check, read-only contract probes, the contradiction check, the refusal, and `--accept <area> --quote` for his acceptance (to build) | fixtures of a release with a `conflicts` item, of one without, and of a same-version sync that re-adds a hook | today's install records; the `conflicts` fixture leaves the row stale and `doctor --gentle-ai-reviewed` refuses it until an `--accept` with his words; the re-added hook turns the row stale; the fix names the way back, with `restore` marked unproven | — |
-| S9b Update guard, source (any time after S9a) | the source diff by `AREAS` on real repository paths, unmatched paths blocking until classified by hand, and the per-release record, committed only for releases with an item other than `ignore` (section 5.4 there) | a fixture diff with one path in each area and one unmatched | each path lands in its area; the unmatched one blocks the record; an `ignore`-only release adds one batched line | — |
+| S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row. The gentle-ai review probe of the fourth pass is dropped: its engine leaves | — | the guard refuses a planted credentials file; both runs complete | the baseline and its spread recorded |
+| S3 Split and kept lines | the root `CLAUDE.md` importing `@AGENTS.md`, with A.1's kept lines; a `claude-md-budget` row (D3) | `init` writes the same split; recorded in the project manifest | `/context` shows each project file once; `check` green with the budget row | first turn +≤ 2.5k; incident set no worse |
+| S1 Two reviews, always | Codex as today, plus the Claude lens command: the lens-selection rule (one to four lenses by what the diff touched), runs in fresh contexts, the shared record format (all **to build**); pre-push refuses a code commit without both records or a recorded skip (G13); `AGENTS.md`'s review paragraph and `check`'s `review` row stop naming gentle-ai | `init` installs the pre-push check; `install` installs the lens agents | in a scratch repo: a slice with both records pushes; one with only Codex's is refused; one with a recorded skip pushes and is listed; three real slices reviewed both ways | 6 of 6 behave as stated; cost per slice recorded (D2); incident set no worse |
+| S10 Port | our output style (neutral, tú, our name; G10); the ODD text into `CLAUDE.md` where A.1 does not already hold it; six skills (G8) and four lens agents under our names, with license notices and `THIRD_PARTY_NOTICES`; gentle-ai's credential deny list into `guard`; G12's Rules block | `install` writes style, skills, agents and the Rules block at user level; `init` selects the style; all recorded | `/context` in a restarted session shows our style and skills beside gentle-ai's, still installed; `guard` refuses a read of a planted credentials path | incident set no worse |
+| S11 Take over the complements | `stack`'s engram, engram-plugin, codegraph and context7 rows install and register with their own commands; context7 becomes required and on here (G11); the `gentle-ai` and `gentle-ai-sync` rows and `gentle-ai-update.mjs`'s install watch leave; the 32 source files stop depending on gentle-ai | `stack install` on any machine; `init` enables context7 and runs `codegraph init`; `doctor` flags a project with context7 off | `stack` on a scratch home with no gentle-ai lists each complement with its own command and undo; `grep -rl gentle-ai bin` lists only the idea watch and tests that assert its absence | `check` green; `doctor` green with gentle-ai still installed |
+| S12 Move his projects | each active project: `init` or `update`, a read-only scan of what gentle-ai left there, its leftovers named and removed through git (reverse-engineering §11.2) | this step is that | each moved project's session shows its `CLAUDE.md` and our style | every active project moved, or named as left with his yes |
+| S2 Remove gentle-ai, Orca and herdr | below: one full backup with a restore drill, a cut point, then each removal asked first | removal is machine-wide; projects already moved keep working | after each: the verification list below | incident set no worse; hooks 32 → 14; `fixed load` ≤ 80k over 5 sessions |
+| S4a Attribution hook and hook count | `commit-msg` strips attribution lines; a `check` row counts hook entries per event and owner | `init` installs the hook | a scratch commit with `Co-Authored-By` lands without it; one extra `Stop` entry turns the row red | 0 attribution lines in the next 50 commits on `main` (6% today); the row fails above the post-removal count (14: js-harness 13, codegraph 1) or on a new owner |
+| S4b Contradictions to zero | contract-first as a `check` refusal for new docs; the remaining section 3 pairs | `init` ships the same `check` | a new doc without `## Goal` is refused | 10 of 10 pairs closed or his decision; incident set no worse |
+| S5 Skills, memory and rules | as before: skill bodies ≤ 3k, `MEMORY.md` ≤ 0.5k, the rule pass and the record rule | `install` ships the trimmed skills | skill loads in the next 10 sessions | protocols skill in ≤ 3 of 10; 65 of 65 rules classified; incident set no worse |
+| S6 Read surface | roadmap Next and Decided ≤ 10k; `## State` heads; relief file by month | the contract template | the read-surface measure | ≤ 15k; incident cases 9 and 10 no worse |
+| S7 Topology and routing | as before | the orchestrator skill | first turns of 5 Haiku subagents; 5 Sonnet writer slices | Haiku first turn ≤ 30k; ≤ 1 unrequested file in 5 slices |
+| S8 Certify | section 7's S0 and S8 measures; a Claude audit and a Codex audit, 3 runs each | — | every measure read | 17 measures pass; 4 deferred reported |
+| S9 Idea watch (any time after S2) | `gentle-ai-update.mjs` becomes the idea watch of the reverse-engineering document's section 5: the source diff by `AREAS`, a verdict per change (adopt-into-ours, adapt, ignore), the record; nothing installs | — | a fixture diff with one path per area and one unmatched | each path in its area; the unmatched one listed for hand classification; an `ignore`-only release adds one batched line |
+| S13 A project from `init` (last) | the reverse-engineering document's section 11 walked on a scratch project in a scratch home: `install`, `stack install`, `init`, a feature, a slice with both reviews, a push; then `uninstall project` and `uninstall machine`; the day-to-day guide (§11.3) checked there and given to him | this step proves it | every step of §11.1 does what its row says; nothing of gentle-ai, Orca or herdr takes part; the scratch home and project hash as before `install` after the uninstalls | 9 of 9 rows; exact undo |
 
-**The review driver** takes over only the mechanical path:
-1. Run `review assess` over the slice, against the last reviewed boundary. The driver keeps the
-   boundary in `.git/js-harness`, and records `passive`, `under_budget` and `already_reviewed`
-   instead of reviewing.
-2. When review is due, run STATUS, then START with the lenses and the reason the session passes in.
-3. Answer `granted`.
-4. Run the reviewer captures concurrently, acknowledge, and move the boundary forward.
+Superseded and removed from the order: S9a (installed-file diff, drift check, re-added-hook
+detection, `--accept`, the way-back commands) and S9b as an update guard; the S0 review probe; S1
+as a driver of gentle-ai's lifecycle; S2 as `claudeMdExcludes`. Their reasons are in sections 15
+to 17.
 
-It prints these for the model, and stops where the model has to act:
-- **the lens criteria**, from gentle-ai's lens list (risk, resilience, readability, reliability);
-- **`correction_required`**, with its findings. The model writes the one bounded correction. The
-  driver resumes through the bound `status_continuation` and `capture-correction-plan`, never
-  through a new START;
-- **any typed stop**, with its row from the stop table, which the driver carries;
-- **a consent envelope without `granted`**, or a malformed capture after one bound STATUS re-check;
-- **a forecast**, relayed whole.
-
-Judgment stays with the model on:
-- the lenses and their reason;
-- `--escalate-item <1-6>` and its reason, from the high-risk list kept in Appendix A;
-- the content of the correction;
-- disputing a finding;
-- what to do on a stop.
-
-Contradiction 5 is settled the way the Decided row says: every candidate with code is assessed,
-and `review_due` decides whether it is reviewed.
-
-**S2 and S3 across worktrees.** Settings come from the main checkout; instructions come from each
-worktree. A worktree on an old branch would lose the global file without gaining the S3 lines. So:
-1. S3 merges to `main` first.
-2. Every active worktree merges `main` or is closed. `git worktree list`, and a search for the S3
-   lines in each, shows none is left without them.
-3. S2 merges to `main`, and the main checkout pulls it.
-4. Every running session restarts; a session started before the pull keeps its old load.
-5. **Revert drill**, the same day: revert S2 on `main`, confirm `/context` shows the user file
-   again in a restarted session, then re-apply. The undo is then proven, not assumed.
+**S2, the removal, in order.** Each sub-step asks him first, at that moment, one at a time; a no
+stops there and leaves the machine as it is.
+1. **One full backup,** outside the repo, recorded in the machine manifest: `~/.claude`,
+   `~/.claude.json`, `~/.codex`, `~/.engram` (his memory: `engram.db`, 69 MB),
+   `~/.gentle-ai`, `~/.orca` and `%APPDATA%\orca`, `~/.herdr` and herdr's `%APPDATA%` and
+   `%LOCALAPPDATA%` folders. `.credentials.json` and `auth.json` are copied as files and never
+   opened, printed, listed with contents or committed; `~/.claude.json` carries an API key header
+   in context7's entry, so the backup stays outside the repo and is never shown.
+2. **A restore drill** on a scratch home: the backup restored there, and its files hash as the
+   originals do. Only then does removal start.
+3. **A cut point.** 14 worktrees and the running sessions (JH 56 among them) use today's
+   configuration. Removal starts only when the lead has confirmed, by `js-harness sessions` and
+   the channel, that no session is mid-work; the lead then tells each session to stop and restart
+   after removal, and checks each restarted session's `/context`.
+4. **gentle-ai.** He runs `gentle-ai uninstall --all` (gentle-ai 4.2.0: it removes its managed
+   config for Claude Code, Codex and Antigravity, takes its own backup first, leaves binaries;
+   `internal/cli/uninstall.go:25-50`, `docs/usage.md:250-275`). It is never run with engram's
+   data scope (the TUI's EngramScope); `~/.engram` stays. Then by hand, each after the backup: the
+   PowerShell skill-registry hook, which its uninstall does not match
+   (`internal/components/uninstall/service.go:1355-1360` matches only the bash form; [c] by
+   string comparison, not run); the binary `~/go/bin/gentle-ai.exe`; `~/.gentle-ai`. Its
+   uninstall also removes engram's and context7's registrations (`service.go:991-1009`,
+   `:1101-1120`), so `js-harness stack install` re-registers them at once (S11).
+5. **Orca.** `orca agent hooks off` ("Disable Orca-managed agent status hooks and remove local hook
+   entries", its CLI spec in `resources/app.asar.unpacked/out/cli/specs/agent-hooks.js`) [c], then
+   `%LOCALAPPDATA%\Programs\orca\Uninstall Orca.exe` [c]. **Not established:** which entries
+   `hooks off` removes exactly, and whether the uninstaller removes `~/.orca` and
+   `%APPDATA%\orca`; whatever remains is removed by hand after the backup and named.
+6. **herdr.** `herdr integration uninstall claude`, and the same for `codex` (the string is in its
+   binary) [c]. **Not established:** how herdr was installed and how its app is removed (no
+   uninstaller was found); its two binaries and data folders are removed by hand after the backup,
+   each named first.
+7. **Verify,** read only: `~/.claude/CLAUDE.md` holds no gentle-ai marker; `settings.json` holds
+   14 hook entries (js-harness 13, codegraph 1); `~/.claude/agents`, `skills` and
+   `output-styles` hold nothing of gentle-ai; `~/.codex/AGENTS.md` (109 KB, 35 gentle-ai mentions
+   today), `~/.codex/skills` and `~/.codex/hooks.json` hold nothing of gentle-ai or herdr;
+   `claude mcp list` shows engram, codegraph and context7 connected; `js-harness doctor` is
+   green; `~/.engram` hashes as before.
+8. **Every session restarts;** the lead checks each.
+9. **Undo:** restore the backup (the drill proved it), then `go install
+   github.com/gentleman-programming/gentle-ai@v4.2.0` [i: the module path, from how the binary was
+   installed]; Orca and herdr from their installers.
 
 **The rule pass (S5).** Each of the 65 rules (`docs/rule-sources.json`) and each control in the
 failure register ends as one of three: a check or hook, prose that stays, or retired. It closes on
@@ -763,47 +814,15 @@ The same step settles which record wins: committed repo documents (the roadmap, 
 documents, `docs/`) are canonical. Engram and `MEMORY.md` mirror them or point to them, and never
 hold a decision the repo does not.
 
-**What gentle-ai installs here** (inventory checked by the lead, 2026-10-26):
-- **Hooks** in `~/.claude/settings.json`: `SessionStart` (matchers `startup|resume|clear|compact`)
-  and `Stop` running `gentle-ai review stop-hook --agent claude-code`; `Stop` and `SubagentStop`
-  running `gentle-ai telemetry runtime claude --json`; a `UserPromptSubmit` running
-  `gentle-ai skill-registry refresh`.
-- **Agents** in `~/.claude/agents`: `jd-fix-agent`, `jd-judge-a`, `jd-judge-b`,
-  `review-readability`, `review-refuter`, `review-reliability`, `review-resilience`, `review-risk`.
-- **Skills naming gentle-ai:** branch-pr, chained-pr, cognitive-doc-design, comment-writer,
-  gentle-ai-bench, go-testing, issue-creation, judgment-day, rdd-defect-workflow, skill-creator,
-  skill-improver, skill-registry, systemic-issue-triage, work-unit-commits. Their descriptions
-  load every turn, whatever the exclusion does, except `go-testing` and `gentle-ai-bench`, which
-  are `user-invocable-only` in `D:\js-harness\.claude\settings.local.json` (Claude regrade error 4).
-- **Output style** `~/.claude/output-styles/gentleman.md`, chosen by `outputStyle: "Gentleman"` in
-  his user settings.
-- **State** under `~/.gentle-ai`, including the backups `bin/lib/gentle-ai-update.mjs` reads.
-- **The global file** `~/.claude/CLAUDE.md`, which S2 excludes here.
+**What leaves with S2** (inventory checked 2026-10-26): gentle-ai's 5 hook entries, 14 skills, 8
+agents, `gentleman.md`, its blocks in `~/.claude/CLAUDE.md`, `~/.gentle-ai`, and on Codex's
+side its blocks in `~/.codex/AGENTS.md`, its skills in `~/.codex/skills` and 3 entries in
+`~/.codex/hooks.json`; Orca's 12 entries and its app; herdr's 1 Claude entry, 1 Codex entry and
+its app. What stays: js-harness's 13 entries, codegraph's 1, engram and its data, context7, and
+Codex as reviewer through `codex-review`'s lean home.
 
-**The update guard (S9)** is designed in
-[gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), section 5, which replaces
-the text that stood here. It extends `bin/lib/gentle-ai-update.mjs`, whose `doctor` row already
-marks a new gentle-ai version stale until it is reviewed (`:57-75`), with no new command. On a new
-version it diffs the release's source by area and the installed files by marker and hook, probes
-the review contract read-only, classifies each change against that document's matrix, and records
-the verdicts per release. It also refuses, not only detects (Codex regrade): while a change is
-`conflicts`, the review record is withheld and the row names the commands that keep the reviewed
-version. What it guarantees, exactly: it **detects after an install and withholds the record**; it
-does not stop a sync from writing, and a sync re-adds a hook he removed. So a hook removal is
-checked on every run (a re-added hook turns the row stale), never made persistent. S9a, the
-installed-file half, lands before S2; S9b, the source diff, any time after. The baseline reruns by
-the one rule of section 7.2. The scratch-home `gentle-ai sync` this text first planned is not part
-of S9: it reads files and runs read-only probes, never a sync.
-
-The `fixed load` row cannot do this job. It reads the first turns of the latest real sessions
-(the median of 5, `bin/lib/fixed-load.mjs:1-13`), so it sees growth only after sessions have run
-on the new version.
-
-**When gentle-ai changes its persona.** The S4b project copy of the output style keeps winning in
-this project, so here the old persona stays, with its three lines rewritten, while his other
-projects get the new one. S9's diff flags a changed `gentleman.md`. The copy is then refreshed by
-hand: copy the new file and re-apply the three rewrites, which the repo keeps as a patch, so the
-diff shows what moved.
+**The idea watch (S9)** is designed in the reverse-engineering document, section 5. It replaces
+the update guard that stood here: nothing of gentle-ai is installed, so there is nothing to guard.
 
 **What F8 does not fix** (fourth pass; both regrades). 68 of the register's 101 entries are tool,
 machine or unseen-state failures (Appendix B). Less prose does not move them; each keeps its own
@@ -815,49 +834,35 @@ control is missing. F8 routes them, and claims nothing for them:
   row.
 - **unseen-state** (20): a tool that showed a state that was not the real one. Its home is a
   `doctor` row per state: C3's hooks-not-cancelled row, the credentials-file row of section 9,
-  and the `gentle-ai-sync` row.
+  and the complements' rows.
 - Model regressions, such as replies drifting out of his language (section 14.2), are measured and
   reported apart, not fixed.
 
 ## 11. Risks
 
-- **S2 removes ODD's guidance here.** Sessions may plan or slice less well. Guard: the contract
-  check, the S3 lines, and the incident set before and after. Revert if worse.
-- **The desktop app may ignore `claudeMdExcludes`.** Mostly retired by the second pass: its binary
-  and flags honour it, read from the main checkout (section 14.1). Guard: confirm it in the first
-  desktop session, or revert.
-- **S2 cannot be tried on one branch.** A worktree session reads project settings from the main
-  checkout, so S2 changes every session when it reaches `main`. Guard: S2 merges alone, after S3
-  and after every active worktree carries S3's lines; sessions restart; the measures run the same
-  day; the revert drill proves the undo (section 10).
-- **A worktree on an old branch** would lose the global file without gaining the S3 lines. Guard:
-  the rollout of section 10 (merge `main` or close it before S2).
-- **gentle-ai's review hooks may assume its prose is loaded.** Guard: S0's behavioural probe, with
-  the exclusion on: a session with no lifecycle prose carries a review to a terminal state through
-  `next_transition`, and the `SessionStart` and `Stop` review hooks fire. If it works, S1 moves
-  after S2; if not, S1 lands first.
-- **A gentle-ai update may write instructions where the exclusion does not reach** (a new file, a
-  rules folder, a new hook or skill). Editing its file after each update was weighed and rejected:
-  gentle-ai rewrites its marked blocks on every `sync`, and the file is global, so an edit would
-  change every project. Guard: S9a, landed before S2, diffs the installed files by marker and
-  hook on every `doctor` run, new version or not, and withholds the review record on a conflict;
-  S9b diffs each release's source by area
-  ([gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), section 5). It detects
-  after the install; it does not prevent the write. The
-  `fixed load` row is a second, later
-  net: it reads real first turns (the median of 5, `bin/lib/fixed-load.mjs:1-13`), so it catches
-  growth only after sessions have run on the new version.
-- **gentle-ai changes its persona** while the S4b project copy of the output style keeps the old
-  one here. Guard: S9 flags a changed `gentleman.md`; the copy is refreshed by re-applying the
-  repo's patch of three rewrites (section 10).
-- **The kept lines of Appendix A are a judgment.** A rule that lived only in the global file and
-  was missed would be lost without anyone noticing. Guard: the incident set, and Appendix A read
-  again against the file's headings before S2.
-- **Codex sessions still load gentle-ai's ~25k** in `~/.codex/AGENTS.md`. They are out of scope
-  for a Claude-only harness; reviews already run lean.
+- **Removal takes ODD's guidance out of every project at once.** Guard: S10 ports it first, S12
+  moves his projects onto it, and the incident set runs before and after S2. Revert by the backup.
+- **A project not moved loses gentle-ai's text without gaining ours.** Guard: S12 lists active
+  projects from the manifests and his recent sessions; a project left out is named, with his yes.
+- **A running session uses today's configuration.** Guard: the cut point (S2 step 3); every session
+  restarts and the lead checks each.
+- **gentle-ai's uninstall removes engram's and context7's registrations.** Guard: `stack install`
+  re-registers them right after; the verification checks `claude mcp list`.
+- **His memory.** `~/.engram` is copied first; the uninstall runs without engram's data scope; its
+  hash is checked after.
+- **Orca's and herdr's removal is not fully known** (S2 steps 5 and 6). Guard: the backup first,
+  leftovers removed by hand and named, each asked.
+- **The PowerShell skill-registry hook survives the uninstall** [c by string comparison, not run].
+  Guard: removed by hand, and the hook count of S4a fails on any leftover owner.
+- **Two reviews per slice cost limits and time.** Guard: S1 measures per slice; G13 says what
+  happens when either reviewer cannot run; `throughput` reports it daily.
+- **The kept and ported lines are a judgment.** A rule that lived only in gentle-ai's text and was
+  missed would be lost. Guard: the incident set, and Appendix A read again before S2.
+- **The plan lives on branches.** New sessions read `main`, so none of this takes effect for
+  other sessions until he reads and lands PRs 593 and 594.
 - **The long-session eval** uses a simulated user, not him. It measures plantable rules, not taste.
 - **A scratch home holding copied credentials** can break his login, as it did today. Guard: the
-  `evals/home.mjs` refusal and allow-list, landed in S0 (section 9).
+  `evals/home.mjs` refusal and allow-list (S0), and the restore drill never opens credential files.
 
 ## 12. What we have not thought of
 
@@ -1192,6 +1197,38 @@ was scheduled "any time after S0". What changed, in one correction batch:
 
 Not changed, and why: Claude's review counted 14 Orca entries; `~/.claude/settings.json` holds 12,
 one per event, and the inventory uses 12.
+
+## 18. Sixth pass: replace (2026-10-26)
+
+Not a grade: his change of direction. Inputs, verbatim, transcript
+`e41d1e8d-8264-45a4-b16c-f9279f7b6076` (local 2026-10-26): line 2272 (gentle-ai, Orca and herdr
+leave; copy its way of working; bring codegraph, context7 and engram), line 2351 (two reviews,
+always), line 2382 (this is how the harness works in projects), line 2466 (neutral voice, context7
+always on, and "lo coloquemos todo" for the gaps below). What changed:
+- **S2 is the removal,** last, machine-wide, after S10 (port), S11 (complements) and S12 (his
+  projects); with a full backup, a restore drill, a cut point, each removal asked, and an undo.
+- **New steps:** S10 port, S11 take over the complements, S12 move his projects, S13 a scratch
+  project from `init` to its first reviewed slice (last).
+- **S1** is two reviews on every slice: Codex and Claude's lenses; the lens-selection rule and the
+  record format are to build; the review spend is counted beside the envelope (D2).
+- **S9** is the idea watch; S9a and S9b as an update guard are superseded.
+- **The register:** G1, G4, G5, G6, D9 closed; D6, G9, G10, G11 answered; G7 reframed; G8, G12,
+  G13 new.
+- **First turn after removal:** about 75.8k (D4).
+
+The lead's nine gaps, each placed:
+
+| # | Gap | Where it went |
+|---|---|---|
+| 1 | Removal is machine-wide; replacements and project moves first | the order; S12; reverse-engineering §11.2 |
+| 2 | Codex's side: `~/.codex/AGENTS.md` 109 KB, 35 mentions; `~/.codex/skills` | S2 steps 4 and 7; "What leaves" |
+| 3 | Engram's data, 69 MB, kept; no EngramScope | S2 steps 1, 4 and 7; risks |
+| 4 | One full backup and a restore drill; credentials never opened | S2 steps 1 and 2 |
+| 5 | A cut point: 14 worktrees and running sessions | S2 steps 3 and 8 |
+| 6 | Two reviews against Codex's meter and Claude's limits; unavailability; daily cost | D2's review spend; G13; S1 |
+| 7 | The persona's voice and name; context7 in projects | G10 and G11, answered |
+| 8 | A day-to-day guide, checked on the scratch project | reverse-engineering §11.3; S13 |
+| 9 | Landing: PRs 593 and 594 | risks; ROADMAP |
 
 ## Appendix A. The global file, block by block
 
