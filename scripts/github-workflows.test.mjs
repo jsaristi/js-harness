@@ -125,8 +125,8 @@ test('the daily Windows suite is one bounded job on an exact Windows image, with
   assert.doesNotMatch(text, /persist-credentials:\s*true/);
 });
 
-/** The node versions a text names: each `node-version:` value and each `cimg/node:<tag>`, in order. */
-const nodeVersions = (text) => [...text.matchAll(/node-version:\s*([\d.]+)|cimg\/node:([\d.]+)/g)].map((match) => match[1] ?? match[2]);
+/** The node versions a text sets up: each `node-version:` value, in order. */
+const nodeVersions = (text) => [...text.matchAll(/node-version:\s*([\d.]+)/g)].map((match) => match[1]);
 
 // C-e-1: `engines` names the Node major the gate runs, and the README and the guide say the same. The check is equality,
 // not "not above": a minimum below the gate's major promises a Node that no run tests (the defect of 2026-10-24, when
@@ -143,16 +143,18 @@ test('engines names the Node major the gate runs, and the README and the guide s
   }
 });
 
-// C-e-14: both workflows say their node is the one the CircleCI image runs, so a bump of one without the other fails here.
-test('the workflows set up the node of the CircleCI image, and say so', () => {
-  const [image, ...others] = nodeVersions(fs.readFileSync(path.join(ROOT, '.circleci', 'config.yml'), 'utf8'));
-  assert.match(image ?? '', /^\d+\.\d+\.\d+$/);
-  assert.deepEqual(others, [], 'one cimg/node image in .circleci/config.yml');
-  for (const file of [GATE, DAILY]) {
-    const versions = nodeVersions(fs.readFileSync(file, 'utf8'));
-    assert.ok(versions.length >= 2, `${path.basename(file)} names its node and the image`);
-    assert.deepEqual(versions, versions.map(() => image), path.basename(file));
-  }
-  // The control: a workflow one patch behind the image is caught.
-  assert.notDeepEqual(nodeVersions('# cimg/node:24.21.0\nnode-version: 24.20.0'), ['24.21.0', '24.21.0']);
+// C-e-14: the daily suite tests the node the gate runs, so a bump of one without the other fails here. Until
+// 2026-10-27 both were held to the node of CircleCI's image (odd/tasks/drop-circleci.md).
+test('the daily Windows suite sets up the exact node the gate sets up', () => {
+  const [gateNode, ...more] = nodeVersions(fs.readFileSync(GATE, 'utf8'));
+  assert.match(gateNode ?? '', /^\d+\.\d+\.\d+$/, 'the gate sets up an exact node');
+  assert.deepEqual(more, [], 'the gate sets up one node');
+  assert.deepEqual(nodeVersions(fs.readFileSync(DAILY, 'utf8')), [gateNode]);
+  // The control: a workflow one patch behind is caught.
+  assert.notDeepEqual(nodeVersions('node-version: 24.20.0'), ['24.21.0']);
+});
+
+// S3 of odd/tasks/drop-circleci.md: every test runs on GitHub Actions, and no CircleCI configuration comes back unnoticed.
+test('the repository holds no CircleCI configuration', () => {
+  assert.equal(fs.existsSync(path.join(ROOT, '.circleci')), false);
 });

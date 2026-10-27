@@ -132,8 +132,7 @@ so the variable left set in a shell never passes for a gate. `--verbose` prints 
 `--door` print their rows either way. `--head` goes only with `--push`, and `--push` refuses `--first`,
 `--subagents`, `--wait`, `--no-wait` and `--verbose`, as a usage error. With `JS_HARNESS_TEST_CONCURRENCY=<n>`
 set, a tests sensor that is `node --test` (directly or as the `test` script) runs `n` test files
-at a time, for a machine where node's default, one fewer than its processors, is too few: this
-repository's CircleCI run of the merge queue's candidates sets 2.
+at a time, for a machine where node's default, one fewer than its processors, is too few.
 
 Three keys of `harness.json` shape the gate's sensors: `documents` (an array of paths from the top of
 the repository, with forward slashes and a final `/` for a folder; a commit that holds only these

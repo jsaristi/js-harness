@@ -544,7 +544,7 @@ test('only the gate workflow\'s newest run on the queue branch and the candidate
   assert.equal(actionsState([run('success', daily)], at).state, 'pending');
   assert.equal(actionsState([run('success', { head_branch: 'gate/y' })], at).state, 'pending');
   assert.equal(actionsState([run('success', { head_sha: 'b'.repeat(40) })], at).state, 'pending');
-  assert.equal(actionsState([run('failure', { id: 1 }), run('success', { id: 2 })], at).state, 'green', 'the newer run, a re-run, counts');
+  assert.equal(actionsState([run('failure', { id: 1 }), run('success', { id: 2 })], at).state, 'green', 'the newer run counts: a re-run keeps its id, so a newer id is the run of another push');
   assert.equal(actionsState([run('success', { id: 2 }), run('failure', { id: 1 })], at).state, 'green', 'whatever order GitHub lists them in');
 });
 

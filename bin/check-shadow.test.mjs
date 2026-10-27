@@ -135,8 +135,8 @@ test('in skip mode an npm suite with a pretest or posttest script runs whole whe
 });
 
 // The lead's condition on the flip (odd/tasks/exact-tests.md, L18): the merge queue's candidate run on
-// CircleCI, `node bin/check.mjs` on a fresh checkout, stays the whole suite. CircleCI and GitHub Actions both
-// set `CI`.
+// GitHub Actions, `node bin/check.mjs` on a fresh checkout (.github/workflows/gate.yml), stays the whole suite.
+// GitHub Actions sets `CI`.
 test('in skip mode a gate on CI runs the whole suite, and the row says why', async () => {
   const { root, dir, done } = project();
   try {
