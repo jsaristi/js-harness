@@ -12,7 +12,8 @@
   "sensorsInWsl": true,
   "exactTests": "skip",
   "functions": {
-    "pushUnasked": "on"
+    "pushUnasked": "on",
+    "lensReview": "on"
   },
   "reply": {
     "states": {

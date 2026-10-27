@@ -66,7 +66,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T1 (kind: docs) this document, the forecast and the chain question to the orchestrator — all; inline; 82412009
 - [x] T2 (kind: build) the candidate and its packager: identity (base, head, subject hash), ordered manifest, each path's patch; the four lens prompts from one text with four scopes; result validation; test first — S1, S2; inline; 6bc94451, fixed in 7ccc7033 and 2d0d2ef0
 - [x] T3 (kind: build) launch and records: `js-harness lens-review --base <b> --lenses <list> --reason <why>`, one fresh tool-less run a lens, `--unavailable <reason>` as the skip; a record a run, beside Codex's; test first with a fake CLI — S1; inline; eb518c07, 2d0d2ef0
-- [ ] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline
+- [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
 - [ ] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline
 - [ ] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline
 
@@ -128,6 +128,26 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     solidez" asked for.
 - L6 (2026-10-27): the first pull request holds slices 1 and 2: slice 2 carries the fixes of slice 1's findings,
   so slice 1 alone would land with known faults. Every later slice is a pull request of its own, as L4 says.
+- L7 (2026-10-27): the reviews of slice 3, T4 (`b6ef6f38..e4375922`, 243 lines):
+  - Lenses risk, reliability and readability: complete, no finding, about 14,990 input tokens each.
+  - Codex, 221,053 input tokens: incorrect (0.99), two faults the lenses missed. P1: the lens row refused the
+    first push to a remote that holds no branch, which the Codex row lets through. P2: a skip stayed listed after
+    a complete review covered its commits. Both fixed test first in d5c722f6; the empty-remote probe is now one
+    function, `remoteHoldsNoBranch`, both rows ask.
+  - Rechecks of `e4375922..d5c722f6`: Codex correct (0.97), both fixed; lenses reliability and resilience
+    complete with no finding, about 7,080 input tokens each.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
+- gentle-ai on `b6ef6f38..e4375922`: medium, not due (under_budget, 243 lines); on `e4375922..d5c722f6`: medium, not due (under_budget, 72 lines).
+- gentle-ai on `7f107aad..8233cf84`: medium, not due (under_budget, 107 lines); Codex correct (0.87), lenses risk, reliability and resilience no finding (L9).
+
+## Next step
+State at 2026-10-27 ~18:45Z. PR 607 (slices 1+2) merged at 17:45Z. T4 is done and reviewed (L7): e4375922 and its
+fix d5c722f6, both reviews clean on the recheck; it goes out as PR 2 of 3, from branch `f8-s1-gate`.
+Next, T5: the `review` row (`checkReview`, gentle-ai, `bin/check.mjs:1721`, at its 2110-line ceiling) replaced by a
+debt row of both reviews and their skips, from `lens-review-rows.mjs`; a `doctor` row of skips; `reviewEvidence`
+(`bin/merge-queue.mjs:307`, at its 1057-line ceiling) adds
+`checkLensReviews` and refuses a skip; `AGENTS.md` "says whether the pending change is due a gentle-ai review" and
+`CLAUDE.md`'s review lines. Then T6: the probe (six behaviours) and the incident rerun, asked first through the
+orchestrator (about $11 to $22).

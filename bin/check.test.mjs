@@ -4134,7 +4134,7 @@ test('a push and the inner check are as they were beside a failing static row: n
   // A push computes no static row at all: its one row is the one it always had.
   const pushed = afterStaticRows();
   const push = await runCheck(['--push', ...argv], {}, pushed.deps);
-  assert.deepEqual(namesOf(push.output), ['codex-review']);
+  assert.deepEqual(namesOf(push.output), ['codex-review', 'lens-review']);
   // A push asks git through `deps.spawn` (`checkCodexReviews`), which this stand-in counts with the sensors,
   // so what is asserted of it is what a push never asks for: the lock, the load, gentle-ai.
   assert.deepEqual([pushed.asked.lock, pushed.asked.load, pushed.asked.gentleAi], [0, 0, 0]);
