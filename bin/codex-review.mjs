@@ -176,7 +176,7 @@ import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, 
 import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
-import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews } from './lib/codex-reviews.mjs';
+import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
   classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
@@ -1499,7 +1499,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
    * `null`, for the caller to exit 1 on. */
   const writeRecord = (fields) => {
     try {
-      return appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: now().toISOString(), ...fields }, { spawn, where });
+      return appendCodexReview(root, withSubjectHash(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: now().toISOString(), ...fields }), { spawn, where });
     } catch (err) {
       error(`Could not write the record: ${err.message}`);
       return null;

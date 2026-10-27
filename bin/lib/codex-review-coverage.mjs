@@ -11,6 +11,7 @@
 import { spawnSync } from 'node:child_process';
 import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
+import { lensCandidate } from './lens-candidate.mjs';
 
 /** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. `input`, when given, is what
  * git reads on its standard input. */
@@ -171,8 +172,13 @@ export const MARKS_UNREAD = 'marks';
  * `where` is for a caller that already knows where the repository of `cwd` is. It is handed on as it is to
  * the two that would ask git: its `top` to `leftOutOf`, with the `marks` that one fills for its caller, and
  * its `commonGitDir` to the reader of the records (`jsonLinesPath`). Each then starts one git process fewer;
- * without it both ask, as before. */
-export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where }) {
+ * without it both ask, as before.
+ *
+ * `read` and `isValid` name the records: Codex's by default, the Claude lenses' for their push row
+ * (`./lens-review-rows.mjs`). A record that carries a `subjectHash` covers only while the patch of its own range
+ * still hashes to it (`./lens-candidate.mjs`): one that does not is counted `stale` and covers nothing
+ * (odd/tasks/f8-s1-reviews.md, T4). */
+export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
   if (inRange === null) return { unknown: COMMITS_UNREAD };
@@ -233,8 +239,8 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where }) {
   };
   const codeCommits = commits.filter(isCode).map(ownFiles).filter(isCode);
 
-  const records = readCodexReviews(cwd, { spawn, where });
-  const valid = records.filter(isValidCodexReview);
+  const records = read(cwd, { spawn, where });
+  const valid = records.filter(isValid);
   // A record can cover part of the range only when its head is in it, or lies past the tip (a review of
   // base..D still covers C when C is the tip). Any other record is unrelated, and expanding it would cost
   // one git process per record ever written.
@@ -249,14 +255,19 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where }) {
   const pastTip = headsPastTip(spawn, cwd, tip, [...new Set(mayLiePast.map((rec) => rec.head))]);
   const covers = [];
   let ignored = 0;
+  let stale = 0;
   for (const rec of valid) {
     if (outside(rec) && (onlyWhole(rec) || !pastTip.has(rec.head))) continue;
+    if (rec.subjectHash !== undefined && lensCandidate(cwd, { base: rec.base, head: rec.head, spawn }).subjectHash !== rec.subjectHash) {
+      stale += 1;
+      continue;
+    }
     const covered = coveredBy(spawn, cwd, rec);
     if (covered) covers.push({ rec, covered });
     else ignored += 1;
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
-  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored };
+  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale };
 }
 
 // The outcomes of a record that is no review of Codex's, each with what a row calls it.

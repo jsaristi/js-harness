@@ -136,7 +136,13 @@ function whereOf(root) {
 // The readers and writers of records, under the names the product gives them, each told where the git
 // folder is. A test that calls one calls these.
 const codexReviewsPath = (root) => reviewRecords.codexReviewsPath(root, { where: whereOf(root) });
-const readCodexReviews = (root) => reviewRecords.readCodexReviews(root, { where: whereOf(root) });
+// A record the command writes carries the subject hash of its range (odd/tasks/f8-s1-reviews.md, T4): it is held to
+// the shape of one here and taken off, so the tests compare what they always compared; its value is pinned beside the
+// lens rows (`bin/lib/lens-review-rows.test.mjs`).
+const readCodexReviews = (root) => reviewRecords.readCodexReviews(root, { where: whereOf(root) }).map(({ subjectHash, ...rest }) => {
+  if (subjectHash !== undefined) assert.match(subjectHash, /^[0-9a-f]{64}$/);
+  return rest;
+});
 const appendCodexReview = (root, record) => reviewRecords.appendCodexReview(root, record, { where: whereOf(root) });
 const codexReviewRunsPath = (root) => reviewRuns.codexReviewRunsPath(root, { where: whereOf(root) });
 const readCodexReviewRuns = (root) => reviewRuns.readCodexReviewRuns(root, { where: whereOf(root) });

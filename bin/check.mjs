@@ -42,7 +42,7 @@ import { readRecords, recordFolders } from './subagents.mjs';
 import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';
-import { checkCodexReviewDebt, checkCodexReviews, codexSwitchHere } from './lib/codex-review-rows.mjs';
+import { checkCodexReviewDebt, checkCodexReviews, checkLensReviews, codexSwitchHere } from './lib/codex-review-rows.mjs';
 
 export { CLAUDE_MD_BUDGET, checkClaudeBudget, estimateTokens };
 export { failingTests } from './lib/flaky.mjs';
@@ -2015,7 +2015,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
-    ? [checkCodexReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
+    ? [checkCodexReviews(cwd, head, { ...deps, remote }), checkLensReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
     : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.

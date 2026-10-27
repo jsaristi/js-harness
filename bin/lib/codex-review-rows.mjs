@@ -14,6 +14,8 @@ import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
+// The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
+export { checkLensReviews } from './lens-review-rows.mjs';
 
 /** What the Codex review records say of the code commits between the default branch of `remote` and
  * `head`, for the two rows that read it: the `--push` row, which fails on a commit no record covers, and
