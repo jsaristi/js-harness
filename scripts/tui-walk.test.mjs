@@ -1,35 +1,40 @@
-// The pure parts of the TUI walk (scripts/tui-walk.mjs, C-e-8): how it reads the last menu out of the text the TUI
-// printed. The walk itself starts a TUI and npm, so only its two readers are tested here, on text handed in.
+// The pure parts of the TUI walk (scripts/tui-walk.mjs, C-e-8): how it reads the last frame out of the text the TUI
+// printed. The walk itself starts a TUI and npm, so only its readers are tested here, on frames built with the
+// TUI's own `paint` (bin/lib/terminal.mjs), which repaints the whole screen each time (odd/tasks/tui-gentle-level.md).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { menuOf, screenOf } from './tui-walk.mjs';
+import { paint } from '../bin/lib/terminal.mjs';
+import { menuOf, resultOf, screenOf } from './tui-walk.mjs';
 
-const ERASE = '\u001b[0J';
+const KEYS = 'Up/Down move, Enter select, Esc back, q quit';
 
-test('screenOf starts the last menu at its version header after command output', () => {
-  const text = 'Installed js-harness 0.97.0.\njs-harness 0.97.0\n\nmachine\n> Status\n';
-  assert.deepEqual(screenOf(text), ['js-harness 0.97.0', '', 'machine', '> Status', '']);
+test('screenOf reads the last frame painted, its escapes removed', () => {
+  const text = paint(['js-harness 0.97.0', '', '> Status', '  Install']) + paint(['js-harness 0.97.0', '', '  Status', '> Install']);
+  assert.deepEqual(screenOf(text), ['js-harness 0.97.0', '', '  Status', '> Install']);
 });
 
-test('screenOf starts a draw in place at its erase sequence, which is the last draw', () => {
-  const text = `js-harness 0.97.0\n\nmachine\n> Status\n${ERASE}js-harness 0.97.0\n\nmachine\n  Status\n> Install\n`;
-  assert.equal(screenOf(text)[3], '  Status');
-  assert.equal(screenOf(text)[4], '> Install');
-});
-
-test('menuOf reads the sections and the one selected item of the last draw', () => {
-  const text = `js-harness 0.97.0\n\nmachine\n> Status\n  Install\nproject\n  Init\nuninstall\n  Machine\n${ERASE}js-harness 0.97.0\n\nmachine\n  Status\n> Install\nproject\n  Init\n`;
-  assert.deepEqual(menuOf(text), {
+test('menuOf reads the sections and the one selected item of the last frame, never its keys line', () => {
+  const first = paint(['js-harness 0.97.0', '', 'machine', '> Status', '  Install', '', KEYS]);
+  const last = paint(['js-harness 0.97.0', '  gentle-ai       4.2.0     ok', '', 'project', '  Init', 'machine', '  Status', '> Install', '', KEYS]);
+  assert.deepEqual(menuOf(first + last), {
     items: [
+      { section: 'project', label: 'Init' },
       { section: 'machine', label: 'Status' },
       { section: 'machine', label: 'Install' },
-      { section: 'project', label: 'Init' },
     ],
-    selected: 1,
+    selected: 2,
   });
 });
 
 test('menuOf reads nothing above the first blank line, the version header and the stack rows', () => {
-  const text = 'js-harness 0.97.0\n> not a menu row\n\nmachine\n  Status\n';
+  const text = paint(['js-harness 0.97.0', '> not a menu row', '', 'machine', '  Status']);
   assert.deepEqual(menuOf(text), { items: [{ section: 'machine', label: 'Status' }], selected: -1 });
+});
+
+test('resultOf reads the title of a result screen, and nothing from a menu or a run still going', () => {
+  assert.equal(resultOf(paint(['js-harness 0.97.0', '', 'Install: done (exit 0)', '', 'installed js-harness 0.97.0'])), 'Install: done (exit 0)');
+  assert.equal(resultOf(paint(['js-harness 0.97.0', '', 'Update: failed (exit 1)', ''])), 'Update: failed (exit 1)');
+  assert.equal(resultOf(paint(['js-harness 0.97.0', '', 'status failed: boom', ''])), 'status failed: boom');
+  assert.equal(resultOf(paint(['js-harness 0.97.0', '', '| Update: running', ''])), null);
+  assert.equal(resultOf(paint(['js-harness 0.97.0', '', '> Status'])), null);
 });
