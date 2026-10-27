@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { removableWorktrees } from './lib/worktrees.mjs';
 import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
+import { CI_WORKFLOW } from './lib/ci-gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
@@ -157,20 +158,21 @@ const CI_WAIT_MS = 30 * 60_000;
 const CI_POLL_MS = 30_000;
 const RED = new Set(['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale']);
 
-/** GitHub Actions' result on the commit `sha`: the check runs GitHub's own app posted for it, the jobs of
- * .github/workflows/gate.yml on the candidate's `queue/*` branch (odd/tasks/drop-circleci.md, S2); another app's
- * run is not read. `{ state: 'green' | 'red' | 'pending', name, conclusion, url }`; pending while it has posted
- * nothing or something is still running. */
-export function actionsState(checkRuns) {
-  const runs = (checkRuns ?? []).filter((one) => one?.app?.slug === 'github-actions');
-  const red = runs.find((one) => one.status === 'completed' && RED.has(one.conclusion));
-  if (red) return { state: 'red', name: red.name, conclusion: red.conclusion, url: red.html_url };
-  // Every run a success: a skipped or neutral run is no run of the suite, and green is the suite passing (Codex, 2026-10-14).
-  const done = runs.every((one) => one.status === 'completed' && one.conclusion === 'success');
-  if (!(runs.length > 0 && done)) return { state: 'pending' };
-  // Named as a red is, so the land record keeps the run that passed (odd/tasks/land-unattended.md, B2).
-  const [run] = runs;
-  return { state: 'green', name: run.name, conclusion: run.conclusion, url: run.html_url };
+/** GitHub Actions' result on the candidate: the newest run of .github/workflows/gate.yml (`CI_WORKFLOW`) for the push
+ * of `branch`, its `queue/*` branch, at the commit `sha` (odd/tasks/drop-circleci.md, S2). No other workflow's run
+ * decides it, as a windows-daily.yml run dispatched by hand on that branch would (Codex, 2026-10-27); the newest is a
+ * re-run's. `{ state: 'green' | 'red' | 'pending', name, conclusion, url }`; pending while there is no such run or it
+ * is still running. */
+export function actionsState(workflowRuns, { branch, sha }) {
+  const [run] = (workflowRuns ?? [])
+    .filter((one) => one?.path === CI_WORKFLOW && one.head_branch === branch && one.head_sha === sha)
+    .sort((a, b) => b.id - a.id);
+  if (run?.status !== 'completed') return { state: 'pending' };
+  // Named either way, so the land record keeps the run that decided it (odd/tasks/land-unattended.md, B2).
+  const named = { name: run.name, conclusion: run.conclusion, url: run.html_url };
+  if (RED.has(run.conclusion)) return { state: 'red', ...named };
+  // A skipped or neutral run is no run of the suite: green is the suite passing (Codex, 2026-10-14).
+  return run.conclusion === 'success' ? { state: 'green', ...named } : { state: 'pending' };
 }
 
 /** The rows of `status` (`FAIL`, `INFO`) in a `check` `output`. `check` prints its rows as one block, then each failed
@@ -568,7 +570,8 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
   // `--no-verify`: the branch is the candidate's run on GitHub Actions, and no hook judges it; main's push is judged.
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
-  // A record before 2026-10-27 names this phase and field `circleci`; the throughput command counts each phase by its name, old and new.
+  // A record before 2026-10-27 names this phase and its top-level field `circleci`. The throughput command counts each
+  // phase by its name, old and new (bin/lib/throughput.test.mjs), and nothing reads the field.
   const ciEnded = log.phase('actions');
   let ci = { state: 'pending' };
   let [asked, dropped] = [false, false];
@@ -641,16 +644,13 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
     if (!local.skipped) stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
     asked = true;
     for (let waited = 0; waited <= CI_WAIT_MS; waited += CI_POLL_MS) {
-      const read = (what) => {
-        try {
-          return JSON.parse(answer(run, 'gh', ['api', `repos/{owner}/{repo}/commits/${candidate}/${what}`], place).out);
-        } catch {
-          return null;
-        }
-      };
-      // A read that fails is asked again at the next turn, never taken for an empty answer (Codex, 2026-10-14).
-      const checks = read('check-runs')?.check_runs;
-      ci = Array.isArray(checks) ? actionsState(checks) : { state: 'pending' };
+      let runs = null;
+      try {
+        runs = JSON.parse(answer(run, 'gh', ['api', `repos/{owner}/{repo}/actions/runs?head_sha=${candidate}&branch=${encodeURIComponent(branch)}&event=push`], place).out).workflow_runs;
+      } catch {
+        // A read that fails is asked again at the next turn, never taken for an empty answer (Codex, 2026-10-14).
+      }
+      ci = Array.isArray(runs) ? actionsState(runs, { branch, sha: candidate }) : { state: 'pending' };
       if (ci.state !== 'pending') break;
       await sleep(CI_POLL_MS);
     }

@@ -91,7 +91,8 @@ test('a secret is found in either form an expression can name it', () => {
 
 test('the shapes a workflow must not take are refused', () => {
   // The reader above is the guard: a trigger added beside `push`, or a pull request event, changes `on:`.
-  const pullRequest = workflowLines("name: gate\non:\n  push:\n    branches:\n      - 'gate/**'\n  pull_request_target:\npermissions:\n  contents: read\njobs:\n");
+  // The fixture is the gate's `on:` with one trigger added, so that trigger is all that differs (gentle-ai, 2026-10-27).
+  const pullRequest = workflowLines("name: gate\non:\n  push:\n    branches:\n      - 'gate/**'\n      - 'queue/**'\n  pull_request_target:\npermissions:\n  contents: read\njobs:\n");
   assert.notDeepEqual(below(pullRequest, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'", "- 'queue/**'"]);
 });
 

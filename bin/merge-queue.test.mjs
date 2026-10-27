@@ -192,27 +192,29 @@ test('no mode, or an unknown flag, is a usage error (exit 2)', async () => {
   assert.match(out.join('\n'), /^Usage: js-harness merge-queue --dry-run/m);
 });
 
-/** A runner for `--land`: git for real, `gh pr list` from `prs`, and the check runs of a commit from `checks`,
- * one answer a call (the last repeats); `onChecks(call)` runs before each answer. */
+/** A runner for `--land`: git for real, `gh pr list` from `prs`, and the workflow runs of a commit from `checks`,
+ * one answer a call (the last repeats); `onChecks(call)` runs before each answer. A run that names no branch or sha
+ * takes the ones the land asked for. */
 function landRunner(prs, checks, onChecks = () => {}, gh = {}) {
   const base = runner(prs, gh);
   let asked = 0;
   const run = (command, args, options) => {
-    if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1])) {
+    if (command === 'gh' && args[0] === 'api' && /\/actions\/runs\?/.test(args[1])) {
       base.calls.push([command, ...args].join(' '));
       onChecks(asked);
-      const answer = checks[Math.min(asked, checks.length - 1)];
+      const query = new URLSearchParams(args[1].split('?')[1]);
+      const answer = checks[Math.min(asked, checks.length - 1)].map((one) => ({ head_branch: query.get('branch'), head_sha: query.get('head_sha'), ...one }));
       asked += 1;
-      return { status: 0, stdout: JSON.stringify({ check_runs: answer }) };
+      return { status: 0, stdout: JSON.stringify({ workflow_runs: answer }) };
     }
     return base.run(command, args, options);
   };
   return { run, calls: base.calls };
 }
 
-const job = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'github-actions' }, html_url: 'https://github.com/o/r/actions/runs/1/job/2' });
+const workflowRun = (status, conclusion = null, more = {}) => ({ id: 1, name: 'gate', path: '.github/workflows/gate.yml', status, conclusion, html_url: 'https://github.com/o/r/actions/runs/1', ...more });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[job('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[workflowRun('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks, gh);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
@@ -344,7 +346,7 @@ test('--land: a retarget gh refuses is said, and the land still exits 0 with mai
 
 test('--land: the candidate green locally and on GitHub Actions becomes main, by fast-forward, and its queue branch is removed', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
-  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { checks: [[job('in_progress')], [job('completed', 'success')]] });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { checks: [[workflowRun('in_progress')], [workflowRun('completed', 'success')]] });
   assert.equal(code, 0, out.join('\n'));
   const landed = git(origin, 'rev-parse', 'main');
   assert.notEqual(landed, main);
@@ -366,17 +368,17 @@ test('--land: a candidate red locally pushes no main, and the queue branch that 
 
 test('--land: a candidate red on GitHub Actions leaves main as it was', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
-  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[job('completed', 'failure')]] });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[workflowRun('completed', 'failure')]] });
   assert.equal(code, 4, out.join('\n'));
   assert.equal(git(origin, 'rev-parse', 'main'), main);
   assert.ok(!remoteBranches(origin).some((name) => name.startsWith('queue/')));
-  assert.match(out.at(-1), /^The candidate is red on GitHub Actions \(check: failure, https:\/\/github\.com\/o\/r\/actions\/runs\/1\/job\/2\): main was not pushed\.$/);
+  assert.match(out.at(-1), /^The candidate is red on GitHub Actions \(gate: failure, https:\/\/github\.com\/o\/r\/actions\/runs\/1\): main was not pushed\.$/);
 });
 
 // Harness review b2, 2026-10-18: a CI run that never answered judged nothing, so it is no red (4) but 5.
 test('--land: a candidate GitHub Actions gave no result for leaves main as it was, and exits 5, not red', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
-  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[job('in_progress')]] });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[workflowRun('in_progress')]] });
   assert.equal(code, 5, out.join('\n'));
   assert.equal(git(origin, 'rev-parse', 'main'), main);
   assert.deepEqual(queueBranches(origin), []);
@@ -521,24 +523,37 @@ test('--land: a bisection whose reset fails stops, tests nothing more and pushes
   assert.match(out.join('\n'), /could not reset the candidate to the merge of PR 1 \(fatal: refused by the test\)/);
 });
 
-test('GitHub Actions is green only when every run of it succeeded: a skipped or neutral run is no run of the suite (Codex, 2026-10-14)', () => {
-  const run = (conclusion, slug = 'github-actions') => ({ name: 'check', status: 'completed', conclusion, app: { slug } });
-  assert.equal(actionsState([run('success')]).state, 'green');
-  assert.equal(actionsState([run('skipped')]).state, 'pending');
-  assert.equal(actionsState([run('neutral')]).state, 'pending');
-  assert.equal(actionsState([run('success'), run('skipped')]).state, 'pending');
-  assert.equal(actionsState([]).state, 'pending');
-  // Another app's run is no GitHub Actions run: a CircleCI green alone leaves the candidate untested (odd/tasks/drop-circleci.md, S2).
-  assert.equal(actionsState([run('success', 'circleci-checks')]).state, 'pending');
-  assert.equal(actionsState([run('failure', 'circleci-checks'), run('success')]).state, 'green');
+test('GitHub Actions is green only when the gate\'s run succeeded: a skipped or neutral run is no run of the suite (Codex, 2026-10-14)', () => {
+  const at = { branch: 'queue/x', sha: 'a'.repeat(40) };
+  const run = (conclusion, more = {}) => workflowRun('completed', conclusion, { head_branch: at.branch, head_sha: at.sha, ...more });
+  assert.equal(actionsState([run('success')], at).state, 'green');
+  assert.equal(actionsState([run('skipped')], at).state, 'pending');
+  assert.equal(actionsState([run('neutral')], at).state, 'pending');
+  assert.equal(actionsState([workflowRun('in_progress', null, { head_branch: at.branch, head_sha: at.sha })], at).state, 'pending');
+  assert.equal(actionsState([run('failure')], at).state, 'red');
+  assert.equal(actionsState([], at).state, 'pending');
+});
+
+// Codex, 2026-10-27, on 87c6f87: the land waits for gate.yml on its queue branch and its candidate, and no other run
+// decides it, as a windows-daily.yml run dispatched by hand on a queue/* ref would.
+test('only the gate workflow\'s newest run on the queue branch and the candidate decides the land', () => {
+  const at = { branch: 'queue/x', sha: 'a'.repeat(40) };
+  const run = (conclusion, more = {}) => workflowRun('completed', conclusion, { head_branch: at.branch, head_sha: at.sha, ...more });
+  const daily = { path: '.github/workflows/windows-daily.yml', name: 'windows-daily' };
+  assert.equal(actionsState([run('failure', daily), run('success')], at).state, 'green');
+  assert.equal(actionsState([run('success', daily)], at).state, 'pending');
+  assert.equal(actionsState([run('success', { head_branch: 'gate/y' })], at).state, 'pending');
+  assert.equal(actionsState([run('success', { head_sha: 'b'.repeat(40) })], at).state, 'pending');
+  assert.equal(actionsState([run('failure', { id: 1 }), run('success', { id: 2 })], at).state, 'green', 'the newer run, a re-run, counts');
+  assert.equal(actionsState([run('success', { id: 2 }), run('failure', { id: 1 })], at).state, 'green', 'whatever order GitHub lists them in');
 });
 
 test('--land: a read of GitHub Actions that fails is asked again, never taken for an empty answer (Codex, 2026-10-14)', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   let reads = 0;
-  const base = landRunner([pr(1, 'feat/a', heads['feat/a'])], [[job('completed', 'success')]]);
+  const base = landRunner([pr(1, 'feat/a', heads['feat/a'])], [[workflowRun('completed', 'success')]]);
   const run = (command, args, options) => {
-    if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1]) && (reads += 1) === 1) return { status: 1, stdout: '', stderr: 'HTTP 502' };
+    if (command === 'gh' && args[0] === 'api' && /\/actions\/runs\?/.test(args[1]) && (reads += 1) === 1) return { status: 1, stdout: '', stderr: 'HTTP 502' };
     return base.run(command, args, options);
   };
   let slept = 0;
@@ -744,7 +759,7 @@ test('the main worktree is made beside the candidate, and removed with it: on su
     redSeen.push(fs.existsSync(args[0]));
     return passes();
   };
-  const failed = await land(red.root, [pr(1, 'feat/a', red.heads['feat/a'])], { checks: [[job('completed', 'failure')]], wrap: (run) => withDoor(run, redDoor, []) });
+  const failed = await land(red.root, [pr(1, 'feat/a', red.heads['feat/a'])], { checks: [[workflowRun('completed', 'failure')]], wrap: (run) => withDoor(run, redDoor, []) });
   assert.equal(failed.code, 4, failed.out.join('\n'));
   assert.deepEqual(redSeen, [true]);
   assert.equal(git(red.root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left after the red GitHub Actions');
@@ -1009,7 +1024,7 @@ test('--land: a candidate of documents alone runs no suite on this machine, says
 
 test('--land: a candidate of documents alone that GitHub Actions turns red is not landed', async () => {
   const { root, origin, main, heads } = makeDocumentsRepo();
-  const { code, out, suites } = await landCounted(root, [pr(1, 'feat/doc', heads['feat/doc'])], { checks: [[job('completed', 'failure')]] });
+  const { code, out, suites } = await landCounted(root, [pr(1, 'feat/doc', heads['feat/doc'])], { checks: [[workflowRun('completed', 'failure')]] });
   assert.equal(code, 4, out.join('\n'));
   assert.deepEqual(suites, [], 'no suite ran on this machine');
   assert.ok(out.includes(DOCUMENTS_LINE), out.join('\n'));
@@ -1133,7 +1148,7 @@ function makeRuleRepo(lines, { sources } = {}) {
 }
 
 async function landRule(made, { args = ['--land'], suite = () => ({ ok: true }), wrap = (run) => run, onChecks } = {}) {
-  const { run } = landRunner([pr(1, 'rule/a', made.head)], [[job('completed', 'success')]], onChecks);
+  const { run } = landRunner([pr(1, 'rule/a', made.head)], [[workflowRun('completed', 'success')]], onChecks);
   const out = [];
   const code = await mergeQueueMain([...args, '--cwd', made.root], { run: wrap(run), env: made.env, covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   return { code, out };
@@ -1389,7 +1404,7 @@ test('--land writes one land record: the pull requests it looked at, each left o
       { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'], told: null },
     ],
     phases: [{ phase: 'suite', ok: true }, { phase: 'actions', ok: true }, { phase: 'push', ok: true }],
-    actions: { state: 'green', name: 'check', conclusion: 'success', url: 'https://github.com/o/r/actions/runs/1/job/2' },
+    actions: { state: 'green', name: 'gate', conclusion: 'success', url: 'https://github.com/o/r/actions/runs/1' },
     candidate: landed,
     landed: [1, 2],
     removed: [],
@@ -1614,7 +1629,7 @@ test('--land stops before it builds anything when the merge-queue it runs from i
   const { root, origin, self } = guardedRepo('export const queue = 2;\n');
   fs.writeFileSync(self, 'export const queue = 1;\n', 'utf8');
   const main = git(origin, 'rev-parse', 'main');
-  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[job('completed', 'success')]]);
+  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
@@ -1626,7 +1641,7 @@ test('--land stops before it builds anything when the merge-queue it runs from i
 test('the land guard reads a merge-queue with Windows line ends as origin/main\'s, and lands', async () => {
   const { root, origin, self } = guardedRepo('export const queue = 2;\n');
   fs.writeFileSync(self, 'export const queue = 2;\r\n', 'utf8');
-  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[job('completed', 'success')]]);
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
@@ -1639,7 +1654,7 @@ const MODULES = { 'merge-queue.mjs': 'export const queue = 2;\n', 'check.mjs': '
 test('the land guard passes when every bin/ file the running copy holds is origin/main\'s, subfolders and Windows line ends aside (C-b-5)', async () => {
   const { root, origin, self, dir } = guardedBinRepo(MODULES);
   writeCopy(dir, { ...MODULES, 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'].replace('\n', '\r\n') });
-  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[job('completed', 'success')]]);
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
@@ -1650,7 +1665,7 @@ test('the land guard refuses a stale bin/ module the running copy holds, names t
   const stale = Object.fromEntries(Object.keys(MODULES).map((name) => [name, `export const old = 1; // ${name}\n`]));
   writeCopy(dir, { ...stale, 'merge-queue.mjs': MODULES['merge-queue.mjs'] });
   const main = git(origin, 'rev-parse', 'main');
-  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[job('completed', 'success')]]);
+  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
@@ -1662,7 +1677,7 @@ test('the land guard refuses a stale bin/ module the running copy holds, names t
 test('the land guard refuses a bin/ file origin/main holds that the running copy lacks, and one the copy holds that main does not (C-b-5)', async () => {
   const { root, origin, self, dir } = guardedBinRepo({ ...MODULES, 'lib/new.mjs': 'export const added = 1;\n' });
   writeCopy(dir, { 'merge-queue.mjs': MODULES['merge-queue.mjs'], 'check.mjs': MODULES['check.mjs'], 'gate.mjs': MODULES['gate.mjs'], 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'], 'lib/worktrees.mjs': MODULES['lib/worktrees.mjs'], 'removed.mjs': 'export const gone = 1;\n' });
-  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[job('completed', 'success')]]);
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
@@ -1845,7 +1860,7 @@ test('a land keeps a landed worktree of the Orca app, under orca/workspaces', as
 // T4 (S5b): `--land --refresh-copy` refreshes the installed copy after a land that moved main, through `refreshCopy`
 // (bin/lib/refresh-copy.mjs), which is passed here as a stand-in so no package manager runs.
 async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'] } = {}) {
-  const { run } = landRunner(prs, [[job('completed', 'success')]]);
+  const { run } = landRunner(prs, [[workflowRun('completed', 'success')]]);
   const out = [];
   const asked = [];
   const code = await mergeQueueMain([...args, '--cwd', root], {
