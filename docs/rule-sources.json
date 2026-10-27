@@ -736,46 +736,64 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "todo lo que estamos implementando es para el harnes y estamos haciendo doogfooding",
+        "quote": "listo recuerda que todo lo que estamos implementando es para el harnes y estamos haciendo doogfooding, ademas antes de continua, queria decirte que ya salio haiku 5.5 y tambien tenemos sonnet 5.5 por si no lo sabias y no eras conciente",
         "date": "2026-10-07",
         "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
         "line": 7178
       },
       {
-        "quote": "todo lo que queda en memoria se olvida, siempre pero SIEMPRe y ten en cuenta esta directiva, TODO debe quedar guardado y cementado en el harness osea en la documentacion pero tambien en los archivos donde debe ir para que el harness funcione bien aqui y en cualquier otra parte que se instale",
+        "quote": "recuerda que todo lo que queda en memoria se olvida, siempre pero SIEMPRe y ten en cuenta esta directiva, TODO debe quedar guardado y cementado en el harness osea en la documentacion pero tambien en los archivos donde debe ir para que el harness funcione bien aqui y en cualquier otra parte que se instale",
         "date": "2026-10-08",
         "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
         "line": 555
       },
       {
-        "quote": "Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
+        "quote": "1. no tuve buena atencion por que necesito mejor comunicacion contigo y la forma en como me explicas el avance 2. la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones 3. no tengo problema en aumentar el plan y tener varios planes maximos 4. en este caso es por que estamos armando el harness y estamos en el proyecto del harness pero recuerda que la idea es que en otros proyectos donde instalemos el harness esto no se puede hacer ya que es fijo y ya tendremos un metodo que desarrollaremos apra cada proyectos con su propio roadmap y arquitectura y ademas de specs, pero por ahora estamos haciendo doogfooding y ademas estamos puliendo en tiempo real y viendo a medida que van saliendo las necesidades como abordarlas, testearlas, probarlas e implementarlas o corregirlas ademas de optimizarlas. Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
         "date": "2026-10-09",
         "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
         "line": 11284
       },
       {
-        "quote": "la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones",
+        "quote": "1. no tuve buena atencion por que necesito mejor comunicacion contigo y la forma en como me explicas el avance 2. la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones 3. no tengo problema en aumentar el plan y tener varios planes maximos 4. en este caso es por que estamos armando el harness y estamos en el proyecto del harness pero recuerda que la idea es que en otros proyectos donde instalemos el harness esto no se puede hacer ya que es fijo y ya tendremos un metodo que desarrollaremos apra cada proyectos con su propio roadmap y arquitectura y ademas de specs, pero por ahora estamos haciendo doogfooding y ademas estamos puliendo en tiempo real y viendo a medida que van saliendo las necesidades como abordarlas, testearlas, probarlas e implementarlas o corregirlas ademas de optimizarlas. Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
         "date": "2026-10-09",
         "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
         "line": 11284
       },
       {
-        "quote": "Me gusta lo que estas haciendo de medir todo, sobre todo ahora, ver y analizar problemas o cosas a mejorar con todo hasta en esta misma sesion y las otras sesiones y la comunicaciones todo para que mejoremos el harness",
+        "quote": "Me gusta lo que estas haciendo de medir todo, sobre todo ahora, ver y analizar problemas o cosas a mejorar con todo hasta en esta misma sesion y las otras sesiones y la comunicaciones todo para que mejoremos el harness y tambien ver que errores salen para que el harness no vaya a quedar con errores y aun asi despues probarlos en carpetas de pruebas como si estuviera instalado y ver como funciona y si funciona como es",
         "date": "2026-10-10",
         "session": "4a8db1c5-ba2e-4c72-86b0-1a75ff29bee5",
         "line": 1315
       },
       {
-        "quote": "este harnes tiene prohibido que utilicemos Claude.md solo Agents.md",
+        "quote": "Para un momento, este harnes tiene prohibido que utilicemos Claude.md solo Agents.md",
         "date": "2026-10-15",
         "session": "987548fe-5062-4dd4-9b92-7a246494198f",
         "line": 1270
+      },
+      {
+        "quote": "pero me dices que pasemos cosas a Agents.md pero si solo vamos a utilizar antropic los modelos entonces vamos a utilizar solo Claude.md si o no?",
+        "date": "2026-10-26",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 1665
+      },
+      {
+        "quote": "si pero codex es un revisor externo no mas y se usa para revisar lo que hacemos y cuando manejemos un proyecto es para revisar el codigo",
+        "date": "2026-10-26",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 1697
+      },
+      {
+        "quote": "Excelente me parece excelente eso asi",
+        "date": "2026-10-26",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 1733
       }
     ],
-    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness; and the harness never uses CLAUDE.md, only AGENTS.md (odd/tasks/memory-hygiene.md). The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor.",
-    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness. Since the models are Anthropic's and Codex is only an outside reviewer of what is done and of a project's code, Claude works from a root CLAUDE.md that imports AGENTS.md, and AGENTS.md keeps what a reviewer needs (diet D3, F8's S3): a rule's prose home is a line of either file, no longer AGENTS.md alone. The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor.",
+    "accepted": "He accepted the split in his own typed words at line 1733 of e41d1e8d (\"Excelente me parece excelente eso asi\"), after asking at line 1665 whether only CLAUDE.md would be used and saying at line 1697 that Codex is only an outside reviewer.",
     "checked": {
-      "date": "2026-10-22",
+      "date": "2026-10-27",
       "by": "command"
     }
   },

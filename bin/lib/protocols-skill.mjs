@@ -68,7 +68,7 @@ Incident (2026-10-10): a check and the step it should allow were joined by a sem
 Incident (2026-10-11): the user found a 73 percent mark still read as in force after the share of its context at which a session writes its state had changed three times in two days, each time carried by hand to the places that stated it; the old value stayed beside the new one, and the user called it systemic and repeated.
 
 - A new rule or a new protocol first passes five questions: did it happen; twice, or once at a cost; can a check do it; can an existing one be amended, the search of \`rule:reuse-first\`; what does it cost and what leaves.
-- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`AGENTS.md\`, a protocol. A memory note is never its home.
+- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol. A memory note is never its home.
 - One home. A value is a constant in code that messages, skills and tests read; a rule in prose is one text with its id. Every other text names the rule and does not repeat it. A rule of another tool is not copied.
 - One act. In the harness's own checkout, \`js-harness rules change <id>\`, on a \`rule/\` branch, writes the declaration, its source and the rendered list in one commit; a revert and an urgent change are the same command. In a project, its own rules are \`docs/rules.json\`, edited by hand, and \`js-harness rules check\` refuses a phrase gone from its file or a rule deleted instead of retired.
 - A rule that leaves is retired, never deleted: it keeps its id, with its date and its successor. Text it superseded is removed, not annotated.

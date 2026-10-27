@@ -134,9 +134,9 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### rules-live-in-the-harness
-A rule he gives is cemented in the harness where something acts on it, never only in memory: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`AGENTS.md\`, a protocol."
+A rule he gives is cemented in the harness where something acts on it, never only in memory: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, checked by the command on 2026-10-22.
+- Since 2026-10-27. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, checked by the command on 2026-10-27.
 
 ### session-effort
 The effort a session runs at: high.

@@ -471,7 +471,7 @@ export const RULES = [
     "id": "rules-live-in-the-harness",
     "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory",
     "owner": "sebastian",
-    "since": "2026-10-22",
+    "since": "2026-10-27",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A rule is recorded only where something acts on it",
