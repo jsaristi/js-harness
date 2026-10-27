@@ -42,14 +42,14 @@ each ready pull request the queue prints, commit by commit, the Codex record tha
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
 line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
-refused ticket it waits its turn, and says which), and at the same time CircleCI's run of a queue/*
+refused ticket it waits its turn, and says which), and at the same time GitHub Actions' run (.github/workflows/gate.yml) of a queue/*
 branch pushed for it before the suite starts. The branch is removed once the candidate is red or
-untested on this machine, or once CircleCI answered. A candidate red or untested here still spends
-that CircleCI run, and a land killed before it ends leaves its branch on origin for a hand to remove. When
+untested on this machine, or once GitHub Actions answered. A candidate red or untested here still spends
+that GitHub Actions run, and a land killed before it ends leaves its branch on origin for a hand to remove. When
 both are green, main is pushed as the
 candidate, by fast-forward from the main it was built from. A candidate whose every changed path is a
 document main's harness.json declares runs no suite on this machine, as a commit of documents alone
-runs none, and CircleCI's run is its test. A candidate red on this machine is
+runs none, and its GitHub Actions run is its test. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. For each landed rule/ pull request and each rule it
 changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> landed on main <sha> from
@@ -57,7 +57,7 @@ changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> la
 declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
 write none. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped before it
 ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or nothing to land, 4 red,
-3 main moved meanwhile (main not pushed), 5 the suite did not run or CircleCI gave no result in 30 minutes
+3 main moved meanwhile (main not pushed), 5 the suite did not run or GitHub Actions gave no result in 30 minutes
 (main not pushed), 1 anything else.
 --land --refresh-copy, after a land that moved main, also brings the installed copy the hooks run up to that main
 (odd/tasks/harness-review.md, T4): under the gate lock, the Claude settings are backed up (the newest five kept under
@@ -69,7 +69,7 @@ stands), 75 when the gate lock was not obtained (nothing refreshed).
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
-one left out with its reason, the time of each suite run, of CircleCI (from the push of its queue branch, so it spans the local
+one left out with its reason, the time of each suite run, of GitHub Actions (from the push of its queue branch, so it spans the local
 suite, to its answer or the branch's removal) and of the push, what landed, and its exit.
 A land tells the work session of each pull request it left out why, the failing tests of a red included, by a
 note to that session's number in the channel; the session is the one whose newest ready notice names the pull
@@ -95,7 +95,7 @@ const RETARGET_LIMIT = 1000;
  * dry run and found its git directory; `said` keeps the last line the land printed. */
 function landLog({ now, session }) {
   const iso = (ms) => new Date(ms).toISOString();
-  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], removed: [], exit: null, said: null };
+  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], actions: null, candidate: null, landed: [], removed: [], exit: null, said: null };
   return {
     record,
     file: null,
@@ -152,28 +152,25 @@ function parseArgs(argv) {
   return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
 
-/** How long the queue waits for CircleCI's result on a candidate, and how often it asks. */
+/** How long the queue waits for GitHub Actions' result on a candidate, and how often it asks. */
 const CI_WAIT_MS = 30 * 60_000;
 const CI_POLL_MS = 30_000;
 const RED = new Set(['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale']);
 
-/** CircleCI's result on the commit `sha`, from GitHub: its check runs (the CircleCI GitHub app) and its
- * statuses (`ci/circleci...`, the OAuth integration). `{ state: 'green' | 'red' | 'pending', name, conclusion,
- * url }`; pending while it has posted nothing or something is still running. */
-export function circleciState(checkRuns, statuses) {
-  const runs = (checkRuns ?? []).filter((one) => /circleci/i.test(one?.app?.slug ?? ''));
-  const posted = (statuses ?? []).filter((one) => /^ci\/circleci/i.test(one?.context ?? ''));
-  const redRun = runs.find((one) => one.status === 'completed' && RED.has(one.conclusion));
-  if (redRun) return { state: 'red', name: redRun.name, conclusion: redRun.conclusion, url: redRun.html_url };
-  const redStatus = posted.find((one) => one.state === 'failure' || one.state === 'error');
-  if (redStatus) return { state: 'red', name: redStatus.context, conclusion: redStatus.state, url: redStatus.target_url };
-  const all = runs.length + posted.length;
+/** GitHub Actions' result on the commit `sha`: the check runs GitHub's own app posted for it, the jobs of
+ * .github/workflows/gate.yml on the candidate's `queue/*` branch (odd/tasks/drop-circleci.md, S2); another app's
+ * run is not read. `{ state: 'green' | 'red' | 'pending', name, conclusion, url }`; pending while it has posted
+ * nothing or something is still running. */
+export function actionsState(checkRuns) {
+  const runs = (checkRuns ?? []).filter((one) => one?.app?.slug === 'github-actions');
+  const red = runs.find((one) => one.status === 'completed' && RED.has(one.conclusion));
+  if (red) return { state: 'red', name: red.name, conclusion: red.conclusion, url: red.html_url };
   // Every run a success: a skipped or neutral run is no run of the suite, and green is the suite passing (Codex, 2026-10-14).
-  const done = runs.every((one) => one.status === 'completed' && one.conclusion === 'success') && posted.every((one) => one.state === 'success');
-  if (!(all > 0 && done)) return { state: 'pending' };
-  // Named as a red is, so the land record keeps the build that passed (odd/tasks/land-unattended.md, B2).
+  const done = runs.every((one) => one.status === 'completed' && one.conclusion === 'success');
+  if (!(runs.length > 0 && done)) return { state: 'pending' };
+  // Named as a red is, so the land record keeps the run that passed (odd/tasks/land-unattended.md, B2).
   const [run] = runs;
-  return run ? { state: 'green', name: run.name, conclusion: run.conclusion, url: run.html_url } : { state: 'green', name: posted[0].context, conclusion: posted[0].state, url: posted[0].target_url };
+  return { state: 'green', name: run.name, conclusion: run.conclusion, url: run.html_url };
 }
 
 /** The rows of `status` (`FAIL`, `INFO`) in a `check` `output`. `check` prints its rows as one block, then each failed
@@ -336,7 +333,7 @@ export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } 
 
 /** Whether every path the candidate at `place` changes against `main` is a document that main's harness.json, in
  * main's worktree `mainPlace`, declares (`discoverDocuments`): then the suite does not run on this machine, as for a
- * commit of documents alone, and CircleCI's run of the whole gate is the candidate's test (the throughput plan's item 7,
+ * commit of documents alone, and the GitHub Actions run of the whole gate is the candidate's test (the throughput plan's item 7,
  * 2026-10-16). Main's declaration, never the candidate's: a pull request cannot widen what counts as a document for
  * itself, and its harness.json is a path that is no document. A git that does not answer, a declaration that does not
  * parse, or an empty change runs the suite. */
@@ -348,7 +345,7 @@ function documentsAlone(gitIn, place, main, mainPlace) {
   return diff.ok && allDocuments(diff.out.split('\0').filter(Boolean), documents);
 }
 
-const DOCUMENTS_ALONE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; CircleCI runs the whole gate on it.';
+const DOCUMENTS_ALONE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; GitHub Actions runs the whole gate on it.';
 
 /** Whether main's check.mjs has the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): its source names
  * the `'--door'` flag. Read once per batch from main's worktree; a main without the file has no door yet. */
@@ -556,30 +553,32 @@ function retargetStacked({ run, cwd, defaultBranch, landedPrs, stdout }) {
 }
 
 /** `--land`: the candidate at `place`, built on `main` (the sha of origin's default branch `defaultBranch`), tested on this
- * machine and on CircleCI at once, and the default branch moved to it when both are green (S6, S7). Its CircleCI run is
- * that of a `queue/*` branch pushed for it before the local suite starts (odd/tasks/land-unattended.md, D) and removed
- * as soon as its answer no longer matters: once the candidate is red or untested here, or once CircleCI answered. The
+ * machine and on GitHub Actions at once, and the default branch moved to it when both are green (S6, S7). Its GitHub
+ * Actions run is gate.yml's on a `queue/*` branch pushed for it before the local suite starts (odd/tasks/land-unattended.md,
+ * D; odd/tasks/drop-circleci.md, S2) and removed as soon as its answer no longer matters: once the candidate is red or
+ * untested here, or once GitHub Actions answered. The
  * branch moves by fast-forward only, leased on the `main` the candidate was built from: a branch that moved in between
  * is left as it is (exit 3). Red anywhere is exit 4. `retarget` runs after a land, for the pull requests stacked on it. */
 async function landCandidate({ run, gitIn, place, main, defaultBranch, door, merged, suite, sleep, stdout, fail, landed, retarget, log }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   log.record.candidate = candidate;
-  // CircleCI starts with the local suite, not after it: the two ran in series, about 2.8 minutes a land. The cost
-  // is one CircleCI run spent on each candidate this machine turns red or does not test. Main still waits for both greens.
-  // `--no-verify`: the branch is the candidate's run on CircleCI, and no hook judges it; main's push is judged.
+  // The CI run starts with the local suite, not after it: the two ran in series, about 2.8 minutes a land. The cost
+  // is one GitHub Actions run spent on each candidate this machine turns red or does not test. Main still waits for both greens.
+  // `--no-verify`: the branch is the candidate's run on GitHub Actions, and no hook judges it; main's push is judged.
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
-  const ciEnded = log.phase('circleci');
+  // A record before 2026-10-27 names this phase and field `circleci`; the throughput command counts each phase by its name, old and new.
+  const ciEnded = log.phase('actions');
   let ci = { state: 'pending' };
   let [asked, dropped] = [false, false];
-  // Removes the queue branch once, and ends the CircleCI phase: `dropped` when its answer was not waited for.
+  // Removes the queue branch once, and ends the GitHub Actions phase: `dropped` when its answer was not waited for.
   const drop = () => {
     if (dropped) return;
     dropped = true;
     ciEnded(ci.state === 'green' ? true : ci.state === 'red' ? false : null);
     const state = !asked ? 'dropped' : ci.state === 'pending' ? 'none' : ci.state;
-    log.record.circleci = { state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
+    log.record.actions = { state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
     const removed = gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
     // Named, never silent: a queue branch origin keeps runs nothing more, and only a hand removes it.
     if (!removed.ok) stdout(`Could not remove ${branch} from origin (${removed.err.split('\n')[0] || 'git gave no reason'}): remove it by hand.`);
@@ -650,21 +649,21 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
         }
       };
       // A read that fails is asked again at the next turn, never taken for an empty answer (Codex, 2026-10-14).
-      const [checks, statuses] = [read('check-runs')?.check_runs, read('status')?.statuses];
-      ci = Array.isArray(checks) && Array.isArray(statuses) ? circleciState(checks, statuses) : { state: 'pending' };
+      const checks = read('check-runs')?.check_runs;
+      ci = Array.isArray(checks) ? actionsState(checks) : { state: 'pending' };
       if (ci.state !== 'pending') break;
       await sleep(CI_POLL_MS);
     }
     drop();
     if (ci.state === 'red') {
-      stdout(`The candidate is red on CircleCI (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
+      stdout(`The candidate is red on GitHub Actions (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
       return 4;
     }
     if (ci.state !== 'green') {
-      stdout(`CircleCI gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
+      stdout(`GitHub Actions gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
       return 5; // no answer judged nothing: not red (harness review b2)
     }
-    stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
+    stdout(`The candidate ${candidate.slice(0, 7)} is green on GitHub Actions.`);
     // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
     const pushEnded = log.phase('push');
     const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });

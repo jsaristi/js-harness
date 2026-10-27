@@ -4,9 +4,9 @@
 // odd/tasks/commit-gates-first.md), and `windows-daily.yml`, the whole suite on Windows once a day
 // (odd/tasks/commit-gates-first.md, R1). What bounds them is held here, because a public repository is read and
 // forked by anyone. The gate:
-// - it runs for a push to a `gate/` branch and for nothing else, so a pull request starts no run (the merge
-//   queue's CircleCI run tests main as it will be, odd/tasks/merge-queue.md S4), `pull_request_target` never
-//   hands a fork's code this repository's token, and a fork starts nothing here: a push needs write access;
+// - it runs for a push to a `gate/` branch (a commit's gate) or a `queue/` branch (the merge queue's candidate,
+//   main as it will be: odd/tasks/merge-queue.md S4, odd/tasks/drop-circleci.md S2) and for nothing else, so a
+//   pull request starts no run, `pull_request_target` never hands a fork's code this repository's token, and a fork starts nothing here: a push needs write access;
 // - its token can only read, and it names no secret;
 // - each action is pinned by commit, so a moved tag cannot change what runs; one job, a fixed runner, a bound.
 // Zero deps: the file is read as text, by the few shapes it is allowed to take.
@@ -50,10 +50,10 @@ test('the repository holds two GitHub workflows, the gate and the daily Windows 
   assert.equal(fs.existsSync(path.join(ROOT, '.github', 'actions')), false, 'no local action for a workflow to run');
 });
 
-test('the gate runs for a push to a gate/ branch and for nothing else', () => {
+test('the gate runs for a push to a gate/ or a queue/ branch and for nothing else', () => {
   const lines = workflowLines();
   assert.deepEqual(level(lines), ['name: gate', 'on:', 'permissions:', 'jobs:']);
-  assert.deepEqual(below(lines, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'"]);
+  assert.deepEqual(below(lines, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'", "- 'queue/**'"]);
 });
 
 test('its token reads the contents and nothing more, and no secret is named', () => {
@@ -92,7 +92,7 @@ test('a secret is found in either form an expression can name it', () => {
 test('the shapes a workflow must not take are refused', () => {
   // The reader above is the guard: a trigger added beside `push`, or a pull request event, changes `on:`.
   const pullRequest = workflowLines("name: gate\non:\n  push:\n    branches:\n      - 'gate/**'\n  pull_request_target:\npermissions:\n  contents: read\njobs:\n");
-  assert.notDeepEqual(below(pullRequest, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'"]);
+  assert.notDeepEqual(below(pullRequest, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'", "- 'queue/**'"]);
 });
 
 // The daily Windows suite (odd/tasks/commit-gates-first.md, S5 and R1): it runs on its schedule and by hand, never

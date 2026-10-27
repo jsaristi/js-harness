@@ -1011,7 +1011,7 @@ as one candidate (odd/tasks/drop-github-gate.md, "Why").
   `main` again. In place since 14:23, outside the repository: his decision to take the exchange (the
   lead's transcript ffe99ebf, line 5394), a code pull request merged on a green run on GitHub against
   the `main` it lands on, by the lead's script (relief file, line 764)
-- Control: check — bin/merge-queue.test.mjs — "--land: the candidate green locally and on CircleCI
+- Control: check — bin/merge-queue.test.mjs — "--land: the candidate green locally and on GitHub Actions
   becomes main, by fast-forward, and its queue branch is removed" — since 2026-10-15
 
 ### reopen-tested-old-base
