@@ -1189,6 +1189,25 @@ $ js-harness sessions --address orchestrator
 js-harness sessions: no sessions folder for my-project: …
 ```
 
+`js-harness sessions live` feeds the live board, an Artifact page whose shared database the user
+watches as it updates (rule `live-board`). Its rows are the notices of the channel record, the
+ones `notify`, the merge queue and the permit hook already write: each one's time, session, kind,
+text and the state its kind gives. With no flag it says how many rows the board has not been sent;
+`--out <dir>` writes them as batch files, one database document of the `events` collection each,
+and prints the `ArtifactData` set that sends one; `--sent <file>` moves the cursor past that file.
+The cursor goes by each notice's place in the record, not its time, so a notice stamped before a
+later one but appended after it still waits. Only a Claude session can make that call: no command or hook reaches an artifact's database. The
+cursor and the board's link (`--url`) are kept in `~/.js-harness/channel/live/`, which `uninstall`
+deletes with the channel. The page's source is `docs/live-board.html`.
+
+```console
+$ js-harness sessions live --out live --url https://claude.ai/artifact/…
+3 rows wait for the live board
+board: https://claude.ai/artifact/…
+ArtifactData set: url https://claude.ai/artifact/…, collection events, doc_id 2026-10-27T05:23:50.996Z-62656cd8, file_path …/live/live-2026-10-27T05-23-50.996Z-62656cd8.json
+  then: js-harness sessions live --sent …/live/live-2026-10-27T05-23-50.996Z-62656cd8.json
+```
+
 ### js-harness unseen
 
 What the desktop app opened for this project out of his sidebar: an enabled scheduled task whose

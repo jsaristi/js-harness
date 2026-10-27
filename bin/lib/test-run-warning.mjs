@@ -309,7 +309,8 @@ function boardRead(words, depth = 0) {
     return script !== null && commandsOf(script).some((inner) => boardRead(inner, depth + 1));
   }
   const at = HARNESS.test(rest[0].text) ? 1 : isNode(rest[0]) && HARNESS_SCRIPT.test(rest[1]?.text ?? '') ? 2 : -1;
-  return at !== -1 && rest[at]?.text === 'sessions' && !rest.slice(at + 1).some((word) => ONE_ENTRY.has(word.text.split('=')[0]));
+  // `sessions live` reads only the channel record, for the live board (bin/sessions-live.mjs).
+  return at !== -1 && rest[at]?.text === 'sessions' && rest[at + 1]?.text !== 'live' && !rest.slice(at + 1).some((word) => ONE_ENTRY.has(word.text.split('=')[0]));
 }
 
 /** The warning for `command`, or `null`: one line, when the command runs, outside `js-harness gate --`, a

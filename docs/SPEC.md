@@ -465,6 +465,15 @@ proofs and by those tasks.
 **Discarded:** The brief as the prompt itself: a `.cmd` shim of the CLI runs through `cmd.exe`, which cannot carry a line break. Removing the transcript with the session: `claude rm` keeps it, as every session's is kept. Stopping a session at work from `uninstall`: its work would be lost unseen.
 **Today:** `bin/sessions-background.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/install.mjs`, `js-harness sessions`
 
+### The user follows the sessions on a live board
+
+**Problem:** He watches several sessions at once and the harness was a black box to him; the lead republished a status page by hand (his words of 2026-10-27: "Esto se podria hacer de una forma dinamica para estar informado en tiempo real?").
+**Requirement:** `js-harness sessions live` turns the channel record's notices the live board has not been sent into rows (time, session, kind, text, state), writes them with `--out <dir>` as batch files of one database document each with the `ArtifactData` call that sends one, and moves its cursor past a file with `--sent <file>`; the lead adds to each row a `sesion` and a `texto` in the user's language before it sends, since the record stays in English; with nothing sent yet it starts at the last `--hours` (24). The cursor and the board's link live under the channel's folder, which `uninstall` deletes.
+**Reason:** Sessions already write every event as a notice, and only a Claude session can write an artifact's database, so the record is the feed and the lead the one writer (rule `live-board`).
+**Proof:** `node --test bin/sessions-live.test.mjs`, `node --test bin/lib/live-rows.test.mjs`
+**Discarded:** A hook that sends the rows: no hook or command reaches an artifact's database. Rewriting a session's status document on each event: a write to an existing document needs the version it was read at, so rows are only ever created.
+**Today:** `bin/sessions-live.mjs`, `bin/lib/live-rows.mjs`, `bin/sessions.mjs`, `js-harness sessions`
+
 ### The machine says when nothing runs
 
 **Problem:** The owner leaves the lead alone for 8 hours or more; once every session has finished the PC stays on for nothing, and a session that waits for him moves only when he answers (his words of 2026-10-25: "cuando no haya nada ejecutandose me avises para ver que en vez de dejandote trabajar solo pueda apagar el pc").
