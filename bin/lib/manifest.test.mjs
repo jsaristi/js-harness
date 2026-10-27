@@ -2873,11 +2873,12 @@ test('the orchestrator skill says what every recap carries and how a block waits
     '- what waits for the user in a session, said only after reading that session at that moment;',
     '- when a stretch or a session ends, that it ended and which session to return to.',
     '- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.',
-    '- Before the user leaves, ask in that reply for everything the stretch will need',
     '- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back',
     'a step the charter does not name, waits for their return with no question; a work session\'s question that is theirs is recorded and held, never answered for them',
   ]) assert.ok(text.includes(line), line);
   assert.ok(text.includes('ask before anything it does not name; while the user is away it waits instead, as `rule:away-autonomy` says.'));
+  // rule:ask-before-away is retired: its ask before he leaves is the permission he declined.
+  assert.doesNotMatch(text, /ask in that reply for everything the stretch will need/);
 });
 
 test('the orchestrator skill closes a work session with the notify command and keeps notices out of the relief file', () => {

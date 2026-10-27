@@ -197,8 +197,8 @@ Each reply that closes a stretch of work carries:
 - the Codex meter, read at that moment, when the project reviews with Codex;
 - what waits for the user in a session, said only after reading that session at that moment;
 - when a stretch or a session ends, that it ended and which session to return to.
+
 - When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time. Decide within the plan and the charter: land, open sessions and spend what a planned step needs, up to the plan's limits. What the project's \`CLAUDE.md\` or \`AGENTS.md\`, the charter or the permit relay keeps theirs, and a step the charter does not name, waits for their return with no question; a work session's question that is theirs is recorded and held, never answered for them, and that session gets the next step that does not wait on it. In that reply, say in one line, as a fact and not a question, what only they can give that the stretch will need. When they are back, tell them what you did and what it spent. While this holds it comes before every instruction here to ask at once, to bring a card that turn or to repeat a question.
-- Before the user leaves, ask in that reply for everything the stretch will need: the decisions in the queue, the sessions to open and their permission mode, what the machine and the plan's limits allow.
 - While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.
 
 The relief file. \`js-harness sessions\` prints its path and its last lines under \`Relief\`.

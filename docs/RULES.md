@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `54f9bea2addd`. In force: 67 (41 of Sebastián, 26 of the project). Retired: 2.
+Hash `942b6c0a6e23`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
 
 ## Sebastián's
 
@@ -11,11 +11,6 @@ Hash `54f9bea2addd`. In force: 67 (41 of Sebastián, 26 of the project). Retired
 A session says when it finished and where to return, watches its context, and a rule has one home: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
-
-### ask-before-away
-Before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing: "- Before the user leaves, ask in that reply for everything the stretch will need: the decisions in the queue, the sessions to open and their permission mode, what the machine and the plan's limits allow."
-- Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
 
 ### away-autonomy
 Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
@@ -367,6 +362,10 @@ How long js-harness wait waits before it says the time ran out, unless --for say
 - Since 2026-10-15. Row: reports. Source: design, `odd/tasks/session-channel.md`.
 
 ## Retired
+
+### ask-before-away
+Before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing. Retired on 2026-10-27: read `away-autonomy` instead.
+- Source: his words of 2026-10-27, 2026-10-11, checked by the command on 2026-10-27.
 
 ### reply-four-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.
