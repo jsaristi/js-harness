@@ -12,7 +12,15 @@ committed on the feature branch in the same session; that record is part of the 
 separate request. Near `rule:context-pause` of its window a session writes its state to the feature
 document and keeps working; the host compacts it by itself, and it resumes from the summary checked
 against that document. What he is given at that point is the pause notice's (`cutRule` in
-`bin/lib/sessions.mjs`). A claim's evidence takes the form `js-harness-protocols` section 6 gives.
+`bin/lib/sessions.mjs`).
+
+A task is small when it is understood (the outcome, where to change and no open decision, shown
+within one short read), touches no high-risk item (below) and could be finished from the request
+and `git diff` alone. Small work stays inline with no feature document; it is large only when that
+resume test fails, never by counting files, tests or lines. Large work opens
+`odd/tasks/<feature>.md` before the first source write, in this order: the task contract;
+`## Specs`, numbered, quoting his words as written; `## Tasks`, one line each with its spec, route
+and commit; `## Log` last, L1 his request as written, then his corrections, evidence and decisions.
 
 ## Working with Sebastián
 
@@ -38,7 +46,33 @@ that text, under what it is, where it goes and what sending it does: two blocks 
 session. Reports open with a short plain summary and close with a recap of the whole stretch,
 including what was spent.
 
-## Review
+## Reporting
+
+A report puts bad news first, then what was done, what was checked and how (the command and its
+output, or `path:line`), what was not checked, what failed and what stays open, "nothing" where
+true. Each claim is checked with its evidence, assumed, or not known; an estimate says so. What a
+session or sub-agent says it did is checked in one thing before anything builds on it; a claim
+that something is absent names the search that would have found it. What he reads to understand or
+decide reaches him in Spanish as a visual Artifact page. A mistake is told in five parts: what
+happened; the fix now and whether it is checked; what stops it recurring (a check before a line, a
+line before a protocol); where that enters and when; the command or count that will prove it has
+not come back. It goes into `docs/FAILURES.md` as a `- Seen:` line.
+
+A throughput review (the heartbeat's `DUE:` line, `js-harness throughput`) gives each candidate
+its baseline, target, cost and why no check, review or test weakens; one whose gain is below its
+cost is dropped with the reason written, and the review is recorded with
+`js-harness throughput reviewed`.
+
+## Running what costs, and review
+
+Before a gate, an eval batch, a review or a push, say how many runs and what each costs. One try:
+when it fails, read why before anything runs again, never in a loop. Read the proof before the
+command it allows; two steps share a command only with `&&`. Run the installed `js-harness`, not
+the branch's `node bin/js-harness.mjs`, except to test the change itself. A gentle-ai review's
+base is a hash on the head's first-parent line (the last reviewed boundary, or the commit that
+merged main in), never a branch name. Each code commit a review approved is named on a gentle-ai
+line of the feature document; on `operation_timeout` the same command runs once more, then the
+range is written "not reviewed" and Codex reviews it anyway.
 
 Review is not his to decide: the consent he granted for every candidate here is his standing
 selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
