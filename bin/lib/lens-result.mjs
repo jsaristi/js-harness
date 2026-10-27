@@ -11,15 +11,57 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const isText = (value) => typeof value === 'string' && value.trim() !== '';
 const texts = (value) => Array.isArray(value) && value.every(isText);
 
-/** The JSON object `text` holds, alone or inside one Markdown code fence; `null` for anything else. */
-function objectOf(text) {
-  const fenced = /^\s*```(?:json)?\s*\n([\s\S]*?)\n\s*```\s*$/.exec(text);
-  try {
-    const value = JSON.parse(fenced ? fenced[1] : text);
-    return isObject(value) ? value : null;
-  } catch {
-    return null;
+/** Where the brace-delimited span that opens at `start` closes (the index past its last `}`), or -1 when it never
+ * does. Braces inside a JSON string do not count. */
+function spanEnd(text, start) {
+  let depth = 0;
+  let inString = false;
+  for (let at = start; at < text.length; at += 1) {
+    const char = text[at];
+    if (inString) {
+      if (char === '\\') at += 1;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === '{') depth += 1;
+    else if (char === '}' && (depth -= 1) === 0) return at + 1;
   }
+  return -1;
+}
+
+/** Why the span `json` does not parse, with where it breaks and the text there when the parser names a position. */
+function parseFault(json, offset, err) {
+  const position = /at position (\d+)/.exec(err.message);
+  if (!position) return `an object in it does not parse: ${err.message}`;
+  const at = Number(position[1]);
+  const near = json.slice(Math.max(0, at - 40), at + 40).replace(/\s+/g, ' ');
+  return `an object in it does not parse at character ${offset + at}, near ${JSON.stringify(near)}`;
+}
+
+/** The one JSON object `text` holds, `{ value }`, or `{ why }` when it holds none, more than one, one that does not
+ * parse, or Markdown fences other than one around the object. Prose before or after the object is not read: a lens
+ * often adds a line, and the object alone is its result. Every brace-delimited span counts as a would-be object, so
+ * an answer that offers two results, or a broken one beside a whole one, is never read as one complete result. */
+function objectOf(text) {
+  const objects = [];
+  for (let start = text.indexOf('{'); start !== -1; ) {
+    const end = spanEnd(text, start);
+    if (end === -1) return { why: `an object in it is not closed (it opens at character ${start})` };
+    const json = text.slice(start, end);
+    let value;
+    try {
+      value = JSON.parse(json);
+    } catch (err) {
+      return { why: parseFault(json, start, err) };
+    }
+    objects.push({ value, start, end });
+    start = text.indexOf('{', end);
+  }
+  if (objects.length !== 1) return { why: `it holds ${objects.length || 'none'}` };
+  const [{ value, start, end }] = objects;
+  const fences = (part) => part.split('\n').filter((line) => /^\s*```/.test(line)).length;
+  const [before, after] = [fences(text.slice(0, start)), fences(text.slice(end))];
+  if (before + after !== 0 && (before !== 1 || after !== 1)) return { why: `its Markdown fences are not one block around the object (${before} before it, ${after} after)` };
+  return { value };
 }
 
 /** Why the finding `finding` (at `at`) is not one, or `null`. */
@@ -39,8 +81,9 @@ function findingFault(finding, at) {
  * findings, evidence }`, or `{ complete: false, why }`. */
 export function lensResult(text, candidate) {
   const incomplete = (why) => ({ complete: false, why });
-  const value = typeof text === 'string' ? objectOf(text) : null;
-  if (!value) return incomplete('the answer is not one JSON object');
+  const read = typeof text === 'string' ? objectOf(text) : { why: 'it is no text' };
+  if (read.why) return incomplete(`the answer is not one JSON object: ${read.why}`);
+  const { value } = read;
   const unknown = Object.keys(value).filter((key) => !TOP.includes(key));
   if (unknown.length) return incomplete(`the answer has unknown fields: ${unknown.join(', ')}`);
   if (value.subject_hash !== candidate.subjectHash) return incomplete(`its subject_hash ${JSON.stringify(value.subject_hash)} is not the candidate's`);
