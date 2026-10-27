@@ -131,6 +131,7 @@ test('a proposal reaches the user only after two readers, and a handoff names th
   assert.match(asking, /A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round\./);
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
+  assert.ok(handoff.includes('- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (`rule:reports-spanish-visual`)'), handoff);
   assert.ok(squash(agentsTemplate('project')).includes('one attacks its claims, one looks only for what is missing'));
 });
 
