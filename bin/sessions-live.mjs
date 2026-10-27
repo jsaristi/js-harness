@@ -20,6 +20,9 @@ export const LIVE_USAGE = [
   '         text, state); with nothing sent yet, those of the last --hours (24 by default). With no --out it prints how many',
   '         wait; --out writes them as batch files, one document of the board\'s events collection each, and prints the',
   '         ArtifactData set that sends each one; --sent <file> moves the cursor past that file once it was sent.',
+  '         --out also writes board-checked.json, the time it read the record, and prints the ArtifactData update that',
+  '         merges it into board/summary once every batch was sent, with no row to send too: the board then tells a',
+  '         quiet stretch from a record nobody sent.',
   '         --url records the board\'s link with the cursor, and every run prints it back. Only a Claude session sends',
   '         a batch: no command reaches an artifact\'s database. Exit 1 when the record or a batch file cannot be read,',
   '         2 for a usage error.',
@@ -176,5 +179,11 @@ export async function sessionsLiveMain(argv, {
     stdout(`ArtifactData set: url ${url ?? '<board>'}, collection events, doc_id ${batch.docId}, file_path ${file}`);
     stdout(`  then: js-harness sessions live --sent ${file}`);
   }
+  // A quiet stretch has no new notice, so the board would read the newest row's age as nobody sending the record. Once
+  // the batches are sent, the record up to this run is on the board: board/summary carries that time.
+  const checked = path.join(out, 'board-checked.json');
+  fs.writeFileSync(checked, `${JSON.stringify({ checked: new Date(now()).toISOString() })}\n`, 'utf8');
+  stdout(`ArtifactData update: url ${url ?? '<board>'}, collection board, doc_id summary, file_path ${checked}`);
+  stdout('  once every batch above was sent: the board reads it as the time you checked the record');
   return 0;
 }

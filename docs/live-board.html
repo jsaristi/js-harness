@@ -145,9 +145,10 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
       <li>Cada sesión deja un aviso cuando empieza una tarea, cuando la termina, cuando encuentra algo nuevo, cuando abre o une un PR, cuando se toma una decisión y cuando reporta gasto.</li>
       <li>Además, cada 15 minutos, cada sesión que trabaja deja un aviso corto de “sigo en esto”, para que sepas que no se trabó.<span class="tag">propuesto</span></li>
       <li><b>Quien sube los avisos a este tablero es el orquestador</b>, porque solo una sesión de Claude puede escribir aquí. Al subirlos les pone el texto en español que ves. Hoy lo hace cada vez que despierta; la propuesta es una tarea programada que los suba cada 15 minutos aunque nadie se acuerde.<span class="tag">15 min: propuesto</span></li>
+      <li>Cada vez que el orquestador mira el registro deja anotada la hora, aunque no haya ningún aviso nuevo que subir. Así el tablero distingue un rato tranquilo (nadie avisó nada, pero él revisó) de un tablero que nadie atiende.</li>
       <li>Por eso, si arriba dice <b>“Atrasado”</b>, lo que falló es quien sube los avisos, no la página ni las sesiones.</li>
       <li>Esta página no hay que recargarla: en cuanto el aviso llega, se ve aquí en pocos segundos. Si la conexión falla, la página vuelve a mirar cada 30 segundos.</li>
-      <li>La línea de arriba dice qué tan al día está el tablero: <b>“Al día: último aviso hace 3 min”</b> en verde si el aviso más nuevo tiene menos de 15 minutos; <b>“Atrasado: nadie actualiza este tablero desde hace 1 h”</b> en naranja si tiene más. Si se pierde la conexión, lo dice aparte y basta con recargar.</li>
+      <li>La línea de arriba dice qué tan al día está el tablero: <b>“Al día: último aviso hace 3 min”</b> en verde si el aviso más nuevo tiene menos de 15 minutos; <b>“Al día, sin avisos nuevos: el orquestador revisó a las 10:40”</b>, también en verde, si no hubo avisos pero él revisó el registro en los últimos 45 minutos (sin novedades, despierta al menos cada media hora); <b>“Atrasado: nadie actualiza este tablero desde hace 1 h”</b> en naranja si no pasó ninguna de las dos cosas. Si se pierde la conexión, lo dice aparte y basta con recargar.</li>
       <li>Cada aviso trae su texto en español. El original en inglés, tal como lo escribió la sesión, está en “ver original”, por si lo necesitas.</li>
     </ul>
   </div>
@@ -171,7 +172,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
     <ul class="plain">
       <li><b>Atrasada</b>: lee su último aviso; ahí debe estar la razón. Si no la hay, pregúntale al orquestador por esa sesión.</li>
       <li><b>Quieta</b>: dile al orquestador “revisa la sesión JH N”. Él mira qué está haciendo y te cuenta.</li>
-      <li><b>Atrasado</b>, arriba: nadie subió avisos en más de 15 minutos. Dile al orquestador “el tablero está atrasado”.</li>
+      <li><b>Atrasado</b>, arriba: no llegó ningún aviso en 15 minutos y el orquestador tampoco revisó el registro en 45. Dile al orquestador “el tablero está atrasado”.</li>
     </ul>
   </div>
   <div class="card">
@@ -189,7 +190,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
 <script>
 // Renders the board from its db: `events` holds batch documents of rows ({ time, session, kind, text, state, pr? }),
 // written by the lead from `js-harness sessions live`; `board/summary` holds what the lead says now, what is the
-// user's, the route and the links. Everything shared is untrusted data, so it goes in through textContent only.
+// user's, the route, the links and `checked`, the time it last read the record. Everything shared is untrusted data, so it goes in through textContent only.
 const STATE = { working: 'trabajando', quiet: 'quieta', late: 'atrasada', waiting: 'esperando', asking: 'te pregunta', ready: 'PR listo', closed: 'terminó', relieved: 'relevada' };
 const KIND = { opened: 'empezó', note: 'avance', answer: 'tu respuesta', withdrawn: 'pregunta retirada', waiting: 'esperando', question: 'te pregunta', ready: 'PR listo', closed: 'terminó', relieved: 'relevada' };
 const ORDER = { asking: 0, late: 1, quiet: 2, waiting: 3, working: 4, ready: 5, relieved: 6, closed: 7 };
@@ -199,6 +200,9 @@ let rows = [];
 let summary = null;
 let connected = false;
 const FRESH_MS = 15 * 60 * 1000;
+// The lead's check of the record (`board/summary.checked`) comes when it wakes: on a notice, or after the heartbeat's
+// 30 quiet minutes (`js-harness loop heartbeat`), so a check counts for those 30 minutes and 15 to wake and send.
+const CHECK_MS = 45 * 60 * 1000;
 // The lead adds the user's words when it sends a batch; a row without them shows the record's text.
 const label = (row) => (typeof row.sesion === 'string' && row.sesion) || row.session;
 const words = (row) => (typeof row.texto === 'string' && row.texto) || row.text;
@@ -321,18 +325,35 @@ function renderSummary(asking) {
   }));
 }
 
+/** How fresh the board is at `now`: `rows` when the newest row is recent, `checked` when it is not but the lead checked
+ * the record lately (a quiet stretch), `stale` when neither, `none` with no row and no check. */
+function freshness(newest, checked, now) {
+  const rowAt = Date.parse(newest);
+  const checkAt = Date.parse(checked);
+  if (now - rowAt <= FRESH_MS) return 'rows';
+  if (now - checkAt <= CHECK_MS) return 'checked';
+  return Number.isFinite(rowAt) || Number.isFinite(checkAt) ? 'stale' : 'none';
+}
+
 function render() {
   const asking = renderSessions();
   renderTimeline();
   renderSummary(asking);
   const newest = rows.reduce((latest, row) => (!latest || Date.parse(row.time) > Date.parse(latest) ? row.time : latest), null);
-  // The header says how fresh the rows are, not only that the page is connected: a connected page with old rows
-  // means nobody sent the record, and must not read as live.
+  const checked = typeof summary?.checked === 'string' ? summary.checked : null;
+  // The header says how fresh the rows are, not only that the page is connected: a connected page with old rows and
+  // no recent check means nobody sent the record, and must not read as live.
   const live = $('live');
   if (!connected) return;
-  const fresh = newest && Date.now() - Date.parse(newest) <= FRESH_MS;
-  live.className = `live ${fresh ? 'on' : 'stale'}`;
-  live.textContent = !newest ? 'Conectado, sin avisos todavía' : fresh ? `Al día: último aviso ${ago(newest)}` : `Atrasado: nadie actualiza este tablero desde ${ago(newest)}`;
+  const state = freshness(newest, checked, Date.now());
+  const last = Date.parse(checked) > Date.parse(newest) || !newest ? checked : newest;
+  live.className = `live ${state === 'rows' || state === 'checked' ? 'on' : 'stale'}`;
+  live.textContent = {
+    rows: `Al día: último aviso ${ago(newest)}`,
+    checked: `Al día, sin avisos nuevos: el orquestador revisó a las ${new Date(checked).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })} (${ago(checked)}); ${newest ? `último aviso ${ago(newest)}` : 'aún no hay avisos'}`,
+    stale: `Atrasado: nadie actualiza este tablero desde ${ago(last)}`,
+    none: 'Conectado, sin avisos todavía',
+  }[state];
 }
 
 function offline(text) {
