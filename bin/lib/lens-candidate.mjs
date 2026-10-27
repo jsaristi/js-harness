@@ -14,7 +14,7 @@
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { numstatFiles } from './codex-review-parts.mjs';
-import { leftOutOf, patchSections } from './codex-review-scope.mjs';
+import { leftOutOf, MARKED, patchSections } from './codex-review-scope.mjs';
 
 export const SUBJECT_LINE = 'JS_HARNESS_LENS_SUBJECT';
 export const CONTEXT_START = 'JS_HARNESS_LENS_CONTEXT';
@@ -45,9 +45,9 @@ function statusOf(text) {
 }
 
 /** The candidate `base..head` of the repository at `cwd`: `{ base, head, subjectHash, manifest, patches, leftOut,
- * block }`, with `base` and `head` as full commit ids, `manifest` the paths a lens reads (each `{ index, path,
- * status, added, deleted }`, in git's order), `patches` each one's patch at the same index, `leftOut` the paths of
- * the range a review leaves out, and `block` the text a lens is handed. `{ error }` when git cannot say. */
+ * markedLeftOut, block }`, with `base` and `head` as full commit ids, `manifest` the paths a lens reads (each
+ * `{ index, path, status, added, deleted }`, in git's order), `patches` each one's patch at the same index, `leftOut`
+ * the paths of the range a review leaves out (`markedLeftOut` of them by the project's marks), and `block` the text a lens is handed. `{ error }` when git cannot say. */
 export function lensCandidate(cwd, { base, head, spawn = spawnSync }) {
   const resolve = (name) => gitRaw(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${name}^{commit}`])?.trim() || null;
   const from = resolve(base);
@@ -91,7 +91,8 @@ export function lensCandidate(cwd, { base, head, spawn = spawnSync }) {
   const subjectHash = crypto.createHash('sha256').update(context, 'utf8').digest('hex');
   const subject = JSON.stringify({ base: from, head: to, subject_hash: subjectHash, paths: manifest.length });
   const block = `${SUBJECT_LINE} ${subject}\n${CONTEXT_START}\n${context}\n${CONTEXT_END}\n`;
-  return { base: from, head: to, subjectHash, manifest, patches, leftOut, block };
+  const markedLeftOut = leftOut.filter((file) => why.get(file) === MARKED).length;
+  return { base: from, head: to, subjectHash, manifest, patches, leftOut, markedLeftOut, block };
 }
 
 /** The added and deleted counts of the `at`-th record of `git diff --numstat -z` (`numstatFiles` keeps only their sum). */
