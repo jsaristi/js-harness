@@ -59,18 +59,18 @@ Nothing new: D2 has no cap, and the incident rerun (~$13) is in its table.
 - S9 (brief): "Then run S3's incident rerun once against the baseline ... Report the real cost."
 
 ## Tasks
-- [ ] T1 (kind: docs) this document — all; inline
-- [ ] T2 (kind: build) `init` writes `AGENTS.md` and `CLAUDE.md` split; `sync` renders each block; a legacy `AGENTS.md` keeps its whole block; the practice script follows; test first — S3, S6 (template line); inline
-- [ ] T3 (kind: build) this repo's root `CLAUDE.md` and the smaller `AGENTS.md`; the protocols skill names both files — S1, S2, S7; inline
-- [ ] T4 (kind: build) `payload` honours `claudeMdExcludes` from the settings layers; test first — S8; inline
-- [ ] T5 (kind: build) `.claude/settings.json` with the exclusion, on its own branch — S8; inline
-- [ ] T6 (kind: build) `rule/` branch: `claude-md-budget` and its `check` row (test first); `rules-live-in-the-harness` rewritten — S4, S5; inline
-- [ ] T7 (kind: docs) the roadmap's "Portable by default" row and F8 step 4 — S5; inline
+- [x] T1 (kind: docs) this document — all; inline; 9d07f7a6 and the commits after it
+- [x] T2 (kind: build) `init` writes `AGENTS.md` and `CLAUDE.md` split; `sync` renders each block; a legacy `AGENTS.md` keeps its whole block; the practice script follows; test first — S3, S6 (template line); inline; b94f525f
+- [x] T3 (kind: build) this repo's root `CLAUDE.md` and the smaller `AGENTS.md`; the protocols skill names both files — S1, S2, S7; inline; b94f525f
+- [x] T4 (kind: build) `payload` honours `claudeMdExcludes` from the settings layers; test first — S8; inline; 18260036, f49b5749
+- [x] T5 (kind: build) `.claude/settings.json` with the exclusion, on its own branch — S8; inline; ff716e6c on `claude/f8-s3-exclude`, PR 603
+- [x] T6 (kind: build) `rule/` branch: `claude-md-budget` and its `check` row (test first); `rules-live-in-the-harness` rewritten — S4, S5; inline; 18083c91, e5e36473, f4c058c8 on `rule/f8-s3-split`, PR 602
+- [x] T7 (kind: docs) the roadmap's "Portable by default" row and F8 step 4 — S5; inline; b94f525f and this commit
 - [ ] T8 (kind: verify) the incident rerun on `current-without-claude-md`, recorded against the baseline — S9; inline
 - [ ] T9 (kind: verify) `npm run check`, Codex per code slice, gentle-ai per slice, push, PRs, notify — all; inline
 
-## D7 applied
-Every default of the diet's item 7 (his "Aceptar todo", transcript `e41d1e8d`, line 3733):
+## D7 pending
+Applied in b94f525f and taken out again (L8): every default of the diet's item 7 (his "Aceptar todo", transcript `e41d1e8d`, line 3733):
 - "Response-length contract: default to short answers. ..." (global file 38) and "If unsure about length or detail, choose the
   shorter response." (41): dropped.
 - "Ask at most one question at a time. After asking it, STOP and wait." (39) and "When asking a
@@ -109,3 +109,38 @@ Every default of the diet's item 7 (his "Aceptar todo", transcript `e41d1e8d`, l
   typed line of his on D5 was found in that transcript. D7 needs no rule change (its lines live in
   `CLAUDE.md`, not in a declared rule). Told the orchestrator; `rule:double-review` and the template's
   two-readers line stay as they are until his typed words or its call.
+- L4 (2026-10-27, after a host compaction at 07:01 local): T4 done test first: `payload` reads
+  `claudeMdExcludes` from the user, project and local settings layers, lists a matched `CLAUDE.md` as
+  excluded with no tokens, and `check` prints it as "excluded (claudeMdExcludes)". The first full
+  gate found `bin/lib/project.mjs` 52 lines over its ceiling and `scripts/practice-lib.mjs` 4 over:
+  the template block moved out to `bin/lib/project-template.mjs` (re-exported, so no importer
+  changes) and the ceiling went down to 1984; the practice lines were folded back to 1174. On the
+  `rule/` branch the `claude-md-budget` row lives in `bin/lib/claude-md-budget.mjs`, so
+  `bin/check.mjs` stays at exactly its ceiling of 2110 lines and the two branches change no adjacent
+  ceiling lines. The rule's value is 2300: this repo's `CLAUDE.md` measures 2239 estimated tokens.
+- L5 (2026-10-27): the incident rerun cannot run `current-without-claude-md` alone: the suite refuses
+  an arm without its base (`evals/suite.mjs:218`), so it runs `current` beside it, about $22
+  API-equivalent instead of about $13; within D2, decided, and the orchestrator told. The `current`
+  half measures the split without the exclusion.
+- L6 (2026-10-27): Codex on the split, 9d07f7a..b94f525, in two parts: correct (0.86, 0.88), no findings. Codex on
+  the payload slice, b94f525..1826003: incorrect (0.9), one P2: excluding a project's root `CLAUDE.md` still counted
+  the `AGENTS.md` it imports; fixed test first in f49b5749, and the recheck of 1826003..f49b574 found it fixed (0.97).
+  The rule branch and the exclusion each carry their own document and lines (PRs 602 and 603).
+- gentle-ai on `9d07f7a6..b94f525f`: medium, not due (under_budget, 563 lines, executable_change), assessed in a
+  detached worktree at b94f525f since `assess` reads to HEAD.
+- gentle-ai on `b94f525f..18260036`: medium, not due (under_budget, 99 lines).
+- gentle-ai on `18260036..f49b5749`: medium, not due (under_budget, 27 lines).
+- L7 (2026-10-27), what is left after these pull requests land:
+  - the `/context` check after a restart, that the global file no longer loads and the root `CLAUDE.md` does;
+  - the fixed load measured over five sessions against the S0 row;
+  - D5 (`rule:double-review`), waiting for his typed words (L3);
+  - follow-ups: `rule:memory-feedback-home` and the memory guard (`bin/guard.mjs`,
+    `bin/lib/memory-feedback-guard.mjs`) read only `AGENTS.md` phrases; and D7's "keep doing what does not depend on
+    the answer" sits beside `rule:reply-five-states`' "never while work runs", which the orchestrator should reconcile.
+- L8 (2026-10-27, JH ORQ): "D5 now has his typed words. Use the excerpt \"si\", transcript
+  e41d1e8d-8264-45a4-b16c-f9279f7b6076, line 7461 ... D7 is still tapped only: keep it pending until I send his
+  typed words, unless your D7 changes already have a typed source." They have none, so `CLAUDE.md` drops the four
+  lines D7 gave (A.1 keeps none of the global lines 37-43, 45 and 56 until D7) and says they wait. The
+  `claude-md-budget` value stays 2300, the file's size once D7's lines return. D5 goes through
+  `js-harness rules change double-review` on `rule/f8-s3-split` (PR 602). The template's two-readers line
+  (`claudeBlock` in `bin/lib/project.mjs`) stays: narrowing it re-renders every project's block, a follow-up.

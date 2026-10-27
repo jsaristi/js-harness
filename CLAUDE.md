@@ -40,12 +40,8 @@ share and the total, from `js-harness progress`; if it fails, say so.
 
 Gentle-ai's global file does not load here (`.claude/settings.json`, `claudeMdExcludes`, until F8's
 S2). These are its lines this repo keeps, word for word (`docs/proposals/harness-diet.md`, Appendix
-A.1), with his reply rules as his answer D7 left them.
+A.1). His reply rules (global lines 37-43, 45 and 56) wait for his typed answer to D7.
 
-- One question at a time; keep doing what does not depend on the answer.
-- Verify a claim before building on it.
-- Prefer the agent's native file-reading, search, and editing tools. When shell commands are necessary, use tools available on the current platform; do not require a specific package manager.
-- Do not present option menus, exhaustive lists, or multiple approaches unless there is a real fork with meaningful tradeoffs.
 - Never add "Co-Authored-By" or AI attribution to commits. Use conventional commits only.
 - If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof.
 - Verify technical claims before stating them. If unsure, investigate first.
