@@ -1,8 +1,14 @@
 #!/usr/bin/env node
-// Zero-dependency TUI: rendering and key handling are pure (state + key -> state), so they are
-// unit-tested without a terminal. Only `runTui`/`tuiMain` below touch real stdin/stdout.
+// Zero-dependency TUI, after gentle-ai's Bubble Tea design (odd/tasks/tui-gentle-level.md): rendering and key
+// handling are pure (state + key -> state), so they are unit-tested without a terminal. Only `runTui`/`tuiMain`
+// below touch real stdin/stdout, through the terminal layer (bin/lib/terminal.mjs) and child runs
+// (bin/lib/run-child.mjs).
 import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { cleanLine, createKeyReader, createTerminalGuard, layoutFrame, paint, splitKeys, splitOutput } from './lib/terminal.mjs';
+import { handOff, runChild } from './lib/run-child.mjs';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
 import { initMain } from './init.mjs';
 import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
@@ -207,19 +213,10 @@ export function initialState({ installedVersion, updateAvailable, stack, stackGa
   };
 }
 
-/** Maps a raw terminal chunk to a normalized key token; unrecognized input passes through. */
+/** Maps one raw chunk to its first key token (`splitKeys` reads them all); a lone Esc is `escape`. */
 export function normalizeKey(chunk) {
-  if (chunk === '\u001b[A') return 'up';
-  if (chunk === '\u001b[B') return 'down';
-  if (chunk === '\r' || chunk === '\n') return 'enter';
   if (chunk === '\u001b') return 'escape';
-  if (chunk === '\u0003') return 'quit'; // Ctrl-C
-  if (chunk === 'k' || chunk === 'K') return 'up';
-  if (chunk === 'j' || chunk === 'J') return 'down';
-  if (chunk === 'q' || chunk === 'Q') return 'quit';
-  if (chunk === 'y' || chunk === 'Y') return 'y';
-  if (chunk === 'n' || chunk === 'N') return 'n';
-  return chunk;
+  return splitKeys(chunk).keys[0] ?? chunk;
 }
 
 /** Pure: the menu the submenu was opened from, back in place, with the selection where it was. */
@@ -227,29 +224,87 @@ function leaveSubmenu(state) {
   return { ...state, mode: 'menu', pending: undefined, menu: state.parent.menu, selected: state.parent.selected, parent: undefined };
 }
 
+// --- the run screen (odd/tasks/tui-gentle-level.md, S4): a command running as a child, then its result ---
+
+const SPINNER = ['|', '/', '-', '\\'];
+// The most lines of output a run keeps: older lines leave the log first.
+const MAX_LOG = 5000;
+const MENU_KEYS = 'Up/Down move, Enter select, Esc back, q quit';
+const RUN_KEYS = 'ctrl+c cancels it; the other keys wait until it ends';
+const SCROLL_KEYS = 'Up/Down/PgUp/PgDn/Home/End scroll';
+const RESULT_KEYS = 'Enter or Esc back to the menu, q quit';
+
+/** What a run is called on its screen: the item's label, with its section where the label alone is ambiguous. */
+function titleOf(command) {
+  const label = MENU_LABELS[command] ?? command;
+  if (command.startsWith('project-')) return `Project ${label.toLowerCase()}`;
+  if (command.startsWith('uninstall-')) return `Uninstall ${label.toLowerCase()}`;
+  return label;
+}
+
+/** Pure: the state of a command that has just started; the menu stays underneath, untouched, for the way back. */
+export function startRun(state, command) {
+  return { ...state, mode: 'running', run: { command, title: titleOf(command), log: [], partial: '', frame: 0, scroll: 0, notes: [] } };
+}
+
+/** Pure: `text` from the running command added to its log, each line made safe to draw. */
+export function appendRunOutput(state, text) {
+  const { lines, partial } = splitOutput(state.run.partial, text);
+  if (lines.length === 0) return { ...state, run: { ...state.run, partial } };
+  const log = [...state.run.log, ...lines.map(cleanLine)].slice(-MAX_LOG);
+  return { ...state, run: { ...state.run, log, partial } };
+}
+
+/** Pure: the run ended, as `{ code, cancelled, error }`; the result screen shows it from the top of its tail. */
+export function finishRun(state, { code = null, cancelled = false, error = null } = {}) {
+  const tail = state.run.partial ? [cleanLine(state.run.partial)] : [];
+  const closeOnLeave = state.run.command === 'uninstall-everything' && code === 0 && !cancelled;
+  return { ...state, mode: 'result', run: { ...state.run, log: [...state.run.log, ...tail], partial: '', code, cancelled, error, closeOnLeave, scroll: 0 } };
+}
+
+const quitting = (state) => ({ state: { ...state, mode: 'done' }, effect: { type: 'quit' } });
+
+/** Keys on the result screen: scroll the log, go back to the menu, or quit. */
+function resultKey(state, key, rows) {
+  const page = Math.max(1, rows - 6);
+  const max = state.run.log.length;
+  const scrollBy = { up: 1, down: -1, pgup: page, pgdn: -page }[key];
+  if (scrollBy !== undefined) return { state: { ...state, run: { ...state.run, scroll: Math.min(max, Math.max(0, state.run.scroll + scrollBy)) } }, effect: null };
+  if (key === 'home' || key === 'end') return { state: { ...state, run: { ...state.run, scroll: key === 'home' ? max : 0 } }, effect: null };
+  if (key === 'quit' || key === 'ctrl-c' || (state.run.closeOnLeave && (key === 'enter' || key === 'escape'))) return quitting(state);
+  if (key === 'enter' || key === 'escape') return { state: { ...state, mode: 'menu', run: undefined }, effect: null };
+  return { state, effect: null };
+}
+
 /**
- * Pure reducer: (state, normalized key) -> { state, effect }. `effect` is null,
- * `{ type: 'run', command }`, or `{ type: 'quit' }` — the shell performs it, the reducer never does. While the
- * Uninstall submenu is open, `state.parent` holds the menu it was opened from: a yes runs the kind from that menu,
- * and Back or Escape returns to it.
+ * Pure reducer: (state, key token) -> { state, effect }. `effect` is null, `{ type: 'run', command }`,
+ * `{ type: 'cancel' }` or `{ type: 'quit' }` — the shell performs it, the reducer never does. While a command runs,
+ * only ctrl+c is read, and it cancels the command. Esc is Back, as in gentle-ai: it leaves the Uninstall submenu
+ * (`state.parent` holds the menu it was opened from) and does nothing on the main menu; q and ctrl+c quit.
+ * `rows` is the window's height, for PgUp/PgDn on the result screen.
  */
-export function handleKey(state, key) {
+export function handleKey(state, key, { rows = 24 } = {}) {
+  if (state.mode === 'running') {
+    if (key === 'ctrl-c' && !state.run.cancelling) return { state: { ...state, run: { ...state.run, cancelling: true } }, effect: { type: 'cancel' } };
+    return { state, effect: null };
+  }
+  if (state.mode === 'result') return resultKey(state, key, rows);
   if (state.mode === 'confirm') {
     if (key === 'y') return { state: state.parent ? leaveSubmenu(state) : { ...state, mode: 'menu', pending: undefined }, effect: { type: 'run', command: state.pending } };
+    if (key === 'ctrl-c') return quitting(state);
     return { state: { ...state, mode: 'menu', pending: undefined }, effect: null };
   }
-  if (state.parent && key === 'escape') return { state: leaveSubmenu(state), effect: null };
-
-  if (key === 'up' || key === 'down') {
-    const selected = stepSelection(state.menu, state.selected, key === 'up' ? -1 : 1);
+  if (key === 'escape') return { state: state.parent ? leaveSubmenu(state) : state, effect: null };
+  if (key === 'up' || key === 'down' || key === 'tab' || key === 'shift-tab') {
+    const selected = stepSelection(state.menu, state.selected, key === 'up' || key === 'shift-tab' ? -1 : 1);
     return { state: { ...state, selected }, effect: null };
   }
-  if (key === 'quit' || key === 'escape') {
-    return { state: { ...state, mode: 'done' }, effect: { type: 'quit' } };
-  }
+  if (key === 'home' || key === 'pgup') return { state: { ...state, selected: firstSelectable(state.menu) }, effect: null };
+  if (key === 'end' || key === 'pgdn') return { state: { ...state, selected: stepSelection(state.menu, 0, -1) }, effect: null };
+  if (key === 'quit' || key === 'ctrl-c') return quitting(state);
   if (key === 'enter') {
     const command = state.menu[state.selected].id;
-    if (command === 'quit') return { state: { ...state, mode: 'done' }, effect: { type: 'quit' } };
+    if (command === 'quit') return quitting(state);
     if (command === 'back') return { state: leaveSubmenu(state), effect: null };
     if (command === 'uninstall') {
       const menu = buildUninstallMenu(state.location);
@@ -261,13 +316,15 @@ export function handleKey(state, key) {
   return { state, effect: null };
 }
 
-/** Pure: state -> the lines to draw. The stack block (T5) renders above the menu, straight from
- * `state.stack` — this function never probes anything itself, see `computeStackState`. */
-export function render(state) {
+/** The header: the version, with an update or a copy to reopen, then the stack block. */
+function headerLines(state) {
   // A newer copy installed under the home (an Upgrade from this menu) runs only in a new process: this one keeps
   // its code, so the header says to open the menu again instead of offering the update once more (release-095 F1).
   const reopen = state.installedCopy && isNewer(state.installedCopy, state.installedVersion);
-  const updateNote = reopen ? `  (${state.installedCopy} installed: quit and open js-harness again to use it)` : state.updateAvailable ? `  (update available: ${state.updateAvailable})` : '';
+  let updateNote = '';
+  if (reopen) updateNote = `  (${state.installedCopy} installed: quit and open js-harness again to use it)`;
+  else if (state.updateAvailable) updateNote = `  (update available: ${state.updateAvailable})`;
+  else if (state.checkingUpdate) updateNote = '  (checking for updates...)';
   const lines = [`js-harness ${state.installedVersion}${updateNote}`];
   if (Array.isArray(state.stack)) {
     for (const row of state.stack) {
@@ -275,19 +332,57 @@ export function render(state) {
     }
   } else if (state.stack === 'unknown') {
     lines.push('  stack: unknown');
-  }
-  lines.push('');
-  for (const [i, entry] of state.menu.entries()) {
-    if (entry.header) {
-      lines.push(entry.label);
-    } else {
-      lines.push(`${i === state.selected ? '>' : ' '} ${entry.label}`);
-    }
-  }
-  if (state.mode === 'confirm') {
-    lines.push('', CONFIRM_PROMPTS[state.pending]);
+  } else if (state.stack === 'checking') {
+    lines.push('  stack: checking...');
   }
   return lines;
+}
+
+/** What the result screen says the run did, and what comes next. */
+function resultLines(run) {
+  let title;
+  if (run.error) title = `${run.command} failed: ${run.error}`;
+  else if (run.cancelled) title = `${run.title}: cancelled; the command was stopped before it finished`;
+  else if (run.code === 0 || run.code === undefined) title = `${run.title}: done (exit 0)`;
+  else title = `${run.title}: failed (exit ${run.code})`;
+  let next;
+  if (run.closeOnLeave) next = 'Everything js-harness kept is removed, this menu included: Enter, Esc or q closes it.';
+  else if (run.cancelled) next = 'It may have done part of its work: run it again from the menu to finish it.';
+  else if (run.error || (run.code !== 0 && run.code !== undefined)) next = 'The log above is its whole output: fix what it names, then run it again from the menu.';
+  else next = 'Back in the menu, Status and Doctor show what changed.';
+  return { title, next };
+}
+
+/** Pure: the frame's parts — `top`, `body` (with `focus`, the selected line, or `scroll`, rows above a log's
+ * tail) and `bottom` — that `layoutFrame` fits to the window. */
+export function sections(state) {
+  if (state.mode === 'running' || state.mode === 'result') {
+    const { run } = state;
+    const head = `js-harness ${state.installedVersion}`;
+    const body = run.log.length ? run.log : [run.partial ? cleanLine(run.partial) : '(no output yet)'];
+    if (state.mode === 'running') {
+      const status = run.cancelling ? `${run.title}: cancelling...` : `${SPINNER[run.frame % SPINNER.length]} ${run.title}: running`;
+      return { top: [head, '', status, ''], body, scroll: 0, bottom: ['', RUN_KEYS] };
+    }
+    const { title, next } = resultLines(run);
+    const keys = run.closeOnLeave ? SCROLL_KEYS : `${SCROLL_KEYS}, ${RESULT_KEYS}`;
+    return { top: [head, '', title, ''], body: run.log.length ? run.log : ['(no output)'], scroll: run.scroll, bottom: ['', ...run.notes, next, keys] };
+  }
+  const body = state.menu.map((entry, i) => (entry.header ? entry.label : `${i === state.selected ? '>' : ' '} ${entry.label}`));
+  const bottom = state.mode === 'confirm' ? ['', CONFIRM_PROMPTS[state.pending]] : ['', MENU_KEYS];
+  return { top: [...headerLines(state), ''], body, focus: state.selected, bottom };
+}
+
+/** Pure: state -> the logical lines of its screen, before they are fitted to a window (`frame` does that). The
+ * stack block renders above the menu, straight from `state.stack`: nothing here probes anything. */
+export function render(state) {
+  const { top, body, bottom } = sections(state);
+  return [...top, ...body, ...bottom];
+}
+
+/** Pure: state -> the rows drawn in a `{ columns, rows }` window: none wider, never more of them. */
+export function frame(state, size) {
+  return layoutFrame(sections(state), size);
 }
 
 /** An error as one printable line: its first line, without C0, DEL or C1 control characters (U+009B is a
@@ -298,146 +393,296 @@ function oneLine(err) {
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
 }
 
-function screenText(state) {
-  return `${render(state).join('\n')}\n`;
-}
-
-/** The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above. `location` is the
- * `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every command,
- * since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStack`
- * (sync or async) does the same for the stack block above the menu: `init` creating `.codegraph/` changes
- * codegraph's project state, and `uninstall` the reverse. `readStackView` reads the block and `stackGap` together,
- * where the caller has both (`computeStackView`), and is used in place of `readStack`.
+/**
+ * The thin I/O shell: wires real (or fake) stdin/stdout to the pure reducer above, on the alternate screen (S1),
+ * repainting the whole frame fitted to the window on every change and on `resize` (S2).
  *
- * A command is called with the location and `{ ask }`: `ask(question)` writes the question and resolves to whether the
- * next key is `y`. That key goes to the command and never to the menu, which still listens while a command runs
- * (Install the stack asks before each install it runs, odd/tasks/stack-install.md, D4-D5). */
+ * `commands` maps a menu item to `(location, { output, signal })`, which resolves to an exit code or to
+ * `{ code, cancelled, error }`: it writes what it prints through `output`, which lands in the run screen's log, and
+ * stops when `signal` aborts (ctrl+c while it runs). A command with `handoff: true` asks its own questions, so the
+ * terminal is handed to it (main screen, keys cooked) and taken back once it ends and a key is pressed.
+ *
+ * `location` is the `projectLocation` the menu opens on; `readLocation` (sync or async) reads it again after every
+ * command, since a command can change it (`init` initializes the project, `uninstall` undoes it). `readStackView`
+ * reads the stack block and `stackGap` again (`readStack` the block alone) and `readUpdate` the version note, both
+ * after every command. `loaders` are read once after the first draw (S5), each resolving to a part of the state
+ * (`{ stack, stackGap }`, `{ updateAvailable, installedCopy }`), so slow work never delays the menu.
+ */
 export function runTui({
   installedVersion,
   updateAvailable,
   installedCopy = null,
   stack,
   stackGap = false,
+  checkingUpdate = false,
   location,
   readLocation,
   readStack,
   readStackView,
   readUpdate,
+  loaders = [],
   commands,
   stdin = process.stdin,
   stdout = process.stdout,
+  proc = process,
+  escapeMs = 50,
+  tickMs = 100,
 }) {
-  let state = initialState({ installedVersion, updateAvailable, stack, stackGap, location, installedCopy });
-  // The answer a command's `ask` waits for: the next key is its, not the menu's.
-  let waiting = null;
-  const ask = (question) => new Promise((resolve) => {
-    stdout.write(question);
-    waiting = (key) => {
-      stdout.write(key === 'y' ? 'y\n' : 'n\n');
-      stdin.pause();
-      resolve(key === 'y');
-    };
-    stdin.resume();
-  });
-  // Lines the last draw left on screen; the next draw moves back over them and clears them, so the
-  // menu updates in place. Zero means "start below whatever is there" (e.g. a command's output).
-  let drawn = 0;
-  const draw = () => {
-    const erase = drawn > 0 ? `[${drawn}A[0J` : '';
-    stdout.write(erase + screenText(state));
-    drawn = render(state).length;
+  let state = { ...initialState({ installedVersion, updateAvailable, stack, stackGap, location, installedCopy }), checkingUpdate };
+  const size = () => ({ columns: stdout.columns || 80, rows: stdout.rows || 24 });
+  // Once the menu has ended, the main screen is back: nothing more is drawn over it.
+  const draw = () => finished || stdout.write(paint(frame(state, size())));
+  let drawQueued = false;
+  const drawSoon = () => {
+    if (drawQueued) return;
+    drawQueued = true;
+    setImmediate(() => {
+      drawQueued = false;
+      draw();
+    });
   };
+  let controller = null;
+  // Stops what the loaders still run (a tag lookup over the network) once the menu ends.
+  const loading = new AbortController();
+  let afterHandoff = null;
+  let finished = false;
 
-  stdin.setRawMode?.(true);
-  stdin.setEncoding('utf8');
-  stdin.resume();
-  draw();
-
-  return new Promise((resolve) => {
-    async function onData(chunk) {
-      const key = normalizeKey(chunk);
-      if (waiting) {
-        const answer = waiting;
-        waiting = null;
-        answer(key);
+  return new Promise((resolve, reject) => {
+    const guard = createTerminalGuard({
+      stdin,
+      stdout,
+      proc,
+      // A signal from outside ends the menu like q does, a running command with it.
+      onSignal: (signal) => {
+        controller?.abort();
+        finish(signal === 'SIGINT' ? 130 : 143);
+      },
+    });
+    const reader = createKeyReader({ onKey, timeoutMs: escapeMs });
+    const onData = (chunk) => {
+      if (afterHandoff) {
+        const back = afterHandoff;
+        afterHandoff = null;
+        back();
         return;
       }
-      const { state: next, effect } = handleKey(state, key);
-      state = next;
+      reader.feed(String(chunk));
+    };
+    const onResize = () => draw();
 
-      if (effect?.type === 'run') {
-        stdin.pause();
-        // Whatever the command or the re-read does, the terminal comes back: a failure is one line on
-        // stderr, the previous location stays, and the menu is drawn again below.
-        let code = null;
+    function finish(code) {
+      if (finished) return;
+      finished = true;
+      loading.abort();
+      reader.dispose();
+      stdin.removeListener('data', onData);
+      stdout.removeListener?.('resize', onResize);
+      guard.restore();
+      stdin.pause();
+      resolve(code);
+    }
+    function fail(err) {
+      if (finished) return;
+      finished = true;
+      loading.abort();
+      reader.dispose();
+      stdin.removeListener('data', onData);
+      stdout.removeListener?.('resize', onResize);
+      guard.restore();
+      reject(err);
+    }
+
+    /** Reads what a command may have changed: the location, the stack block, the version note. A read that fails
+     * keeps what was there, and says so under the result. */
+    async function refresh() {
+      const notes = [];
+      const attempt = async (what, read) => {
         try {
-          code = await commands[effect.command](state.location, { ask });
+          await read();
         } catch (err) {
-          console.error(`${effect.command} failed: ${oneLine(err)}`);
+          notes.push(`${what} failed: ${oneLine(err)}`);
         }
-        // Once everything is gone, the program included, there is no menu left to offer: the TUI ends. A failure
-        // keeps the menu, since what it kept is still installed and the uninstall can be run again.
-        if (effect.command === 'uninstall-everything' && code === 0) {
-          stdin.setRawMode?.(false);
-          stdin.removeListener('data', onData);
-          resolve(0);
-          return;
-        }
-        if (readLocation) {
-          try {
-            state = withLocation(state, await readLocation());
-          } catch (err) {
-            console.error(`reading the project failed: ${oneLine(err)}`);
-          }
-        }
-        if (readStackView) {
-          try {
-            const view = await readStackView();
-            state = withLocation({ ...state, stack: view.stack, stackGap: view.stackGap }, state.location);
-          } catch (err) {
-            console.error(`refreshing the stack failed: ${oneLine(err)}`);
-          }
-        } else if (readStack) {
-          try {
-            state = { ...state, stack: await readStack() };
-          } catch (err) {
-            console.error(`refreshing the stack failed: ${oneLine(err)}`);
-          }
-        }
-        if (readUpdate) {
-          try {
-            const { updateAvailable: available = null, installedCopy = null } = (await readUpdate()) ?? {};
-            state = { ...state, updateAvailable: available, installedCopy };
-          } catch (err) {
-            console.error(`reading the installed version failed: ${oneLine(err)}`);
-          }
-        }
-        stdin.resume();
-        drawn = 0; // keep the command's output; redraw the menu below it
+      };
+      if (readLocation) await attempt('reading the project', async () => { state = withLocation(state, await readLocation()); });
+      if (readStackView) {
+        await attempt('refreshing the stack', async () => {
+          const view = await readStackView();
+          state = withLocation({ ...state, stack: view.stack, stackGap: view.stackGap }, state.location);
+        });
+      } else if (readStack) {
+        await attempt('refreshing the stack', async () => { state = { ...state, stack: await readStack() }; });
       }
+      if (readUpdate) {
+        await attempt('reading the installed version', async () => {
+          const { updateAvailable: available = null, installedCopy: copy = null } = (await readUpdate()) ?? {};
+          state = { ...state, updateAvailable: available, installedCopy: copy };
+        });
+      }
+      if (notes.length && state.mode === 'result') state = { ...state, run: { ...state.run, notes } };
+    }
 
+    async function runCommand(command) {
+      const run = commands[command];
+      state = startRun(state, command);
       draw();
-
-      if (effect?.type === 'quit') {
-        stdin.setRawMode?.(false);
-        stdin.pause();
-        stdin.removeListener('data', onData);
-        resolve(0);
+      controller = new AbortController();
+      const ticker = setInterval(() => {
+        state = { ...state, run: { ...state.run, frame: state.run.frame + 1 } };
+        draw();
+      }, tickMs);
+      let result;
+      try {
+        if (run?.handoff) {
+          guard.suspend();
+          stdin.pause();
+          result = await run(state.location, { signal: controller.signal });
+          stdout.write(`\r\n${titleOf(command)} ended (exit ${result?.code ?? result ?? 'unknown'}). Press Enter to go back to the menu.`);
+          await new Promise((back) => {
+            afterHandoff = back;
+            stdin.resume();
+          });
+          guard.resume();
+          state = appendRunOutput(state, 'It ran on the terminal itself: its output is on the main screen, which comes back when the menu quits.\n');
+        } else {
+          result = await run(state.location, { output: (text) => { state = appendRunOutput(state, text); drawSoon(); }, signal: controller.signal });
+        }
+      } catch (err) {
+        result = { code: null, error: oneLine(err) };
+      } finally {
+        clearInterval(ticker);
+        controller = null;
+      }
+      if (finished) return;
+      // A main that returns nothing ended well, as on the command line, where it exits 0.
+      const outcome = typeof result === 'object' && result !== null ? result : { code: result ?? 0 };
+      state = finishRun(state, outcome);
+      draw();
+      // Once everything is gone, the program included, there is nothing left to read again.
+      if (!state.run.closeOnLeave) {
+        await refresh();
+        draw();
       }
     }
+
+    function onKey(key) {
+      if (finished) return;
+      try {
+        const { state: next, effect } = handleKey(state, key, size());
+        state = next;
+        if (effect?.type === 'cancel') {
+          controller?.abort();
+          draw();
+          return;
+        }
+        if (effect?.type === 'quit') {
+          finish(0);
+          return;
+        }
+        if (effect?.type === 'run') {
+          runCommand(effect.command).catch(fail);
+          return;
+        }
+        draw();
+      } catch (err) {
+        fail(err);
+      }
+    }
+
+    guard.enter();
+    stdin.setEncoding?.('utf8');
     stdin.on('data', onData);
+    stdout.on?.('resize', onResize);
+    stdin.resume();
+    draw();
+    // The slow reads start once the menu is on screen; each fills its part and draws again.
+    if (loaders.length) {
+      setImmediate(() => {
+        for (const load of loaders) {
+          Promise.resolve()
+            .then(() => load({ signal: loading.signal }))
+            .then((part) => {
+              if (finished || !part) return;
+              const gapChanged = 'stackGap' in part && part.stackGap !== state.stackGap;
+              state = { ...state, ...part };
+              if (gapChanged && state.mode === 'menu' && !state.parent) state = withLocation(state, state.location);
+              draw();
+            })
+            .catch(() => {});
+        }
+      });
+    }
   });
 }
 
-/** The commands the menu runs, each bound to `home`. The machine ones do not change scope with the folder:
- * `status` and `sync` pass `--global`, and each kind of uninstall names its kind, which never acts by location,
- * so the same Enter never acts on a project. (`doctor`
- * reads the folder's project, like the stack block, so it gets `--cwd`.) Every project command exists
- * whatever the TUI opened on, and takes the location the menu was last built for: it acts on that
- * location's `root` (the repository's top-level) with `--cwd`, so a repository that appears, or a project
- * that moves, while the TUI is open never leaves a menu item without a command or bound to a stale root.
- * `root` serves direct callers and tests that call a project command with no location; the TUI always
- * passes one, so there the location is authoritative. */
+// --- the commands: each menu item is one `js-harness` command line ---
+
+const CLI = path.join(import.meta.dirname, 'js-harness.mjs');
+
+/**
+ * The `js-harness` arguments each menu item runs. The machine ones do not change scope with the folder: `status`
+ * and `sync` pass `--global`, and each kind of uninstall names its kind, which never acts by location, so the same
+ * Enter never acts on a project. (`doctor` reads the folder's project, like the stack block, so it gets `--cwd`.)
+ * Every project command acts on the `root` (the repository's top-level) of the location the menu was last built
+ * for, with `--cwd`, so a repository that appears, or a project that moves, while the menu is open never leaves an
+ * item bound to a stale root; `root` serves callers with no location. `source` is the folder of tarballs the menu
+ * was opened with, passed on, so that its header and its three version commands read the same release source.
+ */
+export function commandArgv(command, { home, cwd = process.cwd(), root, source, location } = {}) {
+  const fromSource = source ? ['--source', source] : [];
+  const at = () => {
+    const where = location?.root ?? root;
+    if (!where) throw new Error('no project to act on');
+    return ['--cwd', where, '--home', home];
+  };
+  const table = {
+    'project-init': () => ['init', ...at()],
+    'project-sync': () => ['sync', ...at()],
+    'project-status': () => ['status', ...at()],
+    'uninstall-project': () => ['uninstall', 'project', ...at()],
+    // `remote` takes the same `--cwd` and `--home` for its three subcommands, and nothing else is passed.
+    'project-remote-status': () => ['remote', 'status', ...at()],
+    'project-remote-start': () => ['remote', 'start', ...at()],
+    'project-remote-stop': () => ['remote', 'stop', ...at()],
+    status: () => ['status', '--global', '--home', home, ...fromSource],
+    doctor: () => ['doctor', '--home', home, '--cwd', cwd],
+    'stack-install': () => ['stack', 'install', '--home', home, '--cwd', cwd],
+    install: () => ['install', '--home', home],
+    update: () => ['update', '--home', home, ...fromSource],
+    upgrade: () => ['upgrade', '--home', home, ...fromSource],
+    sync: () => ['sync', '--global', '--home', home],
+    'uninstall-machine': () => ['uninstall', 'machine', '--home', home],
+    'uninstall-snapshots': () => ['uninstall', 'snapshots', '--home', home],
+    'uninstall-everything': () => ['uninstall', 'everything', '--home', home],
+  };
+  if (!table[command]) throw new Error(`no menu command ${command}`);
+  return table[command]();
+}
+
+/** The menu's commands as children of `node bin/js-harness.mjs`, the way the menu runs them (S4): output piped
+ * to the run screen, stdin closed, the tree stopped on cancel. Install the stack asks y/N before each install it
+ * runs, so it is handed the terminal and asks there exactly as on the command line (`handoff`). */
+export function childCommands({ home, cwd = process.cwd(), env = process.env, source, runChild: run = runChild, handOff: hand = handOff } = {}) {
+  const childEnv = env === process.env ? env : { ...process.env, ...env };
+  const commands = {};
+  for (const command of COMMAND_IDS) {
+    commands[command] = async (location, { output, signal } = {}) => run(process.execPath, [CLI, ...commandArgv(command, { home, cwd, source, location })], { env: childEnv, cwd, onOutput: output, signal });
+  }
+  commands['stack-install'] = Object.assign(
+    async (location) => hand(process.execPath, [CLI, ...commandArgv('stack-install', { home, cwd, source, location })], { env: childEnv, cwd }),
+    { handoff: true },
+  );
+  return commands;
+}
+
+const COMMAND_IDS = [
+  'project-init', 'project-sync', 'project-status', 'uninstall-project',
+  'project-remote-status', 'project-remote-start', 'project-remote-stop',
+  'status', 'doctor', 'stack-install', 'install', 'update', 'upgrade', 'sync',
+  'uninstall-machine', 'uninstall-snapshots', 'uninstall-everything',
+];
+
+/** The same commands run in this process, each bound to `home`, with the arguments `commandArgv` gives the
+ * child: the seam the tests use to hand a command a fake `spawn`, `fetch` or `now`. */
 export function buildCommands({
   home,
   cwd = process.cwd(),
@@ -449,42 +694,49 @@ export function buildCommands({
   remoteMain: remote = remoteMain,
   source,
 } = {}) {
-  // The folder of tarballs the menu was opened with, passed on, so that its header and its three version
-  // commands read the same release source.
-  const fromSource = source ? ['--source', source] : [];
-  const argsAt = (location) => {
-    const at = location?.root ?? root;
-    if (!at) throw new Error('no project to act on');
-    return ['--cwd', at, '--home', home];
-  };
+  // The arguments after the command's own words: what its main takes.
+  const args = (command, location, words = 1) => commandArgv(command, { home, cwd, root, source, location }).slice(words);
   return {
-    'project-init': async (location) => initMain(argsAt(location), env),
-    'project-sync': async (location) => syncMain(argsAt(location), env),
-    'project-status': async (location) => statusMain(argsAt(location), env, spawn),
-    'uninstall-project': async (location) => uninstallMain(['project', ...argsAt(location)], env),
-    // `remote` takes the same `--cwd` and `--home` for its three subcommands, and nothing else is passed.
-    'project-remote-status': async (location) => remote(['status', ...argsAt(location)], env),
-    'project-remote-start': async (location) => remote(['start', ...argsAt(location)], env),
-    'project-remote-stop': async (location) => remote(['stop', ...argsAt(location)], env),
-    status: () => statusMain(['--global', '--home', home, ...fromSource], env, spawn),
-    doctor: () => doctorMain(['--home', home, '--cwd', cwd], env, { spawn, fetch: fetchImpl, now }),
-    // Each install it runs is shown, then asked through the menu's `ask`: the TUI is the terminal that consents (D5).
-    'stack-install': (location, io = {}) => stackInstallMain(['--home', home, '--cwd', cwd], env, { ask: io.ask, interactive: true }),
-    install: () => installMain(['--home', home]),
-    update: () => updateMain(['--home', home, ...fromSource], env, spawn),
-    upgrade: () => upgradeMain(['--home', home, ...fromSource], env, spawn),
-    sync: () => syncMain(['--global', '--home', home]),
-    'uninstall-machine': () => uninstallMain(['machine', '--home', home]),
-    'uninstall-snapshots': () => uninstallMain(['snapshots', '--home', home]),
-    'uninstall-everything': () => uninstallMain(['everything', '--home', home]),
+    'project-init': async (location) => initMain(args('project-init', location), env),
+    'project-sync': async (location) => syncMain(args('project-sync', location), env),
+    'project-status': async (location) => statusMain(args('project-status', location), env, spawn),
+    'uninstall-project': async (location) => uninstallMain(args('uninstall-project', location), env),
+    'project-remote-status': async (location) => remote(args('project-remote-status', location), env),
+    'project-remote-start': async (location) => remote(args('project-remote-start', location), env),
+    'project-remote-stop': async (location) => remote(args('project-remote-stop', location), env),
+    status: () => statusMain(args('status'), env, spawn),
+    doctor: () => doctorMain(args('doctor'), env, { spawn, fetch: fetchImpl, now }),
+    'stack-install': (location, io = {}) => stackInstallMain(args('stack-install', location, 2), env, { ask: io.ask, interactive: true }),
+    install: () => installMain(args('install')),
+    update: () => updateMain(args('update'), env, spawn),
+    upgrade: () => upgradeMain(args('upgrade'), env, spawn),
+    sync: () => syncMain(args('sync')),
+    'uninstall-machine': () => uninstallMain(args('uninstall-machine')),
+    'uninstall-snapshots': () => uninstallMain(args('uninstall-snapshots')),
+    'uninstall-everything': () => uninstallMain(args('uninstall-everything')),
   };
 }
 
-/** CLI entry point: gathers version info, reads where it opened (`--cwd`, default the current folder),
- * binds the real commands to a home, computes the stack block (offline, never blocking on the network —
- * see `computeStackState`), opens the TUI. `io` may also carry `fetch`/`now` overrides for tests;
- * production leaves them at their real defaults. `argv` is a test seam: bin/js-harness.mjs opens the menu with no
- * arguments, so only the tests pass `--home`, `--cwd` or `--source`. */
+const UPDATE_URL = pathToFileURL(path.join(import.meta.dirname, 'update.mjs')).href;
+
+/** The newest release, looked up off the menu's thread: a folder of tarballs is read here, and the repository's
+ * tags are listed by a child (`git ls-remote` over the network can take seconds), so keys and resize never wait.
+ * The child runs from the temp folder, never the user's, and an abort stops it with its `git`. */
+export async function latestRelease({ source, repo, env = process.env, signal }) {
+  if (source) return resolveLatest({ source, repo });
+  const script = `import(${JSON.stringify(UPDATE_URL)}).then((m) => process.stdout.write(JSON.stringify(m.resolveLatest({ repo: process.argv[1] || undefined }))))`;
+  let out = '';
+  const { code, cancelled, error } = await runChild(process.execPath, ['--input-type=module', '-e', script, repo ?? ''], { env, cwd: os.tmpdir(), signal, onOutput: (text) => { out += text; } });
+  if (code !== 0) throw new Error(error ?? (cancelled ? 'cancelled' : `the tag lookup exited ${code}`));
+  return JSON.parse(out);
+}
+
+/** CLI entry point: reads where it opened (`--cwd`, default the current folder), binds the commands to a home and
+ * opens the menu at once; the update check and the stack block (offline, never the network — see
+ * `computeStackState`) fill in after the first draw. `io` may carry `fetch`/`now` overrides for tests, and
+ * `inProcess: true` runs the commands in this process (`buildCommands`) so a test's fakes reach them; production
+ * runs each as a child. `argv` is a test seam: bin/js-harness.mjs opens the menu with no arguments, so only the
+ * tests pass `--home`, `--cwd` or `--source`. */
 export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {}) {
   const get = (flag) => {
     const i = argv.indexOf(flag);
@@ -494,19 +746,13 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
   const home = harnessHome({ given: get('--home'), env, homedir: os.homedir });
   const cwd = get('--cwd') ?? process.cwd();
   const installedVersion = currentVersion();
-  const { fetch: fetchImpl = fetch, now } = io;
+  const { fetch: fetchImpl = fetch, now, inProcess = false, ...rest } = io;
 
-  // The newest release: in a folder of tarballs when one is named, else the repository's tags (`git ls-remote`).
+  // The newest release: in a folder of tarballs when one is named, else the repository's tags. It is looked up
+  // once, after the first draw; what the home's manifest records is read again after each command, since an
+  // Upgrade installs a newer copy than the one running this menu.
   const source = get('--source') ?? env.JS_HARNESS_SOURCE;
   let latest = null;
-  try {
-    // The repository JS_HARNESS_REPO names, as update and status read it, so the header and those items agree.
-    latest = resolveLatest({ source, repo: env.JS_HARNESS_REPO });
-  } catch {
-    latest = null;
-  }
-  // The release is looked up once; what the home's manifest records is read again after each command, since an
-  // Upgrade installs a newer copy than the one running this menu.
   // A manifest that cannot be read names no copy: the menu opens all the same, as it did before it read one.
   const readUpdate = () => {
     let installedCopy = null;
@@ -518,27 +764,34 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     const newest = installedCopy && isNewer(installedCopy, installedVersion) ? installedCopy : installedVersion;
     return { installedCopy, updateAvailable: latest && isNewer(latest.version, newest) ? latest.version : null };
   };
-  const { updateAvailable, installedCopy } = readUpdate();
+  const loadUpdate = async ({ signal } = {}) => {
+    try {
+      // The repository JS_HARNESS_REPO names, as update and status read it, so the header and those items agree.
+      latest = await latestRelease({ source, repo: env.JS_HARNESS_REPO, env: env === process.env ? env : { ...process.env, ...env }, signal });
+    } catch {
+      latest = null;
+    }
+    return { ...readUpdate(), checkingUpdate: false };
+  };
 
   // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
   const location = projectLocation(cwd);
-  const { stack, stackGap } = await computeStackView({ home, cwd, spawn, fetch: fetchImpl, now });
-
-  const commands = buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now, source });
+  const readStackView = () => computeStackView({ home, cwd, spawn, fetch: fetchImpl, now });
+  const commands = inProcess ? buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now, source }) : childCommands({ home, cwd, env, source });
 
   return runTui({
     installedVersion,
-    updateAvailable,
-    installedCopy,
+    ...readUpdate(),
+    checkingUpdate: true,
     readUpdate,
-    stack,
-    stackGap,
+    stack: 'checking',
     location,
     readLocation: () => projectLocation(cwd),
     // The same offline probes as at start, never the network: `computeStackView` always calls
     // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
-    readStackView: () => computeStackView({ home, cwd, spawn, fetch: fetchImpl, now }),
+    readStackView,
+    loaders: [() => readStackView(), loadUpdate],
     commands,
-    ...io,
+    ...rest,
   });
 }
