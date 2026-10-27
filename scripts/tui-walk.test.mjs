@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { paint } from '../bin/lib/terminal.mjs';
-import { menuOf, resultOf, screenOf } from './tui-walk.mjs';
+import { REFRESHING } from '../bin/tui.mjs';
+import { menuOf, resultOf, screenOf, settledOf } from './tui-walk.mjs';
 
 const KEYS = 'Up/Down move, Enter select, Esc back, q quit';
 
@@ -37,4 +38,10 @@ test('resultOf reads the title of a result screen, and nothing from a menu or a 
   assert.equal(resultOf(paint(['js-harness 0.97.0', '', 'status failed: boom', ''])), 'status failed: boom');
   assert.equal(resultOf(paint(['js-harness 0.97.0', '', '| Update: running', ''])), null);
   assert.equal(resultOf(paint(['js-harness 0.97.0', '', '> Status'])), null);
+  assert.equal(resultOf(paint(['js-harness 0.97.0', '', 'Doctor: failed (stopped by SIGKILL)', ''])), 'Doctor: failed (stopped by SIGKILL)');
+});
+
+test('settledOf waits out the menu reading what a command changed, said on its version line', () => {
+  assert.equal(settledOf(paint([`js-harness 0.97.0${REFRESHING}`, '', 'Upgrade: done (exit 0)'])), false);
+  assert.equal(settledOf(paint([`js-harness 0.97.0${REFRESHING}`, '']) + paint(['js-harness 0.97.0', '', 'Upgrade: done (exit 0)'])), true);
 });

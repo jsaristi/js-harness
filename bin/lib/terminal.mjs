@@ -86,11 +86,44 @@ export function createKeyReader({ onKey, timeoutMs = 50, setTimeout: later = set
   };
 }
 
-/** `text` as rows no wider than `width`: wrapped at spaces, a word longer than a row split, and every row after
- * the first indented like the first, so a wrapped item still reads as one. */
+// The characters a terminal draws two cells wide (East Asian wide and fullwidth, most emoji), and the ones it draws
+// in none (combining marks, zero-width spaces and joiners, variation selectors): a row measured in string length
+// can be wider than the window, which then wraps it by itself.
+const WIDE = [[0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe30, 0xfe4f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1f64f], [0x1f680, 0x1f6ff], [0x1f900, 0x1f9ff], [0x1fa70, 0x1faff], [0x20000, 0x3fffd]];
+const ZERO = [[0x0300, 0x036f], [0x200b, 0x200f], [0x20d0, 0x20ff], [0xfe00, 0xfe0f]];
+const within = (ranges, point) => ranges.some(([from, to]) => point >= from && point <= to);
+const charCells = (char) => {
+  const point = char.codePointAt(0);
+  if (within(ZERO, point)) return 0;
+  return within(WIDE, point) ? 2 : 1;
+};
+
+/** How many terminal cells `text` takes. */
+export function cellWidth(text) {
+  let cells = 0;
+  for (const char of text) cells += charCells(char);
+  return cells;
+}
+
+/** `text` split after at most `room` cells, between characters (a surrogate pair stays whole); at least one
+ * character goes first, so a row narrower than one wide character still moves on. */
+function splitCells(text, room) {
+  let cells = 0;
+  let end = 0;
+  for (const char of text) {
+    const next = cells + charCells(char);
+    if (next > room && end > 0) break;
+    cells = next;
+    end += char.length;
+  }
+  return [text.slice(0, end), text.slice(end)];
+}
+
+/** `text` as rows no wider than `width` cells: wrapped at spaces, a word longer than a row split, and every row
+ * after the first indented like the first, so a wrapped item still reads as one. */
 export function wrapLine(text, width) {
   const w = Math.max(1, width);
-  if (text.length <= w) return [text];
+  if (cellWidth(text) <= w) return [text];
   const indent = text.match(/^ */)[0].slice(0, Math.floor(w / 2));
   const rows = [];
   let row = '';
@@ -98,16 +131,16 @@ export function wrapLine(text, width) {
     let rest = word;
     while (rest) {
       const lead = row ? `${row} ` : indent;
-      if (lead.length + rest.length <= w) {
+      if (cellWidth(lead) + cellWidth(rest) <= w) {
         row = lead + rest;
         rest = '';
       } else if (row) {
         rows.push(row);
         row = '';
       } else {
-        const room = w - indent.length;
-        rows.push(indent + rest.slice(0, room));
-        rest = rest.slice(room);
+        const [head, tail] = splitCells(rest, w - indent.length);
+        rows.push(indent + head);
+        rest = tail;
       }
     }
   }
@@ -124,11 +157,32 @@ const wrapAll = (lines, width) => lines.flatMap((line) => wrapLine(line, width))
  * next, keeping its first row and naming how many it hid; the body gets the rows left, around line `focus` (a
  * menu's selection) or `scroll` rows above its tail (a log).
  */
-export function layoutFrame({ top = [], body = [], bottom = [], focus, scroll = 0 }, { columns = 80, rows = 24 } = {}) {
+export function layoutFrame(parts, size) {
+  const { bottomRows, height, shownTop, bodyRows, room, focus, focusStart, focusEnd } = planFrame(parts, size);
+  if (bottomRows.length >= height) return bottomRows.slice(-height);
+  const scroll = parts.scroll ?? 0;
+  let start = 0;
+  if (bodyRows.length > room) {
+    const last = bodyRows.length - room;
+    if (focus === undefined) start = Math.max(0, last - Math.max(0, scroll));
+    else start = Math.min(last, Math.max(0, focusStart - Math.floor((room - (focusEnd - focusStart)) / 2)));
+  }
+  return [...shownTop, ...bodyRows.slice(start, start + room), ...bottomRows];
+}
+
+/** How far a log's body scrolls in a window, in the rows `layoutFrame` draws: `page`, the rows it shows, and
+ * `max`, the most rows it can be scrolled above its tail (its wrapped rows, not its lines). */
+export function scrollRange(parts, size) {
+  const { bodyRows, room } = planFrame(parts, size);
+  return { page: Math.max(1, room), max: Math.max(0, bodyRows.length - room) };
+}
+
+/** The rows of each part and the room the body gets, shared by `layoutFrame` and `scrollRange`. */
+function planFrame({ top = [], body = [], bottom = [], focus }, { columns = 80, rows = 24 } = {}) {
   const width = Math.max(1, (columns || 80) - 1);
   const height = Math.max(1, rows || 24);
   const bottomRows = wrapAll(bottom, width);
-  if (bottomRows.length >= height) return bottomRows.slice(-height);
+  if (bottomRows.length >= height) return { bottomRows, height, shownTop: [], bodyRows: [], room: 0, focus };
   const topRows = wrapAll(top, width);
   const bodyRows = [];
   let focusStart = 0;
@@ -148,13 +202,7 @@ export function layoutFrame({ top = [], body = [], bottom = [], focus, scroll = 
     shownTop = [...shownTop.slice(0, -1), wrapLine(`  ... ${hidden} more rows: a taller window shows them`, width)[0]];
   }
   const room = height - topKeep - bottomRows.length;
-  let start = 0;
-  if (bodyRows.length > room) {
-    const last = bodyRows.length - room;
-    if (focus === undefined) start = Math.max(0, last - Math.max(0, scroll));
-    else start = Math.min(last, Math.max(0, focusStart - Math.floor((room - (focusEnd - focusStart)) / 2)));
-  }
-  return [...shownTop, ...bodyRows.slice(start, start + room), ...bottomRows];
+  return { bottomRows, height, shownTop, bodyRows, room, focus, focusStart, focusEnd };
 }
 
 /** The text that repaints `rows` over the whole screen: home, each row cleared to its end, the rest cleared below.
@@ -192,7 +240,7 @@ const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
  * undoes all three, once, whatever ended the menu. It restores by itself when the process exits (an uncaught error
  * included) and on SIGINT, SIGTERM or SIGHUP, then hands the signal to `onSignal`, which ends the process.
  * `suspend` and `resume` hand the terminal to a command that asks its own questions, and back; while suspended,
- * a ctrl+c is the command's, so the guard lets it pass.
+ * a ctrl+c is the command's, so the guard lets it pass, while SIGTERM and SIGHUP still end the menu.
  */
 export function createTerminalGuard({ stdin, stdout, proc = process, onSignal = () => {} }) {
   let entered = false;
@@ -207,7 +255,8 @@ export function createTerminalGuard({ stdin, stdout, proc = process, onSignal = 
   };
   const onExit = () => restore();
   const handlers = Object.fromEntries(SIGNALS.map((signal) => [signal, () => {
-    if (suspended) return;
+    // A ctrl+c while a command owns the terminal is that command's; a termination or a hangup still ends the menu.
+    if (suspended && signal === 'SIGINT') return;
     restore();
     onSignal(signal);
   }]));

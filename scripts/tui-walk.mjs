@@ -10,6 +10,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, npm, run, mkTmp, copyRepoToStaging, nextVersion, bumpVersion } from './lib.mjs';
+import { REFRESHING } from '../bin/tui.mjs';
 
 const KEY = { down: 'j', up: 'k', enter: '\r', yes: 'y', no: 'n', quit: 'q', escape: '\u001b' };
 const STEP_MS = 10 * 60_000; // an upgrade with the real npm can take minutes
@@ -21,13 +22,19 @@ export function screenOf(text) {
   return text.slice(at).replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r\n/g, '\n').split('\n');
 }
 
-// The title a result screen opens with, the third row: an exit code, a cancel, or a command that could not run.
-const RESULT_TITLE = / \(exit \d+\)$|: cancelled; |^\S+ failed: /;
+// The title a result screen opens with, the third row: an exit code, a signal, a cancel, or a command that could not run.
+const RESULT_TITLE = / \(exit \d+\)$| \(stopped by \w+\)$|: cancelled; |^\S+ failed: /;
 
 /** The title of the result screen `text` ends on, or null while a command still runs or a menu is drawn. */
 export function resultOf(text) {
   const title = screenOf(text)[2] ?? '';
   return RESULT_TITLE.test(title) ? title : null;
+}
+
+/** Whether the last frame in `text` is done reading what a command changed: until then its version line says so
+ * (`REFRESHING`, bin/tui.mjs), and the header and the menu may still be the ones from before the command. */
+export function settledOf(text) {
+  return !(screenOf(text)[0] ?? '').includes(REFRESHING);
 }
 
 /** The index of each item of the last menu drawn in `text`, with its section, and the one selected. */
@@ -122,12 +129,13 @@ async function main() {
   }
 
   const results = [];
-  /** Presses `key`, which starts a command, and waits for its result screen: the rows of that last frame. */
+  /** Presses `key`, which starts a command, and waits for its result screen, done reading what the command changed
+   * (so the menu Enter goes back to is the new one): the rows of that last frame. */
   async function runToResult(key) {
     const start = out.length;
     child.stdin.write(key);
     const until = Date.now() + STEP_MS;
-    while (!resultOf(out.slice(start))) {
+    while (!resultOf(out.slice(start)) || !settledOf(out.slice(start))) {
       if (Date.now() > until) throw new Error(`no result screen ${STEP_MS / 1000} s after the key ${JSON.stringify(key)}`);
       if (child.exitCode !== null) break;
       await sleep(50);
