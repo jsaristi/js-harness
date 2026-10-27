@@ -414,11 +414,11 @@ proofs and by those tasks.
 ### What a session took from gentle-ai is ours
 
 **Problem:** F8's S2 removes gentle-ai, and with it the output style that sets how a session talks, the skills that say how to cut a commit and split a large change, and, by its uninstall, the whole `permissions` object of the user's Claude settings (`docs/proposals/gentle-ai-reverse-engineering.md`, section 3; `odd/tasks/f8-s10-port.md`).
-**Requirement:** Install writes, for Claude Code, an output style named `js-harness` (neutral Spanish with tú, no voseo, no persona; Claude Code's coding instructions kept) and two skills adapted from gentle-ai under our names, `js-harness-work-units` and `js-harness-chained-prs`, each recorded and removed exactly; the package ships the notices of what it ports, the Apache License 2.0 text among them.
+**Requirement:** Install writes, for Claude Code, an output style named `js-harness` (neutral Spanish with tú, no voseo, no persona; Claude Code's coding instructions kept) and two skills adapted from gentle-ai under our names, `js-harness-work-units` and `js-harness-chained-prs`, each recorded and removed exactly; the package ships the notices of what it ports, the Apache License 2.0 text among them. Install also holds the `permissions` object of the user's Claude settings: it adds the allow entry and the 24 denies gentle-ai writes where they are missing, puts back a `defaultMode` it adopted once that has gone missing and never invents one, and records only what it wrote, so uninstall takes out exactly that and never an entry it found; `doctor`'s `permissions` row names each entry missing.
 **Reason:** The owner's voice decision G10 ("la 7 la voz hazlo en neutro", 2026-10-26) and the order of F8: port first, remove last. Under gentle-ai's names install would write over gentle-ai's own files.
-**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/package.test.mjs`
-**Discarded:** Copying gentle-ai's persona or its 14 skills. Installing the skills for Codex, which only reviews here. Moving the first skills' text out of the engine, which would move 13 rules' phrases.
-**Today:** `bin/lib/output-style.mjs`, `bin/lib/ported-skills.mjs`, `claude-output-style`, `claude-work-units-skill`, `claude-chained-prs-skill`, `THIRD_PARTY_NOTICES.md`
+**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/package.test.mjs`, `node --test bin/lib/permissions.test.mjs`
+**Discarded:** Copying gentle-ai's persona or its 14 skills. Installing the skills for Codex, which only reviews here. Moving the first skills' text out of the engine, which would move 13 rules' phrases. Holding the denies as hook-style entries, whose engine does not remember an entry that was there before it, so uninstall would take gentle-ai's denies out of the user's settings.
+**Today:** `bin/lib/output-style.mjs`, `bin/lib/ported-skills.mjs`, `claude-output-style`, `claude-work-units-skill`, `claude-chained-prs-skill`, `THIRD_PARTY_NOTICES.md`, `bin/lib/permissions.mjs`
 
 ### The record of notices between sessions
 

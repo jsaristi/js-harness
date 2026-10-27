@@ -36,6 +36,9 @@ import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpe
 import { remoteDir, remoteFiles } from './remote.mjs';
 import { hygieneDir, journalPath, purgeMarker } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
+import { PERMISSIONS_ALLOW, PERMISSIONS_DENY } from './permissions.mjs';
+
+const OUR_PERMISSIONS = { allow: PERMISSIONS_ALLOW, deny: PERMISSIONS_DENY };
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
@@ -63,9 +66,12 @@ function ourHooks(file, event) {
 }
 
 /** Our whole host file `file` as install writes it: each event key at the place its first entry is declared. */
+/** What install leaves in the host file `file` that held nothing: our hooks, and in Claude's settings the permissions it
+ * holds after them (F8 S10, ./permissions.mjs). */
 function ourFile(file) {
   const events = [...new Set(componentsIn(file).map((component) => component.pointer.at(-1)))];
-  return { hooks: Object.fromEntries(events.map((event) => [event, ourHooks(file, event)])) };
+  const hooks = Object.fromEntries(events.map((event) => [event, ourHooks(file, event)]));
+  return file === 'settings.json' ? { hooks, permissions: OUR_PERMISSIONS } : { hooks };
 }
 
 const claudeHook = hookById('claude-hook');
@@ -1963,12 +1969,12 @@ test('R3-001: install leaves the file untouched and reports skipped when an inte
   try {
     const target = claudeHook.target(home);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    const original = JSON.stringify({ hooks: 'not-an-object' });
-    fs.writeFileSync(target, original, 'utf8');
+    fs.writeFileSync(target, JSON.stringify({ hooks: 'not-an-object' }), 'utf8');
 
     const manifest = install(home, '0.1.0');
 
-    assert.equal(fs.readFileSync(target, 'utf8'), original, 'expected the file to be byte-for-byte untouched');
+    // The permissions are another key, held as in any file; the hooks are left byte for byte.
+    assert.equal(fs.readFileSync(target, 'utf8'), JSON.stringify({ hooks: 'not-an-object', permissions: OUR_PERMISSIONS }), 'expected the hooks to be untouched');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
   } finally {
@@ -1988,7 +1994,7 @@ test('R3-001: install never clobbers a value of an unexpected shape, and reports
     // The pause, web failure, guard and share hooks are separate entries under their own keys, so they are written; the SessionStart value is not touched.
     const otherEvents = { ...ourSettings().hooks };
     delete otherEvents.SessionStart;
-    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', ...otherEvents } }, 'the unexpected value is left as it is');
+    assert.deepEqual(readJson(target), { hooks: { SessionStart: 'oops', ...otherEvents }, permissions: OUR_PERMISSIONS }, 'the unexpected value is left as it is');
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
   } finally {

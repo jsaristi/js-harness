@@ -17,6 +17,7 @@ import { SHARE_TOLERANCE } from './audit.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';
+import { holdPermissions, releasePermissions } from './permissions.mjs';
 import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
 import { chainedPrsSkillContent, workUnitsSkillContent } from './ported-skills.mjs';
 import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, webFailureHookEntry } from './hook-entries.mjs';
@@ -948,7 +949,7 @@ function forgetRecord(home, key, matches, listDir) {
   const left = manifest[key].filter((entry) => !matches(entry));
   const { [key]: dropped, ...rest } = manifest;
   const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0
-    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0);
+    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0) && !rest.permissions;
   if (left.length > 0) {
     writeManifest(home, { ...manifest, [key]: left });
   } else if (empty) {
@@ -962,23 +963,12 @@ function forgetRecord(home, key, matches, listDir) {
 
 // ---- settings ---------------------------------------------------------------------------------------------------------
 
-/** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
- * with `accept`, a message from a session of another permission class arrives instead of being held (his choice of
- * 2026-10-11, and his answer of 2026-10-14 that `install` writes it on an explicit flag; T5 of
- * odd/tasks/commands-and-doctor.md). It is a security setting, so nothing writes it without that flag. */
-export const SESSION_MESSAGES = { key: 'crossSessionInbound', value: 'accept' };
-
-/** The user settings of Claude Code under `home`, where `SESSION_MESSAGES` is read. */
-export function userSettingsPath(home) {
-  return path.join(home, '.claude', 'settings.json');
-}
-
 /** The style of a JSON settings file the machine manifest creates: two spaces, LF, and no newline at the end (settings-key
  * adds one to the files it creates). A file that exists is written back in its own style (`detectIndent`, its line
  * endings, its final newline). Frozen, since every missing file shares it. */
 export const NEW_SETTINGS_STYLE = Object.freeze({ trailingNewline: false, useCRLF: false, indent: 2 });
 
-export { acceptSessionMessages } from './user-settings.mjs';
+export { SESSION_MESSAGES, acceptSessionMessages, userSettingsPath } from './user-settings.mjs';
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
 
@@ -1227,8 +1217,10 @@ export function install(home, version, deps = {}) {
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
-  const manifest = { version, files, entries, ...carried };
+  const { held, record: permissions } = holdPermissions(home, previous?.permissions);
+  const manifest = { version, files, entries, ...(permissions && { permissions }), ...carried };
   writeManifest(home, manifest);
+  Object.defineProperty(manifest, 'permissionsHeld', { value: held, enumerable: false });
   return manifest;
 }
 
@@ -1446,6 +1438,7 @@ function uninstallInstalled(home, deps) {
   // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
   const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
+  const permissions = manifest.permissions && releasePermissions(manifest.permissions, home, listDir, { writeFile: deps.writeFile, removeFile });
 
   // Codex keys a hook's trust by its place, so where each group of a Codex hooks.json goes is read before any entry
   // of it is taken out, and the trust follows the entries once they are out.
@@ -1495,13 +1488,14 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0) {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
-    const keptSettings = settings.failedRecords.map((record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) }));
+    const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
+    const keptSettings = settings.failedRecords.map(madeFile);
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
       ...(keptSettings.length > 0 && { settings: keptSettings }),
-      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }),
+      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
     });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
@@ -1513,7 +1507,7 @@ function uninstallInstalled(home, deps) {
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

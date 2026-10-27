@@ -275,6 +275,14 @@ function logEntries(entries) {
   }
 }
 
+/** What install did with the permissions it holds in the user's Claude settings (F8 S10, bin/lib/permissions.mjs). A
+ * file it could not hold them in goes to stderr, and `doctor` keeps the gap: the entries are not there. */
+function logPermissions(held) {
+  if (held?.status === 'written') console.log(`wrote the permissions js-harness holds into ${held.path}`);
+  else if (held?.status === 'already') console.log(`the permissions js-harness holds are already in ${held.path}`);
+  else if (held?.status === 'skipped') console.error(`skipped the permissions in ${held.path}: ${held.reason}; js-harness doctor shows the entries missing`);
+}
+
 /** The config.toml Codex keeps its hooks' trust in, for the Codex home of `home` as doctor reads it (`codexHomeOf`,
  * stack-install T8): install records it on each Codex entry, so `uninstall` takes the trust out of that file
  * (odd/tasks/codex-hook-trust.md). `deps.homedir` and `deps.platform` are the seams of a test. */
@@ -329,6 +337,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
+  logPermissions(manifest.permissionsHeld);
   if (logTrust(manifest) > 0) return 1;
   return acceptMessages ? reportSessionMessages(home) : 0;
 }
@@ -481,6 +490,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
+  logPermissions(manifest.permissionsHeld);
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   return logTrust(manifest) > 0 ? 1 : 0;
 }
@@ -608,6 +618,10 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   logTrust(result);
   for (const p of result.settingsRestored ?? []) console.log(`put ${SESSION_MESSAGES.key} back in ${p}`);
   for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
+  const released = result.permissions;
+  if (released?.status === 'released') console.log(`took ${released.removed} permission entr${released.removed === 1 ? 'y' : 'ies'} install wrote out of ${released.path}`);
+  else if (released?.status === 'kept') console.error(`could not read ${released.path} (${released.reason}): the permission entries install wrote may still be in it, and are no longer recorded; remove them by hand`);
+  else if (released?.status === 'failed') console.error(`could not take the permission entries install wrote out of ${released.path} (${released.code}): they are still recorded; run js-harness uninstall --global again, or remove them by hand`);
   for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is still recorded; run js-harness uninstall --global again, or set it back by hand`);
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with
   // how to delete it; one that could not be looked at or deleted is not their doing, and stays recorded so that
@@ -733,7 +747,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
+  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

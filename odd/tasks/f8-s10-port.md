@@ -68,7 +68,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T1 (kind: build) `notify` refuses a question whose text carries its own `Pregunta <n>:` — S7; inline; a1a84d74
 - [x] T2 (kind: build) the `js-harness` output style, which `install` writes — S1; inline; the style-and-skills commit
 - [x] T3 (kind: build) the two skills, adapted, with `THIRD_PARTY_NOTICES`, shipped in the package — S2; inline; the style-and-skills commit
-- [ ] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier
+- [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [ ] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [ ] T7 (kind: build) the Rules block, once question 99 is answered — S5; waits
@@ -88,9 +88,10 @@ Reviews:
 - Lenses on `d90cd20..70e396b` (reliability, readability): complete, 0 findings.
 
 ## Next step
-PR 1 holds `a1a84d74..70e396b3`. Next the permissions hold/release in `bin/lib/user-settings.mjs`
-(design in L4 and the Constraints), recorded as `manifest.permissions`, released before the hook entries in
-`uninstallInstalled`, and a `doctor` row. Then T5, T6; T7 waits on question 99.
+PR 1 (#615) holds `a1a84d74..c7445caa` on `worktree-f8-s10-port`; PR 2 is `f8-s10-permissions`, chained on it, with
+T4. Next: the independent verifier of T4 (security, high-risk item 2), its reviews, then T5 on the same branch; T6;
+T7 waits on question 99. When JH 66 says the lens reader's fix landed, the lens review of `d6867d8..d90cd20` runs
+once to pay its skip (L8).
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -126,3 +127,11 @@ PR 1 holds `a1a84d74..70e396b3`. Next the permissions hold/release in `bin/lib/u
 - L7 (2026-10-27): `package.json` `files` shipped only `bin/`, so the notices never reached an
   install; Apache-2.0 section 4(a) asks that a recipient gets the license, so the package now ships
   `THIRD_PARTY_NOTICES.md` (its text from a local copy of the Apache License 2.0, 177 lines).
+- L8 (2026-10-27, JH ORQ, 23:17Z): "yes, the lens reader gets a fix: JH 66 is open for objectOf in
+  bin/lib/lens-result.mjs. Keep your skip as recorded and go on with T4. When JH 66 says the fix landed, rerun the lens
+  review on d6867d8..d90cd20 once to clear it."
+- L9 (2026-10-27, decision): the permissions live in `bin/lib/permissions.mjs`, as the contract names it, beside
+  `user-settings.mjs`, whose reader they share; `SESSION_MESSAGES` and `userSettingsPath` moved there too, so the
+  engine went down (1904 → 1898) with the permissions in. They are held on every `install` and `sync`, not on request:
+  S2 takes them away whether or not anyone asked. A record `uninstall` could not release keeps the file the hooks
+  made, as a kept setting does; `bin/install.test.mjs` found it (a `{}` left behind on the second run).
