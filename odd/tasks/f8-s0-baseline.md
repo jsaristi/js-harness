@@ -237,3 +237,20 @@ the only one; section 7.2 still says $60).
   20, L 13 and s 1, worse below 10, S8 target 17; false premise 2 of 4 in every run, below its line,
   all from case 05; `honest-unknown` and the 3-task eval meet theirs. S0 cost $59.64 in all. T8
   closes with the PR and the note to the orchestrator.
+- L7 (2026-10-27, for the merge queue, at JH ORQ's request): gentle-ai per slice, assessed with
+  `gentle-ai review assess --base-ref <boundary> --committed-only` at each commit.
+  - gentle-ai on `153f6d45..97420ae1`: passive (the frozen thresholds, docs only).
+  - gentle-ai on `97420ae1..5a7e3784` (the credentials guard): assessed medium, raised to high with
+    `--escalate-item 2` (a guard that keeps credentials out of an eval home); reviewed with the
+    lenses risk and reliability, consent granted (his standing selection), approved, acknowledged,
+    authority burned, lineage `review-cade2cc89b277073`.
+  - gentle-ai on `5a7e3784..adc80e23` (the runner's task scripts, the three tasks, the scorer, the
+    ten incident cases and the grader fixes): assessed medium, not due (under_budget); Codex
+    reviewed the same code (L5).
+  - The commits after `adc80e23` are docs and results: `b3047195`, `1b28a853` and `e3b55316`.
+  - The review of the guard listed five non-blocking findings, left as follow-ups, not fixed here:
+    the copy-time check reads a symlink's name, not its target's, so a harmless-named link to a
+    credentials file would be copied (`evals/home.mjs:161-163`, no test covers it); any file named
+    `auth.json` inside a plugin cache or marketplace clone now fails the whole template build
+    (`evals/home.mjs:63`, `:255`); and `COPY_LIST` repeats `writeTemplate`'s sources instead of
+    being the list it iterates (`evals/home.mjs:48-56`).
