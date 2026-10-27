@@ -955,6 +955,14 @@ everything waiting on it, waited behind the measure.
 - Control: check — bin/gate.test.mjs — "gate refuses a turn while a commit that a push takes now waits
   on a branch with an open pull request" — since 2026-10-14
 
+### question-numbered-by-hand
+A session wrote the `Pregunta <n>: ` prefix of a question by hand, guessing the next number, and `notify`
+gave the question another, so the text he would see named a question that does not exist.
+- Class: wrong-information
+- Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L13 — JH 62 sent "Pregunta 94: ..." and `notify` recorded
+  it as question 98 (its reply: `prefix: "Pregunta 98: "`); corrected by a note to the orchestrator at 21:42Z
+- Control: owed — odd/tasks/f8-s1-reviews.md — "numbered by hand before `notify` gave it 98"
+
 ### question-tool-holds-asker
 The question tool holds the session that asks until he answers, so a question asked while he was
 away held the lead, and the merges it owed, for seven hours.

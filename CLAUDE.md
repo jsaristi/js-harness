@@ -81,10 +81,13 @@ skipped, because his answer is always yes and the question only stalls the work.
 has no `granted` choice or does not parse, ask him instead. A candidate is a work-unit commit or a
 slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the
 branch, run its read-only status and start nothing, because with consent pre-granted nothing would
-stop a review that size. Every slice with code goes through Codex, whether or not gentle-ai
-reviewed it: `js-harness codex-review --base <boundary>` records the review, and the pre-push hook
-refuses a branch whose code commits no record covers. Treat its findings like gentle-ai's. If Codex
-cannot run, report that and record the skip with `--unavailable <reason>`.
+stop a review that size. Every slice with code goes through Codex and the Claude lenses, whether
+or not gentle-ai reviewed it: `js-harness codex-review --base <boundary>` and `js-harness
+lens-review --base <boundary> --lenses <pertinent> --reason <why>` record the reviews, and the
+pre-push hook refuses a branch whose code commits either record does not cover. Treat their
+findings like gentle-ai's. If one cannot run, report that and record the skip with its
+`--unavailable <reason>`: a skip is a debt `check` and `doctor` list and the merge door refuses
+until a review pays it.
 
 ## Kept from the global file
 
