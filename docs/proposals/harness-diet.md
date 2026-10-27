@@ -51,25 +51,54 @@ reported in section 9. Every change outside the repository is in section 1, as h
   one noise rule, where the kept lines live and which budget counts them, a behavioural Stop-hook
   probe, and what F8 does not fix. The gentle-ai research of the same day is its own document,
   [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), which now holds S9.
+- **Fifth pass (section 17).** A third blind grade, of this plan with that document, gave Claude
+  6.4 and Codex 7.0. S9's detect-and-refuse half (S9a) now lands before S2, the decisions are one
+  register, the paid checkpoints are named, and the incident score has a target.
 
 IDs used below:
 - F2, F5: roadmap phases (`docs/ROADMAP.md`).
-- D1-D7: his decisions in `odd/tasks/fixed-load.md`.
-- S0-S9: migration steps (section 10).
+- FL1-FL7: his decisions in `odd/tasks/fixed-load.md` (named D1-D7 there).
+- S0-S9: migration steps (section 10); S9 is split into S9a and S9b.
+- D1-D9: his decisions of this plan; G1-G7: those raised by
+  [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md). One register, section 1.
 - C1-C5: certification criteria (section 7).
 
 ## 1. What is his to decide
 
-Asked one at a time, in this order. Each says which earlier decision it changes.
+**The register.** Every open decision of F8, with a unique ID, its status, the recommended default
+and the step that asks it. ROADMAP step 2 asks from this table, one at a time; the G decisions'
+reasons are in the reverse-engineering document, section 7. Dates are local (America/Bogota).
 
-1. **Log the CLI back in** (`claude auth login`). Done, and verified on 2026-10-26: `claude auth
+| ID | Decision | Status | Recommended default | Asked at |
+|---|---|---|---|---|
+| D1 | Log the CLI back in | done 2026-10-26 | — | step 0 |
+| D2 | Exclude the global file here; the eval spend | exclusion answered 2026-10-26; spend open | at most $200 API-equivalent for F8 | step 2, first |
+| D3 | `AGENTS.md` or `CLAUDE.md` | answered 2026-10-26: `CLAUDE.md` importing `@AGENTS.md`, his words below | — | — |
+| D4 | The `fixed load` budget | open | 80,000 failing once S2 is measured; 75,000 after S5 and S6 | step 4, after S2 |
+| D5 | `rule:double-review` | open | narrow it to proposals that change one of his decisions | step 2 |
+| D6 | Codex as the slice reviewer | open | keep it | step 2 |
+| D7 | His reply rules and the six lines that join them | open | defaults per line, below | step 2, before S3 |
+| D8 | The engram prompt hook | open | off | step 2 |
+| D9 | Whether `init` offers the exclusion | open | after the final grade | step 5 |
+| G1 | gentle-ai telemetry | open | off, after he reads `gentle-ai telemetry preview` | step 2 |
+| G2 | TUI approach | open | (a) port the design plus (e) open gentle-ai's TUI | step 2 |
+| G3 | TUI priority against F8 | open | the defect task (causes 1 and 2) now; the rest beside F8 | step 2 |
+| G4 | The skill-registry prompt hook | open | remove it after S2 and S9a; S9a checks it every run, since a sync re-adds it | step 4, after S2 |
+| G5 | gentle-ai skills to hide here | open | `rdd-defect-workflow` after S1, `skill-registry` after G4 | step 4, at S5 |
+| G6 | GGA | open | keep | step 2 |
+| G7 | Re-analysis spend after F8 | open | ~$13 per rerun under the rule of section 7.2, capped at $50 a month | step 5 |
+
+The detail of each D decision follows, in the order asked. Each says which earlier decision it
+changes.
+
+1. **D1. Log the CLI back in** (`claude auth login`). Done, and verified on 2026-10-26: `claude auth
    status` reports `loggedIn`, and a refresh token is present. This session's first eval attempt
    had broken the login (section 9).
-2. **Exclude gentle-ai's global file in this repo, with eval spend to guard it** (S0, then S3 and
+2. **D2. Exclude gentle-ai's global file in this repo, with eval spend to guard it** (S0, then S3 and
    S2 in that order; S2 is not safe without S3).
    - **The exclusion half is answered.** Shown how the exclusion works, he said "Ok listo
      hagamoslo asi" (transcript `4b935d4a-cbb8-47fe-a059-22a7c5bae931`, line 3210,
-     2026-10-26T23:42Z). That answer replaces D2 (`odd/tasks/fixed-load.md:108`, answered at
+     2026-10-26T23:42Z). That answer replaces FL2 (`odd/tasks/fixed-load.md:108`, answered at
      :116): exclude only the orchestrator and routing blocks, and only once gentle-ai #4036 ships.
      #4036 has been open since 2026-09-01 with no comments, and 4.2.0 has no exclude flag.
    - The whole file stops loading here. The kept lines of Appendix A move into the repo, word for
@@ -78,16 +107,27 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      on `main` (section 14.1). The untracked `settings.local.json` there would also work, but git
      cannot revert it and no manifest records it, so it is not used (fourth pass, Claude regrade
      criterion 4). It takes effect in every worktree session at once, not one branch at a time.
-   - **Still his: the eval spend**, which replaces D7 (no paid eval). It is now one bounded
+   - **Still his: the eval spend**, which replaces FL7 (no paid eval). It is now one bounded
      envelope: at most **$200 API-equivalent** (`total_cost_usd`) for all of F8, on the eval
-     token, so it draws on his Max plan's limits. The estimate: the S0 baseline twice (~$25), one
-     rerun after each measured step (5 × ~$13), S8 twice (~$25), the long-session eval capped at
-     $60. Codex's audits come on top, about 6% of its five-hour window each. Each run reports its
-     cost; crossing the envelope stops the evals and comes back to him.
+     token, so it draws on his Max plan's limits. The paid checkpoints, by name:
+
+     | Checkpoint | Runs | Cost |
+     |---|---|---:|
+     | S0 baseline | the incident set, the 3-task eval, `honest-unknown`, twice | ~$25 |
+     | After S3, S2, S1, S4b, S5 | one incident-set run each (section 10's "no worse") | 5 × ~$13 = ~$65 |
+     | S8 | the S0 and S8 measures, twice | ~$25 |
+     | Long-session eval | 5 runs per setup and one desktop smoke run | ≤ $60 |
+     | Reserve | S6's two-case run (~$3); then at most one or two reruns after a gentle-ai update (section 7.2) | ~$25 |
+     | **Total** | | **≤ $200** |
+
+     S4a, S7 and S9 use their own probes and spend nothing. Grading: a script grades the
+     deterministic cases; Codex grades the rubric cases blind (outside the envelope, about 6% of its
+     five-hour window per audit); a fresh Sonnet 5.5 regrades a fifth (inside it). Each run reports
+     its cost; crossing the envelope stops the evals and comes back to him.
    - Recommended.
-3. **AGENTS.md or CLAUDE.md** (section 4 has the evidence; the second pass adds a
+3. **D3. AGENTS.md or CLAUDE.md** (section 4 has the evidence; the second pass adds a
    recommendation).
-   - **Answered 2026-10-27: yes, `CLAUDE.md`.** Asked whether Codex keeps reviewing, he said:
+   - **Answered 2026-10-26 (local; 00:36Z on the 27th): yes, `CLAUDE.md`.** Asked whether Codex keeps reviewing, he said:
      "si pero codex es un revisor externo no mas y se usa para revisar lo que hacemos y cuando
      manejemos un proyecto es para revisar el codigo" (transcript
      `e41d1e8d-8264-45a4-b16c-f9279f7b6076` line 1697), and to the split below: "Excelente me
@@ -120,19 +160,19 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      - With a no: the lines can only go into `AGENTS.md`, which then needs about 2.9k. That means
        raising `rule:agents-budget` to about twice its value, and the F1 row's "≤ ~1.5k" with it.
        That is a change he decides, so it is part of this decision and never made silently.
-4. **The `fixed load` budget** (D1: 100,000, warn only). After S2+S3 the first turn is about
+4. **D4. The `fixed load` budget** (FL1: 100,000, warn only). After S2+S3 the first turn is about
    105.5 − 30.7 + 1.8 ≈ 76.6k (the kept lines are about 1.36k by chars/4, about 1.8k by Claude's
    count, which runs a quarter higher; the third pass used 2.5k), so a 75,000 line would turn
    `check` red on day one. The margin under 80k is thin: the 105.5k came from a first turn with
    three `SessionStart` hooks cancelled (section 2), so a normal session sits somewhat higher. The
    recommendation: 80,000, failing `check`, once S2 is measured; 75,000 only once S5 and S6 have
    landed and the row reads under it.
-5. **`rule:double-review`** (two readers before a proposal reaches him). The Opus 5 guide says
+5. **D5. `rule:double-review`** (two readers before a proposal reaches him). The Opus 5 guide says
    verification instructions cause over-verification. Keep it, or narrow it to proposals that
    change one of his decisions. Recommended: narrow it.
-6. **Codex as the slice reviewer** (`AGENTS.md:56-60`). It stays, or Claude reviewers in a fresh
+6. **D6. Codex as the slice reviewer** (`AGENTS.md:56-60`). It stays, or Claude reviewers in a fresh
    context replace it. Section 6 has the tradeoffs. Recommended: keep it.
-7. **His reply rules.** "Default to short answers" and "Ask at most one question ... STOP" sit in
+7. **D7. His reply rules.** "Default to short answers" and "Ask at most one question ... STOP" sit in
    the Rules block of the global file and in the output style. They fight "keep moving" and the
    closing recap.
    - Option: "one question at a time; keep doing what does not depend on the answer", which is the
@@ -155,9 +195,9 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      - "Always propose alternatives with tradeoffs when relevant." (45): drop. It pulls against 40,
        and the decisions he is asked already carry a recommended default.
    - The Gentleman voice stays either way (section 5).
-8. **The engram prompt hook** (his install): turn it off. It costs ~0.4k per prompt (chars/4),
+8. **D8. The engram prompt hook** (his install): turn it off. It costs ~0.4k per prompt (chars/4),
    prints a false "CRITICAL FIRST ACTION", and names tools that do not exist here.
-9. Later, a product choice: whether `js-harness init` offers the same exclusion in other projects.
+9. **D9.** Later, a product choice: whether `js-harness init` offers the same exclusion in other projects.
 
 gentle-ai stays installed. Its review CLI, skills and engram install keep working. Only its
 always-on prose stops loading in this project.
@@ -312,7 +352,7 @@ that fight the project rules:
 - "Default to short answers" (lines 15-16) fights the closing recap with spend.
 - "Close with impact only when it fits" (line 95) sits well enough with the five states. Keep it.
 
-The voice can stay. The first three should be reworded (decision 7).
+The voice can stay. The first three should be reworded (D7).
 
 ## 6. Models, host features, sessions
 
@@ -365,7 +405,7 @@ deeper hierarchy helps coding, multi-agent systems use about 15× the tokens of 
 reports that one writer with read-only helpers works and parallel writers fail
 ([Cognition](https://cognition.com/blog/dont-build-multi-agents)).
 
-**Codex as reviewer (decision 6).**
+**Codex as reviewer (D6).**
 - For keeping it: a different model family. In its blind audit it found two points this audit had
   missed. The pre-push record already enforces it.
 - Against: one audit-sized run cost 6% of its five-hour window, and the setup is separate.
@@ -401,6 +441,13 @@ Rules that keep the method honest:
   trials to 3 per case would narrow that, at about $6 more per run, beyond the envelope's estimate;
   it is not done. The other S0 measures have fixed lines instead: `honest-unknown` 3 of 3; the
   3-task eval at least 2 of 3 on each task.
+- **The target, so "funciona muy mal" has a number** (fifth pass). Frozen with the thresholds at S0,
+  before S2: at S8 the incident set scores at least `max(17, min(20, L + 3))` of 20, that is one
+  noise band above the baseline's lower run and never under 17. With L at 12 the target is 17;
+  at 15 it is 18; at 18 it is 20. F8 is judged on that observed result as well as on tokens: if
+  the token targets pass and this does not, F8 is not done. If L is already 17 or more, the
+  incident set does not reproduce what he reports; that is said plainly, and the judgment claim
+  rests on the long-session eval (section 7.2) instead.
 - **Two numbers, reported apart:** coverage (how many measures exist) and pass rate (how many of
   those pass). A missing measure is never counted as a pass.
 - **A criterion passes when all its S0 and S8 measures pass.** Deferred measures are excluded:
@@ -433,7 +480,7 @@ Rules that keep the method honest:
 | | temp folders, locks or processes older than a day | S8 | 0 | `js-harness clean`, `quiet` (exist; 5 `merge-queue-*` folders today) |
 | | a read-only command writes nothing | deferred | 0 | to build |
 | | `evals/home.mjs` refuses a scratch home holding a credentials file, and copies only its copy list | S0 | refused; nothing copied beyond its list: `CLAUDE_ITEMS`, the plugin folders and state files, `.claude.json` without `projects`, and `.gentle-ai/state.json` (`evals/home.mjs:216-238`), never a credentials file | to build, in `evals/home.mjs` (section 9) |
-| C5 Optimized | first turn, desktop | S0, S8 | ≤ 80k after S2+S3; ≤ 75k after S5 and S6 (decision 4) | `check` `fixed load` row (exists; 105.5k), and `/context` of one desktop session |
+| C5 Optimized | first turn, desktop | S0, S8 | ≤ 80k after S2+S3; ≤ 75k after S5 and S6 (D4) | `check` `fixed load` row (exists; 105.5k), and `/context` of one desktop session |
 | | what a session reads to start | S0 | ≤ 15k after S6 | to build: a byte count of the roadmap's Next and Decided and the open feature document's head |
 | | cost per task against the minimal arm, at equal score | S0 | ≤ 1.2× at S8 | the 3-task eval through `node evals/suite.mjs --configs minimal,current` (to build: its three tasks go into `evals/tasks/`; section 9 ran them from the scratch `diet-eval.mjs`; 1.68-2.54× in F5, 3.1× there) |
 
@@ -474,7 +521,7 @@ node evals/suite.mjs --summary --name f8-s0-<run>-incidents
 - the credentials guard in `evals/home.mjs` (section 9).
 
 The `--permission-mode` matches the desktop sessions here (`bypassPermissions`, roadmap open
-decision 2); `--plan` on each line prints the trials and their estimated cost first.
+D2); `--plan` on each line prints the trials and their estimated cost first.
 
 **The incident set.** Ten cases, each written from a register entry or a reported failure, with
 its expected behaviour fixed before the first run:
@@ -520,8 +567,13 @@ feature where the test must come before the code. A separate grader reads the tr
 one rubric line per moment. At least 5 runs per setup (the baseline harness and the final one),
 plus one desktop smoke run. Capped at $60 of the envelope.
 
-Certification is rerun on each new model and each Claude Code or Codex CLI update
-(`docs/future-model.md:15-18` already names both moments), and on each gentle-ai update through S9.
+**When things rerun: one rule** (fifth pass; the same in the roadmap and in the reverse-engineering
+document, section 5.5). Full certification, the S8 measures and the audits, reruns on each new
+model and each Claude Code or Codex CLI update (`docs/future-model.md:15-18` already names both
+moments). On a gentle-ai update, S9 classifies first, and only the S0 incident baseline reruns,
+once (~$13), and only when an item in a prompt, hook, persona or skill area is recorded as
+`adapt`, or as `conflicts` that he accepted. An update whose items are all `adopt` or `ignore`
+records without a rerun.
 Vendor-side changes have broken quality before
 ([April postmortem](https://www.anthropic.com/engineering/april-23-postmortem), 2026-04-23,
 *older*).
@@ -643,23 +695,26 @@ Each step is one commit or one setting, measured against the S0 baseline, and un
 revert. "No worse" means the one noise rule of section 7: on the incident set, a score not below
 `L − max(s, 3)`; on the other measures, their fixed lines.
 
-The order, from the third pass: S0, then S3 and S2, then S4's attribution hook, then S1 (or S1
-before S3 if S0's probe fails), then the rest of S4, S5, S6, S7, and S8. S9 lands any time after
-S0. The long-session eval is built beside them and only S8 needs it.
+The order, from the third pass, with S9a moved by the fifth: S0, then S3, then **S9a**, then S2,
+then S4's attribution hook, then S1 (or S1 before S3 if S0's probe fails), then the rest of S4,
+S5, S6, S7, and S8. S9a comes before S2 because S2's guard against new injection paths (section
+11), G4 and the persona-copy refresh all rest on it. S9b lands any time after S9a. The
+long-session eval is built beside them and only S8 needs it.
 
 | Step | What | Probe and expected result | Pass, against the baseline | Saving |
 |---|---|---|---|---|
 | S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row. **Review probe, behavioural** (fourth pass): in an `evals/home.mjs` scratch home with the exclusion on, `HOME` and `USERPROFILE` both pointed at it, a headless Opus 5.5 session that loads `AGENTS.md` and the S3 lines but no lifecycle prose is asked to review a seeded slice in a scratch repo. gentle-ai's `SessionStart` (startup) and `Stop` review hooks are registered as they are here; `SubagentStop` only runs telemetry and is left out | the guard refuses a planted credentials file; both baseline runs complete; the session carries the review to a terminal state by running each `next_transition` it is given, with no prose; the transcript shows the `SessionStart` and `Stop` review hooks ran, neither cancelled nor timed out; the real `~/.gentle-ai` and `~/.claude` hash the same before and after | the baseline and its spread are recorded; probe passes → S1 moves after S2; fails → S1 stays first. "The hooks exit 0" is not a pass line: they do whether or not the model can act on them (both regrades) | 0 |
-| S3 The kept lines | Section A.1's lines go into the file decision 3 picks, and a budget counts them there: a new `claude-md-budget` row for the root `CLAUDE.md`, or `rule:agents-budget` raised by his decision (decision 3). Lands before S2, alone: while the global file still loads, the lines are a harmless ~1.4k duplicate | `/context` from a real worktree session shows each project file once; `check` is green with the budget row that counts the lines | first turn +≤ 2.5k; incident set no worse | none by itself; it lets S2 save 30.7k |
+| S3 The kept lines | Section A.1's lines go into the file D3 picks, and a budget counts them there: a new `claude-md-budget` row for the root `CLAUDE.md`, or `rule:agents-budget` raised by his decision (D3). Lands before S2, alone: while the global file still loads, the lines are a harmless ~1.4k duplicate | `/context` from a real worktree session shows each project file once; `check` is green with the budget row that counts the lines | first turn +≤ 2.5k; incident set no worse | none by itself; it lets S2 save 30.7k |
 | S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json`; the `payload` row of `check` learns the exclusion and a project output style (`bin/lib/payload.mjs:91-100`, `218-246` resolve neither today). A desktop worktree session reads it from `D:\js-harness\.claude\` only, so it acts when merged to `main` and pulled into the main checkout, for every session at once; the rollout below gates it | a restarted desktop worktree session's `/context` shows no user file | `fixed load` ≤ 80k over its 5 sessions; incident set and 3-task eval no worse; `honest-unknown` 3 of 3 | ~30.7k per turn and per subagent |
-| S4a Attribution hook | `commit-msg` hook strips attribution lines (no refusal) | a scratch commit carrying `Co-Authored-By` lands without it | 0 attribution lines in the next 50 commits on `main` (6% today) | small |
-| S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one `correction_required`, one a typed stop; then three real slices | 6 of 6 reach their terminal state with no lifecycle prose loaded | the 28 KB of lifecycle prose stops being needed |
+| S4a Attribution hook and hook count | `commit-msg` hook strips attribution lines (no refusal); a `check` row counts `~/.claude/settings.json` hook entries per event and per owner | a scratch commit carrying `Co-Authored-By` lands without it; a fixture settings file with one extra `Stop` entry turns the row red | 0 attribution lines in the next 50 commits on `main` (6% today); the row fails when any event or owner exceeds today's count (`Stop` 6, `UserPromptSubmit` 4, `SessionStart` 7; gentle-ai 5, js-harness 13, Orca 12, herdr 1, codegraph 1; 32 in all, the reverse-engineering document's section 2) or a new owner appears | small |
+| S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one `correction_required`, one a typed stop; then three real slices | 6 of 6 reach their terminal state with no lifecycle prose loaded; incident set no worse (case 2 is a review consent) | the 28 KB of lifecycle prose stops being needed |
 | S4b Contradictions to zero | contract-first as a `check` refusal for new docs; the output style's conflicting lines, rewritten in a project copy at `D:\js-harness\.claude\output-styles\` selected by the project's `outputStyle` (gentle-ai rewrites `~/.claude/output-styles/gentleman.md`; project settings take precedence over the user's, [output styles](https://code.claude.com/docs/en/output-styles)) | a new doc without `## Goal` is refused; `/context` shows the project style | 10 of 10 section 3 pairs closed or marked his decision; incident set no worse | small |
 | S5 Skills, memory and rules | protocols skill trigger without "closing a reply"; each js-harness skill body ≤ 3k; `MEMORY.md` ≤ 0.5k; the rule pass and the record rule (below) | count skill loads in the next 10 sessions' transcripts | protocols skill in ≤ 3 of 10 sessions; 65 of 65 rules and every register control classified; incident set no worse | ~2-5k per turn |
 | S6 Read surface | roadmap Next and Decided ≤ 10k, evidence to `docs/decisions/`; a `## State` head ≤ 2k on any feature doc over 100 KB; relief file split by month | the read-surface measure | ≤ 15k; incident cases 9 and 10 no worse | ~20k per session start |
 | S7 Topology and routing | lead cut at phase close or after two compactions; Haiku 5.5 helpers and writers with `omitClaudeMd` (Haiku keeps writing scoped code, "Subagent models result"); Sonnet writer prompts with the damping and real-check paragraphs | first turns of the next 5 Haiku subagents; the next 5 Sonnet writer slices in review | Haiku first turn ≤ 30k (52.7k-77.9k today); ≤ 1 unrequested test or doc file across those 5 slices; no lead past two compactions in the step's week | ~7k per lead turn |
 | S8 Certify | section 7's S0 and S8 measures; a Claude audit and a Codex audit, 3 runs each, on the same prompt (no longer blind: this document is in the repo) | every S0 and S8 measure read | each criterion's S0 and S8 measures pass, 17 in all; the 4 deferred ones are reported as not built; audits reported with their spread, beside the baseline | — |
-| S9 Update guard | extend `bin/lib/gentle-ai-update.mjs` as [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md) section 5 designs: a source diff by area, an installed-file diff by marker and hook, read-only contract probes, a classifier, verdicts recorded per release | fixtures of a release with a `conflicts` item and of one without | today's version records; a release with a `conflicts` item leaves the row stale, `doctor --gentle-ai-reviewed` refuses to record it, and the fix names the commands that keep the reviewed version | — |
+| S9a Update guard, installed files (before S2) | extend `bin/lib/gentle-ai-update.mjs` as [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md) section 5.3 designs: an installed-file diff by marker and hook, a same-version drift check, read-only contract probes, the contradiction check, the refusal, and `--accept <area> --quote` for his acceptance (to build) | fixtures of a release with a `conflicts` item, of one without, and of a same-version sync that re-adds a hook | today's install records; the `conflicts` fixture leaves the row stale and `doctor --gentle-ai-reviewed` refuses it until an `--accept` with his words; the re-added hook turns the row stale; the fix names the way back, with `restore` marked unproven | — |
+| S9b Update guard, source (any time after S9a) | the source diff by `AREAS` on real repository paths, unmatched paths blocking until classified by hand, and the per-release record, committed only for releases with an item other than `ignore` (section 5.4 there) | a fixture diff with one path in each area and one unmatched | each path lands in its area; the unmatched one blocks the record; an `ignore`-only release adds one batched line | — |
 
 **The review driver** takes over only the mechanical path:
 1. Run `review assess` over the slice, against the last reviewed boundary. The driver keeps the
@@ -732,9 +787,12 @@ version it diffs the release's source by area and the installed files by marker 
 the review contract read-only, classifies each change against that document's matrix, and records
 the verdicts per release. It also refuses, not only detects (Codex regrade): while a change is
 `conflicts`, the review record is withheld and the row names the commands that keep the reviewed
-version. The S0 baseline reruns only for releases that touch a prompt, hook, persona or skill
-area. The scratch-home `gentle-ai sync` this text first planned is untested on Windows and is no
-longer the first tool.
+version. What it guarantees, exactly: it **detects after an install and withholds the record**; it
+does not stop a sync from writing, and a sync re-adds a hook he removed. So a hook removal is
+checked on every run (a re-added hook turns the row stale), never made persistent. S9a, the
+installed-file half, lands before S2; S9b, the source diff, any time after. The baseline reruns by
+the one rule of section 7.2. The scratch-home `gentle-ai sync` this text first planned is not part
+of S9: it reads files and runs read-only probes, never a sync.
 
 The `fixed load` row cannot do this job. It reads the first turns of the latest real sessions
 (the median of 5, `bin/lib/fixed-load.mjs:1-13`), so it sees growth only after sessions have run
@@ -780,9 +838,11 @@ control is missing. F8 routes them, and claims nothing for them:
 - **A gentle-ai update may write instructions where the exclusion does not reach** (a new file, a
   rules folder, a new hook or skill). Editing its file after each update was weighed and rejected:
   gentle-ai rewrites its marked blocks on every `sync`, and the file is global, so an edit would
-  change every project. Guard: S9 diffs each release by area and the installed files by marker
-  and hook, at update time, and withholds the review record on a conflict
-  ([gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), section 5). The
+  change every project. Guard: S9a, landed before S2, diffs the installed files by marker and
+  hook on every `doctor` run, new version or not, and withholds the review record on a conflict;
+  S9b diffs each release's source by area
+  ([gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), section 5). It detects
+  after the install; it does not prevent the write. The
   `fixed load` row is a second, later
   net: it reads real first turns (the median of 5, `bin/lib/fixed-load.mjs:1-13`), so it catches
   growth only after sessions have run on the new version.
@@ -828,7 +888,7 @@ The second pass (section 14) added row 24; the evidence it appended to rows 1, 3
 
 | # | Concern | Gap | The difference | Today | Should be (source) | Step | Status |
 |---|---|---|---|---|---|---|---|
-| 5 | Verification instructions | opposite | We add verification instructions; on Opus 5 they cause over-verification and should be removed. | gentle-ai's verification gates plus rule:double-review. In today's eval the full payload took 8-9 turns on a commit task, against 4-6 for the slim one. | On Opus 5, explicit verification instructions cause over-verification; removing them saves tokens with no loss in quality. That this holds for 5.5 too is an inference. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 (undated, fetched 2026-10-26)) | S2, decision 5 | decision pending |
+| 5 | Verification instructions | opposite | We add verification instructions; on Opus 5 they cause over-verification and should be removed. | gentle-ai's verification gates plus rule:double-review. In today's eval the full payload took 8-9 turns on a commit task, against 4-6 for the slim one. | On Opus 5, explicit verification instructions cause over-verification; removing them saves tokens with no loss in quality. That this holds for 5.5 too is an inference. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 (undated, fetched 2026-10-26)) | S2, D5 | decision pending |
 | 1 | Instruction loading and its size | major | We load a 613-line global file (30.7k tokens); the target is under 200 lines per file. | About 105k tokens load before the first word (this session's first turn). About 43k of them are instructions, and 30.7k of those come from ~/.claude/CLAUDE.md, which runs to 613 lines. | Under 200 lines per instruction file; longer files cost more context and reduce adherence. Cut every line whose removal causes no mistake. (https://code.claude.com/docs/en/memory ; https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S2, S5, S6 | open |
 | 3 | Who owns each rule, and contradictions | major | Ten rule pairs contradict each other; the target is one owner per rule and no contradictions. | Ten contradiction pairs. gentle-ai owns about 99% of the global file. His no-attribution rule loses on 141 of 2,344 commits. | One owner per instruction. When two instructions contradict each other, Claude may pick one arbitrarily. (https://code.claude.com/docs/en/memory (undated, fetched 2026-10-26)) | S2, S4 | open |
 | 7 | Subagents and delegation | major | Every subagent but Explore and Plan loads the 30.7k global file; omitClaudeMd can keep it out. | Every subagent but the built-in Explore and Plan agents loads the 30.7k global file; first turns ran 52.7k-77.9k. Haiku writers carry it too. | omitClaudeMd: true keeps the instruction files out of a subagent (v2.1.271). Haiku 5.5 stops early under long agent prompts. Use subagents for parallel or isolated work, and work directly on simple tasks. (https://code.claude.com/docs/en/sub-agents#what-loads-at-startup ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5 (undated, fetched 2026-10-26)) | S2, S7 | open |
@@ -837,16 +897,16 @@ The second pass (section 14) added row 24; the evidence it appended to rows 1, 3
 | 11 | Model routing on the 5.5 family | major | Our Sonnet and Haiku writers get the full global file and no real-check paragraph; the guide says to add it and drop the rest. | Opus 5.5 leads. Haiku writers load the full global file. Writer prompts carry no damping paragraph and no real-check paragraph. | Sonnet 5.5 adds tests and docs nobody asked for, and at low effort it reports done without running a check: give it the guide's damping and real-check paragraphs. Haiku 5.5 is cheapest ($0.10/$0.50) but skips verification at low and medium effort. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5 ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5 ; https://platform.claude.com/docs/en/about-claude/pricing (undated, fetched 2026-10-26)) | S7 | open |
 | 13 | Evals and certification | major | Our evals sit at the ceiling and 7 of 21 measures exist; the target is a runnable check per claim. | The F5 evals sit at their ceiling. Today's eval scored 9/9 on both arms. Of 21 certification measures (18 in the first pass), 7 exist and 3 pass. | Give the agent a check it can run, and gate completion on it. No vendor publishes adherence rates, so they must be measured here. (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0, S8 | open |
 | 14 | Credentials and safety hooks | major | Nothing stopped a credentials copy; the target is an eval home that refuses to start with a credentials file present and copies only an allow-list. | An eval copied ~/.claude/.credentials.json into scratch homes and killed the CLI login. The copy ran inside a Node script, so no filename-matching hook would have seen it. The eval-token path existed and was not used. | Scratch state stays outside real state; guard it where it is made. evals/home.mjs already copies an allow-list (CLAUDE_ITEMS, evals/home.mjs:40-46). (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0 | open |
-| 15 | Hooks that inject text | major | A hook shouts CRITICAL on every prompt; the guidance is plain wording, because shouting overtriggers. | The engram prompt hook adds about 0.4k per prompt, says "CRITICAL FIRST ACTION", and names tools that do not exist here. Three SessionStart hooks were cancelled in this session, and nothing reported it. | "CRITICAL: You MUST" overtriggers; use plain wording. Blanket instructions make Haiku 5.5 overtrigger. (https://code.claude.com/docs/en/best-practices ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5 (undated, fetched 2026-10-26)) | S0 (doctor row), decision 8 | decision pending |
+| 15 | Hooks that inject text | major | A hook shouts CRITICAL on every prompt; the guidance is plain wording, because shouting overtriggers. | The engram prompt hook adds about 0.4k per prompt, says "CRITICAL FIRST ACTION", and names tools that do not exist here. Three SessionStart hooks were cancelled in this session, and nothing reported it. | "CRITICAL: You MUST" overtriggers; use plain wording. Blanket instructions make Haiku 5.5 overtrigger. (https://code.claude.com/docs/en/best-practices ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5 (undated, fetched 2026-10-26)) | S0 (doctor row), D8 | decision pending |
 | 16 | Docs and help verbosity | major | Every session reads an 82 KB roadmap; the target is a ~100-line map and loading the rest on demand. | Every session reads the 82 KB roadmap. Feature docs reach 421 KB. --help is 32 KB. | The instruction file is a map of about 100 lines into docs/, kept fresh by linters. Load the rest by progressive disclosure. (https://openai.com/index/harness-engineering/ (2026-02-11); https://code.claude.com/docs/en/skills (undated, fetched 2026-10-26)) | S6 | open |
 | 22 | Removing scaffolding | major | We retire rules only when a successor replaces them; the target is to remove each part once the model outgrows it. | 65 rules and 101 failure entries. Two rules were retired on 2026-10-24, `reply-four-states` and `work-sessions`, each replaced by successors (`bin/lib/rules-data.mjs:318-325`, `:697`); none was retired because a check or the model made it unneeded (fourth pass, Codex regrade). | Every harness part encodes an assumption about what the model can't do. Remove it once the model outgrows it, and find the simplest solution. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://addyosmani.com/blog/agent-harness-engineering/ (2026-04-19)) | S5 (rule pass), then a schedule | open |
 | 23 | Isolation of evals, probes and read commands | major | A read command wrote a notice and an eval reached real credentials; the target is reads that write nothing and evals isolated from real state. | windows-daily, run as a read, recorded a notice to the lead. An eval reached real credentials. | Scratch state stays outside real state, and read-only commands write nothing. The repo's own runner already uses only an eval token (evals/suite.mjs:94). (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0 | open |
-| 2 | Project instructions file (AGENTS.md / CLAUDE.md) | minor | We use AGENTS.md alone; native loading has silent off-switches, which a root CLAUDE.md importing @AGENTS.md avoids (tested: one copy, the worktree's). | AGENTS.md only, by his rule of 2026-10-15 (docs/rule-sources.json:713). It loaded in 132 of 133 transcripts and after all 16 compactions of the old lead. No failure traces to it. Second pass: in a real worktree layout a root CLAUDE.md holding @AGENTS.md loads AGENTS.md once, from the worktree only. | CLAUDE.md is the documented path. AGENTS.md is read only when no CLAUDE.md sits in the folder or above it (since v2.1.277). A CLAUDE.md that holds @AGENTS.md imports it once. Users report native loading switched off by a CLAUDE.local.md, an /init file or a home ancestor. (https://code.claude.com/docs/en/memory (undated, fetched 2026-10-26); anthropics/claude-code#103458, #96117, #97004) | S3, decision 3 | decision pending (recommended: CLAUDE.md importing AGENTS.md) |
+| 2 | Project instructions file (AGENTS.md / CLAUDE.md) | minor | We use AGENTS.md alone; native loading has silent off-switches, which a root CLAUDE.md importing @AGENTS.md avoids (tested: one copy, the worktree's). | AGENTS.md only, by his rule of 2026-10-15 (docs/rule-sources.json:713). It loaded in 132 of 133 transcripts and after all 16 compactions of the old lead. No failure traces to it. Second pass: in a real worktree layout a root CLAUDE.md holding @AGENTS.md loads AGENTS.md once, from the worktree only. | CLAUDE.md is the documented path. AGENTS.md is read only when no CLAUDE.md sits in the folder or above it (since v2.1.277). A CLAUDE.md that holds @AGENTS.md imports it once. Users report native loading switched off by a CLAUDE.local.md, an /init file or a home ancestor. (https://code.claude.com/docs/en/memory (undated, fetched 2026-10-26); anthropics/claude-code#103458, #96117, #97004) | S3, D3 | decision pending (recommended: CLAUDE.md importing AGENTS.md) |
 | 24 | Where a worktree session reads project settings | minor | A desktop worktree session reads project settings from the main checkout, so a settings change acts on every session at once; the plan had assumed one branch at a time. | Desktop worktree sessions start with --project-config-root D:\js-harness (read from the live processes, 2026-10-26). claudeMdExcludes in the worktree's .claude/settings.json is not honoured; in the main checkout's it is. | Land a settings change such as S2 as one merge to main, measure it the same day, and revert on main if a measure is worse. (Claude Code 2.1.308 help for --project-config-root; section 14.1) | S2 | open |
 | 4 | Checks versus prose | minor | Most rules are prose; the target puts every must-always rule in a hook or check. | A check gate, a reply Stop hook and a pre-push hook exist. Most of the 65 rules and the failure register's controls are prose. | What must always happen goes into a hook or CI, because hooks are deterministic. OpenAI's team promotes rules from docs into linters. (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26); https://openai.com/index/harness-engineering/ (2026-02-11)) | S4, S5 (rule pass) | open |
-| 6 | Review (gentle-ai RDD, Codex) | minor | We keep 28 KB of review prose always loaded; the target keeps the separate reviewer but drives it by a check, not prose. | The gentle-ai review lifecycle is 28 KB of always-on prose. Codex reviews each slice, and the pre-push hook enforces it. | Separate generation from evaluation, with a fresh-context evaluator and a contract fixed before coding. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5 (undated, fetched 2026-10-26)) | S1, decision 6 | open |
+| 6 | Review (gentle-ai RDD, Codex) | minor | We keep 28 KB of review prose always loaded; the target keeps the separate reviewer but drives it by a check, not prose. | The gentle-ai review lifecycle is 28 KB of always-on prose. Codex reviews each slice, and the pre-push hook enforces it. | Separate generation from evaluation, with a fresh-context evaluator and a contract fixed before coding. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5 (undated, fetched 2026-10-26)) | S1, D6 | open |
 | 12 | Effort per kind of work | minor | We pick effort by kind of work but never measure it; the target measures it per role. | Effort is chosen by kind of work (rule:session-effort, rule:subagent-effort). Nothing measures it per role. | Opus 5.5 at medium matches Opus 5 at high. Lowering effort reduces thinking more reliably than prompt instructions do. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5 (undated, fetched 2026-10-26)) | S8 (effort row) | open |
-| 17 | Output style and persona | minor | Our style says STOP after a question; the target is to keep doing what does not depend on the answer. | gentleman.md costs about 1.8k per request. "STOP IMMEDIATELY after the question" and "concepts first" fight keep moving. keep-coding-instructions is on. | Claude Code sends the style with every request. keep-coding-instructions keeps the built-in coding section. Opus 5.5 should carry on with whatever does not depend on the answer. (https://code.claude.com/docs/en/output-styles ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5 (undated, fetched 2026-10-26)) | S4, decision 7 | decision pending |
+| 17 | Output style and persona | minor | Our style says STOP after a question; the target is to keep doing what does not depend on the answer. | gentleman.md costs about 1.8k per request. "STOP IMMEDIATELY after the question" and "concepts first" fight keep moving. keep-coding-instructions is on. | Claude Code sends the style with every request. keep-coding-instructions keeps the built-in coding section. Opus 5.5 should carry on with whatever does not depend on the answer. (https://code.claude.com/docs/en/output-styles ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5 (undated, fetched 2026-10-26)) | S4, D7 | decision pending |
 | 18 | Host-native features vs js-harness commands | minor | 13 of our commands overlap native features; the target is to build on the native ones and add only what is missing. | 42 commands are registered. Of the 37 classified, 13 are partly covered by native features, and permit goes against the native design. | Build on agent view, SendMessage, notify_when_idle, Monitor, /goal and the compact matcher, and add only what they lack. A message from another session cannot approve anything. (https://code.claude.com/docs/en/agent-view ; https://code.claude.com/docs/en/cross-session-messaging ; https://code.claude.com/docs/en/goal (undated, fetched 2026-10-26)) | rule for new work | open |
 | 19 | Skills | minor | The protocols skill loads most turns; skills should load only when their task comes up. | The protocols skill's trigger includes "closing a reply", so it loads most turns. Skill bodies run 3.8k-7.4k. | Only a skill's name and description load until it is used. (https://code.claude.com/docs/en/skills (undated, fetched 2026-10-26)) | S5 | open |
 | 21 | Testing after vendor updates | minor | We rerun evals for a new model and a new engine version, but not for a gentle-ai update, and nothing notices either by itself. | docs/future-model.md:15-18 already names a new model and a new Claude Code or Codex CLI version; gap G7 says nothing notices them. A gentle-ai update is covered only by a doctor row that asks for a manual review. | Vendor-side changes broke quality before: a lowered default effort, a caching bug and one system-prompt line. (https://www.anthropic.com/engineering/april-23-postmortem (2026-04-23)) | S8, S9 | open |
@@ -958,10 +1018,10 @@ common single fresh reviewer. And nothing retires a rule as outgrown.
 
 ### 14.4 What moves
 
-- **Decision 2** needs no more tests before it is asked. The exclusion must live in the main
+- **D2** needs no more tests before it is asked. The exclusion must live in the main
   checkout and acts on every session at once (section 1, section 10 S2, section 11). Its
   exclusion half was answered later that day (section 1).
-- **Decision 3** now has a recommendation: a root `CLAUDE.md` holding `@AGENTS.md`. It may never sit
+- **D3** now has a recommendation: a root `CLAUDE.md` holding `@AGENTS.md`. It may never sit
   in `.claude/CLAUDE.md`, which the S2 glob also matches (#93858: the globs match absolute paths).
 - **The certification (section 7) gains three measures**, all to build into the long-session eval:
   - a rule planted at turn 1 and tested after turn 10 (#98870);
@@ -1040,9 +1100,9 @@ waited behind machinery nobody had designed, and that machinery outweighed what 
    credentials guard moved into `evals/home.mjs`, and the claim that a hook would have refused
    `node diet-eval.mjs` is gone (sections 9, 13, A.1).
 
-**Errors fixed:** decision 4's 75k line would have failed `check` after S2+S3 (≈ 77.3k), so it is
+**Errors fixed:** D4's 75k line would have failed `check` after S2+S3 (≈ 77.3k), so it is
 80k then and 75k after S5 and S6; Haiku 5.5 keeps writing scoped code, as settled; two of his lines
-that over-trigger on 5.5 go to decision 7 instead of being kept silently; decision 2's exclusion
+that over-trigger on 5.5 go to D7 instead of being kept silently; D2's exclusion
 half is recorded as answered; the final audits are Claude ×3 and Codex ×3 everywhere; Explore and
 Plan do not load the global file; map row 21 credits `docs/future-model.md:15-18`; "no precedent"
 and the two-compaction cut are stated as an observation and a hypothesis; step 0 is done.
@@ -1076,12 +1136,12 @@ documents as written. What changed, each with the regrade that found it:
 - **One noise rule:** `score < L − max(s, 3)` on 20 incident trials, with boundary examples, in
   section 7; section 10 points to it (both).
 - **S3's home and budget:** the kept lines go below the import in the root `CLAUDE.md` with a new
-  `claude-md-budget` row, or into `AGENTS.md` only if he raises `rule:agents-budget`; decision 3
-  carries it (Claude, error 6). Their size is 1.36k by chars/4, not 2.5k, and decision 4's
+  `claude-md-budget` row, or into `AGENTS.md` only if he raises `rule:agents-budget`; D3
+  carries it (Claude, error 6). Their size is 1.36k by chars/4, not 2.5k, and D4's
   arithmetic follows (Claude, error 7).
 - **A.1 is self-contained:** line 122 kept whole with its reasons, so "Delegation Trigger" keeps
   its definition; the "one writer, helpers read-only" lines (224, 227) and the separate-index
-  line (9) it had promised are quoted (Codex). His four dropped Rules lines go to decision 7
+  line (9) it had promised are quoted (Codex). His four dropped Rules lines go to D7
   (Claude, error 8).
 - **"No rule has ever been retired"** is corrected: two were, on 2026-10-24, by succession (Codex).
 - **The S0 probe is behavioural** and covers `SessionStart`: a session with no lifecycle prose
@@ -1096,7 +1156,7 @@ documents as written. What changed, each with the regrade that found it:
   untracked local file (Claude, criterion 4); `go-testing` and `gentle-ai-bench` do not load their
   descriptions here (Claude, error 4); the scratch home's copy list is stated as it is
   (`evals/home.mjs:216-238`, Codex); the 80k margin is called thin (Claude, error 10); the
-  re-analysis spend per gentle-ai release is his decision 7 in the new document (Claude, error 11).
+  re-analysis spend per gentle-ai release is G7 in the new document (Claude, error 11).
 
 Not changed, and why: S7's Haiku line (≤30k) may be met by S2 alone, so it may not measure
 `omitClaudeMd` (Claude, criterion 6). It stays until S2's measure shows the first turn of a Haiku
@@ -1104,18 +1164,46 @@ subagent; if that is already under 30k, S7's line is restated then. The owner pa
 over-promises (all hooks tested, unconditional update safety; Codex) are in a page outside this
 repo; this pass does not edit it.
 
+## 17. Fifth pass (2026-10-26)
+
+A third blind grade read this plan together with
+[gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md): Claude 6.4, Codex 7.0. Both
+found the order unsafe in one place: S2's guard against new injection paths rested on S9, which
+was scheduled "any time after S0". What changed, in one correction batch:
+- **S9 split.** S9a (installed-file diff by marker and hook, a same-version drift check, contract
+  probes, the contradiction check, the refusal, his recorded acceptance) lands before S2. S9b (the
+  source diff by area on real paths, unmatched paths classified by hand, per-release records only
+  for releases with an item other than `ignore`) any time after. What S9 guarantees is stated
+  exactly: it detects after an install and withholds the record; it does not stop a sync from
+  re-adding hooks, so G4's removal is checked on every run, not made persistent (both).
+- **One decision register** in section 1: D1-D9 here, G1-G7 there, each with status, default and
+  the step that asks it; FL1-FL7 name the fixed-load document's own decisions (Claude).
+- **The hook inventory** counts every owner, 32 entries (gentle-ai 5, js-harness 13, Orca 12,
+  herdr 1, codegraph 1; `Stop` 6 from three owners), and S4a's row fails on growth (both).
+- **The target:** S8's incident score at least `max(17, min(20, L + 3))`, frozen before S2; F8 is
+  judged on it as well as on tokens (Claude).
+- **The paid checkpoints** are named, with their cost against the $200 envelope (Codex).
+- **One rerun rule** in section 7.2, the reverse-engineering document's 5.5 and the roadmap (Codex).
+- **Local dates:** D3 was answered on 2026-10-26, local time (Claude).
+- The TUI, in the other document: every gentle-ai screen mapped, seven sized slices, action-level
+  authorization kept, warnings never clipped, cancellation outcomes, frame tests, counts per
+  version; causes 1 and 2 as a defect task under the freeze (both).
+
+Not changed, and why: Claude's review counted 14 Orca entries; `~/.claude/settings.json` holds 12,
+one per event, and the inventory uses 12.
+
 ## Appendix A. The global file, block by block
 
 Line numbers are from the file's headings today; it has 613 lines. "Kept" means the lines move
-word for word into the repo's always-on file, whichever one decision 3 picks. "Dropped" says why
+word for word into the repo's always-on file, whichever one D3 picks. "Dropped" says why
 nothing is lost.
 
 | Block (lines) | Goes to |
 |---|---|
 | CodeGraph (2-33) | **dropped**: its MCP server instructions carry the usage. **Kept**, three lines (8, 9, 16): worktrees under the home; each worktree with its own index; never `codegraph uninit/install/uninstall/upgrade` |
-| Rules (34-47) | **kept**: "If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof", "Verify technical claims before stating them", conventional commits. Attribution also becomes the S4a hook. **Flagged, to decision 7:** "Never agree with user claims without verification" is a blanket verification instruction of the kind section 5 says the 5.5 models over-trigger on; it is his words, so it is not kept or dropped silently. "Default to short answers" and "Ask at most one question ... STOP" are his words and fight "keep moving": decision 7. The other four (37 native tools, 40 option menus, 41 shorter when unsure, 45 alternatives with tradeoffs) also go to decision 7, each with a default; the third pass had dropped them without a word |
+| Rules (34-47) | **kept**: "If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof", "Verify technical claims before stating them", conventional commits. Attribution also becomes the S4a hook. **Flagged, to D7:** "Never agree with user claims without verification" is a blanket verification instruction of the kind section 5 says the 5.5 models over-trigger on; it is his words, so it is not kept or dropped silently. "Default to short answers" and "Ask at most one question ... STOP" are his words and fight "keep moving": D7. The other four (37 native tools, 40 option menus, 41 shorter when unsure, 45 alternatives with tradeoffs) also go to D7, each with a default; the third pass had dropped them without a word |
 | Expertise (48-51) | dropped: not used in this repo |
-| Contextual Skill Loading (52-59) | **flagged, to decision 7**: "Self-check BEFORE every response" is a blanket instruction the 5.5 guides say over-triggers (section 5), and it is his words. Until he decides, nothing from it moves. `AGENTS.md` relies on `js-harness-protocols` sections 2, 3 and 6 loading; those skills' descriptions load every turn without it |
+| Contextual Skill Loading (52-59) | **flagged, to D7**: "Self-check BEFORE every response" is a blanket instruction the 5.5 guides say over-triggers (section 5), and it is his words. Until he decides, nothing from it moves. `AGENTS.md` relies on `js-harness-protocols` sections 2, 3 and 6 loading; those skills' descriptions load every turn without it |
 | Persona Voice (60-67) | dropped: the output style holds it |
 | Engram (68-109) | **dropped**: its MCP instructions carry most of it. **Kept**, two lines: `mem_current_project` first; on `ambiguous_project`, ask him and never guess |
 | Identity, core role, continuity, mental model (110-147) | dropped: `AGENTS.md` "keep moving" covers continuity |
@@ -1208,9 +1296,9 @@ graphify (611-612):
 >
 > When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
-Not kept until decision 7: "Never agree with user claims without verification. First say you'll
+Not kept until D7: "Never agree with user claims without verification. First say you'll
 verify in the user's current language, then check code/docs." (43), "**Self-check BEFORE every
-response**: ..." (56), and the four Rules lines 37, 40, 41 and 45 quoted in decision 7. Lines 40
+response**: ..." (56), and the four Rules lines 37, 40, 41 and 45 quoted in D7. Lines 40
 and 37 are recommended to join this list on his yes.
 
 ## Appendix B. Evidence
