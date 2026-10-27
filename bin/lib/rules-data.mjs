@@ -143,9 +143,9 @@ export const RULES = [
   },
   {
     "id": "double-review",
-    "subject": "a design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it",
+    "subject": "a proposal that changes one of his decisions passes two read-only readers that did not write it",
     "owner": "sebastian",
-    "since": "2026-10-16",
+    "since": "2026-10-27",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "first passes two read-only readers that did not write it",

@@ -46,10 +46,10 @@ The share of its context window at which a session pauses, writes its state and 
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
 ### double-review
-A design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it: "- A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
+A proposal that changes one of his decisions passes two read-only readers that did not write it: "- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
-- Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+- Since 2026-10-27. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-27, checked by the command on 2026-10-27.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.

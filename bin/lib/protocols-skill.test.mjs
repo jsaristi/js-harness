@@ -127,7 +127,7 @@ test('a session runs the installed js-harness, and its branch\'s copy only to te
 test('a proposal reaches the user only after two readers, and a handoff names the rule', () => {
   const squash = (text) => text.replace(/\s+/g, ' ');
   const [asking, , , , , handoff] = sections(TEXT).map((section) => squash(section.lines.join('\n')));
-  assert.match(asking, /A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
+  assert.match(asking, /A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
   assert.match(asking, /A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round\./);
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);

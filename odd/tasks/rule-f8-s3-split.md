@@ -46,3 +46,8 @@ Nothing: the budget is the project's; the rewrite carries his typed words.
 - gentle-ai on `84b6b7ed..f4c058c8`: medium, not due (under_budget); the slice is this pull request.
 - L3. 2026-10-27, Codex on 84b6b7e..f4c058c: the patch is correct (0.89), no actionable defects, recorded (109,797
   input tokens, 48 s).
+- L4. 2026-10-27, JH ORQ: "D5 now has his typed words. Use the excerpt \"si\", transcript
+  e41d1e8d-8264-45a4-b16c-f9279f7b6076, line 7461". `rules change double-review` narrows the rule to proposals that
+  change one of his decisions (line 42 of `bin/lib/protocols-skill.mjs`; its two phrases unchanged). Its earlier
+  source keeps the quote whose transcript is still on this machine; the one at line 14210 of e152c9d8 is gone from the
+  sessions folder, so the command cannot check it again, and it stays in git history.
