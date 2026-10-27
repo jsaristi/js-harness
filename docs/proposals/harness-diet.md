@@ -87,6 +87,18 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
    - Recommended.
 3. **AGENTS.md or CLAUDE.md** (section 4 has the evidence; the second pass adds a
    recommendation).
+   - **Answered 2026-10-27: yes, `CLAUDE.md`.** Asked whether Codex keeps reviewing, he said:
+     "si pero codex es un revisor externo no mas y se usa para revisar lo que hacemos y cuando
+     manejemos un proyecto es para revisar el codigo" (transcript
+     `e41d1e8d-8264-45a4-b16c-f9279f7b6076` line 1697), and to the split below: "Excelente me
+     parece excelente eso asi" (line 1733). The split, by role: the root `CLAUDE.md` is the file
+     Claude works from (how sessions run, working with him, review, orchestration, the kept lines
+     of A.1) and imports `@AGENTS.md`; `AGENTS.md` shrinks to what a reviewer needs (what the
+     project is, how the repo works, what good looks like), because `js-harness codex-review`
+     hands Codex the project's `AGENTS.md` by design (`bin/codex-review.mjs:30`, `:222`). `init`
+     ships the same split to his projects, where Codex reviews the code. It lands at S3, in
+     order; with it, the "With a yes" branch below applies, and the Decided row "Portable by
+     default" is rewritten.
    - His rule from 2026-10-15: "este harnes tiene prohibido que utilicemos Claude.md solo
      Agents.md" (`docs/rule-sources.json:713`, `rule:rules-live-in-the-harness`). Today he said he
      leans to `CLAUDE.md`.

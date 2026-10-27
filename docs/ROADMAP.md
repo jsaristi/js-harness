@@ -22,7 +22,7 @@ and native `/goal` (autonomy loop). This repo builds only what those leave open.
 2. **Every component must earn its place.** Each new model: remove one piece, measure, keep what still matters.
 3. **Do not rebuild the stack.** Workflow, task docs, TDD and review are gentle-ai's; memory is engram's; the code graph is codegraph's; the loop is `/goal`.
 4. **Context, not commands.** What the project is, what good looks like, and the reason behind each real constraint.
-5. **Portable by default.** `AGENTS.md` is the single source Claude Code, Codex and Antigravity read.
+5. **Portable by default.** `AGENTS.md` is the single source Claude Code, Codex and Antigravity read. Changing, by his answer of 2026-10-27 (diet decision 3): `CLAUDE.md` becomes the file Claude works from and imports `AGENTS.md`, which shrinks to what a reviewer such as Codex needs; it lands at F8's S3.
 6. **Measure the real payload.** The budget gate counts everything that loads each turn, not only `AGENTS.md`.
 7. **Work to the objective, not at will.** Judgment acts inside the plan: the double review checks that the work still serves the objective and what was planned, which is why a feature starts from a plan made as close to perfect as possible. His words, 2026-10-18: "siempre debes trabajar conforme al objetivo no como se te de la gana esa debe ser la filosofia principal del harnes osea para eso siempre hay una doble revision para revisar que vamos bien y no nos hemos salido del objetivo o de lo planeado por eso tambien cuando comencemos con el harnes debemos armar muy bien el plan casi a la perfeccion".
 
