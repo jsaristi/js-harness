@@ -135,9 +135,10 @@ test('the notices before the --hours window stay out once the first batch was se
 }));
 
 // Codex, f074443..4c71f21: the route's section held the progress too, so hiding it for an empty route hid the progress.
+// The page has no eol attribute, so where core.autocrlf is true (a land's worktree) it checks out CRLF.
 test('the board page hides the route section only when it has no steps and no valid progress', () => {
   const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
-  const source = page.match(/function routeShown\([\s\S]*?\n}\n/)?.[0];
+  const source = page.match(/function routeShown\([\s\S]*?\r?\n}\r?\n/)?.[0];
   assert.ok(source, 'the page defines routeShown');
   const routeShown = new Function(`${source}; return routeShown;`)();
   assert.equal(routeShown({ route: [], progress: { done: 3, total: 10 } }), true);
