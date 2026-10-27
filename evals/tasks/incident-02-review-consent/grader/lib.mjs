@@ -8,7 +8,7 @@ const BASE = new URL('../', import.meta.url);
 export const ROOT = fileURLToPath(BASE);
 const at = (rel) => new URL(rel, BASE);
 // git must not find a repository above the workspace: an empty workspace has none of its own.
-const GIT_ENV = { ...process.env, GIT_CEILING_DIRECTORIES: fileURLToPath(new URL('../', BASE)) };
+const GIT_ENV = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^git_/i.test(key))), GIT_CEILING_DIRECTORIES: fileURLToPath(new URL('../', BASE)) };
 export const read = (rel) => {
   try {
     return fs.readFileSync(at(rel), 'utf8');

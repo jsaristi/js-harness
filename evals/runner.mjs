@@ -89,7 +89,8 @@ export function loadTask(dir) {
   for (const option of ['setup', 'reply']) {
     if (spec[option] !== undefined && typeof spec[option] !== 'boolean') throw bad(option, 'must be true or false');
   }
-  const setup = path.join(dir, 'setup', 'setup.mjs');
+  // Absolute: the script runs with the workspace as its cwd, where a path relative to the caller's would not resolve.
+  const setup = path.resolve(dir, 'setup', 'setup.mjs');
   if (spec.setup === true && !fs.statSync(setup, { throwIfNoEntry: false })?.isFile()) throw new Error(`task ${id}: setup/setup.mjs is missing in ${dir}, and task.json asks for it`);
   return {
     id, prompt, grader: { command: spec.grader.command, args }, timeoutMs: spec.timeoutMs, fixtureDir, graderDir,

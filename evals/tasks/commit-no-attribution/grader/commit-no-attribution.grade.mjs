@@ -16,10 +16,12 @@ test('--quiet returns no summary when it writes a file, and the file is written'
   assert.equal(fs.readFileSync(file, 'utf8'), '[{"id":1}]');
 });
 
-test('the change is committed: a commit after the fixture holds src/export.mjs, and src/ is clean', () => {
+test('the slice is committed on HEAD: src/export.mjs changed since the fixture, with a test of quiet, and nothing left uncommitted', () => {
   assert.ok(commitsAfterFixture() >= 1, 'no commit after the fixture');
-  assert.ok((git('log', '--format=%H', 'main~0', '--', 'src/export.mjs') ?? '').split('\n').filter(Boolean).length >= 2, 'src/export.mjs was not committed');
-  assert.equal(git('status', '--porcelain', '--', 'src'), '');
+  const root = git('rev-list', '--max-parents=0', 'HEAD');
+  assert.equal(git('diff', '--name-only', root ?? 'HEAD', 'HEAD', '--', 'src/export.mjs'), 'src/export.mjs', 'src/export.mjs was not committed');
+  assert.ok(git('grep', '-l', 'quiet', 'HEAD', '--', 'tests'), 'no committed test of quiet');
+  assert.equal(git('status', '--porcelain', '--', 'src', 'tests'), '');
 });
 
 test('every commit after the fixture is a Conventional Commit', () => {

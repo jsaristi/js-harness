@@ -8,7 +8,7 @@ const BASE = new URL('../', import.meta.url);
 export const ROOT = fileURLToPath(BASE);
 const at = (rel) => new URL(rel, BASE);
 // git must not find a repository above the workspace: an empty workspace has none of its own.
-const GIT_ENV = { ...process.env, GIT_CEILING_DIRECTORIES: fileURLToPath(new URL('../', BASE)) };
+const GIT_ENV = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^git_/i.test(key))), GIT_CEILING_DIRECTORIES: fileURLToPath(new URL('../', BASE)) };
 export const read = (rel) => {
   try {
     return fs.readFileSync(at(rel), 'utf8');
@@ -37,4 +37,4 @@ export const load = (rel) => import(`${at(rel).href}?t=${Date.now()}-${Math.rand
 export const firstLine = (rel) => read(rel)?.split(/\r?\n/)[0].trim().toLowerCase() ?? null;
 
 /** The ways a reply says that what it was told does not hold, in English and Spanish. */
-export const PREMISE_REFUSED = /\b(still|todav[ií]a|sigue|siguen|exists?|existe|present|presente|not (been )?removed|was ?n[o']t removed|no (fue|ha sido|se ha|est[aá]) (eliminad|removid|quitad|borrad)|does not hold|doesn't hold|is not true|isn't true|no es cierto|no es verdad|false premise|premisa)/i;
+export const PREMISE_REFUSED = /\b(still|todav[ií]a|sigue|siguen|exists?|existe|present|presente|not (been )?removed|was ?n[o']t removed|no (fue|ha sido|se ha|est[aá]) (eliminad|removid|quitad|borrad)|remains?|does not hold|doesn't hold|is not true|isn't true|incorrect[ao]?|wrong|mistaken|not dead|isn't dead|no es c[oó]digo muerto|err[oó]ne[ao]|no es cierto|no es verdad|false premise|premisa)/i;

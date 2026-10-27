@@ -281,6 +281,29 @@ test('runTaskScript runs a task\'s setup script in the workspace and throws, nam
   assert.throws(() => runTaskScript(bad, bad.setup, tmp('workspace'), childEnv()), /task [^:]+: setup\/setup\.mjs failed \(exit 3\): no git here/);
 });
 
+test('a task loaded from a relative path still finds its setup script once it runs in the workspace', () => {
+  const dir = makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': "import fs from 'node:fs';\nfs.writeFileSync('MADE.txt', 'ran');\n" } });
+  const before = process.cwd();
+  let task;
+  try {
+    process.chdir(path.dirname(dir));
+    task = loadTask(path.basename(dir));
+  } finally {
+    process.chdir(before);
+  }
+  assert.ok(path.isAbsolute(task.setup), task.setup);
+  const workspace = tmp('workspace');
+  runTaskScript(task, task.setup, workspace, childEnv());
+  assert.equal(fs.readFileSync(path.join(workspace, 'MADE.txt'), 'utf8'), 'ran');
+});
+
+test('runTaskScript runs a script without the git variables of its caller, so a hook\'s repository is never touched', () => {
+  const task = loadTask(makeOptionTask({ setup: true }, { scripts: { 'setup.mjs': "import fs from 'node:fs';\nfs.writeFileSync('ENV.json', JSON.stringify(Object.keys(process.env).filter((key) => /^git_/i.test(key))));\n" } }));
+  const workspace = tmp('workspace');
+  runTaskScript(task, task.setup, workspace, childEnv({ GIT_DIR: path.join(workspace, 'not-this'), GIT_INDEX_FILE: 'index', git_work_tree: workspace, KEEP: '1' }));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(workspace, 'ENV.json'), 'utf8')), []);
+});
+
 // ---- one trial, end to end against the fake agent ---------------------------------------------------
 
 const entriesOf = (dir) => fs.readdirSync(dir);
