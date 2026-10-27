@@ -12,9 +12,10 @@ import { channelDir, readNotices } from './lib/channel.mjs';
 import { batchesOf, cursorAfter, cursorFrom, pendingRows, positionOf } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { WAIT_FOR_MINUTES } from './wait.mjs';
 
 export const LIVE_USAGE = [
-  'Usage: js-harness sessions live [--hours <n>] [--out <dir>] [--url <board>] [--cwd <path>] [--home <path>]',
+  'Usage: js-harness sessions live [--hours <n>] [--out <dir> [--resting]] [--url <board>] [--cwd <path>] [--home <path>]',
   '       js-harness sessions live --sent <file> [--cwd <path>] [--home <path>]',
   '         turns the notices of the channel record the live board has not been sent into its rows (time, session, kind,',
   '         text, state); with nothing sent yet, those of the last --hours (24 by default). With no --out it prints how many',
@@ -22,13 +23,18 @@ export const LIVE_USAGE = [
   '         ArtifactData set that sends each one; --sent <file> moves the cursor past that file once it was sent.',
   '         --out also writes board-checked.json, the time it read the record, and prints the ArtifactData update that',
   '         merges it into board/summary once every batch was sent, with no row to send too: the board then tells a',
-  '         quiet stretch from a record nobody sent.',
+  '         quiet stretch from a record nobody sent. The check holds 45 minutes, the lead\'s heartbeat; with --resting,',
+  '         the run before the lead\'s resting wait, it holds that wait (wait-for) and the board reads as resting.',
   '         --url records the board\'s link with the cursor, and every run prints it back. Only a Claude session sends',
   '         a batch: no command reaches an artifact\'s database. Exit 1 when the record or a batch file cannot be read,',
   '         2 for a usage error.',
 ].join('\n');
 
 const CURSOR_SCHEMA = 'js-harness.live-cursor/v1';
+
+// How long a check of the record holds on the board: the lead wakes on a notice or after the heartbeat's 30 quiet
+// minutes (`loop heartbeat --quiet`), plus 15 to wake and send. A resting lead waits for a notice up to `wait-for`.
+const CHECK_MINUTES = 45;
 
 class LiveArgError extends Error {}
 
@@ -43,6 +49,10 @@ function parseLive(argv) {
   const parsed = {};
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
+    if (token === '--resting') {
+      parsed.resting = true;
+      continue;
+    }
     if (!VALUED.has(token)) throw new LiveArgError(`unknown argument: ${token}`);
     const value = argv[i + 1];
     if (value === undefined || value === '' || value.startsWith('--')) throw new LiveArgError(`${token} requires a value`);
@@ -57,6 +67,7 @@ function parseLive(argv) {
   if (parsed.sent !== undefined && (parsed.out !== undefined || parsed.hours !== undefined || parsed.url !== undefined)) {
     throw new LiveArgError('--sent takes only --cwd and --home besides it');
   }
+  if (parsed.resting && parsed.out === undefined) throw new LiveArgError('--resting takes --out');
   return parsed;
 }
 
@@ -180,9 +191,12 @@ export async function sessionsLiveMain(argv, {
     stdout(`  then: js-harness sessions live --sent ${file}`);
   }
   // A quiet stretch has no new notice, so the board would read the newest row's age as nobody sending the record. Once
-  // the batches are sent, the record up to this run is on the board: board/summary carries that time.
+  // the batches are sent, the record up to this run is on the board: board/summary carries that time and how long it
+  // holds, until the lead's next check.
   const checked = path.join(out, 'board-checked.json');
-  fs.writeFileSync(checked, `${JSON.stringify({ checked: new Date(now()).toISOString() })}\n`, 'utf8');
+  const holds = (parsed.resting ? WAIT_FOR_MINUTES : CHECK_MINUTES) * 60_000;
+  const stamp = { checked: new Date(now()).toISOString(), until: new Date(now() + holds).toISOString(), resting: parsed.resting === true };
+  fs.writeFileSync(checked, `${JSON.stringify(stamp)}\n`, 'utf8');
   stdout(`ArtifactData update: url ${url ?? '<board>'}, collection board, doc_id summary, file_path ${checked}`);
   stdout('  once every batch above was sent: the board reads it as the time you checked the record');
   return 0;

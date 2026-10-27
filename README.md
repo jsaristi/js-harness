@@ -1198,6 +1198,8 @@ and prints the `ArtifactData` set that sends one; `--sent <file>` moves the curs
 `--out` also writes `board-checked.json`, the time it read the record, with the `ArtifactData`
 update that merges it into `board/summary` once every batch was sent, with no row to send too: a
 quiet stretch has no new notice, and the page counts that check to tell it from a record nobody sent.
+A check holds 45 minutes, the lead's heartbeat; `--resting`, the run before the lead's resting
+wait, makes it hold that wait (`wait-for`) and the page reads the board as resting.
 The cursor goes by each notice's place in the record, not its time, so a notice stamped before a
 later one but appended after it still waits. Only a Claude session can make that call: no command or hook reaches an artifact's database. The
 cursor and the board's link (`--url`) are kept in `~/.js-harness/channel/live/`, which `uninstall`

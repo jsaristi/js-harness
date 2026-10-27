@@ -7,6 +7,7 @@ import { appendNotice, newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { liveCursorPath, sessionsLiveMain } from './sessions-live.mjs';
 import { sessionsMain } from './sessions.mjs';
+import { WAIT_FOR_MINUTES } from './wait.mjs';
 
 // odd/tasks/live-board.md, S3: `js-harness sessions live` turns the channel record into the live board's batches and
 // moves its cursor once a batch was sent. Every test has a home, a project folder and an output folder of its own in
@@ -159,29 +160,37 @@ test('--out writes the time it read the record for board/summary, after the batc
   const quiet = await live(['--out', dirs.out, '--url', url], dirs);
   assert.equal(quiet.code, 0, quiet.err);
   const stamp = path.join(dirs.out, 'board-checked.json');
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false }, 'it holds until the heartbeat wakes the lead');
   assert.ok(quiet.out.includes(`ArtifactData update: url ${url}, collection board, doc_id summary, file_path ${stamp}`), quiet.out);
 
   note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
   const busy = (await live(['--out', dirs.out], dirs)).out;
   assert.ok(busy.indexOf('ArtifactData set:') < busy.indexOf('ArtifactData update:'), 'the stamp goes after the rows it vouches for');
   assert.equal((await live([], dirs)).out.includes('ArtifactData update'), false, 'counting stamps nothing');
+
+  // Codex, 59df62f..bc72c2e: a resting lead waits for a notice up to wait-for, not a half-hour heartbeat.
+  assert.equal((await live(['--out', dirs.out, '--resting'], dirs)).code, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString(), resting: true });
+  assert.equal((await live(['--resting'], dirs)).code, 2, '--resting stamps, so it takes --out');
 }));
 
 test('the board page counts the lead\'s check of the record apart from the newest row', () => {
   const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
-  const limits = page.match(/^const (FRESH|CHECK)_MS = .*;\r?$/gm);
+  const limit = page.match(/^const FRESH_MS = .*;\r?$/m)?.[0];
   const source = page.match(/function freshness\([\s\S]*?\r?\n}\r?\n/)?.[0];
-  assert.equal(limits?.length, 2, 'the page defines FRESH_MS and CHECK_MS');
+  assert.ok(limit, 'the page defines FRESH_MS');
   assert.ok(source, 'the page defines freshness');
-  const freshness = new Function(`${limits.join('\n')}\n${source}; return freshness;`)();
+  const freshness = new Function(`${limit}\n${source}; return freshness;`)();
   const now = Date.parse('2026-10-27T12:00:00.000Z');
-  const before = (minutes) => new Date(now - minutes * 60_000).toISOString();
-  assert.equal(freshness(before(5), null, now), 'rows');
-  assert.equal(freshness(before(48), before(10), now), 'checked', 'a quiet stretch the lead checked');
-  assert.equal(freshness(null, before(10), now), 'checked');
-  assert.equal(freshness(before(48), before(90), now), 'stale', 'nobody sent the record');
-  assert.equal(freshness(before(48), null, now), 'stale');
+  const at = (minutes) => new Date(now - minutes * 60_000).toISOString();
+  const check = (minutes, holds, resting = false) => ({ checked: at(minutes), until: at(minutes - holds), resting });
+  assert.equal(freshness(at(5), null, now), 'rows');
+  assert.equal(freshness(at(48), check(10, 45), now), 'checked', 'a quiet stretch the lead checked');
+  assert.equal(freshness(null, check(10, 45), now), 'checked');
+  assert.equal(freshness(at(48), check(90, 45), now), 'stale', 'nobody sent the record');
+  assert.equal(freshness(at(300), check(200, 480, true), now), 'resting', 'a resting lead waits for a notice');
+  assert.equal(freshness(at(48), null, now), 'stale');
+  assert.equal(freshness(at(48), { checked: at(10) }, now), 'stale', 'a check with no until holds nothing');
   assert.equal(freshness(null, null, now), 'none');
-  assert.equal(freshness(null, 'not a time', now), 'none');
+  assert.equal(freshness(null, { checked: 'not a time', until: 'no' }, now), 'none');
 });
