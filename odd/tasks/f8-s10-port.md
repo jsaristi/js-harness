@@ -65,11 +65,11 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
   with the number notify assigns; JH 62 numbered one by hand and got it wrong)".
 
 ## Tasks
-- [ ] T1 (kind: build) `notify` refuses a question whose text carries its own `Pregunta <n>:` — S7; inline
-- [ ] T2 (kind: build) the `js-harness` output style: `install` writes it; a clone's `outputStyle` key — S1; inline
-- [ ] T3 (kind: build) the two skills, adapted, with `THIRD_PARTY_NOTICES` — S2; inline
+- [x] T1 (kind: build) `notify` refuses a question whose text carries its own `Pregunta <n>:` — S7; inline; a1a84d74
+- [x] T2 (kind: build) the `js-harness` output style, which `install` writes — S1; inline; the style-and-skills commit
+- [x] T3 (kind: build) the two skills, adapted, with `THIRD_PARTY_NOTICES`, shipped in the package — S2; inline; the style-and-skills commit
 - [ ] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier
-- [ ] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's deny key — S4; inline; independent verifier
+- [ ] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [ ] T7 (kind: build) the Rules block, once question 99 is answered — S5; waits
 
@@ -99,3 +99,11 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
   use, never the tracked `.claude/settings.json`.
 - L5 (2026-10-27): G12 sent as question 99 (`notify` 22:43:09Z), with the default and the other
   option; held by the lead for his return.
+- L6 (2026-10-27): `bin/lib/manifest.mjs` is over 1,000 lines with a ceiling that only goes down
+  (`bin/conventions-structure.test.mjs`). Moving the first two skills' text out failed: 13 rules
+  quote phrases at lines 110-248 of that file, and moving them is a `rules change` each. The hook
+  entries (no rule phrase, no rule read) moved whole to `bin/lib/hook-entries.mjs`, which the
+  engine re-exports: 2159 → 2008 lines with the three new components in.
+- L7 (2026-10-27): `package.json` `files` shipped only `bin/`, so the notices never reached an
+  install; Apache-2.0 section 4(a) asks that a recipient gets the license, so the package now ships
+  `THIRD_PARTY_NOTICES.md` (its text from a local copy of the Apache License 2.0, 177 lines).

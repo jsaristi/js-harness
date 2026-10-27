@@ -411,6 +411,15 @@ proofs and by those tasks.
 **Discarded:** A watchman skill: replaced by a lead with a charter the owner decided. Six protocol skills: every installed skill's description is read on every turn. Teaching in a skill what a check now enforces. Asking the owner to compact a session.
 **Today:** `bin/lib/manifest.mjs`, `bin/install.mjs`, `claude-skill`, `codex-skill`, `claude-orchestrator-skill`, `codex-orchestrator-skill`, `bin/lib/protocols-skill.mjs`, `claude-protocols-skill`, `codex-protocols-skill`
 
+### What a session took from gentle-ai is ours
+
+**Problem:** F8's S2 removes gentle-ai, and with it the output style that sets how a session talks, the skills that say how to cut a commit and split a large change, and, by its uninstall, the whole `permissions` object of the user's Claude settings (`docs/proposals/gentle-ai-reverse-engineering.md`, section 3; `odd/tasks/f8-s10-port.md`).
+**Requirement:** Install writes, for Claude Code, an output style named `js-harness` (neutral Spanish with tú, no voseo, no persona; Claude Code's coding instructions kept) and two skills adapted from gentle-ai under our names, `js-harness-work-units` and `js-harness-chained-prs`, each recorded and removed exactly; the package ships the notices of what it ports, the Apache License 2.0 text among them.
+**Reason:** The owner's voice decision G10 ("la 7 la voz hazlo en neutro", 2026-10-26) and the order of F8: port first, remove last. Under gentle-ai's names install would write over gentle-ai's own files.
+**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/package.test.mjs`
+**Discarded:** Copying gentle-ai's persona or its 14 skills. Installing the skills for Codex, which only reviews here. Moving the first skills' text out of the engine, which would move 13 rules' phrases.
+**Today:** `bin/lib/output-style.mjs`, `bin/lib/ported-skills.mjs`, `claude-output-style`, `claude-work-units-skill`, `claude-chained-prs-skill`, `THIRD_PARTY_NOTICES.md`
+
 ### The record of notices between sessions
 
 **Problem:** On 2026-10-10 a finished feature sat undelivered for six hours: a session opened from the phone runs in another permission mode, and the app held its messages (the orchestrator's relief file, lines 58-61 and 143, as `odd/tasks/session-channel.md` cites them).

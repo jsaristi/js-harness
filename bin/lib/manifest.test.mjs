@@ -88,9 +88,10 @@ test('install writes every component and records a manifest', () => {
       assert.ok(fs.existsSync(target), `expected ${target} to exist`);
       const content = fs.readFileSync(target, 'utf8');
       assert.equal(content, component.content('0.1.0'));
-      // Every component is a skill: its frontmatter names it after the folder it is installed in.
-      const frontmatter = /^---\nname: (.+)\ndescription: .+\n---\n/.exec(content);
-      assert.equal(frontmatter?.[1], path.basename(path.dirname(target)), target);
+      // A skill's frontmatter names it after the folder it is installed in, a style's after its file.
+      const frontmatter = /^---\nname: (.+)\ndescription: .+\n(?:license: Apache-2\.0\n|keep-coding-instructions: true\n)?---\n/.exec(content);
+      const named = path.basename(target) === 'SKILL.md' ? path.basename(path.dirname(target)) : path.basename(target, '.md');
+      assert.equal(frontmatter?.[1], named, target);
     }
 
     const onDisk = readManifest(home);
@@ -114,8 +115,35 @@ test('install writes the Claude and Codex skill files at the documented paths', 
   }
 });
 
+test('install writes the js-harness output style and the two ported skills for Claude Code only (F8 S10)', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0');
+    const style = fs.readFileSync(path.join(home, '.claude', 'output-styles', 'js-harness.md'), 'utf8');
+    assert.match(style, /^---\nname: js-harness\n/);
+    assert.match(style, /address the user with tú/);
+    for (const skill of ['js-harness-work-units', 'js-harness-chained-prs']) {
+      const text = fs.readFileSync(path.join(home, '.claude', 'skills', skill, 'SKILL.md'), 'utf8');
+      assert.match(text, /\nlicense: Apache-2\.0\n---\n\nAdapted from gentle-ai's `(work-unit-commits|chained-pr)` skill/, skill);
+      assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', skill)), false, `no Codex copy of ${skill}`);
+    }
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'output-styles')), false);
+    // Under gentle-ai's names the files would be gentle-ai's own (odd/tasks/f8-s10-port.md, L3).
+    for (const theirs of ['work-unit-commits', 'chained-pr']) assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', theirs)), false, theirs);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the output style names the voseo forms never to use, and keeps Claude Code\'s coding instructions', () => {
+  const style = components.find((component) => component.id === 'claude-output-style').content('0.1.0');
+  for (const form of ['vos', 'tenés', 'podés', 'querés', 'sabés']) assert.ok(style.includes(`"${form}"`), form);
+  assert.match(style, /\nkeep-coding-instructions: true\n/);
+  assert.doesNotMatch(style, /Gentleman|Rioplatense/, 'nothing of the persona it replaces');
+});
+
 // Other tests index the first two, so a new component goes after them.
-test('the components are the three skills, each for Claude Code and for Codex, the first skill first', () => {
+test('the components are the three skills, each for Claude Code and for Codex, the first skill first, then the style and the two ported skills, for Claude Code only', () => {
   assert.deepEqual(components.map((component) => component.id), [
     'claude-skill',
     'codex-skill',
@@ -123,6 +151,9 @@ test('the components are the three skills, each for Claude Code and for Codex, t
     'codex-orchestrator-skill',
     'claude-protocols-skill',
     'codex-protocols-skill',
+    'claude-output-style',
+    'claude-work-units-skill',
+    'claude-chained-prs-skill',
   ]);
   assert.equal(new Set(components.map((component) => component.target('home'))).size, components.length, 'no two components share a file');
 });
