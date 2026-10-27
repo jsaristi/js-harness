@@ -98,7 +98,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 | Remote sessions | `js-harness remote start` keeps Claude Code's remote-control server alive in a git repository, so a session opened from the phone runs on this PC; `stop` leaves no process of it; `--at-login` brings it back after a restart, through a launcher that `uninstall` removes exactly; `doctor` says when the CLI and the desktop app are signed into different accounts, and when a launcher's server is down; a scheduled task brings back a server that died, never one stopped on purpose; the log is capped at 5 MB; the TUI offers the three commands inside a repository | Written, reviewed and merged on 2026-10-04, in three slices stacked to `main` (`odd/tasks/remote-control.md`): the supervisor and the three commands (`jsaristi/js-harness#28`), the login launcher with the TUI entry (`jsaristi/js-harness#29`) and the account check (`jsaristi/js-harness#30`). The live check passed the same day: after `remote stop` and `remote start` a session opened from the iOS app ran in `D:\js-harness`, and the final `remote stop` left no process. Reopened on 2026-10-06 (branch `fix/remote-watchdog`): the supervisor had been killed from outside and stayed down twelve hours, and the log had reached 71 MB. The log cap, the watchdog task and the `doctor` row are written and reviewed, and merged on 2026-10-06 as three pull requests stacked to `main` (`jsaristi/js-harness#35`, `#36`, `#37`); live on this machine since 2026-10-06 |
 | F6 Codex parity | The eval tasks run on Codex; differences measured and written down | Two of three slices merged to `main` on 2026-10-05 (`jsaristi/js-harness#33`, `#34`); the third paused by Sebastián on 2026-10-06, closed by him on 13 of its 15 trials on 2026-10-12, and brought to `main` on 2026-10-13 from a branch cut from it (see "F6 result") |
 | F7 Future-model protocol | A written procedure: measure payload, run evals, strip one component at a time | Procedure written 2026-10-14: [future-model.md](future-model.md), version 2 after one reader (`odd/tasks/future-model-protocol.md`); it cannot run on a new model until its gaps are built: G5, G6, G3 and G2 cleared for that feature, G1, G4 and G7 later |
-| F8 Harness reorganization | The measures of [the diet's section 7](proposals/harness-diet.md#7-certification-how-it-works-is-proven) pass at thresholds frozen before the baseline, run with the desktop's own flags: the 9 S0 baseline measures before any cut and after each measured step, the 8 S8 release measures at the end; a Claude audit and a Codex audit, three runs each, are graded side by side against the baseline; every row of the [alignment map](https://claude.ai/artifact/TsjfvX6CkD9ZGEXJd6kPYJ) is aligned or kept by his decision. Its six checklist steps run in order, under [Next](#next) | Opened 2026-10-26 by his order. Step 0 done; step 1 in progress: the research and plan are written (`docs/proposals/harness-diet.md`, sections 1-15), graded by two blind readers and revised. It takes over F2's two open steps |
+| F8 Harness reorganization | The measures of [the diet's section 7](proposals/harness-diet.md#7-certification-how-it-works-is-proven) pass at thresholds frozen before the baseline, run with the desktop's own flags: the 9 S0 baseline measures before any cut and after each measured step, the 8 S8 release measures at the end (the 4 deferred ones are reported as not built, never as passed); a Claude audit and a Codex audit, three runs each, are graded side by side against the baseline; every row of [the diet's alignment map table](proposals/harness-diet.md#13-alignment-map-how-we-do-it-against-how-it-should-be-done), which is canonical over its Artifact copy, is aligned or kept by his decision. Its six checklist steps run in order, under [Next](#next) | Opened 2026-10-26 by his order. Step 0 done; step 1 in progress: the research and plan are written (`docs/proposals/harness-diet.md`, sections 1-16, and `docs/proposals/gentle-ai-reverse-engineering.md`, which holds S9 and the TUI proposal), graded twice by two blind readers (6.3 and 6.3 the second time) and revised. It takes over F2's two open steps |
 
 ## Checklist
 
@@ -148,10 +148,10 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 
 ### F8 Harness reorganization
 - [x] 0. His CLI login restored (`claude auth login`, his): done and verified 2026-10-26, `claude auth status` shows `loggedIn` and a refresh token is present
-- [ ] 1. Research complete: the diet proposal with its second and third passes merged to `main` (PR 593 and PR 594), and the map's rows current
+- [ ] 1. Research complete: the diet proposal with its second, third and fourth passes, and the gentle-ai reverse-engineering proposal (`docs/proposals/gentle-ai-reverse-engineering.md`: the keep/drop/merge matrix, the TUI, the update watch that S9 builds), merged to `main` (PR 593 and PR 594), and the map's rows current
 - [ ] 2. His decisions, one at a time, in the proposal's section 1 order (2, 3, 5, 6, 7, 8); each answer recorded in the roadmap or the proposal with his words and the transcript line. Decision 2's exclusion half is answered ("Ok listo hagamoslo asi", transcript `4b935d4a-cbb8-47fe-a059-22a7c5bae931` line 3210); only its eval spend envelope (at most $200 API-equivalent) stays his
 - [ ] 3. A small baseline before any cut (S0): thresholds frozen in a commit; the credentials guard in `evals/home.mjs`; the gentle-ai Stop-hook probe run with the exclusion on; the 3-task eval, `honest-unknown`, `/context`, the `fixed load` row and the 10-case incident set run twice with the desktop's flags, their spread recorded. The long-session eval is designed now and built in parallel; it is S8's confirmation, not a gate
-- [ ] 4. Migration, one reversible step at a time, each against the baseline with its own probe and pass line (the proposal's section 10): S3, then every active worktree carrying S3's lines, then S2 with a session restart and a revert drill; the S4a attribution hook; S1 (first instead, if the Stop-hook probe failed); S4b; S5 with the rule pass; S6; S7. S9, the gentle-ai update guard, lands any time after S0. Decision 4 (the budget: 80k once S2 is measured, 75k after S5 and S6) asked once S2 is measured
+- [ ] 4. Migration, one reversible step at a time, each against the baseline with its own probe and pass line (the proposal's section 10): S3, then every active worktree carrying S3's lines, then S2 with a session restart and a revert drill; the S4a attribution hook; S1 (first instead, if the review probe failed); S4b; S5 with the rule pass; S6; S7. S9, the gentle-ai update watch of `docs/proposals/gentle-ai-reverse-engineering.md` section 5, lands any time after S0. Decision 4 (the budget: 80k once S2 is measured, 75k after S5 and S6) asked once S2 is measured
 - [ ] 5. Final certification (S8): the S0 and S8 measures of section 7, a Claude audit and a Codex audit three runs each, graded side by side with the baseline and their spread; decision 9 (whether `init` offers the exclusion) asked after it
 
 ### Project init
@@ -319,6 +319,11 @@ does not serve a step waits, unless it breaks shipped behaviour.
 
    The third (section 15) followed two blind grades, about 5.5 of 10 each from a Claude reviewer
    and Codex: right direction, wrong order. He approved its seven improvements on 2026-10-26.
+   The fourth (section 16) followed a second blind grade, 6.3 from both: the order is right, and
+   S0 now names its exact commands and the four things to build before they run. The same day he asked for a deeper reverse-engineering of
+   gentle-ai; it is [its own proposal](proposals/gentle-ai-reverse-engineering.md): what stays,
+   goes or merges, the TUI, and the update watch that S9 builds. Its seven decisions are asked
+   when their step needs them.
 3. **His decisions (step 2).** Before the baseline, because two of them set what it costs and
    measures: the eval spend envelope (decision 2; its exclusion half is already answered) and the
    project file (decision 3). Decision 4 needs S2's measure, so it moves into step 4. Decision 9
@@ -327,14 +332,16 @@ does not serve a step waits, unless it breaks shipped behaviour.
    one, but the baseline only needs what a step depends on: the 3-task eval, `honest-unknown`,
    `/context`, the `fixed load` row and a 10-case incident set, run twice so "worse" means beyond
    their spread. The credentials guard lands first, inside `evals/home.mjs`, because an eval broke
-   his login. A probe runs gentle-ai's Stop hooks and one review with the exclusion on. The
-   long-session eval is built in parallel and confirms at the end.
+   his login. A behavioural probe, with the exclusion on, has a session with no lifecycle prose
+   carry one review to its end through `next_transition`, and checks that gentle-ai's
+   `SessionStart` and `Stop` review hooks fired. The long-session eval is built in parallel and
+   confirms at the end.
 5. **Migration (step 4).** One step at a time, in the proposal's section 10 order:
    - S3 lands first; every active worktree merges `main` or closes; then S2 alone, a restart of
      every session and a revert drill. The setting is read from the main checkout, so it changes
      every session at once and cannot be tried on a branch.
    - The S4a attribution hook follows at once: it is cheap and safe.
-   - The review driver (S1) comes after S2 if the Stop-hook probe passed, and before S3 if not.
+   - The review driver (S1) comes after S2 if the review probe passed, and before S3 if not.
    - Then S4b, S5 (with the rule-by-rule pass), S6 and S7, each with its own probe and pass line.
      S9, the gentle-ai update guard, lands any time after the baseline.
 6. **Final certification (step 5).** The baseline and release measures, then a Claude audit and a
@@ -420,6 +427,13 @@ Codex.
   have grown into history: 381 lines in `rule-hierarchy.md` and 1,036 lines in `session-channel.md`
   at 64933f6. Since `#332` a resumed session reads them through named ranges, but nothing bounds
   their size. Not tracked yet; it waits for him. Source: `odd/tasks/resume-open-task.md`, "In scope / Out of scope".
+- [ ] A TUI as capable as gentle-ai's, proposed and awaiting his priority. He asked for it on 2026-10-26
+  ("el de nosotros es muy sencillo y no funciona como el de gentle-ai"). The proposal ports gentle-ai's
+  design to zero-dependency Node in `bin/tui.mjs`, plus one item that opens `gentle-ai`'s own TUI; the
+  first slice (about 400 lines: terminal guard, frame clipped to the terminal, key parser, run screen,
+  first draw before slow work) touches only `bin/tui.mjs` and its tests, so it can run beside F8.
+  Not a phase: a feature with its own document once he sets its priority (decision 3 of
+  `docs/proposals/gentle-ai-reverse-engineering.md`, section 4 there).
 
 **What the first version holds, by his answer of 2026-10-13.** Asked what enters the first
 version, the 1.0.0, he had four options: what is already installed, well finished (the one

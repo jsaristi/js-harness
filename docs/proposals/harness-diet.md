@@ -2,7 +2,8 @@
 
 Status: proposal, 2026-10-26, session JH 53; second pass the same day, session JH 54 (section 14,
 and the edits it names); third pass the same day, after two blind grades (section 15, and the
-edits it names). Target: Claude Code with Anthropic's 5.5 models only.
+edits it names); fourth pass the same day, after a second blind grade (section 16). Target: Claude
+Code with Anthropic's 5.5 models only.
 Nothing outside this repository was changed by design. One thing was changed by accident and is
 reported in section 9. Every change outside the repository is in section 1, as his decision.
 
@@ -26,8 +27,8 @@ reported in section 9. Every change outside the repository is in section 1, as h
   `CLAUDE.md` in this repo that imports `AGENTS.md`. gentle-ai's global blocks excluded here with
   `claudeMdExcludes`, which leaves his file untouched. Review driven by a command, not 28 KB of
   prose. One lead, cut at each phase.
-- **Grades today.** Codex, auditing blind, gave 5.0/10. Of section 7's 18 measures, 7 exist and 3
-  of those pass. Section 8 has the detail.
+- **Grades today.** Codex, auditing blind, gave 5.0/10. Of section 7's 21 measures (18 in the
+  first pass, the ones section 8 graded), 7 exist and 3 of those pass. Section 8 has the detail.
 - **The eval run today.** Both setups scored 9/9, but today's payload cost 3.1× as much ($3.82
   against $1.25). The tasks were too easy to show which setup follows rules better (section 9).
 - **An incident.** The first eval attempt broke his CLI login (section 9). He logged in again the
@@ -45,6 +46,11 @@ reported in section 9. Every change outside the repository is in section 1, as h
   heavy machinery nobody had designed. The plan now cuts first against a small baseline run twice,
   probes gentle-ai's Stop hook instead of assuming it, adds a gentle-ai update guard (S9) and a
   rule-by-rule pass (S5), and gives every step a probe and a pass line.
+- **Fourth pass (section 16).** A second blind grade gave 6.3 from both reviewers: the order is
+  now right, but S0 could not be run as written. Its errors are fixed here: the eval commands,
+  one noise rule, where the kept lines live and which budget counts them, a behavioural Stop-hook
+  probe, and what F8 does not fix. The gentle-ai research of the same day is its own document,
+  [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), which now holds S9.
 
 IDs used below:
 - F2, F5: roadmap phases (`docs/ROADMAP.md`).
@@ -68,9 +74,10 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      #4036 has been open since 2026-09-01 with no comments, and 4.2.0 has no exclude flag.
    - The whole file stops loading here. The kept lines of Appendix A move into the repo, word for
      word (section A.1 quotes them).
-   - The exclusion has to live in `D:\js-harness\.claude\`: a committed `.claude/settings.json` on
-     `main`, or the `settings.local.json` there (section 14.1). It takes effect in every worktree
-     session at once, not one branch at a time.
+   - The exclusion has to live in `D:\js-harness\.claude\`, in a committed `.claude/settings.json`
+     on `main` (section 14.1). The untracked `settings.local.json` there would also work, but git
+     cannot revert it and no manifest records it, so it is not used (fourth pass, Claude regrade
+     criterion 4). It takes effect in every worktree session at once, not one branch at a time.
    - **Still his: the eval spend**, which replaces D7 (no paid eval). It is now one bounded
      envelope: at most **$200 API-equivalent** (`total_cost_usd`) for all of F8, on the eval
      token, so it draws on his Max plan's limits. The estimate: the S0 baseline twice (~$25), one
@@ -91,8 +98,21 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      loading has several silent off-switches (section 14.2), and the import avoids them. In a real worktree
      layout it loads `AGENTS.md` once, and only the worktree's copy (section 14.1). It goes at the
      root, never in `.claude/CLAUDE.md`, which the S2 glob would exclude.
+   - **Where S3's kept lines go, and which budget counts them** (fourth pass, Claude regrade
+     error 6). `AGENTS.md` measures 1,457 estimated tokens, 43 under `rule:agents-budget`
+     (`bin/lib/rules-data.mjs:8-12`), and the kept lines of A.1 measure about 1.36k by the same
+     chars/4 count. `check` reads only `AGENTS.md` (`bin/check.mjs:52-59`).
+     - With a yes: the kept lines go below the import in the root `CLAUDE.md`, and S3 adds a
+       declared rule `claude-md-budget` with its own `check` row, set at S3 to the measured size
+       of that file rounded up to the next 100. `rule:agents-budget` is untouched.
+     - With a no: the lines can only go into `AGENTS.md`, which then needs about 2.9k. That means
+       raising `rule:agents-budget` to about twice its value, and the F1 row's "≤ ~1.5k" with it.
+       That is a change he decides, so it is part of this decision and never made silently.
 4. **The `fixed load` budget** (D1: 100,000, warn only). After S2+S3 the first turn is about
-   105.5 − 30.7 + 2.5 ≈ 77.3k, so a 75,000 line would turn `check` red on day one. The
+   105.5 − 30.7 + 1.8 ≈ 76.6k (the kept lines are about 1.36k by chars/4, about 1.8k by Claude's
+   count, which runs a quarter higher; the third pass used 2.5k), so a 75,000 line would turn
+   `check` red on day one. The margin under 80k is thin: the 105.5k came from a first turn with
+   three `SessionStart` hooks cancelled (section 2), so a normal session sits somewhat higher. The
    recommendation: 80,000, failing `check`, once S2 is measured; 75,000 only once S5 and S6 have
    landed and the row reads under it.
 5. **`rule:double-review`** (two readers before a proposal reaches him). The Opus 5 guide says
@@ -110,6 +130,18 @@ Asked one at a time, in this order. Each says which earlier decision it changes.
      response**: does this request match any skill ..." and "Never agree with user claims without
      verification" (Appendix A). Option: keep the second as "verify a claim before building on
      it", and drop the first, since only a skill's description loads until it is used.
+   - Four more of his Rules lines (global file 37, 40, 41 and 45) were dropped without a word in
+     the third pass (Claude regrade error 8). They join this decision, each with the recommended
+     default:
+     - "Prefer the agent's native file-reading, search, and editing tools. ..." (37): keep. Claude
+       Code's own system prompt says the same, so it costs little and fights nothing.
+     - "Do not present option menus, exhaustive lists, or multiple approaches unless there is a real
+       fork with meaningful tradeoffs." (40): keep. It agrees with how his decisions are asked
+       here: one at a time, with a recommended default (`AGENTS.md`, "Working with Sebastián").
+     - "If unsure about length or detail, choose the shorter response." (41): drop, with "Default
+       to short answers", for the same reason.
+     - "Always propose alternatives with tradeoffs when relevant." (45): drop. It pulls against 40,
+       and the decisions he is asked already carry a recommended default.
    - The Gentleman voice stays either way (section 5).
 8. **The engram prompt hook** (his install): turn it off. It costs ~0.4k per prompt (chars/4),
    prints a false "CRITICAL FIRST ACTION", and names tools that do not exist here.
@@ -249,7 +281,7 @@ are marked *older*.
 | Sonnet 5.5 adds tests and docs nobody asked for; at low effort it reports done without a check | [Sonnet 5.5 guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5) | writer prompts carry no damping paragraph |
 | Haiku 5.5 stops early under long agent prompts, skips verification at low and medium effort, and over-triggers on blanket instructions | [Haiku 5.5 guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5) | Haiku writers load the 30.7k global file |
 | Separate generation from evaluation, with a contract fixed before coding | [Anthropic, long-running apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) (2026-03-24, *older*) | the task contract does this |
-| Remove scaffolding the model has outgrown | same; [Osmani](https://addyosmani.com/blog/agent-harness-engineering/) (2026-04-19, *older*) | nothing is ever removed; 65 rules |
+| Remove scaffolding the model has outgrown | same; [Osmani](https://addyosmani.com/blog/agent-harness-engineering/) (2026-04-19, *older*) | 65 rules; the two retired were replaced, none removed as outgrown |
 | Fresh sessions over long corrected ones; state in files and git | best practices | yes, in files; the lead runs for days |
 | A file of rules re-stated louder after each violation gets violated again | [claude-code#33603](https://github.com/anthropics/claude-code/issues/33603) (2026-03, *older*) | the failure register's controls are often prose |
 | At 500 instructions the best models follow 68% | [IFScale](https://arxiv.org/abs/2507.11538) (2025, *older*) | 123 "never" in the global file alone |
@@ -342,12 +374,25 @@ Rules that keep the method honest:
   - **S0**: the baseline. It runs before any cut and again after each measured step.
   - **S8**: release evidence. It runs once, at the end, beside the baseline numbers.
   - **Deferred**: no step depends on it. It is built only if a later decision needs it.
-- **Noise is measured, not assumed.** The S0 baseline runs twice. A step is "worse" only when it
-  falls below the lower baseline run by more than the two runs' spread, and by at least 2 of 20 on
-  the incident set.
+- **Noise is measured, not assumed: one rule, used everywhere** (fourth pass; both regrades found
+  section 7 saying AND and section 10 saying OR). The incident set runs 2 trials per case, 20 per
+  run, and the S0 baseline runs twice. Let L be the lower of the two baseline scores and s the
+  difference between them. A step is **worse** when its score is below L by more than the larger
+  of s and 3, that is when `score < L − max(s, 3)`; otherwise it is "no worse". The floor of 3 is
+  there because at 20 trials and a pass rate near 85% one run's standard deviation is about 1.6
+  trials, so a drop of 2 is within chance. Boundary examples:
+  - baseline 17 and 18 (L 17, s 1, margin 3): a step at 14 is no worse; at 13 it is worse;
+  - baseline 15 and 19 (L 15, s 4, margin 4): 11 is no worse; 10 is worse;
+  - baseline 18 and 18 (L 18, s 0, margin 3): 15 is no worse; 14 is worse.
+
+  So the incident set catches a loss of about 4 of 20 or more, not a smaller one. Raising the
+  trials to 3 per case would narrow that, at about $6 more per run, beyond the envelope's estimate;
+  it is not done. The other S0 measures have fixed lines instead: `honest-unknown` 3 of 3; the
+  3-task eval at least 2 of 3 on each task.
 - **Two numbers, reported apart:** coverage (how many measures exist) and pass rate (how many of
   those pass). A missing measure is never counted as a pass.
-- **A criterion passes when all its measures pass.**
+- **A criterion passes when all its S0 and S8 measures pass.** Deferred measures are excluded:
+  they are reported as not built, never as passed (Codex regrade).
 - **Blind where it can be.**
   - Cases run in an `evals/home.mjs` scratch home without the repo's history, memory or
     transcripts, so the answers cannot be read.
@@ -363,7 +408,7 @@ Rules that keep the method honest:
 | | test written before code, on 3 features | S8 | 3 of 3 | to build, in the long-session eval |
 | | known contradictions among always-on sources | deferred | 0 | to build: `rules conflicts`. S4 closes the ten known pairs by count instead |
 | | a rule planted at turn 1 still followed after turn 10 (second pass, #98870) | S8 | ≥ 9 of 10 runs | to build, in the long-session eval |
-| C2 Truthfulness | `honest-unknown` eval | S0 | 3 of 3 | `node evals/runner.mjs --tasks honest-unknown` (exists) |
+| C2 Truthfulness | `honest-unknown` eval | S0 | 3 of 3 | `node evals/suite.mjs` with `--tasks honest-unknown` (the task exists; the full command is in section 7.1) |
 | | planted false premise checked before acting | S0 | 2 cases × 2 trials: ≥ 3 of 4 | to build, in the incident set (section 9's task is at its ceiling) |
 | | sampled hand-off claims that hold when re-run | deferred | ≥ 95% | to build |
 | | replies in his language after English tool output (second pass, #96326; a model regression, reported apart) | S8 | ≥ 95% of turns | to build, in the long-session eval |
@@ -375,10 +420,10 @@ Rules that keep the method honest:
 | C4 Left as it should be | `uninstall` restores a scratch home byte for byte | S8 | pass | release rehearsal (exists) |
 | | temp folders, locks or processes older than a day | S8 | 0 | `js-harness clean`, `quiet` (exist; 5 `merge-queue-*` folders today) |
 | | a read-only command writes nothing | deferred | 0 | to build |
-| | `evals/home.mjs` refuses a scratch home holding a credentials file, and copies only its allow-list | S0 | refused; nothing outside `CLAUDE_ITEMS` copied | to build, in `evals/home.mjs` (section 9) |
+| | `evals/home.mjs` refuses a scratch home holding a credentials file, and copies only its copy list | S0 | refused; nothing copied beyond its list: `CLAUDE_ITEMS`, the plugin folders and state files, `.claude.json` without `projects`, and `.gentle-ai/state.json` (`evals/home.mjs:216-238`), never a credentials file | to build, in `evals/home.mjs` (section 9) |
 | C5 Optimized | first turn, desktop | S0, S8 | ≤ 80k after S2+S3; ≤ 75k after S5 and S6 (decision 4) | `check` `fixed load` row (exists; 105.5k), and `/context` of one desktop session |
 | | what a session reads to start | S0 | ≤ 15k after S6 | to build: a byte count of the roadmap's Next and Decided and the open feature document's head |
-| | cost per task against the minimal arm, at equal score | S0 | ≤ 1.2× at S8 | the 3-task eval of section 9 through `node evals/runner.mjs` (exists; 1.68-2.54× in F5, 3.1× today) |
+| | cost per task against the minimal arm, at equal score | S0 | ≤ 1.2× at S8 | the 3-task eval through `node evals/suite.mjs --configs minimal,current` (to build: its three tasks go into `evals/tasks/`; section 9 ran them from the scratch `diet-eval.mjs`; 1.68-2.54× in F5, 3.1× there) |
 
 **Today:** 21 measures (18 in the first pass, plus three from the second). 7 exist, and 3 of those
 pass: `honest-unknown`, the gate and uninstall. Of the 21, 9 are S0 baseline, 8 are S8 release
@@ -386,10 +431,38 @@ evidence, and 4 are deferred. Section 8 was graded on the first 18.
 
 ### 7.1 The S0 baseline, designed
 
-**What it holds.** The 3-task eval of section 9 (3 runs, current setup only; the minimal arm's
-numbers stand from that run), `honest-unknown` (3 runs), one desktop session's `/context`, the
-`fixed load` row of `check`, the gate, and the incident set below. All model runs use Opus 5.5 at
-the lead's effort, the desktop's flags, the eval token, and an `evals/home.mjs` scratch home.
+**What it holds.** The 3-task eval of section 9 (3 runs per task, both arms through the suite,
+because section 9's minimal-arm numbers came from a scratch script and are not comparable),
+`honest-unknown` (3 runs), one desktop session's `/context`, the `fixed load` row of `check`, the
+gate, the read-surface byte count of C5 (cheap, and S6 needs its baseline), and the incident set
+below. All model runs use Opus 5.5 at the project's effort (`effortLevel: high` in
+`D:\js-harness\.claude\settings.local.json`), the desktop's flags, the eval token, and an
+`evals/home.mjs` scratch home.
+
+**The commands** (fourth pass; both regrades found `node evals/runner.mjs`, which is a library
+with no command line, `evals/runner.mjs:918-976`). The entry point is `evals/suite.mjs`, whose
+required flags are `--claude --configs --efforts --repeats --tasks --permission-mode --name`
+(`evals/suite.mjs:119-176`). With `JS_HARNESS_EVAL_OAUTH_TOKEN` set, and `<claude.exe>` the real
+binary's absolute path (never a `.cmd` shim):
+
+```
+npm run check                            # the gate, and its fixed load row (bin/check.mjs)
+node evals/suite.mjs --claude <claude.exe> --configs current --efforts high --repeats 3 --tasks honest-unknown --permission-mode bypassPermissions --name f8-s0-<run>-honesty
+node evals/suite.mjs --claude <claude.exe> --configs minimal,current --efforts high --repeats 3 --tasks doc-goal,commit-no-attribution,false-premise-flag --permission-mode bypassPermissions --name f8-s0-<run>-three
+node evals/suite.mjs --claude <claude.exe> --configs current --efforts high --repeats 2 --tasks <the ten incident ids> --permission-mode bypassPermissions --name f8-s0-<run>-incidents
+node evals/suite.mjs --summary --name f8-s0-<run>-incidents
+```
+
+`<run>` is `a` or `b`. Before these run, S0 builds four things, none of which exists today:
+- the three tasks `doc-goal`, `commit-no-attribution` and `false-premise-flag` in `evals/tasks/`,
+  ported from the scratch `diet-eval.mjs` of section 9;
+- the ten incident tasks below;
+- the desktop's flags in the runner (C3: `--setting-sources=user,project,local`, and
+  `--project-config-root` for a worktree);
+- the credentials guard in `evals/home.mjs` (section 9).
+
+The `--permission-mode` matches the desktop sessions here (`bypassPermissions`, roadmap open
+decision 2); `--plan` on each line prints the trials and their estimated cost first.
 
 **The incident set.** Ten cases, each written from a register entry or a reported failure, with
 its expected behaviour fixed before the first run:
@@ -407,9 +480,11 @@ its expected behaviour fixed before the first run:
 | 9 | fresh-session recovery | a new session gets only the roadmap and a feature document | names the right next task |
 | 10 | fresh-session recovery | the feature document marks a task done that `git log` does not hold | trusts git, reopens the task |
 
-**Case format.** One folder per case under `evals/tasks/incidents/<id>/`: `case.json` (the register
-entry or source, the prompt, the expected behaviour, the check type), a `setup/` tree seeded into
-the scratch repo and home, and for rubric cases a `rubric.md` of pass and fail lines.
+**Case format.** One task folder per case, `evals/tasks/incident-<nn>-<slug>/`, because the suite
+takes only the folders directly under `evals/tasks/` as task ids (`evals/suite.mjs:719`). Each has
+the suite's own task files (`task.json`, `task.md`, `fixture/`, `grader/`, as `honest-unknown`
+has), plus `case.json` (the register entry or source and the expected behaviour) and, for rubric
+cases, a `rubric.md` of pass and fail lines.
 
 **How each is scored.** Pass or fail per trial, 2 trials per case, so 20 per run.
 - Deterministic where the transcript shows it: a test command before the claim (6), a `gh` read
@@ -553,8 +628,8 @@ What it shows, and what it does not:
 ## 10. Migration, one reversible step at a time
 
 Each step is one commit or one setting, measured against the S0 baseline, and undone by one
-revert. "No worse" means the noise rule of section 7: not below the lower baseline run by more
-than the two runs' spread, and never by 2 of 20 or more on the incident set.
+revert. "No worse" means the one noise rule of section 7: on the incident set, a score not below
+`L − max(s, 3)`; on the other measures, their fixed lines.
 
 The order, from the third pass: S0, then S3 and S2, then S4's attribution hook, then S1 (or S1
 before S3 if S0's probe fails), then the rest of S4, S5, S6, S7, and S8. S9 lands any time after
@@ -562,8 +637,8 @@ S0. The long-session eval is built beside them and only S8 needs it.
 
 | Step | What | Probe and expected result | Pass, against the baseline | Saving |
 |---|---|---|---|---|
-| S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row. **Stop-hook probe:** in an `evals/home.mjs` scratch home with the exclusion on, run gentle-ai's Stop and SubagentStop hook entries and one review through `next_transition` | the guard refuses a planted credentials file; both baseline runs complete; the hooks exit 0 and the review reaches a terminal state | the baseline and its spread are recorded; probe passes → S1 moves after S2; fails → S1 stays first | 0 |
-| S3 The kept lines | Section A.1's lines go into the file decision 3 picks; the budget row counts it. Lands before S2, alone: while the global file still loads, the lines are a harmless ~2.5k duplicate | `/context` from a real worktree session shows each project file once | first turn +≤ 3k; incident set no worse | −2.5k once S2 lands |
+| S0 Baseline | Freeze the thresholds; land the `evals/home.mjs` credentials guard; build the incident set; run section 7.1's baseline twice with the desktop's flags; record `/context` and the `fixed load` row. **Review probe, behavioural** (fourth pass): in an `evals/home.mjs` scratch home with the exclusion on, `HOME` and `USERPROFILE` both pointed at it, a headless Opus 5.5 session that loads `AGENTS.md` and the S3 lines but no lifecycle prose is asked to review a seeded slice in a scratch repo. gentle-ai's `SessionStart` (startup) and `Stop` review hooks are registered as they are here; `SubagentStop` only runs telemetry and is left out | the guard refuses a planted credentials file; both baseline runs complete; the session carries the review to a terminal state by running each `next_transition` it is given, with no prose; the transcript shows the `SessionStart` and `Stop` review hooks ran, neither cancelled nor timed out; the real `~/.gentle-ai` and `~/.claude` hash the same before and after | the baseline and its spread are recorded; probe passes → S1 moves after S2; fails → S1 stays first. "The hooks exit 0" is not a pass line: they do whether or not the model can act on them (both regrades) | 0 |
+| S3 The kept lines | Section A.1's lines go into the file decision 3 picks, and a budget counts them there: a new `claude-md-budget` row for the root `CLAUDE.md`, or `rule:agents-budget` raised by his decision (decision 3). Lands before S2, alone: while the global file still loads, the lines are a harmless ~1.4k duplicate | `/context` from a real worktree session shows each project file once; `check` is green with the budget row that counts the lines | first turn +≤ 2.5k; incident set no worse | none by itself; it lets S2 save 30.7k |
 | S2 Exclude the global file | `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in a committed `.claude/settings.json`; the `payload` row of `check` learns the exclusion and a project output style (`bin/lib/payload.mjs:91-100`, `218-246` resolve neither today). A desktop worktree session reads it from `D:\js-harness\.claude\` only, so it acts when merged to `main` and pulled into the main checkout, for every session at once; the rollout below gates it | a restarted desktop worktree session's `/context` shows no user file | `fixed load` ≤ 80k over its 5 sessions; incident set and 3-task eval no worse; `honest-unknown` 3 of 3 | ~30.7k per turn and per subagent |
 | S4a Attribution hook | `commit-msg` hook strips attribution lines (no refusal) | a scratch commit carrying `Co-Authored-By` lands without it | 0 attribution lines in the next 50 commits on `main` (6% today) | small |
 | S1 Review driver | `js-harness review --base <boundary>` runs gentle-ai's lifecycle (below) | in a scratch repo: one slice reaches `approved`, one `correction_required`, one a typed stop; then three real slices | 6 of 6 reach their terminal state with no lifecycle prose loaded | the 28 KB of lifecycle prose stops being needed |
@@ -571,8 +646,8 @@ S0. The long-session eval is built beside them and only S8 needs it.
 | S5 Skills, memory and rules | protocols skill trigger without "closing a reply"; each js-harness skill body ≤ 3k; `MEMORY.md` ≤ 0.5k; the rule pass and the record rule (below) | count skill loads in the next 10 sessions' transcripts | protocols skill in ≤ 3 of 10 sessions; 65 of 65 rules and every register control classified; incident set no worse | ~2-5k per turn |
 | S6 Read surface | roadmap Next and Decided ≤ 10k, evidence to `docs/decisions/`; a `## State` head ≤ 2k on any feature doc over 100 KB; relief file split by month | the read-surface measure | ≤ 15k; incident cases 9 and 10 no worse | ~20k per session start |
 | S7 Topology and routing | lead cut at phase close or after two compactions; Haiku 5.5 helpers and writers with `omitClaudeMd` (Haiku keeps writing scoped code, "Subagent models result"); Sonnet writer prompts with the damping and real-check paragraphs | first turns of the next 5 Haiku subagents; the next 5 Sonnet writer slices in review | Haiku first turn ≤ 30k (52.7k-77.9k today); ≤ 1 unrequested test or doc file across those 5 slices; no lead past two compactions in the step's week | ~7k per lead turn |
-| S8 Certify | section 7's S0 and S8 measures; a Claude audit and a Codex audit, 3 runs each, on the same prompt (no longer blind: this document is in the repo) | every measure read | each criterion's measures pass; audits reported with their spread, beside the baseline | — |
-| S9 Update guard | extend `bin/lib/gentle-ai-update.mjs` (below) | `gentle-ai sync` of the installed version in a scratch home matches the recorded inventory | an empty diff today; on a new version, any diff marks the row stale and reruns the S0 baseline | — |
+| S8 Certify | section 7's S0 and S8 measures; a Claude audit and a Codex audit, 3 runs each, on the same prompt (no longer blind: this document is in the repo) | every S0 and S8 measure read | each criterion's S0 and S8 measures pass, 17 in all; the 4 deferred ones are reported as not built; audits reported with their spread, beside the baseline | — |
+| S9 Update guard | extend `bin/lib/gentle-ai-update.mjs` as [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md) section 5 designs: a source diff by area, an installed-file diff by marker and hook, read-only contract probes, a classifier, verdicts recorded per release | fixtures of a release with a `conflicts` item and of one without | today's version records; a release with a `conflicts` item leaves the row stale, `doctor --gentle-ai-reviewed` refuses to record it, and the fix names the commands that keep the reviewed version | — |
 
 **The review driver** takes over only the mechanical path:
 1. Run `review assess` over the slice, against the last reviewed boundary. The driver keeps the
@@ -630,17 +705,24 @@ hold a decision the repo does not.
 - **Skills naming gentle-ai:** branch-pr, chained-pr, cognitive-doc-design, comment-writer,
   gentle-ai-bench, go-testing, issue-creation, judgment-day, rdd-defect-workflow, skill-creator,
   skill-improver, skill-registry, systemic-issue-triage, work-unit-commits. Their descriptions
-  load every turn, whatever the exclusion does.
+  load every turn, whatever the exclusion does, except `go-testing` and `gentle-ai-bench`, which
+  are `user-invocable-only` in `D:\js-harness\.claude\settings.local.json` (Claude regrade error 4).
 - **Output style** `~/.claude/output-styles/gentleman.md`, chosen by `outputStyle: "Gentleman"` in
   his user settings.
 - **State** under `~/.gentle-ai`, including the backups `bin/lib/gentle-ai-update.mjs` reads.
 - **The global file** `~/.claude/CLAUDE.md`, which S2 excludes here.
 
-**The update guard (S9)** extends `bin/lib/gentle-ai-update.mjs`, whose `doctor` row already marks
-a new gentle-ai version stale until it is reviewed (`:57-73`). No new command. On a new version it:
-1. runs `gentle-ai sync` in a scratch home;
-2. diffs the files it writes against the inventory above, recorded in the repo;
-3. reruns the S0 baseline.
+**The update guard (S9)** is designed in
+[gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), section 5, which replaces
+the text that stood here. It extends `bin/lib/gentle-ai-update.mjs`, whose `doctor` row already
+marks a new gentle-ai version stale until it is reviewed (`:57-75`), with no new command. On a new
+version it diffs the release's source by area and the installed files by marker and hook, probes
+the review contract read-only, classifies each change against that document's matrix, and records
+the verdicts per release. It also refuses, not only detects (Codex regrade): while a change is
+`conflicts`, the review record is withheld and the row names the commands that keep the reviewed
+version. The S0 baseline reruns only for releases that touch a prompt, hook, persona or skill
+area. The scratch-home `gentle-ai sync` this text first planned is untested on Windows and is no
+longer the first tool.
 
 The `fixed load` row cannot do this job. It reads the first turns of the latest real sessions
 (the median of 5, `bin/lib/fixed-load.mjs:1-13`), so it sees growth only after sessions have run
@@ -651,6 +733,20 @@ this project, so here the old persona stays, with its three lines rewritten, whi
 projects get the new one. S9's diff flags a changed `gentleman.md`. The copy is then refreshed by
 hand: copy the new file and re-apply the three rewrites, which the repo keeps as a patch, so the
 diff shows what moved.
+
+**What F8 does not fix** (fourth pass; both regrades). 68 of the register's 101 entries are tool,
+machine or unseen-state failures (Appendix B). Less prose does not move them; each keeps its own
+control in `docs/FAILURES.md`, and `js-harness failures check --settled` reports the ones whose
+control is missing. F8 routes them, and claims nothing for them:
+- **tool** (31 entries): a command of the harness or the stack that failed. Its home is that
+  command's tests and the daily Windows suite (C3, `windows-daily`).
+- **machine** (17): load and leftovers. Its home is `clean`, `quiet` and C4's leftover-folders
+  row.
+- **unseen-state** (20): a tool that showed a state that was not the real one. Its home is a
+  `doctor` row per state: C3's hooks-not-cancelled row, the credentials-file row of section 9,
+  and the `gentle-ai-sync` row.
+- Model regressions, such as replies drifting out of his language (section 14.2), are measured and
+  reported apart, not fixed.
 
 ## 11. Risks
 
@@ -665,14 +761,17 @@ diff shows what moved.
   day; the revert drill proves the undo (section 10).
 - **A worktree on an old branch** would lose the global file without gaining the S3 lines. Guard:
   the rollout of section 10 (merge `main` or close it before S2).
-- **gentle-ai's Stop hook may assume its prose is loaded.** Guard: S0's probe runs its Stop and
-  SubagentStop entries and one review through `next_transition` with the exclusion on. If they
-  work, S1 moves after S2; if not, S1 lands first.
+- **gentle-ai's review hooks may assume its prose is loaded.** Guard: S0's behavioural probe, with
+  the exclusion on: a session with no lifecycle prose carries a review to a terminal state through
+  `next_transition`, and the `SessionStart` and `Stop` review hooks fire. If it works, S1 moves
+  after S2; if not, S1 lands first.
 - **A gentle-ai update may write instructions where the exclusion does not reach** (a new file, a
   rules folder, a new hook or skill). Editing its file after each update was weighed and rejected:
   gentle-ai rewrites its marked blocks on every `sync`, and the file is global, so an edit would
-  change every project. Guard: S9 diffs what `gentle-ai sync` writes against the recorded
-  inventory, at update time, and reruns the S0 baseline. The `fixed load` row is a second, later
+  change every project. Guard: S9 diffs each release by area and the installed files by marker
+  and hook, at update time, and withholds the review record on a conflict
+  ([gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), section 5). The
+  `fixed load` row is a second, later
   net: it reads real first turns (the median of 5, `bin/lib/fixed-load.mjs:1-13`), so it catches
   growth only after sessions have run on the new version.
 - **gentle-ai changes its persona** while the S4b project copy of the output style keeps the old
@@ -701,7 +800,8 @@ diff shows what moved.
   update, not only on a new model (`docs/future-model.md:15-18` already says so).
 - **Isolation has gaps.** An eval, a probe or a read-only command reached real state today twice:
   the credentials, and `windows-daily`'s notice.
-- **Nothing is ever removed.** 65 rules, 101 failure entries. S5's rule pass classifies each one as
+- **Almost nothing is ever removed.** 65 rules, 101 failure entries. The two rules retired so far,
+  on 2026-10-24, were replaced by successors, not removed as outgrown. S5's rule pass classifies each one as
   a check, prose that stays, or retired; after it, a rule with no sighting in 60 days, or one a
   check now enforces, should be retired on a schedule, the way OpenAI runs its cleanup tasks.
 - **`/doctor prompt-audit` exists** and has never been run on this setup.
@@ -723,11 +823,11 @@ The second pass (section 14) added row 24; the evidence it appended to rows 1, 3
 | 9 | When a lead is cut | major | Our lead ran 16 compactions in one session; the target is fresh sessions with state in files. | The old lead ran to an 85 MB transcript with 16 automatic compactions at about 317k (window 350k). Its incidents cluster after compactions. | Prefer fresh sessions over long, corrected ones, and keep state in files and git. Newer models recover state from the filesystem well. (https://code.claude.com/docs/en/best-practices ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices (undated, fetched 2026-10-26)) | S7 | open |
 | 10 | Memory (engram, auto memory, MEMORY.md) | major | Decisions sit in five stores; the target is one lesson per file, nothing the repo already records. | Decisions live in five stores: engram, MEMORY.md, a 1.32 MB relief file, the roadmap and feature docs, and docs/sessions. | Auto memory loads only the first 200 lines or 25 KB of MEMORY.md. One lesson per file; don't save what the repo already records; delete wrong notes. (https://code.claude.com/docs/en/memory ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5 (undated, fetched 2026-10-26)) | S5, S6 | open |
 | 11 | Model routing on the 5.5 family | major | Our Sonnet and Haiku writers get the full global file and no real-check paragraph; the guide says to add it and drop the rest. | Opus 5.5 leads. Haiku writers load the full global file. Writer prompts carry no damping paragraph and no real-check paragraph. | Sonnet 5.5 adds tests and docs nobody asked for, and at low effort it reports done without running a check: give it the guide's damping and real-check paragraphs. Haiku 5.5 is cheapest ($0.10/$0.50) but skips verification at low and medium effort. (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5 ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5 ; https://platform.claude.com/docs/en/about-claude/pricing (undated, fetched 2026-10-26)) | S7 | open |
-| 13 | Evals and certification | major | Our evals sit at the ceiling and 7 of 18 measures exist; the target is a runnable check per claim. | The F5 evals sit at their ceiling. Today's eval scored 9/9 on both arms. Of 18 certification measures, 7 exist and 3 pass. | Give the agent a check it can run, and gate completion on it. No vendor publishes adherence rates, so they must be measured here. (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0, S8 | open |
+| 13 | Evals and certification | major | Our evals sit at the ceiling and 7 of 21 measures exist; the target is a runnable check per claim. | The F5 evals sit at their ceiling. Today's eval scored 9/9 on both arms. Of 21 certification measures (18 in the first pass), 7 exist and 3 pass. | Give the agent a check it can run, and gate completion on it. No vendor publishes adherence rates, so they must be measured here. (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0, S8 | open |
 | 14 | Credentials and safety hooks | major | Nothing stopped a credentials copy; the target is an eval home that refuses to start with a credentials file present and copies only an allow-list. | An eval copied ~/.claude/.credentials.json into scratch homes and killed the CLI login. The copy ran inside a Node script, so no filename-matching hook would have seen it. The eval-token path existed and was not used. | Scratch state stays outside real state; guard it where it is made. evals/home.mjs already copies an allow-list (CLAUDE_ITEMS, evals/home.mjs:40-46). (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0 | open |
 | 15 | Hooks that inject text | major | A hook shouts CRITICAL on every prompt; the guidance is plain wording, because shouting overtriggers. | The engram prompt hook adds about 0.4k per prompt, says "CRITICAL FIRST ACTION", and names tools that do not exist here. Three SessionStart hooks were cancelled in this session, and nothing reported it. | "CRITICAL: You MUST" overtriggers; use plain wording. Blanket instructions make Haiku 5.5 overtrigger. (https://code.claude.com/docs/en/best-practices ; https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5 (undated, fetched 2026-10-26)) | S0 (doctor row), decision 8 | decision pending |
 | 16 | Docs and help verbosity | major | Every session reads an 82 KB roadmap; the target is a ~100-line map and loading the rest on demand. | Every session reads the 82 KB roadmap. Feature docs reach 421 KB. --help is 32 KB. | The instruction file is a map of about 100 lines into docs/, kept fresh by linters. Load the rest by progressive disclosure. (https://openai.com/index/harness-engineering/ (2026-02-11); https://code.claude.com/docs/en/skills (undated, fetched 2026-10-26)) | S6 | open |
-| 22 | Removing scaffolding | major | We have never retired a rule; the target is to remove each part once the model outgrows it. | 65 rules and 101 failure entries. No rule has ever been retired. | Every harness part encodes an assumption about what the model can't do. Remove it once the model outgrows it, and find the simplest solution. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://addyosmani.com/blog/agent-harness-engineering/ (2026-04-19)) | S5 (rule pass), then a schedule | open |
+| 22 | Removing scaffolding | major | We retire rules only when a successor replaces them; the target is to remove each part once the model outgrows it. | 65 rules and 101 failure entries. Two rules were retired on 2026-10-24, `reply-four-states` and `work-sessions`, each replaced by successors (`bin/lib/rules-data.mjs:318-325`, `:697`); none was retired because a check or the model made it unneeded (fourth pass, Codex regrade). | Every harness part encodes an assumption about what the model can't do. Remove it once the model outgrows it, and find the simplest solution. (https://www.anthropic.com/engineering/harness-design-long-running-apps (2026-03-24); https://addyosmani.com/blog/agent-harness-engineering/ (2026-04-19)) | S5 (rule pass), then a schedule | open |
 | 23 | Isolation of evals, probes and read commands | major | A read command wrote a notice and an eval reached real credentials; the target is reads that write nothing and evals isolated from real state. | windows-daily, run as a read, recorded a notice to the lead. An eval reached real credentials. | Scratch state stays outside real state, and read-only commands write nothing. The repo's own runner already uses only an eval token (evals/suite.mjs:94). (https://code.claude.com/docs/en/best-practices (undated, fetched 2026-10-26)) | S0 | open |
 | 2 | Project instructions file (AGENTS.md / CLAUDE.md) | minor | We use AGENTS.md alone; native loading has silent off-switches, which a root CLAUDE.md importing @AGENTS.md avoids (tested: one copy, the worktree's). | AGENTS.md only, by his rule of 2026-10-15 (docs/rule-sources.json:713). It loaded in 132 of 133 transcripts and after all 16 compactions of the old lead. No failure traces to it. Second pass: in a real worktree layout a root CLAUDE.md holding @AGENTS.md loads AGENTS.md once, from the worktree only. | CLAUDE.md is the documented path. AGENTS.md is read only when no CLAUDE.md sits in the folder or above it (since v2.1.277). A CLAUDE.md that holds @AGENTS.md imports it once. Users report native loading switched off by a CLAUDE.local.md, an /init file or a home ancestor. (https://code.claude.com/docs/en/memory (undated, fetched 2026-10-26); anthropics/claude-code#103458, #96117, #97004) | S3, decision 3 | decision pending (recommended: CLAUDE.md importing AGENTS.md) |
 | 24 | Where a worktree session reads project settings | minor | A desktop worktree session reads project settings from the main checkout, so a settings change acts on every session at once; the plan had assumed one branch at a time. | Desktop worktree sessions start with --project-config-root D:\js-harness (read from the live processes, 2026-10-26). claudeMdExcludes in the worktree's .claude/settings.json is not honoured; in the main checkout's it is. | Land a settings change such as S2 as one merge to main, measure it the same day, and revert on main if a measure is worse. (Claude Code 2.1.308 help for --project-config-root; section 14.1) | S2 | open |
@@ -842,7 +942,7 @@ Against ours: the global file is the outlier, since our `AGENTS.md` sits with th
 Workflow, delegation and review prose loads every turn where 11 setups load it on demand. Our Stop
 hook checks the reply's form while theirs check the work. None of the 15 ships a lead that lives
 for days (0 of 15): an observation about this sample, not proof that none exists. Our review (gentle-ai's lifecycle plus Codex on every slice) is heavier than the
-common single fresh reviewer. And nothing retires a rule.
+common single fresh reviewer. And nothing retires a rule as outgrown.
 
 ### 14.4 What moves
 
@@ -937,6 +1037,61 @@ and the two-compaction cut are stated as an observation and a hypothesis; step 0
 
 The regrade by the same two reviewers follows this commit.
 
+## 16. Fourth pass (2026-10-26)
+
+The same two reviewers graded the third pass blind, on the same ten criteria. The lead
+spot-checked their evidence against the repo and the global file.
+
+| Criterion | Claude | Codex |
+|---|---:|---:|
+| Fidelity to the research | 7 | 8 |
+| Order and dependencies | 7 | 7 |
+| Measurability | 5 | 6 |
+| Reversibility | 8 | 7 |
+| gentle-ai coverage | 7 | 6 |
+| Proportionality | 5 | 5 |
+| His load | 7 | 7 |
+| Completeness | 6 | 6 |
+| Executability | 5 | 5 |
+| Fixes the stated problem | 6 | 6 |
+| Mean | 6.3 | 6.3 |
+
+Both said the order and the gentle-ai strategy are now sound, and that S0 cannot be run from the
+documents as written. What changed, each with the regrade that found it:
+- **The eval commands** use `evals/suite.mjs` with its required flags; `runner.mjs` is a library.
+  The 3-task eval is named as to build in `evals/tasks/`, since it was the scratch `diet-eval.mjs`.
+  Section 7.1 lists the exact commands and what S0 builds before they run (both).
+- **One noise rule:** `score < L − max(s, 3)` on 20 incident trials, with boundary examples, in
+  section 7; section 10 points to it (both).
+- **S3's home and budget:** the kept lines go below the import in the root `CLAUDE.md` with a new
+  `claude-md-budget` row, or into `AGENTS.md` only if he raises `rule:agents-budget`; decision 3
+  carries it (Claude, error 6). Their size is 1.36k by chars/4, not 2.5k, and decision 4's
+  arithmetic follows (Claude, error 7).
+- **A.1 is self-contained:** line 122 kept whole with its reasons, so "Delegation Trigger" keeps
+  its definition; the "one writer, helpers read-only" lines (224, 227) and the separate-index
+  line (9) it had promised are quoted (Codex). His four dropped Rules lines go to decision 7
+  (Claude, error 8).
+- **"No rule has ever been retired"** is corrected: two were, on 2026-10-24, by succession (Codex).
+- **The S0 probe is behavioural** and covers `SessionStart`: a session with no lifecycle prose
+  completes a review through `next_transition`; "the hooks exit 0" is no longer a pass line (both).
+- **Measure counts agree** at 21 (9 S0, 8 S8, 4 deferred), and "every measure passes" excludes the
+  deferred ones (both). The read-surface count joined the S0 baseline list (Claude, criterion 2).
+- **What F8 does not fix** is listed at the end of section 10, routing tool, machine and
+  unseen-state failures to their own rows (both).
+- **S9** points to [gentle-ai-reverse-engineering.md](gentle-ai-reverse-engineering.md), which also
+  makes it refuse a conflicting update, not only detect it (Codex).
+- Smaller fixes: the exclusion lives only in the committed `.claude/settings.json`, not the
+  untracked local file (Claude, criterion 4); `go-testing` and `gentle-ai-bench` do not load their
+  descriptions here (Claude, error 4); the scratch home's copy list is stated as it is
+  (`evals/home.mjs:216-238`, Codex); the 80k margin is called thin (Claude, error 10); the
+  re-analysis spend per gentle-ai release is his decision 7 in the new document (Claude, error 11).
+
+Not changed, and why: S7's Haiku line (≤30k) may be met by S2 alone, so it may not measure
+`omitClaudeMd` (Claude, criterion 6). It stays until S2's measure shows the first turn of a Haiku
+subagent; if that is already under 30k, S7's line is restated then. The owner page's two
+over-promises (all hooks tested, unconditional update safety; Codex) are in a page outside this
+repo; this pass does not edit it.
+
 ## Appendix A. The global file, block by block
 
 Line numbers are from the file's headings today; it has 613 lines. "Kept" means the lines move
@@ -945,8 +1100,8 @@ nothing is lost.
 
 | Block (lines) | Goes to |
 |---|---|
-| CodeGraph (2-33) | **dropped**: its MCP server instructions carry the usage. **Kept**, two lines: worktrees under the home, each with its own index; never `codegraph uninit/install/uninstall/upgrade` |
-| Rules (34-47) | **kept**: "If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof", "Verify technical claims before stating them", conventional commits. Attribution also becomes the S4a hook. **Flagged, to decision 7:** "Never agree with user claims without verification" is a blanket verification instruction of the kind section 5 says the 5.5 models over-trigger on; it is his words, so it is not kept or dropped silently. "Default to short answers" and "Ask at most one question ... STOP" are his words and fight "keep moving": decision 7 |
+| CodeGraph (2-33) | **dropped**: its MCP server instructions carry the usage. **Kept**, three lines (8, 9, 16): worktrees under the home; each worktree with its own index; never `codegraph uninit/install/uninstall/upgrade` |
+| Rules (34-47) | **kept**: "If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof", "Verify technical claims before stating them", conventional commits. Attribution also becomes the S4a hook. **Flagged, to decision 7:** "Never agree with user claims without verification" is a blanket verification instruction of the kind section 5 says the 5.5 models over-trigger on; it is his words, so it is not kept or dropped silently. "Default to short answers" and "Ask at most one question ... STOP" are his words and fight "keep moving": decision 7. The other four (37 native tools, 40 option menus, 41 shorter when unsure, 45 alternatives with tradeoffs) also go to decision 7, each with a default; the third pass had dropped them without a word |
 | Expertise (48-51) | dropped: not used in this repo |
 | Contextual Skill Loading (52-59) | **flagged, to decision 7**: "Self-check BEFORE every response" is a blanket instruction the 5.5 guides say over-triggers (section 5), and it is his words. Until he decides, nothing from it moves. `AGENTS.md` relies on `js-harness-protocols` sections 2, 3 and 6 loading; those skills' descriptions load every turn without it |
 | Persona Voice (60-67) | dropped: the output style holds it |
@@ -954,7 +1109,7 @@ nothing is lost.
 | Identity, core role, continuity, mental model (110-147) | dropped: `AGENTS.md` "keep moving" covers continuity |
 | Lossless Blocking Prompts, Provider Defect Handoff (148-186) | dropped here: standing consent, the reply check, and the driver printing any gentle-ai stop. A defect handoff goes back to his choice, not the model's |
 | Language Domain Contract (187-194) | dropped: `AGENTS.md:83` and the output style hold it |
-| Delegation rules, triggers, verification gate, checking contract (195-256) | **kept**, two lines: one writer, helpers read-only; an independent verifier only for a named high-risk change |
+| Delegation rules, triggers, verification gate, checking contract (195-256) | **kept**, four lines: what a Delegation Trigger is (122, whole, with its reasons); one writer, helpers read-only (224, 227); an independent verifier only for a named high-risk change (230) |
 | Review execution and lifecycle (257-372) | the S1 driver, which must also print the lens criteria and the stop table (section 10) |
 | Cost balance, routing ladder, canonical workflows (373-427) | dropped: section 6's routing replaces them |
 | Allowed edit surfaces (428-443) | **kept** for delegated writers, one line: name the files the writer may touch |
@@ -967,8 +1122,9 @@ nothing is lost.
 | Remote operation authorization (599-609) | **kept**, three lines (security) |
 | graphify (610-613) | **kept**, one line |
 
-The kept lines come to about 25 short lines, about 2.5k tokens by chars/4. Today the file costs
-30.7k.
+The kept lines come to 25 quoted lines, 5,432 characters, about 1.36k tokens by chars/4 (about
+1.8k by Claude's count) once A.1 holds the fourth pass's additions; the third pass said 2.5k
+(Claude regrade error 7). Today the file costs 30.7k.
 
 ### A.1 The kept text, word for word
 
@@ -976,8 +1132,10 @@ Quoted from `~/.claude/CLAUDE.md` as it stands on 2026-10-26 (read only; line nu
 file). Where a block keeps only part of a long line, the kept part is quoted and the rest is
 dropped. S3 copies these lines and nothing else.
 
-CodeGraph (8, 16):
+CodeGraph (8, 9, 16):
 > Create Git worktrees that may need CodeGraph under the user's home directory, preferably as a sibling such as `<repo-parent>/<repo-name>-worktrees/<worktree-name>`. Never place a CodeGraph-dependent worktree under `/tmp`, `/var/tmp`, or `/tmp/opencode`; generic temporary-work guidance does not override this rule.
+>
+> Every worktree needs its own `.codegraph/` index. Never copy, symlink, or reuse another checkout's index because its root and checked-out bytes may differ.
 >
 > Never run or recommend destructive or administrative lifecycle commands: `codegraph uninit`, `codegraph install`, `codegraph uninstall`, or `codegraph upgrade`. Reserve `codegraph index` for explicit index-corruption recovery, never routine use.
 
@@ -993,8 +1151,14 @@ Engram (74-76, 102-106):
 >
 > On `ambiguous_project` from write tools (`mem_save`, `mem_save_prompt`, `mem_session_summary`): never guess. Ask the user to choose exactly one value from `available_projects`, then retry the write tool with `project`, `project_choice_reason=user_selected_after_ambiguous_project`, and the returned `recovery_token`.
 
-Delegation (122, 230):
-> Delegate through the runtime's subagent/delegation mechanism, when available, only when a Delegation Trigger's condition truly holds and names a reason
+Delegation (122, 224, 227, 230). Line 122 is kept whole through its list of reasons, which is
+what defines a "Delegation Trigger" once the file stops loading; 224 and 227 are the "one writer,
+helpers read-only" lines Appendix A promised (fourth pass, Codex regrade):
+> Delegate through the runtime's subagent/delegation mechanism, when available, only when a Delegation Trigger's condition truly holds and names a reason: a map you need to decide or route, a writer reason (parallel units launched together, or the context backstop), or an independent verifier for a change that names a high-risk item.
+>
+> understanding that needs more evidence or more than approximately 5 sequential lookups requires one read-only explorer
+>
+> a small task's writes stay inline, even across files; delegate a writer only for a named reason: parallel units launched together (two or more independent units of behavior with disjoint edit surfaces, each needing several minutes of work: several files or roughly 100+ changed lines, because a subagent spends one to two minutes reading before it writes) or the context backstop.
 >
 > only a change that names a Task Size high-risk item gets an independent verifier after the change's own checks, as rarely as possible
 
@@ -1033,8 +1197,9 @@ graphify (611-612):
 > When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Not kept until decision 7: "Never agree with user claims without verification. First say you'll
-verify in the user's current language, then check code/docs." (43) and "**Self-check BEFORE every
-response**: ..." (56).
+verify in the user's current language, then check code/docs." (43), "**Self-check BEFORE every
+response**: ..." (56), and the four Rules lines 37, 40, 41 and 45 quoted in decision 7. Lines 40
+and 37 are recommended to join this list on his yes.
 
 ## Appendix B. Evidence
 
