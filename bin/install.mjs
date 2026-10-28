@@ -621,7 +621,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   for (const p of result.settingsKept ?? []) console.log(`kept ${SESSION_MESSAGES.key} in ${p} (modified by you)`);
   const released = result.permissions;
   if (released?.status === 'released') console.log(`took ${released.removed} permission entr${released.removed === 1 ? 'y' : 'ies'} install wrote out of ${released.path}`);
-  else if (released?.status === 'kept') console.error(`could not read ${released.path} (${released.reason}): the permission entries install wrote may still be in it, and are no longer recorded; remove them by hand`);
+  else if (released?.status === 'kept') console.error(`left the permission entries install wrote in ${released.path} as they are (${released.reason}): they are still recorded; fix that, then run js-harness uninstall --global again, or remove them by hand`);
   else if (released?.status === 'failed') console.error(`could not take the permission entries install wrote out of ${released.path} (${released.code}): they are still recorded; run js-harness uninstall --global again, or remove them by hand`);
   for (const { path: p, code } of result.settingsFailed ?? []) console.error(`could not put ${SESSION_MESSAGES.key} back in ${p} (${code}): it is still recorded; run js-harness uninstall --global again, or set it back by hand`);
   // A scheduled task, like an optional file: one that runs something else now is the user's, and is kept with

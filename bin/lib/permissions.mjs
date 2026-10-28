@@ -101,15 +101,21 @@ export function holdPermissions(home, previous) {
   return { held: { status: 'written', path: target, ...(restored !== null && { restoredMode: restored }) }, record, keep: recordWith(putBack) };
 }
 
+/** Whether `a` and `b` name one file: resolved, and in any case on Windows, whose paths ignore it. */
+function sameFile(a, b) {
+  const [x, y] = [path.resolve(String(a)), path.resolve(b)];
+  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
 /** Takes out of the settings what `record` says `install` wrote: its entries, the `defaultMode` it wrote back while it
  * is still that value, and a list, the object or the file it made once nothing else is in them. Returns `{ status,
  * path }`: `released` with `removed`, the count taken out (one copy of each recorded entry of the lists); `gone` with
  * nothing of it left to take; `kept` with a `reason` when the file cannot be read, or is not the user settings of `home`,
- * left as it is; `failed` with a `code` when it cannot be written, and then the caller keeps the record for a second
- * run. */
+ * left as it is; `failed` with a `code` when it cannot be written. On `kept` and `failed` the caller keeps the record
+ * for a second run. */
 export function releasePermissions(record, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
   const at = userSettingsPath(home);
-  if (record.path !== at) return { status: 'kept', path: String(record.path), reason: 'the record names another file than the user settings' };
+  if (!sameFile(record.path, at)) return { status: 'kept', path: String(record.path), reason: 'the record names another file than the user settings' };
   let settings;
   try {
     settings = readSettings(at);

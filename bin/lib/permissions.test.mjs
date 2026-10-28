@@ -291,6 +291,42 @@ test('a write that fails on uninstall keeps the record, so a second uninstall ta
   }
 });
 
+// gentle-ai's reliability lens on PR 2: a record that names the file in another spelling was refused and dropped.
+test('on Windows a record that names the user settings in another case is that file, and uninstall takes the entries out', { skip: process.platform !== 'win32' }, () => {
+  const m = machine();
+  try {
+    m.write({ theme: 'dark' });
+    install(m.home, '1.0.0');
+    const file = path.join(m.home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    manifest.permissions.path = manifest.permissions.path.toUpperCase();
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    assert.equal(m.remove().permissions.status, 'released');
+    assert.deepEqual(m.data(), { theme: 'dark' });
+  } finally {
+    m.done();
+  }
+});
+
+test('a record that names another file than the user settings is kept with its reason, never dropped', () => {
+  const m = machine();
+  try {
+    m.write({ theme: 'dark' });
+    install(m.home, '1.0.0');
+    const file = path.join(m.home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    manifest.permissions.path = path.join(m.home, 'elsewhere.json');
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    const removed = m.remove();
+    assert.equal(removed.permissions.status, 'kept');
+    assert.match(removed.permissions.reason, /names another file than the user settings/);
+    assert.ok(readManifest(m.home).permissions, 'still recorded');
+    assert.deepEqual(m.data().permissions.deny, PERMISSIONS_DENY);
+  } finally {
+    m.done();
+  }
+});
+
 test('a kept record takes the file install made with it, so a second uninstall still leaves an empty home', () => {
   const m = machine();
   try {

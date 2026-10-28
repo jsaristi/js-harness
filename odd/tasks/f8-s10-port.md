@@ -197,3 +197,11 @@ its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a bra
   the user's own, only those are recorded, uninstall takes out one copy of each, and the manifest's format goes to 3.
   NOTE 9 (a clone's `outputStyle` outranks the user's own style in `~/.claude/settings.json`) is what S1 asks
   ("`init` selects the style") and stays.
+- L14 (2026-10-28, gentle-ai on PR 2's range, `c7445caa..e2c38a15`, its granted invocation run unasked): approved,
+  medium, one lens (reliability), two WARNINGs. One fixed test first in the next commit: a record naming the user
+  settings in another spelling (case, on Windows) was refused as another file and then dropped from the manifest,
+  with a "could not read" message; now the path is compared as Windows does, a `kept` record stays recorded as a
+  `failed` one does, and the message says why. The other is left open with L13's: a Grep of the project's root, or
+  with no path, can read a `.env` in it, since only a folder that holds a place of several segments is refused; a
+  root search is what most Greps are, so refusing it would stop the work, and the settings' `Read(.env)` deny is the
+  layer there.
