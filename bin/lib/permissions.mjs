@@ -24,6 +24,21 @@ const LISTS = { allow: PERMISSIONS_ALLOW, deny: PERMISSIONS_DENY };
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const union = (a, b) => [...new Set([...a, ...b])];
 
+/** Runs the write of the manifest that records what was held; when it throws, `undo` takes the settings back first, so
+ * no entry is left that nothing records (Codex on c7445ca..e523ac7, as `acceptSessionMessages` does). */
+const recordWith = (undo) => (write) => {
+  try {
+    write();
+  } catch (err) {
+    try {
+      undo?.();
+    } catch {
+      // The write's own error is the one to tell.
+    }
+    throw err;
+  }
+};
+
 /** The user's `permissions` in `data`, or why it cannot be held: `{ permissions }` or `{ reason }`. */
 function permissionsOf(data) {
   const permissions = data.permissions === undefined ? {} : data.permissions;
@@ -33,15 +48,16 @@ function permissionsOf(data) {
 }
 
 /** Adds to the user settings under `home` every entry of `PERMISSIONS_ALLOW` and `PERMISSIONS_DENY` they lack, and
- * puts back a `defaultMode` adopted before that has gone missing; never invents one. Returns `{ held, record }`:
+ * puts back a `defaultMode` adopted before that has gone missing; never invents one. Returns `{ held, record, keep }`:
  * `held` is `{ status, path }`, `written` or `already`, or `skipped` with a `reason` (a file that cannot be read or
  * written, or a `permissions` that is not the shape it holds), and then nothing is written and `record` is
  * `previous`. `record` is what `uninstall` undoes, `{ path, added: { allow, deny }, defaultMode, wroteMode,
  * createdFile, createdObject, createdLists }`: `added` only the entries this wrote, carried over from `previous`, the
- * record of an earlier install, as its flags are. */
+ * record of an earlier install, as its flags are. `keep(write)` runs the caller's write of the manifest, and takes the
+ * settings back when it throws. */
 export function holdPermissions(home, previous) {
   const target = userSettingsPath(home);
-  const skipped = (reason) => ({ held: { status: 'skipped', path: target, reason }, record: previous ?? null });
+  const skipped = (reason) => ({ held: { status: 'skipped', path: target, reason }, record: previous ?? null, keep: recordWith(null) });
   let settings;
   try {
     settings = readSettings(target);
@@ -80,14 +96,15 @@ export function holdPermissions(home, previous) {
     createdObject: Boolean(previous?.createdObject) || data.permissions === undefined,
     createdLists: Object.keys(LISTS).filter((name) => createdLists.has(name)),
   };
-  if (!changed) return { held: { status: 'already', path: target }, record };
+  if (!changed) return { held: { status: 'already', path: target }, record, keep: recordWith(null) };
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, serializeJson({ ...data, permissions }, style), 'utf8');
   } catch (err) {
     return skipped(`not writable (${err.code ?? err.message})`);
   }
-  return { held: { status: 'written', path: target }, record };
+  const putBack = () => (existed ? fs.writeFileSync(target, settings.raw, 'utf8') : fs.rmSync(target, { force: true }));
+  return { held: { status: 'written', path: target }, record, keep: recordWith(putBack) };
 }
 
 /** Takes out of the settings what `record` says `install` wrote: its entries, the `defaultMode` it wrote back while it
@@ -107,6 +124,7 @@ export function releasePermissions(record, home, listDir, { writeFile = fs.write
   }
   const { data, existed, style } = settings;
   if (!existed || !isObject(data.permissions)) return { status: 'gone', path: at };
+  const before = JSON.stringify(data.permissions);
   const permissions = { ...data.permissions };
   let removed = 0;
   for (const [name, known] of Object.entries(LISTS)) {
@@ -127,9 +145,10 @@ export function releasePermissions(record, home, listDir, { writeFile = fs.write
     delete permissions.defaultMode;
     removed += 1;
   }
-  if (removed === 0) return { status: 'gone', path: at };
   if (record.createdObject && Object.keys(permissions).length === 0) delete data.permissions;
   else data.permissions = permissions;
+  // An emptied list or object install made goes too, though no entry is left in it (Codex on c7445ca..e523ac7).
+  if (JSON.stringify(data.permissions) === before) return { status: 'gone', path: at };
   try {
     if (record.createdFile && Object.keys(data).length === 0) {
       removeFile(at);

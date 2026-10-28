@@ -211,6 +211,33 @@ test('an entry found twice loses one copy to uninstall, and a record edited by h
   }
 });
 
+// Codex on c7445ca..e523ac7, part 1: the permissions written and then no manifest to record them would be left for good.
+test('when the manifest cannot be written, the permissions install wrote are taken back', () => {
+  const m = machine();
+  try {
+    m.write({ theme: 'dark' });
+    fs.writeFileSync(path.join(m.home, '.js-harness'), 'a file where the manifest\'s folder goes');
+    assert.throws(() => install(m.home, '1.0.0'));
+    assert.equal(m.data().permissions, undefined);
+  } finally {
+    m.done();
+  }
+});
+
+// Codex on c7445ca..e523ac7, part 1: lists another tool emptied still go, with the object and the file install made.
+test('lists someone else emptied are still taken out with the object install made', () => {
+  const m = machine();
+  try {
+    m.write({ theme: 'dark' });
+    install(m.home, '1.0.0');
+    m.write({ ...m.data(), permissions: { allow: [], deny: [] } });
+    assert.equal(m.remove().permissions.status, 'released');
+    assert.deepEqual(m.data(), { theme: 'dark' });
+  } finally {
+    m.done();
+  }
+});
+
 test('a record kept by a failed uninstall still takes the file away after a reinstall', () => {
   const m = machine();
   try {

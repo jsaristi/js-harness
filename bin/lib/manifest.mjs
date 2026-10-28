@@ -1217,9 +1217,9 @@ export function install(home, version, deps = {}) {
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
-  const { held, record: permissions } = holdPermissions(home, previous?.permissions);
+  const { held, record: permissions, keep } = holdPermissions(home, previous?.permissions);
   const manifest = { version, files, entries, ...(permissions && { permissions }), ...carried };
-  writeManifest(home, manifest);
+  keep(() => writeManifest(home, manifest));
   Object.defineProperty(manifest, 'permissionsHeld', { value: held, enumerable: false });
   return manifest;
 }
