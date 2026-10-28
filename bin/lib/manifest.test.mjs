@@ -2967,6 +2967,12 @@ test('the orchestrator skill says what every recap carries and how a block waits
     '- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back',
     'a step the charter does not name, waits for their return with no question; a work session\'s question that is theirs is recorded and held, never answered for them',
   ]) assert.ok(text.includes(line), line);
+  // His additions of 2026-10-28: the stretch shown before he leaves, and checked against its goals when he is back.
+  for (const line of [
+    'what only they can give that the stretch will need. Before they leave, open a stretch (`js-harness stretch open --plan <file> --html <file>`) and show its departure in that reply',
+    'When they say they are back, before anything else, close it (`js-harness stretch close --html <file>`) and show its return',
+    'The chat\'s visual tool takes the file\'s HTML whole; where the host has none, publish the file as an Artifact and give the link.',
+  ]) assert.ok(text.includes(line), line);
   assert.ok(text.includes('ask before anything it does not name; while the user is away it waits instead, as `rule:away-autonomy` says.'));
   // rule:ask-before-away is retired: its ask before he leaves is the permission he declined.
   assert.doesNotMatch(text, /ask in that reply for everything the stretch will need/);
