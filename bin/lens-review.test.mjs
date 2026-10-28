@@ -139,6 +139,7 @@ test('a lens whose CLI printed no JSON keeps that output too; one that printed n
 test('an output that cannot be kept is recorded as not kept, and the run still has its record', () => {
   const folder = path.join(git('rev-parse', '--absolute-git-dir'), 'js-harness', 'lens-answers');
   fs.rmSync(folder, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(folder), { recursive: true });
   fs.writeFileSync(folder, 'a file where the folder goes');
   try {
     const before = readLensReviews(dir).length;

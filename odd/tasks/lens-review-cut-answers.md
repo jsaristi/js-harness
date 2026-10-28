@@ -118,3 +118,10 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
     change of wording now falls to the parser's own words rather than to a wrong reason.
   - Left open for the lead: guarding or pruning `lens-answers/`, a relative `answerFile`, and `--json-schema` (L4).
   - GREEN: 28 of 28 in the three files.
+- L10, the reviews of 37fc1e65 (a93558f1..37fc1e65):
+  - Codex: "the patch is correct" (0.94), no findings; Claude lenses reliability and readability: complete, 0 findings.
+  - gentle-ai: 37fc1e65 reviewed in lineage review-1fdc246a7c78cf3c (lens reliability, tier medium), approved and
+    acknowledged, with a warning (an empty reason when the parser reads the span whole, a path the scanner never sends)
+    and two suggestions (the failed-write test needs `js-harness/` made by an earlier test; the V8 wording, R3-002).
+  - Fixed in the next commit: that path now says the scanner and the parser disagree, and the test makes its own
+    parent folder; run alone with `--test-name-pattern="cannot be kept"`, it passes. The wording stays as L9 says.

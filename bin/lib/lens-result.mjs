@@ -61,7 +61,10 @@ function unclosedFault(text, start) {
   }
   const opens = `an object in it is not closed (it opens at character ${start})`;
   // A message that names no character is given as it is: only the parser knows whether it broke at the end.
-  if (at === null) return /end of JSON input/.test(message) ? `${opens}: the answer ends before it closes` : `${opens}: the parser says ${message}`;
+  if (at === null) {
+    if (!message) return `${opens}: the parser reads it whole, so the scanner and the parser disagree`;
+    return /end of JSON input/.test(message) ? `${opens}: the answer ends before it closes` : `${opens}: the parser says ${message}`;
+  }
   if (at >= rest.trimEnd().length) return `${opens}: the answer ends before it closes`;
   return `${opens}: it breaks at character ${start + at}, near ${nearText(rest, at)}`;
 }
