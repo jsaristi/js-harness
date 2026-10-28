@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, undoSession, within, worktreeOf } from './lib/background.mjs';
+import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { nextSessionNumber } from './lib/channel.mjs';
@@ -207,14 +207,16 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}\n${saidBy(result)}`);
     return 1;
   }
+  const entry = {
+    event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
+    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
+  };
   try {
-    appendRecord(home, {
-      event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-      worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
-    });
+    appendRecord(home, entry);
   } catch (err) {
     const undone = [claude(['stop', id]), claude(['rm', id])].every((step) => !step.error && step.status === 0);
-    stderr(`js-harness sessions start: the session ${id} started and could not be recorded (${err.code ?? err.message}), so ${undone ? 'it was stopped and removed' : `it still runs: claude stop ${id} and claude rm ${id} remove it`}`);
+    // One claude would not undo is kept where stop and the machine uninstall find it (Codex finding 4 on 54c7e39..e7aa7ec).
+    stderr(`js-harness sessions start: the session ${id} started and could not be recorded (${err.code ?? err.message}), so ${undone ? 'it was stopped and removed' : `claude did not remove it${strandedWords(home, entry)}`}`);
     return 1;
   }
   stdout(`started ${id} · ${parsed.title}`);
@@ -313,16 +315,17 @@ function resumeStart(parsed, deps) {
   if (id === null) {
     return refuse(`claude printed no id for the new job, and claude agents lists no new job titled ${JSON.stringify(entry.title)} in ${folder}, so nothing is recorded: if claude agents lists it later, claude stop <id> stops it; its brief stays at ${copy}\n${saidBy(result)}`);
   }
+  const job = {
+    event: 'started', at: new Date(now()).toISOString(), id, sessionId: resumed?.sessionId ?? entry.sessionId, title: entry.title, root: entry.root, cwd: entry.cwd,
+    worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, remoteControl, brief: copy, resumedFrom: entry.id,
+  };
   try {
-    appendRecord(home, {
-      event: 'started', at: new Date(now()).toISOString(), id, sessionId: resumed?.sessionId ?? entry.sessionId, title: entry.title, root: entry.root, cwd: entry.cwd,
-      worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, remoteControl, brief: copy, resumedFrom: entry.id,
-    });
+    appendRecord(home, job);
   } catch (err) {
-    // Stopped, not removed: the worktree and the brief are the stopped job's too.
+    // Stopped, not removed: the worktree and the brief are the stopped job's too. Its entry is kept as a start's is.
     const stop = claude(['stop', id]);
     const stopped = !stop.error && stop.status === 0;
-    return refuse(`the job ${id} resumed ${name} and could not be recorded (${err.code ?? err.message}), so ${stopped ? `it was stopped; claude rm ${id} removes it` : `it still runs: claude stop ${id} and claude rm ${id} remove it`}`);
+    return refuse(`the job ${id} resumed ${name} and could not be recorded (${err.code ?? err.message}), so ${stopped ? 'it was stopped' : 'it still runs'}${strandedWords(home, job)}`);
   }
   stdout(`resumed ${entry.id} as ${id} · ${entry.title}`);
   stdout(`  js-harness sessions stop ${id} removes it and ${entry.id}, the job it resumed; claude attach ${id} opens it here`);
@@ -393,5 +396,6 @@ export function sessionsStopMain(argv, given = {}) {
   stdout(done.outcome === 'gone' ? `${name} was already gone: its record is closed` : `removed ${name}: its transcript stays, as every session's does`);
   if (done.worktreeKept) stdout(`  its worktree ${done.worktreeKept} stays: claude keeps a worktree with uncommitted changes, locked; git worktree remove --force twice removes it once they are not needed`);
   if (done.worktreeGone) stdout(`  its worktree ${done.worktreeGone} is gone`);
+  if (done.worktreeMissing) stdout(`  its worktree ${done.worktreeMissing} was not there when stop ran: claude never made it, or something else removed it`);
   return 0;
 }

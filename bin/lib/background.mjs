@@ -20,6 +20,8 @@ export function backgroundDir(home) {
 
 export const recordFileOf = (home) => path.join(backgroundDir(home), 'sessions.jsonl');
 export const briefsDirOf = (home) => path.join(backgroundDir(home), 'briefs');
+// The starts whose line the record would not take after claude ran, each in a file of its own (`strandEntry`).
+export const strandedDirOf = (home) => path.join(backgroundDir(home), 'stranded');
 
 /** The section the copy of a brief closes with: a background session has no screen anybody watches, and a question
  * it asks with the question tool waits unseen, so it reports where the lead reads. */
@@ -127,23 +129,70 @@ export function appendRecord(home, entry) {
   fs.appendFileSync(file, `${cut ? '\n' : ''}${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
 }
 
+/** Keeps the start `entry` of a session that runs, whose line the record would not take, in a file of its own under
+ * `strandedDirOf(home)`: `readRecord` reads it as a line of the record, so `sessions stop` and the machine uninstall
+ * undo it, and the removal of the session closes it (`closeEntry`). Its path, or throws. */
+export function strandEntry(home, entry) {
+  const file = path.join(strandedDirOf(home), `${entry.id}.json`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
+  return file;
+}
+
+/** The end of a start's words when the record would not take its `entry` and claude did not undo it: where its entry is
+ * kept (`strandEntry`), or, when that fails too, the commands that remove it. */
+export function strandedWords(home, entry) {
+  try {
+    return `, and its entry is kept in ${strandEntry(home, entry)}: js-harness sessions stop ${entry.id} removes it, and so does js-harness uninstall machine`;
+  } catch (err) {
+    return `, and nothing records it (${err.code ?? err.message}): claude stop ${entry.id} and claude rm ${entry.id} remove it`;
+  }
+}
+
+/** Records that the job `job` was removed: a `removed` line, and its stranded file deleted. A stranded job is closed by
+ * either, so only when both fail does it throw; any other throws when the line cannot be appended. */
+function closeEntry(home, job, now) {
+  const stranded = typeof job.stranded === 'string' ? job.stranded : null;
+  try {
+    appendRecord(home, { event: 'removed', at: new Date(now()).toISOString(), id: job.id });
+  } catch (err) {
+    if (stranded === null) throw err;
+    fs.rmSync(stranded, { force: true });
+    return;
+  }
+  try {
+    if (stranded !== null) fs.rmSync(stranded, { force: true });
+  } catch {
+    // The line closes it: a file left behind is read as removed.
+  }
+}
+
 /** The sessions the record under `home` holds, those started and not removed: `{ sessions }`, a list of their start
  * entries, oldest first, and `started`, every start entry it holds, of removed sessions too; `resumedAs`, from the id
  * of each of those sessions a recorded resume replaced to the entry of the job that resumed it, which shares its
  * worktree and brief, so the two are undone together (`resumedChain`); `{ none: true }` when there is no record;
  * `{ unavailable }` when it could not be read. A line that is not an entry of this schema is skipped and counted
- * (`skipped`). */
+ * (`skipped`). The stranded starts (`strandEntry`) are read after the lines, each marked with its file (`stranded`),
+ * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too. */
 export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
-  let text;
+  let text = null;
   try {
     text = readFile(recordFileOf(home));
   } catch (err) {
-    return err.code === 'ENOENT' ? { none: true, sessions: [], started: [], resumedAs: new Map() } : { unavailable: err.code ?? err.message };
+    if (err.code !== 'ENOENT') return { unavailable: err.code ?? err.message };
   }
+  let strandedNames = [];
+  try {
+    strandedNames = fs.readdirSync(strandedDirOf(home)).filter((name) => name.endsWith('.json'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') return { unavailable: `${strandedDirOf(home)}: ${err.code ?? err.message}` };
+  }
+  if (text === null && strandedNames.length === 0) return { none: true, sessions: [], started: [], resumedAs: new Map() };
   const open = new Map();
   const started = [];
+  const removed = new Set();
   let skipped = 0;
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of (text ?? '').split(/\r?\n/)) {
     if (line.trim() === '') continue;
     let entry;
     try {
@@ -156,8 +205,26 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
     else if (entry.event === 'started') {
       open.set(entry.id, entry);
       started.push(entry);
-    } else if (entry.event === 'removed') open.delete(entry.id);
-    else skipped += 1;
+    } else if (entry.event === 'removed') {
+      open.delete(entry.id);
+      removed.add(entry.id);
+    } else skipped += 1;
+  }
+  for (const name of strandedNames) {
+    const file = path.join(strandedDirOf(home), name);
+    let entry;
+    try {
+      entry = JSON.parse(readFile(file));
+    } catch {
+      skipped += 1;
+      continue;
+    }
+    if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') skipped += 1;
+    else if (!removed.has(entry.id)) {
+      const kept = { ...entry, stranded: file };
+      open.set(entry.id, kept);
+      started.push(kept);
+    }
   }
   const resumedAs = new Map([...open.values()].filter((entry) => open.has(entry.resumedFrom)).map((entry) => [entry.resumedFrom, entry]));
   return { sessions: [...open.values()], started, resumedAs, skipped };
@@ -220,13 +287,16 @@ const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(said
  * then records the removal: `{ outcome: 'removed', worktreeKept, worktreeGone }`, or `'gone'` when claude no longer
  * knows it, or `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it
  * recorded, so a second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps
- * one that holds uncommitted changes (odd/tasks/background-sessions.md, L10); `worktreeGone` is the one it removed.
+ * one that holds uncommitted changes (odd/tasks/background-sessions.md, L10); `worktreeGone` is the one it removed;
+ * `worktreeMissing` one that was not there before the stop, which claude never made or something else removed (R3-004).
  * The jobs it resumed (`resumedChain`) are undone with it, after it: they share its worktree and brief. */
 export function undoSession(entry, { home, run, now }) {
   let stopped;
   let removed;
   const record = readRecord(home);
   const chain = [entry, ...resumedChain(record.started ?? [], entry)];
+  const worktree = worktreeOf(entry);
+  const was = worktree !== null && fs.existsSync(worktree);
   for (const job of chain) {
     const stop = run(['stop', job.id]);
     if ((stop.error || stop.status !== 0) && !lostSaid(stop)) return { outcome: 'kept', why: `claude stop ${job.id}: ${saidBy(stop)}` };
@@ -242,10 +312,9 @@ export function undoSession(entry, { home, run, now }) {
     }
   }
   // The jobs it resumed first: a record cut between the two still names them through this one, which a retry undoes.
-  for (const job of [...chain.slice(1), entry]) appendRecord(home, { event: 'removed', at: new Date(now()).toISOString(), id: job.id });
-  const worktree = worktreeOf(entry);
+  for (const job of [...chain.slice(1), entry]) closeEntry(home, job, now);
   const kept = worktree !== null && fs.existsSync(worktree);
-  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept: kept ? worktree : null, worktreeGone: worktree !== null && !kept ? worktree : null };
+  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept: kept ? worktree : null, worktreeGone: was && !kept ? worktree : null, worktreeMissing: worktree !== null && !was ? worktree : null };
 }
 
 /** A session at work: busy, or waiting on something (a permission prompt). */
