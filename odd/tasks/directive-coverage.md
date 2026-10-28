@@ -30,7 +30,7 @@ His words (transcript `0f71b2c6`, line 6690, 2026-10-28T09:23Z, read with `js-ha
 - [x] T3 (kind: docs) PR, Spanish page, ready notice (PR 622; page https://claude.ai/artifact/T4b4vuNC2UhL9P389wRneX)
 
 ## Next step
-The limited recheck is done and its one fix batch committed (L4). Next: rebase 622 on main once 620 and 621 land (both open at 04:52; ROADMAP conflict, the merge queue left 622 out at 04:55), update the Spanish page, and send ready with both new grades. Open for him: the eval spend over the envelope (about $95 to $130 [i]), asked when S5c-a starts.
+Main merged in locally (`0cd696be`, after 620 and 621 landed; the ROADMAP conflict was resolved by re-applying this branch's edits to main's step 4 line). The push is held: the lead is refreshing the installed js-harness (05:02 note), and this session waits on `node bin/js-harness.mjs wait --notice-to 67` (the branch's copy, so the installed one is not in use) for its notice. Then push, and send ready with both recheck grades (Claude 7, Codex 7). Open for him: the eval spend over the envelope (about $95 to $130 [i]), asked when S5c-a starts.
 
 ## Log
 - L1 (2026-10-28, the lead's message relaying his request, line 6690): write the directive-coverage proposal as section 14 with a ROADMAP line; double review; docs PR; Spanish page; ready.
