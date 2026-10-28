@@ -521,7 +521,7 @@ function readWorkspaceStack({ spawn, platform, root }) {
  * `null` when git cannot say either (a commit that cannot be told clean is not recorded as clean). A file git does not
  * track is left out, and so is `evals/results`, where a run writes its own results file: neither is what `init`
  * runs. Two dirty checkouts of one commit read the same, so `+dirty` says only that the commit is not all of it. */
-export function readWorkspaceCommit({ spawn, root }) {
+function readWorkspaceCommit({ spawn, root }) {
   const git = (args) => {
     const result = spawn('git', ['-C', root, ...args], { encoding: 'utf8', timeout: 30000, windowsHide: true });
     return result.error || result.status !== 0 ? null : `${result.stdout ?? ''}`;

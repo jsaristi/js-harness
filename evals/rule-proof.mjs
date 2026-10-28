@@ -15,7 +15,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cutSpans, tiesOf } from '../bin/lib/rules-coverage.mjs';
 import { RULES } from '../bin/lib/rules-data.mjs';
 import { textSources } from '../bin/lib/rules-sources.mjs';
-import { readWorkspaceCommit } from './suite.mjs';
 
 /** Where the records are, from the top of the checkout: one `<case>.json` a case that names rules. */
 export const PROOFS = 'evals/proofs/rules';
@@ -68,15 +67,21 @@ function armScore(results, name, arm) {
 
 const CLEAN_COMMIT = /^[0-9a-f]{40,64}$/;
 
-/** The commit of the checkout at `root` a proof is written at, as `readWorkspaceCommit` reads it, with `+untracked`
- * after it when a file git does not track is there outside `evals/results` and `evals/proofs`: `caseDigest` reads
- * every file of a case folder, so an untracked one would be digested as if the runs had run on it. */
+/** The commit of the checkout at `root` a proof is written at, with `+dirty` after it when a file there differs from
+ * it, a file git does not track included, or `null` when git cannot say. `evals/results` and `evals/proofs` are left
+ * out: a run writes its results there and this command its records, none of which a case ran on. Untracked files
+ * count, unlike the run's own `readWorkspaceCommit` (`evals/suite.mjs`), because `caseDigest` reads every file of a
+ * case folder, so an untracked one would be digested as if the runs had run on it. */
 export function proofCommit({ spawn, root }) {
-  const commit = readWorkspaceCommit({ spawn, root });
-  if (commit === null || !CLEAN_COMMIT.test(commit)) return commit;
-  const listed = spawn('git', ['-C', root, 'ls-files', '--others', '--exclude-standard', '--', '.', ':(exclude)evals/results', ':(exclude)evals/proofs'], { encoding: 'utf8', timeout: 30000, windowsHide: true });
-  if (listed.error || listed.status !== 0) return null;
-  return String(listed.stdout).trim() === '' ? commit : `${commit}+untracked`;
+  const git = (args) => {
+    const result = spawn('git', ['-C', root, ...args], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+    return result.error || result.status !== 0 ? null : String(result.stdout ?? '');
+  };
+  const commit = git(['rev-parse', 'HEAD'])?.trim();
+  if (!commit || !CLEAN_COMMIT.test(commit)) return null;
+  const changes = git(['status', '--porcelain', '--untracked-files=all', '--', '.', ':(exclude)evals/results', ':(exclude)evals/proofs']);
+  if (changes === null) return null;
+  return changes.trim() === '' ? commit : `${commit}+dirty`;
 }
 
 /** The record of the case `name` that names `rules`, from the results of its `current` run and its `without` run.

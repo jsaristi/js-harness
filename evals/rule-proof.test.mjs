@@ -87,13 +87,20 @@ test('the commit a proof is written at is clean only with no file git does not t
   put(root, 'evals/tasks/a-case/task.json', '{}');
   git('add', '-A');
   git('commit', '-q', '-m', 'init');
-  const head = git('rev-parse', 'HEAD').stdout.trim();
-  assert.equal(proofCommit({ spawn: spawnSync, root }), head);
+  assert.equal(proofCommit({ spawn: spawnSync, root }), git('rev-parse', 'HEAD').stdout.trim());
+  put(root, 'evals/proofs/rules/b-case.json', '{}');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'a record');
+  const recorded = git('rev-parse', 'HEAD').stdout.trim();
   put(root, 'evals/results/run.json', '{}');
   put(root, 'evals/proofs/rules/a-case.json', '{}');
-  assert.equal(proofCommit({ spawn: spawnSync, root }), head, 'a results file and a record are not what a case ran on');
+  put(root, 'evals/proofs/rules/b-case.json', '{"written":"again"}');
+  assert.equal(proofCommit({ spawn: spawnSync, root }), recorded, 'a results file and a record, new or written again, are not what a case ran on');
+  put(root, 'evals/tasks/a-case/task.json', '{"changed":true}');
+  assert.equal(proofCommit({ spawn: spawnSync, root }), `${recorded}+dirty`);
+  put(root, 'evals/tasks/a-case/task.json', '{}');
   put(root, 'evals/tasks/a-case/hidden.test.mjs', 'added after the runs');
-  assert.equal(proofCommit({ spawn: spawnSync, root }), `${head}+untracked`);
+  assert.equal(proofCommit({ spawn: spawnSync, root }), `${recorded}+dirty`);
 });
 
 test('a record is written only from runs of the clean commit the checkout is at, so its digests are the texts they ran on', () => {

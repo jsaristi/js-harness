@@ -106,7 +106,10 @@ Reviews:
 - Codex on `947ac91c..f39c41a4`, recorded (`codex-reviews.jsonl`, 8 parts, 1,690,061 input tokens): 7 findings P2,
   each read true and fixed by `f9c10579` (L7).
 - Codex's recheck of `f39c41a4..f9c10579` (130,726 input tokens): 5 fixed, 2 not; the lenses on the same range: 0,
-  1 and 2 findings. All five fixed by the commit after `f9c10579` (L8), which waits for its Codex and lens reviews.
+  1 and 2 findings. All five fixed by `d0954123` (L8).
+- Codex again on `62f4a623..d0954123` (`--again`, the command's own advice after it refused a second recheck from
+  `f9c10579`; 2 parts, 353,905 input tokens): part 2 clean, part 1 one finding P2, fixed by the commit after
+  `d0954123` (L9). The lenses on `f9c10579..d0954123` ran twice and were incomplete both times (L9).
 
 ## Paid runs
 None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
@@ -129,9 +132,9 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 
 ## Next step
 T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
-seven by `f9c10579` (L7), and what their recheck left by the commit after it (L8). Next: Codex and the lenses on
-that commit, from `f9c10579`, the tree untouched while they run; then push, the pull request and
-`js-harness notify --to orchestrator --kind ready --pr <n>`.
+seven by `f9c10579` (L7), what their recheck left by `d0954123` (L8), and Codex's last finding by the commit after
+it (L9). Next: Codex on that commit (a recheck from `d0954123`) and the lenses from `f9c10579`, the tree untouched
+while they run; then push, the pull request and `js-harness notify --to orchestrator --kind ready --pr <n>`.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -229,3 +232,10 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   the report with no test and no doc saying so, and that the project's summary still said "left their test green";
   both said, tested and worded as the harness's. A range from `f9c10579` is not rechecked again: the next review
   is a plain one.
+- L9 (2026-10-28, evidence): Codex found that regenerating a tracked record made the checkout `+dirty` for the next
+  one, since `readWorkspaceCommit` leaves out only `evals/results`. `proofCommit` now reads the commit and the status
+  itself, untracked files included and `evals/results` and `evals/proofs` left out, and `suite.mjs` keeps
+  `readWorkspaceCommit` private as before. The lenses on `f9c10579..d0954123`: each run cut one lens's answer short
+  (readability, then reliability; "an object in it is not closed"), the other two complete with 0 findings; the
+  parser in `bin/lib/lens-result.mjs` reads strings, so the answer itself was cut. Not this branch's code: the
+  next lens run covers this commit too, and a third failure is recorded as a skip with its reason.
