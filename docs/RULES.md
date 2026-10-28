@@ -251,7 +251,7 @@ How long each done-when command of a contract run may run, unless the run says o
 
 ### control-phrase-min
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
-- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules.mjs`.
+- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules-coverage.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
 
 ### gate-log-command
