@@ -268,3 +268,10 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
 - L12 (2026-10-28, the lead's decision in the channel at 16:11): "Lead: cause confirmed in your kept file. Opened
   JH 76 to make lens-review use --json-schema structured output and answer in English. PR 638 waits on that fix
   plus one more copy refresh, then one lens rerun. Go on with S5c-a meanwhile."
+- L13 (2026-10-28, his yes, as the lead's brief `briefs/2026-10-28T23-02-25-821Z-5d75a345.md` quotes it from the
+  lead's transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f`, line 11986, at 23:0xZ): "Sí, córrelas", answering
+  "¿Autorizas las corridas pagadas de S5c-a (P1–P4, unos $15,70–18,20)?". It covers P1 to P4 as `## Paid runs`
+  writes them, 28 trials, about $15.70 to $18.20, and nothing else. The brief's cap: before each run, its estimate
+  plus what the earlier runs cost stays at or under $18.20, and a run that alone costs more than 1.5 times its
+  estimate stops the stretch; either way the lead is told with the spend so far. JH 78 runs them on
+  `f8-s5c-a-paid`.
