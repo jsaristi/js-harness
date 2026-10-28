@@ -6,6 +6,7 @@ import path from 'node:path';
 import { SETTINGS_FILE, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
 import { applySettingsKey } from './settings-key.mjs';
 import { readFunctions, resolveFunctions } from './functions.mjs';
+import { PERMISSIONS_DENY } from './deny-paths.mjs';
 
 const PASTE = settingLabel(['env', 'CODEGRAPH_NO_PROMPT_HOOK']);
 const PLUGIN = settingLabel(['enabledPlugins', 'typescript-lsp@claude-plugins-official']);
@@ -176,6 +177,48 @@ test('a record is valid only for a known key, its own pointer and value, in the 
   assert.equal(isValidSettingsRecord({ ...good, createdContainers: 2 }), false);
   assert.equal(isValidSettingsRecord({ ...good, createdFile: 'yes' }), false);
   assert.equal(isValidSettingsRecord(null), false);
+});
+
+// --- The denies every clone holds are a list shared with the user (odd/tasks/f8-s10-port.md, L13) ---
+
+test('a deny list of the user gets the missing denies after its own, and uninstall takes out only those', (t) => {
+  const root = withSettings(t, { permissions: { deny: ['Bash(curl:*)', PERMISSIONS_DENY[0]] } });
+  const applied = applySettings(root, [], ['denies']);
+  assert.deepEqual(applied.actions, [{ kind: 'wrote', path: settingLabel(['permissions', 'deny']) }]);
+  assert.deepEqual(settings(root).permissions.deny, ['Bash(curl:*)', ...PERMISSIONS_DENY]);
+  assert.deepEqual(applied.records[0].entries, PERMISSIONS_DENY.slice(1));
+  assert.ok(applied.records.every(isValidSettingsRecord));
+  applySettings(root, applied.records, []);
+  assert.deepEqual(settings(root), { permissions: { deny: ['Bash(curl:*)', PERMISSIONS_DENY[0]] } });
+});
+
+test('an entry the user adds to the denies later keeps the record, so uninstall still takes the denies out', (t) => {
+  const root = project(t);
+  const first = applySettings(root, [], ['denies']);
+  const data = settings(root);
+  data.permissions.deny.push('Bash(curl:*)');
+  fs.writeFileSync(settingsFile(root), JSON.stringify(data));
+  assert.deepEqual(applySettings(root, first.records, ['denies']), { records: first.records, actions: [] });
+  applySettings(root, first.records, []);
+  assert.deepEqual(settings(root), { permissions: { deny: ['Bash(curl:*)'] } });
+});
+
+test('a record of the denies takes out only entries of the shipped list, whatever a manifest edited by hand names', (t) => {
+  const root = project(t);
+  const [record] = applySettings(root, [], ['denies']).records;
+  const data = settings(root);
+  data.permissions.deny.push('Bash(curl:*)');
+  fs.writeFileSync(settingsFile(root), JSON.stringify(data));
+  applySettings(root, [{ ...record, entries: [...record.entries, 'Bash(curl:*)'] }], []);
+  assert.deepEqual(settings(root), { permissions: { deny: ['Bash(curl:*)'] } });
+});
+
+test('a record of the denies is valid with its entries as strings, whatever the shipped list holds now', () => {
+  const good = { key: 'denies', path: SETTINGS_FILE, pointer: ['permissions', 'deny'], entries: ['Read(.env)', 'Read(old)'], createdList: true, createdFile: true, createdDir: false, createdContainers: 1 };
+  assert.equal(isValidSettingsRecord(good), true);
+  assert.equal(isValidSettingsRecord({ ...good, entries: undefined, value: PERMISSIONS_DENY }), false);
+  assert.equal(isValidSettingsRecord({ ...good, entries: [1] }), false);
+  assert.equal(isValidSettingsRecord({ ...good, createdList: 'yes' }), false);
 });
 
 // --- Codex's review of slice 2 (L18) ---

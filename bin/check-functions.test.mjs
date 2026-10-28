@@ -101,12 +101,23 @@ test('a clone that is not what its switches ask is told so, one line a differenc
   assert.equal(row.detail, 'this clone is not what its switches ask: js-harness functions apply makes it so');
   assert.deepEqual(row.lines, [
     'codeMap on-demand: no code map index here (.codegraph)',
-    'every clone: .claude/settings.local.json#/outputStyle is not there',
-    'every clone: .claude/settings.local.json#/permissions/deny is not there',
+    'every clone: .claude/settings.local.json#/outputStyle is not "js-harness"',
+    'every clone: .claude/settings.local.json#/permissions/deny lacks 24 of the 24 entries js-harness holds',
     'codeMap on-demand: .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK is not "1"',
     'languageServer off: .claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official is not false',
     'codexReview on: no push check in the pre-push hook',
   ]);
+});
+
+test('a deny list that holds the user\'s own entries and not all of the harness\'s is a difference', (t) => {
+  const root = repo(t, { 'bin/a.mjs': '', 'harness.json': '{}\n' });
+  applyProjectFunctions(root, '0.1.0', { spawn: fakeCodegraph, platform: 'linux' });
+  const file = path.join(root, '.claude', 'settings.local.json');
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  data.permissions.deny = ['Bash(curl:*)', ...data.permissions.deny.slice(2)];
+  fs.writeFileSync(file, JSON.stringify(data));
+  const [row] = checkFunctionsPending(root);
+  assert.deepEqual(row.lines, ['every clone: .claude/settings.local.json#/permissions/deny lacks 2 of the 24 entries js-harness holds']);
 });
 
 test('a key the harness wrote that a switch no longer wants is a difference too', (t) => {

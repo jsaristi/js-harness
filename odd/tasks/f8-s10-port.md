@@ -103,11 +103,12 @@ Reviews:
   out).
 
 ## Next step
-State at 00:45Z, 2026-10-28: T5 committed (`f2480611`), T4's two lens findings taken in `cbce05e2`, both through
-the gate. T5's independent verifier (opus, read-only) is running on `f2480611`. Then, one at a time: `js-harness
-codex-review --base d0d68079^` (covers d0d68079, the T4 fix it owed, and T5), the lenses on `d0d6807..HEAD`
-(`js-harness lens-review --base d0d6807`), then PR 2 on `f8-s10-permissions` (base `worktree-f8-s10-port`) with
-L11's Read cost and the defaultMode note in its body; then T6; T7 waits on question 99.
+State at 01:30Z, 2026-10-28: T5 (`f2480611`), T4's lens findings (`cbce05e2`), and the fixes of T5's verifier (L13):
+the guard's reading of a path (`88b53455`) and the clone's denies as a list key, format 3 (the commit after it).
+Then, one at a time: `js-harness codex-review --base d0d68079^` (covers d0d68079, the T4 fix it owed, T5 and its
+fixes), the lenses on `d0d6807..HEAD` (`js-harness lens-review --base d0d6807`), then PR 2 on `f8-s10-permissions`
+(base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in its body; then T6;
+T7 waits on question 99.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,

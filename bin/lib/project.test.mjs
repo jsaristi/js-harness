@@ -196,9 +196,9 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     // And the line of .atl/ in the clone's exclude file (bin/lib/project-exclude.mjs).
     assert.deepEqual(result.actions.filter((a) => a.kind === 'excluded'), [{ kind: 'excluded', path: '.git/info/exclude', line: '.atl/' }]);
 
-    // Manifest contents and hashes: format 2, since it records that line.
+    // Manifest contents and hashes: format 3, since it records the style and the denies every clone holds.
     assert.equal(result.manifest.version, '0.1.0');
-    assert.equal(result.manifest.format, 2);
+    assert.equal(result.manifest.format, 3);
     assert.deepEqual(result.manifest.settings.map((record) => record.key), ['outputStyle', 'denies', 'paste', 'languageServer']);
     assert.equal(result.manifest.files.length, 6);
     for (const file of result.manifest.files) {

@@ -15,19 +15,20 @@ import { spawnSync } from 'node:child_process';
 import { sha256, writeManifestAtomic } from './manifest.mjs';
 import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
-import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
+import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
 import { TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 
 /** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what an
  * older copy cannot undo: format 1 its `settings`, which a copy older than the switches does not know, and
- * format 2 its `exclude`, the line of `.atl/` (./project-exclude.mjs). Such a copy deletes a manifest it does not
- * understand and leaves the rest behind, which is why a copy that reads a format greater than its own undoes
- * nothing. A copy already installed that knows no format cannot be made to refuse. */
-export const MANIFEST_FORMAT = 2;
+ * format 2 its `exclude`, the line of `.atl/` (./project-exclude.mjs), format 3 the style and the denies every clone
+ * holds (`SETTINGS_KEYS`, `format`). Such a copy deletes a manifest it does not understand and leaves the rest behind,
+ * which is why a copy that reads a format greater than its own undoes nothing. A copy already installed that knows no
+ * format cannot be made to refuse. */
+export const MANIFEST_FORMAT = 3;
 
 /** The format `manifest` needs for what it holds (`MANIFEST_FORMAT`), or `undefined` where any copy reads it. */
-const formatFor = (manifest) => (manifest.exclude ? 2 : manifest.settings ? 1 : undefined);
+const formatFor = (manifest) => Math.max(manifest.exclude ? 2 : 0, ...(manifest.settings ?? []).map((record) => SETTINGS_KEYS[record.key]?.format ?? 1), manifest.settings ? 1 : 0) || undefined;
 
 /** Resolves the git top-level of `cwd`, or `null` outside a git repository (missing `git`, a
  * non-zero exit, or any thrown spawn error all count as "not a repo" here). Callers must check
@@ -1181,7 +1182,7 @@ function isValidManifestShape(manifest, root, gitBases) {
   if (manifest.scope !== undefined && manifest.scope !== 'functions') return false;
   if (manifest.settings !== undefined) {
     if (manifest.format === undefined || !Array.isArray(manifest.settings)) return false;
-    if (!manifest.settings.every(isValidSettingsRecord)) return false;
+    if (!manifest.settings.every((record) => isValidSettingsRecord(record) && (SETTINGS_KEYS[record.key].format ?? 1) <= manifest.format)) return false;
   }
   // The line of `.atl/`, with the format that says a copy knows it; its file is asked of git again, never read from here.
   if (manifest.exclude !== undefined && !(manifest.format >= 2 && isValidExcludeRecord(manifest.exclude))) return false;
@@ -1981,11 +1982,6 @@ export function applyProjectFunctions(cwd, version, deps = {}) {
 /** The switch a settings key belongs to, for the words of a difference. */
 const SWITCH_OF_KEY = { paste: 'codeMap', languageServer: 'languageServer' };
 
-/** The value at `pointer` of `data`, or `undefined`. */
-function valueAt(data, pointer) {
-  return pointer.reduce((object, key) => (object !== null && typeof object === 'object' && Object.hasOwn(object, key) ? object[key] : undefined), data);
-}
-
 /** The JSON of `file`, or `fallback` where it is not there or cannot be read: a read-only report reports no
  * failure of its own. A byte-order mark is no part of the JSON. */
 function jsonOr(file, fallback) {
@@ -2018,8 +2014,8 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
 
   const settings = jsonOr(path.join(root, ...SETTINGS_FILE.split('/')), {});
   for (const key of plan.settings) {
-    const { pointer, value } = SETTINGS_KEYS[key];
-    if (valueAt(settings, pointer) === undefined) SWITCH_OF_KEY[key] ? say(SWITCH_OF_KEY[key], `${settingLabel(pointer)} is not ${JSON.stringify(value)}`) : lines.push(`every clone: ${settingLabel(pointer)} is not there`);
+    const pending = settingPending(key, settings);
+    if (pending !== null) SWITCH_OF_KEY[key] ? say(SWITCH_OF_KEY[key], pending) : lines.push(`every clone: ${pending}`);
   }
   const records = Array.isArray(manifest?.settings) ? manifest.settings.filter(isValidSettingsRecord) : [];
   for (const record of records) {

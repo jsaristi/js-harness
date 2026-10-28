@@ -86,8 +86,8 @@ test('init in a project with no program makes no index, says why, and turns the 
     enabledPlugins: { 'typescript-lsp@claude-plugins-official': false },
   });
   assert.deepEqual(manifest(root).codegraph, { createdDir: false, status: 'off' });
-  // Format 2: the manifest records the line of .atl/ as well (bin/lib/project-exclude.mjs).
-  assert.equal(manifest(root).format, 2);
+  // Format 3: the manifest records the style and the denies every clone holds (odd/tasks/f8-s10-port.md, L13).
+  assert.equal(manifest(root).format, 3);
   assert.deepEqual(manifest(root).settings.map((record) => record.key), ['outputStyle', 'denies', 'paste', 'languageServer']);
 });
 
@@ -166,8 +166,11 @@ test('a manifest that holds settings without a format, or a record of another ke
   initProject(root, '0.1.0', deps());
   // Without the line of .atl/ too, which needs the format as well, so the settings alone are judged.
   const { format, exclude, ...withoutFormat } = manifest(root);
-  assert.equal(format, 2);
+  assert.equal(format, 3);
   fs.writeFileSync(manifestPath(root), JSON.stringify(withoutFormat));
+  assert.equal(uninstallProject(root, deps()).malformedManifest, true);
+  // A record of the style or the denies in a format older than the one that knows them is no record of this copy's.
+  fs.writeFileSync(manifestPath(root), JSON.stringify({ ...withoutFormat, format: 2 }));
   assert.equal(uninstallProject(root, deps()).malformedManifest, true);
 
   const other = { ...withoutFormat, format: 1, settings: [{ ...withoutFormat.settings[0], pointer: ['env', 'PATH'] }] };
@@ -189,7 +192,9 @@ test('sync follows a switch changed in harness.json: a key no longer wanted is t
 
   harness(root, { version: '0.1.0', functions: { codeMap: 'always', languageServer: 'on' } });
   syncProject(root, '0.1.0', deps());
-  // What every clone holds stays: the style and the denies (odd/tasks/f8-s10-port.md, T5).
+  // What every clone holds stays: the style and the denies (odd/tasks/f8-s10-port.md, T5), in the format a copy
+  // that knows them reads; an older copy refuses it as newer, never as malformed (L13).
+  assert.equal(manifest(root).format, 3);
   assert.deepEqual(settings(root), ALWAYS);
   assert.deepEqual(manifest(root).settings.map((record) => record.key), ['outputStyle', 'denies']);
   assert.equal(syncProject(root, '0.1.0', deps()).upToDate, true);
