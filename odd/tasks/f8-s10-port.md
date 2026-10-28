@@ -71,7 +71,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
-- [ ] T7 (kind: build) the Rules block, once question 99 is answered — S5; waits
+- [ ] T7 (kind: build) the Rules block (question 99 answered, L18) — S5
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -114,12 +114,18 @@ Reviews:
   input tokens.
 - gentle-ai: the Stop hook offered the whole branch from `d6867d86`; only its read-only status ran (`unrelated`, no
   change in the working tree), nothing started, as CLAUDE.md says of a branch.
+- gentle-ai on `c7445caa..e2c38a15` (granted run): approved, 2 WARNINGs (L14).
+- gentle-ai on `edcd2bfd..8c684535` (granted run): approved, 1 WARNING, fixed in `c9f3efd9` (L15).
+- gentle-ai on `8c684535..e792eaab` (the code is `c9f3efd9`; granted run): approved, 1 WARNING and 1 SUGGESTION,
+  both taken in `8b046c0f` (L18).
+- Codex on `e792eaa..8b046c0`: correct (0.97), 47,536 input tokens; lenses (reliability, readability) 0 findings.
 
 ## Next step
 State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings
 `cbce05e2`, the verifier's fixes `88b53455` and `1f607cb8`, Codex's P2 `e2c38a15`. Next: PR 2 on
 `f8-s10-permissions` (base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in
-its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a branch after it; T7 waits on question 99.
+its body, `ready --pr` once the merge queue's dry run takes it; then T7 (question 99 answered, L18) and T6 on a
+branch after it.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -221,3 +227,10 @@ its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a bra
   install writes the recorded Rules block (his 9 D7 lines) into ~/.claude/CLAUDE.md, undone by uninstall. Go ahead
   with T7." Before T7: read his answer with `js-harness sessions --quote` (question 99). The host killed this
   session's background waits for low memory at 21:3x; the lead was told.
+- L18 (2026-10-28): the host compacted this session at 21:41 local; the lead was told. gentle-ai on
+  `8c684535..e792eaab`: approved; its WARNING (the `kept` message sent the user to the user settings, not to the file
+  the record names) and its SUGGESTION (no test of the messages) taken test first in `8b046c0f`. Question 99 checked
+  in his words (`js-harness sessions --quote 0f71b2c6 5233`, 2026-10-28T02:35:59Z): he tapped "Bloque de reglas
+  (Recomendada)", which asked that install write into `~/.claude/CLAUDE.md` "un bloque pequeño y registrado con tus 9
+  líneas de D7, que se puede deshacer con uninstall. No toca nada más de ~/.claude." T7 is open, on a branch after
+  PR 2.
