@@ -90,12 +90,16 @@ export function applySettingsEntries(file, pointer, entries, earlier = []) {
     if (missing.length === 0) return { state: 'kept' };
     holder[leaf] = [...(list ?? []), ...missing];
     const added = [...new Set([...(recorded?.entries ?? []), ...missing])];
-    return { held: { entries: added, createdList: Boolean(recorded?.createdList) || list === undefined } };
+    return {
+      held: { entries: added, createdList: Boolean(recorded?.createdList) || list === undefined },
+      now: { entries: missing, createdList: list === undefined },
+    };
   });
 }
 
 /** The write both kinds share: `place(holder, leaf)` puts the key in the object that holds it and returns what the
- * record holds of it (`{ held }`), or the result to return with nothing written (`{ state }`). */
+ * record holds of it (`{ held }`, and `now`, what this write alone added, where that differs), or the result to
+ * return with nothing written (`{ state }`). */
 function writeAt(file, pointer, earlier, place) {
   const read = readObject(file);
   if (read.reason) return { state: 'problem', reason: read.reason };
@@ -128,6 +132,10 @@ function writeAt(file, pointer, earlier, place) {
       createdDir: madeDir || earlier.some((record) => record.createdDir),
       createdContainers,
     },
+    // What this write alone did, for a run that fails before its manifest is written to undo and no more: the
+    // record above also holds what earlier runs did, which the manifest on disk still records (Codex on
+    // d0d6807..1f607cb).
+    undo: { pointer, ...(placed.now ?? placed.held), createdFile: Boolean(read.absent), createdDir: madeDir, createdContainers: found.missing },
   };
 }
 

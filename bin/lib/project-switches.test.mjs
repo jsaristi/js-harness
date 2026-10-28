@@ -249,6 +249,21 @@ test('init takes back the keys it wrote when the manifest cannot be written', (t
   assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
 });
 
+// Codex on d0d6807..1f607cb (P2): a sync that writes back one deny and then cannot write the manifest takes back
+// only that one; the denies the manifest on disk still records stay where they were.
+test('a sync that cannot write the manifest takes back only the denies it added, never those recorded before', (t) => {
+  const root = repo(t, { 'bin/a.mjs': '' });
+  initProject(root, '0.1.0', deps());
+  const before = settings(root);
+  fs.writeFileSync(settingsPath(root), JSON.stringify({ ...before, permissions: { deny: PERMISSIONS_DENY.slice(1) } }));
+  const open = (target) => {
+    if (target.includes('manifest.json.')) throw new Error('disk full');
+    return fs.openSync(target, 'wx');
+  };
+  assert.throws(() => syncProject(root, '0.1.0', { ...deps(), open }), InitWriteError);
+  assert.deepEqual(settings(root).permissions.deny, PERMISSIONS_DENY.slice(1));
+});
+
 const prePushPath = (root) => path.join(root, '.git', 'hooks', 'pre-push');
 
 test('init wires the push check where the Codex review is on, and records it for uninstall', (t) => {

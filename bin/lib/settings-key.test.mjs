@@ -27,20 +27,16 @@ function withSettings(t, text) {
 test('a key in a file that does not exist creates the folder and the file, and records both', (t) => {
   const root = project(t);
   const applied = applySettingsKey(settingsFile(root), PASTE, '1');
-  assert.deepEqual(applied, {
-    state: 'written',
-    record: { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 },
-  });
+  const record = { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 };
+  assert.deepEqual(applied, { state: 'written', record, undo: record });
   assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}\n');
 });
 
 test('a key in a file that exists is merged beside what is there, in the file own indent and line endings', (t) => {
   const root = withSettings(t, '{\r\n\t"effortLevel": "high"\r\n}\r\n');
   const applied = applySettingsKey(settingsFile(root), PLUGIN, false);
-  assert.deepEqual(applied, {
-    state: 'written',
-    record: { pointer: PLUGIN, value: false, createdFile: false, createdDir: false, createdContainers: 1 },
-  });
+  const record = { pointer: PLUGIN, value: false, createdFile: false, createdDir: false, createdContainers: 1 };
+  assert.deepEqual(applied, { state: 'written', record, undo: record });
   assert.equal(
     fs.readFileSync(settingsFile(root), 'utf8'),
     '{\r\n\t"effortLevel": "high",\r\n\t"enabledPlugins": {\r\n\t\t"typescript-lsp@claude-plugins-official": false\r\n\t}\r\n}\r\n',
@@ -224,10 +220,8 @@ const DENY = ['permissions', 'deny'];
 test('entries missing from a list are added after what is there, and only they are recorded', (t) => {
   const root = withSettings(t, '{\n  "permissions": {\n    "deny": ["Bash(curl:*)", "Read(.env)"]\n  }\n}\n');
   const applied = applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)']);
-  assert.deepEqual(applied, {
-    state: 'written',
-    record: { pointer: DENY, entries: ['Read(.ssh/*)'], createdList: false, createdFile: false, createdDir: false, createdContainers: 0 },
-  });
+  const record = { pointer: DENY, entries: ['Read(.ssh/*)'], createdList: false, createdFile: false, createdDir: false, createdContainers: 0 };
+  assert.deepEqual(applied, { state: 'written', record, undo: record });
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')).permissions.deny, ['Bash(curl:*)', 'Read(.env)', 'Read(.ssh/*)']);
   assert.deepEqual(applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)'], [applied.record]), { state: 'kept' });
 });
@@ -260,6 +254,8 @@ test('an entry taken out since is written back and the record keeps every entry 
   assert.deepEqual(again.record.entries, ['Read(.env)', 'Read(.ssh/*)']);
   assert.equal(again.record.createdList, true);
   assert.equal(again.record.createdFile, true);
+  // What this write alone did: the one entry, in a file and a list that were already there.
+  assert.deepEqual(again.undo, { pointer: DENY, entries: ['Read(.env)'], createdList: false, createdFile: false, createdDir: false, createdContainers: 0 });
 });
 
 test('something that is not a list where the list goes is never overwritten, and undo keeps it', (t) => {

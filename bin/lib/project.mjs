@@ -1634,7 +1634,7 @@ function updateRecorded(root, manifest, gitBases, steps) {
     if (functions.plan) {
       const before = next.settings ?? [];
       const applied = applySettings(root, before, functions.plan.settings);
-      writtenSettings = applied.records.filter((record) => !before.includes(record));
+      writtenSettings = applied.written;
       actions.push(...applied.actions);
       setSettings(next, applied.records);
     }

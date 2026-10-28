@@ -95,7 +95,8 @@ export function isValidSettingsRecord(record) {
 
 /** Makes the settings file of the clone at `root` hold the keys named in `wanted`, and only those of the keys
  * the harness recorded. `records` are the manifest's `settings` (each valid). Returns the records to keep in
- * the manifest and the actions to report, in the kinds `init`, `sync` and `uninstall` already print:
+ * the manifest, `written` (not enumerable: the records of what this call alone wrote, for a rollback) and the
+ * actions to report, in the kinds `init`, `sync` and `uninstall` already print:
  * - a wanted key: `wrote` when written; `kept` when it already holds the value (somebody else's then, unless
  *   a record says it is the harness's) or holds another value, which is never overwritten and leaves the
  *   switch not applied; `problem` when the file cannot be read;
@@ -111,6 +112,7 @@ export function applySettings(root, records, wanted, deps = {}) {
   const file = path.join(root, ...SETTINGS_FILE.split('/'));
   const actions = [];
   let held = [];
+  const written = [];
 
   for (const record of records) {
     if (wanted.includes(record.key)) {
@@ -142,6 +144,7 @@ export function applySettings(root, records, wanted, deps = {}) {
     if (applied.state === 'written') {
       // Written again where a record says it was before: the key had gone, and the new record replaces it.
       held = [...others, { key, path: SETTINGS_FILE, ...applied.record }];
+      written.push({ key, path: SETTINGS_FILE, ...(applied.undo ?? applied.record) });
       actions.push({ kind: 'wrote', path: label });
     } else if (applied.state === 'kept') {
       if (!recorded) actions.push({ kind: 'kept', path: label, reason: 'already holds this value' });
@@ -157,5 +160,7 @@ export function applySettings(root, records, wanted, deps = {}) {
     }
   }
 
-  return { records: held, actions };
+  // What this call alone wrote, for a run whose manifest cannot be written to take back and no more (Codex on
+  // d0d6807..1f607cb): a record held before stays in the manifest on disk, so what it holds stays too.
+  return Object.defineProperty({ records: held, actions }, 'written', { value: written, enumerable: false });
 }

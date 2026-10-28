@@ -101,6 +101,14 @@ Reviews:
   comments stacked on `ourFile`) and risk a WARNING (a `defaultMode` put back in silence), both taken in the next
   commit (`cbce05e2`: install prints the mode it put back, and that a `defaultMode` of `"default"` keeps it
   out).
+- T5's independent verifier (opus, read-only) on `f2480611`: 2 BLOCKERs, 4 WARNINGs, 3 NOTEs (L13); the BLOCKERs and
+  WARNING 3 fixed test first in `88b53455`, WARNINGs 4 to 6 in `1f607cb8`.
+- Codex on `e523ac7..d0d6807`, run alone from a detached worktree at `d0d6807` (a recheck is one part, and
+  `codex-review` has no `--head`): correct (0.96), its 2 findings fixed; 61,674 input tokens.
+- Codex on `d0d6807..1f607cb`, 2 parts: part 1 correct (0.87); part 2 incorrect (0.97), one P2 (a sync whose manifest
+  write fails took back every deny of the list, the ones the manifest on disk records too), fixed test first in the
+  next commit: `applySettings` returns what the call alone wrote, and that is what a rollback undoes; 348,300 input
+  tokens.
 
 ## Next step
 State at 01:30Z, 2026-10-28: T5 (`f2480611`), T4's lens findings (`cbce05e2`), and the fixes of T5's verifier (L13):
