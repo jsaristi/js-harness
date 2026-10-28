@@ -169,9 +169,10 @@ until its chmod), so the next commit creates it with the mode; Codex rechecks no
 the lenses review that commit. Lenses on `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
 gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in `8012d8d6`, which Codex, the
 lenses and gentle-ai approved (Reviews). PR 619 (T7) is open and `ready` (L22). T6 is on `f8-s10-probe`, chained on
-`f8-s10-rules`: `## Probe` holds the install probe and the five prompts, 5 of 5. Held: the incident rerun, asked of
-the lead (L22). Next: its answer; then the ROADMAP and the diet's register (G8, G10n, G12 answered; S10's row), T6
-closed, PR 4, and the `closed` notice with its summary in `docs/sessions/`.
+`f8-s10-rules`: `## Probe` holds the install probe and the five prompts, 5 of 5. Held: the incident rerun,
+until he applies S10 to his machine (the lead, L23). The ROADMAP and the register are done. Next: PR 4 (T6's
+record, docs only) and `ready`; once he has applied S10, the rerun once (about $13; if it fails, its cause is
+reported and it is not rerun), T6 closed, and the `closed` notice with its summary in `docs/sessions/`.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -326,3 +327,6 @@ closed, PR 4, and the `closed` notice with its summary in `docs/sessions/`.
   `init` in the workspace (`evals/home.mjs:454-458`), so run now it would measure his home without S10's user-level
   part, with a clone that selects a style the trial home lacks; about $13 for a measure of neither. Asked of the lead
   (its planned step): run it once S10 is applied to his machine, or now as it is.
+- L23 (2026-10-28, 02:19 local, JH ORQ's note): "Lead's call: run the incident rerun only after he applies S10 to his
+  machine, so it measures S10 as he will run it. Hold it". The ROADMAP and the diet's register are updated on
+  `f8-s10-probe` (`5da88074`); T7 is marked done (PR 619 merged, main `e1725c83`).
