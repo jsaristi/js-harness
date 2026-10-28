@@ -17,7 +17,22 @@ is small, one work unit a commit.
 - `3982ae68` item 6: the guard reads `RegExp('…').exec(` as no string run; shadowed RegExp and named receivers still count.
 
 ## Next step
-1. Independent verifier on `3982ae68` (guard, high-risk item 2), read-only, after its own checks.
+0. Fix what the verifier and Codex found (both done 2026-10-28 ~16:50Z; nothing pushed):
+   - Verifier, REGRESSION in `3982ae68`: the RegExp skip lets a write pass when exec is redirected to eval through the
+     prototype (`Object.getPrototypeOf(RegExp('')).exec = eval`, `__proto__`, `Reflect.set`) or RegExp is replaced under
+     a computed name (`globalThis['Reg'+'Exp'] = () => ({exec: eval})`, `atob`), or `RegExp(a)['exec'](...)`, or a
+     `(0, eval)(...)` beside it. Its cases and a compare script: `C:\Users\Oficina\.claude\jobs\00ab404f\tmp\verifier\`
+     (`cmp.mjs`, `cases2.txt`, `cases3.txt`). Fix: skip only when the blanked code has no `[`, and none of eval,
+     Function, prototype, __proto__, getPrototypeOf, setPrototypeOf, defineProperty, Reflect, Object, globalThis,
+     global, window, self, this, with, atob; add every verifier case as a refused test; rerun the verifier once.
+   - Codex on 79e3430..318f952 (recorded; output in the task file of this session): P1 resume must check every job
+     using the conversation (agents with the same sessionId, not only the recorded id) before resuming; P1 protect
+     resources shared with the resumed job (stop of either job: brief and worktree shared). P2: recheck activity after
+     the gate lock is obtained (merge-queue-refresh.mjs:68); worktreeOf must not take a main checkout named like the
+     worktree (background.mjs:173); validate the resumed effort with sessionEffortRefusal; look the job up in claude
+     agents when no id is printed; check the record is writable before launching and handle append failure; keep
+     `entry.sessionId` when the listing fails (sessions-background.mjs:274).
+1. (done) Independent verifier on `3982ae68`.
 2. Reviews over `79e3430..HEAD` (lens records before the 16:20Z refresh do not count): `js-harness codex-review --base
    79e3430` and `js-harness lens-review --base 79e3430 --lenses risk,reliability --reason "..."`; gentle-ai per slice.
 3. Push, open the PR, `js-harness notify --to orchestrator --kind ready --pr <n>`, then `closed --summary` this file.
