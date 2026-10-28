@@ -33,7 +33,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule } from './lib/rules-change-run.mjs';
-import { proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
+import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
 import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
 
@@ -216,19 +216,29 @@ const projectCount = (n) => `${n} ${n === 1 ? 'rule' : 'rules'} of the project`;
  * the sensors `check` runs in the project; when its `harness.json` does not parse they cannot be known, and the sensor
  * rules are left unchecked (the gate's sensors row reports that file). It writes nothing: `render` is the harness's. */
 async function projectForm(parsed, top, { run, stdout, stderr }) {
-  if (parsed.command === 'coverage') {
-    const { version } = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'));
-    return (await import('./lib/project-coverage.mjs')).projectCoverageForm(parsed, top, { run, stdout, stderr, version });
-  }
   if (parsed.command === 'render') {
     stderr("rules render writes the harness's docs/RULES.md and runs only in the harness's own repository; a project's list is printed by `js-harness rules`");
     return 1;
   }
+  const { discoverSensors } = await import('./check.mjs');
+  const sensorsOf = () => {
+    const found = discoverSensors(top);
+    return found.error ? null : found.sensors.map((sensor) => sensor.name);
+  };
+  if (parsed.command === 'coverage') {
+    const { version } = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+    let sensors;
+    try {
+      sensors = sensorsOf();
+    } catch (err) {
+      stderr(err.message);
+      return 1;
+    }
+    return (await import('./lib/project-coverage.mjs')).projectCoverageForm(parsed, top, { run, stdout, stderr, version, sensors });
+  }
   let read;
   try {
-    const { discoverSensors } = await import('./check.mjs');
-    const found = discoverSensors(top);
-    read = readProjectRules(top, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name), run });
+    read = readProjectRules(top, { sensors: sensorsOf(), run });
   } catch (err) {
     stderr(err.message);
     return 1;
@@ -470,11 +480,10 @@ function coverageForm(parsed, root, { run, stdout, stderr }) {
   if (proofs !== null) {
     for (const proof of proofs) {
       const what = `${proof.rule}${proof.of === undefined ? '' : ` (${proof.of})`}: ${proof.test} with the break in ${proof.path}`;
-      stdout(proof.red ? `PROVEN  ${what} went red` : `FAIL    ${what} ${proof.status === null ? 'did not finish' : 'stayed green'}`);
+      stdout(`${proof.red ? 'PROVEN ' : 'FAIL   '} ${what} ${proofSaid(proof)}`);
     }
-    stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break turns its test' : 'breaks turn their tests'} red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks left their test green`);
+    stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break turns its test' : 'breaks turn their tests'} red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks proved nothing`);
     if (open > 0) return 1;
-    if (!parsed.strict) return 0;
   }
   for (const line of coverageLines(report)) stdout(line);
   const word = parsed.strict ? 'strict' : 'coverage';

@@ -25,7 +25,8 @@ const SOURCES = [
 ];
 const RULE = 'questions-one-place';
 const trial = (config, score, costUsd = 0.5) => ({ task: 'a-case', config, score, passed: score * 4, total: 4, costUsd });
-const results = (name, trials) => ({ name, trials: [...trials, trial('minimal', 0), { ...trial('current', 1), task: 'other' }] });
+const COMMIT = 'a'.repeat(40);
+const results = (name, trials, jsHarness = COMMIT) => ({ name, stack: { jsHarness }, trials: [...trials, trial('minimal', 0), { ...trial('current', 1), task: 'other' }] });
 const ARM = `current-without-rule-${RULE}`;
 
 test('the arm of a case takes out every rule it names, sorted, at most two', () => {
@@ -55,12 +56,12 @@ test('the digest of the rules reads the spans tied to them in the sources, and o
 test('a record is built from the two runs, the case\'s trials alone, and is current while the digests hold and the arm without scored below', () => {
   const digests = { case: 'c1', rules: 'r1' };
   const record = buildRecord({
-    name: 'a-case', rules: [RULE], digests, date: '2026-10-29',
+    name: 'a-case', rules: [RULE], digests, date: '2026-10-29', commit: COMMIT,
     current: results('run-current', [trial('current', 1), trial('current', 0.75)]),
     without: results('run-without', [trial(ARM, 0.25), trial(ARM, 0.5)]),
   });
   assert.deepEqual(record, {
-    format: 1, case: 'a-case', rules: [RULE], digests, date: '2026-10-29',
+    format: 1, case: 'a-case', rules: [RULE], digests, date: '2026-10-29', commit: COMMIT,
     current: { run: 'run-current', arm: 'current', trials: 2, score: 0.875 },
     without: { run: 'run-without', arm: ARM, trials: 2, score: 0.375 },
     costUsd: 2,
@@ -74,6 +75,14 @@ test('a record is built from the two runs, the case\'s trials alone, and is curr
 
 test('a run short of trials, or a record not in its shape, is refused', () => {
   const short = results('run-current', [trial('current', 1)]);
-  assert.throws(() => buildRecord({ name: 'a-case', rules: [RULE], digests: {}, date: '2026-10-29', current: short, without: results('w', [trial(ARM, 0), trial(ARM, 0)]) }), new RegExp(`1 trial of a-case on current in run-current: a proof takes ${MIN_TRIALS}`));
+  assert.throws(() => buildRecord({ name: 'a-case', rules: [RULE], digests: {}, date: '2026-10-29', commit: COMMIT, current: short, without: results('w', [trial(ARM, 0), trial(ARM, 0)]) }), new RegExp(`1 trial of a-case on current in run-current: a proof takes ${MIN_TRIALS}`));
   assert.deepEqual(recordFaults({ format: 1 }, { name: 'a-case', rules: [RULE], digests: {} }), ['the proof of a-case is not a record buildRecord writes']);
+});
+
+test('a record is written only from runs of the clean commit the checkout is at, so its digests are the texts they ran on', () => {
+  const arms = (current, without) => ({ name: 'a-case', rules: [RULE], digests: {}, date: '2026-10-29', current: results('run-current', [trial('current', 1), trial('current', 1)], current), without: results('run-without', [trial(ARM, 0), trial(ARM, 0)], without) });
+  assert.throws(() => buildRecord({ ...arms(COMMIT, 'b'.repeat(40)), commit: COMMIT }), /run-without ran on js-harness b{40}, and the checkout is at a{40}/);
+  assert.throws(() => buildRecord({ ...arms(`${COMMIT}+dirty`, COMMIT), commit: COMMIT }), /run-current ran on js-harness a{40}\+dirty/);
+  assert.throws(() => buildRecord({ ...arms(COMMIT, COMMIT), commit: `${COMMIT}+dirty` }), /the checkout is not one clean commit \(a{40}\+dirty\)/);
+  assert.throws(() => buildRecord({ ...arms(null, COMMIT), commit: COMMIT }), /run-current ran on js-harness unknown/);
 });

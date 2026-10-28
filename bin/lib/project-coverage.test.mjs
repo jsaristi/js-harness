@@ -79,6 +79,28 @@ test('rules coverage --prove --json prints one JSON document, each planted break
     assert.deepEqual(document.proofs.map((proof) => [proof.rule, proof.red]), [['value-one', true]]);
     assert.equal(code, strict && document.findings.length > 0 ? 1 : 0, all);
   }
+  // A check that names no break is a finding, and its proof proves nothing; neither stops the document.
+  const unplanted = { id: 'no-break', subject: 'a check with no break', since: '2026-10-14', sensor: 'held', control: { level: 'check', test: 'held.test.mjs' } };
+  fs.writeFileSync(path.join(root, 'docs', 'rules.json'), JSON.stringify({ format: 1, rules: [unplanted] }));
+  const { code, out, all } = form({ command: 'coverage', prove: true, json: true }, root);
+  assert.equal(code, 1, all);
+  const document = JSON.parse(out[0]);
+  assert.deepEqual(document.proofs.map((proof) => [proof.rule, proof.red, proof.baseline]), [['no-break', false, 'no break']]);
+  assert.ok(document.findings.some((finding) => finding.startsWith('rule "no-break"')), all);
+});
+
+test('rules coverage --strict in a project holds a rule to the sensors check runs there, as rules check does', async (t) => {
+  const control = { level: 'line', path: 'AGENTS.md', phrase: 'Deploys run from the pipeline only' };
+  const root = project(t, {
+    'AGENTS.md': `${agentsTemplate('app')}\n${ADDED}\n`,
+    'harness.json': JSON.stringify({ sensors: { tests: 'node --test' } }),
+    'docs/rules.json': JSON.stringify({ format: 1, rules: [{ id: 'gone-sensor', subject: 'a sensor that is not there', since: '2026-10-14', sensor: 'nope', failure: 'x', control }] }),
+  });
+  const out = [];
+  const { rulesMain } = await import('../rules.mjs');
+  const code = await rulesMain(['coverage', '--strict'], { cwd: root, root, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 1, out.join('\n'));
+  assert.ok(out.some((line) => line.includes('rule "gone-sensor": the sensor "nope" is not declared')), out.join('\n'));
 });
 
 test('a project with no coverage record says init records it, and holds no rule to a control', async (t) => {

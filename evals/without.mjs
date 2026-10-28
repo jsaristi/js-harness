@@ -230,11 +230,18 @@ const ownTexts = (host) => [host.instructions, ...fileComponents
   .filter((parts) => parts[0] === host.dir)
   .map((parts) => parts.join('/'))];
 
-/** `text` without each span (`cutSpans`) tied to the rule `id`, the spaces after it with it, and the line break of a
- * line it leaves empty; `null` when no span is tied to it. */
+/** `{ content, evidence }`: `text` without each span (`cutSpans`) tied to the rule `id`, the spaces after it with it,
+ * and the line break of a line it leaves empty, and the lines of the words cut; `null` when no span is tied to it. */
 function withoutRule(text, id) {
   const cuts = cutSpans(text).filter((span) => tiesOf(span.text, RULES).includes(id));
   if (cuts.length === 0) return null;
+  // What the model is no longer sent: the words cut, not the lines they shared, which the arm still sends rewritten.
+  const evidence = cuts.flatMap(({ start, end }) => text.slice(start, end).split(/\r?\n/)).filter((line) => line.trim() !== '');
+  return { content: cutRule(text, cuts), evidence };
+}
+
+/** `text` with the spans `cuts` taken out, as `withoutRule` says. */
+function cutRule(text, cuts) {
   let out = '';
   let at = 0;
   for (const { start, end } of cuts) {
@@ -258,8 +265,8 @@ function rulePieces(root, id, host) {
     throw new ArmError(`rule-${id}: ${id} is not a live rule of bin/lib/rules-data.mjs`);
   }
   return ownTexts(host).filter((rel) => exists(root, rel)).flatMap((rel) => {
-    const content = withoutRule(fs.readFileSync(full(root, rel), 'utf8'), id);
-    return content === null ? [] : [{ text: rel, content }];
+    const cut = withoutRule(fs.readFileSync(full(root, rel), 'utf8'), id);
+    return cut === null ? [] : [{ text: rel, ...cut }];
   });
 }
 
@@ -473,7 +480,8 @@ export function withoutEvidence(root, id, agent) {
   const read = (rel) => fs.readFileSync(full(root, rel), 'utf8');
   for (const piece of piecesOf(root, id, agent)) {
     if (piece.text) {
-      lines.push(...droppedLines(read(piece.text), piece.content));
+      // A rule's cut can rewrite a line, which `droppedLines` would read as every line after it dropped.
+      lines.push(...(piece.evidence ?? droppedLines(read(piece.text), piece.content)));
       continue;
     }
     const files = piece.remove ? markdownFiles(root, piece.remove) : [];

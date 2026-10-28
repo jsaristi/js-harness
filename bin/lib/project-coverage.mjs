@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { FAILURES_TEMPLATE, agentsTemplate, claudeTemplate } from './project.mjs';
 import { coverageRecord, readProjectRules } from './project-rules-read.mjs';
-import { proveBreaks } from './rules-coverage-read.mjs';
+import { proofSaid, proveBreaks } from './rules-coverage-read.mjs';
 import { cutSpans, spanWords } from './rules-coverage.mjs';
 import { PROJECT_RULES_PATH } from './project-rules.mjs';
 
@@ -36,8 +36,10 @@ export function projectCoverage({ record, version, name, readFile }) {
 
 /** The `coverage` form of `js-harness rules` in the project at `top`: the report, `--json`, `--strict` (exit 1 on
  * a finding of the project's rules, a missing control among them) and `--prove` (each check of a project rule turns
- * its test red in a copy). `--refresh` is refused: a project keeps no register. `version` is this copy's. */
-export function projectCoverageForm(parsed, top, { run, stdout, stderr, version }) {
+ * its test red in a copy). `--refresh` is refused: a project keeps no register. `version` is this copy's, and
+ * `sensors` the names of the sensors `check` runs in the project, or `null` where they cannot be known (`rules check`
+ * then leaves the sensor rules unchecked, as here). */
+export function projectCoverageForm(parsed, top, { run, stdout, stderr, version, sensors = null }) {
   if (parsed.refresh) {
     stderr(`rules coverage --refresh writes the harness's register, and a project keeps none: its side is reported, and its rules' controls are in ${PROJECT_RULES_PATH}`);
     return 1;
@@ -46,7 +48,7 @@ export function projectCoverageForm(parsed, top, { run, stdout, stderr, version 
   let read;
   try {
     record = coverageRecord(top, run);
-    read = readProjectRules(top, { sensors: null, run });
+    read = readProjectRules(top, { sensors, run });
   } catch (err) {
     stderr(err.message);
     return 1;
@@ -65,7 +67,7 @@ export function projectCoverageForm(parsed, top, { run, stdout, stderr, version 
     return failed ? 1 : 0;
   }
   if (proofs !== null) {
-    for (const proof of proofs) stdout(`${proof.red ? 'PROVEN ' : 'FAIL   '} ${proof.rule}: ${proof.test} with the break in ${proof.path} ${proof.red ? 'went red' : 'stayed green'}`);
+    for (const proof of proofs) stdout(`${proof.red ? 'PROVEN ' : 'FAIL   '} ${proof.rule}: ${proof.test} with the break in ${proof.path} ${proofSaid(proof)}`);
     stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break' : 'breaks'} of this project's rules turn their tests red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks left their test green`);
     if (open > 0) return 1;
   }

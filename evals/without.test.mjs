@@ -154,6 +154,13 @@ test('rule-<id> takes out the spans tied to that rule in the texts js-harness wr
   assert.deepEqual(after, before, 'another tool\'s skill keeps its words');
 });
 
+test('the evidence of rule-<id> is the words it cut, never a line it rewrote or one after it that stays', (t) => {
+  const root = claudeHome(tmp(t));
+  put(root, '.claude/CLAUDE.md', '# global\n\nFirst sentence stays. Every question of the project reaches the user in one place. Last stays.\n\n- A line well after the cut, which the arm keeps whole.\n');
+  const { lines } = withoutEvidence(root, 'rule-questions-one-place', 'claude');
+  assert.deepEqual(lines, ['Every question of the project reaches the user in one place.']);
+});
+
 test('rule-<id> of no live rule, or of a rule the home holds no text of, is refused before anything is touched', (t) => {
   const root = claudeHome(tmp(t));
   const before = snapshot(root);

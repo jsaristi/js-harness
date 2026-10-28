@@ -7,6 +7,7 @@
 // it proves the case only when the arm without scored below the current arm. Zero deps, plain Node.
 //
 //   node evals/rule-proof.mjs <case> <current results.json> <without results.json>
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cutSpans, tiesOf } from '../bin/lib/rules-coverage.mjs';
 import { RULES } from '../bin/lib/rules-data.mjs';
 import { textSources } from '../bin/lib/rules-sources.mjs';
+import { readWorkspaceCommit } from './suite.mjs';
 
 /** Where the records are, from the top of the checkout: one `<case>.json` a case that names rules. */
 export const PROOFS = 'evals/proofs/rules';
@@ -64,11 +66,20 @@ function armScore(results, name, arm) {
   return { line: { run: results.name, arm, trials: trials.length, score }, costUsd: trials.reduce((sum, item) => sum + (item.costUsd ?? 0), 0) };
 }
 
-/** The record of the case `name` that names `rules`, from the results of its `current` run and its `without` run. */
-export function buildRecord({ name, rules, digests, date, current, without }) {
+const CLEAN_COMMIT = /^[0-9a-f]{40,64}$/;
+
+/** The record of the case `name` that names `rules`, from the results of its `current` run and its `without` run.
+ * `digests` are read from the checkout at `commit`, so each run must have run on that same commit, clean (its
+ * `stack.jsHarness`, `evals/suite.mjs`): a run of other texts would be stamped with digests it never ran on. */
+export function buildRecord({ name, rules, digests, date, commit, current, without }) {
+  if (typeof commit !== 'string' || !CLEAN_COMMIT.test(commit)) throw new Error(`the checkout is not one clean commit (${commit ?? 'unknown'}): a proof's digests are read from the commit both runs ran on`);
+  for (const results of [current, without]) {
+    const ran = results.stack?.jsHarness ?? null;
+    if (ran !== commit) throw new Error(`${results.name} ran on js-harness ${ran ?? 'unknown'}, and the checkout is at ${commit}: write the proof from the clean commit both runs ran on`);
+  }
   const held = armScore(current, name, 'current');
   const out = armScore(without, name, armOf(rules));
-  return { format: FORMAT, case: name, rules: [...rules].sort(), digests, date, current: held.line, without: out.line, costUsd: held.costUsd + out.costUsd };
+  return { format: FORMAT, case: name, rules: [...rules].sort(), digests, date, commit, current: held.line, without: out.line, costUsd: held.costUsd + out.costUsd };
 }
 
 const isArmLine = (line) => line !== null && typeof line === 'object' && typeof line.run === 'string' && typeof line.arm === 'string' && Number.isInteger(line.trials) && typeof line.score === 'number';
@@ -113,7 +124,8 @@ function main(argv) {
   const task = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'evals', 'tasks', name, 'task.json'), 'utf8'));
   const rules = Array.isArray(task.rules) ? task.rules : [];
   const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-  const record = buildRecord({ name, rules, digests: digestsOf(PACKAGE, name, rules), date: new Date().toISOString().slice(0, 10), current: read(currentFile), without: read(withoutFile) });
+  const commit = readWorkspaceCommit({ spawn: spawnSync, root: PACKAGE });
+  const record = buildRecord({ name, rules, digests: digestsOf(PACKAGE, name, rules), date: new Date().toISOString().slice(0, 10), commit, current: read(currentFile), without: read(withoutFile) });
   const faults = recordFaults(record, { name, rules, digests: record.digests });
   fs.mkdirSync(path.join(PACKAGE, ...PROOFS.split('/')), { recursive: true });
   fs.writeFileSync(path.join(PACKAGE, ...PROOFS.split('/'), `${name}.json`), `${JSON.stringify(record, null, 2)}\n`);

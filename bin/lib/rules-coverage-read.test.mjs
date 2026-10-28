@@ -39,9 +39,23 @@ test('a planted break proves its check only when its test goes red in the copy, 
     const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-prove-tmp-'));
     try {
       const proofs = proveBreaks(root, { controls: { held: CHECKED, unheld: UNHELD } }, { spawn: noGit, tmpdir });
-      assert.deepEqual(proofs.map(({ rule, red }) => [rule, red]), [['held', true], ['unheld', false]]);
+      assert.deepEqual(proofs.map(({ rule, red, baseline }) => [rule, red, baseline]), [['held', true, 'green'], ['unheld', false, 'green']]);
       assert.equal(fs.readFileSync(path.join(root, 'value.mjs'), 'utf8'), FILES['value.mjs']);
       assert.deepEqual(fs.readdirSync(tmpdir), [], 'the copy is removed');
+    } finally {
+      fs.rmSync(tmpdir, { recursive: true, force: true });
+    }
+  });
+});
+
+test('a test already red without its break proves nothing, and a test that is not there proves nothing', () => {
+  const broken = { ...FILES, 'held.test.mjs': FILES['held.test.mjs'].replace('assert.equal(A, 1)', 'assert.equal(A, 0)') };
+  const gone = { ...CHECKED, test: 'renamed.test.mjs' };
+  inFolder(broken, (root) => {
+    const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-prove-tmp-'));
+    try {
+      const proofs = proveBreaks(root, { controls: { held: CHECKED, gone } }, { spawn: noGit, tmpdir });
+      assert.deepEqual(proofs.map(({ rule, red, baseline }) => [rule, red, baseline]), [['gone', false, 'red'], ['held', false, 'red']]);
     } finally {
       fs.rmSync(tmpdir, { recursive: true, force: true });
     }

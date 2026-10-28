@@ -83,8 +83,9 @@ const withoutGit = (env) => Object.fromEntries(Object.entries(env).filter(([key]
 
 /** `rules coverage --prove`: the checkout at `root` copied once into a folder under `tmpdir`, and in it each planted
  * break of `register` applied in turn, its test run with `node --test`, and the file put back. Each result is
- * `{ rule, of, test, path, red, status }`: a break proves its check only when the test goes red. The copy is removed
- * at the end. `spawn` runs git and node. */
+ * `{ rule, of, test, path, red, status, baseline }`: a break proves its check only when the test, green without it
+ * (`baseline`), goes red with it; a test red without it, or a break whose file is not there, proves nothing. The copy
+ * is removed at the end. `spawn` runs git and node. */
 export function proveBreaks(root, register, { spawn, tmpdir, env = process.env }) {
   const breaks = plantedBreaks(register);
   if (breaks.length === 0) return [];
@@ -97,18 +98,35 @@ export function proveBreaks(root, register, { spawn, tmpdir, env = process.env }
       fs.mkdirSync(path.dirname(to), { recursive: true });
       fs.copyFileSync(from, to);
     }
+    const runTest = (test) => {
+      const ran = spawn(process.execPath, ['--test', test], { cwd: scratch, env: withoutGit(env), encoding: 'utf8', timeout: PROOF_TIMEOUT_MS, windowsHide: true });
+      return ran.error ? null : ran.status;
+    };
+    // Each test run once as the checkout holds it: one that is red already, or not there, would go red with any break.
+    const baselines = new Map();
     return breaks.map(({ rule, of, test, break: planted }) => {
-      const target = path.join(scratch, ...planted.path.split('/'));
+      const said = { rule, ...(of === undefined ? {} : { of }), test, path: planted?.path };
+      const target = typeof planted?.path === 'string' ? path.join(scratch, ...planted.path.split('/')) : null;
+      if (target === null || !fs.statSync(target, { throwIfNoEntry: false })?.isFile()) return { ...said, red: false, status: null, baseline: 'no break' };
+      if (!baselines.has(test)) baselines.set(test, runTest(test) === 0 ? 'green' : 'red');
+      if (baselines.get(test) === 'red') return { ...said, red: false, status: null, baseline: 'red' };
       const text = fs.readFileSync(target, 'utf8');
       fs.writeFileSync(target, text.replace(/\r\n/g, '\n').replace(planted.find, () => planted.replace));
-      const ran = spawn(process.execPath, ['--test', test], { cwd: scratch, env: withoutGit(env), encoding: 'utf8', timeout: PROOF_TIMEOUT_MS, windowsHide: true });
+      const status = runTest(test);
       fs.writeFileSync(target, text);
-      const status = ran.error ? null : ran.status;
-      return { rule, ...(of === undefined ? {} : { of }), test, path: planted.path, red: status !== 0 && status !== null, status };
+      return { ...said, red: status !== 0 && status !== null, status, baseline: 'green' };
     });
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
+}
+
+/** How a proof of `proveBreaks` ended, in the words of a report line. */
+export function proofSaid({ red, status, baseline }) {
+  if (red) return 'went red';
+  if (baseline === 'no break') return 'has no file to plant the break in';
+  if (baseline === 'red') return 'was red before the break, or is not there, so it proves nothing';
+  return status === null ? 'did not finish' : 'stayed green';
 }
 
 /** The coverage of the harness's checkout at `root` against `rules`: `{ present: false }` when it holds no register,

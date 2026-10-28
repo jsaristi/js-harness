@@ -264,7 +264,8 @@ export function alignSpans(entries, spans) {
       stretches.at(-1).inserted.push(spans[j]);
       j += 1;
     } else {
-      stretches.at(-1).removed.push(entries[i]);
+      // By its place in `entries`: two entries of one hash are equal strings, and a move takes only one of them.
+      stretches.at(-1).removed.push(i);
       i += 1;
     }
   }
@@ -272,15 +273,17 @@ export function alignSpans(entries, spans) {
   const left = stretches.flatMap((stretch) => stretch.removed);
   for (const stretch of stretches) {
     stretch.inserted = stretch.inserted.filter((span) => {
-      const at = left.findIndex((entry) => entryHash(entry) === span.id);
+      const at = left.findIndex((index) => a[index] === span.id);
       if (at < 0) return true;
-      out.kept.push({ entry: left[at], span });
-      for (const other of stretches) other.removed = other.removed.filter((entry) => entry !== left[at]);
+      out.kept.push({ entry: entries[left[at]], span });
+      for (const other of stretches) other.removed = other.removed.filter((index) => index !== left[at]);
       left.splice(at, 1);
       return false;
     });
   }
-  for (const { removed, inserted } of stretches) {
+  for (const stretch of stretches) {
+    const removed = stretch.removed.map((index) => entries[index]);
+    const { inserted } = stretch;
     const pairs = Math.min(removed.length, inserted.length);
     for (let k = 0; k < pairs; k += 1) out.edited.push({ entry: removed[k], span: inserted[k] });
     out.gone.push(...removed.slice(pairs));

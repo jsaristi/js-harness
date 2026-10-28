@@ -102,9 +102,9 @@ mechanism here, before S13 rehearses it and S12 ships it.
 
 Reviews:
 - lenses risk, reliability, readability on `947ac91c..62f4a62` (`lens-reviews.jsonl`): 0, 2 and 1 findings, fixed
-  by the commit after `62f4a623` (L6); that fix is reviewed with the rest by the next Codex run.
-- Codex on `947ac91c..62f4a62`: not recorded; the first run was refused at 8 parts, the second broke at part 2
-  (L6). Next: `js-harness codex-review --base 947ac91c --max-parts <n>` over the fix as well.
+  by `f39c41a4` (L6); the lenses on `62f4a623..f39c41a4`: 0 findings.
+- Codex on `947ac91c..f39c41a4`, recorded (`codex-reviews.jsonl`, 8 parts, 1,690,061 input tokens): 7 findings P2,
+  each read true and fixed by the commit after `f39c41a4` (L7); that fix waits for its Codex and lens reviews.
 
 ## Paid runs
 None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
@@ -118,16 +118,17 @@ equivalent on his Max plan; the flags are S0's (`evals/results/f8-s0-a-incidents
 | P3 without away-autonomy | the same with `--configs current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-without-away-autonomy` | 2 | $1.12 to $1.30 |
 | P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents`, then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents` | 20 | about $13 |
 
-In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
+In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
+record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
 evals/results/f8-s5c-a-rules-current.json evals/results/f8-s5c-a-without-reuse-first.json` (and the same for
 `rule-away-autonomy` with P3), then drop the case from the register's `cases` so `evals/tasks.test.mjs` holds its
 record. Each `--plan` first prints the trials and starts nothing. The 13 to 23 cases 14.4 counts that T6 did not
 write, on both arms twice, are about $30 to $60 more, when a later session writes them.
 
 ## Next step
-T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' three findings are fixed in the commit after it (L6).
-Next: one Codex run over `947ac91c..HEAD` with `--max-parts`, the tree untouched while it runs; its findings fixed
-and their fix reviewed; then push, the pull request and `js-harness notify --to orchestrator --kind ready --pr <n>`.
+T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
+seven by the commit after it (L7). Next: Codex and the lenses on that fix, from `f39c41a4`, the tree untouched
+while they run; then push, the pull request and `js-harness notify --to orchestrator --kind ready --pr <n>`.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -205,3 +206,14 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   its 8 parts, over the 6 a run starts without `--max-parts`; the second, with `--max-parts 8`, passed part 1 and
   broke after part 2 because this session wrote a test file while it ran (353,663 input tokens, nothing recorded;
   `docs/FAILURES.md`, `edit-during-review`). From here no file is written while a review runs.
+- L7 (2026-10-28, evidence, Codex on `947ac91c..f39c41a4`, 7 findings P2, each reproduced or read in the code):
+  (1) a project's `rules coverage` read its rules with `sensors: null`, so a rule naming a sensor that is not there
+  passed `--strict`: `projectForm` now discovers them as for `rules check`; (2) a project check with no `break`
+  threw inside `--prove`; (3) a test already red, or not there, made any break "proven": each test now runs once
+  unchanged, and a proof counts only from a green baseline (`proveBreaks`, `baseline`); (4) a move took every
+  entry of its hash, so `[a, b, b]` against `[b, a, c]` called `c` a gap: `alignSpans` takes one entry by its
+  place; (5) a renamed test was proven and plain `--prove` hid the finding: (3) refuses it, and plain `--prove`
+  now prints the report after the proofs; (6) `rule-proof.mjs` stamped old runs with the checkout's digests: both
+  runs' `stack.jsHarness` must be the clean commit the checkout is at, and the record keeps it (`commit`);
+  (7) a rule cut that rewrote a line made `droppedLines` read every later line as removed: a `rule-<id>` piece
+  carries its evidence, the words it cut. `rules coverage --prove` after: 11 of 11 red.

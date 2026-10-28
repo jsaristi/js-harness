@@ -145,6 +145,14 @@ test('a span moved to another place keeps its entry, even where its new place ho
   assert.deepEqual([mixed.added, mixed.gone], [[], []]);
 });
 
+test('a sentence the register lists twice keeps an entry for each: a move takes one, the other is edited or gone', () => {
+  const edited = alignSpans(['a', 'b', 'b'], [{ id: 'b' }, { id: 'a' }, { id: 'c' }]);
+  assert.equal(edited.kept.length, 2);
+  assert.deepEqual([edited.edited.map(({ entry, span }) => [entry, span.id]), edited.added, edited.gone], [[['b', 'c']], [], []]);
+  const shrunk = alignSpans(['a', 'b', 'b'], [{ id: 'b' }, { id: 'a' }]);
+  assert.deepEqual([shrunk.kept.length, shrunk.edited, shrunk.added, shrunk.gone], [2, [], [], ['b']]);
+});
+
 test("a source's coverage: tied spans, owed, context, an edited owed span still owed, a changed context reopened, a new span a gap", () => {
   const text = [
     'Always ask the user before any paid run starts.',
