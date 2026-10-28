@@ -75,6 +75,8 @@ export function plantedBreaks(register) {
   return out;
 }
 
+const isText = (value) => typeof value === 'string' && value.length > 0;
+
 // How long one test may run with its break before the proof gives it up as not red.
 const PROOF_TIMEOUT_MS = 5 * 60 * 1000;
 /** `env` without a single `GIT_*` variable, so a test the gate runs in a hook writes to no repository of the caller, and
@@ -106,11 +108,13 @@ export function proveBreaks(root, register, { spawn, tmpdir, env = process.env }
     const baselines = new Map();
     return breaks.map(({ rule, of, test, break: planted }) => {
       const said = { rule, ...(of === undefined ? {} : { of }), test, path: planted?.path };
-      const target = typeof planted?.path === 'string' ? path.join(scratch, ...planted.path.split('/')) : null;
-      if (target === null || !fs.statSync(target, { throwIfNoEntry: false })?.isFile()) return { ...said, red: false, status: null, baseline: 'no break' };
+      // A check not in its shape is a finding of the register's, and nothing of it is run.
+      if (!isText(test) || !isText(planted?.path) || !isText(planted?.find) || typeof planted?.replace !== 'string') return { ...said, red: false, status: null, baseline: 'malformed' };
+      const target = path.join(scratch, ...planted.path.split('/'));
+      const text = fs.statSync(target, { throwIfNoEntry: false })?.isFile() ? fs.readFileSync(target, 'utf8') : null;
+      if (text === null || !text.replace(/\r\n/g, '\n').includes(planted.find)) return { ...said, red: false, status: null, baseline: 'no break' };
       if (!baselines.has(test)) baselines.set(test, runTest(test) === 0 ? 'green' : 'red');
       if (baselines.get(test) === 'red') return { ...said, red: false, status: null, baseline: 'red' };
-      const text = fs.readFileSync(target, 'utf8');
       fs.writeFileSync(target, text.replace(/\r\n/g, '\n').replace(planted.find, () => planted.replace));
       const status = runTest(test);
       fs.writeFileSync(target, text);
@@ -124,7 +128,8 @@ export function proveBreaks(root, register, { spawn, tmpdir, env = process.env }
 /** How a proof of `proveBreaks` ended, in the words of a report line. */
 export function proofSaid({ red, status, baseline }) {
   if (red) return 'went red';
-  if (baseline === 'no break') return 'has no file to plant the break in';
+  if (baseline === 'malformed') return 'is not a check of a test and a break { path, find, replace }, so nothing was run';
+  if (baseline === 'no break') return 'has no file holding the words its break changes';
   if (baseline === 'red') return 'was red before the break, or is not there, so it proves nothing';
   return status === null ? 'did not finish' : 'stayed green';
 }

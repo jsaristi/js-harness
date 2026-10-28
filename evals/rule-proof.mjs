@@ -68,6 +68,17 @@ function armScore(results, name, arm) {
 
 const CLEAN_COMMIT = /^[0-9a-f]{40,64}$/;
 
+/** The commit of the checkout at `root` a proof is written at, as `readWorkspaceCommit` reads it, with `+untracked`
+ * after it when a file git does not track is there outside `evals/results` and `evals/proofs`: `caseDigest` reads
+ * every file of a case folder, so an untracked one would be digested as if the runs had run on it. */
+export function proofCommit({ spawn, root }) {
+  const commit = readWorkspaceCommit({ spawn, root });
+  if (commit === null || !CLEAN_COMMIT.test(commit)) return commit;
+  const listed = spawn('git', ['-C', root, 'ls-files', '--others', '--exclude-standard', '--', '.', ':(exclude)evals/results', ':(exclude)evals/proofs'], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  if (listed.error || listed.status !== 0) return null;
+  return String(listed.stdout).trim() === '' ? commit : `${commit}+untracked`;
+}
+
 /** The record of the case `name` that names `rules`, from the results of its `current` run and its `without` run.
  * `digests` are read from the checkout at `commit`, so each run must have run on that same commit, clean (its
  * `stack.jsHarness`, `evals/suite.mjs`): a run of other texts would be stamped with digests it never ran on. */
@@ -124,7 +135,7 @@ function main(argv) {
   const task = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'evals', 'tasks', name, 'task.json'), 'utf8'));
   const rules = Array.isArray(task.rules) ? task.rules : [];
   const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-  const commit = readWorkspaceCommit({ spawn: spawnSync, root: PACKAGE });
+  const commit = proofCommit({ spawn: spawnSync, root: PACKAGE });
   const record = buildRecord({ name, rules, digests: digestsOf(PACKAGE, name, rules), date: new Date().toISOString().slice(0, 10), commit, current: read(currentFile), without: read(withoutFile) });
   const faults = recordFaults(record, { name, rules, digests: record.digests });
   fs.mkdirSync(path.join(PACKAGE, ...PROOFS.split('/')), { recursive: true });

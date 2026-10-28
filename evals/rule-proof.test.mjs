@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { MIN_TRIALS, armOf, buildRecord, caseDigest, recordFaults, ruleDigest } from './rule-proof.mjs';
+import { spawnSync } from 'node:child_process';
+import { MIN_TRIALS, armOf, buildRecord, caseDigest, proofCommit, recordFaults, ruleDigest } from './rule-proof.mjs';
 
 // F8 S5c-a (`odd/tasks/f8-s5c-a-coverage.md`, S4): a case that names rules is proven by a paid run on the current
 // arm and on the arm without its rules; the record says what each scored on which texts, and is current only while
@@ -77,6 +78,22 @@ test('a run short of trials, or a record not in its shape, is refused', () => {
   const short = results('run-current', [trial('current', 1)]);
   assert.throws(() => buildRecord({ name: 'a-case', rules: [RULE], digests: {}, date: '2026-10-29', commit: COMMIT, current: short, without: results('w', [trial(ARM, 0), trial(ARM, 0)]) }), new RegExp(`1 trial of a-case on current in run-current: a proof takes ${MIN_TRIALS}`));
   assert.deepEqual(recordFaults({ format: 1 }, { name: 'a-case', rules: [RULE], digests: {} }), ['the proof of a-case is not a record buildRecord writes']);
+});
+
+test('the commit a proof is written at is clean only with no file git does not track, outside the results and the proofs', (t) => {
+  const root = tmp(t);
+  const git = (...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: root, encoding: 'utf8' });
+  git('init', '-q');
+  put(root, 'evals/tasks/a-case/task.json', '{}');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'init');
+  const head = git('rev-parse', 'HEAD').stdout.trim();
+  assert.equal(proofCommit({ spawn: spawnSync, root }), head);
+  put(root, 'evals/results/run.json', '{}');
+  put(root, 'evals/proofs/rules/a-case.json', '{}');
+  assert.equal(proofCommit({ spawn: spawnSync, root }), head, 'a results file and a record are not what a case ran on');
+  put(root, 'evals/tasks/a-case/hidden.test.mjs', 'added after the runs');
+  assert.equal(proofCommit({ spawn: spawnSync, root }), `${head}+untracked`);
 });
 
 test('a record is written only from runs of the clean commit the checkout is at, so its digests are the texts they ran on', () => {

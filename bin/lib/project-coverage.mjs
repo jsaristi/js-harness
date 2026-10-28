@@ -68,7 +68,7 @@ export function projectCoverageForm(parsed, top, { run, stdout, stderr, version,
   }
   if (proofs !== null) {
     for (const proof of proofs) stdout(`${proof.red ? 'PROVEN ' : 'FAIL   '} ${proof.rule}: ${proof.test} with the break in ${proof.path} ${proofSaid(proof)}`);
-    stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break' : 'breaks'} of this project's rules turn their tests red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks left their test green`);
+    stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break' : 'breaks'} of this project's rules turn their tests red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks proved nothing`);
     if (open > 0) return 1;
   }
   if (record === null) stdout(`This project records no coverage baseline: \`js-harness init\` records it when it sets a project up, and until then no rule of ${PROJECT_RULES_PATH} needs a control.`);

@@ -68,7 +68,13 @@ test('rules coverage --prove --json prints one JSON document, the proofs in it',
     const document = JSON.parse(out[0]);
     assert.deepEqual(document.proofs, []);
     assert.ok(Array.isArray(document.findings), all);
-  });
+    // Plain, the proofs come first and the report after them, its findings with it.
+    edit(root, 'CLAUDE.md', (text) => `${text}\n${PLANTED}\n`);
+    const plain = await rules(['coverage', '--prove'], root);
+    assert.equal(plain.code, 0, plain.all);
+    assert.equal(plain.out[0], 'PASS  prove  0 planted breaks turn their tests red');
+    assert.ok(plain.out.includes('FAIL  coverage  1 finding'), plain.all);
+  }, CHECKED);
 });
 
 test('a directive planted with no control makes rules check exit 1 and names it; the plain report says it and exits 0', async () => {

@@ -448,7 +448,9 @@ function coverageLines(report) {
 
 /** `rules coverage` in the harness's checkout at `root`: the report, or its JSON with `--json`; `--strict` exits 1 on a
  * finding, a stale line or an owed share over the cap once it is held; `--refresh` writes the register brought up to
- * the texts, which only shrinks the debt. Plain, it exits 0 whatever it finds: `rules check` is the refusal. */
+ * the texts, which only shrinks the debt. Plain, it exits 0 whatever it finds: `rules check` is the refusal.
+ * `--prove` prints each planted break's proof and exits 1 when one proves nothing; then the report follows, so a
+ * finding (a check whose test is gone, say) is never hidden behind the proofs. With `--json` all of it is one document. */
 function coverageForm(parsed, root, { run, stdout, stderr }) {
   let read;
   try {

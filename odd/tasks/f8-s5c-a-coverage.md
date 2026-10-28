@@ -104,7 +104,9 @@ Reviews:
 - lenses risk, reliability, readability on `947ac91c..62f4a62` (`lens-reviews.jsonl`): 0, 2 and 1 findings, fixed
   by `f39c41a4` (L6); the lenses on `62f4a623..f39c41a4`: 0 findings.
 - Codex on `947ac91c..f39c41a4`, recorded (`codex-reviews.jsonl`, 8 parts, 1,690,061 input tokens): 7 findings P2,
-  each read true and fixed by the commit after `f39c41a4` (L7); that fix waits for its Codex and lens reviews.
+  each read true and fixed by `f9c10579` (L7).
+- Codex's recheck of `f39c41a4..f9c10579` (130,726 input tokens): 5 fixed, 2 not; the lenses on the same range: 0,
+  1 and 2 findings. All five fixed by the commit after `f9c10579` (L8), which waits for its Codex and lens reviews.
 
 ## Paid runs
 None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
@@ -127,8 +129,9 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 
 ## Next step
 T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
-seven by the commit after it (L7). Next: Codex and the lenses on that fix, from `f39c41a4`, the tree untouched
-while they run; then push, the pull request and `js-harness notify --to orchestrator --kind ready --pr <n>`.
+seven by `f9c10579` (L7), and what their recheck left by the commit after it (L8). Next: Codex and the lenses on
+that commit, from `f9c10579`, the tree untouched while they run; then push, the pull request and
+`js-harness notify --to orchestrator --kind ready --pr <n>`.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -217,3 +220,12 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   runs' `stack.jsHarness` must be the clean commit the checkout is at, and the record keeps it (`commit`);
   (7) a rule cut that rewrote a line made `droppedLines` read every later line as removed: a `rule-<id>` piece
   carries its evidence, the words it cut. `rules coverage --prove` after: 11 of 11 red.
+- L8 (2026-10-28, evidence, Codex's recheck of `f39c41a4..f9c10579` and the lenses on it): Codex held (1, 5) a
+  check with no `test`, or a break with no `replace`, still ran (a throw, or a `PROVEN` on `undefined`), and (6) an
+  untracked file in a case folder changed its digest while `readWorkspaceCommit`, which skips untracked files,
+  still called the commit clean. Fixed: `proveBreaks` runs nothing of a check not in its shape (`malformed`) or
+  whose break finds no words to change (`no break`); `proofCommit` (`evals/rule-proof.mjs`) adds `+untracked` for
+  any untracked file outside `evals/results` and `evals/proofs`. The lenses held that plain `--prove` now prints
+  the report with no test and no doc saying so, and that the project's summary still said "left their test green";
+  both said, tested and worded as the harness's. A range from `f9c10579` is not rechecked again: the next review
+  is a plain one.

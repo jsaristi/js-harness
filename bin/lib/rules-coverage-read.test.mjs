@@ -62,6 +62,29 @@ test('a test already red without its break proves nothing, and a test that is no
   });
 });
 
+test('a check not in its shape, or whose break finds nothing to change, is never run: it proves nothing', () => {
+  const ran = [];
+  const spawn = (command, args, options) => {
+    if (command !== 'git') ran.push(args.at(-1));
+    return noGit(command, args, options);
+  };
+  const controls = {
+    'no-test': { level: 'check', break: CHECKED.break },
+    'no-replace': { level: 'check', test: 'held.test.mjs', break: { path: 'value.mjs', find: 'export const A = 1;' } },
+    'not-found': { ...CHECKED, break: { ...CHECKED.break, find: 'export const B = 1;' } },
+  };
+  inFolder(FILES, (root) => {
+    const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-prove-tmp-'));
+    try {
+      const proofs = proveBreaks(root, { controls }, { spawn, tmpdir });
+      assert.deepEqual(proofs.map(({ rule, red, baseline }) => [rule, red, baseline]), [['no-replace', false, 'malformed'], ['no-test', false, 'malformed'], ['not-found', false, 'no break']]);
+      assert.deepEqual(ran, [], 'no test ran');
+    } finally {
+      fs.rmSync(tmpdir, { recursive: true, force: true });
+    }
+  });
+});
+
 test('the cases are the folders of evals/tasks that hold a task.json, with the rules each names', () => {
   inFolder({ 'evals/tasks/b-case/task.json': '{"rules":["questions-one-place"]}', 'evals/tasks/a-case/task.json': '{}', 'evals/tasks/no-task/README.md': 'x' }, (root) => {
     assert.deepEqual(readCases(root), [{ name: 'a-case', rules: undefined }, { name: 'b-case', rules: ['questions-one-place'] }]);

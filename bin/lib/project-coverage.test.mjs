@@ -85,7 +85,7 @@ test('rules coverage --prove --json prints one JSON document, each planted break
   const { code, out, all } = form({ command: 'coverage', prove: true, json: true }, root);
   assert.equal(code, 1, all);
   const document = JSON.parse(out[0]);
-  assert.deepEqual(document.proofs.map((proof) => [proof.rule, proof.red, proof.baseline]), [['no-break', false, 'no break']]);
+  assert.deepEqual(document.proofs.map((proof) => [proof.rule, proof.red, proof.baseline]), [['no-break', false, 'malformed']]);
   assert.ok(document.findings.some((finding) => finding.startsWith('rule "no-break"')), all);
 });
 
