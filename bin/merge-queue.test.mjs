@@ -1885,15 +1885,20 @@ test('a land keeps a landed worktree of the Orca app, under orca/workspaces', as
 
 // T4 (S5b): `--land --refresh-copy` refreshes the installed copy after a land that moved main, through `refreshCopy`
 // (bin/lib/refresh-copy.mjs), which is passed here as a stand-in so no package manager runs.
-async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'] } = {}) {
+async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'], agents = () => [] } = {}) {
   const { run } = landRunner(prs, [[workflowRun('completed', 'success')]]);
   const out = [];
   const asked = [];
+  let at = Date.now();
   const code = await mergeQueueMain([...args, '--cwd', root], {
     run,
     covered: () => ({ pass: true }),
     suite: () => ({ ok: true }),
-    sleep: async () => {},
+    now: () => at,
+    sleep: async (ms) => {
+      at += ms ?? 0;
+    },
+    listAgents: agents,
     stdout: (line) => out.push(line),
     stderr: (line) => out.push(line),
     refreshCopy: async (opts) => {
@@ -1939,6 +1944,25 @@ test('--land --refresh-copy whose refresh throws still records the land with its
   assert.ok(out.some((line) => /refresh failed: .*boom/.test(line)), out.join('\n'));
   const record = fs.readFileSync(path.join(root, '.git', 'js-harness', 'lands.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line)).at(-1);
   assert.equal(record.exit, 0);
+});
+
+// A refresh under a session in the middle of a run breaks its hooks (2026-10-28): the refresh waits for the project's
+// sessions to be between runs, and refreshes nothing when one is still at work after the wait.
+test('--land --refresh-copy waits for the project\'s sessions to be between runs, and refreshes nothing while one still runs', async () => {
+  const { root, heads } = makeQueueRepo();
+  const running = (status, folder = root) => [{ kind: 'background', cwd: path.join(folder, '.claude', 'worktrees', 'a'), sessionId: 'aaaa1111', name: 'JH 7 · a', status }];
+  const listings = [running('busy'), running('busy'), running('idle')];
+  const waited = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { agents: () => listings.shift() ?? running('idle') });
+  assert.equal(waited.code, 0, waited.out.join('\n'));
+  assert.equal(waited.asked.length, 1);
+  assert.ok(waited.out.some((line) => /waiting for JH 7 · a \(busy\) to be between runs/.test(line)), waited.out.join('\n'));
+
+  const again = makeQueueRepo();
+  const busy = await landRefreshing(again.root, [pr(1, 'feat/a', again.heads['feat/a'])], { agents: () => running('busy', again.root) });
+  assert.equal(busy.code, 75, busy.out.join('\n'));
+  assert.equal(busy.asked.length, 0, 'nothing was refreshed');
+  assert.ok(busy.out.some((line) => line.startsWith('Landed: main ')), 'the land stands');
+  assert.ok(busy.out.some((line) => /still in the middle of a run: JH 7 · a \(busy\): nothing was refreshed/.test(line)), busy.out.join('\n'));
 });
 
 test('--land --refresh-copy with nothing ready asks the refresh that nothing landed, so it refreshes nothing', async () => {

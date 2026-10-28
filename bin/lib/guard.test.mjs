@@ -659,6 +659,29 @@ test('a script that writes a record, or calls a function that appends one, is re
     `node -e "fs['appendFileSync']('${RECORD}', '{}')"`,
     // The same in a script read whole, here for its division (gentle-ai R3 on 9e167848).
     `node -e "const n = 4 / 2; fs['appendFileSync']('${RECORD}', '{}')"`,
+    // A RegExp's exec beside a real write, and an exec that may be a child process's (2026-10-28): still refused.
+    `node -e "const m = RegExp('rename').exec(t); fs.appendFileSync('${RECORD}', '{}')"`,
+    'node -e "const m = RegExp(\'x\').exec(t); require(\'child_process\').execSync(\'node -e m.startLensRun(root)\')"',
+    `node -e "const re = RegExp('rename'); console.log(re.exec(fs.readFileSync('${RECORD}', 'utf8')))"`,
+    // A RegExp the script names as anything but a call may be another function by that name.
+    `node -e "const RegExp = eval; RegExp('fs.appendFileSync(\\'${RECORD}\\', 1)').exec(t)"`,
+    `node -e "function RegExp(s) { return { exec: () => s } } RegExp('fs.appendFileSync(\\'${RECORD}\\', 1)').exec(t)"`,
+    // A RegExp's exec made eval through its prototype, a RegExp replaced under a computed name, an exec named in
+    // brackets, or an eval reached without a call beside it (the independent verifier on 3982ae68).
+    ...[
+      "Object.getPrototypeOf(RegExp('')).exec = eval;",
+      "RegExp('').__proto__.exec = eval;",
+      "const p = Object.getPrototypeOf(RegExp('')); p.exec = eval;",
+      "Reflect.set(Object.getPrototypeOf(RegExp('')), 'exec', eval);",
+      "globalThis['Reg'+'Exp'] = () => ({exec: eval});",
+      "Object.defineProperty(globalThis, 'Reg'+'Exp', {value: () => ({exec: eval})});",
+      "with({['Reg'+'Exp']: () => ({exec: eval})})",
+      "Object.assign(globalThis, {['Reg' + 'Exp']: () => ({exec: eval})});",
+      "const R = globalThis[atob('UmVnRXhw')]; R.prototype.exec = eval;",
+    ].map((redirect) => `node -e "${redirect} RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`),
+    `node -e "RegExp(a)['exec']('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e "RegExp(a).exec(t); (0, eval)('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e "RegExp('a').exec('t'); const o = {run: eval}; o.run('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -727,5 +750,8 @@ test('reading a record, the commands that write one, and text that only names on
     // Space before the function (the reliability lens on d153e61e).
     'node -e "setTimeout( () => console.log(\'appendLensReview(\'), 0)"',
     'node -e "setTimeout(\n  function () { console.log(\'appendLensReview(\') }, 0)"',
+    // A RegExp's exec runs no string: a write call's name in its pattern is text (gentle-ai on PR 630, 2026-10-28).
+    `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(RegExp('rename').exec(t))"`,
+    `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(new RegExp('writeFileSync', 'g').exec(t))"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

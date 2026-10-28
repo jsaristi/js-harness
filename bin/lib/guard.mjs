@@ -705,12 +705,25 @@ function callArguments(text, from) {
 // A call that runs a string as code, here or in a child process: what that string holds is code too. A timer may run
 // what it is given unless that is a function written in place.
 const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*(?![\s(]|function\b|async\b|[\w$]+\s*=>)|\b(?:subprocess|child_process)\b/;
+// The one exec that runs no string: a RegExp's, called on the RegExp it is written on (`RegExp('…').exec(t)`), whose
+// arguments hold no call (gentle-ai on PR 630). Called on a name, it may be a child process's, and stays in RUNS_TEXT;
+// so does every exec of a script that names RegExp as anything but a call, which may make it another function, or that
+// could make a RegExp's exec something else: eval named without a call, a prototype, a global or a member named in
+// brackets by a string (the independent verifier on 3982ae68). An exec named in brackets reads `.exec` with spaces
+// after it, and stays.
+const REGEXP_EXEC = /\b(?:new\s+)?RegExp\s*\([^()]*\)\s*\.exec\(/g;
+const REGEXP_NOT_CALLED = /\bRegExp\b(?!\s*\()|\b(?:function|class)\s+RegExp\b/;
+const REGEXP_REDIRECTED = /\b(?:eval|Function|constructor|prototype|__proto__|\w*[Pp]rototypeOf|define\w*|Reflect|Object|globalThis|global|window|self|this|with|atob|Buffer)\b|\[\s*['"`]/;
+
+/** Whether the code `code`, its strings blanked, runs a string (`RUNS_TEXT`), a RegExp's own exec left out. */
+const runsText = (code) =>
+  RUNS_TEXT.test(REGEXP_NOT_CALLED.test(code) || REGEXP_REDIRECTED.test(code) ? code : code.replace(REGEXP_EXEC, ''));
 
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
  * at the same indexes; a template literal's `${…}` stays code, a member named in brackets (`fs['writeFileSync']`) is
  * read as `.writeFileSync`, and a `//` or `/* … *\/` comment opens no string. On the safe side, the script comes back
  * whole, its bracketed members still read so, when its code holds any other `/` (a regex literal's quotes would mislead it), a quote is left open, or the script
- * runs a string (`RUNS_TEXT`). */
+ * runs a string (`runsText`). */
 function codeOf(script) {
   // Read whole on the safe side, a script keeps its bracketed members read as `.name` (`text`, at the same indexes).
   const text = script.replace(/\[\s*(['"`])([A-Za-z_$][\w$]*)\1\s*\]/g, (whole, _, name) => `.${name}`.padEnd(whole.length));
@@ -747,7 +760,7 @@ function codeOf(script) {
     else if (c === '}' && top !== undefined) open.pop();
     out += c;
   }
-  return open.length > 0 || RUNS_TEXT.test(out) ? text : out;
+  return open.length > 0 || runsText(out) ? text : out;
 }
 
 /** What the call argument `arg` holds when it is one string literal and nothing else, or null. */
