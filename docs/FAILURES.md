@@ -416,6 +416,9 @@ not the committed range, wrote no record and had to be run again.
 - Class: delivery
 - Seen: 2026-10-27 — this entry's own commit (JH 66, lens reader) — `docs/FAILURES.md` edited during
   the Codex review of `d6867d8..484df03`; 68,470 input tokens spent on a run that recorded nothing
+- Seen: 2026-10-28 — `odd/tasks/f8-s1-reviews.md` L16 (JH 69, T7) — a tracked file edited during the
+  Codex review of `9e167848..d153e61e` (run b2dfaa03 in `codex-review-runs.jsonl`); 79,701 input tokens spent
+  on a run that recorded nothing, and the review ran again
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
