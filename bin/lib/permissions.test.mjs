@@ -308,7 +308,30 @@ test('on Windows a record that names the user settings in another case is that f
   }
 });
 
-test('a record that names another file than the user settings is kept with its reason, never dropped', () => {
+// gentle-ai's lens on 8c684535: a record kept forever would make every later uninstall fail, and nothing the user can
+// do changes the path it names. So a file that cannot be read now is a failure that stays recorded for a run again,
+// and a record that names another file is left out of the manifest, its entries said to be removed by hand.
+test('a settings file that cannot be read on uninstall is a failure that stays recorded, and a run after it is fixed takes the entries out', () => {
+  const m = machine();
+  try {
+    m.write({ theme: 'dark' });
+    install(m.home, '1.0.0');
+    const good = m.read();
+    m.write('{ not json');
+    const first = m.remove();
+    assert.equal(first.permissions.status, 'failed');
+    assert.ok(readManifest(m.home).permissions, 'still recorded');
+    m.write(good);
+    assert.equal(m.remove().permissions.status, 'released');
+    // The hook entries are the hook engine's to report (its own kept record); the permissions are out.
+    assert.equal(m.data().permissions, undefined);
+    assert.equal(m.data().theme, 'dark');
+  } finally {
+    m.done();
+  }
+});
+
+test('a record that names another file than the user settings is left as it is, said, and not kept to fail every uninstall', () => {
   const m = machine();
   try {
     m.write({ theme: 'dark' });
@@ -320,7 +343,7 @@ test('a record that names another file than the user settings is kept with its r
     const removed = m.remove();
     assert.equal(removed.permissions.status, 'kept');
     assert.match(removed.permissions.reason, /names another file than the user settings/);
-    assert.ok(readManifest(m.home).permissions, 'still recorded');
+    assert.equal(readManifest(m.home)?.permissions, undefined);
     assert.deepEqual(m.data().permissions.deny, PERMISSIONS_DENY);
   } finally {
     m.done();

@@ -205,3 +205,9 @@ its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a bra
   with no path, can read a `.env` in it, since only a folder that holds a place of several segments is refused; a
   root search is what most Greps are, so refusing it would stop the work, and the settings' `Read(.env)` deny is the
   layer there.
+- L15 (2026-10-28, gentle-ai on `edcd2bfd..8c684535`, granted run): approved, one WARNING: a `kept` record that names
+  another file stays recorded forever and fails every uninstall, since nothing the user does changes its path. Fixed
+  test first in the commit after it: an unreadable settings file is `failed` (recorded, a run again once fixed), and
+  a record naming another file is `kept`, dropped and said, its entries to remove by hand. Codex on
+  `edcd2bf..8c68453`: correct (0.89); lenses (reliability, readability): 0 findings. Next step: commit this fix,
+  review it (Codex, lenses, gentle-ai), push, write gentle-ai lines for PR 2 in Reviews, `ready --pr 617`; then T6.
