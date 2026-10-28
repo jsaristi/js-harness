@@ -71,7 +71,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
-- [ ] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`
+- [x] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`; PR 619, merged
 - [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
 
 Reviews:
