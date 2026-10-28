@@ -545,6 +545,9 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     'mv /tmp/lens-reviews.jsonl .git/js-harness/',
     'cp --target-directory=.git/js-harness /tmp/codex-reviews.jsonl',
     'cp -t .git/js-harness /tmp/codex-reviews.jsonl',
+    // `-t` among other short options (gentle-ai R3 on b2bc9596).
+    'cp -vt .git/js-harness /tmp/codex-reviews.jsonl',
+    'mv -ft .git/js-harness /tmp/lens-reviews.jsonl',
     'rm -rf .git/js-harness',
     'rm -rf D:/r/.git/js-harness/',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
@@ -574,6 +577,8 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "new Function(\'m\', \'m.appendLensReview(root, {})\')(m)"',
     'node -e "/\'/.test(x); m.appendLensReview(root, {})"',
     'node -e "// it\'s the record\nm.appendLensReview(root, {}) // don\'t"',
+    // Two regex literals whose quotes balance blank no code between them (Codex P2 on b2bc9596).
+    'node -e "const a = /\'/; fs.appendFileSync(\'.git/js-harness/lens-reviews.jsonl\', \'{}\'); const b = /\'/"',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -606,5 +611,12 @@ test('reading a record, the commands that write one, and text that only names on
     'node -e "fs.appendFileSync(\'ledger.jsonl\', \'appendJsonLine(x, lens-reviews.jsonl)\')"',
     'node -e "console.log(fs.readFileSync(\'bin/lib/lens-reviews.mjs\', \'utf8\').includes(\'appendLensReview\'))"',
     `cp ${RECORD} /tmp/copy.jsonl > /tmp/cp.log`,
+    // A path written whole in one string is a record only in the records' folder (Codex P2 on b2bc9596).
+    'node -e "fs.writeFileSync(\'/tmp/lens-reviews.jsonl\', \'{}\')"',
+    'python -c "open(\'/tmp/codex-reviews.jsonl\', \'w\').write(\'{}\')"',
+    'python -c "open(\'lens-reviews.jsonl\', \'w\').write(\'{}\')"',
+    // A read whose other arguments hold a w, a, x or + is no write (gentle-ai R3 on b2bc9596).
+    `python -c "print(open('${RECORD}', 'r', encoding='ascii').read())"`,
+    `python -c "print(open('${RECORD}', encoding='latin-1').read())"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

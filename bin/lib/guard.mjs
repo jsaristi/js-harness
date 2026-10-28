@@ -583,10 +583,10 @@ function segmentRecordWrite(words, redirected) {
 }
 
 /** The record a `mv`, `cp`, `install` or `ln` given `args` writes: its target when that is a record, or a record's name
- * among its sources when the target is the records' folder; else null. The target is the folder `-t` (or
- * `--target-directory`) names, else the last path. */
+ * among its sources when the target is the records' folder; else null. The target is the folder `-t` (alone or last
+ * among short options, or `--target-directory`) names, else the last path. */
 function writtenInto(args) {
-  const flag = args.findIndex((arg) => arg === '-t' || arg === '--target-directory');
+  const flag = args.findIndex((arg) => /^-[A-Za-z]*t$/.test(arg) || arg === '--target-directory');
   const long = args.find((arg) => arg.startsWith('--target-directory='));
   const folder = flag !== -1 ? args[flag + 1] : long?.slice('--target-directory='.length);
   const paths = args.filter((arg, i) => !arg.startsWith('-') && !(flag !== -1 && i === flag + 1));
@@ -634,8 +634,8 @@ const RUNS_TEXT = /\b(?:eval|Function|exec|compile|runIn\w*Context|runInThisCont
 
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
  * at the same indexes; a template literal's `${…}` stays code, and a `//` or `/* … *\/` comment opens no string. On the
- * safe side, `text` comes back whole when a quote is left open (one in a regex literal, say) or the script runs a
- * string (`RUNS_TEXT`). */
+ * safe side, `text` comes back whole when its code holds any other `/` (a regex literal's quotes would mislead it), a
+ * quote is left open, or the script runs a string (`RUNS_TEXT`). */
 function codeOf(text) {
   let out = '';
   const open = [];
@@ -650,6 +650,8 @@ function codeOf(text) {
       i = to - 1;
       continue;
     }
+    // A regex literal may hold a quote, and telling one from a division needs a parser: read the script whole.
+    if (top !== "'" && top !== '"' && top !== '`' && c === '/') return text;
     if (top === "'" || top === '"' || top === '`') {
       if (c === top) open.pop();
       else if (top === '`' && c === '$' && text[i + 1] === '{') {
@@ -671,20 +673,35 @@ function codeOf(text) {
   return open.length > 0 || RUNS_TEXT.test(out) ? text : out;
 }
 
+/** What the call argument `arg` holds when it is one string literal and nothing else, or null. */
+function literalOf(arg) {
+  const match = /^\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*$/s.exec(arg);
+  return match === null || (match[1] === '`' && match[2].includes('${')) ? null : match[2];
+}
+
 /** The record the script `text` writes by a call given it, or null. What each call writes: `rename` both of its paths,
  * `copyFile` and `appendJsonLine` (this package's, given a folder and a record's name) their second, `open` its first
- * when a mode that writes follows, the others their first. A call is looked for in the code, not inside a string. A path
- * given as no string at all, a variable, is taken for the record the script names anywhere, when it names one: reading
- * a record and writing to a variable is refused with it, the safe side. */
+ * when its mode (the second argument, or `mode=`) writes, the others their first. A call is looked for in the code, not
+ * inside a string. A path written whole in one string is a record only in the records' folder (`reviewRecordOf`); one
+ * assembled from parts, a join, is taken for a record when a part names one. A path given as no string at all, a
+ * variable, is taken for the record the script names anywhere, when it names one: reading a record and writing to a
+ * variable is refused with it, the safe side. */
 function scriptRecordWrite(text) {
   const anywhere = RECORD_IN_TEXT.exec(text);
   for (const match of codeOf(text).matchAll(WRITE_CALL)) {
     const call = match[1].toLowerCase();
     const args = callArguments(text, match.index + match[0].length);
-    if (call === 'open' && !args.slice(1).some((arg) => /['"][^'"]*[wax+][^'"]*['"]/.test(arg))) continue;
+    if (call === 'open') {
+      const mode = args.slice(1).find((arg) => /^\s*mode\s*=/.test(arg)) ?? (args[1] !== undefined && !/^\s*\w+\s*=/.test(args[1]) ? args[1] : undefined);
+      if (mode === undefined || !/['"][^'"]*[wax+][^'"]*['"]/.test(mode)) continue;
+    }
     const written = call === 'rename' ? args : call === 'copyfile' || call === 'appendjsonline' ? args.slice(1, 2) : args.slice(0, 1);
-    const named = written.map((arg) => RECORD_IN_TEXT.exec(arg)).find((found) => found !== null);
-    if (named !== undefined) return named[1].toLowerCase();
+    const recordIn = (arg) => {
+      const literal = call === 'appendjsonline' ? null : literalOf(arg);
+      return literal !== null ? reviewRecordOf(literal) : RECORD_IN_TEXT.exec(arg)?.[1].toLowerCase() ?? null;
+    };
+    const named = written.map(recordIn).find((name) => name !== null);
+    if (named !== undefined) return named;
     if (anywhere !== null && written.some((arg) => arg.trim() !== '' && !/['"`]/.test(arg))) return anywhere[1].toLowerCase();
   }
   const named = CMDLET_WRITE.test(text) ? RECORD_IN_TEXT.exec(text) : null;
