@@ -75,11 +75,11 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   engram-plugin row's `mismatch` with its two fixtures (L10) — S6; inline; PR 2
 - [ ] T5 (kind: build) the review sweep: the merge door's gentle-ai evidence, the pull-request body line, the
   review-starts row and the shipped text that sends a session to gentle-ai — S5; inline; PR 3
-- [ ] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
+- [x] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
   list — S5; inline; PR 4
-- [ ] T7 (kind: build) the comment sweep and `bin/lib/gentle-ai-absence.test.mjs`, the named list — S5; inline;
+- [x] T7 (kind: build) the comment sweep and `bin/lib/gentle-ai-absence.test.mjs`, the named list — S5; inline;
   PR 4
-- [ ] T8 (kind: verify) the probe in a scratch home, and `doctor` read on his machine — S7; inline
+- [x] T8 (kind: verify) the probe in a scratch home, and `doctor` read on his machine — S7; inline
 
 Reviews:
 - Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
@@ -107,18 +107,38 @@ Reviews:
   came back incomplete, readability's answer cut mid-JSON, and the one rerun was complete); gentle-ai on
   `6c047591..f718c3f6`: approved (lineage review-050cc676b966128a), one suggestion left: R3-001 (the no-store test
   wraps three fs calls, not every one) is covered by the same test's output assertion, which is what a person sees.
+- PR 4 (#632), eef7e095 and 61829b9f (the live mentions and the sweep): Codex caaccd3..61829b9, 2 parts, passed
+  (163,588 input tokens), one P2 taken: the review cell built its index without DO_NOT_TRACK (fixed in 8d7bc9fa;
+  Codex 61829b9..8d7bc9f, confidence 0.99, says fixed); lenses reliability, readability over caaccd3..8d7bc9f: 0
+  findings (about 38,750 input tokens each); gentle-ai on `fc2a9a0f..8d7bc9fa` (the range its Stop hook offered,
+  with f718c3f6 again): approved (lineage review-c62331774b325e18), two findings taken in 71e89a2b: R3-001 (the
+  absence test walked the worktree, so an untracked file decided it; it reads `git ls-files` now, proved with an
+  untracked scratch file naming it) and R3-002 (an old day's `reviews` key is proved silent). 71e89a2b: Codex
+  8d7bc9f..71e89a2 passed (63,924 input tokens); lens reliability, 0 findings.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
-Not run yet.
+T8, 2026-10-28, from the branch at 71e89a2b, nothing installed and nothing written to his machine:
+- `stack` on a scratch home (`mktemp -d`, outside the repo) with only a copied `node` on PATH: 6 installs and 4 own
+  steps; engram, engram-plugin, codegraph (installed, claude, codex) and context7 (claude, codex) each with its own
+  command and undo; no gentle-ai row; the home held only the `bin/` the probe made. A first run with node's own
+  folder on PATH found codegraph there (`/c/nvm4w/nodejs`), so it showed no codegraph install: the reason for the copy.
+- `grep -rl gentle-ai bin evals`: `bin/lib/gentle-ai-absence.test.mjs` runs it over the tracked files and passes;
+  every file it finds is on its named list, with why.
+- `doctor --offline` on his machine, gentle-ai 4.3.1 still installed: the branch exits 0, as the installed copy does;
+  against it, the gentle-ai and gentle-ai-sync rows are gone, context7's project cell reads `ok` (it read `n/a`),
+  and codegraph's project fix is `codegraph init --yes <root>`; its other gaps are the same in both. Codex's fix
+  says `npm i -g` from the branch and `pnpm add -g` from the installed copy: the package manager is the one the
+  running copy was installed with (`resolveStackPm`, bin/lib/package-manager.mjs:117), not a change of S11.
+- `check` green at each commit (the pre-commit hook); the full tests run on GitHub at each push.
 
 ## Next step
-#627 and #628 landed (main 170e09dd). PR 3 is draft #629 on f8-s11-reviews (base main, worktree
-D:/js-harness/.claude/worktrees/f8-s11): fc2a9a0f (the merge door asks for no gentle-ai line) and f718c3f6 (the review
-starts and their throughput row leave), each reviewed by Codex, the lenses and gentle-ai (Reviews). T5 is done but
-for question 104. Next: T6/T7 on a branch f8-s11-sweep from f8-s11-reviews, by L12's plan, then T8. Open, his:
-question 104 (L11); the agentsBlock line and its two tests (bin/lib/project.test.mjs:1954,
-bin/lib/template-block.test.mjs:30) stay until he answers, and PR 3 is not announced ready before.
+#627 and #628 landed (main 170e09dd). Open as drafts: #629 (PR 3, f8-s11-reviews, base main) and #632 (PR 4,
+f8-s11-sweep, base f8-s11-reviews), each reviewed by Codex, the lenses and gentle-ai (Reviews); T1-T8 done but T5
+for question 104. Waiting on him, through the lead: question 104 (L11), then the agentsBlock line and its two tests
+(bin/lib/project.test.mjs:1954, bin/lib/template-block.test.mjs:30) change by his answer, the absence list drops
+them, and both PRs are announced ready; and whether to apply S11 to his machine (`stack install` on his real home),
+which is his to decide.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
