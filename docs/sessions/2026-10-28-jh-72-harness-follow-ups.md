@@ -24,6 +24,14 @@ is small, one work unit a commit.
   of the conversation, the effort rule and the record first, finds a job printed without id, keeps the conversation id;
   `worktreeOf` skips a same-named main checkout. The three new tests fail on the code before it (checked).
 
+## Reviews
+- Codex `79e3430..318f952`: incorrect, 2 P1 and 6 P2, all answered in `2e51fff7` and `c7cd82c6`.
+- Codex `a1cd4c5..eb669c9` (recheck, one part): correct, confidence 0.93, 8 of 8 fixed; 132,203 input tokens.
+- Claude lenses risk, resilience, reliability, readability over `79e3430..eb669c9`: 0 findings each, about 187,000
+  input tokens in all (the plan said about 106,000).
+- gentle-ai: the Stop hook offered the whole branch; only its read-only status ran, as CLAUDE.md says. No slice review.
+- Merges clean with origin/main `b4fdda99` (`git merge-tree`).
+
 ## Next step
 0. (done, kept for the record) What the verifier and Codex found, 2026-10-28 ~16:50Z:
    - Verifier, REGRESSION in `3982ae68`: the RegExp skip lets a write pass when exec is redirected to eval through the
