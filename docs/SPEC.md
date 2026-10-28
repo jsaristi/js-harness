@@ -195,7 +195,7 @@ to them (diet section 10, "The rule pass").
 | Session summaries | `docs/sessions/<date>-<slug>.md` | `summary`, then the session | the lead, the 1.0.0 review |
 | The machine manifest | `~/.js-harness/manifest.json` | `install`, `stack install`, opt-ins | `uninstall`, `status`, `doctor` |
 | A clone's manifest | `js-harness/manifest.json` at `git rev-parse --git-path` (`bin/lib/project.mjs:1063`) | `init` | `uninstall` in the project, `sync` |
-| Review records | `<git common dir>/js-harness/codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl` | `codex-review`, `lens-review` | `check --push`, the merge door, `doctor`, `throughput` |
+| Review records | `<git common dir>/js-harness/codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl`, `lens-review-runs.jsonl`, and an incomplete lens's whole output in `lens-answers/`, which no check reads | `codex-review`, `lens-review` | `check --push`, the merge door, `doctor`, `throughput` |
 | Lands | `<git common dir>/js-harness/lands.jsonl` | `merge-queue --land` | `throughput` |
 | Codex review homes | `~/.js-harness/codex-review-homes` (`bin/lib/codex-review-home.mjs:65`) | `codex-review` | `codex-review` (`--keep-home`) |
 | The channel | `~/.js-harness/channel/<project>.jsonl`; the lead's relief file in `~/.js-harness/relief/` | `notify` | `wait`, `sessions`, `report`, `sessions live`, `resume` |

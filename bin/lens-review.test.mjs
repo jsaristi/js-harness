@@ -97,6 +97,44 @@ test('an incomplete answer is kept on one line and cut at its first characters, 
   assert.ok(err.split('\n').some((line) => line === `risk: incomplete, the answer is not one JSON object: it holds none; it answered: ${JSON.stringify(kept)}`), err);
 });
 
+// JH 75: three of JH 73's lenses answered an object that never closed, over a diff holding JSON in strings, and the
+// 300 characters kept were the start of a well-formed result. The record now names a file holding what the CLI printed,
+// whole, with why it stopped, so the next one is read rather than guessed.
+test('an incomplete lens keeps what its CLI printed whole, in a file its record names, with why the answer stopped', () => {
+  const quoting = (subject) => `{"subject_hash":"${subject.subject_hash}","inspection":{"status":"completed","paths":["a.mjs"]},"findings":[],"evidence":["put(root, 'b-case.json', '{\\"written\\":\\"again\\"}') rewrites a \\"kept\\" proof, and "a.mjs is read"]}`;
+  const printed = [];
+  const runLens = ({ lens, block }) => {
+    const subject = JSON.parse(block.split('\n')[0].replace(/^\S+ /, ''));
+    const result = lens === 'risk' ? quoting(subject) : clean(lens, subject);
+    const stdout = JSON.stringify({ type: 'result', is_error: false, stop_reason: 'end_turn', result, usage: { output_tokens: 700 } });
+    printed.push(stdout);
+    return { status: 0, durationMs: 900, stdout };
+  };
+  const { code, err } = run(['--base', 'HEAD~1', '--lenses', 'risk,reliability', '--reason', 'r'], { runLens });
+  assert.equal(code, 1);
+  const [rec] = readLensReviews(dir).slice(-1);
+  const [risk, reliability] = rec.results;
+  assert.equal(risk.outcome, 'incomplete');
+  assert.match(risk.why, /not closed \(it opens at character 0\): it breaks at character \d+, near "/);
+  assert.equal(risk.stopReason, 'end_turn');
+  assert.equal(path.basename(risk.answerFile), `${rec.run}-risk.stdout`);
+  assert.equal(fs.readFileSync(risk.answerFile, 'utf8'), printed[0]);
+  assert.match(err, /^risk: incomplete, the answer is not one JSON object/m);
+  assert.ok(err.split('\n').includes(`  what its CLI printed is kept whole in ${risk.answerFile}`), err);
+  // A complete lens keeps nothing beside its record.
+  assert.equal(reliability.outcome, 'complete');
+  assert.equal(reliability.answerFile, undefined);
+});
+
+test('a lens whose CLI printed no JSON keeps that output too; one that printed nothing keeps no file', () => {
+  const outputs = { risk: 'Error: overloaded\n', readability: '' };
+  const runLens = ({ lens }) => ({ status: 1, durationMs: 10, stdout: outputs[lens], stderr: 'failed' });
+  assert.equal(run(['--base', 'HEAD~1', '--lenses', 'risk,readability', '--reason', 'r'], { runLens }).code, 1);
+  const [risk, readability] = readLensReviews(dir).at(-1).results;
+  assert.equal(fs.readFileSync(risk.answerFile, 'utf8'), 'Error: overloaded\n');
+  assert.equal(readability.answerFile, undefined);
+});
+
 test('a skip is recorded with its reason and runs no lens; a range with no code records nothing to review', () => {
   const claude = fakeClaude(clean);
   assert.equal(run(['--base', 'HEAD~1', '--unavailable', 'the plan is out of turns'], { runLens: claude.runLens }).code, 0);

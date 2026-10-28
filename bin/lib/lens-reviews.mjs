@@ -2,9 +2,11 @@
 // T3; diet section 10, "S1, the Claude lens runner", item 6).
 //
 // It lives beside Codex's record, in `<git common dir>/js-harness/`, so every worktree of a clone shares it and
-// deleting the one file undoes everything this module writes. A run holds each picked lens's outcome, findings,
-// tokens, cost and duration. Only a run whose every lens was complete is `reviewed`; one with an incomplete lens is
-// recorded as `incomplete` and covers nothing, so the attempt is kept and the review is not.
+// deleting its two files and its `lens-answers/` folder undoes everything this module writes. A run holds each picked
+// lens's outcome, findings, tokens, cost and duration. Only a run whose every lens was complete is `reviewed`; one
+// with an incomplete lens is recorded as `incomplete` and covers nothing, so the attempt is kept and the review is
+// not. What an incomplete lens's CLI printed is kept whole in `lens-answers/`, a file the result names, so why it
+// failed is read there; no check reads that folder (JH 75).
 //
 // Provenance (docs/proposals/gentle-ai-reverse-engineering.md, section 13.3, row 3). The command writes a run line to
 // a file of its own, `lens-review-runs.jsonl` beside it, before any lens runs, and the record it writes after names
@@ -19,7 +21,9 @@
 // refuses a file tool or a shell write to either file (`reviewRecordOf` in ./guard.mjs), stands in its way.
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendJsonLine, NOTHING_TO_REVIEW, readJsonLines } from './codex-reviews.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { appendJsonLine, jsonLinesPath, NOTHING_TO_REVIEW, readJsonLines } from './codex-reviews.mjs';
 import { gitDirs } from './project.mjs';
 
 export const LENS_REVIEW_SCHEMA = 'js-harness.lens-review/v1';
@@ -27,6 +31,17 @@ export const LENS_REVIEWS_FILE = 'lens-reviews.jsonl';
 export const LENS_REVIEW_RUN_SCHEMA = 'js-harness.lens-review-run/v1';
 export const LENS_REVIEW_RUNS_FILE = 'lens-review-runs.jsonl';
 export const INCOMPLETE = 'incomplete';
+export const LENS_ANSWERS_FOLDER = 'lens-answers';
+
+/** Keeps `text`, what the lens `lens` of the run `run` printed, whole in `lens-answers/<run>-<lens>.stdout` beside the
+ * records and returns the file's path; throws outside a git repository. */
+export function keepLensAnswer(root, { run, lens, text }, deps = {}) {
+  const file = jsonLinesPath(root, path.join(LENS_ANSWERS_FOLDER, `${run}-${lens}.stdout`), deps);
+  if (!file) throw new Error(`not a git repository: ${root}`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text, 'utf8');
+  return file;
+}
 
 /** Appends `record` as one line and returns the file's path; throws outside a git repository. */
 export function appendLensReview(root, record, deps = {}) {

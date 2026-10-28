@@ -56,6 +56,34 @@ test('an answer that is not one complete object is still refused, and says what 
   }
 });
 
+// JH 75: three answers of JH 73's were "not closed (it opens at character 0)" over a diff that holds JSON in strings
+// (`put(root, 'b-case.json', '{"written":"again"}')`). Escaped, such a quote is read; left unescaped, the refusal says
+// where the JSON breaks, or that the answer ends first, so the reason alone tells a stray quote from a cut answer.
+test('an answer quoting JSON from a diff is read when escaped, and refused with where it breaks when not', () => {
+  const quoting = { ...finding, claim: "put(root, 'evals/proofs/rules/b-case.json', '{\"written\":\"again\"}') rewrites a kept proof", proof_refs: ["bin/rules.test.mjs:234 put(root, 'task.json', '{\"changed\":true}')"] };
+  const escaped = JSON.stringify(answer({ findings: [quoting] }));
+  assert.deepEqual(lensResult(escaped, candidate), { complete: true, findings: [quoting], evidence: ['read both'] });
+  const breaksAt = (text, word, why) => {
+    const read = lensResult(text, candidate);
+    assert.equal(read.complete, false, text);
+    assert.match(read.why, why, text);
+    const at = Number(/breaks at character (\d+)|does not parse at character (\d+)/.exec(read.why).slice(1).find(Boolean));
+    assert.equal(text.slice(at, at + word.length), word, read.why);
+  };
+  // The JSON quoted as the diff holds it, its quotes unescaped: the object still closes, and does not parse.
+  breaksAt(escaped.replaceAll('\\"', '"'), 'written', /does not parse at character \d+, near ".*written/);
+  // One stray quote turns every string after it inside out, so the last brace is read inside a string.
+  breaksAt(escaped.replace('rewrites a kept proof', 'rewrites a "kept proof'), 'kept', /not closed \(it opens at character 0\): it breaks at character \d+, near ".*kept/);
+  // A backslash before a string's closing quote, or an answer cut before its last brace, ends the text first.
+  for (const text of [escaped.replace('"read both"', '"read evals\\\\results\\"'), escaped.slice(0, -1)]) {
+    assert.match(lensResult(text, candidate).why, /not closed \(it opens at character 0\): the answer ends before it closes$/, text);
+  }
+});
+
+test('the prompt asks for every quote and backslash in a string escaped, a quoted patch included', () => {
+  for (const name of LENS_NAMES) assert.match(lensPrompt(name), /escape every double quote as \\" and every backslash as \\\\, also in text quoted from a patch/, name);
+});
+
 test('anything else is incomplete and says why: prose, another hash, a missing path, an incomplete status, an unknown field', () => {
   const cases = [
     ['Looks good to me.', /not one JSON object/],
