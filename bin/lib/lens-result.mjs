@@ -4,10 +4,26 @@
 // incomplete: the run that gave it is recorded, and no review is.
 import { SEVERITIES } from './lens-prompts.mjs';
 
-const TOP = ['subject_hash', 'inspection', 'findings', 'evidence'];
-const FINDING = ['location', 'severity', 'claim', 'evidence_class', 'causal_disposition', 'proof_refs'];
 // A line that opens or closes a Markdown code fence: three backticks or three tildes (CommonMark's two kinds).
 const FENCE = /^\s*(```|~~~)/;
+
+const filled = { type: 'string', minLength: 1 };
+const list = (items, minItems = 0) => ({ type: 'array', items, ...(minItems && { minItems }) });
+const shape = (properties) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
+
+/** The JSON Schema of a lens answer, which the CLI enforces (`--json-schema`, `../lens-review.mjs`), so an answer
+ * always closes its object (odd/tasks/lens-review-structured-output.md, L1). It holds the shape `lensResult` reads and
+ * no more: the hash is echoed and the paths listed by the lens, so whether they are the candidate's is still read
+ * from its answer, never forced by the host. */
+export const LENS_ANSWER_SCHEMA = shape({
+  subject_hash: filled,
+  inspection: shape({ status: { type: 'string', enum: ['completed', 'incomplete'] }, paths: list(filled) }),
+  findings: list(shape({ location: filled, severity: { type: 'string', enum: SEVERITIES }, claim: filled, evidence_class: filled, causal_disposition: filled, proof_refs: list(filled, 1) })),
+  evidence: list(filled, 1),
+});
+// The fields the parse admits, named once, in the schema.
+const TOP = Object.keys(LENS_ANSWER_SCHEMA.properties);
+const FINDING = Object.keys(LENS_ANSWER_SCHEMA.properties.findings.items.properties);
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isText = (value) => typeof value === 'string' && value.trim() !== '';
