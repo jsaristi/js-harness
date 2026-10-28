@@ -32,7 +32,13 @@ is small, one work unit a commit.
 - gentle-ai: the Stop hook offered the whole branch; only its read-only status ran, as CLAUDE.md says. No slice review.
 - Merges clean with origin/main `b4fdda99` (`git merge-tree`).
 
-## Waiting on the lead (2026-10-28 17:47Z)
+## Closed (2026-10-28 18:06Z)
+The lead chose (a) at 12:49 local. `odd/tasks/board-follow-ups.md` holds the five gentle-ai slices, all approved and
+acknowledged (D and E escalated to high for item 2), and the non-blocking follow-ups their findings left. `notify
+--kind ready --pr 636` was recorded at 18:05:58Z. The five review worktrees (`D:\js-harness-worktrees\jh72-a` to `-e`)
+were removed with `git worktree remove`, without force, so none held changes. No background task of this session runs.
+
+## Waiting on the lead (2026-10-28 17:47Z, answered)
 PR 636 is pushed (`gh pr view 636`). `notify --kind ready` is refused by the merge door: no written gentle-ai evidence
 for the 10 code commits, which it reads only from a gentle-ai line of an `odd/tasks/<name>.md` feature document
 (`bin/lib/gentle-ai-evidence.mjs:69`). The brief said no feature document and Codex and the lenses as reviews. Sent

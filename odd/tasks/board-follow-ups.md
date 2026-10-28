@@ -50,7 +50,7 @@ one-liner. Each cost the lead a manual step on 2026-10-28.
 - [x] T4 (build) S6: `3982ae68`. Slice D: `73fc8cf7..3982ae68`.
 - [x] T5 (build) S4, S5, S6, the review fixes: `b5d28ae5`, `2e51fff7`, `c7cd82c6`. Slice E: `a1cd4c58..c7cd82c6`.
 - [x] T6 (verify) gentle-ai on slices A to E, each checked out in its own worktree; lines below.
-- [ ] T7 (verify) `notify --kind ready --pr 636`, then `closed`.
+- [x] T7 (verify) `notify --kind ready --pr 636`, then `closed`.
 
 ## Reviews
 - Codex `79e3430..318f952`: incorrect, 2 P1 and 6 P2; recheck `a1cd4c5..eb669c9`: correct (0.93), 8 of 8 fixed.
