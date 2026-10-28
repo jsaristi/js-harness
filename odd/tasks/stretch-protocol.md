@@ -157,7 +157,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T3 (kind: build) the command and its record: `open`, `bind`, `status`, `close`, the dispatcher and index (`bin/stretch.mjs`), in b1d9f90a. Spec 1, 3, 5. Route: inline.
 - [x] T4 (kind: build) the renders (`bin/lib/stretch-render.mjs`), in b1d9f90a. Spec 2, 3, 4. Route: inline.
 - [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. In 4e6dbdd7. Route: inline.
-- [ ] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`. Spec 1, 3. Route: inline.
+- [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
 
 ## Log
@@ -205,6 +205,14 @@ itself is not limited to an absence: the skill text names it for any stretch.
   19f2d80: complete, 0 findings, about 142,000 input tokens. Code commits approved by Codex and the lenses: 838c9fe1,
   765baf9a, b1d9f90a, 4e6dbdd7, b651463a. No gentle-ai review ran on this slice.
 
+- L6. 2026-10-28, the rule change. `rules change away-autonomy` refused a branch behind origin/main, so origin/main
+  (two commits, `docs/FAILURES.md` only, merge-tree clean) was merged into feat/stretch in 17308fd7 and the rule
+  branch made from it. The first commit of the rule failed the gate: `bin/lib/manifest.mjs` grew past its ceiling of
+  1,793 lines with three new bullets; the same text went inside the rule's bullet, which is the same moment (the
+  reply before he leaves), and the file kept its ceiling. 865ec2e7 reviewed: Codex over 17308fd..865ec2e correct
+  (0.88), no findings; the Claude lenses (readability, risk) 0 findings. PR 633 (this feature), PR 634 (the rule,
+  based on feat/stretch, retargeted to main once 633 lands).
+
 ## Next step
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
 - Done and committed: T1 (12e954b6), T2 (838c9fe1, 765baf9a). T3+T4 staged with docs/SPEC.md "The stretch" entry;
@@ -229,3 +237,5 @@ State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\st
 - Update ~16:50Z: the slice's reviews are done and taken in (L5, fixes in b651463a). Next: T6 on
   `rule/away-autonomy-stretch` from feat/stretch (manifest text, then `node bin/js-harness.mjs rules change
   away-autonomy --dry-run`, then real, one commit, its two reviews); then push both, PRs, notify ready.
+- Update ~17:05Z: T6 done (L6). PR 633 and PR 634 open and notified ready. What stays: T7's real stretch with the
+  user (the lead opens one with the command before he next leaves), and the closing notice once the PRs land.
