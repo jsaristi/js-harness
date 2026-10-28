@@ -1040,8 +1040,8 @@ its holder checks: `reply-five-states` asks for a close and for a question expla
 | Source | Directives | Held by code | Eval case | Neither |
 |---|---:|---:|---:|---:|
 | Rules list, values (`bin/lib/rules-data.mjs`) | 46 | at most 42: 4 are `Read by: none` (`docs/RULES.md:214,220,226,295`) [c]; of the rest, some readers only print the value into skill text (`bin/lib/manifest.mjs:50,51,58`), not counted apart [i] | 0 | at least 4 [c] |
-| Rules list, prose | 20 | 1 in part (`reply-five-states`: the close), and parts of `questions-one-place` (`bin/lib/reply.mjs:114,165,172`) and of the reporting rules (`js-harness report`, `sessions`) [i, mapped by behaviour] | about 2 (`incident-01`, `-03`) [i] | about 16 [i] |
-| `CLAUDE.md` and `AGENTS.md` | 134 sentences in all, descriptive ones included (2,687 words over 196 hard-wrapped lines) [c]; the instructions among them are fewer, not counted [i] | about 25 (those that name a refusing command: the gate, pre-push, `contract check`, the reply hook, `guard`, the budgets) [i] | about 10 (`incident-02`, `-05`, `-06`, `-07`, `-09`, `-10`, `doc-goal`, `commit-no-attribution`, `false-premise-flag`, `honest-unknown`) [i] | most of the rest [i] |
+| Rules list, prose | 20 | 1 in part (`reply-five-states`: the close), and parts of `questions-one-place` (`bin/lib/reply.mjs:114,165,172`), of the rule that a session ending with work held must have it running (`bin/lib/stop-wake.mjs`) and of the reporting rules (`bin/report.mjs`, `bin/sessions.mjs`) [i, mapped by behaviour] | about 2 (`incident-01`, `-03`) [i] | about 16 [i] |
+| `CLAUDE.md` and `AGENTS.md` | about 120 to 135 sentences in all, descriptive ones included, by the splitter used (two readers' counts: 120, 128 with headings, 134) [i]; 2,687 words over 196 hard-wrapped lines [c]; the instructions among them are fewer, not counted [i] | about 25 (those that name a refusing command: the gate, pre-push, `contract check`, the reply hook, `guard`, the budgets) [i] | about 10 (`incident-02`, `-05`, `-06`, `-07`, `-09`, `-10`, `doc-goal`, `commit-no-attribution`, `false-premise-flag`, `honest-unknown`) [i] | most of the rest [i] |
 | Skills `js-harness-protocols`, `-orchestrator`, `js-harness` (333 lines) | 38 rule phrases from 19 prose rules live there (26 in `manifest.mjs`, 12 in `protocols-skill.mjs`) [c]; the other lines not counted | as the rules | as the rules | not counted |
 | Not counted at all: the ported skills `js-harness-work-units` and `-chained-prs` (`bin/lib/manifest.mjs:306-314`), the output style (`bin/lib/output-style.mjs:20-33`), the texts hooks send the agent (`bin/resume.mjs:95-99`, `bin/lib/web-block.mjs:21-23`, the reply and guard messages), and what `init` writes beyond the `CLAUDE.md` block and `AGENTS.md`, such as `FAILURES_TEMPLATE` (`bin/lib/project.mjs:420`) | unknown | unknown | unknown | unknown |
 | `docs/FAILURES.md` controls | 82 | 70 (`Control: check`) [c] | 0 named | 12 (8 protocol, 2 measured, 1 line, 1 owed) [c] |
@@ -1079,19 +1079,32 @@ a component. Five additions:
    producer that is not a source fails.
 2. **Every obligation is declared, by span.** A source is cut into spans (a sentence, a list item, a
    table row), each with its text's hash, never by line, so a rewrap changes nothing. A span either
-   names `rule:<id>`, sits inside a rule's phrases, or is listed as context with its hash in the
-   register; a changed context span reopens until it is listed again, so "context" cannot hide an
-   instruction. A rule that bundles obligations lists them, and each carries its own control.
-3. **Every obligation names its control**, with the failure register's levels and `Proof` field:
-   `check` or `hook` (a test, plus a planted break: a patch that `rules coverage --prove` applies
-   in a scratch copy, where the test must go red; a proof that names only a file is refused),
-   `eval` (a case in `evals/tasks`), or `owed` (a reason and a date). `rules check` refuses an
-   obligation with none, a proof that names a test or case that does not exist, and an `owed` dated
-   after the baseline; `owed` only shrinks, like the conventions' legacy lists.
-4. **Every eval case names its rules** (`rules: [<id>]` in `task.json`). `task-proof.mjs` grows one
-   arm: the case run with that rule's text taken out (`without.mjs`) must score below the current
-   arm, and its grader scores what the model did (files, commands, the reply's acts), never whether
-   the prompt's text is present. `rules check` holds that each id exists.
+   names `rule:<id>`, sits inside a rule's phrases, or is listed as context with its hash and a
+   one-line reason in the register; a changed context span reopens until it is listed again. A
+   command can hold that the listing exists and is current, not that it is justified: each new
+   context listing is part of its commit's diff, so the slice's Codex and lens reviews read it, and
+   `rules coverage` prints every context span so it can be read again. A rule that bundles
+   obligations lists them, and each carries its own control. A span keeps its id across a wording
+   edit that keeps its rule, so an edit does not reopen a seeded debt; only a new span is new.
+3. **Every obligation names its control.** This extends the failure register's grammar
+   (`bin/lib/failures.mjs:55-57`) and says so, rather than copying it: `check`, `line`, `protocol`
+   and `measured` keep their meaning, a hook is a `check` whose path is the hook, and two things
+   are new. One is the level `eval` (a case in `evals/tasks`). The other is a date on `owed`, which
+   the register's `owed` does not carry (`bin/lib/failures.mjs:127`). A `check` names a test plus a
+   planted break: a patch that `rules coverage --prove` applies in a scratch copy, where the test
+   must go red; a proof that names only a file is refused. `rules check` refuses an obligation with
+   no control, a proof that names a test or case that does not exist, and an `owed` dated after the
+   baseline, save the one move 14.3 admits; `owed` only shrinks, like the conventions'
+   legacy lists.
+4. **Every eval case names its rules** (`rules: [<id>]` in `task.json`), and `rules check` holds
+   that each id exists. The proof that a case can tell the rule apart is a paid run, so it does not
+   live in `task-proof.mjs`, which runs no model and runs on every gate (`evals/task-proof.mjs:1-4`).
+   The suite runs the case on the current arm and on an arm with that rule's text taken out. That
+   arm is new code: `without.mjs` takes out whole components, not one rule's text
+   (`evals/without.mjs:1-11`). The without-rule arm must score below the current arm, and the result
+   is recorded under `evals/proofs/`. `tasks.test.mjs` then checks, for free, that each case naming
+   a rule has a current record. Its grader scores what the model did (files, commands, the reply's
+   acts), never whether the prompt's text is present.
 5. **A coverage report**, `js-harness rules coverage` (and `--json`): per source, how many
    obligations are held by code, by an eval case, owed, context or not declared, and which.
    `check` shows its totals as an INFO row; `rules coverage --strict` exits 1 on a gap the pass
@@ -1109,8 +1122,12 @@ each sensor declared, no rule deleted) (`js-harness rules --help`) [c]. The list
 the harness never writes it (`bin/lib/project-rules.mjs:1-4`) [c]. Built on that:
 - **What the harness writes into a project** (the `CLAUDE.md` block, `AGENTS.md`,
   `FAILURES_TEMPLATE`, the settings it selects) is covered by the harness's own register. Its proofs
-  stay in the harness and are bound to the bytes the release wrote (the manifest's hash). A project
-  that edits that text breaks the binding, and the span moves to the project's side as `owed`.
+  stay in the harness and are bound to the bytes the release wrote. The project's `rules coverage`
+  finds each span's proof by the release named in the project's manifest record and the span's
+  hash, in the coverage record the installed harness ships for that release. A project that edits
+  that text breaks the binding, and the span moves to the project's side as `owed`, dated at the
+  edit. That is the one late `owed` the refusal admits: the record names the harness span and
+  release it came from, so a new gap cannot pass as a move.
 - **The project's own rules** get the same `Control` field, optional in `docs/rules.json` and
   required by `rules check` once the project's baseline is set. `init` sets the baseline at
   creation, adds the coverage row to the project's gate and writes one example case under `evals/`.
@@ -1121,27 +1138,32 @@ the harness never writes it (`bin/lib/project-rules.mjs:1-4`) [c]. Built on that
   after the baseline, and the project closes its list at its own pace.
 - **Its eval cases** run through the harness's runner against the project's own folder (to build:
   the runner reads only `evals/tasks` here), on the eval token, never on a copied login (diet §9).
+  A project's runs are that project's spend, not F8's: each is asked and reported like any eval
+  spend.
 
 ### 14.4 Cost
 
 Estimates [i]:
 - **Build:** about 300 lines and tests for the sources list, the spans, the control field, the
   refusal, `--prove` and the report, in `bin/lib/rules.mjs` and a new `bin/lib/rules-coverage.mjs`;
-  about 50 for the arm in `task-proof.mjs`; about 150 for `init`, S12 and the project binding;
-  about 150 for the project eval runner. Declaring and seeding the spans of 14.1: about a session.
+  about 100 for the without-rule arm, its record under `evals/proofs/` and the free check in
+  `tasks.test.mjs`; about 150 for `init`, S12 and the project binding; about 150 for the project
+  eval runner. Declaring and seeding the spans of 14.1: about a session.
 - **New eval cases:** only for behaviour no check can hold (a judgment, a question that is his).
   About 15 to 25 cases, written like the incident set, at one to two hours each.
-- **Eval spend**, priced from the diet's small eval ($0.11 to $0.50 a run, $0.42 a trial for the
-  incident set, diet §9), each price two trials a case, both arms counted, script grading free:
-  - proving the 15 to 25 new cases (current arm and the arm without the rule, twice each): about
-    60 to 100 trials, $25 to $40;
-  - S5c-a's own "incident set no worse" rerun: about $13;
-  - a full run at S8, about 40 cases twice: about $34, since cases written like the incident set
-    cost as much;
-  - per change: the cases that name the rules it touches, about 1 to 3 cases twice, $1 to $3.
-  So F8 spends about $70 to $90 more than the diet's envelope (about $200, diet §9's table), and
-  each recurring certification grows from about $25 to about $35 to $60. That overrun is his: it
-  goes to him, through the lead, with this estimate when S5c-a starts, before any of it runs.
+- **Eval spend**, at one price for every line: $0.56 to $0.65 a trial. $0.56 is the current
+  arm's measured cost in the S3 run, $11.22 for 20 trials (diet §7.1, line 636; the $0.42 there
+  averages in the cheaper arm without `CLAUDE.md`). $0.65 is the envelope's own ~$13 for the
+  incident set's 20 trials (the diet's section 1, D2, the table at lines 152-164). Script grading
+  is free. Like the envelope, these are API-equivalent and draw on his Max plan's limits, not on
+  money (D2).
+  - proving the 15 to 25 new cases, on both arms, twice each: 60 to 100 trials, about $34 to $65;
+  - S5c-a's own "incident set no worse" rerun: 20 trials, about $13;
+  - a full run at S8 on the current arm only, about 40 cases twice: 80 trials, about $45 to $52;
+  - per change: the cases that name the rules it touches, about 1 to 3 cases twice, $1 to $4.
+  So F8 spends about $95 to $130 more than the envelope's forecast of about $200 (D2's table),
+  and each recurring certification grows from about $25 to about $70 to $80. That overrun is his:
+  it goes to him, through the lead, with this estimate when S5c-a starts, before any of it runs.
 
 ### 14.5 Where it enters F8, and its pass line
 
@@ -1149,16 +1171,21 @@ In two parts, so S13 rehearses it and S12 ships it, and S8 certifies it. The ord
 becomes: … S11 → **S5c-a** → S13 → S12 → S2 → S4a, S4b, S5, **S5c-b**, S6, S7 → S8.
 - **S5c-a, the mechanism** (items 1 to 5, the bootstrap, `init` and the project binding), after
   S11 and before S13. S13's scratch project then shows it; S12's migration carries it.
-- **S5c-b, the filling**, beside S5's rule pass, which already classifies the 66 live rules and
-  every register control: each span declared, each seeded `owed` closed by a check or an eval case.
+- **S5c-b, the filling**, beside S5's rule pass, which classifies every rule and every register
+  control: each span declared, each seeded `owed` closed by a check or an eval case. S5's pass
+  line says "65 of 65" from `docs/rule-sources.json` (diet lines 794 and 919), while
+  `bin/lib/rules-data.mjs` holds 66 live rules on `86491fa` [c]. S5 counts from the register on the
+  day it runs, not from a number written in the diet.
 
 **Pass line**, each a command that exits 0:
 - `js-harness rules coverage --strict` on main: every source listed, 0 undeclared spans, 0
   obligations without a control or a dated `owed`; at S8 the same command with `owed` at most 10%
   of the live obligations (a constant in code, not a number in prose);
 - `js-harness rules coverage --prove`: every planted break turns its test red;
-- `node --test evals/tasks.test.mjs`: every case names its rules, and its arm without them scores
-  below its current arm;
+- `node --test evals/tasks.test.mjs`: every case names its rules, and each one that does has a
+  current record under `evals/proofs/` where its arm without them scored below its current arm;
 - on S13's scratch project, a planted directive without a control makes `js-harness rules check`
-  exit 1, and the test that plants it is part of S13's probe;
-- the incident set scored against S0's baseline, as every measured step is: no worse.
+  exit 1: the step's probe test (S13's rehearsal test, run with `node --test`) plants it and
+  passes only on that exit;
+- `node evals/incident-score.mjs <run a> <run b>` on S5c-a's rerun, against S0's frozen line
+  (`odd/tasks/f8-s0-baseline.md`), as every measured step is: no worse.
