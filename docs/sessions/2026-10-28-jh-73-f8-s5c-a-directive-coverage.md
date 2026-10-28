@@ -20,14 +20,6 @@ None in this session; the brief is the lead's, quoted in `odd/tasks/f8-s5c-a-cov
 The session's, in the feature document's L3; with the lead: the `init` baseline line is a ready patch for JH 68
 (L5, 13:49), and the lens skip waits for the lead's fix of `lens-review` instead of a fourth run (L10, 15:14).
 
-## Spent
-- Evals: nothing. P1-P4 are ready commands, 28 trials, about $15.70 to $18.20.
-- Codex: 947ac91..f39c41a in 8 parts (1,690,061 input tokens) after a run broken at part 2 (353,663, L6) and one
-  refused at 8 parts (nothing); the recheck f39c41a..f9c1057 (130,726); again 62f4a62..d095412 (353,905); the
-  recheck d095412..37cdab2 (38,018).
-- Claude lenses: six runs on sonnet, about 9,000 to 90,000 input tokens a lens.
-- One independent verifier on slices 1-2 (L4).
-
 ## Failures and lessons
 - A test file was written while Codex reviewed, so the run recorded nothing after two parts of eight (353,663
   input tokens): `docs/FAILURES.md`, `edit-during-review`, a `Seen:` line. No file was written during a review
@@ -40,9 +32,27 @@ The session's, in the feature document's L3; with the lead: the `init` baseline 
   model leaves `inspection` open and nests `findings` and `evidence` in it (L11). This session's guess, that the
   answers quoted the diff's JSON, was wrong.
 
+  The lenses completed over `f9c10579..cd9c4220` after PR 640 gave them structured output, with 0 findings, which
+  paid the skip.
+- The gentle-ai line first wrapped six hashes onto a line that does not say gentle-ai, which the merge door does not
+  read; the line now names the range `9890615e..37cdab21`, and the `ready` notice for PR 638 was accepted.
+
 ## Left
-- A lens run that completes over `f9c10579..37cdab21`, waiting on the lead (L11); then the `ready` notice for PR
-  638.
+- PR 638, ready: the lead's to land.
 - The paid runs P1-P4, his to start.
 - 13 to 23 more eval cases section 14.4 counts, a later session's.
 - The `init` baseline line (L5), routed to JH 68.
+
+## Cost
+- Time: first notice 2026-10-28T17:44:36Z, last 22:18:56Z (the `ready` for PR 638); compacted twice, at about
+  19:07Z and 22:16Z.
+- Context at the end: 15% of the window, by the `ready` notice.
+- Evals: nothing. P1-P4 are ready commands, 28 trials, about $15.70 to $18.20.
+- gentle-ai: no review ran; the Stop hook offered only the whole branch, and only its read-only status ran.
+- Codex: 947ac91..f39c41a in 8 parts (1,690,061 input tokens) after a run broken at part 2 (353,663, L6) and one
+  refused at 8 parts (nothing); the recheck f39c41a..f9c1057 (130,726); again 62f4a62..d095412 (353,905); the
+  recheck d095412..37cdab2 (38,018).
+- Claude lenses: seven runs on sonnet, about 9,000 to 90,000 input tokens a lens; the last, after PR 640, complete.
+- One independent verifier on slices 1-2 (L4).
+- Gate runs: one pre-commit `npm run check` per commit on the branch, and the pre-push gate on each push; not
+  counted one by one.
