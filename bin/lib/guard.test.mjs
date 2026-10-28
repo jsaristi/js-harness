@@ -556,6 +556,11 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     // `-t` names the target, so the folder after it is a source (Codex P2 and the reliability lens on d61b5588).
     'mv -t /tmp .git/js-harness',
     'mv --target-directory=/tmp .git/js-harness',
+    // Removing what the folder holds, or the git dir above it (gentle-ai R3 on 9e167848).
+    'rm -rf .git/js-harness/*',
+    'rm -f .git/js-harness/*.jsonl',
+    'rm -rf .git',
+    'rm -rf D:/r/.git/',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
     "printf '{}'>>.git/js-harness/lens-reviews.jsonl",
     `echo x>>${RECORD}`,
@@ -590,11 +595,15 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "require(\'child_process\').execSync(\'node -e m.startLensRun(root)\')"',
     'python -c "subprocess.run([\'node\', \'-e\', \'m.appendLensReview(root, {})\'])"',
     'node -e "setTimeout(\'m.appendLensReview(root, {})\', 0)"',
+    // A timer given a string through a variable (the risk lens on 9e167848).
+    'node -e "const s = \'m.appendLensReview(root, {})\'; setTimeout(s, 0)"',
     // A function reached by a reference or a bracketed name (gentle-ai R3 on d61b5588).
     'node -e "m.appendLensReview.call(null, root, {})"',
     'node -e "const f = m.appendLensReview; f(root, {})"',
     'node -e "m[\'appendLensReview\'](root, {})"',
     `node -e "fs['appendFileSync']('${RECORD}', '{}')"`,
+    // The same in a script read whole, here for its division (gentle-ai R3 on 9e167848).
+    `node -e "const n = 4 / 2; fs['appendFileSync']('${RECORD}', '{}')"`,
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -637,5 +646,6 @@ test('reading a record, the commands that write one, and text that only names on
     // A move into the records' folder of a file that is no record, and a timer given a function (Codex P2 on d61b5588).
     'mv -t .git/js-harness /tmp/notes.txt',
     'node -e "setTimeout(() => console.log(\'appendLensReview(\'), 0)"',
+    'node -e "setTimeout(function () { console.log(\'appendLensReview(\') }, 0)"',
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

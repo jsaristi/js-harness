@@ -478,8 +478,9 @@ const RECORD_PATH = new RegExp(`(?:^|/)js-harness/(${RECORD_NAMES})$`, 'i');
 // A record's name in a script's text, where its folder may be joined apart from it.
 const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\w.-])`, 'i');
 const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
-// The folder itself, removed whole: named by the git dir above it, so a project folder named `js-harness` is not it.
-const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git\/js-harness\/?$/i;
+// The folder itself, removed or moved whole: named by the git dir above it, so a project folder named `js-harness` is
+// not it; the git dir itself; and a glob inside the folder, which takes what it holds.
+const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git(?:\/js-harness(?:\/[^/]*[*?[][^/]*)?)?\/?$/i;
 
 /** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */
 const slashed = (file) => path.posix.normalize(String(file).trim().replace(/\\/g, '/'));
@@ -636,16 +637,17 @@ function callArguments(text, from) {
   return args;
 }
 
-// A call that runs a string as code, here or in a child process: what that string holds is code too. A timer runs one
-// only when it is given a string, not a function.
-const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*['"`]|\b(?:subprocess|child_process)\b/;
+// A call that runs a string as code, here or in a child process: what that string holds is code too. A timer may run
+// what it is given unless that is a function written in place.
+const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*(?!\(|function\b|async\b|[\w$]+\s*=>)|\b(?:subprocess|child_process)\b/;
 
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
  * at the same indexes; a template literal's `${…}` stays code, a member named in brackets (`fs['writeFileSync']`) is
- * read as `.writeFileSync`, and a `//` or `/* … *\/` comment opens no string. On the safe side, `text` comes back whole
- * when its code holds any other `/` (a regex literal's quotes would mislead it), a quote is left open, or the script
+ * read as `.writeFileSync`, and a `//` or `/* … *\/` comment opens no string. On the safe side, the script comes back
+ * whole, its bracketed members still read so, when its code holds any other `/` (a regex literal's quotes would mislead it), a quote is left open, or the script
  * runs a string (`RUNS_TEXT`). */
 function codeOf(script) {
+  // Read whole on the safe side, a script keeps its bracketed members read as `.name` (`text`, at the same indexes).
   const text = script.replace(/\[\s*(['"`])([A-Za-z_$][\w$]*)\1\s*\]/g, (whole, _, name) => `.${name}`.padEnd(whole.length));
   let out = '';
   const open = [];
@@ -661,7 +663,7 @@ function codeOf(script) {
       continue;
     }
     // A regex literal may hold a quote, and telling one from a division needs a parser: read the script whole.
-    if (top !== "'" && top !== '"' && top !== '`' && c === '/') return script;
+    if (top !== "'" && top !== '"' && top !== '`' && c === '/') return text;
     if (top === "'" || top === '"' || top === '`') {
       if (c === top) open.pop();
       else if (top === '`' && c === '$' && text[i + 1] === '{') {
@@ -680,7 +682,7 @@ function codeOf(script) {
     else if (c === '}' && top !== undefined) open.pop();
     out += c;
   }
-  return open.length > 0 || RUNS_TEXT.test(out) ? script : out;
+  return open.length > 0 || RUNS_TEXT.test(out) ? text : out;
 }
 
 /** What the call argument `arg` holds when it is one string literal and nothing else, or null. */
