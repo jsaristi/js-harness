@@ -213,3 +213,7 @@ State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\st
   words of lines 8017, 8139, 8213, 8264 (date 2026-10-28, session 0f71b2c6...). Run `--dry-run` first.
 - T7: reviews (`js-harness codex-review --base 79e34308`, `js-harness lens-review --base 79e34308 --lenses <..> --reason
   <..>`), push, PR, `js-harness notify --to orchestrator --kind ready --pr <n>`; keep a declared `js-harness wait`.
+- Update ~16:20Z: T3+T4 in b1d9f90a, T5 in 4e6dbdd7. Next: the slice's reviews over 79e34308..4e6dbdd7 (Codex:
+  one run, its allowance about 1,200 input tokens a changed line, ~1,000 lines; the Claude lenses: one run of the
+  pertinent lenses), their output written to the job tmp (`review-codex.log`, `review-lens.log`), findings taken in;
+  then T6 on `rule/away-autonomy-stretch`; then push, PR, notify ready.
