@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseRegister } from './failures.mjs';
 import { checkProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
+import { isDay } from './rules.mjs';
 
 const REGISTER = 'docs/FAILURES.md';
 
@@ -21,6 +22,27 @@ function readOptional(root, file) {
 }
 
 const gitShow = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true });
+
+/** The coverage record of the project manifest under `root` (`{ baseline, release }`, which `init` writes, F8
+ * S5c-a): `null` when there is no manifest or it records none. A record not in that shape throws: read wrong, it
+ * would drop the controls a baseline asks for. */
+export function coverageRecord(root, run = gitShow) {
+  const where = run('git', ['rev-parse', '--git-path', 'js-harness/manifest.json'], { cwd: root });
+  const file = !where.error && where.status === 0 ? path.resolve(root, String(where.stdout).trim()) : path.join(root, '.git', 'js-harness', 'manifest.json');
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
+    throw new Error(`cannot read the project manifest: ${err.code ?? err.message}`);
+  }
+  const record = JSON.parse(text).coverage;
+  if (record === undefined) return null;
+  if (!(record !== null && typeof record === 'object' && isDay(record.baseline) && typeof record.release === 'string')) {
+    throw new Error(`the coverage record of ${file} is not { baseline, release }: a day written YYYY-MM-DD and the release that set it`);
+  }
+  return record;
+}
 
 /** The project's list checked, read under `root`, its git top: `{ present: false }` when it keeps no list, and
  * otherwise `{ present: true, rules, findings, notes }`. `sensors` are the names of the sensors `check` runs there.
@@ -40,6 +62,7 @@ export function readProjectRules(root, { sensors = [], run = gitShow } = {}) {
     const parsed = parseRegister(register);
     if (parsed.errors.length === 0) failureIds = parsed.entries.map((entry) => entry.id);
   }
-  const result = checkProjectRules({ text, headText, readFile: (file) => readOptional(root, file), sensors, failureIds });
+  const baseline = coverageRecord(root, run)?.baseline ?? null;
+  const result = checkProjectRules({ text, headText, readFile: (file) => readOptional(root, file), sensors, failureIds, baseline });
   return { present: true, ...result };
 }

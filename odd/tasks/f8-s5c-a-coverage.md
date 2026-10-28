@@ -17,7 +17,7 @@ the same, never that a model follows it; nothing here ties a directive to its pr
 mechanism here, before S13 rehearses it and S12 ships it.
 
 ## Done when
-- `node --test bin/lib/rules-coverage.test.mjs bin/lib/rules-sources.test.mjs bin/rules-coverage.test.mjs evals/rule-proof.test.mjs evals/without.test.mjs evals/arms.test.mjs bin/lib/project-rules.test.mjs` exits 0
+- `node --test bin/lib/rules-coverage.test.mjs bin/lib/rules-sources.test.mjs bin/rules-coverage.test.mjs evals/rule-proof.test.mjs evals/without.test.mjs evals/arms.test.mjs bin/lib/project-rules.test.mjs bin/lib/project-coverage.test.mjs` exits 0
 - `node bin/js-harness.mjs rules coverage --strict` exits 0 on this branch, with the seeded debt
 - `node bin/js-harness.mjs rules coverage --prove` exits 0: every planted break turns its test red
 - `node bin/js-harness.mjs rules check` exits 0, and a test plants a span with no control and sees it exit 1
@@ -29,12 +29,12 @@ mechanism here, before S13 rehearses it and S12 ships it.
 ## In scope / Out of scope
 - In: `bin/lib/rules.mjs`, `bin/lib/rules-coverage.mjs`, `bin/lib/rules-sources.mjs`,
   `bin/lib/rules-coverage-data.mjs`, `bin/rules.mjs`, `bin/lib/project-rules.mjs` and
-  `bin/lib/project-rules-read.mjs` (the control of a project's rule), `bin/lib/project.mjs` (the coverage record of
-  `init` only), `evals/` (the without-rule arm, `evals/proofs/`, `tasks.test.mjs`, `task.json` `rules`, new
+  `bin/lib/project-rules-read.mjs` (the control of a project's rule), `bin/lib/project-coverage.mjs` (a project's
+  `rules coverage`), `evals/` (the without-rule arm, `evals/proofs/`, `tasks.test.mjs`, `task.json` `rules`, new
   cases), their tests, `docs/RULES.md` and `docs/rule-sources.json` as the commands write them, this document,
   the S5c-a line of `docs/ROADMAP.md`.
 - Out: `bin/lib/rules-data.mjs` (L3, D1), `bin/check.mjs` (the INFO row, L3, D5), the stack, install, doctor and
-  the preset code of `init` (JH 68), sessions, notify, the merge queue and guard (JH 72), every paid eval run.
+  `init`'s code, `bin/lib/project.mjs` included (JH 68, L5), sessions, notify, the merge queue and guard (JH 72), every paid eval run.
 
 ## Constraints
 - No eval trial runs in this session — because every trial is his spend (14.4) and he is away.
@@ -90,8 +90,9 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T4b (kind: build) the verifier's findings on slice 2 (L4): a moved span is no gap, a heading and a comment
   that is no marker are spans, the prompt builders are sources — S1, S2; inline; slice 4b (the commit after
   `f79dcc8a`; the register reseeded on the baseline day: 60 spans and 5 message sources more, owed)
-- [ ] T5 (kind: build) the project binding: a project rule's `control`, the baseline `init` records, the project's
-  `rules coverage` against the shipped register — S7; inline; slice 5
+- [x] T5 (kind: build) the project binding: a project rule's `control`, the baseline `init` records, the project's
+  `rules coverage` against the shipped register — S7; inline; slice 5 (the commit after `72b9eb6b`; the `init`
+  line is the ready patch of L5, routed by the lead to JH 68)
 - [ ] T6 (kind: build) new eval cases for behaviour no check can hold, with their texts and script graders — S4;
   inline; slice 6
 - [ ] T7 (kind: docs) the paid runs as ready commands, the ROADMAP line, the ready notice — S8; inline
@@ -103,7 +104,7 @@ Reviews:
 Not written yet (T7).
 
 ## Next step
-T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4 and T4b are committed. Next: the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T5-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
+T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4, T4b and T5 are committed. Next: the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T6-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
 ## Log
 - L1 (2026-10-28, the lead's brief `briefs/2026-10-28T17-34-30-440Z-2b199716.md`): "JH 73 · F8 S5c-a: directive
@@ -158,3 +159,13 @@ T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-re
   force-push ...`) pass plain `rules check` as that span edited; `--strict` holds it stale, and the `--refresh`
   that clears it is a reviewed commit; (5) a span that holds a rule's phrase is tied whatever else it says. Left
   for T5: (6) a project's `rules coverage` printed its rules list and exited 0.
+- L5 (2026-10-28, decision, with the lead's agreement in the channel at 13:49): `bin/lib/project.mjs` is at its
+  ceiling of 2,034 lines on the legacy list of `bin/conventions-structure.test.mjs`, and `init`'s code is JH 68's,
+  so this branch does not write the baseline. It reads it: `coverageRecord` (`bin/lib/project-rules-read.mjs`)
+  takes `coverage: { baseline, release }` from the project manifest, and from that day `rules check` asks every
+  live rule of `docs/rules.json` for its `control` (`bin/lib/project-rules.mjs`); a project's `rules coverage`
+  (`bin/lib/project-coverage.mjs`) binds each span of the texts `init` wrote while it is the harness's text and
+  lists the rest as the project's side, reported and not refused, since the project keeps no register to date it
+  in. The ready patch for `init`, in `writeProject` beside `if (exclude) manifest.exclude = exclude;`:
+  `manifest.coverage = { baseline: <today, YYYY-MM-DD>, release: version };`, with a test that a new project's
+  manifest holds it, and a look at `formatFor` (a key a reader of an older format refuses needs its format).

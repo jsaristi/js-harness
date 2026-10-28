@@ -216,6 +216,10 @@ const projectCount = (n) => `${n} ${n === 1 ? 'rule' : 'rules'} of the project`;
  * the sensors `check` runs in the project; when its `harness.json` does not parse they cannot be known, and the sensor
  * rules are left unchecked (the gate's sensors row reports that file). It writes nothing: `render` is the harness's. */
 async function projectForm(parsed, top, { run, stdout, stderr }) {
+  if (parsed.command === 'coverage') {
+    const { version } = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+    return (await import('./lib/project-coverage.mjs')).projectCoverageForm(parsed, top, { run, stdout, stderr, version });
+  }
   if (parsed.command === 'render') {
     stderr("rules render writes the harness's docs/RULES.md and runs only in the harness's own repository; a project's list is printed by `js-harness rules`");
     return 1;

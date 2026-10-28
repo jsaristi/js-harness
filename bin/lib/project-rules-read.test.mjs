@@ -84,3 +84,16 @@ test('the sensors named by the caller and the register of the project are what a
   write(root, { 'docs/FAILURES.md': REGISTER.replace('secret-leaked', 'other-leak') });
   assert.deepEqual(readProjectRules(root, { sensors: ['secrets'] }).findings, ['rule "no-secrets": the failure "secret-leaked" is not an entry of docs/FAILURES.md']);
 });
+
+test('the baseline the project manifest records makes every live rule name its control', (t) => {
+  const root = project(t, { 'docs/rules.json': listOf([prose]), 'AGENTS.md': '- Never deploy by hand.\n' });
+  assert.deepEqual(readProjectRules(root).findings, [], 'no manifest, no baseline');
+  write(root, { '.git/js-harness/manifest.json': JSON.stringify({ version: '0.98.0', coverage: { baseline: '2026-10-28', release: '0.98.0' } }) });
+  assert.deepEqual(readProjectRules(root).findings, [
+    "rule \"no-direct-deploy\": no control: it names a check, an eval case, a line, a protocol, a measurement or a dated owed (the project's baseline is 2026-10-28)",
+  ]);
+  write(root, { 'docs/rules.json': listOf([{ ...prose, control: { level: 'line', path: 'AGENTS.md', phrase: 'Never deploy by hand' } }]) });
+  assert.deepEqual(readProjectRules(root).findings, []);
+  write(root, { '.git/js-harness/manifest.json': JSON.stringify({ version: '0.98.0', coverage: { baseline: 'soon' } }) });
+  assert.throws(() => readProjectRules(root), /coverage record .* is not \{ baseline, release \}/);
+});
