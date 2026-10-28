@@ -30,7 +30,7 @@ His words (transcript `0f71b2c6`, line 6690, 2026-10-28T09:23Z, read with `js-ha
 - [ ] T3 (kind: docs) PR, Spanish page, ready notice
 
 ## Next step
-Section 14 is drafted (14.1-14.5, committed). Next: the ROADMAP line in F8 step 4 (append after "rows 13 and 14 into S8": directive coverage, section 14, as S5c-a after S11 and before S13, S5c-b beside S5, with its pass line); then T2, the two blind readers on section 14 only; one fix batch; then T3.
+Section 14 and the ROADMAP line are committed. Next: T2. (Done: the ROADMAP line in F8 step 4 (append after "rows 13 and 14 into S8": directive coverage, section 14, as S5c-a after S11 and before S13, S5c-b beside S5, with its pass line); then T2, the two blind readers on section 14 only; one fix batch; then T3.
 
 ## Log
 - L1 (2026-10-28, the lead's message relaying his request, line 6690): write the directive-coverage proposal as section 14 with a ROADMAP line; double review; docs PR; Spanish page; ready.
