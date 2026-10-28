@@ -46,6 +46,71 @@ export function readCases(root) {
   return cases;
 }
 
+/** The files of the checkout at `root` that a proof copies: what git tracks or would track there, or, where git gives no
+ * answer, every file but those under `.git` and `node_modules`. */
+function filesOf(root, spawn) {
+  const listed = spawn('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8', windowsHide: true });
+  if (!listed.error && listed.status === 0) return [...new Set(String(listed.stdout).split('\0').filter(Boolean))];
+  const found = [];
+  const visit = (rel) => {
+    for (const entry of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
+      const child = rel === '' ? entry.name : `${rel}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (entry.name !== '.git' && entry.name !== 'node_modules') visit(child);
+      } else if (entry.isFile()) found.push(child);
+    }
+  };
+  visit('');
+  return found;
+}
+
+/** Every planted break of `register`'s controls: `{ rule, of, test, break }`, one a check, a bundled rule's included. */
+export function plantedBreaks(register) {
+  const out = [];
+  for (const [rule, control] of Object.entries(register.controls).sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const item of Array.isArray(control) ? control : [control]) {
+      if (item?.level === 'check') out.push({ rule, of: item.of, test: item.test, break: item.break });
+    }
+  }
+  return out;
+}
+
+// How long one test may run with its break before the proof gives it up as not red.
+const PROOF_TIMEOUT_MS = 5 * 60 * 1000;
+/** `env` without a single `GIT_*` variable, so a test the gate runs in a hook writes to no repository of the caller, and
+ * without `NODE_TEST_CONTEXT`, under which a `node --test` started by a test reports to it and exits 0 on a failure. */
+const withoutGit = (env) => Object.fromEntries(Object.entries(env).filter(([key]) => !/^git_/i.test(key) && key !== 'NODE_TEST_CONTEXT'));
+
+/** `rules coverage --prove`: the checkout at `root` copied once into a folder under `tmpdir`, and in it each planted
+ * break of `register` applied in turn, its test run with `node --test`, and the file put back. Each result is
+ * `{ rule, of, test, path, red, status }`: a break proves its check only when the test goes red. The copy is removed
+ * at the end. `spawn` runs git and node. */
+export function proveBreaks(root, register, { spawn, tmpdir, env = process.env }) {
+  const breaks = plantedBreaks(register);
+  if (breaks.length === 0) return [];
+  const scratch = fs.mkdtempSync(path.join(tmpdir, 'js-harness-prove-'));
+  try {
+    for (const file of filesOf(root, spawn)) {
+      const from = path.join(root, ...file.split('/'));
+      if (!fs.statSync(from, { throwIfNoEntry: false })?.isFile()) continue;
+      const to = path.join(scratch, ...file.split('/'));
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(from, to);
+    }
+    return breaks.map(({ rule, of, test, break: planted }) => {
+      const target = path.join(scratch, ...planted.path.split('/'));
+      const text = fs.readFileSync(target, 'utf8');
+      fs.writeFileSync(target, text.replace(/\r\n/g, '\n').replace(planted.find, () => planted.replace));
+      const ran = spawn(process.execPath, ['--test', test], { cwd: scratch, env: withoutGit(env), encoding: 'utf8', timeout: PROOF_TIMEOUT_MS, windowsHide: true });
+      fs.writeFileSync(target, text);
+      const status = ran.error ? null : ran.status;
+      return { rule, ...(of === undefined ? {} : { of }), test, path: planted.path, red: status !== 0 && status !== null, status };
+    });
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 /** The coverage of the harness's checkout at `root` against `rules`: `{ present: false }` when it holds no register,
  * and otherwise `{ present: true, register, report }` (`coverageOf`). A register that does not read throws. */
 export function readCoverage(root, rules) {

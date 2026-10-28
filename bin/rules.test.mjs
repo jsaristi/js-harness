@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { rulesMain } from './rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesHash, writeRules } from './lib/rules.mjs';
+import { readCoverageText, writeCoverage } from './lib/rules-coverage.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,15 +25,25 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
+/** The package's coverage register with every control owed, since a project of these tests holds none of the files a
+ * check names, so that directive coverage adds no line to them. */
+function owedRegister() {
+  const { register } = readCoverageText(fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8'));
+  const owed = { level: 'owed', since: register.baseline };
+  const controls = Object.fromEntries(Object.entries(register.controls)
+    .map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...owed })) : owed]));
+  return writeCoverage({ ...register, controls });
+}
+
 /** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests,
- * and the package's coverage register, whose controls are all owed, so that directive coverage adds no line to them. */
+ * and the package's coverage register, its controls all owed. */
 const HOMES = {
   ...Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
     .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')])),
-  'bin/lib/rules-coverage-data.mjs': fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8'),
+  'bin/lib/rules-coverage-data.mjs': owedRegister(),
 };
 
 /** The package's register, whose entries the rules' `failure` keys name. */

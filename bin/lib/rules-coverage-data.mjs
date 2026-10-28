@@ -6,8 +6,13 @@ export const COVERAGE = {
   "baseline": "2026-10-28",
   "controls": {
     "agents-budget": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/check.mjs",
+        "find": "('agents-budget', 'estimated tokens')",
+        "replace": "('agents-budget', 'estimated tokens') + 1"
+      }
     },
     "announce-finished": {
       "level": "owed",
@@ -42,12 +47,22 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "context-pause": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/lib/sessions.mjs",
+        "find": "('context-pause', 'percent of the context window')",
+        "replace": "('context-pause', 'percent of the context window') + 1"
+      }
     },
     "contract-run-timeout": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/contract.mjs",
+        "find": "('contract-run-timeout', 'minutes')",
+        "replace": "('contract-run-timeout', 'minutes') + 1"
+      }
     },
     "control-phrase-min": {
       "level": "owed",
@@ -62,20 +77,40 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "gate-log-command": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/lib/gate-log.mjs",
+        "find": "('gate-log-command', 'characters')",
+        "replace": "('gate-log-command', 'characters') + 1"
+      }
     },
     "gate-log-size": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/lib/gate-log.mjs",
+        "find": "('gate-log-size', 'KiB')",
+        "replace": "('gate-log-size', 'KiB') + 1"
+      }
     },
     "gate-max": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/gate.mjs",
+        "find": "('gate-max', 'minutes')",
+        "replace": "('gate-max', 'minutes') + 1"
+      }
     },
     "gate-wait": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/lib/gate-lock.mjs",
+        "find": "('gate-wait', 'minutes')",
+        "replace": "('gate-wait', 'minutes') + 1"
+      }
     },
     "lead-charter": {
       "level": "owed",
@@ -174,12 +209,22 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "sensor-silence": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/check.mjs",
+        "find": "('sensor-silence', 'minutes')",
+        "replace": "('sensor-silence', 'minutes') + 1"
+      }
     },
     "sensor-timeout": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/check.mjs",
+        "find": "('sensor-timeout', 'minutes')",
+        "replace": "('sensor-timeout', 'minutes') + 1"
+      }
     },
     "session-effort": {
       "level": "owed",
@@ -246,12 +291,22 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "wait-every": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/wait.mjs",
+        "find": "('wait-every', 'seconds')",
+        "replace": "('wait-every', 'seconds') + 1"
+      }
     },
     "wait-for": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "check",
+      "test": "bin/lib/rules-bindings.test.mjs",
+      "break": {
+        "path": "bin/wait.mjs",
+        "find": "('wait-for', 'minutes')",
+        "replace": "('wait-for', 'minutes') + 1"
+      }
     },
     "wording-is-the-need": {
       "level": "owed",

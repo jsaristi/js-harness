@@ -89,6 +89,9 @@ test('each level of control has its shape, and a check names its test and a plan
     'a check names its test, a path of the repository',
     'a planted break changes what it finds: find and replace are two different texts',
   ]);
+  assert.deepEqual(faults({ level: 'check', test: 'bin/x.test.mjs', break: { path: 'bin/x.mjs', find: 'limit = ruleOf(id)', replace: 'limit = 1' } }), [
+    'a planted break holds no rule read such as ruleValue(, which rules check would count as the register reading that rule',
+  ]);
   assert.deepEqual(faults({ level: 'eval', cases: [] }), ['an eval control names its cases, a list of task names']);
   assert.deepEqual(faults({ level: 'owed', since: '2026-10-29' }), ['owed since 2026-10-29, after the baseline of 2026-10-28: only a gap of the baseline is owed']);
   assert.deepEqual(faults({ level: 'owed', since: BASELINE }, { ruleSince: '2026-10-29' }), ['the rule is declared on 2026-10-29, after the baseline of 2026-10-28, so it is not owed: it names its control']);

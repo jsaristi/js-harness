@@ -7,7 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rulesMain } from './rules.mjs';
-import { spanId } from './lib/rules-coverage.mjs';
+import { readCoverageText, spanId } from './lib/rules-coverage.mjs';
+import { plantedBreaks } from './lib/rules-coverage-read.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLANTED = 'A planted directive that no rule and no register holds.';
@@ -23,8 +24,11 @@ async function rules(argv, root = PACKAGE) {
 // What `rules check` reads of the package, and the much less that `rules coverage` reads: the register, the version,
 // the cases and the repository's own sources (the shipped texts are rendered by the code that runs).
 const CHECKED = ['bin', 'docs', 'evals/tasks', 'odd/tasks', 'package.json', 'AGENTS.md', 'CLAUDE.md', 'README.md'];
-// The list marks the harness's own checkout, which `rules` tells from a project by it.
-const COVERED = ['bin/lib/rules-data.mjs', 'bin/lib/rules-coverage-data.mjs', 'package.json', 'evals/tasks', 'AGENTS.md', 'CLAUDE.md'];
+// The list marks the harness's own checkout, which `rules` tells from a project by it; the files the register's checks
+// name are there, since a check whose test or break is gone is refused.
+const NAMED = plantedBreaks(readCoverageText(fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8')).register)
+  .flatMap((item) => [item.test, item.break.path]);
+const COVERED = [...new Set(['bin/lib/rules-data.mjs', 'bin/lib/rules-coverage-data.mjs', 'package.json', 'evals/tasks', 'AGENTS.md', 'CLAUDE.md', ...NAMED])];
 
 /** A copy of the `parts` of the package, in a temp folder outside the repository, for `body(root)`. */
 async function inCopy(body, parts = COVERED) {

@@ -78,11 +78,13 @@ mechanism here, before S13 rehearses it and S12 ships it.
   incident set no worse."
 
 ## Tasks
-- [ ] T1 (kind: build) spans, ties, the control grammar and the register's reading — S2, S3; inline; slice 1
-- [ ] T2 (kind: build) the sources list and its test, the seeded register, `rules coverage` with `--json`,
-  `--strict` and `--refresh`, and the `rules check` refusal — S1, S5, S6; inline; slice 2; one independent
-  verifier after it
-- [ ] T3 (kind: build) `--prove` and the first controls with planted breaks — S3; inline; slice 3
+- [x] T1 (kind: build) spans, ties, the control grammar and the register's reading — S2, S3; inline; slice 1
+  (`9890615e`)
+- [x] T2 (kind: build) the sources list and its test, the seeded register, `rules coverage` with `--json`,
+  `--strict` and `--refresh`, and the `rules check` refusal — S1, S5, S6; inline; slice 2 (`5fb2c270`,
+  `65d6f804`); one independent verifier after it
+- [x] T3 (kind: build) `--prove` and the first controls with planted breaks — S3; inline; slice 3 (the commit
+  after `65d6f804`)
 - [ ] T4 (kind: build) `rules` in every `task.json`, the without-rule arm, the record under `evals/proofs/` and
   the free check in `tasks.test.mjs` — S4; inline; slice 4
 - [ ] T5 (kind: build) the project binding: a project rule's `control`, the baseline `init` records, the project's
@@ -98,20 +100,7 @@ Reviews:
 Not written yet (T7).
 
 ## Next step
-State at the context pause (2026-10-28): T1 committed `9890615e`. T2 split in two commits under the 1,200-line
-cap: 2a (`rules-sources.mjs` and test, `coverageOf`, `refreshRegister`, `writeCoverage`, `registerFaults`) was
-committing in the background; 2b is in the working tree, unstaged: `bin/lib/rules-coverage-data.mjs` (seeded by
-`C:\Users\Oficina\.claude\jobs\76a92c61\tmp\seed.mjs <root> 2026-10-28`: 411 spans, 66 rules, 9 message sources,
-19 cases owed), `bin/lib/rules-coverage-read.mjs` (without `proveBreaks`), `bin/rules.mjs` (`coverage
-[--json] [--strict] [--refresh]`, the `rules check` refusal), `bin/rules.test.mjs` (HOMES holds the register, the
-usage line), `bin/rules-coverage.test.mjs`. Commit 2b once 2a lands. Then T3: put `proveBreaks` and
-`plantedBreaks` back into `rules-coverage-read.mjs` from `tmp\read-with-prove.mjs`, add `--prove` to the parse,
-usage and `coverageForm`, a test, and real check controls for the value rules `rules-bindings.test.mjs` holds
-(agents-budget, sensor-timeout, sensor-silence, contract-run-timeout, gate-max, wait-every, wait-for, gate-wait,
-gate-log-size, gate-log-command, context-pause), each break `= ruleValue(` to `= 1 + ruleValue(` in its reader.
-Then the independent verifier on slice 2, the reviews, T4-T7. Known limit for the Log: an edit is judged by its
-place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds
-it stale until `--refresh`, so the review reads it.
+T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. Next: the independent verifier on slice 2 (`5fb2c270`, `65d6f804`), the reviews (Codex and the lenses) of slices 1-3 from base `7899f5ee`, then T4-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
 ## Log
 - L1 (2026-10-28, the lead's brief `briefs/2026-10-28T17-34-30-440Z-2b199716.md`): "JH 73 · F8 S5c-a: directive

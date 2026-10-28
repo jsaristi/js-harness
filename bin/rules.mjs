@@ -33,12 +33,12 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule } from './lib/rules-change-run.mjs';
-import { readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
+import { proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
 import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
+export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -67,13 +67,13 @@ function parseArgs(argv) {
   }
   // `coverage` takes its flags, each once at most; `--refresh` writes the register and goes alone.
   if (argv[0] === 'coverage') {
-    const parsed = { command: 'coverage', json: false, strict: false, refresh: false };
-    const flags = { '--json': 'json', '--strict': 'strict', '--refresh': 'refresh' };
+    const parsed = { command: 'coverage', json: false, strict: false, prove: false, refresh: false };
+    const flags = { '--json': 'json', '--strict': 'strict', '--prove': 'prove', '--refresh': 'refresh' };
     for (const token of argv.slice(1)) {
       if (!Object.hasOwn(flags, token) || parsed[flags[token]]) throw new RulesArgError(`unknown argument: ${token}`);
       parsed[flags[token]] = true;
     }
-    if (parsed.refresh && (parsed.json || parsed.strict)) throw new RulesArgError('rules coverage --refresh goes alone');
+    if (parsed.refresh && (parsed.json || parsed.strict || parsed.prove)) throw new RulesArgError('rules coverage --refresh goes alone');
     return parsed;
   }
   const words = [];
@@ -435,7 +435,7 @@ function coverageLines(report) {
 /** `rules coverage` in the harness's checkout at `root`: the report, or its JSON with `--json`; `--strict` exits 1 on a
  * finding, a stale line or an owed share over the cap once it is held; `--refresh` writes the register brought up to
  * the texts, which only shrinks the debt. Plain, it exits 0 whatever it finds: `rules check` is the refusal. */
-function coverageForm(parsed, root, { stdout, stderr }) {
+function coverageForm(parsed, root, { run, stdout, stderr }) {
   let read;
   try {
     read = readCoverage(root, RULES);
@@ -455,6 +455,18 @@ function coverageForm(parsed, root, { stdout, stderr }) {
   }
   const overCap = OWED_CAP_FROM !== null && report.totals.owed > OWED_CAP * report.totals.obligations;
   const failing = parsed.strict ? [...report.findings, ...report.stale, ...(overCap ? [`owed is ${percent(report.totals.owed, report.totals.obligations)} of the obligations, over the cap of ${percent(OWED_CAP, 1)}`] : [])] : report.findings;
+  // Each planted break is applied in a copy of the checkout, and its test must go red there.
+  if (parsed.prove) {
+    const proofs = proveBreaks(root, read.register, { spawn: run, tmpdir: os.tmpdir() });
+    for (const proof of proofs) {
+      const what = `${proof.rule}${proof.of === undefined ? '' : ` (${proof.of})`}: ${proof.test} with the break in ${proof.path}`;
+      stdout(proof.red ? `PROVEN  ${what} went red` : `FAIL    ${what} ${proof.status === null ? 'did not finish' : 'stayed green'}`);
+    }
+    const open = proofs.filter((proof) => !proof.red).length;
+    stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break turns its test' : 'breaks turn their tests'} red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks left their test green`);
+    if (open > 0) return 1;
+    if (!parsed.strict && !parsed.json) return 0;
+  }
   if (parsed.json) stdout(JSON.stringify(report, null, 2));
   else {
     for (const line of coverageLines(report)) stdout(line);

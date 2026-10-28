@@ -22,6 +22,8 @@ const LEVEL_KEYS = {
   owed: ['level', 'since'],
 };
 const BREAK_KEYS = ['find', 'path', 'replace'];
+// A read of a rule in code, as rules check finds one (bin/lib/rules-check.mjs) in any file, the register's included.
+const RULE_READ = /\b(?:ruleValue|ruleHere|ruleOf)\(/;
 // A phrase shorter than this could be found by accident; it is also the shortest span that sits inside a phrase.
 const MIN_PHRASE = ruleValue('control-phrase-min', 'characters');
 const NAME_PATTERN = /`rule:([a-z][a-z0-9-]*)`/g;
@@ -161,6 +163,7 @@ function levelFaults(control, { baseline, ruleSince }) {
       else if (!isObject(planted) || Object.keys(planted).sort().join(',') !== BREAK_KEYS.join(',') || !isPath(planted.path) || !isText(planted.find) || typeof planted.replace !== 'string') {
         faults.push('the planted break is { path, find, replace }: a path of the repository, the text it finds and the text it puts there');
       } else if (planted.find === planted.replace) faults.push('a planted break changes what it finds: find and replace are two different texts');
+      else if (RULE_READ.test(`${planted.find}\n${planted.replace}`)) faults.push('a planted break holds no rule read such as ruleValue(, which rules check would count as the register reading that rule');
       break;
     }
     case 'eval':
