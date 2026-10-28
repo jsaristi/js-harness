@@ -14,6 +14,48 @@ test('a complete result echoes the hash and lists every manifest path, in any or
   assert.equal(lensResult(`\`\`\`json\n${JSON.stringify(answer({ findings: [] }))}\n\`\`\``, candidate).complete, true);
 });
 
+test('the one object is read with prose before or after it, bare or in its fence', () => {
+  const object = JSON.stringify(answer({ findings: [] }), null, 2);
+  const shapes = [
+    `${object}\n\nNote: every path was read in full.`,
+    `Here is the review of the range.\n\n${object}`,
+    `Here is the review:\n\n\`\`\`json\n${object}\n\`\`\`\n\nNothing blocks the change.`,
+    `${object}\n`,
+    `The review [risk lens] is below.\n${object}\n(see [1] above)`,
+  ];
+  for (const text of shapes) assert.deepEqual(lensResult(text, candidate), { complete: true, findings: [], evidence: ['read both'] }, text);
+  // Braces, escaped quotes and a backslash before a closing quote inside its strings do not split or join the object.
+  const quoting = { ...finding, claim: 'the `{` in "a}b" stays \\', proof_refs: ['p {x} "y"'] };
+  assert.deepEqual(lensResult(`Done.\n${JSON.stringify(answer({ findings: [quoting] }))}\nThat is all.`, candidate), { complete: true, findings: [quoting], evidence: ['read both'] });
+});
+
+test('an answer that is not one complete object is still refused, and says what it holds', () => {
+  const object = JSON.stringify(answer({ findings: [] }));
+  const cases = [
+    ['two objects', `${object}\n\n${object}`, /not one JSON object: it holds 2/],
+    ['two objects, each fenced', `\`\`\`json\n${object}\n\`\`\`\n\`\`\`json\n${object}\n\`\`\``, /it holds 2/],
+    ['the object and a second fenced block', `\`\`\`json\n${object}\n\`\`\`\n\n\`\`\`diff\n- a\n+ b\n\`\`\``, /fence/],
+    ['a bare object and a fenced block', `${object}\n\n\`\`\`\nnode --test\n\`\`\``, /fence/],
+    ['a bare object and a tilde-fenced block', `${object}\n\n~~~diff\n- a\n+ b\n~~~`, /fence/],
+    ['prose with no object', 'Looks good to me.', /not one JSON object: it holds none/],
+    ['an object cut short', object.slice(0, -40), /not closed/],
+    // A quote left unescaped in a string is the likely break; the why shows the text where it breaks, since the record
+    // keeps only the start: near the character the parser names, or in the parser's own words when it names none.
+    ['an object that does not parse', object.replace('"read both"', '"read "both" paths"'), /does not parse( at character \d+, near "|: ).*both/],
+    ['the object as the element of an array', `[${object}]`, /element of a JSON array/],
+    ['the object as the element of a fenced array', `\`\`\`json\n[\n${object}\n]\n\`\`\``, /element of a JSON array/],
+    // A comma beside the object is read as an array's too: refusing a valid answer costs a run, reading one does not.
+    ['the object first of two elements', `[${object}, 1]`, /element of a JSON array/],
+    ['the object last of two elements', `[1, ${object}]`, /element of a JSON array/],
+    ['prose holding braces beside the object', `The {placeholder} stays.\n${object}`, /does not parse/],
+  ];
+  for (const [shape, text, why] of cases) {
+    const read = lensResult(text, candidate);
+    assert.equal(read.complete, false, shape);
+    assert.match(read.why, why, shape);
+  }
+});
+
 test('anything else is incomplete and says why: prose, another hash, a missing path, an incomplete status, an unknown field', () => {
   const cases = [
     ['Looks good to me.', /not one JSON object/],

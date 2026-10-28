@@ -410,6 +410,15 @@ gate for a change that held no code.
 - Control: check — bin/check.test.mjs — "a merge of the trunk into a branch of documents runs no
   sensor when the merge differs from the side it merges only in documents" — since 2026-10-14
 
+### edit-during-review
+A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
+not the committed range, wrote no record and had to be run again.
+- Class: delivery
+- Seen: 2026-10-27 — this entry's own commit (JH 66, lens reader) — `docs/FAILURES.md` edited during
+  the Codex review of `d6867d8..484df03`; 68,470 input tokens spent on a run that recorded nothing
+- Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
+  leaves no record: the tree is no longer the committed range" — since 2026-10-12
+
 ### engram-listener-unseen-at-kill
 A gate failed on one test of `evals/isolation-probe.test.mjs` (line 1734), "the probe stops what the
 trial left listening on its engram port, by number, and leaves nothing behind", in a change that touched
@@ -703,6 +712,20 @@ repository has.
   of 07:50 named it and the session reported it without looking at whose it was
 - Control: check — bin/lib/project-apply.test.mjs — "a project with JavaScript and no TypeScript: the
   paste off, the plugin off, an index made, the push check wired" — since 2026-10-14
+
+### lens-refusal-unread
+A Claude lens answer was refused as "not one JSON object" and neither the run's output nor its
+record showed why: the reader parsed the whole text, so a line before or after the object was
+enough, and the record keeps only the answer's first 300 characters. Whether the refused answers
+held such a line or a broken object was never read; a rerun of the same range answered clean.
+- Class: unseen-state
+- Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md:164-168 (L10) — readability on
+  `4834997f..023eceb9`; its answer was not kept, and a run alone after it was complete
+- Seen: 2026-10-27 — `lens-reviews.jsonl` in the git directory, the incomplete runs of 23:09:08Z and
+  23:10:12Z over `d6867d8..d90cd20` (JH 65) — risk, then reliability, each answer starting as the
+  object; the range was recorded as a skip, which holds its pull request at the merge door
+- Control: check — bin/lib/lens-result.test.mjs — "an answer that is not one complete object is still
+  refused, and says what it holds" — since 2026-10-27
 
 ### linux-probe-misnames-process
 On Linux the probe of a port named the process that listened by `ps -o comm=`, which answered the

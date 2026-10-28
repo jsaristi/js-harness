@@ -204,6 +204,17 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     passed both. Cost $11.35 of list cost (`evals/results/f8-s1-incidents.json`).
   - S1's pass is met: the probe 6 of 6 (L13), tokens per lens recorded on every real slice, the incident set no
     worse.
+- L15 (2026-10-27, JH 66, a small task after S1 closed; branch `worktree-lens-reader-object`, PR 616): JH 65's lens
+  run over `d6867d8..d90cd20` refused 2 of 6 answers as "not one JSON object", each starting as the object (L10's
+  refusal again). What they held past the object is not known: no record kept it, and one diagnostic run of the three
+  lenses over that range answered clean ($0.051 by the CLI, about 67k input and 3.9k output tokens).
+  - The reader now takes the one object an answer holds with prose before or after it, bare or in one fence, and
+    still refuses no object, two, a broken or unclosed one, fences other than one block around it (backtick or
+    tilde) and an object that is an array element; its why says which, and where a broken object breaks, so the
+    300-character record is kept as it is (`docs/FAILURES.md`, `lens-refusal-unread`).
+  - A Codex run was wasted: `docs/FAILURES.md` was edited while Codex reviewed, so it recorded nothing
+    (`edit-during-review`). Run again on `d6867d8..b71ddb0`: correct (0.87); its first run's P2 (tilde fences) fixed
+    in eaa577e6. Lenses risk and reliability on `d6867d8..b71ddb0`: complete, no finding.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -212,6 +223,9 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `9e81839b..e35eb7dc` (4834997f, 023eceb9, e35eb7dc): medium, reviewed and approved (lineage review-31b6ff71575dd070, lens reliability), one suggestion: the `review` row's catch for a spawn that throws has no test since the gentle-ai row's went, left for the next slice; Codex correct on parts 1 and 2, its P2 fixed in e35eb7dc and rechecked correct (0.98); lenses no finding (L10, L11).
 - gentle-ai on `2d20b75..42a4225c` (4df603e0): medium, reviewed and approved (lineage review-4adc6c14fd575602, lens reliability), a warning refuted and two suggestions taken in 96ffb9f9; Codex on `2d20b75..96ffb9f9` correct (0.97); lenses no finding (L13).
 - gentle-ai on `2d20b75..b6e2fbff` (4df603e0, 96ffb9f9): medium, reviewed and approved (lineage review-dff84825d3dcac2d, lens reliability), one suggestion left as is: an empty answer prints `it answered: ""`, which reads right.
+- gentle-ai on `d6867d86..7b8a0a6e` (7b8a0a6e): medium, reviewed and approved (lineage review-0174f325f0f58bea, lenses risk and reliability), three advisory findings taken in 41c08b96 and 484df031 (L15).
+- gentle-ai on `7b8a0a6e..41c08b96` (41c08b96): medium, reviewed and approved (lineage review-6b678a0a52436631, lens reliability), two advisory findings: the comma tests taken in 484df031; a comma beside the object stays refused, since a refusal costs a run and a false complete breaks S1's rule.
+- gentle-ai on `484df031..eaa577e6` (484df031, eaa577e6): medium, reviewed and approved (lineage review-e23cd3803964664e, lens reliability), two advisory findings left for later work: a `~~~` prose line on one side of a bare object is now refused (the safe side), and no test reads an object inside a tilde fence as complete.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27

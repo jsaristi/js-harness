@@ -81,7 +81,7 @@ test('one incomplete lens makes the run incomplete: recorded, exit 1, and no rev
   assert.deepEqual(rec.results.map((r) => r.outcome), ['incomplete', 'complete']);
   // What it answered is kept and shown, cut short, so why it failed can be read before it runs again (L10).
   assert.equal(rec.results[0].answered, 'Looks fine.');
-  assert.match(err, /risk: incomplete, the answer is not one JSON object; it answered: "Looks fine\."/);
+  assert.match(err, /risk: incomplete, the answer is not one JSON object: it holds none; it answered: "Looks fine\."/);
 });
 
 test('an incomplete answer is kept on one line and cut at its first characters, never inside one', () => {
@@ -94,7 +94,7 @@ test('an incomplete answer is kept on one line and cut at its first characters, 
   const [rec] = readLensReviews(dir).slice(-1);
   const kept = `${head}${'x'.repeat(LENS_ANSWER_KEPT - head.length - 1)}🙂`;
   assert.equal(rec.results[0].answered, kept);
-  assert.ok(err.split('\n').some((line) => line === `risk: incomplete, the answer is not one JSON object; it answered: ${JSON.stringify(kept)}`), err);
+  assert.ok(err.split('\n').some((line) => line === `risk: incomplete, the answer is not one JSON object: it holds none; it answered: ${JSON.stringify(kept)}`), err);
 });
 
 test('a skip is recorded with its reason and runs no lens; a range with no code records nothing to review', () => {
