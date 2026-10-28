@@ -7,9 +7,8 @@ import { stackNotice, stackUpdateRow, stackVersions } from './stack-update.mjs';
 const AT = '2026-10-16T00:00:00.000Z';
 const now = () => new Date(AT);
 
-test('the versions read are those of the tools installed, with the Claude CLI on PATH, and without gentle-ai, which has its own row', () => {
+test('the versions read are those of the tools installed, with the Claude CLI on PATH', () => {
   const rows = [
-    { id: 'gentle-ai', installed: 'ok', version: '3.7.0' },
     { id: 'engram', installed: 'ok', version: '3.3.0' },
     { id: 'codex', installed: 'missing', version: null },
     { id: 'context7', installed: 'ok', version: 'hosted' },

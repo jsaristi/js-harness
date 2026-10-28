@@ -29,7 +29,6 @@ function fakeSpawnMissing() {
 /** A fully "healthy" fixture home, matching doctor.test.mjs's own — every tool installed and
  * configured everywhere it applies, so the report has zero gaps. */
 function seedHealthyHome(home, project) {
-  writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
   writeJson(path.join(home, '.claude.json'), {
     mcpServers: {
       engram: { command: 'engram' },
@@ -45,10 +44,10 @@ function seedHealthyHome(home, project) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'engram@engram': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }], 'engram@engram': [{ version: '0.1.19' }] },
   });
   fs.mkdirSync(path.join(project, '.codegraph'), { recursive: true });
 }
@@ -64,7 +63,7 @@ function healthySpawn(project, { codexCli = true } = {}) {
     if (codexCli && line === 'codex login status') return { status: 0, stdout: 'Logged in\n', stderr: '' };
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
-    if (['gentle-ai', 'engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
+    if (['engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }
@@ -139,8 +138,8 @@ test('doctor --hook prints again when the gaps change', async () => {
     const first = await runHook(['--hook', '--home', home, '--cwd', project], {}, deps);
     assert.ok(first.stdout.trim().length > 0);
 
-    // Close one gap: register gentle-ai for both hosts, changing the gap list and its digest.
-    writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
+    // Close one gap: register context7 in Claude Code, changing the gap list and its digest.
+    writeJson(path.join(home, '.claude.json'), { mcpServers: { context7: { type: 'http', url: 'https://mcp.context7.com/mcp' } } });
 
     const second = await runHook(['--hook', '--home', home, '--cwd', project], {}, deps);
     assert.equal(second.code, 0);
@@ -280,25 +279,25 @@ test('doctor --hook notifies once when a recorded launcher\'s server is down, an
 });
 
 // R3-001 (accepted T6b review follow-up): a fix may be a list of commands, and the hook must not
-// care — its message only counts gaps, so one report carrying a list fix (gentle-ai `upToDate`, a major
-// behind) and a one-step fix (codex `installed`, no Codex CLI) is still exactly one well-formed count line.
+// care — its message only counts gaps, so one report carrying a list fix (the engram plugin's `upToDate`, behind
+// the one its binary's tag ships) and a one-step fix (codex `installed`, no Codex CLI) is still exactly one
+// well-formed count line.
 test('doctor --hook prints one well-formed count line for a report whose gaps have list fixes', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home, project);
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
+    const git = async () => ({ status: 0, stdout: JSON.stringify({ plugins: [{ name: 'engram', version: '0.2.0' }] }) });
     const fetchImpl = async (url) => ({
       ok: true,
-      json: async () =>
-        url.includes('registry.npmjs.org')
-          ? { version: '0.0.1' }
-          : { tag_name: url.includes('Gentleman-Programming/gentle-ai') ? 'v99.0.0' : 'v0.0.1' },
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : [{ tag_name: 'v0.0.1' }]),
     });
 
     const { code, stdout, stderr } = await runHook(
       ['--hook', '--home', home, '--cwd', project],
       {},
-      { spawn: healthySpawn(project, { codexCli: false }), fetch: fetchImpl },
+      { spawn: healthySpawn(project, { codexCli: false }), fetch: fetchImpl, git },
     );
 
     assert.equal(code, 0);

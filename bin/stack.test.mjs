@@ -56,6 +56,33 @@ test('optional gaps alone exit 0', async () => {
   assert.match(out, /fix typescript-lsp/);
 });
 
+// F8 S11, S7 (odd/tasks/f8-s11-complements.md): on a home with none of the complements, each one is listed with a
+// command of its own and an undo, and nothing names gentle-ai. The fixes are doctor's real ones.
+test('a home with no complement lists engram, its plugin, codegraph and context7, each with its own command and undo', async () => {
+  const { tools } = await import('./lib/stack.mjs');
+  const real = (id) => tools.find((tool) => tool.id === id).fix({ project: '/p', env: { JS_HARNESS_PM: 'pnpm' }, platform: 'linux' });
+  const none = { installed: 'missing', claude: 'missing', codex: 'missing' };
+  const { code, out } = await run([], {
+    read: stack({
+      engram: { ...none, fix: real('engram') },
+      'engram-plugin': { ...none, codex: 'n/a', fix: real('engram-plugin') },
+      codegraph: { ...none, fix: real('codegraph') },
+      context7: { ...none, fix: real('context7') },
+    }),
+  });
+  assert.equal(code, 1);
+  assert.doesNotMatch(out, /gentle-ai/);
+  for (const [tool, command, undo] of [
+    ['engram', /engram setup codex/, /undo: codex mcp remove engram/],
+    ['engram-plugin', /engram setup claude-code/, /undo: claude plugin marketplace remove engram/],
+    ['codegraph', /run: {2}pnpm add -g @colbymchenry\/codegraph/, /undo: pnpm remove -g @colbymchenry\/codegraph/],
+    ['context7', /run: {2}claude mcp add -s user --transport http context7 https:\/\/mcp\.context7\.com\/mcp/, /undo: claude mcp remove -s user context7/],
+  ]) {
+    assert.match(out, command, tool);
+    assert.match(out, undo, tool);
+  }
+});
+
 test('stack --json prints the plan in the shape onboarding reads', async () => {
   const { code, out } = await run(['--json'], { read: stack({ codex: { installed: 'missing', codex: 'n/a' } }) });
   assert.equal(code, 1);
@@ -117,7 +144,7 @@ test('readStack keeps only the tool rows, resolves the switches and probes git a
     return { status: null, error: new Error('spawn ENOENT'), stdout: '' };
   };
   const { rows, functions, prerequisites } = readStack({ home: '/no/such/home', cwd: '/no/such/project', spawn, platform: 'linux', env: {} });
-  assert.deepEqual(rows.map((r) => r.id), ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex']);
+  assert.deepEqual(rows.map((r) => r.id), ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex']);
   assert.ok(functions.codeMap, 'the switches are resolved');
   assert.deepEqual(prerequisites, [{ id: 'git', state: 'ok' }, { id: 'gh', state: 'ok' }]);
 });
@@ -136,13 +163,15 @@ test('stack --help and stack install --help print the usage of both, with the --
   assert.equal(read, 0);
 });
 
-test("stack takes an empty JS_HARNESS_HOME as unset: engram's registration is read from the user home, not the working directory", () => {
+test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read from the user home, not the working directory', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-stack-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
   try {
-    // Registered in Claude Code in the user home: read from there, `claude` is no gap; read from the working
-    // directory, which holds nothing, it would be one. Codex's side is missing either way.
-    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { engram: { command: 'engram' } } }));
+    // Installed and disabled in the user home: read from there, its one gap is `claude`; read from the working
+    // directory, which holds nothing, it would be `installed` too.
+    fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'engram@engram': [{ version: '0.1.19' }] } }));
+    fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'engram@engram': false } }));
 
     const run = spawnSync(process.execPath, [fileURLToPath(new URL('./js-harness.mjs', import.meta.url)), 'stack', '--json', '--cwd', work], {
       cwd: work,
@@ -150,10 +179,9 @@ test("stack takes an empty JS_HARNESS_HOME as unset: engram's registration is re
       env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
     });
 
-    const engram = JSON.parse(run.stdout).manual.filter((row) => row.tool === 'engram');
-    assert.equal(engram.length, 1, run.stdout);
-    assert.equal(engram[0].dimensions.includes('codex'), true, run.stdout);
-    assert.equal(engram[0].dimensions.includes('claude'), false, run.stdout);
+    const plugin = JSON.parse(run.stdout).manual.filter((row) => row.tool === 'engram-plugin');
+    assert.equal(plugin.length, 1, run.stdout);
+    assert.deepEqual(plugin[0].dimensions, ['claude'], run.stdout);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });

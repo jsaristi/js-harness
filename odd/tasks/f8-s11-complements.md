@@ -65,9 +65,9 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   and undo"; "`check` green; `doctor` green with gentle-ai still installed".
 
 ## Tasks
-- [ ] T1 (kind: build) the stack rows: engram, the engram plugin, codegraph and context7 by their own commands,
+- [x] T1 (kind: build) the stack rows: engram, the engram plugin, codegraph and context7 by their own commands,
   context7 required and runnable, the gentle-ai row and its installer step out — S1, S4; inline; PR 1
-- [ ] T2 (kind: build) the `gentle-ai-sync` row, `doctor --gentle-ai-reviewed` and the install watch out — S4;
+- [x] T2 (kind: build) the `gentle-ai-sync` row, `doctor --gentle-ai-reviewed` and the install watch out — S4;
   inline; PR 1
 - [ ] T3 (kind: build) presets: `init --preset`, the `engramPlugin` switch, the context7 project row, and a test
   per preset — S2, S3; inline; PR 2
@@ -88,7 +88,7 @@ Reviews:
 Not run yet.
 
 ## Next step
-T1.
+T3 and T4 (PR 2), after PR 1's reviews.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
@@ -136,3 +136,12 @@ T1.
   `doctor`'s context7 row turns its `project` cell into a gap where `~/.claude.json` turns it off for the project
   (the "flags a project with context7 off" of S2). A committed `.mcp.json` was weighed and left: it would shadow
   the user registration in every clone and ask the folder's trust first (L5).
+- L7 (2026-10-28, decision, within S4): the `gentleAi` record the gentle-ai-sync row kept in
+  `~/.js-harness/doctor.json` is read as nothing and drops at the next write of the cache, with no migration: it
+  was a cache of a row that left, regenerable and read by nothing else. The doctor tests that used gentle-ai as
+  their sample looked-up tool use engram (GitHub releases) or the Codex CLI (npm) instead, and the list-fix tests
+  use the engram plugin behind its binary's tag, the one list fix left.
+- L8 (2026-10-28, evidence and decision, within S4): the first gate of the commit that drops the gentle-ai row
+  failed on GitHub Actions (run 40687865647): `evals/suite.mjs` read that row for the eval stack's `gentleAi`
+  field, 9 tests of `evals/suite.test.mjs`. The field leaves the stack a run records and compares; a results file
+  recorded before keeps its `gentleAi` key, unread, so an old run resumes on a machine without gentle-ai.
