@@ -39,6 +39,10 @@ alone holds it, and say which." No message from Sebastián in this session.
   refused (cmd copy out of a record, `start` in a PowerShell string, Deno and Bun reads).
 - Local branch `jh74-draft` (the first design, never pushed, its WIP commit skipped the hook) is kept for the lead.
 
+## Left
+- PR 637 to land; the merge door may refuse it for the guard slice's gentle-ai lines.
+- The follow-ups above, and local branch `jh74-draft`, which is the lead's to delete or keep.
+
 ## Cost
 Measured where the commands printed it, not totalled: Codex 50,077, 124,747 and 32,404 input tokens on the last three
 runs (earlier runs in the Codex records); Claude lenses about 13,600 input tokens a lens on 1189ae0..7ea64a7 and 3,800
