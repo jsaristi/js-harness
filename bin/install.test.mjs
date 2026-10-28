@@ -123,6 +123,71 @@ test('installMain then uninstallMain give a Claude settings file with no hooks k
   }
 });
 
+// F8 S10, T4: what install does with the permissions is said, and a settings file it could not hold them in goes to
+// stderr; uninstall says what it took out, and one it could not write fails it with what to do.
+test('installMain and uninstallMain say what they did with the permissions, and a failure goes to stderr', async () => {
+  const home = makeTmpHome();
+  try {
+    const settings = userSettingsPath(home);
+    const installed = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(installed.code, 0);
+    assert.ok(installed.outLines.includes(`wrote the permissions js-harness holds into ${settings}`), installed.outLines.join('\n'));
+    const again = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(again.outLines.includes(`the permissions js-harness holds are already in ${settings}`), again.outLines.join('\n'));
+
+    const writeFile = (file, ...rest) => {
+      if (file === settings) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      return fs.writeFileSync(file, ...rest);
+    };
+    const failed = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
+    assert.equal(failed.code, 1);
+    assert.ok(failed.errLines.includes(`could not take the permission entries install wrote out of ${settings} (EBUSY): they are still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove them by hand`), failed.errLines.join('\n'));
+    const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(removed.code, 0);
+    assert.ok(removed.outLines.includes(`took 25 permission entries install wrote out of ${settings}`), removed.outLines.join('\n'));
+
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }));
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(settings, '{}');
+    const restored = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(restored.outLines.includes(`put back defaultMode "bypassPermissions" in ${settings}, adopted at an earlier install; to keep it out, set "permissions.defaultMode" to "default"`), restored.outLines.join('\n'));
+
+    fs.writeFileSync(settings, '{ not json');
+    const skipped = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(skipped.errLines.includes(`skipped the permissions in ${settings}: malformed JSON; js-harness doctor shows the entries missing`), skipped.errLines.join('\n'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// gentle-ai's lens on 8c684535..c9f3efd9: the message of a record that names another file sends the user to that file,
+// the one the record says install wrote, not to the user settings; a file it could not read or write says so before a run again.
+test('uninstallMain sends a permissions record it cannot clear to its own file, and an unreadable one to be fixed first', async () => {
+  const home = makeTmpHome();
+  try {
+    const settings = userSettingsPath(home);
+    assert.equal(await installMain(['--home', home]), 0);
+    const good = fs.readFileSync(settings, 'utf8');
+    fs.writeFileSync(settings, '{ not json');
+    const failed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(failed.code, 1);
+    assert.ok(failed.errLines.some((line) => line.startsWith(`could not take the permission entries install wrote out of ${settings} (`) && line.endsWith('): they are still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove them by hand')), failed.errLines.join('\n'));
+
+    fs.writeFileSync(settings, good);
+    assert.equal(await installMain(['--home', home]), 0);
+    const file = path.join(home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const elsewhere = path.join(home, 'elsewhere.json');
+    manifest.permissions.path = elsewhere;
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    const kept = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.ok(kept.errLines.includes(`left the permission entries install wrote as they are (the record names another file than the user settings): they are no longer recorded; remove them by hand from ${elsewhere}, the file the record names`), kept.errLines.join('\n'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('syncMain updates the manifest under --home and exits 0', async () => {
   const home = makeTmpHome();
   try {
@@ -379,7 +444,7 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     const actual = installed.outLines.filter((line) => line.startsWith('registered hook entry'));
     assert.deepEqual(actual, registeredLines);
     // The guard's line in full, its matcher included, as one literal.
-    assert.ok(actual.includes(`registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)`));
+    assert.ok(actual.includes(`registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)`));
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
     assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), entryComponents.map((component) => `removed hook entry from ${component.target(home)}`).sort());
@@ -674,7 +739,10 @@ test('uninstallMain says a setting it could not write back, with the error code 
     };
     const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
     assert.equal(code, 1, 'a setting left in place is not a clean uninstall');
-    assert.deepEqual(errLines, [`could not put crossSessionInbound back in ${settings} (EPERM): it is still recorded; run js-harness uninstall --global again, or set it back by hand`]);
+    assert.deepEqual(errLines, [
+      `could not take the permission entries install wrote out of ${settings} (EPERM): they are still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove them by hand`,
+      `could not put crossSessionInbound back in ${settings} (EPERM): it is still recorded; run js-harness uninstall --global again, or set it back by hand`,
+    ]);
     assert.equal(outLines.some((line) => line.includes('modified by you') && line.includes(settings)), false, outLines.join('\n'));
 
     // The record is kept, so a run again, once the file can be written, puts the setting back and passes.
@@ -1889,7 +1957,7 @@ test('syncMain and uninstallMain --cwd refuse a project manifest of a newer form
       const { code, errLines } = await captureConsole(main);
       assert.equal(code, 1);
       assert.ok(
-        errLines.some((l) => l.includes('in format 99, and this copy reads format 2') && l.includes('run that version of js-harness')),
+        errLines.some((l) => l.includes('in format 99, and this copy reads format 3') && l.includes('run that version of js-harness')),
         errLines.join('\n'),
       );
     }

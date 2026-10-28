@@ -327,6 +327,50 @@ test('any other tool, an unreadable payload, or a failure inside passes silently
   assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: 42 }), quiet);
 });
 
+// T5 of odd/tasks/f8-s10-port.md: the denies of the Claude settings, which gentle-ai's uninstall takes away, are held
+// here too, so a Read, Write or Edit of a secret's place is refused whatever the settings hold; so is Claude Code's
+// own login file, which an eval once copied into a scratch home (the diet's section 9).
+test('a Read, a Write or an Edit of a secret\'s place or of the login file is denied, naming the place', async () => {
+  const calls = [
+    ['Read', 'C:\\Users\\u\\.claude\\.credentials.json', '.credentials.json'],
+    ['Read', 'C:/Users/u/.ssh/id_ed25519', '.ssh/*'],
+    ['Write', 'D:/project/.env', '.env'],
+    ['Edit', 'D:/project/config/secrets/db.json', '**/secrets/*'],
+  ];
+  for (const [tool, file, place] of calls) {
+    const result = await hook({ tool_name: tool, cwd: 'D:/project', tool_input: { file_path: file, content: 'x', old_string: 'a', new_string: 'b' } });
+    assert.equal(result.code, 0);
+    assert.equal(denied(result).permissionDecision, 'deny', `${tool} ${file}`);
+    assert.equal(denied(result).permissionDecisionReason,
+      `js-harness guard: ${tool} of ${file} is refused: it matches ${place}, a place of secrets that sessions are kept off (the denies js-harness install holds in the Claude settings); if the work needs it, the user does that step by hand`);
+  }
+});
+
+// The verifier found the other file tools silent: a NotebookEdit or a MultiEdit writes a file, and a Grep reads the
+// file or every file of the folder its `path` names.
+test('a NotebookEdit, a MultiEdit or a Grep of a secret\'s place is denied too', async () => {
+  const calls = [
+    ['NotebookEdit', { notebook_path: 'D:/project/secrets/a.ipynb', new_source: 'x' }, 'D:/project/secrets/a.ipynb', '**/secrets/*'],
+    ['MultiEdit', { file_path: 'D:/project/.env', edits: [] }, 'D:/project/.env', '.env'],
+    ['Grep', { pattern: 'token', path: 'C:\\Users\\u\\.claude\\.credentials.json', output_mode: 'content' }, 'C:\\Users\\u\\.claude\\.credentials.json', '.credentials.json'],
+    ['Grep', { pattern: 'BEGIN', path: 'C:/Users/u/.ssh' }, 'C:/Users/u/.ssh', '.ssh/*'],
+  ];
+  for (const [tool, input, file, place] of calls) {
+    const result = await hook({ tool_name: tool, cwd: 'D:/project', tool_input: input });
+    assert.equal(denied(result).permissionDecisionReason,
+      `js-harness guard: ${tool} of ${file} is refused: it matches ${place}, a place of secrets that sessions are kept off (the denies js-harness install holds in the Claude settings); if the work needs it, the user does that step by hand`);
+  }
+  for (const input of [{ pattern: 'x' }, { pattern: 'x', path: 'D:/project/bin' }]) {
+    assert.deepEqual(await hook({ tool_name: 'Grep', cwd: 'D:/project', tool_input: input }), { code: 0, out: '', err: '' }, JSON.stringify(input));
+  }
+});
+
+test('a Read of any other file passes with nothing printed', async () => {
+  for (const file of ['D:/project/bin/guard.mjs', 'D:/project/.envrc', 'C:/Users/u/.claude/settings.json']) {
+    assert.deepEqual(await hook({ tool_name: 'Read', cwd: 'D:/project', tool_input: { file_path: file } }), { code: 0, out: '', err: '' }, file);
+  }
+});
+
 // T4 of odd/tasks/memory-hygiene.md: the memory index grew to lines of 844 characters, read on every turn; the host's
 // own limit is about 150 (the consolidate-memory skill). A Write or an Edit of a project's memory MEMORY.md that puts
 // a longer line there is refused when it is written, which is cheaper than any clean-up after it.

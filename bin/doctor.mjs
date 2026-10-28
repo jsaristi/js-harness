@@ -26,6 +26,7 @@ import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gent
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
+import { permissionsHealth } from './lib/permissions.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
 
@@ -215,7 +216,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
   const withUnseen = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
-  const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now, project)] : withBackup;
+  const withPermissions = deps.permissions ? [...withBackup, permissionsRow(deps.permissions, home)] : withBackup;
+  const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
   const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
@@ -284,6 +286,19 @@ function backupRow(backup, home, now) {
   }
 }
 
+/** The permissions row (odd/tasks/f8-s10-port.md, T4): an entry `install` holds in the user's Claude settings that is
+ * missing, the denies that keep a session off credentials among them, is a gap the hook announces, with each entry;
+ * `n/a` where js-harness is not installed. Fails open to `unknown`. */
+function permissionsRow(permissions, home) {
+  const row = { id: 'permissions', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  try {
+    const health = permissions(home);
+    return { ...row, claude: health.state, fix: health.fix.length ? { claude: health.fix } : {} };
+  } catch {
+    return { ...row, claude: 'unknown' };
+  }
+}
+
 /** The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main holds, clean and idle,
  * that no land removed, a gap with the command that removes them and each one; `unknown` when git cannot say. */
 function worktreesRow(worktrees, project) {
@@ -317,7 +332,7 @@ function reviewSkipsRow(reviewSkips, project) {
   return { ...row, project: 'stale', fix: { project: [`${count}, and a pull request that holds a lens skip does not land: run the review it skipped`, ...found] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, host-update, clean and gentle-ai-sync rows. Their checks are
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, permissions, host-update, clean and gentle-ai-sync rows. Their checks are
  * given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
@@ -328,6 +343,7 @@ export function doctorCommand(argv) {
     worktrees: (cwd) => worktreesInMain({ cwd }),
     reviewSkips: (cwd) => owedSkipLines(cwd),
     backup: (home, now) => backupHealth(home, now),
+    permissions: (home) => permissionsHealth(home),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }

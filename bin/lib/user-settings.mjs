@@ -1,14 +1,26 @@
 // What js-harness writes into the user's Claude settings besides its hook entries, each recorded in the machine
-// manifest so `uninstall` puts back what was there: `crossSessionInbound` on request. Moved out of the engine
+// manifest so `uninstall` puts back what was there: `crossSessionInbound` on request, and the reader the permissions
+// (./permissions.mjs) share. Moved out of the engine
 // (./manifest.mjs) whole when F8 S10 added the permissions it holds there (odd/tasks/f8-s10-port.md). It and the engine
 // import each other's functions only, which an ES module cycle allows.
 import fs from 'node:fs';
 import path from 'node:path';
-import { NEW_SETTINGS_STYLE, SESSION_MESSAGES, detectIndent, keepRecord, readManifest, removeEmptyDirsUpTo, serializeJson, userSettingsPath } from './manifest.mjs';
+import { NEW_SETTINGS_STYLE, detectIndent, keepRecord, readManifest, removeEmptyDirsUpTo, serializeJson } from './manifest.mjs';
+
+/** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
+ * with `accept`, a message from a session of another permission class arrives instead of being held (his choice of
+ * 2026-10-11, and his answer of 2026-10-14 that `install` writes it on an explicit flag; T5 of
+ * odd/tasks/commands-and-doctor.md). It is a security setting, so nothing writes it without that flag. */
+export const SESSION_MESSAGES = { key: 'crossSessionInbound', value: 'accept' };
+
+/** The user settings of Claude Code under `home`, where `SESSION_MESSAGES` and the permissions are read. */
+export function userSettingsPath(home) {
+  return path.join(home, '.claude', 'settings.json');
+}
 
 /** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
  * was; a missing file is an empty object written in `NEW_SETTINGS_STYLE`. Throws with the reason a file cannot be taken. */
-function readSettings(target) {
+export function readSettings(target) {
   const existed = fs.existsSync(target);
   const raw = existed ? fs.readFileSync(target, 'utf8') : '{}';
   let data;

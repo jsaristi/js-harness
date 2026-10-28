@@ -2441,6 +2441,28 @@ test('doctorMain shows the memory-backup row stale with its reason, and n/a wher
   }
 });
 
+// The permissions row (odd/tasks/f8-s10-port.md, T4): a deny install holds that went missing is a gap, with each entry.
+test('doctorMain shows the permissions row stale with each missing entry, and n/a where nothing is installed', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const stale = () => ({ state: 'stale', fix: ['permissions: 1 entry missing from settings.json: run js-harness install', 'deny Read(.env)'] });
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, permissions: stale });
+    assert.match(output, /^permissions\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(output.includes('    deny Read(.env)'), output);
+
+    const off = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, permissions: () => ({ state: 'n/a', fix: [] }) });
+    assert.match(off.output, /^permissions\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    const broken = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, permissions: () => { throw new Error('boom'); } });
+    assert.match(broken.output, /^permissions\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
 // and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
 // so the hook, run at every session start, does not ask.

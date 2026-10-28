@@ -68,10 +68,10 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T1 (kind: build) `notify` refuses a question whose text carries its own `Pregunta <n>:` — S7; inline; a1a84d74
 - [x] T2 (kind: build) the `js-harness` output style, which `install` writes — S1; inline; the style-and-skills commit
 - [x] T3 (kind: build) the two skills, adapted, with `THIRD_PARTY_NOTICES`, shipped in the package — S2; inline; the style-and-skills commit
-- [ ] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier
-- [ ] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier
+- [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
+- [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
-- [ ] T7 (kind: build) the Rules block, once question 99 is answered — S5; waits
+- [ ] T7 (kind: build) the Rules block (question 99 answered, L18) — S5
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -86,11 +86,48 @@ Reviews:
 - gentle-ai on `d90cd206..70e396b3`: medium, not due (under_budget, 245 lines).
 - Codex on `d90cd20..70e396b`: correct (0.97), no finding; 69,913 input tokens.
 - Lenses on `d90cd20..70e396b` (reliability, readability): complete, 0 findings.
+- Lenses on `d6867d8..d90cd20`, run once more after PR 616 fixed the reader (L10): complete, the skip paid; risk 0
+  findings; reliability and readability one WARNING each, the claim refuted twice before: `git show --stat 883747f2 --
+  THIRD_PARTY_NOTICES.md` lists it (191 insertions) and `git grep` finds `ported-skills.mjs` in it; the lenses never see
+  a Markdown file.
+- T4's independent verifier (opus, read-only, scratch homes): sound in the normal flow; 5 defects, fixed test first in
+  `e523ac72`: a settings file that cannot hold the permissions read as `unknown`, which the hook never announces (now
+  `stale`); `"permissions": null` rewritten; an empty file left after a failed uninstall and a reinstall; every copy
+  of a recorded entry removed (now one); a manifest edited by hand could name the user's entries (now only the lists').
+- Codex on `c7445ca..e523ac7`, 2 parts: part 1 incorrect (0.96), 2 P2 fixed test first in `d0d68079` (the settings
+  go back when the manifest cannot be written; emptied lists and the object still go); part 2 correct (0.93);
+  199,164 input tokens.
+- Lenses on `c7445ca..d0d6807` (risk, reliability, readability): reliability 0; readability a SUGGESTION (two doc
+  comments stacked on `ourFile`) and risk a WARNING (a `defaultMode` put back in silence), both taken in the next
+  commit (`cbce05e2`: install prints the mode it put back, and that a `defaultMode` of `"default"` keeps it
+  out).
+- T5's independent verifier (opus, read-only) on `f2480611`: 2 BLOCKERs, 4 WARNINGs, 3 NOTEs (L13); the BLOCKERs and
+  WARNING 3 fixed test first in `88b53455`, WARNINGs 4 to 6 in `1f607cb8`.
+- Codex on `e523ac7..d0d6807`, run alone from a detached worktree at `d0d6807` (a recheck is one part, and
+  `codex-review` has no `--head`): correct (0.96), its 2 findings fixed; 61,674 input tokens.
+- Codex on `d0d6807..1f607cb`, 2 parts: part 1 correct (0.87); part 2 incorrect (0.97), one P2 (a sync whose manifest
+  write fails took back every deny of the list, the ones the manifest on disk records too), fixed test first in the
+  next commit: `applySettings` returns what the call alone wrote, and that is what a rollback undoes; 348,300 input
+  tokens.
+- Codex on `1f607cb..e2c38a1` (the recheck): correct (0.97), the P2 fixed; 39,680 input tokens.
+- Lenses on `d0d6807..e2c38a1` (risk, reliability, readability, resilience): complete, 0 findings; about 172,500
+  input tokens.
+- gentle-ai: the Stop hook offered the whole branch from `d6867d86`; only its read-only status ran (`unrelated`, no
+  change in the working tree), nothing started, as CLAUDE.md says of a branch.
+- gentle-ai on `c7445caa..e2c38a15` (granted run): approved, 2 WARNINGs (L14).
+- gentle-ai on `edcd2bfd..8c684535` (granted run): approved, 1 WARNING, fixed in `c9f3efd9` (L15).
+- gentle-ai on `8c684535..e792eaab` (the code is `c9f3efd9`; granted run): approved, 1 WARNING and 1 SUGGESTION,
+  both taken in `8b046c0f` (L18).
+- Codex on `e792eaa..8b046c0`: correct (0.97), 47,536 input tokens; lenses (reliability, readability) 0 findings.
+- gentle-ai on `e792eaab..8b046c0f` (granted run): approved, 1 SUGGESTION (the new test does not check the exit code
+  of the `kept` case), taken in T7's first slice.
 
 ## Next step
-PR 1 holds `a1a84d74..70e396b3`. Next the permissions hold/release in `bin/lib/user-settings.mjs`
-(design in L4 and the Constraints), recorded as `manifest.permissions`, released before the hook entries in
-`uninstallInstalled`, and a `doctor` row. Then T5, T6; T7 waits on question 99.
+State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings
+`cbce05e2`, the verifier's fixes `88b53455` and `1f607cb8`, Codex's P2 `e2c38a15`. Next: PR 2 on
+`f8-s10-permissions` (base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in
+its body, `ready --pr` once the merge queue's dry run takes it; then T7 (question 99 answered, L18) and T6 on a
+branch after it.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -126,3 +163,76 @@ PR 1 holds `a1a84d74..70e396b3`. Next the permissions hold/release in `bin/lib/u
 - L7 (2026-10-27): `package.json` `files` shipped only `bin/`, so the notices never reached an
   install; Apache-2.0 section 4(a) asks that a recipient gets the license, so the package now ships
   `THIRD_PARTY_NOTICES.md` (its text from a local copy of the Apache License 2.0, 177 lines).
+- L8 (2026-10-27, JH ORQ, 23:17Z): "yes, the lens reader gets a fix: JH 66 is open for objectOf in
+  bin/lib/lens-result.mjs. Keep your skip as recorded and go on with T4. When JH 66 says the fix landed, rerun the lens
+  review on d6867d8..d90cd20 once to clear it."
+- L9 (2026-10-27, decision): the permissions live in `bin/lib/permissions.mjs`, as the contract names it, beside
+  `user-settings.mjs`, whose reader they share; `SESSION_MESSAGES` and `userSettingsPath` moved there too, so the
+  engine went down (1904 → 1898) with the permissions in. They are held on every `install` and `sync`, not on request:
+  S2 takes them away whether or not anyone asked. A record `uninstall` could not release keeps the file the hooks
+  made, as a kept setting does; `bin/install.test.mjs` found it (a `{}` left behind on the second run).
+- L10 (2026-10-28, JH ORQ, 00:08Z): "PR 616 landed (main 212c7e1): the lens reader now takes one JSON object with prose
+  around it ... rerun the lens review on d6867d8..d90cd20 once to clear the skip." Run 00:16Z, after the lead
+  refreshed the installed copy.
+- L11 (2026-10-27, measured at 23:49Z, and JH ORQ's answer to that note): with `Read` in the guard's matcher every Read of every session
+  runs the hook: 334, 463 and 550 ms a Read on the installed command, against 157-178 ms for node's own start, three
+  runs each. JH ORQ: "keep Read in the guard's matcher, as the spec says ... Write the measured cost ... into the PR
+  body and the feature document: it goes to him on his return as a choice he can reverse. If a cheaper guard start is
+  a small change, propose it as a follow-up; do not build it now." The follow-up to propose: a guard entry for Read
+  alone whose command runs `bin/guard.mjs` directly, skipping the dispatcher (174-266 ms measured, against 328-383 ms
+  through it).
+- L12 (2026-10-28, decision): the lists and the paths `guard` refuses live in `bin/lib/deny-paths.mjs`, which imports
+  nothing, because the hook now runs on every Read; `permissions.mjs` re-exports them. A place matches at any depth of
+  the path, in any case, which is stricter than Claude Code's own reading of a relative deny (from the session's
+  folder): a second layer refuses more, never less. `.credentials.json` is guarded beside the 24, not added to the
+  denies the settings hold, which stay gentle-ai's list that `doctor` compares. A clone holds the style and the denies
+  whatever its switches, and a value already there is kept, never overwritten; a record still has to hold the shipped
+  list to be valid, so a later change of the list will need its own step for clones that recorded the old one.
+- L13 (2026-10-28, T5's independent verifier, opus, read-only, on `f2480611`, and the decisions on it): two
+  BLOCKERs, each checked here before a fix (`deniedPlace` returned null for `C:\Users\u\.ssh\.\id_rsa`,
+  `/home/u/.ssh//id_rsa`, `.credentials.json::$DATA`, `.credentials.json\.` and `.ssh::$INDEX_ALLOCATION\id_rsa`,
+  each of which Node's `fs` opens as the file on Windows): the guard read the path as text. Fixed test first in the
+  next commit: the path is read as Windows opens it (dot segments, doubled separators, an NTFS stream, trailing dots
+  and spaces) and matched segment by segment from its end, in linear time (the verifier measured the old pattern
+  at 3.5 s on 16,000 segments, near the hook's 5 s); `MultiEdit`, `NotebookEdit` and `Grep` (its `path`, a file or
+  the folder that holds a place of several segments) join the matcher. Left open and said in PR 2: 8.3 short names
+  (`CREDEN~1.JSO`), a symbolic link a session makes, Bash (`cat`), Glob (names only), and a Grep of a folder above
+  the one that holds a place (`.config` for `.config/gh/hosts.yml`); the denies of the settings are the first layer
+  there. Three WARNINGs on the clone's denies, the commit after: a user's own entry in `permissions.deny` drops the
+  record (uninstall then leaves the 24), a list already there never gets them (W5), and a record that must equal the
+  shipped list breaks every clone's manifest when the list changes, in a format older copies call malformed (W6).
+  Decided: the clone's denies become a list key, as the user settings' are (T4): the entries missing are added after
+  the user's own, only those are recorded, uninstall takes out one copy of each, and the manifest's format goes to 3.
+  NOTE 9 (a clone's `outputStyle` outranks the user's own style in `~/.claude/settings.json`) is what S1 asks
+  ("`init` selects the style") and stays.
+- L14 (2026-10-28, gentle-ai on PR 2's range, `c7445caa..e2c38a15`, its granted invocation run unasked): approved,
+  medium, one lens (reliability), two WARNINGs. One fixed test first in the next commit: a record naming the user
+  settings in another spelling (case, on Windows) was refused as another file and then dropped from the manifest,
+  with a "could not read" message; now the path is compared as Windows does, a `kept` record stays recorded as a
+  `failed` one does, and the message says why. The other is left open with L13's: a Grep of the project's root, or
+  with no path, can read a `.env` in it, since only a folder that holds a place of several segments is refused; a
+  root search is what most Greps are, so refusing it would stop the work, and the settings' `Read(.env)` deny is the
+  layer there.
+- L15 (2026-10-28, gentle-ai on `edcd2bfd..8c684535`, granted run): approved, one WARNING: a `kept` record that names
+  another file stays recorded forever and fails every uninstall, since nothing the user does changes its path. Fixed
+  test first in the commit after it: an unreadable settings file is `failed` (recorded, a run again once fixed), and
+  a record naming another file is `kept`, dropped and said, its entries to remove by hand. Codex on
+  `edcd2bf..8c68453`: correct (0.89); lenses (reliability, readability): 0 findings. Next step: commit this fix,
+  review it (Codex, lenses, gentle-ai), push, write gentle-ai lines for PR 2 in Reviews, `ready --pr 617`; then T6.
+- L16 (2026-10-28, state at the context pause): the L15 fix is `c9f3efd9`; Codex on `8c68453..c9f3efd` correct (0.93),
+  lenses (reliability, readability) 0 findings. Next step: gentle-ai on `8c684535..c9f3efd9` (status with
+  `--base-ref 8c684535 --committed-only --next-transition`, run its start, then the granted invocation, then
+  `capture-result --agent=claude-code` with the collect arguments), then push, add gentle-ai lines to Reviews for
+  `c7445caa..e2c38a15` (L14), `edcd2bfd..8c684535` (L15) and this range, and `ready --pr 617` when the merge queue's
+  dry run takes it; then T6. T7 waits on question 99.
+- L17 (2026-10-28, 21:37 local, JH ORQ's note, not yet checked against his words): "Q99 (G12) answered by him:
+  install writes the recorded Rules block (his 9 D7 lines) into ~/.claude/CLAUDE.md, undone by uninstall. Go ahead
+  with T7." Before T7: read his answer with `js-harness sessions --quote` (question 99). The host killed this
+  session's background waits for low memory at 21:3x; the lead was told.
+- L18 (2026-10-28): the host compacted this session at 21:41 local; the lead was told. gentle-ai on
+  `8c684535..e792eaab`: approved; its WARNING (the `kept` message sent the user to the user settings, not to the file
+  the record names) and its SUGGESTION (no test of the messages) taken test first in `8b046c0f`. Question 99 checked
+  in his words (`js-harness sessions --quote 0f71b2c6 5233`, 2026-10-28T02:35:59Z): he tapped "Bloque de reglas
+  (Recomendada)", which asked that install write into `~/.claude/CLAUDE.md` "un bloque pequeño y registrado con tus 9
+  líneas de D7, que se puede deshacer con uninstall. No toca nada más de ~/.claude." T7 is open, on a branch after
+  PR 2.

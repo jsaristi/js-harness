@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applySettingsKey, undoSettingsKey } from './settings-key.mjs';
+import { applySettingsEntries, applySettingsKey, undoSettingsEntries, undoSettingsKey } from './settings-key.mjs';
 import { acceptSessionMessages, userSettingsPath } from './manifest.mjs';
 
 const PASTE = ['env', 'CODEGRAPH_NO_PROMPT_HOOK'];
@@ -27,20 +27,16 @@ function withSettings(t, text) {
 test('a key in a file that does not exist creates the folder and the file, and records both', (t) => {
   const root = project(t);
   const applied = applySettingsKey(settingsFile(root), PASTE, '1');
-  assert.deepEqual(applied, {
-    state: 'written',
-    record: { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 },
-  });
+  const record = { pointer: PASTE, value: '1', createdFile: true, createdDir: true, createdContainers: 1 };
+  assert.deepEqual(applied, { state: 'written', record, undo: record });
   assert.equal(fs.readFileSync(settingsFile(root), 'utf8'), '{\n  "env": {\n    "CODEGRAPH_NO_PROMPT_HOOK": "1"\n  }\n}\n');
 });
 
 test('a key in a file that exists is merged beside what is there, in the file own indent and line endings', (t) => {
   const root = withSettings(t, '{\r\n\t"effortLevel": "high"\r\n}\r\n');
   const applied = applySettingsKey(settingsFile(root), PLUGIN, false);
-  assert.deepEqual(applied, {
-    state: 'written',
-    record: { pointer: PLUGIN, value: false, createdFile: false, createdDir: false, createdContainers: 1 },
-  });
+  const record = { pointer: PLUGIN, value: false, createdFile: false, createdDir: false, createdContainers: 1 };
+  assert.deepEqual(applied, { state: 'written', record, undo: record });
   assert.equal(
     fs.readFileSync(settingsFile(root), 'utf8'),
     '{\r\n\t"effortLevel": "high",\r\n\t"enabledPlugins": {\r\n\t\t"typescript-lsp@claude-plugins-official": false\r\n\t}\r\n}\r\n',
@@ -215,4 +211,58 @@ test('a key beside one somebody else wrote under an object the harness did not m
   const second = applySettingsKey(settingsFile(root), ['env', 'B'], '2', [first]).record;
   assert.equal(second.createdContainers, 0);
   assert.equal(second.createdFile, false);
+});
+
+// --- A list the harness adds entries to (odd/tasks/f8-s10-port.md, L13): the denies every clone holds ---
+
+const DENY = ['permissions', 'deny'];
+
+test('entries missing from a list are added after what is there, and only they are recorded', (t) => {
+  const root = withSettings(t, '{\n  "permissions": {\n    "deny": ["Bash(curl:*)", "Read(.env)"]\n  }\n}\n');
+  const applied = applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)']);
+  const record = { pointer: DENY, entries: ['Read(.ssh/*)'], createdList: false, createdFile: false, createdDir: false, createdContainers: 0 };
+  assert.deepEqual(applied, { state: 'written', record, undo: record });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')).permissions.deny, ['Bash(curl:*)', 'Read(.env)', 'Read(.ssh/*)']);
+  assert.deepEqual(applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)'], [applied.record]), { state: 'kept' });
+});
+
+test('a list in a file that does not exist is made, and undo leaves no file and no folder', (t) => {
+  const root = project(t);
+  const applied = applySettingsEntries(settingsFile(root), DENY, ['Read(.env)']);
+  assert.deepEqual(applied.record, { pointer: DENY, entries: ['Read(.env)'], createdList: true, createdFile: true, createdDir: true, createdContainers: 1 });
+  assert.deepEqual(undoSettingsEntries(settingsFile(root), applied.record), { state: 'removed' });
+  assert.equal(fs.existsSync(path.join(root, '.claude')), false);
+});
+
+test('undo takes out one copy of each recorded entry and keeps what the user added since', (t) => {
+  const root = project(t);
+  const applied = applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)']);
+  const data = JSON.parse(fs.readFileSync(settingsFile(root), 'utf8'));
+  data.permissions.deny.push('Bash(curl:*)');
+  fs.writeFileSync(settingsFile(root), JSON.stringify(data));
+  // The user's own entry leaves the harness's in place: nothing is missing, the record stays as it was.
+  assert.deepEqual(applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)'], [applied.record]), { state: 'kept' });
+  assert.deepEqual(undoSettingsEntries(settingsFile(root), applied.record), { state: 'removed' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile(root), 'utf8')), { permissions: { deny: ['Bash(curl:*)'] } });
+});
+
+test('an entry taken out since is written back and the record keeps every entry the harness added', (t) => {
+  const root = project(t);
+  const first = applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)']);
+  fs.writeFileSync(settingsFile(root), JSON.stringify({ permissions: { deny: ['Read(.ssh/*)'] } }));
+  const again = applySettingsEntries(settingsFile(root), DENY, ['Read(.env)', 'Read(.ssh/*)'], [first.record]);
+  assert.deepEqual(again.record.entries, ['Read(.env)', 'Read(.ssh/*)']);
+  assert.equal(again.record.createdList, true);
+  assert.equal(again.record.createdFile, true);
+  // What this write alone did: the one entry, in a file and a list that were already there.
+  assert.deepEqual(again.undo, { pointer: DENY, entries: ['Read(.env)'], createdList: false, createdFile: false, createdDir: false, createdContainers: 0 });
+});
+
+test('something that is not a list where the list goes is never overwritten, and undo keeps it', (t) => {
+  const root = withSettings(t, '{ "permissions": { "deny": "all" } }');
+  assert.deepEqual(applySettingsEntries(settingsFile(root), DENY, ['Read(.env)']), { state: 'conflict', holds: 'all' });
+  const record = { pointer: DENY, entries: ['Read(.env)'], createdList: false, createdFile: false, createdDir: false, createdContainers: 0 };
+  assert.deepEqual(undoSettingsEntries(settingsFile(root), record), { state: 'changed', holds: 'all' });
+  fs.writeFileSync(settingsFile(root), '{ "permissions": { "deny": ["Bash(x)"] } }');
+  assert.deepEqual(undoSettingsEntries(settingsFile(root), record), { state: 'gone' });
 });
