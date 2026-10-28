@@ -125,8 +125,10 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
   says the schema admits less in one place. A comment-only commit, reviewed by Codex, the lenses and gentle-ai.
 - L14, the reviews of 9b33bde4 (697a7a0..9b33bde4): Codex "the patch is correct" (0.99); Claude lens readability
   complete, 0 findings; gentle-ai lineage review-69dc66f23de65793 approved with no finding, acknowledged.
-- gentle-ai lines: 9c6ebb17 approved (review-1c6c8e13ac08b21e); c3a74543 approved (review-0209e1a8721ea743); 697a7a0d
-  approved (review-37264eed8b258075); 9b33bde4 approved (review-69dc66f23de65793).
+- gentle-ai: 9c6ebb17 approved (review-1c6c8e13ac08b21e).
+- gentle-ai: c3a74543 approved (review-0209e1a8721ea743).
+- gentle-ai: 697a7a0d approved (review-37264eed8b258075).
+- gentle-ai: 9b33bde4 approved (review-69dc66f23de65793).
 - Left open for the lead: what the CLI does when an answer fails the schema (retries, or `is_error` with a subtype),
   not seen in a real run; a CLI older than 2.1.312 that does not know the flags makes every lens incomplete; the
   installed copy, which still runs lenses without structured output until it is refreshed.
