@@ -115,6 +115,9 @@ Reviews:
   absence test walked the worktree, so an untracked file decided it; it reads `git ls-files` now, proved with an
   untracked scratch file naming it) and R3-002 (an old day's `reviews` key is proved silent). 71e89a2b: Codex
   8d7bc9f..71e89a2 passed (63,924 input tokens); lens reliability, 0 findings.
+- Lens reruns (2026-10-28, the lead: PR 630 makes older lens records stop counting; installed copy main 19f2d80):
+  PR 629 over e0260e5..caaccd3, risk, reliability, readability: 0 findings (about 53,190 input tokens each); PR 632
+  over caaccd3..83fcb8a, reliability, readability: 0 findings (about 39,320 input tokens each).
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
