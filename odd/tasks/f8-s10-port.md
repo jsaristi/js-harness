@@ -143,6 +143,9 @@ Reviews:
   informational SUGGESTION (R3-place-identity: `place === at` would fail if the path were ever normalized for a plain
   file) not taken: `realPlace` returns its argument itself for anything that is not a link (`rules-block.mjs:85-88`),
   so the two are the same string by construction, and the link test pins the other side.
+- T8 is `98f91454`. Codex on `0d97e52..98f9145`: incorrect (0.96), one P2 (a recorded file that cannot be read was
+  taken as missing and written over), fixed test first in the next commit with `bin/lib/component-write.test.mjs`; 111,434
+  input tokens.
 
 ## Probe
 - Install and uninstall, in a scratch home (`mktemp -d`, no credentials file), from `f8-s10-rules` (L20, rerun after
