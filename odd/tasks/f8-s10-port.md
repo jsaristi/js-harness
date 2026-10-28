@@ -119,6 +119,8 @@ Reviews:
 - gentle-ai on `8c684535..e792eaab` (the code is `c9f3efd9`; granted run): approved, 1 WARNING and 1 SUGGESTION,
   both taken in `8b046c0f` (L18).
 - Codex on `e792eaa..8b046c0`: correct (0.97), 47,536 input tokens; lenses (reliability, readability) 0 findings.
+- gentle-ai on `e792eaab..8b046c0f` (granted run): approved, 1 SUGGESTION (the new test does not check the exit code
+  of the `kept` case), taken in T7's first slice.
 
 ## Next step
 State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings
