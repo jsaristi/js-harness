@@ -101,6 +101,11 @@ mechanism here, before S13 rehearses it and S12 ships it.
   notice goes with the pull request, after the reviews)
 
 Reviews:
+- gentle-ai: no gentle-ai review ran on `9890615e`, `5fb2c270`, `65d6f804`, `71387574`, `f79dcc8a`, `72b9eb6b`,
+  `8e5de40f`, `8f4624eb`, `f39c41a4`, `f9c10579`, `d0954123` or `37cdab21` (`947ac91c..37cdab21`): the Stop hook
+  offered only the whole branch, so only its read-only status ran; `review assess --base-ref 7899f5ee
+  --committed-only` rated it medium, not due. Each was reviewed by Codex and the Claude lenses instead.
+- The lenses on `f9c10579..cd9c4220` after PR 640 (structured output): complete, 0 findings; the skip is paid.
 - lenses risk, reliability, readability on `947ac91c..62f4a62` (`lens-reviews.jsonl`): 0, 2 and 1 findings, fixed
   by `f39c41a4` (L6); the lenses on `62f4a623..f39c41a4`: 0 findings.
 - Codex on `947ac91c..f39c41a4`, recorded (`codex-reviews.jsonl`, 8 parts, 1,690,061 input tokens): 7 findings P2,
