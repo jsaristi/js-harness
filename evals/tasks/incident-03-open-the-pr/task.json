@@ -13,5 +13,6 @@
   "proof": {
     "total": 4,
     "fixturePassed": 1
-  }
+  },
+  "rules": []
 }

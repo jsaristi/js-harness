@@ -1,0 +1,1 @@
+Tags need their own pages. Add `src/tags.mjs` with a `tagPath(tag)` that gives the path of a tag's page, `/tags/<name>`, where the name is the tag's `name` in lower case with its accents taken off and every run of other characters one dash, with no dash at either end: the tag `{ name: 'Café Society' }` is found at `/tags/cafe-society`. Add a test for it beside the others.

@@ -428,6 +428,8 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-10-28 — `odd/tasks/f8-s1-reviews.md` L16 (JH 69, T7) — a tracked file edited during the
   Codex review of `9e167848..d153e61e` (run b2dfaa03 in `codex-review-runs.jsonl`); 79,701 input tokens spent
   on a run that recorded nothing, and the review ran again
+- Seen: 2026-10-28 — `odd/tasks/f8-s5c-a-coverage.md` L6 (JH 73) — a test file written to fix a lens finding
+  during the Codex review of `947ac91..62f4a62`; 353,663 input tokens spent on two parts of 8, nothing recorded
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 

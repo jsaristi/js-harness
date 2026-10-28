@@ -15,7 +15,7 @@ const KEYS = new Set([
   'path', 'phrases',
   'retired', 'successors',
   'patterns', 'row', 'failure', 'differs', 'review',
-  'sensor',
+  'sensor', 'control',
 ]);
 // The keys only the harness's own list holds, each refused in a project's list with the reason a person reads
 // (odd/tasks/project-rules.md, "What a project can declare").
@@ -226,6 +226,7 @@ function ruleFaults(rule, { minPhrase, declared, project }) {
   for (const key of Object.keys(rule)) {
     if (!KEYS.has(key)) faults.push(`unknown key "${key}"`);
     else if (key === 'sensor') faults.push('a sensor body is for a project list');
+    else if (key === 'control') faults.push('a harness rule\'s control is in bin/lib/rules-coverage-data.mjs, apart from what the rule says');
   }
   if (!isText(rule.subject) || rule.subject.trim() === '') faults.push('the subject is missing');
   else if (DIGIT.test(rule.subject)) {

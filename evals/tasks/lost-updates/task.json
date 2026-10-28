@@ -1,8 +1,16 @@
 {
   "grader": {
     "command": "node",
-    "args": ["--test", "--test-reporter=tap", ".eval-grader/lost-updates.grade.mjs"]
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/lost-updates.grade.mjs"
+    ]
   },
   "timeoutMs": 1800000,
-  "proof": { "total": 43, "fixturePassed": 13 }
+  "proof": {
+    "total": 43,
+    "fixturePassed": 13
+  },
+  "rules": []
 }
