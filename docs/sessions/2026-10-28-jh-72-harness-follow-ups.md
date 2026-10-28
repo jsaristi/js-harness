@@ -32,6 +32,15 @@ is small, one work unit a commit.
 - gentle-ai: the Stop hook offered the whole branch; only its read-only status ran, as CLAUDE.md says. No slice review.
 - Merges clean with origin/main `b4fdda99` (`git merge-tree`).
 
+## Waiting on the lead (2026-10-28 17:47Z)
+PR 636 is pushed (`gh pr view 636`). `notify --kind ready` is refused by the merge door: no written gentle-ai evidence
+for the 10 code commits, which it reads only from a gentle-ai line of an `odd/tasks/<name>.md` feature document
+(`bin/lib/gentle-ai-evidence.mjs:69`). The brief said no feature document and Codex and the lenses as reviews. Sent
+`waiting` with three choices: (a) gentle-ai on about 6 slices, each checked out in its own worktree (`--base-ref`
+reviews only to HEAD), plus `odd/tasks/board-follow-ups.md`; (b) he authorizes one review of the whole branch; (c) he
+lands it another way. No line was written to pass the door without a review. `js-harness wait --notice-to 72` runs
+(this session's task; it ends on his answer or after 480 minutes).
+
 ## Next step
 0. (done, kept for the record) What the verifier and Codex found, 2026-10-28 ~16:50Z:
    - Verifier, REGRESSION in `3982ae68`: the RegExp skip lets a write pass when exec is redirected to eval through the
