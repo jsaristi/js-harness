@@ -19,21 +19,50 @@ export const PERMISSIONS_DENY = Object.freeze([
  * eval copied into a scratch home and broke his login with on 2026-10-26 (the diet's section 9). */
 export const GUARDED_PLACES = Object.freeze([...SECRET_PLACES, '.credentials.json']);
 
-/** A place as a pattern over a path's `/`-separated segments, matched at the end of the path from any segment on:
- * `**` stands for any number of segments and `*` for any characters within one. Letters match in any case, as on
- * Windows. */
+/** A place as one pattern a segment, `*` standing for any characters within one; letters match in any case, as on
+ * Windows. A place is matched at the end of a path from any segment on, so a leading `**` (any number of segments)
+ * adds nothing and is dropped; the match then costs a fixed number of segment tests, whatever the path's length. */
 function patternOf(place) {
-  const body = place.split('/').map((segment) => (segment === '**'
-    ? '(?:[^/]+/)*'
-    : `${segment.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')}/`)).join('').replace(/\/$/, '');
-  return new RegExp(`(?:^|/)${body}$`, 'i');
+  const segments = place.split('/');
+  while (segments[0] === '**') segments.shift();
+  if (segments.includes('**')) throw new Error(`${place}: "**" can only open a place`);
+  return segments.map((segment) => new RegExp(`^${segment.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'i'));
 }
 
 const PATTERNS = GUARDED_PLACES.map((place) => [place, patternOf(place)]);
 
-/** The guarded place `file` is in (`GUARDED_PLACES`), or null. A Windows path is read with `/` for `\`. */
+/** The segments of `file` as Windows opens it, so another spelling of a guarded file is that file (T5's verifier
+ * read a planted key through each): either slash; no empty or `.` segment; a `..` takes the one before it; a name
+ * loses an NTFS stream (`name::$DATA`, `name:$INDEX_ALLOCATION`) and the dots and spaces Windows drops from its
+ * end. A drive (`C:`) stays as it is. */
+function segmentsOf(file) {
+  const out = [];
+  for (const raw of file.split(/[\\/]/)) {
+    const named = /^[a-z]:$/i.test(raw) ? raw : raw.replace(/:.*$/s, '');
+    const segment = /^\.+$/.test(named) ? named : named.replace(/[. ]+$/, '');
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..' && out.length > 0 && out.at(-1) !== '..') out.pop();
+    else out.push(segment);
+  }
+  return out;
+}
+
+/** Whether `patterns` match the last segments of `segments`. */
+const endsWith = (segments, patterns) => patterns.length <= segments.length
+  && patterns.every((pattern, index) => pattern.test(segments[segments.length - patterns.length + index]));
+
+/** The guarded place `file` is in (`GUARDED_PLACES`), or null. */
 export function deniedPlace(file) {
   if (typeof file !== 'string' || file === '') return null;
-  const normal = file.replace(/\\/g, '/');
-  return PATTERNS.find(([, pattern]) => pattern.test(normal))?.[0] ?? null;
+  const segments = segmentsOf(file);
+  return PATTERNS.find(([, patterns]) => endsWith(segments, patterns))?.[0] ?? null;
+}
+
+/** The guarded place `file` is in, or the one of several segments a folder `file` holds files of (`.ssh` for
+ * `.ssh/*`), or null: what a search of `file` and the files in it would read. */
+export function heldPlace(file) {
+  const place = deniedPlace(file);
+  if (place !== null || typeof file !== 'string' || file === '') return place;
+  const segments = segmentsOf(file);
+  return PATTERNS.find(([, patterns]) => patterns.length > 1 && endsWith(segments, patterns.slice(0, -1)))?.[0] ?? null;
 }

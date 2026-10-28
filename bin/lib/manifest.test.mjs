@@ -1364,7 +1364,7 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
   assert.deepEqual(guardHook.pointer, ['hooks', 'PreToolUse']);
   assert.deepEqual(guardHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(guardHook.entry(), {
-    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$',
     hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
   });
   assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
@@ -1373,13 +1373,13 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
 test('the guard matcher is anchored: each tool it names matches, and a tool it does not name, or one that only contains its name, does not', () => {
   const matcher = new RegExp(guardHook.entry().matcher);
   const named = [
-    'Agent', 'SendMessage', 'mcp__ccd_session_mgmt__send_message', 'Bash', 'Write', 'Edit',
-    'mcp__scheduled-tasks__create_scheduled_task', 'mcp__scheduled-tasks__update_scheduled_task',
+    'Agent', 'SendMessage', 'mcp__ccd_session_mgmt__send_message', 'Bash', 'Read', 'Write', 'Edit', 'MultiEdit',
+    'NotebookEdit', 'Grep', 'mcp__scheduled-tasks__create_scheduled_task', 'mcp__scheduled-tasks__update_scheduled_task',
     'mcp__scheduled-tasks__run_scheduled_task', 'RemoteTrigger', 'mcp__ccd_session__start_session',
   ];
-  assert.equal(named.length, 11);
+  assert.equal(named.length, 15);
   for (const tool of named) assert.ok(matcher.test(tool), tool);
-  for (const tool of ['TodoWrite', 'NotebookEdit', 'MultiEdit', 'mcp__scheduled-tasks__delete_scheduled_task', 'mcp__scheduled-tasks__list_scheduled_tasks', 'CronCreate']) {
+  for (const tool of ['TodoWrite', 'Glob', 'Grepper', 'mcp__scheduled-tasks__delete_scheduled_task', 'mcp__scheduled-tasks__list_scheduled_tasks', 'CronCreate']) {
     assert.equal(matcher.test(tool), false, tool);
   }
 });

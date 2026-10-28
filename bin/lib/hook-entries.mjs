@@ -73,12 +73,12 @@ export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
  * seconds: it may ask git for the project's root once.
  * The matcher is anchored, `^(…)$`, because Claude Code's hooks reference (checked 2026-10-15) reads a matcher with a
  * character outside letters, digits, `_`, `-`, spaces, `,` and `|` as a JavaScript regular expression, unanchored: the
- * `^` and `$` make it a whole-name match, so `Write` does not match `TodoWrite` and `Edit` does not match
- * `NotebookEdit`. A hyphen alone does not make it a regex. The same text is held by the tests of
+ * `^` and `$` make it a whole-name match, so `Write` does not match `TodoWrite`. `Read`, `MultiEdit`, `NotebookEdit`
+ * and `Grep` are named for the places of secrets (odd/tasks/f8-s10-port.md, T5). A hyphen alone does not make it a regex. The same text is held by the tests of
  * bin/lib/manifest.test.mjs and by scripts/practice-lib.mjs (`HARNESS_HOOKS`). */
 export function guardHookEntry() {
   return {
-    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$',
+    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$',
     hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
   };
 }

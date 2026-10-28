@@ -99,19 +99,15 @@ Reviews:
   199,164 input tokens.
 - Lenses on `c7445ca..d0d6807` (risk, reliability, readability): reliability 0; readability a SUGGESTION (two doc
   comments stacked on `ourFile`) and risk a WARNING (a `defaultMode` put back in silence), both taken in the next
-  commit.
+  commit (`cbce05e2`: install prints the mode it put back, and that a `defaultMode` of `"default"` keeps it
+  out).
 
 ## Next step
-State at 00:35Z, 2026-10-28: T5 is staged on `f8-s10-permissions` and NOT committed: its gate failed on CI (run
-40608582547) on tests that still expect a clone without the two always-held keys or the guard's old matcher:
-`bin/check-functions.test.mjs:90`, `bin/lib/project-switches.test.mjs` (lines 66, 88, 97, 113, 170: add
-`outputStyle`, `permissions.deny`, and the two `wrote`/`removed` actions first), `scripts/practice-lib.test.mjs`
-(HARNESS_HOOKS, add `Read` to the guard's matcher). Fix them, commit T5 with the message in L-less form already used
-(feat(guard): refuse a file tool on a secret's place, and hold it per clone). Then: one commit for T4's lens findings
-(install says when it puts a `defaultMode` back and how to keep it out; merge the two doc comments on `ourFile` in
-`bin/lib/manifest.test.mjs`); `js-harness codex-review --base d0d68079^` is owed for d0d68079; then T5's independent
-verifier (guard and clone keys), Codex and lenses over T5, PR 2 on `f8-s10-permissions` (base `worktree-f8-s10-port`)
-with L11's Read cost in its body; then T6; T7 waits on question 99.
+State at 00:45Z, 2026-10-28: T5 committed (`f2480611`), T4's two lens findings taken in `cbce05e2`, both through
+the gate. T5's independent verifier (opus, read-only) is running on `f2480611`. Then, one at a time: `js-harness
+codex-review --base d0d68079^` (covers d0d68079, the T4 fix it owed, and T5), the lenses on `d0d6807..HEAD`
+(`js-harness lens-review --base d0d6807`), then PR 2 on `f8-s10-permissions` (base `worktree-f8-s10-port`) with
+L11's Read cost and the defaultMode note in its body; then T6; T7 waits on question 99.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -172,3 +168,20 @@ with L11's Read cost in its body; then T6; T7 waits on question 99.
   denies the settings hold, which stay gentle-ai's list that `doctor` compares. A clone holds the style and the denies
   whatever its switches, and a value already there is kept, never overwritten; a record still has to hold the shipped
   list to be valid, so a later change of the list will need its own step for clones that recorded the old one.
+- L13 (2026-10-28, T5's independent verifier, opus, read-only, on `f2480611`, and the decisions on it): two
+  BLOCKERs, each checked here before a fix (`deniedPlace` returned null for `C:\Users\u\.ssh\.\id_rsa`,
+  `/home/u/.ssh//id_rsa`, `.credentials.json::$DATA`, `.credentials.json\.` and `.ssh::$INDEX_ALLOCATION\id_rsa`,
+  each of which Node's `fs` opens as the file on Windows): the guard read the path as text. Fixed test first in the
+  next commit: the path is read as Windows opens it (dot segments, doubled separators, an NTFS stream, trailing dots
+  and spaces) and matched segment by segment from its end, in linear time (the verifier measured the old pattern
+  at 3.5 s on 16,000 segments, near the hook's 5 s); `MultiEdit`, `NotebookEdit` and `Grep` (its `path`, a file or
+  the folder that holds a place of several segments) join the matcher. Left open and said in PR 2: 8.3 short names
+  (`CREDEN~1.JSO`), a symbolic link a session makes, Bash (`cat`), Glob (names only), and a Grep of a folder above
+  the one that holds a place (`.config` for `.config/gh/hosts.yml`); the denies of the settings are the first layer
+  there. Three WARNINGs on the clone's denies, the commit after: a user's own entry in `permissions.deny` drops the
+  record (uninstall then leaves the 24), a list already there never gets them (W5), and a record that must equal the
+  shipped list breaks every clone's manifest when the list changes, in a format older copies call malformed (W6).
+  Decided: the clone's denies become a list key, as the user settings' are (T4): the entries missing are added after
+  the user's own, only those are recorded, uninstall takes out one copy of each, and the manifest's format goes to 3.
+  NOTE 9 (a clone's `outputStyle` outranks the user's own style in `~/.claude/settings.json`) is what S1 asks
+  ("`init` selects the style") and stays.

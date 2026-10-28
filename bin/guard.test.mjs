@@ -346,6 +346,25 @@ test('a Read, a Write or an Edit of a secret\'s place or of the login file is de
   }
 });
 
+// The verifier found the other file tools silent: a NotebookEdit or a MultiEdit writes a file, and a Grep reads the
+// file or every file of the folder its `path` names.
+test('a NotebookEdit, a MultiEdit or a Grep of a secret\'s place is denied too', async () => {
+  const calls = [
+    ['NotebookEdit', { notebook_path: 'D:/project/secrets/a.ipynb', new_source: 'x' }, 'D:/project/secrets/a.ipynb', '**/secrets/*'],
+    ['MultiEdit', { file_path: 'D:/project/.env', edits: [] }, 'D:/project/.env', '.env'],
+    ['Grep', { pattern: 'token', path: 'C:\\Users\\u\\.claude\\.credentials.json', output_mode: 'content' }, 'C:\\Users\\u\\.claude\\.credentials.json', '.credentials.json'],
+    ['Grep', { pattern: 'BEGIN', path: 'C:/Users/u/.ssh' }, 'C:/Users/u/.ssh', '.ssh/*'],
+  ];
+  for (const [tool, input, file, place] of calls) {
+    const result = await hook({ tool_name: tool, cwd: 'D:/project', tool_input: input });
+    assert.equal(denied(result).permissionDecisionReason,
+      `js-harness guard: ${tool} of ${file} is refused: it matches ${place}, a place of secrets that sessions are kept off (the denies js-harness install holds in the Claude settings); if the work needs it, the user does that step by hand`);
+  }
+  for (const input of [{ pattern: 'x' }, { pattern: 'x', path: 'D:/project/bin' }]) {
+    assert.deepEqual(await hook({ tool_name: 'Grep', cwd: 'D:/project', tool_input: input }), { code: 0, out: '', err: '' }, JSON.stringify(input));
+  }
+});
+
 test('a Read of any other file passes with nothing printed', async () => {
   for (const file of ['D:/project/bin/guard.mjs', 'D:/project/.envrc', 'C:/Users/u/.claude/settings.json']) {
     assert.deepEqual(await hook({ tool_name: 'Read', cwd: 'D:/project', tool_input: { file_path: file } }), { code: 0, out: '', err: '' }, file);

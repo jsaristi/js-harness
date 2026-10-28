@@ -19,9 +19,10 @@
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8), and a `js-harness sessions` read of
 //     the board (`--watch` too) in the same case (docs/FAILURES.md, board-read-loads-gate).
-//   - `Read`, `Write` and `Edit`: a path in a place of secrets the denies of the Claude settings keep sessions off, or
-//     Claude Code's login file (bin/lib/deny-paths.mjs, the one module this path loads; odd/tasks/f8-s10-port.md, T5).
-//     A Read stops there.
+//   - `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, and a `Grep` of a file or of the folder that holds it: a
+//     path in a place of secrets the denies of the Claude settings keep sessions off, or Claude Code's login file
+//     (bin/lib/deny-paths.mjs, the one module this path loads; odd/tasks/f8-s10-port.md, T5). All but `Write` and
+//     `Edit` stop there.
 //   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
 //     call leaves (read from disk for an Edit) and only when the call brings it
 //     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
@@ -43,7 +44,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { memoryFileOf, memoryIndexRefusal, memoryNoteType, resultOf } from './lib/memory-index-guard.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { deniedPlace } from './lib/deny-paths.mjs';
+import { deniedPlace, heldPlace } from './lib/deny-paths.mjs';
 
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
@@ -53,7 +54,7 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
   + '  does (where the rules declare terminal-note), a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
-  + '  a Read, Write or Edit of a place of secrets the denies of the Claude settings name, or of Claude Code\'s login file,\n'
+  + '  a Read, Write, Edit, MultiEdit, NotebookEdit or Grep of a place of secrets the denies of the Claude settings name, or of Claude Code\'s login file,\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md), that leaves a feedback note\n'
   + '  of a memory folder naming no home of its rule in the repository (where the rules declare memory-feedback-home),\n'
   + '  or that puts a line in a Markdown\n'
@@ -68,6 +69,8 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
 
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
 const FILE_TOOLS = new Set(['Write', 'Edit']);
+// The field each tool that reads or writes a file names it in: a Grep's `path` is a file or a folder it searches.
+const PATH_FIELDS = { Read: 'file_path', Write: 'file_path', Edit: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path', Grep: 'path' };
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent (the same as
  * bin/lib/guard.mjs's `denial`, written here so the Write and Edit path imports nothing more). */
@@ -108,10 +111,11 @@ const rulesTextOf = (root, readFile) => optionalText(path.join(root, 'bin', 'lib
 async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env = {}, homedir = os.homedir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
-  if (tool === 'Read' || FILE_TOOLS.has(tool)) {
-    const place = deniedPlace(input.file_path);
-    if (place !== null) return `js-harness guard: ${tool} of ${input.file_path} is refused: it matches ${place}, a place of secrets that sessions are kept off (the denies js-harness install holds in the Claude settings); if the work needs it, the user does that step by hand`;
-    if (tool === 'Read') return null;
+  if (Object.hasOwn(PATH_FIELDS, tool)) {
+    const file = input[PATH_FIELDS[tool]];
+    const place = tool === 'Grep' ? heldPlace(file) : deniedPlace(file);
+    if (place !== null) return `js-harness guard: ${tool} of ${file} is refused: it matches ${place}, a place of secrets that sessions are kept off (the denies js-harness install holds in the Claude settings); if the work needs it, the user does that step by hand`;
+    if (!FILE_TOOLS.has(tool)) return null;
   }
   if (FILE_TOOLS.has(tool)) {
     const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
