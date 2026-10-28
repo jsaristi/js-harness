@@ -187,6 +187,14 @@ test('the seeded baseline holds: no finding, every count said, and the owed shar
   assert.deepEqual(report.sources.map((source) => [source.id, source.tied.length, source.owed.length, source.gaps.length]), [['skill', 1, 2, 0]]);
   assert.deepEqual(report.rules.map((rule) => [rule.id, rule.levels]), [['ask-first', ['owed']], ['some-value', ['check']]]);
   assert.deepEqual(report.totals, { obligations: 5, owed: 4, levels: { check: 1, eval: 0, line: 0, protocol: 0, measured: 0, owed: 4 }, context: 0, gaps: 0 });
+  assert.deepEqual(report.cases.map((item) => [item.name, item.owed]), [['incident-01-paid-eval', true], ['incident-02-review-consent', false]]);
+});
+
+test('a case the register owes stays owed when it names its rules: its paid proof is what is owed', () => {
+  const report = whole({ register: { cases: ['incident-01-paid-eval', 'incident-02-review-consent'] } });
+  assert.deepEqual([report.findings, report.stale], [[], []]);
+  assert.deepEqual(report.cases.map((item) => [item.name, item.rules, item.owed]), [['incident-01-paid-eval', [], true], ['incident-02-review-consent', ['ask-first'], true]]);
+  assert.deepEqual(whole({ register: { cases: ['incident-01-paid-eval', 'gone-case'] } }).stale, ['the register owes the case gone-case, which is gone (js-harness rules coverage --refresh)']);
 });
 
 test('rules check refuses each new gap: a span, a rule with no control, a message source, a case naming nothing or an unknown rule', () => {

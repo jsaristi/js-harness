@@ -13,6 +13,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { components as fileComponents } from '../bin/lib/manifest.mjs';
+import { cutSpans, tiesOf } from '../bin/lib/rules-coverage.mjs';
+import { RULES } from '../bin/lib/rules-data.mjs';
 import { ArmError, parseArm } from './arms.mjs';
 import { scanToml, startsWith, withoutTables } from './codex-toml.mjs';
 
@@ -222,6 +224,45 @@ function cutLines(root, rel, drop) {
 
 const within = (block, index) => block !== undefined && index >= block.from && index <= block.to;
 
+/** The texts js-harness writes into the home under `host`: the instructions file, its skills and its output style. */
+const ownTexts = (host) => [host.instructions, ...fileComponents
+  .map((component) => component.target('/').split(/[\\/]/).filter(Boolean))
+  .filter((parts) => parts[0] === host.dir)
+  .map((parts) => parts.join('/'))];
+
+/** `text` without each span (`cutSpans`) tied to the rule `id`, the spaces after it with it, and the line break of a
+ * line it leaves empty; `null` when no span is tied to it. */
+function withoutRule(text, id) {
+  const cuts = cutSpans(text).filter((span) => tiesOf(span.text, RULES).includes(id));
+  if (cuts.length === 0) return null;
+  let out = '';
+  let at = 0;
+  for (const { start, end } of cuts) {
+    let to = end;
+    while (to < text.length && (text[to] === ' ' || text[to] === '\t')) to += 1;
+    out += text.slice(at, start);
+    const tail = out.slice(out.lastIndexOf('\n') + 1);
+    if (tail.trim() === '' && (to === text.length || text[to] === '\r' || text[to] === '\n')) {
+      out = out.slice(0, out.length - tail.length);
+      if (text[to] === '\r') to += 1;
+      if (text[to] === '\n') to += 1;
+    }
+    at = to;
+  }
+  return out + text.slice(at);
+}
+
+/** The rewrites that take the rule `id`'s text out of what js-harness wrote into the home in `root`. */
+function rulePieces(root, id, host) {
+  if (!RULES.some((rule) => rule.id === id && !Object.hasOwn(rule, 'retired'))) {
+    throw new ArmError(`rule-${id}: ${id} is not a live rule of bin/lib/rules-data.mjs`);
+  }
+  return ownTexts(host).filter((rel) => exists(root, rel)).flatMap((rel) => {
+    const content = withoutRule(fs.readFileSync(full(root, rel), 'utf8'), id);
+    return content === null ? [] : [{ text: rel, content }];
+  });
+}
+
 /** What taking `id` out of the home in `root` means for `agent`: a list of removals and edits, empty when the
  * home does not hold it. */
 function piecesOf(root, id, agent) {
@@ -231,6 +272,7 @@ function piecesOf(root, id, agent) {
     const name = id.slice('gentle-ai-'.length);
     return cutLines(root, host.instructions, (index, blocks) => within(blocks[name], index));
   }
+  if (id.startsWith('rule-')) return rulePieces(root, id.slice('rule-'.length), host);
   if (id === 'claude-md-own') return cutLines(root, host.instructions, (index, blocks) => !Object.values(blocks).some((block) => within(block, index)));
   const hookEdits = (keep) => (agent === 'codex' ? codexHookEdits(root, keep) : edit(root, host.hooksFile, (json) => keepHooks(json, keep)));
   switch (id) {

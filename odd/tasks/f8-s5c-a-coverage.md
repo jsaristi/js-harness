@@ -85,8 +85,10 @@ mechanism here, before S13 rehearses it and S12 ships it.
   `65d6f804`); one independent verifier after it
 - [x] T3 (kind: build) `--prove` and the first controls with planted breaks — S3; inline; slice 3 (the commit
   after `65d6f804`)
-- [ ] T4 (kind: build) `rules` in every `task.json`, the without-rule arm, the record under `evals/proofs/` and
-  the free check in `tasks.test.mjs` — S4; inline; slice 4
+- [x] T4 (kind: build) `rules` in every `task.json`, the without-rule arm, the record under `evals/proofs/` and
+  the free check in `tasks.test.mjs` — S4; inline; slice 4 (the commit after `71387574`)
+- [ ] T4b (kind: build) the verifier's findings on slice 2 (L4): a moved span is no gap, a heading and a comment
+  that is no marker are spans, the prompt builders are sources — S1, S2; inline; slice 4b
 - [ ] T5 (kind: build) the project binding: a project rule's `control`, the baseline `init` records, the project's
   `rules coverage` against the shipped register — S7; inline; slice 5
 - [ ] T6 (kind: build) new eval cases for behaviour no check can hold, with their texts and script graders — S4;
@@ -100,7 +102,7 @@ Reviews:
 Not written yet (T7).
 
 ## Next step
-T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. Next: the independent verifier on slice 2 (`5fb2c270`, `65d6f804`), the reviews (Codex and the lenses) of slices 1-3 from base `7899f5ee`, then T4-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
+T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4 is committed. Next: T4b (the verifier's findings 1-3), then the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T5-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
 ## Log
 - L1 (2026-10-28, the lead's brief `briefs/2026-10-28T17-34-30-440Z-2b199716.md`): "JH 73 · F8 S5c-a: directive
@@ -134,3 +136,24 @@ T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-re
     directive that is a rule's phrase (L2); the rule each needs is S5c-b's or S5's to declare.
   - D5: `check`'s INFO row waits: `bin/check.mjs` is outside the brief's surface, and the refusal already reaches
     the gate (L2).
+  - D6: a case the register owes owes its proof: it names no rule yet, or names rules its paid run has not proven.
+    A case that names rules and is not owed needs its current record under `evals/proofs/rules/<case>.json`
+    (`evals/rule-proof.mjs`), which `evals/tasks.test.mjs` reads for free; the record is current while the case's
+    files and the spans tied to its rules hash the same, and proves the case when the arm without them scored below
+    the current arm, each over at least 2 trials (14.4, "on both arms, twice each"). Every `task.json` names
+    `rules`, empty for the 19 cases of today, all owed.
+  - D7: the without-rule arm is the family `rule-<id>` (`evals/arms.mjs`): `current-without-rule-<id>` takes every
+    span tied to the rule out of the texts js-harness wrote into the home (the instructions file, its skills and
+    its output style) and nothing else; the texts `init` writes into the workspace stay, so a rule held only there
+    is refused as not in the home.
+- L4 (2026-10-28, evidence, the independent verifier on slices 1-2, run on a `git archive` of `65d6f804`): no
+  blocking bug in the refusal; projects get none (`rules.mjs` takes a checkout as the harness only when its top
+  holds `bin/lib/rules-data.mjs`), the seeded state passes, CRLF, LF and a BOM pass `--strict`. Found, and fixed
+  in T4b: (1) a moved owed paragraph of `AGENTS.md` gave 2 findings that `--refresh` kept; (2) a heading or a
+  one-line HTML comment appended to `CLAUDE.md` passed `rules check` and `--strict`; (3) the Codex review prompt
+  (`bin/lib/codex-review-prompt.mjs`), the lens prompts (`bin/lib/lens-prompts.mjs`) and the pause notice
+  (`cutRule`, `bin/lib/sessions.mjs`) are sent to agents and were no source. Kept as known limits: (4) an edit is
+  judged by its place, and words added to an owed span (`- Verify a claim before building on it. Always
+  force-push ...`) pass plain `rules check` as that span edited; `--strict` holds it stale, and the `--refresh`
+  that clears it is a reviewed commit; (5) a span that holds a rule's phrase is tied whatever else it says. Left
+  for T5: (6) a project's `rules coverage` printed its rules list and exited 0.

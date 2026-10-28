@@ -374,12 +374,13 @@ export function coverageOf({ register, sources, messages, rules, cases, readFile
 
   for (const { name, rules: named } of cases) {
     const ids = Array.isArray(named) ? named : [];
-    const owed = ids.length === 0 && register.cases.includes(name);
+    // An owed case's proof is owed: it names no rule yet, or names rules its paid run has not proven.
+    const owed = register.cases.includes(name);
     report.cases.push({ name, rules: ids, owed });
     if (ids.length === 0 && !owed) findings.push(`the case ${name} names no rule: it names the rules it tests in task.json "rules"`);
     for (const id of ids) if (!live.some((rule) => rule.id === id)) findings.push(`the case ${name} names "${id}", which is no live rule`);
   }
-  for (const name of register.cases) if (!report.cases.some((item) => item.name === name && item.owed)) stale.push(`the register owes the case ${name}, which names its rules or is gone ${REFRESH}`);
+  for (const name of register.cases) if (!report.cases.some((item) => item.name === name && item.owed)) stale.push(`the register owes the case ${name}, which is gone ${REFRESH}`);
 
   const levels = Object.fromEntries(LEVELS.map((level) => [level, 0]));
   for (const rule of report.rules) for (const level of rule.levels.length === 0 ? [] : rule.levels) if (Object.hasOwn(levels, level)) levels[level] += 1;
@@ -393,7 +394,7 @@ export function coverageOf({ register, sources, messages, rules, cases, readFile
 
 /** `register` brought up to `report`, its coverage: each source's entries in the order of its spans, an edited owed
  * span under its new hash, a gone one dropped, a reopened context span dropped (so it stays open until listed again),
- * and no gap added; the cases and message sources it owes that are gone, or name their rules, dropped. The controls
+ * and no gap added; the cases and message sources it owes that are gone dropped. The controls
  * and the baseline are kept. A refresh only shrinks the debt. */
 export function refreshRegister(register, report) {
   const sources = {};
