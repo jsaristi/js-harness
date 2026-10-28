@@ -44,8 +44,8 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
   `stopReason` (route: inline; one commit with T2, L7)
 - [x] T2 (kind: build) S2, S3: the refusal says where the JSON breaks or that the answer ends first; the prompt asks
   for escaped quotes and backslashes (route: inline; one commit with T1, L7)
-- [ ] T3 (kind: verify) Codex, the lenses, gentle-ai and one independent verifier over the commit (route: commands
-  and one read-only sub-agent)
+- [x] T3 (kind: verify) Codex, the lenses, gentle-ai and one independent verifier over the commits (route: commands
+  and one read-only sub-agent; L8, L10, L11)
 
 ## Log
 - L1, 2026-10-28, the lead's brief (JH 75): "The defect: JH 73 ran `js-harness lens-review` three times over
@@ -125,3 +125,13 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
     and two suggestions (the failed-write test needs `js-harness/` made by an earlier test; the V8 wording, R3-002).
   - Fixed in the next commit: that path now says the scanner and the parser disagree, and the test makes its own
     parent folder; run alone with `--test-name-pattern="cannot be kept"`, it passes. The wording stays as L9 says.
+- L11, the reviews of 27d3827c (37fc1e65..27d3827c):
+  - Codex: "the patch is correct" (0.98); Claude lenses reliability and readability: complete, 0 findings.
+  - gentle-ai: 27d3827c reviewed in lineage review-10fa14e5eeff0fd5 (base a93558f1, lens reliability, tier medium),
+    approved and acknowledged, with two suggestions, left: no test drives the "disagree" reason, a path the scanner
+    never sends; the failed-write test finds the folder by `--absolute-git-dir`, equal to the common dir in its plain
+    fixture repository, which the test builds itself.
+- gentle-ai lines: a93558f1 approved (review-548d31cef271fb3e); 37fc1e65 approved (review-1fdc246a7c78cf3c);
+  27d3827c approved (review-10fa14e5eeff0fd5).
+- Spent: 24 reproduction lens runs, $0.265; 3 Codex reviews; 8 js-harness lens runs; 5 gentle-ai lens runs; one
+  verifier sub-agent (about 97,000 tokens). No evals.
