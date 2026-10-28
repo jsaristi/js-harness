@@ -70,7 +70,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
 - [x] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`; 4834997f, 023eceb9, fixed in e35eb7dc (PR 613); `CLAUDE.md` in the commit that checks this box (L12)
 - [x] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline; the probe 6 of 6 (L13), the incident set 13 of 20, no worse (L14)
-- [ ] T7 (kind: build) the records only the commands write (reverse-engineering doc, section 13.3, row 3): `guard` refuses a file tool or a shell write to a review record, and a lens record counts only when it names the run line `lens-review` wrote first; test first — S1; inline, branch `f8-s1-records`; L16
+- [x] T7 (kind: build) the records only the commands write (reverse-engineering doc, section 13.3, row 3): `guard` refuses a file tool or a shell write to a review record, and a lens record counts only when it names the run line `lens-review` wrote first; test first — S1; inline, branch `f8-s1-records`; L16
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 62 · F8 S1: two reviews on every slice ...
@@ -361,6 +361,11 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     part, each part a glob as the shell reads it (a leading dot matched only by a dot), `.git/js-harness` under any
     prefix; a copy into a git dir of a folder that can be the records' folder, or of what a folder holds (`dir/.`),
     is refused, and so is one into the records' folder of what a folder holds or of a glob that can match a record.
+  - d81ca0f2 closed those: Codex correct (0.86); lenses risk and reliability no finding. gentle-ai approved
+    `e7bc4215..d81ca0f2` (lineage review-a6c643931ce990cf) with one warning, left as is: a write call whose path is
+    not one literal (a `path.join` of the temp dir and a file named `lens-reviews.jsonl`) is refused when any part
+    names a record, in any folder. It is the safe side, chosen in e604ad1f (`recordNamedIn`) because a joined path cannot be read
+    without running it; it costs one refused call, and a scratch file named as a record is rare. T7 is done.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -386,6 +391,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `e7bc4215..0e192478` (0a832b2a to 0e192478): medium, reviewed and approved (lineage review-06603c68dfa91912, lens reliability), two warnings, both taken in the next commit (L16); Codex on `1ac52968..0e192478` incorrect (two P2, taken); lenses no finding.
 - gentle-ai on `e7bc4215..e604ad1f` (0a832b2a to e604ad1f): medium, reviewed and approved (lineage review-af2044e046085837, lens reliability), one warning, taken in the next commit (L16); Codex's recheck of `0e192478..e604ad1f` correct (0.98); lens reliability one warning (taken), risk no finding.
 - gentle-ai on `e7bc4215..d6c504a7` (0a832b2a to d6c504a7): medium, reviewed and approved (lineage review-a6fdd82604eac83d, lens reliability), two warnings, both taken in the next commit (L16); Codex on `e604ad1f..d6c504a7` correct (0.96); lenses risk and reliability one warning, the same regression (taken).
+- gentle-ai on `e7bc4215..d81ca0f2` (0a832b2a to d81ca0f2): medium, reviewed and approved (lineage review-a6c643931ce990cf, lens reliability), one warning left with its reason (L16); Codex on `d6c504a7..d81ca0f2` correct (0.86); lenses no finding.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -405,14 +411,11 @@ L10 (24,950 and 14,060), L11's fix (4,430), L13 (5,040, 3,800; the probe's own, 
 run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
-T7 (JH 69, 2026-10-28 ~14:30Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`: commits
-e7bc4215, 0a832b2a, 9f4d1f23, e56114a4, b2bc9596, 9c291a1e, d61b5588, 9e167848, d153e61e, 4eb7449a, b98b42a6,
-1ac52968, 0e192478, e604ad1f, d6c504a7 and the sixteenth (paths read part by part, folder copies). Left, in order:
-Codex `js-harness codex-review --base d6c504a7` (nothing is edited while it runs) and lenses with `node
-bin/js-harness.mjs lens-review --base d6c504a7 --lenses risk,reliability --reason ...` (the branch's command, so the
-record has its run line); then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
-<n>` saying the bad news: nothing works until a release with it is installed, and every in-flight branch reruns
-`lens-review` over its range once it is (older lens records stop counting); then close T7's box.
+T7 done (JH 69, 2026-10-28 ~15:00Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`, 17
+commits from e7bc4215 to d81ca0f2 and this record's, each reviewed (the gentle-ai lines above). Left: push
+`f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr <n>` saying the bad news: nothing
+works until a release with it is installed, and every in-flight branch reruns `lens-review` over its range once it is
+(older lens records stop counting); then `closed` with its summary.
 
 Before T7:
 State at 2026-10-27 ~22:25Z. S1 is built: T1 to T6 done, PRs 607, 608 and 613 landed, PR 614 (`f8-s1-close`) ready
