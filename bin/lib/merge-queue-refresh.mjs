@@ -23,6 +23,19 @@ export function atWorkIn(agents, { roots, self, platform = process.platform }) {
 }
 
 const named = (agent) => `${agent.name ?? agent.id ?? '(no title)'} (${agent.status ?? agent.state})`;
+const unlisted = (err) => `claude agents could not say which sessions are at work (${err.message})`;
+
+/** One look with `list` at the sessions of `roots`, the refresh's under the gate lock, which waits for none of them: a
+ * session waiting for that lock is at work, and would wait for the refresh in turn. `{ quiet }`, with `why` when not. */
+export function lookOnce({ list, roots, self, platform }) {
+  let busy;
+  try {
+    busy = atWorkIn(list(), { roots, self, platform });
+  } catch (err) {
+    return { quiet: false, why: unlisted(err) };
+  }
+  return busy.length === 0 ? { quiet: true } : { quiet: false, why: `${busy.map(named).join(', ')} began a run` };
+}
 
 /** Waits until no session of `roots` is at work, looking with `list` every QUIET_LOOK_SECONDS: `{ quiet: true }`, or
  * `{ quiet: false, why }` when one still is after `waitMinutes`, or the listing failed, which cannot tell. Whom it waits
@@ -35,7 +48,7 @@ export async function waitForQuiet({ list, roots, self, now, sleep, stdout, wait
     try {
       busy = atWorkIn(list(), { roots, self, platform });
     } catch (err) {
-      return { quiet: false, why: `claude agents could not say which sessions are at work (${err.message})` };
+      return { quiet: false, why: unlisted(err) };
     }
     if (busy.length === 0) return { quiet: true };
     const names = busy.map(named).join(', ');
@@ -57,15 +70,18 @@ function projectRoots(run, cwd) {
 }
 
 /** The refresh after a land whose exit is `code`: when the land moved main, it waits for the project's sessions to be
- * between runs (`waitForQuiet`), then asks `refresh` (`refreshCopy`, bin/lib/refresh-copy.mjs) for main's sha. Returns
- * the land's exit when the refresh did its part, the refresh's code when it failed, and GATE_NOT_RUN when a session was
- * still at work, which refreshes nothing; the landing stands in every case. */
+ * between runs (`waitForQuiet`), then asks `refresh` (`refreshCopy`, bin/lib/refresh-copy.mjs) for main's sha, which
+ * looks once more under the gate lock (`lookOnce`, Codex P2 on 79e3430..318f952). Returns the land's exit when the
+ * refresh did its part, the refresh's code when it failed, and GATE_NOT_RUN when a session was still at work, which
+ * refreshes nothing; the landing stands in every case. */
 export async function refreshAfterLand({ code, log, refresh, versionOf, home, cwd, env, run, list, now, sleep, stdout, stderr }) {
   const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
   const sha = landed ? log.record.candidate : null;
   const session = env.CLAUDE_CODE_SESSION_ID || null;
+  const roots = landed ? projectRoots(run, cwd) : [];
+  const stillQuiet = () => lookOnce({ list, roots, self: session });
   if (landed) {
-    const quiet = await waitForQuiet({ list, roots: projectRoots(run, cwd), self: session, now, sleep, stdout });
+    const quiet = await waitForQuiet({ list, roots, self: session, now, sleep, stdout });
     if (!quiet.quiet) {
       stderr(`refresh: ${quiet.why}: nothing was refreshed, and the installed copy still names its previous main; the next land with --refresh-copy brings it up`);
       return GATE_NOT_RUN;
@@ -73,7 +89,7 @@ export async function refreshAfterLand({ code, log, refresh, versionOf, home, cw
   }
   let refreshed;
   try {
-    refreshed = await refresh({ landed, sha, version: landed ? versionOf(sha) : null, home, cwd, env, session, stdout, stderr });
+    refreshed = await refresh({ landed, sha, version: landed ? versionOf(sha) : null, home, cwd, env, session, stillQuiet, stdout, stderr });
   } catch (err) {
     // A refresh that threw still lets the land record be written: main has moved whatever the refresh did.
     stderr(`refresh failed: ${err.message}`);

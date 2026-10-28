@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { QUIET_WAIT_MINUTES, atWorkIn, waitForQuiet } from './merge-queue-refresh.mjs';
+import { QUIET_WAIT_MINUTES, atWorkIn, lookOnce, waitForQuiet } from './merge-queue-refresh.mjs';
 
 // The wait of `merge-queue --land --refresh-copy` for the work sessions to be between runs, against listings of
 // `claude agents` written here: no claude runs, and the clock is the test's.
@@ -32,6 +32,13 @@ function clock() {
   const said = [];
   return { now: () => at, sleep: async (ms) => { at += ms; }, stdout: (line) => said.push(line), said, at: () => at };
 }
+
+test('lookOnce says whether a session of the project is at work, and that claude agents could not say', () => {
+  assert.deepEqual(lookOnce({ list: () => [agent({})], roots }), { quiet: true });
+  assert.deepEqual(lookOnce({ list: () => [agent({ status: 'busy' })], roots, self: 'other' }), { quiet: false, why: 'JH 7 · a (busy) began a run' });
+  assert.deepEqual(lookOnce({ list: () => [agent({ status: 'busy' })], roots, self: 'aaaa1111-0000' }), { quiet: true }, 'the session that refreshes is left out');
+  assert.match(lookOnce({ list: () => { throw new Error('no claude'); }, roots }).why, /claude agents could not say which sessions are at work \(no claude\)/);
+});
 
 test('waitForQuiet returns at once when no session of the project is at work, and looks once', async () => {
   const time = clock();
