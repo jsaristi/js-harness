@@ -121,22 +121,24 @@ Reviews:
 - PR 638 is open; `notify --kind ready` refuses it while the lens skip holds (L10).
 
 ## Paid runs
-None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
-equivalent on his Max plan; the flags are S0's (`evals/results/f8-s0-a-incidents.json`: claude.exe, high effort,
-`bypassPermissions`, work root `D:/js-harness-evals-work`). A run takes one kind of config, so each arm is its own run.
+Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
+flags are S0's (`evals/results/f8-s0-a-incidents.json`: claude.exe, high effort, `bypassPermissions`, work root
+`D:/js-harness-evals-work`). An arm runs beside its base (`configsOf`, `evals/suite.mjs`), so P2 and P3 continue
+P1's run with the arm added: a continued run never repeats a recorded trial, so the trials and their cost are the
+ones planned (L14).
 
-| Run | Command | Trials | Estimate |
-|---|---|---|---|
-| P1 current arm of the two new cases | `node evals/suite.mjs --claude C:/Users/Oficina/.local/bin/claude.exe --configs current --efforts high --repeats 2 --tasks rule-reuse-first,rule-away-autonomy --permission-mode bypassPermissions --work-root D:/js-harness-evals-work --name f8-s5c-a-rules-current` | 4 | $2.24 to $2.60 |
-| P2 without reuse-first | the same with `--configs current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-without-reuse-first` | 2 | $1.12 to $1.30 |
-| P3 without away-autonomy | the same with `--configs current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-without-away-autonomy` | 2 | $1.12 to $1.30 |
-| P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents`, then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents` | 20 | about $13 |
+| Run | Command | Trials | Estimate | Real |
+|---|---|---|---|---|
+| P1 current arm of the two new cases | `node evals/suite.mjs --claude C:/Users/Oficina/.local/bin/claude.exe --configs current --efforts high --repeats 2 --tasks rule-reuse-first,rule-away-autonomy --permission-mode bypassPermissions --work-root D:/js-harness-evals-work --name f8-s5c-a-rules-current` | 4 | $2.24 to $2.60 | $2.36 |
+| P2 without reuse-first | the same with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first` | 2 | $1.12 to $1.30 | $0.94 |
+| P3 without away-autonomy | the same with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy` | 2 | $1.12 to $1.30 | $1.19 |
+| P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents`, then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents` | 20 | about $13 | |
 
 In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
 record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
-evals/results/f8-s5c-a-rules-current.json evals/results/f8-s5c-a-without-reuse-first.json` (and the same for
-`rule-away-autonomy` with P3), then drop the case from the register's `cases` so `evals/tasks.test.mjs` holds its
-record. Each `--plan` first prints the trials and starts nothing. The 13 to 23 cases 14.4 counts that T6 did not
+evals/results/f8-s5c-a-rules-current.json evals/results/f8-s5c-a-rules-current.json` (and the same for
+`rule-away-autonomy`), then drop a proven case from the register's `cases` so `evals/tasks.test.mjs` holds its
+record; a case its record does not prove stays owed. Each `--plan` first prints the trials and starts nothing. The 13 to 23 cases 14.4 counts that T6 did not
 write, on both arms twice, are about $30 to $60 more, when a later session writes them.
 
 ## Next step
@@ -275,3 +277,15 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   plus what the earlier runs cost stays at or under $18.20, and a run that alone costs more than 1.5 times its
   estimate stops the stretch; either way the lead is told with the spend so far. JH 78 runs them on
   `f8-s5c-a-paid`.
+- L14 (2026-10-28, evidence, P1-P3 from `f1e0e8ea`, clean): P2 as the table first wrote it is refused before it pays,
+  "--configs: current-without-rule-reuse-first is compared with current, which the run does not name"
+  (`evals/suite.mjs:218`), so P2 and P3 continued P1's run with `--configs current,<arm>`, whose `--plan` said "4
+  trials planned ..., 2 to run" each: the trials and the spend of his yes, in one results file
+  (`evals/results/f8-s5c-a-rules-current.json`). Real cost $2.36, $0.94 and $1.19, $4.49 in all, under the $4.66 to
+  $5.20 planned. Neither case tells its rule apart: `rule-reuse-first` scored 1.0 on both arms, `rule-away-autonomy`
+  0.6 (3 of 5) on both. The arms did cut: `withoutEvidence` (`evals/without.mjs`, read only) on the home the runs
+  were built from shows 2 lines cut for `reuse-first` and 4 for `away-autonomy`. Both records are written
+  (`evals/proofs/rules/<case>.json`, `rule-proof.mjs` exit 1, "does not tell the rule apart"); both cases stay owed
+  in the register, so `tasks.test.mjs` does not yet hold them. Learning: a case whose grader the model passes or
+  fails the same way without the rule's text tests the model's habit, not the directive; T6's two cases need a
+  harder premise before another paid run, a later session's work.

@@ -1,0 +1,717 @@
+{
+  "format": 1,
+  "name": "f8-s5c-a-rules-current",
+  "createdAt": "2026-10-28T23:05:38.663Z",
+  "model": "claude-opus-5-5",
+  "permissionMode": "bypassPermissions",
+  "stack": {
+    "claude": "2.1.312 (Claude Code)",
+    "engram": "3.6.0",
+    "engramPlugin": "0.1.19",
+    "codegraph": "1.6.2",
+    "jsHarness": "f1e0e8ea58f6d0f94424cd7e17025f9483a0711a"
+  },
+  "args": {
+    "claude": "C:/Users/Oficina/.local/bin/claude.exe",
+    "configs": [
+      "current",
+      "current-without-rule-away-autonomy"
+    ],
+    "efforts": [
+      "high"
+    ],
+    "repeats": 2,
+    "tasks": [
+      "rule-away-autonomy"
+    ],
+    "workRoot": "D:/js-harness-evals-work"
+  },
+  "trials": [
+    {
+      "task": "rule-reuse-first",
+      "config": "current",
+      "effort": "high",
+      "repeat": 1,
+      "score": 1,
+      "passed": 6,
+      "total": 6,
+      "inputTokens": 406198,
+      "outputTokens": 2369,
+      "turns": 11,
+      "usage": {
+        "input_tokens": 14,
+        "cache_creation_input_tokens": 60380,
+        "cache_read_input_tokens": 345804,
+        "output_tokens": 2369,
+        "output_tokens_details": {
+          "thinking_tokens": 176
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 60380,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.5996368,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 14,
+          "outputTokens": 2369,
+          "cacheReadInputTokens": 345804,
+          "cacheCreationInputTokens": 60380,
+          "webSearchRequests": 0,
+          "costUSD": 0.5996368,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 176,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 60380,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 115742,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:05:47.907Z"
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current",
+      "effort": "high",
+      "repeat": 1,
+      "score": 0.6,
+      "passed": 3,
+      "total": 5,
+      "inputTokens": 821752,
+      "outputTokens": 4167,
+      "turns": 15,
+      "usage": {
+        "input_tokens": 26,
+        "cache_creation_input_tokens": 56768,
+        "cache_read_input_tokens": 764958,
+        "output_tokens": 4167,
+        "output_tokens_details": {
+          "thinking_tokens": 1281
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 56768,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.6905796000000001,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 26,
+          "outputTokens": 4167,
+          "cacheReadInputTokens": 764958,
+          "cacheCreationInputTokens": 56768,
+          "webSearchRequests": 0,
+          "costUSD": 0.6905796000000001,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1281,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 56768,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 149744,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:08:23.526Z"
+    },
+    {
+      "task": "rule-reuse-first",
+      "config": "current",
+      "effort": "high",
+      "repeat": 2,
+      "score": 1,
+      "passed": 6,
+      "total": 6,
+      "inputTokens": 485838,
+      "outputTokens": 2538,
+      "turns": 13,
+      "usage": {
+        "input_tokens": 16,
+        "cache_creation_input_tokens": 49332,
+        "cache_read_input_tokens": 436490,
+        "output_tokens": 2538,
+        "output_tokens_details": {
+          "thinking_tokens": 158
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 49332,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.532778,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 16,
+          "outputTokens": 2538,
+          "cacheReadInputTokens": 436490,
+          "cacheCreationInputTokens": 49332,
+          "webSearchRequests": 0,
+          "costUSD": 0.532778,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 158,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 49332,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 82286,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:11:23.603Z"
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current",
+      "effort": "high",
+      "repeat": 2,
+      "score": 0.6,
+      "passed": 3,
+      "total": 5,
+      "inputTokens": 528351,
+      "outputTokens": 2911,
+      "turns": 9,
+      "usage": {
+        "input_tokens": 18,
+        "cache_creation_input_tokens": 47673,
+        "cache_read_input_tokens": 480660,
+        "output_tokens": 2911,
+        "output_tokens_details": {
+          "thinking_tokens": 871
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 47673,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.535808,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 18,
+          "outputTokens": 2911,
+          "cacheReadInputTokens": 480660,
+          "cacheCreationInputTokens": 47673,
+          "webSearchRequests": 0,
+          "costUSD": 0.535808,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 871,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 47673,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 102616,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:13:10.776Z"
+    },
+    {
+      "task": "rule-reuse-first",
+      "config": "current-without-rule-reuse-first",
+      "effort": "high",
+      "repeat": 1,
+      "score": 1,
+      "passed": 6,
+      "total": 6,
+      "inputTokens": 351360,
+      "outputTokens": 1651,
+      "turns": 6,
+      "usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 46161,
+        "cache_read_input_tokens": 305187,
+        "output_tokens": 1651,
+        "output_tokens_details": {
+          "thinking_tokens": 136
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 46161,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.4633933999999999,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 12,
+          "outputTokens": 1651,
+          "cacheReadInputTokens": 305187,
+          "cacheCreationInputTokens": 46161,
+          "webSearchRequests": 0,
+          "costUSD": 0.4633933999999999,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 136,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 46161,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 54075,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:17:06.229Z"
+    },
+    {
+      "task": "rule-reuse-first",
+      "config": "current-without-rule-reuse-first",
+      "effort": "high",
+      "repeat": 2,
+      "score": 1,
+      "passed": 6,
+      "total": 6,
+      "inputTokens": 353741,
+      "outputTokens": 2076,
+      "turns": 8,
+      "usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 47084,
+        "cache_read_input_tokens": 306645,
+        "output_tokens": 2076,
+        "output_tokens_details": {
+          "thinking_tokens": 196
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 47084,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.47956899999999997,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 12,
+          "outputTokens": 2076,
+          "cacheReadInputTokens": 306645,
+          "cacheCreationInputTokens": 47084,
+          "webSearchRequests": 0,
+          "costUSD": 0.47956899999999997,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 196,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 47084,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 59266,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:18:19.912Z"
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current-without-rule-away-autonomy",
+      "effort": "high",
+      "repeat": 1,
+      "score": 0.6,
+      "passed": 3,
+      "total": 5,
+      "inputTokens": 672937,
+      "outputTokens": 3598,
+      "turns": 12,
+      "usage": {
+        "input_tokens": 22,
+        "cache_creation_input_tokens": 50800,
+        "cache_read_input_tokens": 622115,
+        "output_tokens": 3598,
+        "output_tokens_details": {
+          "thinking_tokens": 1009
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 50800,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.602871,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 22,
+          "outputTokens": 3598,
+          "cacheReadInputTokens": 622115,
+          "cacheCreationInputTokens": 50800,
+          "webSearchRequests": 0,
+          "costUSD": 0.602871,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 1009,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 50800,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 122624,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:20:12.350Z"
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current-without-rule-away-autonomy",
+      "effort": "high",
+      "repeat": 2,
+      "score": 0.6,
+      "passed": 3,
+      "total": 5,
+      "inputTokens": 655541,
+      "outputTokens": 3454,
+      "turns": 13,
+      "usage": {
+        "input_tokens": 22,
+        "cache_creation_input_tokens": 49138,
+        "cache_read_input_tokens": 606381,
+        "output_tokens": 3454,
+        "output_tokens_details": {
+          "thinking_tokens": 836
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 49138,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.5835482,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 22,
+          "outputTokens": 3454,
+          "cacheReadInputTokens": 606381,
+          "cacheCreationInputTokens": 49138,
+          "webSearchRequests": 0,
+          "costUSD": 0.5835482,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 836,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 49138,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 128101,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-28T23:23:05.334Z"
+    }
+  ],
+  "setup": {
+    "sha256": "9948f10ad9cb4fe8837c65110ebe8274248b32ba941d62910badb6640ba3cac4",
+    "items": {
+      ".claude/.claude.json": "ab17e8b1264db30048e9112a67efc201dfb68b27eec820a1c59a3e02fd94cd2b",
+      ".claude/CLAUDE.md": "d363ed1c751ccad94ead297ee0ca4a4a83cf67c0e2c2511bbaa17a0b7fb03cd7",
+      ".claude/agents": "ea76b8df518dc41bbe4805d847d1f7a4e8d06d9ac4327f1f59f4be3e3894b4e7",
+      ".claude/hooks": "95f747a9e4ab9a7db37c778dd0874fa921fc733dde8940bba0eac3c394ea2f06",
+      ".claude/output-styles": "c38aa4aaf2af3c4e431c13cf7319b7132ec52b9e935fc2596d00bb9d6d7c5d87",
+      ".claude/plugins": "ef252975c64daeba63c660e10180a195bbfec36da3cabea664bafd406d15f1c5",
+      ".claude/settings.json": "7e63fe86ddf3c745b329f7f146adc00e3524e1686c1cc41df875aff61e7ef403",
+      ".claude/skills": "e1d925b36b8765ae0ddbb51921eaea9807d875f4353c904ee7be0e232a44a017",
+      ".gentle-ai/state.json": "261859941c337cb9dd663599446e61b86137fe0906ff75db48da4abb5103b4a7"
+    }
+  },
+  "arms": {
+    "current-without-rule-reuse-first": {
+      "base": "current",
+      "components": [
+        "rule-reuse-first"
+      ],
+      "sha256": "5d2d750b7b50e6006ea64d1fa7e1c568e6cf87d0215259dfd53f8985c1a2ee06"
+    },
+    "current-without-rule-away-autonomy": {
+      "base": "current",
+      "components": [
+        "rule-away-autonomy"
+      ],
+      "sha256": "d6f7673866d13a9cbe0ef7cccf6587608adc1e225a0bec3afe38060f66fad3c8"
+    }
+  }
+}
