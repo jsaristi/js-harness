@@ -139,9 +139,9 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
 seven by `f9c10579` (L7), what their recheck left by `d0954123` (L8), and Codex's last finding by the commit after
 it (`37cdab21`, L9). Codex covers every code commit and left nothing open; the lenses cover all but
-`f9c10579..37cdab21`, a recorded skip (three runs cut short). PR 638 is open. Next (L10): when the lead says the
-lens-review fix has landed and the installed copy is refreshed, `js-harness lens-review --base f9c10579
---lenses risk,reliability,readability --reason "..."` once (head `37cdab21` or later), then
+`f9c10579..37cdab21`, a recorded skip (three runs cut short, and the one rerun after PR 639 refused again, L11).
+PR 638 is open. Next: the lead's answer to the `waiting` notice of 16:10 (the skip owes a lens run that completes,
+which a fix of the lens's answer shape or its reading would give); then
 `js-harness notify --to orchestrator --kind ready --pr 638`, then `closed` with
 `docs/sessions/2026-10-28-jh-73-f8-s5c-a-directive-coverage.md`.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
@@ -254,3 +254,10 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   the copy is refreshed, rerun the lenses once over f9c10579..37cdab21." The incomplete answers had 571 to 911
   output tokens, a whole answer's size, so they were not cut by length; the guess that they quote the diff's JSON
   unescaped is unconfirmed, since a record keeps the first 300 characters (`LENS_ANSWER_KEPT`).
+- L11 (2026-10-28, evidence, the one rerun the lead allowed at 16:08 after PR 639, over `f9c10579..4c44d3bb`):
+  refused again, readability this time; risk and reliability complete, 0 findings. PR 639 keeps a refused answer
+  whole, and the kept file (`.git/js-harness/lens-answers/a448c0ad-bfe3-413b-8417-79f61e1ba407-readability.stdout`)
+  disproves L10's guess: `stop_reason` is `end_turn` and the answer is 895 characters, but the model never closes
+  `inspection` after `paths` and writes `findings` and `evidence` inside it, so its last brace closes `inspection`
+  and the outer object stays open; it answered in Spanish too. The skip is recorded with that file and the lead is
+  told (a `waiting` notice at 16:10); no further rerun, as the lead said.

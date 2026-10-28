@@ -35,12 +35,14 @@ The session's, in the feature document's L3; with the lead: the `init` baseline 
 - Codex found ten defects across its runs that the tests had not, among them proofs that a red or missing test
   passed, a move that took every entry of one hash, and records stamped with a checkout's digests rather than
   the runs' (L7-L9). Each fix came with the test that failed before it.
-- Three lens runs over `f9c10579..37cdab21` each cut one lens's answer short; the lead holds it as a defect of
-  `lens-review` and is fixing it (L10).
+- Three lens runs over `f9c10579..37cdab21` each cut one lens's answer short; the lead held it as a defect of
+  `lens-review` (L10). The one rerun after PR 639 was refused again, and its kept answer showed the cause: the
+  model leaves `inspection` open and nests `findings` and `evidence` in it (L11). This session's guess, that the
+  answers quoted the diff's JSON, was wrong.
 
 ## Left
-- The lens run over `f9c10579..37cdab21`, once the lead's fix lands and the copy is refreshed; then the `ready`
-  notice for PR 638.
+- A lens run that completes over `f9c10579..37cdab21`, waiting on the lead (L11); then the `ready` notice for PR
+  638.
 - The paid runs P1-P4, his to start.
 - 13 to 23 more eval cases section 14.4 counts, a later session's.
 - The `init` baseline line (L5), routed to JH 68.
