@@ -29,6 +29,7 @@ const err = (text) => process.stderr.write(text + '\n');
 const lost = (id) => { out("No job matching '" + id + "'. Run 'claude agents' to list running sessions."); save(); process.exit(1); };
 if (argv.includes('--bg')) {
   if (state.refuseStart) { err(state.refuseStart); save(); process.exit(1); }
+  if (state.agentsFailAfterStart) state.agentsFail = state.agentsFailAfterStart;
   const name = argv[argv.indexOf('-n') + 1];
   const id = state.nextId;
   let cwd = process.cwd();
@@ -400,6 +401,92 @@ test('sessions start --resume resumes a recorded session that stopped, in its wo
   assert.equal(js(world, ['sessions', 'start', '--resume', 'f462dfd5']).code, 1);
   assert.equal(js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--title', 'Other']).code, 2);
 }));
+
+/** The recorded job `id` of the fake ended, as a restart of the machine ends it. */
+const endJob = (world, id) => {
+  const state = readState(world);
+  Object.assign(state.agents.find((agent) => agent.id === id), { status: undefined, state: 'failed', pid: undefined });
+  writeState(world, state);
+};
+
+// Codex P1 on 79e3430..318f952: the job a resume replaced shares its worktree and brief with the new one; undone alone
+// it would delete them under the new job, and resumed again it would put two jobs on one conversation.
+test('a resumed job replaces the one it resumed: that one is neither resumed nor stopped alone, and stopping the new job undoes both', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const [first] = recordLines(world);
+  endJob(world, '0db8bc5e');
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  assert.match(resumed.stdout, /js-harness sessions stop c779ed44 removes it and 0db8bc5e, the job it resumed/);
+  const acted = actions(world).length;
+  const again = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(again.code, 1);
+  assert.match(again.stderr, /0db8bc5e was resumed as c779ed44: js-harness sessions start --resume c779ed44 resumes it/);
+  const alone = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(alone.code, 1);
+  assert.match(alone.stderr, /0db8bc5e was resumed as c779ed44: js-harness sessions stop c779ed44 removes both/);
+  // The machine uninstall keeps the new job while it works, and with it the one it resumed.
+  assert.equal(js(world, ['uninstall', 'machine', '--home', world.home]).code, 1);
+  assert.equal(actions(world).length, acted, 'nothing ran');
+  assert.ok(fs.existsSync(first.brief), 'the brief the new job reads stays');
+  const stopped = js(world, ['sessions', 'stop', 'c779ed44']);
+  assert.equal(stopped.code, 0, stopped.stderr);
+  assert.deepEqual(actions(world).slice(acted), [['stop', 'c779ed44'], ['rm', 'c779ed44'], ['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.deepEqual(recordLines(world).slice(2).map((line) => [line.event, line.id]), [['removed', '0db8bc5e'], ['removed', 'c779ed44']]);
+  assert.equal(fs.existsSync(first.brief), false);
+}));
+
+// Codex P1 on 79e3430..318f952: a job the lead resumed by hand works the same conversation under another id.
+test('sessions start --resume refuses while any job claude lists works the recorded conversation', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const [first] = recordLines(world);
+  endJob(world, '0db8bc5e');
+  const state = readState(world);
+  state.agents.push({ id: 'f462dfd5', kind: 'background', cwd: world.project, sessionId: first.sessionId, name: 'Build the thing', status: 'busy', state: 'working' });
+  writeState(world, state);
+  const result = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /its conversation runs in f462dfd5 · Build the thing, which is busy/);
+  assert.equal(actions(world).length, 1, 'nothing ran');
+}));
+
+// Codex P2 on 79e3430..318f952: a resume answers to the same rules and the same record as a start.
+test('sessions start --resume holds to the effort rule, needs a writable record, and keeps what it knows when claude says less', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', 'high']).code, 0);
+  const [first] = recordLines(world);
+  endJob(world, '0db8bc5e');
+  const effort = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--effort', 'max']);
+  assert.equal(effort.code, 2);
+  assert.match(effort.stderr, /--effort high or lower/);
+  fs.chmodSync(recordFile(world), 0o444);
+  const unwritable = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  fs.chmodSync(recordFile(world), 0o644);
+  assert.equal(unwritable.code, 1);
+  assert.match(unwritable.stderr, /could not write the record .*, so nothing was resumed/);
+  assert.equal(actions(world).length, 1, 'nothing ran');
+  // claude prints no id: the new job is taken from claude agents, by its title in the folder it was resumed in.
+  patchState(world, { nextId: 'c779ed44', quiet: true });
+  const quiet = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(quiet.code, 0, quiet.stderr);
+  assert.equal(recordLines(world).at(-1).id, 'c779ed44');
+  // claude agents fails once the job runs: the conversation the resume named is recorded.
+  endJob(world, 'c779ed44');
+  patchState(world, { nextId: 'a1b2c3d4', quiet: false, agentsFailAfterStart: 'agents down' });
+  const blind = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
+  assert.equal(blind.code, 0, blind.stderr);
+  const last = recordLines(world).at(-1);
+  assert.deepEqual([last.id, last.sessionId, last.resumedFrom], ['a1b2c3d4', recordLines(world).at(-2).sessionId, 'c779ed44']);
+  // Neither an id nor a listing: nothing is recorded, and the new brief stays for the job that may run.
+  patchState(world, { agentsFail: undefined, agentsFailAfterStart: undefined, nextId: 'b2c3d4e5', quiet: true, ghost: true });
+  endJob(world, 'a1b2c3d4');
+  const lost = js(world, ['sessions', 'start', '--resume', 'a1b2c3d4', '--brief', world.brief]);
+  assert.equal(lost.code, 1);
+  const kept = /its brief stays at (\S+\.md)/.exec(lost.stderr);
+  assert.ok(kept && fs.existsSync(kept[1]), lost.stderr);
+  assert.equal(recordLines(world).at(-1).id, 'a1b2c3d4');
+  assert.notEqual(first.sessionId, null);
+}, { rules: true }));
 
 test('uninstall machine removes the recorded sessions that rest, keeps a working one and fails until it is stopped', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Busy', '--brief', world.brief]).code, 0);
