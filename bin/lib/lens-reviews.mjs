@@ -59,7 +59,7 @@ const runKey = ({ id, base, head, subjectHash }) => JSON.stringify([id, base, he
  * run claims nothing. A record of another read is never admitted, so `records` is what a check reads with it. The git
  * common dir is asked once for both files (`where`, as `jsonLinesPath` takes it). */
 export function admittedLensReviews(root, { spawn = spawnSync, where } = {}) {
-  const deps = { spawn, where: where ?? { commonGitDir: gitDirs(root, spawn).commonGitDir } };
+  const deps = { spawn, where: where ?? { commonGitDir: gitDirs(root, spawn).commonGitDir ?? null } };
   const records = readLensReviews(root, deps);
   const runs = new Set(readLensRuns(root, deps).filter((line) => line.schema === LENS_REVIEW_RUN_SCHEMA).map(runKey));
   const claimed = new Set();

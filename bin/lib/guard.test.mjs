@@ -547,6 +547,12 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     'cp -t .git/js-harness /tmp/codex-reviews.jsonl',
     'rm -rf .git/js-harness',
     'rm -rf D:/r/.git/js-harness/',
+    // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
+    "printf '{}'>>.git/js-harness/lens-reviews.jsonl",
+    `echo x>>${RECORD}`,
+    `echo x 2>>${RECORD}`,
+    `echo x >| ${RECORD}`,
+    `echo x &>> ${RECORD}`,
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review.*only the command/s, command);
 });
 
@@ -557,6 +563,8 @@ test('a script that writes a record, or calls a function that appends one, is re
     `python -c "open('${RECORD}', 'a').write('{}')"`,
     'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendCodexReview(\'.\', {}))"',
     'node -e "fs.appendFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), l)"',
+    // A path held in a variable of the script (gentle-ai R3 on 0a832b2a).
+    'node -e "const p = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(p, l)"',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -580,5 +588,10 @@ test('reading a record, the commands that write one, and text that only names on
     `cp -t /tmp ${RECORD}`,
     'rm -rf D:/js-harness-worktrees/practice/js-harness',
     `bash -c "cat ${RECORD}"`,
+    // Quoted text and a name that is not called (Codex P2 on 0a832b2a); a redirection elsewhere is no copy's target.
+    "echo '>.git/js-harness/lens-reviews.jsonl'",
+    'node -e "console.log(\'appendLensReview\')"',
+    'node -e "console.log(fs.readFileSync(\'bin/lib/lens-reviews.mjs\', \'utf8\').includes(\'appendLensReview\'))"',
+    `cp ${RECORD} /tmp/copy.jsonl > /tmp/cp.log`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

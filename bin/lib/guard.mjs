@@ -274,10 +274,12 @@ export function terminalNoteRefusal(command, projectData) {
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
  * as it is: a Windows path is written with them. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
- * a `$(...)` stays in its word. */
-function shellWords(command, { groups = false } = {}) {
+ * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
+ * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
+function shellWords(command, { groups = false, redirections = false } = {}) {
   const words = [];
   const operators = new Set();
+  const redirects = new Set();
   const operator = (text) => { operators.add(words.length); words.push(text); };
   let word = null;
   let quote = null;
@@ -335,12 +337,21 @@ function shellWords(command, { groups = false } = {}) {
       const pair = text[i + 1] === c && c !== ';';
       operator(pair ? c + c : c);
       if (pair) i += 1;
+    } else if (redirections && c === '>') {
+      if (word !== null && !/^\d+$/.test(word)) words.push(word);
+      word = null;
+      const pair = text[i + 1] === '>';
+      redirects.add(words.length);
+      words.push(pair ? '>>' : '>');
+      if (pair) i += 1;
+      if (text[i + 1] === '|') i += 1;
     } else {
       word = (word ?? '') + c;
     }
   }
   if (word !== null) words.push(word);
   words.operators = operators;
+  words.redirections = redirects;
   return words;
 }
 
@@ -507,8 +518,8 @@ const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
 const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
-// The functions of this package that append a record of a review and nothing else.
-const RECORD_APPENDS = /\b(?:appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun)\b/;
+// A call of a function of this package that appends a record of a review and nothing else; its name alone is no call.
+const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun)\s*\(/;
 
 /** Why the Bash command `command` is refused for writing a review record, or null (`recordWriteOf`). */
 export function reviewRecordWriteRefusal(command) {
@@ -521,32 +532,32 @@ export function reviewRecordWriteRefusal(command) {
  * folder with a record's name, by `sed` or `perl` with an in-place option, by `dd of=` it, by `rm` of the records'
  * folder, by `bash -c` (or `sh`, `zsh`, `dash`) of a script that does, and by an interpreter's command line whose
  * write call is given it or that calls a function of this package that appends a record. Reading one passes, and so
- * does text in quotes or a heredoc's body. A script fed on standard input, a path held in a variable and a `cd` into
- * the folder are not followed. */
+ * does text in quotes or a heredoc's body. A script fed on standard input, a path held in a shell variable and a `cd`
+ * into the folder are not followed. */
 function recordWriteOf(command) {
-  const words = shellWords(command, { groups: true });
-  const { operators } = words;
+  const words = shellWords(command, { groups: true, redirections: true });
+  const { operators, redirections } = words;
   let start = 0;
   for (let i = 0; i <= words.length; i += 1) {
     if (i < words.length && !operators.has(i)) continue;
-    const what = segmentRecordWrite(words.slice(start, i));
+    const redirected = new Set([...redirections].filter((at) => at >= start && at < i).map((at) => at - start));
+    const what = segmentRecordWrite(words.slice(start, i), redirected);
     if (what !== null) return what;
     start = i + 1;
   }
   return null;
 }
 
-/** What the words of one simple command write of the review records, said as the refusal opens, or null. */
-function segmentRecordWrite(segment) {
+/** What the words of one simple command write of the review records, said as the refusal opens, or null.
+ * `redirected` holds the indexes of its redirections, each followed by the file it writes. */
+function segmentRecordWrite(words, redirected) {
   const writes = (name) => (name === null || name === undefined ? null : `this command writes ${name}, the record of a review`);
-  for (let i = 0; i < segment.length; i += 1) {
-    // `> file` and `>> file`, a descriptor before them or not, or the same in one word: `>>file`.
-    const redirect = /^(?:\d*|&)>>?\|?(.*)$/.exec(segment[i]);
-    if (redirect !== null) {
-      const name = reviewRecordOf(redirect[1] === '' ? segment[i + 1] : redirect[1]);
-      if (name !== null) return writes(name);
-    }
+  for (const at of redirected) {
+    const name = reviewRecordOf(words[at + 1]);
+    if (name !== null) return writes(name);
   }
+  // What is left is the command and its arguments.
+  const segment = words.filter((_, i) => !redirected.has(i) && !redirected.has(i - 1));
   let at = 0;
   while (at < segment.length && (COMMAND_KEYWORDS.has(segment[at]) || WRAPPERS.has(segment[at]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at]))) at += 1;
   const program = String(segment[at] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd)$/, '');
@@ -564,7 +575,7 @@ function segmentRecordWrite(segment) {
   if (!INTERPRETERS.has(program)) return null;
   for (const arg of args) {
     const append = RECORD_APPENDS.exec(arg);
-    if (append !== null) return `this command calls ${append[0]}, which appends the record of a review`;
+    if (append !== null) return `this command calls ${append[1]}, which appends the record of a review`;
     const name = scriptRecordWrite(arg);
     if (name !== null) return writes(name);
   }
@@ -619,8 +630,11 @@ function callArguments(text, from) {
 }
 
 /** The record the script `text` writes by a call given it, or null. What each call writes: `rename` both of its paths,
- * `copyFile` its second, `open` its first when a mode that writes follows, the others their first. */
+ * `copyFile` its second, `open` its first when a mode that writes follows, the others their first. A path given as no
+ * string at all, a variable, is taken for the record the script names anywhere, when it names one: reading a record
+ * and writing to a variable is refused with it, the safe side. */
 function scriptRecordWrite(text) {
+  const anywhere = RECORD_IN_TEXT.exec(text);
   for (const match of text.matchAll(WRITE_CALL)) {
     const call = match[1].toLowerCase();
     const args = callArguments(text, match.index + match[0].length);
@@ -628,6 +642,7 @@ function scriptRecordWrite(text) {
     const written = call === 'rename' ? args : call === 'copyfile' ? args.slice(1, 2) : args.slice(0, 1);
     const named = written.map((arg) => RECORD_IN_TEXT.exec(arg)).find((found) => found !== null);
     if (named !== undefined) return named[1].toLowerCase();
+    if (anywhere !== null && written.some((arg) => arg.trim() !== '' && !/['"`]/.test(arg))) return anywhere[1].toLowerCase();
   }
   const named = CMDLET_WRITE.test(text) ? RECORD_IN_TEXT.exec(text) : null;
   return named === null ? null : named[1].toLowerCase();

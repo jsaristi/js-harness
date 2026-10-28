@@ -76,6 +76,18 @@ test('a record of another range that names a run claims nothing, so the command\
   assert.deepEqual(records.map(admitted), [false, true]);
 }));
 
+// gentle-ai R3 on 0a832b2a: with no `where`, the git common dir is asked once, and a folder in no repository has none.
+test('outside a repository there is no record and nothing is admitted', () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-reviews-norepo-'));
+  try {
+    const { records, admitted } = admittedLensReviews(folder, { spawn: () => ({ status: 128, stdout: '', stderr: 'not a git repository' }) });
+    assert.deepEqual(records, []);
+    assert.equal(admitted(record()), false);
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test('a line of another schema is no run line, and a record read by no reader of the file is never admitted', () => inScratch((deps) => {
   const run = startLensRun('.', { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) }, deps);
   const file = path.join(deps.where.commonGitDir, 'js-harness', LENS_REVIEW_RUNS_FILE);

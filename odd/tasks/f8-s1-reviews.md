@@ -249,6 +249,17 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     suggestions, all taken test first: `appendJsonLine` left the list of appends (it writes any file); a record of
     another range naming a run no longer claims it; the untested branches (`env`, assignments, `dd`, `install`, `ln`,
     `shred`, `perl -i`) have cases.
+  - 0a832b2a closed those. Lenses risk, reliability and readability on `d2bc8ab2..0a832b2a`, run with the branch's
+    `node bin/js-harness.mjs lens-review` (the dogfood): complete, no finding, about 26,460 input tokens each; the run
+    line came first and the branch's `lens-review` push row passes on it, with the 28 older records ignored. Codex on
+    the same range, two parts, 256,364 input tokens: part 2 correct (0.89), part 1 incorrect (0.99), two P2: a
+    redirection was read only where it opened a word, so `printf x>>record` passed and quoted `'>record'` was refused;
+    and a script that only named `appendLensReview` was refused. gentle-ai approved 0a832b2a (lineage
+    review-2bb142cdacbcd360, lens reliability) with two warnings and a suggestion: the same glued redirection; a record
+    path held in a script's variable now passed; `admittedLensReviews` with no `where` had no test. All taken in the
+    next commit, tests written first: the shell reader gives an unquoted `>`, `>>` or `>|` as a word of its own
+    wherever it stands; an append counts only as a call; a write call given a variable is taken for the record the
+    script names, so reading a record and writing to a variable is refused too (the safe side).
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -261,6 +272,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `7b8a0a6e..41c08b96` (41c08b96): medium, reviewed and approved (lineage review-6b678a0a52436631, lens reliability), two advisory findings: the comma tests taken in 484df031; a comma beside the object stays refused, since a refusal costs a run and a false complete breaks S1's rule.
 - gentle-ai on `484df031..eaa577e6` (484df031, eaa577e6): medium, reviewed and approved (lineage review-e23cd3803964664e, lens reliability), two advisory findings left for later work: a `~~~` prose line on one side of a bare object is now refused (the safe side), and no test reads an object inside a tilde fence as complete.
 - gentle-ai on `d2bc8ab2..e7bc4215` (e7bc4215): medium, reviewed and approved (lineage review-17f0584aece227d8, lens reliability), a warning and two suggestions, all taken test first in the next commit (L16).
+- gentle-ai on `e7bc4215..0a832b2a` (0a832b2a): medium, reviewed and approved (lineage review-2bb142cdacbcd360, lens reliability), two warnings and a suggestion, all taken in the next commit (L16); Codex on `d2bc8ab2..0a832b2a` incorrect on part 1 (two P2, taken), correct on part 2; lenses no finding.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -280,6 +292,15 @@ L10 (24,950 and 14,060), L11's fix (4,430), L13 (5,040, 3,800; the probe's own, 
 run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
+T7 (JH 69, 2026-10-28 ~12:40Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`: commits e7bc4215,
+0a832b2a and the third with the Codex P2 fixes. Left, in order: Codex `js-harness codex-review --base 0a832b2a` (a
+recheck of the third commit) and lenses with `node bin/js-harness.mjs lens-review --base 0a832b2a --lenses
+risk,reliability --reason ...` (the branch's command, so the record has its run line); gentle-ai when the Stop hook
+offers the third commit; then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
+<n>` saying the bad news: nothing works until a release with it is installed, and every in-flight branch reruns
+`lens-review` over its range once it is (older lens records stop counting); then close T7's box.
+
+Before T7:
 State at 2026-10-27 ~22:25Z. S1 is built: T1 to T6 done, PRs 607, 608 and 613 landed, PR 614 (`f8-s1-close`) ready
 and told. Its pass is met (`## Probe`). Left: PR 614's land by the queue, gentle-ai's review of 96ffb9f9 when the Stop
 hook offers it (approved, the line above), the session summary and the closed notice. Open for later work, not S1's: the
