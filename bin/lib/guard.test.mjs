@@ -666,6 +666,22 @@ test('a script that writes a record, or calls a function that appends one, is re
     // A RegExp the script names as anything but a call may be another function by that name.
     `node -e "const RegExp = eval; RegExp('fs.appendFileSync(\\'${RECORD}\\', 1)').exec(t)"`,
     `node -e "function RegExp(s) { return { exec: () => s } } RegExp('fs.appendFileSync(\\'${RECORD}\\', 1)').exec(t)"`,
+    // A RegExp's exec made eval through its prototype, a RegExp replaced under a computed name, an exec named in
+    // brackets, or an eval reached without a call beside it (the independent verifier on 3982ae68).
+    ...[
+      "Object.getPrototypeOf(RegExp('')).exec = eval;",
+      "RegExp('').__proto__.exec = eval;",
+      "const p = Object.getPrototypeOf(RegExp('')); p.exec = eval;",
+      "Reflect.set(Object.getPrototypeOf(RegExp('')), 'exec', eval);",
+      "globalThis['Reg'+'Exp'] = () => ({exec: eval});",
+      "Object.defineProperty(globalThis, 'Reg'+'Exp', {value: () => ({exec: eval})});",
+      "with({['Reg'+'Exp']: () => ({exec: eval})})",
+      "Object.assign(globalThis, {['Reg' + 'Exp']: () => ({exec: eval})});",
+      "const R = globalThis[atob('UmVnRXhw')]; R.prototype.exec = eval;",
+    ].map((redirect) => `node -e "${redirect} RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`),
+    `node -e "RegExp(a)['exec']('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e "RegExp(a).exec(t); (0, eval)('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e "RegExp('a').exec('t'); const o = {run: eval}; o.run('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
