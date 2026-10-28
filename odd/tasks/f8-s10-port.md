@@ -63,6 +63,9 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
   replies pass; incident set no worse".
 - S7 (brief, owed from S1): "the notify prefix check (a question's text must begin 'Pregunta <n>: '
   with the number notify assigns; JH 62 numbered one by hand and got it wrong)".
+- S8 (JH ORQ's note, 2026-10-28 04:13 local, from PR 618 section 13.3 row 12): "before he applies S10, make install and
+  sync leave a file we installed whose bytes he changed, and say so, as uninstall does ..., instead of overwriting
+  it"; proof: "a scratch-home test where an edited installed skill survives install and sync with a note".
 
 ## Tasks
 - [x] T1 (kind: build) `notify` refuses a question whose text carries its own `Pregunta <n>:` — S7; inline; a1a84d74
@@ -73,6 +76,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [x] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`; PR 619, merged
 - [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
+- [ ] T8 (kind: build) `install` and `sync` leave an installed file he changed, and say so — S8; inline; `f8-s10-keep-edits`
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -330,3 +334,10 @@ reported and it is not rerun), T6 closed, and the `closed` notice with its summa
 - L23 (2026-10-28, 02:19 local, JH ORQ's note): "Lead's call: run the incident rerun only after he applies S10 to his
   machine, so it measures S10 as he will run it. Hold it". The ROADMAP and the diet's register are updated on
   `f8-s10-probe` (`5da88074`); T7 is marked done (PR 619 merged, main `e1725c83`).
+- L24 (2026-10-28, 04:13 local, JH ORQ's note): T8, S8. Design: a component whose file has a record, still exists and
+  holds neither the recorded bytes nor this version's is his; it is left, its record carried forward with the
+  recorded hash (so `uninstall` still keeps it as his) and marked `edited`, not counted as written, and the command
+  says `kept (modified by you)` with how to take this version's text. A file he deleted is written again; one he put
+  back to the recorded bytes is updated. Not in scope: a file at a component's path that install never recorded
+  (still overwritten on a first install, as before). The write moves into its own module, since `manifest.mjs` is at
+  its ceiling (1801). Not high risk by the sizing test (it makes install write less); the usual reviews.
