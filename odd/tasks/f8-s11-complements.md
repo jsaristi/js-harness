@@ -93,16 +93,19 @@ Reviews:
   taken: a `probeStack` test in the commit after ac28c992. R3-003 (a Windows drive letter in another case would
   read a disabled context7 as `ok`) is left: `claudeJsonMcpServer` reads the same `projects` keys exactly, so one
   cell matching by case would make two rules for one file, and it fails open, never a false gap.
+- f63536e9 (R3-002's test): Codex ac28c99..f63536e passed (35,412 input tokens); lens reliability, 0 findings;
+  gentle-ai on `ac28c992..f63536e9`: approved, no finding (lineage review-02e16e1f6bf65507).
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
 Not run yet.
 
 ## Next step
-PR 1 is #627, pushed and notified ready (2026-10-28). Next, on branch f8-s11-presets stacked on
-f8-s11-complements in the same worktree: T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
-switch; the row-17 test scoped to the text files init writes) and T4 (extend the engram-plugin row: a plugin
-ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence test of mem_* text in shipped files).
+PR 1 is #627 and PR 2 (T3, T4) is on branch f8-s11-presets, stacked on it, every code commit reviewed by
+Codex, the lenses and gentle-ai (2026-10-28). Next, on a branch f8-s11-reviews stacked on f8-s11-presets: T5,
+the review sweep (the merge door's gentle-ai evidence, the pull-request body line, the review-starts row, the
+shipped text at bin/lib/manifest.mjs, bin/lib/protocols-skill.mjs and agentsBlock in bin/lib/project.mjs), leaving
+bin/lib/guard.mjs to JH 69.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
