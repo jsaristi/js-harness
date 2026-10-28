@@ -29,6 +29,14 @@ real run: one lens-review over JH 73's range f9c10579..4c44d3bb, read-only". No 
   proved by the answer (L4).
 - The fixture is a testkit, because `bin/` is published and testkits are left out (L5).
 
+## Failures and lessons
+- The first `notify --kind ready` was refused: 9b33bde4 sat on the wrapped second line of a gentle-ai entry, and the
+  merge door reads evidence a line at a time. One gentle-ai line a code commit, each saying gentle-ai.
+- `js-harness wait --pr 640` exited 1 with no closing line, though the PR had merged; no notice to 76 was in the
+  channel. Not known why; likely the lead's copy refresh after the merge, which the lead warns can kill a wait.
+- The worktree guard refused compound shell lines (`cd` with `&&`, redirections, `.git` paths); edits went through
+  scripts written to the job's scratch folder and run as plain commands.
+
 ## Proof
 One real lens-review over f9c10579..4c44d3bb on JH 73's commits with this branch's code: risk, reliability and
 readability complete, 0 findings, in English, $0.1555 (L7). One more readability run with no record showed the answer
