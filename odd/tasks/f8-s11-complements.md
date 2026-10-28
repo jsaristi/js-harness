@@ -85,6 +85,7 @@ Reviews:
 - Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
   removes the instruction settings an older engram or gentle-ai set before it deletes the files (fix commit after
   cea68ea1); Codex cea68ea..28acfb5 passed (the P2 fixed). Lenses risk, reliability, readability over d2bc8ab..28acfb5: 0 findings.
+- gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
 Not run yet.
