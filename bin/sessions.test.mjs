@@ -9,6 +9,7 @@ import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeO
 import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
 import { issueTicket } from './lib/gate-first.mjs';
+import { appendRecord, recordFileOf } from './lib/background.mjs';
 import { CHANNEL_NOT_KNOWN, DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, ROSTER_NOT_KNOWN, percentOf, projectSlug, sessionFacts, shareOf } from './lib/sessions.mjs';
 
 // Every session below is a synthetic transcript in a temp folder: the command is pointed at it with
@@ -1429,11 +1430,11 @@ const WORKER = 'JH 5 · the roster';
 /** Writes a session that was given `title`: his prompt, with the permission mode the host records on it,
  * and the reply that ended its turn `seconds` ago. Its file was last written then, or `touched` seconds
  * ago when the app wrote to it since: an entry with no time, as it appends to a transcript it opens. */
-function writeTitled(machine, id, title, seconds, { mode = 'bypassPermissions', cwd = 'C:\\proj', branch = 'main', touched } = {}) {
+function writeTitled(machine, id, title, seconds, { mode = 'bypassPermissions', cwd = 'C:\\proj', branch = 'main', touched, projectDir = machine.projectDir } = {}) {
   const where = { cwd, gitBranch: branch };
   const untimed = touched === undefined ? [] : [{ type: 'cost-state', sessionId: id }];
   const lines = jsonl({ type: 'custom-title', customTitle: title, sessionId: id }, { ...prompt('go', seconds + 10), ...where, permissionMode: mode }, { ...reply('Done.', seconds), ...where }, ...untimed);
-  writeAt(path.join(machine.projectDir, `${id}.jsonl`), lines, touched ?? seconds);
+  writeAt(path.join(projectDir, `${id}.jsonl`), lines, touched ?? seconds);
 }
 const transcriptOf = (machine, id) => path.join(machine.projectDir, `${id}.jsonl`);
 /** A `readFile` that cannot read the transcript of `id`, as when the session is writing it. */
@@ -1607,6 +1608,28 @@ test('--address exits 2 and prints each title when more than one session holds t
   // A handover names the one that arrives and the one that leaves otherwise, so one orchestrator is left.
   writeTitled(machine, SESSION_D, 'JH ORQ nueva · proj', 30);
   assert.deepEqual([(await runSessions(machine, ['--address', 'orchestrator'])).code, (await runSessions(machine, ['--address', 'orchestrator'])).stdout], [0, ORCHESTRATOR]);
+}));
+
+// JH 70 ran in the background in a worktree of its own, and notify --to 70 found no address: claude writes such a
+// session's transcript under the worktree's folder, which the main checkout's does not hold (2026-10-28).
+test('--address finds a session sessions start recorded, in its worktree\'s folder, and not one it removed', withMachine(async (machine) => {
+  writeRoster(machine);
+  const worktree = path.join(machine.root, '.claude', 'worktrees', 'docs');
+  writeTitled(machine, SESSION_D, 'JH 70 · docs', 120, { cwd: worktree, projectDir: path.join(machine.home, 'projects', projectSlug(worktree)) });
+  const at = before(3600).toISOString();
+  // Written as sessions start wrote it before 2026-10-28: the main checkout as its worktree's folder.
+  appendRecord(machine.userHome, { event: 'started', at, id: 'dddddddd', sessionId: SESSION_D, title: 'JH 70 · docs', root: machine.root, cwd: machine.root, worktree: 'docs', worktreePath: machine.root });
+  const found = await runSessions(machine, ['--address', '70']);
+  assert.deepEqual([found.code, found.stdout, found.stderr], [0, 'JH 70 · docs', '']);
+  // The session that asks is never its own address, and the other roles are as they were.
+  assert.equal((await runSessions(machine, ['--address', '70'], { env: { CLAUDE_CODE_SESSION_ID: SESSION_D } })).code, 1);
+  assert.deepEqual((await runSessions(machine, ['--address', 'orchestrator'])).stdout, ORCHESTRATOR);
+  // A record that cannot be read may hold the address: not known, exit 2, never the "none" of exit 1.
+  const unread = await runSessions(machine, ['--address', '71'], { readFile: (file) => (file === recordFileOf(machine.userHome) ? (() => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); })() : fs.readFileSync(file, 'utf8')) });
+  assert.equal(unread.code, 2);
+  assert.match(unread.stderr, /background sessions .*could not be read \(EBUSY\)/);
+  appendRecord(machine.userHome, { event: 'removed', at, id: 'dddddddd' });
+  assert.equal((await runSessions(machine, ['--address', '70'])).code, 1);
 }));
 
 test('--address never counts the session that asks: CLAUDE_CODE_SESSION_ID, or --self', withMachine(async (machine) => {

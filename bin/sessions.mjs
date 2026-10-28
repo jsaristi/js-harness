@@ -55,7 +55,7 @@ import { boardMemory } from './lib/memory-hygiene.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { readTickets } from './lib/gate-first.mjs';
-import { appendReading, findOpenings, newReading, nextSessionNumber, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
+import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { toldBetween } from './lib/pause.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -63,11 +63,11 @@ import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
-import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, percentOf, projectCode, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
+import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, percentOf, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { readRelief, tailOfFile } from './lib/board-files.mjs';
-import { backgroundChanges, boardBackground, claudeRunner, listAgents } from './lib/background.mjs';
-import { LIVE_USAGE, START_USAGE, sessionsLiveMain, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
+import { backgroundChanges, boardBackground, claudeRunner, listAgents, recordFileOf, recordedFolders } from './lib/background.mjs';
+import { LIVE_USAGE, START_USAGE, nextNumberMain, sessionsLiveMain, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
 
 export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -435,7 +435,7 @@ function heldOutsideWindow(file, changedAt, now, io) {
   }
 }
 
-export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders }) {
+export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders, alsoRead = [] }) {
   let names;
   try {
     names = io.readdir(projectDir);
@@ -445,21 +445,23 @@ export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, 
   const generatedAt = now();
   const since = generatedAt - hours * 3600 * 1000;
   const record = readNotices(harnessHome, slug, { readFile: io.readFile });
-  const where = { projectDir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders, readings: record.readings };
   const read = [];
-  for (const name of names) {
-    if (!name.endsWith('.jsonl')) continue;
-    const id = name.slice(0, -'.jsonl'.length);
+  // Beside the folder's, the sessions of `alsoRead` (`{ id, folder }`), each read from the sessions folder of the folder
+  // it works in (`recordedFolders`); one whose transcript is not written yet is no session.
+  const files = names.filter((name) => name.endsWith('.jsonl')).map((name) => ({ id: name.slice(0, -'.jsonl'.length), dir: projectDir }));
+  for (const item of alsoRead) if (!files.some((file) => file.id === item.id)) files.push({ id: item.id, dir: path.join(path.dirname(projectDir), projectSlug(item.folder)), elsewhere: true });
+  for (const { id, dir, elsewhere } of files) {
+    const where = { projectDir: dir, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, measureReaders, readings: record.readings };
     let changedAt;
     try {
-      changedAt = io.stat(path.join(projectDir, name)).mtimeMs;
+      changedAt = io.stat(path.join(dir, `${id}.jsonl`)).mtimeMs;
     } catch (err) {
       // A transcript whose date cannot be read cannot be placed outside the window either: it is listed.
-      read.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
+      if (!(elsewhere && err.code === 'ENOENT')) read.push({ id, modifiedAt: null, unavailable: err.code ?? err.message });
       continue;
     }
     if (changedAt >= since) read.push(readSession(id, new Date(changedAt).toISOString(), where, io));
-    else if (heldOutsideWindow(path.join(projectDir, name), changedAt, generatedAt, io)) {
+    else if (heldOutsideWindow(path.join(dir, `${id}.jsonl`), changedAt, generatedAt, io)) {
       // The tail is the cheap look; the whole read, with its subagents' files, says whether it is held.
       const session = readSession(id, new Date(changedAt).toISOString(), where, io);
       if (!session.unavailable && heldPastLimit(session, generatedAt)) read.push(session);
@@ -557,8 +559,9 @@ export async function sessionsMain(
    * `record` is the channel's record as its reader gives it (`readNotices`), read in the same look: a
    * session whose transcript carries no title has the one of the opening it read (`titledByReadings`),
    * so it is on the board, and holds its role, under that title. */
-  const lookAtSessions = () =>
+  const lookAtSessions = (alsoRead) =>
     readSessionsWindow({
+      alsoRead,
       projectDir,
       slug,
       harnessHome: home,
@@ -684,27 +687,8 @@ export async function sessionsMain(
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });
 
-  // The number the next work session is titled with (odd/tasks/session-title.md, S2, S5): the one the guard names when
-  // it refuses a start_session of another title. It reads the project's code from its harness.json, then the channel's
-  // record and the openings, and writes nothing. Exit 1 is a project that declares no code; a code or a source that
-  // could not be read is exit 2, so "could not look" is never read as "none".
-  if (parsed.nextNumber) {
-    let code;
-    try {
-      ({ code } = projectCode(root, readFile));
-    } catch (err) {
-      stderr(`js-harness sessions: could not read the project's code: ${err.message}`);
-      return 2;
-    }
-    if (code === null) {
-      stderr(`js-harness sessions: ${path.join(root, 'harness.json')} declares no "code", the project's identifier a session's title starts with (such as "JH"): add it to give the next number`);
-      return 1;
-    }
-    const next = nextSessionNumber(home, slug, { code, readdir, readFile });
-    for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
-    stdout(`${next.code} ${next.number}`);
-    return next.unavailable ? 2 : 0;
-  }
+  // The number the next work session is titled with (odd/tasks/session-title.md, S2, S5), from the project's code.
+  if (parsed.nextNumber) return nextNumberMain({ root, home, slug, readFile, readdir, stdout, stderr });
 
   // The opening of a session, read by the session it is for (odd/tasks/session-channel.md, points 4 and
   // 6): the text `notify --opening` stored under a title, found by that title or by the code and the role
@@ -867,7 +851,9 @@ export async function sessionsMain(
   // version took every failure of the listing for "no folder" (found by both reviews, 2026-10-11).
   if (parsed.address) {
     const role = parsed.address.role === 'orchestrator' ? 'the orchestrator' : `work session ${parsed.address.number}`;
-    const seen = lookAtSessions();
+    // A session `sessions start` started in a worktree writes its transcript in that worktree's sessions folder.
+    const background = recordedFolders(home, root, { readFile });
+    const seen = lookAtSessions(background.items);
     if (seen.unlisted === 'ENOENT') {
       stderr(noFolder(seen.unlisted));
       return 1;
@@ -897,6 +883,10 @@ export async function sessionsMain(
     }
     if (holders.length === 0 && recordUnread !== null) {
       stderr(`js-harness sessions: not known whether a session carries the title of ${role}: ${recordUnread}, and a session opened from the phone is known by it`);
+      return 2;
+    }
+    if (holders.length === 0 && background.unavailable !== undefined) {
+      stderr(`js-harness sessions: not known whether a session carries the title of ${role}: the record of background sessions ${recordFileOf(home)} could not be read (${background.unavailable}), and a session in a worktree is found by it`);
       return 2;
     }
     if (holders.length === 0) {

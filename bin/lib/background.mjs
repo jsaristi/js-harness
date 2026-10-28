@@ -168,6 +168,17 @@ export function worktreeOf(entry) {
   return typeof entry.root === 'string' ? path.join(entry.root, '.claude', 'worktrees', entry.worktree) : null;
 }
 
+/** The sessions `sessions start` recorded for the project at `root`, those not removed, by the folder each works in:
+ * `{ items }`, each `{ id, folder }`, its session id and its worktree, or the folder it was started in when it has none;
+ * or `{ items: [], unavailable }` when the record could not be read. claude writes a session's transcript under the
+ * folder it works in, so one in a worktree is not among the main checkout's. */
+export function recordedFolders(home, root, { readFile, platform = process.platform } = {}) {
+  const record = readRecord(home, { readFile });
+  if (record.unavailable !== undefined) return { items: [], unavailable: record.unavailable };
+  const ours = record.sessions.filter((entry) => typeof entry.root === 'string' && typeof entry.sessionId === 'string' && within(entry.root, root, platform) && within(root, entry.root, platform));
+  return { items: ours.map((entry) => ({ id: entry.sessionId, folder: worktreeOf(entry) ?? entry.cwd ?? entry.root })) };
+}
+
 const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(saidBy(result));
 
 /** Stops and removes the recorded session `entry` with `claude stop` and `claude rm`, deletes the copy of its brief,

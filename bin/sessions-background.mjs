@@ -204,6 +204,29 @@ export function sessionsStartMain(argv, given = {}) {
   return 0;
 }
 
+/** `sessions --next-number` (odd/tasks/session-title.md, S2, S5): the number the next work session is titled with,
+ * the one the guard names when it refuses a start_session or a `sessions start` of another title. It reads the
+ * project's code from its harness.json, then the channel's record, the openings and the record of `sessions start`,
+ * and writes nothing. Exit 1 is a project that declares no code; a code or a source that could not be read is exit 2,
+ * so "could not look" is never read as "none". */
+export function nextNumberMain({ root, home, slug, readFile, readdir, stdout, stderr }) {
+  let code;
+  try {
+    ({ code } = projectCode(root, readFile));
+  } catch (err) {
+    stderr(`js-harness sessions: could not read the project's code: ${err.message}`);
+    return 2;
+  }
+  if (code === null) {
+    stderr(`js-harness sessions: ${path.join(root, 'harness.json')} declares no "code", the project's identifier a session's title starts with (such as "JH"): add it to give the next number`);
+    return 1;
+  }
+  const next = nextSessionNumber(home, slug, { code, readdir, readFile });
+  for (const source of next.unavailable ?? []) stderr(`js-harness sessions: could not read ${source}: the number may be taken`);
+  stdout(`${next.code} ${next.number}`);
+  return next.unavailable ? 2 : 0;
+}
+
 /** `sessions stop <id>`: exit 0 once the session is removed (or claude had already lost it) and its removal recorded,
  * 1 when the record holds no such session or claude refused (it stays recorded), 2 for a usage error. */
 export function sessionsStopMain(argv, given = {}) {
