@@ -128,11 +128,13 @@ Reviews:
   `updated` and of `kept` with exit 1) taken test first in the next commit.
 
 ## Next step
-State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings
-`cbce05e2`, the verifier's fixes `88b53455` and `1f607cb8`, Codex's P2 `e2c38a15`. Next: PR 2 on
-`f8-s10-permissions` (base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in
-its body, `ready --pr` once the merge queue's dry run takes it; then T7 (question 99 answered, L18) and T6 on a
-branch after it.
+State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
+`f8-s10-rules` (not pushed, no PR yet): `30ac3c3d` (the atomic write moved out), `380b9e77` (the Rules block),
+`d232c63a` (the verifier's fixes), `b27d0633` (gentle-ai's). Codex on `cca493e..b27d063`: part 2 incorrect, two P2s
+(L21). Next: the fix of those two P2s (tests already written, uncommitted), then Codex on the fix alone (a recheck),
+the lenses on `cca493e0..` the fix, gentle-ai on the fix, push, PR 3 with base `f8-s10-permissions` or main, `ready
+--pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
+(about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -270,3 +272,11 @@ branch after it.
   behaves as before; rollback, the failed record, the uninstall order and exit codes. The probe, rerun after the
   fixes in a scratch home: install exit 0, his text kept, 9 lines; `guard` denies both spellings of the planted key;
   uninstall exit 0, the home byte for byte as before.
+- L21 (2026-10-28, 22:50 local): gentle-ai on `cca493e0..d232c63a` approved, its findings taken in `b27d0633`. Codex
+  on `cca493e..b27d063` (3 parts, 334,825 input tokens): parts 1 and 3 correct (0.86, 0.90); part 2 incorrect (0.99),
+  two P2s on `bin/lib/rules-block.mjs:44-45` (the rename of the sibling): his `CLAUDE.md` as a link (into a dotfiles
+  repository) is replaced by a regular file, and on Unix a 0600 file comes back 0644. Planned fix: write into the file
+  the link names (`fs.realpathSync` after an `lstat`), skip a link to nothing, and give the sibling the file's mode
+  (`chmodSync`) before the rename. Its two tests are written in `bin/lib/rules-block.test.mjs`, uncommitted: both
+  skip on this machine (it cannot make links; Windows keeps no Unix mode), so only CI's Linux run proves them. JH
+  ORQ asked a pause for his restart (Claude Desktop, gentle-ai, Codex): nothing ran at that point; nothing pushed.
