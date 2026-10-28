@@ -4,20 +4,25 @@
 // calls this. See odd/tasks/on-demand-functions.md ("Slice 2, read before it is written").
 import path from 'node:path';
 import { applySettingsKey, undoSettingsKey } from './settings-key.mjs';
+import { PERMISSIONS_DENY } from './deny-paths.mjs';
+import { OUTPUT_STYLE_NAME } from './output-style.mjs';
 
 /** The clone's own Claude settings: per clone, like the hook, the index and the project manifest. Never the
  * tracked `.claude/settings.json`, which every clone shares. Repository-relative, with forward slashes. */
 export const SETTINGS_FILE = '.claude/settings.local.json';
 
 /** The keys a switch writes, by the name a manifest records: the paste of the code map into every prompt,
- * off, and the TypeScript plugin, off. */
+ * off, and the TypeScript plugin, off; and the two every clone holds (F8 S10, odd/tasks/f8-s10-port.md, T5): the
+ * `js-harness` output style, and the denies that keep a session off secrets, whatever the user settings hold. */
 export const SETTINGS_KEYS = {
+  outputStyle: { pointer: ['outputStyle'], value: OUTPUT_STYLE_NAME },
+  denies: { pointer: ['permissions', 'deny'], value: PERMISSIONS_DENY },
   paste: { pointer: ['env', 'CODEGRAPH_NO_PROMPT_HOOK'], value: '1' },
   languageServer: { pointer: ['enabledPlugins', 'typescript-lsp@claude-plugins-official'], value: false },
 };
 
 /** What the resolved switches (`resolveFunctions`) ask of this clone:
- * - `settings`: the names of `SETTINGS_KEYS` to hold: the paste off where the map is `off` or `on-demand`
+ * - `settings`: the names of `SETTINGS_KEYS` to hold: the output style and the denies always, the paste off where the map is `off` or `on-demand`
  *   (`always` leaves codegraph to paste as it does by itself), the plugin off where the language server is;
  * - `index`: `'make'` where the map is on and no index is there, `'remove'` only where `off` is declared,
  *   since `auto` never deletes an index, and `'leave'` otherwise. Whether the harness made the index it would
@@ -25,7 +30,7 @@ export const SETTINGS_KEYS = {
  * - `prePush`: whether the push check is wired, where the Codex review is on. */
 export function planFunctions(resolved, { indexPresent }) {
   const codeMap = resolved.codeMap.value;
-  const settings = [];
+  const settings = ['outputStyle', 'denies'];
   if (codeMap === 'off' || codeMap === 'on-demand') settings.push('paste');
   if (resolved.languageServer.value === 'off') settings.push('languageServer');
   let index = 'leave';

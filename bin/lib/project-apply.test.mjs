@@ -26,18 +26,21 @@ function withSettings(t, data) {
   return root;
 }
 
+// The keys every clone holds, whatever its switches (odd/tasks/f8-s10-port.md, T5): the output style and the denies.
+const ALWAYS = ['outputStyle', 'denies'];
+
 const plan = (values, paths, indexPresent = false) => planFunctions(resolveFunctions(readFunctions({ functions: values }).values, { paths }), { indexPresent });
 
 test('a project with JavaScript and no TypeScript: the paste off, the plugin off, an index made, the push check wired', () => {
-  assert.deepEqual(plan({}, ['bin/a.mjs']), { settings: ['paste', 'languageServer'], index: 'make', prePush: true });
+  assert.deepEqual(plan({}, ['bin/a.mjs']), { settings: [...ALWAYS, 'paste', 'languageServer'], index: 'make', prePush: true });
 });
 
 test('a project with TypeScript keeps its plugin, and an index already there is left', () => {
-  assert.deepEqual(plan({}, ['src/a.ts'], true), { settings: ['paste'], index: 'leave', prePush: true });
+  assert.deepEqual(plan({}, ['src/a.ts'], true), { settings: [...ALWAYS, 'paste'], index: 'leave', prePush: true });
 });
 
 test('a project with no program: the paste and the plugin off, no index, no push check', () => {
-  assert.deepEqual(plan({}, ['notes.md', 'data.csv']), { settings: ['paste', 'languageServer'], index: 'leave', prePush: false });
+  assert.deepEqual(plan({}, ['notes.md', 'data.csv']), { settings: [...ALWAYS, 'paste', 'languageServer'], index: 'leave', prePush: false });
 });
 
 test('an index of a project with no program is left when off is only what auto resolved to', () => {
@@ -50,7 +53,7 @@ test('a declared off removes an index that is there', () => {
 
 test('a map declared always writes no paste key, and declared switches win over the files', () => {
   assert.deepEqual(plan({ codeMap: 'always', languageServer: 'on', codexReview: 'off' }, ['bin/a.mjs']), {
-    settings: [],
+    settings: ALWAYS,
     index: 'make',
     prePush: false,
   });

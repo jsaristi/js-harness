@@ -69,7 +69,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T2 (kind: build) the `js-harness` output style, which `install` writes — S1; inline; the style-and-skills commit
 - [x] T3 (kind: build) the two skills, adapted, with `THIRD_PARTY_NOTICES`, shipped in the package — S2; inline; the style-and-skills commit
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
-- [ ] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier
+- [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [ ] T7 (kind: build) the Rules block, once question 99 is answered — S5; waits
 
@@ -86,12 +86,32 @@ Reviews:
 - gentle-ai on `d90cd206..70e396b3`: medium, not due (under_budget, 245 lines).
 - Codex on `d90cd20..70e396b`: correct (0.97), no finding; 69,913 input tokens.
 - Lenses on `d90cd20..70e396b` (reliability, readability): complete, 0 findings.
+- Lenses on `d6867d8..d90cd20`, run once more after PR 616 fixed the reader (L10): complete, the skip paid; risk 0
+  findings; reliability and readability one WARNING each, the claim refuted twice before: `git show --stat 883747f2 --
+  THIRD_PARTY_NOTICES.md` lists it (191 insertions) and `git grep` finds `ported-skills.mjs` in it; the lenses never see
+  a Markdown file.
+- T4's independent verifier (opus, read-only, scratch homes): sound in the normal flow; 5 defects, fixed test first in
+  `e523ac72`: a settings file that cannot hold the permissions read as `unknown`, which the hook never announces (now
+  `stale`); `"permissions": null` rewritten; an empty file left after a failed uninstall and a reinstall; every copy
+  of a recorded entry removed (now one); a manifest edited by hand could name the user's entries (now only the lists').
+- Codex on `c7445ca..e523ac7`, 2 parts: part 1 incorrect (0.96), 2 P2 fixed test first in `d0d68079` (the settings
+  go back when the manifest cannot be written; emptied lists and the object still go); part 2 correct (0.93);
+  199,164 input tokens.
+- Lenses on `c7445ca..d0d6807` (risk, reliability, readability): reliability 0; readability a SUGGESTION (two doc
+  comments stacked on `ourFile`) and risk a WARNING (a `defaultMode` put back in silence), both taken in the next
+  commit.
 
 ## Next step
-PR 1 (#615) holds `a1a84d74..c7445caa` on `worktree-f8-s10-port`; PR 2 is `f8-s10-permissions`, chained on it, with
-T4. Next: the independent verifier of T4 (security, high-risk item 2), its reviews, then T5 on the same branch; T6;
-T7 waits on question 99. When JH 66 says the lens reader's fix landed, the lens review of `d6867d8..d90cd20` runs
-once to pay its skip (L8).
+State at 00:35Z, 2026-10-28: T5 is staged on `f8-s10-permissions` and NOT committed: its gate failed on CI (run
+40608582547) on tests that still expect a clone without the two always-held keys or the guard's old matcher:
+`bin/check-functions.test.mjs:90`, `bin/lib/project-switches.test.mjs` (lines 66, 88, 97, 113, 170: add
+`outputStyle`, `permissions.deny`, and the two `wrote`/`removed` actions first), `scripts/practice-lib.test.mjs`
+(HARNESS_HOOKS, add `Read` to the guard's matcher). Fix them, commit T5 with the message in L-less form already used
+(feat(guard): refuse a file tool on a secret's place, and hold it per clone). Then: one commit for T4's lens findings
+(install says when it puts a `defaultMode` back and how to keep it out; merge the two doc comments on `ourFile` in
+`bin/lib/manifest.test.mjs`); `js-harness codex-review --base d0d68079^` is owed for d0d68079; then T5's independent
+verifier (guard and clone keys), Codex and lenses over T5, PR 2 on `f8-s10-permissions` (base `worktree-f8-s10-port`)
+with L11's Read cost in its body; then T6; T7 waits on question 99.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -135,3 +155,20 @@ once to pay its skip (L8).
   engine went down (1904 → 1898) with the permissions in. They are held on every `install` and `sync`, not on request:
   S2 takes them away whether or not anyone asked. A record `uninstall` could not release keeps the file the hooks
   made, as a kept setting does; `bin/install.test.mjs` found it (a `{}` left behind on the second run).
+- L10 (2026-10-28, JH ORQ, 00:08Z): "PR 616 landed (main 212c7e1): the lens reader now takes one JSON object with prose
+  around it ... rerun the lens review on d6867d8..d90cd20 once to clear the skip." Run 00:16Z, after the lead
+  refreshed the installed copy.
+- L11 (2026-10-27, measured at 23:49Z, and JH ORQ's answer to that note): with `Read` in the guard's matcher every Read of every session
+  runs the hook: 334, 463 and 550 ms a Read on the installed command, against 157-178 ms for node's own start, three
+  runs each. JH ORQ: "keep Read in the guard's matcher, as the spec says ... Write the measured cost ... into the PR
+  body and the feature document: it goes to him on his return as a choice he can reverse. If a cheaper guard start is
+  a small change, propose it as a follow-up; do not build it now." The follow-up to propose: a guard entry for Read
+  alone whose command runs `bin/guard.mjs` directly, skipping the dispatcher (174-266 ms measured, against 328-383 ms
+  through it).
+- L12 (2026-10-28, decision): the lists and the paths `guard` refuses live in `bin/lib/deny-paths.mjs`, which imports
+  nothing, because the hook now runs on every Read; `permissions.mjs` re-exports them. A place matches at any depth of
+  the path, in any case, which is stricter than Claude Code's own reading of a relative deny (from the session's
+  folder): a second layer refuses more, never less. `.credentials.json` is guarded beside the 24, not added to the
+  denies the settings hold, which stay gentle-ai's list that `doctor` compares. A clone holds the style and the denies
+  whatever its switches, and a value already there is kept, never overwritten; a record still has to hold the shipped
+  list to be valid, so a later change of the list will need its own step for clones that recorded the old one.

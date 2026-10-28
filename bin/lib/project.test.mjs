@@ -180,12 +180,15 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     assert.equal(spawn.codegraphCalls.length, 1);
 
     // Five files (the failures register and CLAUDE.md among them), the push check of a project with code (its Codex
-    // review is on), and the two keys of this clone's settings a project of JavaScript with no TypeScript asks for.
+    // review is on), the style and the denies every clone holds (odd/tasks/f8-s10-port.md, T5), and the two keys of
+    // this clone's settings a project of JavaScript with no TypeScript asks for.
     const wroteActions = result.actions.filter((a) => a.kind === 'wrote');
     const ranActions = result.actions.filter((a) => a.kind === 'ran');
-    assert.equal(wroteActions.length, 8);
+    assert.equal(wroteActions.length, 10);
     assert.deepEqual(wroteActions.slice(5).map((a) => a.path), [
       '.git/hooks/pre-push',
+      '.claude/settings.local.json#/outputStyle',
+      '.claude/settings.local.json#/permissions/deny',
       '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
       '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
     ]);
@@ -196,7 +199,7 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     // Manifest contents and hashes: format 2, since it records that line.
     assert.equal(result.manifest.version, '0.1.0');
     assert.equal(result.manifest.format, 2);
-    assert.deepEqual(result.manifest.settings.map((record) => record.key), ['paste', 'languageServer']);
+    assert.deepEqual(result.manifest.settings.map((record) => record.key), ['outputStyle', 'denies', 'paste', 'languageServer']);
     assert.equal(result.manifest.files.length, 6);
     for (const file of result.manifest.files) {
       const abs = path.join(root, ...file.path.split('/'));
@@ -2935,12 +2938,15 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), harnessBefore);
     assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsBefore);
 
-    // The two hooks, and the two keys of this clone's own settings (a clone applies its switches for itself).
+    // The two hooks, the style and the denies every clone holds, and the two keys of this clone's own settings (a
+    // clone applies its switches for itself).
     assert.deepEqual(
       result.actions.filter((a) => a.kind === 'wrote').map((a) => a.path),
       [
         '.git/hooks/pre-commit',
         '.git/hooks/pre-push',
+        '.claude/settings.local.json#/outputStyle',
+        '.claude/settings.local.json#/permissions/deny',
         '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
         '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
       ],

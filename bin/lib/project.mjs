@@ -2019,7 +2019,7 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
   const settings = jsonOr(path.join(root, ...SETTINGS_FILE.split('/')), {});
   for (const key of plan.settings) {
     const { pointer, value } = SETTINGS_KEYS[key];
-    if (valueAt(settings, pointer) === undefined) say(SWITCH_OF_KEY[key], `${settingLabel(pointer)} is not ${JSON.stringify(value)}`);
+    if (valueAt(settings, pointer) === undefined) SWITCH_OF_KEY[key] ? say(SWITCH_OF_KEY[key], `${settingLabel(pointer)} is not ${JSON.stringify(value)}`) : lines.push(`every clone: ${settingLabel(pointer)} is not there`);
   }
   const records = Array.isArray(manifest?.settings) ? manifest.settings.filter(isValidSettingsRecord) : [];
   for (const record of records) {

@@ -8,17 +8,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readManifest, removeEmptyDirsUpTo, serializeJson } from './manifest.mjs';
 import { readSettings, userSettingsPath } from './user-settings.mjs';
+import { PERMISSIONS_ALLOW, PERMISSIONS_DENY } from './deny-paths.mjs';
 
-/** The allow entry gentle-ai writes: codegraph's tools run without a prompt. */
-export const PERMISSIONS_ALLOW = Object.freeze(['mcp__codegraph__*']);
-
-/** The 24 denies gentle-ai writes (the reverse-engineering document, section 3): no wipe of the root or the home,
- * and no read or edit of a secret's usual places. `guard` refuses the same paths for a file tool (T5). */
-export const PERMISSIONS_DENY = Object.freeze([
-  'Bash(rm -rf /)', 'Bash(sudo rm -rf /)', 'Bash(rm -rf ~)', 'Bash(sudo rm -rf ~)',
-  ...['.env', '.env.*', '.ssh/*', '.credentials/*', 'Library/Keychains/*', '.aws/credentials', '.config/gh/hosts.yml', '**/*.pem', '**/*.key', '**/secrets/*']
-    .flatMap((place) => [`Read(${place})`, `Edit(${place})`]),
-]);
+// The lists live with the paths `guard` refuses (./deny-paths.mjs), which loads nothing else.
+export { PERMISSIONS_ALLOW, PERMISSIONS_DENY };
 
 const LISTS = { allow: PERMISSIONS_ALLOW, deny: PERMISSIONS_DENY };
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);

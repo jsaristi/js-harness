@@ -101,6 +101,8 @@ test('a clone that is not what its switches ask is told so, one line a differenc
   assert.equal(row.detail, 'this clone is not what its switches ask: js-harness functions apply makes it so');
   assert.deepEqual(row.lines, [
     'codeMap on-demand: no code map index here (.codegraph)',
+    'every clone: .claude/settings.local.json#/outputStyle is not there',
+    'every clone: .claude/settings.local.json#/permissions/deny is not there',
     'codeMap on-demand: .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK is not "1"',
     'languageServer off: .claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official is not false',
     'codexReview on: no push check in the pre-push hook',
