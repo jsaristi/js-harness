@@ -1017,3 +1017,104 @@ one correction batch:
   limits (13.2, row 11); load checks (row 16); capability-gated text (row 17); verification apart
   from review (row 18); a runnable check for rows 13-15; full paths and lines where a reference
   was short.
+
+## 14. Directive coverage: every directive tied to its proof (2026-10-28)
+
+His words (transcript `0f71b2c6`, line 6690, 2026-10-28T09:23Z, read with `js-harness sessions
+--quote`): "recuerda que este proyecto es el que construye los otros proyectos por eso debe quedar
+completamente preciso es la herramienta de herramientas." Section 13.1's main lesson is that
+gentle-ai tests that its text stays the same, never that a model follows it. No step of F8 ties
+our directives to proof (the lead searched the diet and ROADMAP). The lead relays his approval,
+"Listo, añadámosla", as a planned step, not an option; eval spend beyond the plan's limits stays
+his (D2). Design only: nothing here is built. The working record is
+`odd/tasks/directive-coverage.md`.
+
+### 14.1 What we ship today, and what proves it
+
+Counted on main `86491fa`. "Held by code" means a command or hook refuses or acts when the
+directive is broken; "eval" means a case in `evals/tasks` runs a real model against it.
+
+| Source | Directives | Held by code | Eval case | Neither |
+|---|---:|---:|---:|---:|
+| Rules list, values (`bin/lib/rules-data.mjs`) | 46 | 46 (each a declared reader `rules check` holds; `docs/RULES.md` "Read by") [c] | 0 | 0 |
+| Rules list, prose | 20 | 1 (`reply-five-states`, the Stop hook `bin/lib/reply.mjs`) [c] | about 2 (`incident-01`, `-03`) [i] | about 17 [i] |
+| `CLAUDE.md` and `AGENTS.md` | about 135 (sentences that tell the agent what to do; 2,687 words) [i] | about 25 (those that name a refusing command: the gate, pre-push, `contract check`, the reply hook, `guard`, the budgets) [i] | about 10 (`incident-02`, `-05`, `-06`, `-07`, `-09`, `-10`, `doc-goal`, `commit-no-attribution`, `false-premise-flag`, `honest-unknown`) [i] | about 100 [i] |
+| Skills (`js-harness-protocols`, `-orchestrator`, `js-harness`: 333 lines) | not counted apart; 26 rule phrases live there | as the rules | as the rules | unknown [i] |
+| `docs/FAILURES.md` controls | 82 | 70 (`Control: check`) [c] | 0 named | 12 (8 protocol, 2 measured, 1 line, 1 owed) [c] |
+
+What the counts show:
+- **Values are held; prose is not.** Every value rule is read by code. Of the 20 prose rules, one
+  is held by a hook; the other 19 are held only by phrase presence (`rules check` finds the phrase
+  in its file), which is gentle-ai's kind of test: it proves the text is there, not that it is
+  followed [c, `prose-held.mjs` in the scratch: no non-skill code names any of the 20 ids].
+- **Nothing links a directive to its eval case.** The 19 tasks (10 incident cases, run twice as
+  20 trials, `evals/incident-score.mjs:20`; 5 directive tasks; 4 capability tasks) name what they
+  test only in prose, in `case.json`'s `source` [c]. No case names a rule id, so no command can
+  say which directive has no case.
+- **Most directives sit in the prose files with no proof** [i: a sentence count, not a register].
+  That is the gap the mechanism closes, and the first thing it does is replace these estimates with
+  an exact count.
+
+### 14.2 The mechanism
+
+One register, the one we have: every directive becomes a declared rule, since the rules list
+already gives an id, a home, a source in his words and a check (`AGENTS.md`, "A rule lives where
+something acts on it"; reuse first). Four additions:
+
+1. **Every directive is declared.** Each instruction line of `CLAUDE.md`, `AGENTS.md` and the
+   generated skills either names `rule:<id>` or sits inside a declared prose rule's phrases, or is
+   listed as context (a line that describes, not instructs). `rules check` reports a line that is
+   none of the three.
+2. **Every rule names its proof**, a new field with one of: `check` (a test file and test name that
+   fails when the directive is broken, not when its text is missing), `hook` (the file that refuses
+   or acts), `eval` (a case in `evals/tasks`), or `owed` (a reason and a date). `rules check`
+   refuses a live rule with none, a proof that names a test or case that does not exist, and an
+   `owed` entry added after the step lands; the `owed` list only shrinks, like the conventions'
+   legacy lists.
+3. **Every eval case names its rules** (`rules: [<id>]` in `task.json`), and its grader has a
+   reference run that passes and a broken arm that fails, so the case shows it can tell the two
+   apart. `rules check` holds that each id exists.
+4. **A coverage report**, `js-harness rules coverage` (and `--json`): per source, how many
+   directives are held by code, by an eval case, owed, or not declared, and which. `check` shows its
+   totals as an INFO row, and refuses a commit that adds a gap.
+
+### 14.3 Every project gets the same
+
+Projects already get `docs/rules.json`, which `rules check` holds (each phrase still in its file,
+each sensor declared, no rule deleted) (`js-harness rules --help`) [c]. Built on that:
+- **`init`** writes the project's `docs/rules.json` with the `proof` field required, the same
+  `rules check` refusal, the coverage row in its gate, and an `evals/` folder with one example
+  case. The directives `init` itself writes into the project (the `CLAUDE.md` block, `AGENTS.md`)
+  arrive declared, each with the proof the harness already holds for it.
+- **S12's migration** adds the field to an existing project with every rule `owed` and dated, so
+  its gate reports on day one and refuses only new gaps; the project then closes its `owed` list
+  at its own pace.
+- **Its eval cases** run through the harness's runner against the project's own folder (to build),
+  on the eval token, never on a copied login (diet §9).
+
+### 14.4 Cost
+
+Estimates [i]:
+- **Build:** the field, the refusal, the report and the line check, about 300 lines and tests in
+  `bin/lib/rules.mjs` and a new `bin/lib/rules-coverage.mjs`; `init` and S12's part, about 150
+  more. Declaring the prose directives of 14.1 (about 135 lines, merged into fewer rules): about a
+  session of work.
+- **New eval cases:** only for behaviour no check can hold (a judgment, a question that is his).
+  About 15 to 25 cases, written like the incident set, at one to two hours each.
+- **Eval spend:** the diet's small eval cost $0.14 to $0.42 a run (diet §9). A full run of about 40
+  cases, twice each, is about $10 to $35 a run; a change runs only the cases that name the rules
+  it touches, about 1 to 3 cases twice, $1 to $3. A full run happens at S8 and at each
+  certification (G7); anything beyond the plan's envelope goes to him first.
+
+### 14.5 Where it enters F8, and its pass line
+
+In two parts, so S13 rehearses it and S12 ships it, and S8 certifies it:
+- **S5c-a, the mechanism** (items 1 to 4 and `init`), after S11 and before S13. S13's scratch
+  project then shows it; S12's migration carries it.
+- **S5c-b, the filling**, beside S5's rule pass, which already classifies the 65 rules and every
+  register control: each directive declared, each `owed` closed by a check or an eval case.
+
+**Pass line:** `rules coverage` on main shows 0 undeclared lines and 0 rules without a proof or a
+dated `owed`; at S8, `owed` holds at most 10% of the live directives, each named; every eval case
+names its rules and its broken arm fails; on S13's scratch project a planted directive without a
+proof makes `rules check` exit 1; the incident set is no worse than its baseline.
