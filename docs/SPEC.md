@@ -429,6 +429,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
 **Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput` (with snapshot, status, reviewed and shipped)
 
+### The stretch
+
+**Problem:** Before an absence the lead wrote by hand what would run and for how long, and on the user's return a report by hand: nothing checked the goals, nothing measured the time against the estimate, and the next estimate learned nothing (the user's words of 2026-10-28, `odd/tasks/stretch-protocol.md`).
+**Requirement:** A stretch opens from a plan whose goals are commands and whose items are one session's work each; the departure says whether the queued work fills the hours, each estimate corrected by the last stretches; the open stretch is measured from the records (each item's span, its failed gates as lost time, what no record holds named); the close checks the goals and records estimate against real by kind, which the next opening reads. The departure and the return are rendered from the command's JSON.
+**Reason:** A goal graded by the session that ran it, or a time guessed after the fact, is a claim; read from the records it is a measure the next plan can learn from.
+**Proof:** `node --test bin/stretch.test.mjs`, `node --test bin/lib/stretch.test.mjs`, `node --test bin/lib/stretch-render.test.mjs`
+**Discarded:** One correction for every kind (the user asked by kind; every kind together is the fallback until a kind has three items); measuring tasks by the commits that close them (an item is one session's work, as a session holds one feature); running the goals on every heartbeat (a gate as a goal would take the lock the sessions need).
+**Today:** `bin/stretch.mjs`, `bin/lib/stretch.mjs`, `bin/lib/stretch-render.mjs`, `js-harness stretch` (with open, bind, status and close)
+
 ### The task contract
 
 **Problem:** The host's `/goal` stops when a small model judges a condition from the transcript, so a condition in prose is judged by opinion (`odd/tasks/task-contract.md`). One effort setting covered design and build tasks alike, and nothing applied or printed it (`odd/tasks/effort-by-task.md`).

@@ -160,7 +160,7 @@ test('--out writes the time it read the record for board/summary, after the batc
   const quiet = await live(['--out', dirs.out, '--url', url], dirs);
   assert.equal(quiet.code, 0, quiet.err);
   const stamp = path.join(dirs.out, 'board-checked.json');
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false }, 'it holds until the heartbeat wakes the lead');
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false, stretch: null }, 'it holds until the heartbeat wakes the lead');
   assert.ok(quiet.out.includes(`ArtifactData update: url ${url}, collection board, doc_id summary, file_path ${stamp}`), quiet.out);
 
   note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
@@ -170,8 +170,23 @@ test('--out writes the time it read the record for board/summary, after the batc
 
   // Codex, 59df62f..bc72c2e: a resting lead waits for a notice up to wait-for, not a half-hour heartbeat.
   assert.equal((await live(['--out', dirs.out, '--resting'], dirs)).code, 0);
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString(), resting: true });
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString(), resting: true, stretch: null });
   assert.equal((await live(['--resting'], dirs)).code, 2, '--resting stamps, so it takes --out');
+}));
+
+// odd/tasks/stretch-protocol.md, T5: the open stretch rides on board/summary, measured and with its goals as last checked.
+test('--out puts the open stretch into the stamp, its items measured, and runs none of its goals', withFolders(async (dirs) => {
+  const plan = path.join(dirs.project, 'plan.json');
+  fs.writeFileSync(plan, JSON.stringify({ hours: 8, slots: 1, goals: [{ id: 'G1', text: 'merged', command: 'exit 1' }], items: [{ id: 'W1', title: 'board', kind: 'build', hours: [1, 2], session: 'JH 58' }] }));
+  const { stretchMain } = await import('./stretch.mjs');
+  const opened = await stretchMain(['open', '--plan', plan], {}, { cwd: dirs.project, stdout: () => {}, stderr: () => {}, now: () => NOW - 3_600_000, run: noGit, env: { JS_HARNESS_HOME: dirs.home }, homedir: () => dirs.home });
+  assert.equal(opened, 0);
+  note(dirs.home, dirs.slug, '2026-10-27T05:30:00.000Z', 'board step done');
+  assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
+  const { stretch } = JSON.parse(fs.readFileSync(path.join(dirs.out, 'board-checked.json'), 'utf8'));
+  assert.equal(stretch.elapsedHours, 1);
+  assert.deepEqual(stretch.goals, { met: 0, total: 1, checkedAt: null });
+  assert.deepEqual(stretch.items.map((one) => [one.id, one.state, one.realHours, one.corrected]), [['W1', 'running', 0.5, [1, 2]]]);
 }));
 
 test('the board page counts the lead\'s check of the record apart from the newest row', () => {

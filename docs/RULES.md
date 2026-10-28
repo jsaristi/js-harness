@@ -246,7 +246,7 @@ The most estimated tokens the root CLAUDE.md may hold, since Claude pays it with
 
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
-- Read by: `bin/contract.mjs`.
+- Read by: `bin/contract.mjs`, `bin/stretch.mjs`.
 - Since 2026-10-14. Row: reports. Source: design, `odd/tasks/task-contract.md`.
 
 ### control-phrase-min
@@ -328,7 +328,7 @@ How long one sensor of the gate may run before it is stopped and the commit refu
 
 ### session-stall
 How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
-- Read by: `bin/lib/manifest.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
+- Read by: `bin/lib/manifest.mjs`, `bin/lib/stretch.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
 
 ### throughput-backfill-days

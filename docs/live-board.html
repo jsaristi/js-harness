@@ -103,6 +103,13 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
   <div class="tl" id="tl"><p class="empty" style="padding-left:18px">Sin avisos todavía.</p></div>
 </section>
 
+<section class="stack" id="stretch-box" hidden>
+  <span class="eyebrow">El tramo abierto</span>
+  <h2 id="stretch-title"></h2>
+  <p class="small muted" id="stretch-goals"></p>
+  <div class="stack" id="stretch-items" style="gap:8px"></div>
+</section>
+
 <section class="stack" id="route-box" hidden>
   <span class="eyebrow">La ruta</span>
   <h2>Dónde vamos</h2>
@@ -283,7 +290,35 @@ function routeShown(summary) {
   return route.length > 0 || (total > 0 && done >= 0);
 }
 
+const STRETCH_STATE = { finished: 'terminó', running: 'en curso', silent: 'en silencio', stopped: 'detenida', queued: 'sin empezar' };
+
+/** The open stretch of board/summary (`stretch` from `sessions live --out`): elapsed against its hours, the goals as
+ * last checked, and each item's real hours against its estimate as a bar. Hidden when none is open. */
+function renderStretch(stretch) {
+  const items = Array.isArray(stretch?.items) ? stretch.items : [];
+  $('stretch-box').hidden = !(Number(stretch?.hours) > 0);
+  if ($('stretch-box').hidden) return;
+  $('stretch-title').textContent = `${stretch.elapsedHours} de ${stretch.hours} h · vuelves ${clock(stretch.returnAt)}`;
+  const goals = stretch.goals ?? {};
+  $('stretch-goals').textContent = `Metas: ${goals.met ?? 0} de ${goals.total ?? 0}${goals.checkedAt ? ` (revisadas ${clock(goals.checkedAt)})` : ' (sin revisar aún)'} · perdido en fallas ${stretch.lostHours ?? 0} h · medido ${clock(stretch.measuredAt)}`;
+  $('stretch-items').replaceChildren(...items.map((item) => {
+    const high = Number(item?.corrected?.[1]) || 0;
+    const real = Number(item?.realHours) || 0;
+    const box = el('div', 'stack');
+    box.style.gap = '4px';
+    box.append(el('span', 'small', `${item?.title ?? item?.id} · ${STRETCH_STATE[item?.state] ?? item?.state} · ${real} h de ${item?.corrected?.[0]}-${high} h${item?.waitsFor ? ` · espera: ${item.waitsFor}` : ''}`));
+    const bar = el('div', 'bar');
+    const fill = el('div');
+    fill.style.width = `${high > 0 ? Math.min(100, Math.round((real / high) * 100)) : 0}%`;
+    if (real > high) fill.style.background = 'var(--late)';
+    bar.append(fill);
+    box.append(bar);
+    return box;
+  }));
+}
+
 function renderSummary(asking) {
+  renderStretch(summary?.stretch);
   const lead = $('lead');
   lead.hidden = !summary?.now;
   lead.textContent = summary?.now ?? '';

@@ -340,8 +340,13 @@ function readReviewRecord(root, home, slug, run, fileSystem) {
 /** The merge queue's land records (`<git common dir>/js-harness/lands.jsonl`): none where the file is not there, a
  * machine where no land ran, and a throw where it is there and cannot be read, so its row says so instead of none. A
  * line that does not parse is left out. */
-function readLandRecord(root, run, fileSystem) {
-  const file = jsonLinesPath(root, 'lands.jsonl', { spawn: run });
+export function readLandRecord(root, run, fileSystem) {
+  return readRecordLines(jsonLinesPath(root, 'lands.jsonl', { spawn: run }), fileSystem);
+}
+
+/** The JSON objects of the record `file` the same way: none where `file` is `null` (no repository) or not there, a
+ * throw where it is there and cannot be read. */
+export function readRecordLines(file, fileSystem) {
   if (!file) return [];
   let text;
   try {

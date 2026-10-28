@@ -172,7 +172,7 @@ export function validateContract(markdown) {
 
 /** The kinds of work a task names as `(kind: <kind>)` (odd/tasks/effort-by-task.md, S1). They name
  * work, not a value Sebastián set, so they are a constant here and not rules. */
-const TASK_KINDS = ['design', 'build', 'verify', 'docs'];
+export const TASK_KINDS = ['design', 'build', 'verify', 'docs'];
 
 // A checklist line: its box, then the rest of its first line.
 const TASK_LINE_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/;
