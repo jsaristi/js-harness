@@ -666,15 +666,21 @@ function segmentRecordWrite(words, redirected) {
 // What starts a child process, or a thread that runs a string, in the language of each interpreter (JH 74; found by
 // JH 72): a script that names a record and starts one is refused whole, since what the child runs (a command line, an
 // array of words, a name chosen at run time) is not read here. Matched in the script's strings too, where Node names its
-// module. A module that starts processes among other things (Python's os, Deno, Bun) is refused whole, since an import,
-// an alias or a destructured name renames its call (the independent verifier on 62470339); a read through one goes
-// through cat. A module or a function whose name the script builds from parts is not followed.
+// module. A runtime that starts processes among other things (Deno, Bun) is refused whole, since a destructured name
+// or brackets rename its call (the independent verifier on 62470339); a read through one goes through cat. Python's os
+// is refused by its process functions, or brought in under another name, so its paths still read (the same, on
+// db220fe3). A module or a function whose name the script builds from parts is not followed.
 const CHILD_STARTS = {
-  js: /\b(?:child_process|worker_threads|Deno|Bun)\b|['"]bun['"]|\bprocess\s*\.\s*(?:binding|_linkedBinding|execve|dlopen)\b/,
-  python: /\b(?:os|posix|subprocess|pty|asyncio|multiprocessing|ctypes|importlib|__import__)\b/,
+  js: /\b(?:child_process|worker_threads|Deno|Bun|binding|_linkedBinding|execve|dlopen)\b|['"]bun['"]/,
+  python: new RegExp([
+    /\b(?:posix|nt|_winapi|_posixsubprocess|subprocess|pty|asyncio|multiprocessing|ctypes|importlib|__import__)\b/,
+    /\bos\s*\.\s*(?:system|popen|exec|spawn|posix_spawn|fork|__dict__)/,
+    /\bfrom\s+os\s+import\b[^;\n]*(?:\*|\b(?:system|popen|exec|spawn|posix_spawn|fork))|\bimport\s+os\s+as\b/,
+    /\b(?:getattr|vars)\s*\(\s*os\b|\bmodules\s*\[/,
+  ].map((part) => part.source).join('|')),
   // A pipe open's pipe sits at its mode string's edge (`"|-"`, `'-|'`, `"cmd |"`), not in a block's `|f|` or `|| die`.
   perlRuby: /`|\bqx\b|%x[^\w\s\\]|\b(?:system|exec|spawn|fork|syscall|readpipe|Open[23]|IPC|PTY|popen\w*)\b|\bopen\b[^;]*?(?:["']\s*\||\|\s*["'])/,
-  powershell: /\b(?:Start-Process|saps|start|Invoke-Expression|iex|Invoke-Command|icm|Invoke-Item|ii|Start-Job|Start-ThreadJob|Invoke-CimMethod|Invoke-WmiMethod|scriptblock|InvokeScript)\b|Diagnostics\.Process|Win32_Process/i,
+  powershell: /\b(?:Start-Process|saps|start|Invoke-Expression|iex|Invoke-Command|icm|Invoke-Item|ii|Start-Job|Start-ThreadJob|Invoke-CimMethod|Invoke-WmiMethod|scriptblock|NewScriptBlock|InvokeScript|ComObject|ShellExecute)\b|Diagnostics\.Process|Win32_Process/i,
 };
 const LANGUAGES = { node: 'js', deno: 'js', bun: 'js', python: 'python', python3: 'python', py: 'python', perl: 'perlRuby', ruby: 'perlRuby', pwsh: 'powershell', powershell: 'powershell' };
 

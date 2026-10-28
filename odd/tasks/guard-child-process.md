@@ -84,6 +84,13 @@ gentle-ai (escalated, item 2) on it; then the PR, `notify --kind ready --pr <n>`
   two reads refused (Ruby's `|f|`, Perl's `|| die`). Fixed in db220fe3: Python's os, Deno and Bun are refused
   whole beside a record, and a pipe open is read by its mode string. A Perl two-argument `open(F, "<record>")` stays
   refused by the guard's existing write rule, not by this one.
+- L4 The verifier's third pass on db220fe3: all twenty second-pass bypasses refused and its over-refusals passed; two
+  blocking: Python reads through `os.path` refused, and `import nt` (Windows' posix) passed. Fixed in the next commit:
+  os is refused by its process functions or under another name, and nt, _winapi, `process['binding']`,
+  NewScriptBlock and PowerShell's COM objects are refused.
 - Follow-ups, not done here: a direct write in Perl, Ruby, Deno, Bun or PowerShell code is not followed (only a child
-  process is); a record's name built from parts; a script read from stdin or a file; a cmd copy out of a record is
-  refused as a write; `start` in a PowerShell string refuses a read.
+  process is); a record's name built from parts; a script read from stdin or a file; a cmd copy out of a record, and
+  `findstr move`, refused as a write; `start` in a PowerShell string, a Ruby `"|"` string after `File.open`, Perl's
+  `printf("%x", …)` and every Deno or Bun read refused; outer-shell wrappers not in the guard's WRAPPERS (`timeout`,
+  `wsl`, `xargs`, `find -exec`, `git -c alias.x='!sh …'`, `busybox`), which predate this branch by the verifier's
+  reading, unrun; Python's third-party `sh` package; cmd's `fsutil`; PowerShell's `& (Get-Command cmd)`.

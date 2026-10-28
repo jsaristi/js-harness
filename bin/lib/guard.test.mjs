@@ -752,6 +752,13 @@ test('a script that starts a child process beside a record\'s name is refused, w
     `python -c "import os as o; o.system('echo x >> ${RECORD}')"`,
     `python -c "__import__('os').system('echo x >> ${RECORD}')"`,
     `python -c "import ctypes; ctypes.CDLL(None).system(b'echo x >> ${RECORD}')"`,
+    // Windows' posix, os by another name, and Node's binding by brackets (the independent verifier on db220fe3).
+    `python -c "import nt; nt.system('echo x >> ${RECORD}')"`,
+    `python -c "import os; getattr(os, 'sys' + 'tem')('echo x >> ${RECORD}')"`,
+    `python -c "from os import *; system('echo x >> ${RECORD}')"`,
+    `node -e "process['binding']('spawn_sync')" ${RECORD}`,
+    `pwsh -c "$ExecutionContext.InvokeCommand.NewScriptBlock('''x'' >> ${RECORD}').Invoke()"`,
+    `pwsh -c "(New-Object -ComObject WScript.Shell).Run('cmd /c echo x >> ${RECORD}')"`,
     `perl -e 'readpipe("echo x >> ${RECORD}")'`,
     `perl -e 'use IPC::Open2; open2(my $o, my $i, "tee -a ${RECORD}")'`,
     `pwsh -c "[scriptblock]::Create('''x'' >> ${RECORD}').Invoke()"`,
@@ -784,6 +791,10 @@ test('a read that starts no child process, and a child process beside no record,
     `perl -e 'open(F, "<", "${RECORD}") || die "no: $!"; print <F>'`,
     `perl -e 'printf("%x\\n", -s "${RECORD}")'`,
     `python -c "import json; print([json.loads(l).get('commands') for l in open('${RECORD}')])"`,
+    // os's paths start no process (the independent verifier on db220fe3).
+    `python -c "import os; print(open(os.path.join('.git', 'js-harness', 'lens-reviews.jsonl')).read())"`,
+    `python -c "import json, os; print(os.path.getsize('${RECORD}'))"`,
+    `python -c "from os import path; print(path.exists('${RECORD}'))"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });
 
