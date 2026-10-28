@@ -78,20 +78,21 @@ export async function refreshAfterLand({ code, log, refresh, versionOf, home, cw
   const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
   const sha = landed ? log.record.candidate : null;
   const session = env.CLAUDE_CODE_SESSION_ID || null;
-  const roots = landed ? projectRoots(run, cwd) : [];
-  const stillQuiet = () => lookOnce({ list, roots, self: session });
-  if (landed) {
-    const quiet = await waitForQuiet({ list, roots, self: session, now, sleep, stdout });
-    if (!quiet.quiet) {
-      stderr(`refresh: ${quiet.why}: nothing was refreshed, and the installed copy still names its previous main; the next land with --refresh-copy brings it up`);
-      return GATE_NOT_RUN;
-    }
-  }
   let refreshed;
   try {
+    const roots = landed ? projectRoots(run, cwd) : [];
+    const stillQuiet = () => lookOnce({ list, roots, self: session });
+    if (landed) {
+      const quiet = await waitForQuiet({ list, roots, self: session, now, sleep, stdout });
+      if (!quiet.quiet) {
+        stderr(`refresh: ${quiet.why}: nothing was refreshed, and the installed copy still names its previous main; the next land with --refresh-copy brings it up`);
+        return GATE_NOT_RUN;
+      }
+    }
     refreshed = await refresh({ landed, sha, version: landed ? versionOf(sha) : null, home, cwd, env, session, stillQuiet, stdout, stderr });
   } catch (err) {
-    // A refresh that threw still lets the land record be written: main has moved whatever the refresh did.
+    // A refresh that threw, or the folders or the wait before it, still lets the land record be written: main has
+    // moved whatever the refresh did.
     stderr(`refresh failed: ${err.message}`);
     refreshed = REFRESH_FAILED;
   }

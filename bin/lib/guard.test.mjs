@@ -685,6 +685,123 @@ test('a script that writes a record, or calls a function that appends one, is re
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
+// A command a script hands a child process writes as it would from the shell (JH 74; found by JH 72): a review record
+// written so reads as a review nobody made. Provenance does not stop it: a Codex record names no run line a check asks
+// for, and a child process can write a lens run line and the record naming it both (./lens-reviews.mjs). What a child
+// runs is not read, so a script that names a record and starts one is refused whole, a read among them.
+test('a script that starts a child process beside a record\'s name is refused, whatever the child runs', () => {
+  for (const command of [
+    `node -e "require('child_process').exec('echo x >> ${RECORD}')"`,
+    'node -e "require(\'child_process\').execSync(\'printf x > .git/js-harness/codex-reviews.jsonl\')"',
+    // A lens run line, then the record naming it: what provenance admits.
+    `node -e "const cp = require('child_process'); cp.execSync('echo r >> .git/js-harness/lens-review-runs.jsonl'); cp.execSync('echo x >> ${RECORD}')"`,
+    `node -e "require('child_process').execFileSync('bash', ['-c', 'echo x >> ${RECORD}'])"`,
+    `node -e "require('node:child_process').spawnSync('tee', ['-a', '${RECORD}'], { input: l })"`,
+    // An array a shell joins, a name chosen at run time, a command built from parts (the independent verifier on d91e379f).
+    `node -e "require('child_process').spawnSync('echo', ['x', '>>', '${RECORD}'], { shell: true })"`,
+    `node -e "require('child_process')['exec'+'Sync']('echo x >> ${RECORD}')"`,
+    `node -e "Object.values(require('child_process')).find((f) => f.name === 'execSync')('echo x >> ${RECORD}')"`,
+    `node -e "const p = '${RECORD}'; const { execSync: x } = require('child_process'); x('echo x >> ' + p)"`,
+    `node -e "const { Worker } = require('worker_threads'); new Worker('fs.appendFileSync(process.argv[2], l)', { eval: true, argv: ['${RECORD}'] })"`,
+    `deno eval "new Deno.Command('sh', { args: ['-c', 'echo x >> ${RECORD}'] }).outputSync()"`,
+    `bun -e "await Bun.$\\\`echo x >> ${RECORD}\\\`"`,
+    `python -c "import os; os.system('echo x >> ${RECORD}')"`,
+    `python -c "import subprocess; subprocess.run(['echo', 'x', '>>', '${RECORD}'], shell=True)"`,
+    `python -c "import asyncio; asyncio.run(asyncio.create_subprocess_shell('echo x >> ${RECORD}'))"`,
+    `python -c "from subprocess import run as r; r('echo x >> ' + p)" ${RECORD}`,
+    `perl -e '\`echo x >> ${RECORD}\`'`,
+    `perl -e 'qx(echo x >> ${RECORD})'`,
+    `perl -e 'open(F, "|-", "tee -a ${RECORD}")'`,
+    `ruby -e '%x(echo x >> ${RECORD})'`,
+    `ruby -e 'require "open3"; Open3.capture2("tee -a ${RECORD}", stdin_data: "x")'`,
+    `pwsh -c "Start-Process cmd -ArgumentList '/c echo x >> ${RECORD}'"`,
+    `pwsh -c "Invoke-Expression 'echo x >> ${RECORD}'"`,
+    // The record named in the interpreter's other words, its arguments or its environment.
+    `node -e "require('child_process').execSync('echo x >> ' + process.argv[1])" ${RECORD}`,
+    `R=${RECORD} node -e "require('child_process').execSync('echo x >> $R')"`,
+    `node -e "fs.appendFileSync(process.argv[1], l)" ${RECORD}`,
+    `R=${RECORD} node -e "fs.appendFileSync(process.env.R, l)"`,
+    // A read through a child process is refused too: what the child runs is not read.
+    `node -e "require('child_process').execSync('cat ${RECORD}', { stdio: 'inherit' })"`,
+    'node -e "const d = require(\'child_process\').execSync(\'git rev-parse --git-common-dir\', { encoding: \'utf8\' }).trim(); console.log(fs.readFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), \'utf8\'))"',
+    // cmd and PowerShell read their own command line, cmd's own writing commands among it.
+    `cmd /c "echo x >> ${RECORD}"`,
+    `cmd //c "echo x >> ${RECORD}"`,
+    `cmd /c"echo x >> ${RECORD}"`,
+    'cmd /c "echo x >> .git\\js-harness\\lens-reviews.jsonl"',
+    'cmd /c "copy /y nul .git\\js-harness\\lens-reviews.jsonl"',
+    'cmd /c "del .git\\js-harness\\codex-reviews.jsonl"',
+    'cmd /c "move C:\\tmp\\x .git\\js-harness\\lens-reviews.jsonl"',
+    `pwsh -c "'x' >> ${RECORD}"`,
+    "pwsh -c \"'x' >> .git\\js-harness\\codex-reviews.jsonl\"",
+    `pwsh -c "cmd /c 'echo x >> ${RECORD}'"`,
+    `powershell -Command "'x' | Out-File -Append ${RECORD}"`,
+    // A member call named RegExp is no RegExp, and its exec may be a child process's (gentle-ai R2 on 73fc8cf7..3982ae68).
+    `node -e "obj.RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e "obj?.RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e "obj. RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
+    `node -e '$RegExp("").exec("fs.appendFileSync(\\x27${RECORD}\\x27, 1)")'`,
+    // An import, an alias or a destructured name renames the call; a module that starts processes is refused whole
+    // (the independent verifier on 62470339).
+    `bun -e "import { $ } from 'bun'; await $\\\`echo x >> ${RECORD}\\\`"`,
+    `bun -e "const { spawnSync } = Bun; spawnSync(['sh', '-c', 'echo x >> ${RECORD}'])"`,
+    `bun -e "Bun['spawnSync'](['sh', '-c', 'echo x >> ${RECORD}'])"`,
+    `deno eval "const { Command } = Deno; new Command('sh', { args: ['-c', 'echo x >> ${RECORD}'] }).outputSync()"`,
+    `node -e "process.execve('/bin/sh', ['sh', '-c', 'echo x >> ${RECORD}'])"`,
+    `python -c "from os import system; system('echo x >> ${RECORD}')"`,
+    `python -c "import os as o; o.system('echo x >> ${RECORD}')"`,
+    `python -c "__import__('os').system('echo x >> ${RECORD}')"`,
+    `python -c "import ctypes; ctypes.CDLL(None).system(b'echo x >> ${RECORD}')"`,
+    // Windows' posix, os by another name, and Node's binding by brackets (the independent verifier on db220fe3).
+    `python -c "import nt; nt.system('echo x >> ${RECORD}')"`,
+    `python -c "import os; getattr(os, 'sys' + 'tem')('echo x >> ${RECORD}')"`,
+    `python -c "from os import *; system('echo x >> ${RECORD}')"`,
+    // An import over several lines, and Windows' startfile (Codex on 1189ae0..7ea64a7).
+    `python -c "from os import (\n    path,\n    system,\n)\nsystem('echo x >> ${RECORD}')"`,
+    `python -c "from os import path, \\\\\n    system\nsystem('echo x >> ${RECORD}')"`,
+    `python -c "import os; os.startfile('cmd', arguments='/c echo x >> ${RECORD}')"`,
+    `node -e "process['binding']('spawn_sync')" ${RECORD}`,
+    `pwsh -c "$ExecutionContext.InvokeCommand.NewScriptBlock('''x'' >> ${RECORD}').Invoke()"`,
+    `pwsh -c "(New-Object -ComObject WScript.Shell).Run('cmd /c echo x >> ${RECORD}')"`,
+    `perl -e 'readpipe("echo x >> ${RECORD}")'`,
+    `perl -e 'use IPC::Open2; open2(my $o, my $i, "tee -a ${RECORD}")'`,
+    `pwsh -c "[scriptblock]::Create('''x'' >> ${RECORD}').Invoke()"`,
+    `cmd /c "if 1==1 copy nul .git\\js-harness\\lens-reviews.jsonl"`,
+    `cmd /c "for %f in (x) do copy nul .git\\js-harness\\lens-reviews.jsonl"`,
+  ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
+});
+
+test('a read that starts no child process, and a child process beside no record, pass', () => {
+  for (const command of [
+    `node -e "console.log(fs.readFileSync(process.argv[1], 'utf8'))" ${RECORD}`,
+    `node bin/js-harness.mjs lens-review --base abc1234 --lenses risk --reason "${RECORD}"`,
+    'node -e "require(\'child_process\').execSync(\'echo x >> /tmp/notes.txt\')"',
+    'node -e "require(\'child_process\').execSync(\'git status\', { stdio: \'inherit\' })"',
+    // A regex's exec, a call of a function's `call`, and Python's compile are no child process (the independent
+    // verifier on d91e379f).
+    `node -e "for (const l of fs.readFileSync('${RECORD}', 'utf8').split('\\n')) console.log(/head.(\\w+)/.exec(l)?.[1])"`,
+    `node -e "const re = /head/; for (const l of fs.readFileSync('${RECORD}', 'utf8').split('\\n')) console.log(re.exec(l))"`,
+    `node -e "console.log([].slice.call(fs.readFileSync('${RECORD}', 'utf8')).length)"`,
+    `python -c "import re; pat = re.compile(r'head'); print([l for l in open('${RECORD}') if pat.search(l)])"`,
+    `perl -ne 'print if /reviewed/' ${RECORD}`,
+    `ruby -e 'puts File.read(ARGV[0])' ${RECORD}`,
+    `cmd /c "type ${RECORD}"`,
+    'cmd /c "type .git\\js-harness\\lens-reviews.jsonl > C:\\tmp\\copy.jsonl"',
+    `pwsh -c "Get-Content ${RECORD}"`,
+    // A RegExp's own exec, and a name that only ends in RegExp.
+    `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(new RegExp('x').exec(t), myRegExp)"`,
+    // A pipe that is no pipe open, a format with %x, and a key named commands (the independent verifier on 62470339).
+    `ruby -e 'File.open("${RECORD}") { |f| puts f.read }'`,
+    `perl -e 'open(F, "<", "${RECORD}") || die "no: $!"; print <F>'`,
+    `perl -e 'printf("%x\\n", -s "${RECORD}")'`,
+    `python -c "import json; print([json.loads(l).get('commands') for l in open('${RECORD}')])"`,
+    // os's paths start no process (the independent verifier on db220fe3).
+    `python -c "import os; print(open(os.path.join('.git', 'js-harness', 'lens-reviews.jsonl')).read())"`,
+    `python -c "import json, os; print(os.path.getsize('${RECORD}'))"`,
+    `python -c "from os import path; print(path.exists('${RECORD}'))"`,
+  ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
+});
+
 test('reading a record, the commands that write one, and text that only names one pass', () => {
   for (const command of [
     `cat ${RECORD}`,

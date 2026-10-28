@@ -122,6 +122,15 @@ one runs.
   a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
   it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
 
+### brief-waived-review-lines
+A lead's brief for code work waived the feature document, whose gentle-ai lines the merge door asks
+for every code commit while gentle-ai reviews (until F8's S2).
+- Class: delivery
+- Seen: 2026-10-28 — odd/tasks/board-follow-ups.md, L2 — the brief for JH 72 said "no feature
+  document needed"; the merge door then refused PR 636, and JH 72 added per-slice gentle-ai reviews
+  afterwards. The prevention: a lead's brief for code work never waives the feature document's
+  gentle-ai lines before S2
+
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was
 not the real one.

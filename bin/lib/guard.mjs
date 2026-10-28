@@ -567,6 +567,7 @@ const WRITES_INTO = new Set(['mv', 'cp', 'install', 'ln']);
 const IN_PLACE = new Set(['sed', 'perl']);
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby', 'deno', 'bun', 'pwsh', 'powershell']);
+const POWERSHELLS = new Set(['pwsh', 'powershell']);
 // The words before a command that leave it the command: an assignment, and a few wrappers.
 const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
@@ -595,10 +596,11 @@ export function reviewRecordWriteRefusal(command) {
 /** What the shell command `command` writes of the review records, said as a refusal opens, or null. A record is written
  * by a redirection to it, by a command of `WRITES_EACH` given it, by one of `WRITES_INTO` aimed at it or at the records'
  * folder with a record's name, by `sed` or `perl` with an in-place option, by `dd of=` it, by `rm` of the records'
- * folder, by `bash -c` (or `sh`, `zsh`, `dash`) or `eval` of a script that does, and by an interpreter's command line whose
- * write call is given it or that calls a function of this package that appends a record. Reading one passes, and so
- * does text in quotes or a heredoc's body. A script fed on standard input, a path held in a shell variable and a `cd`
- * into the folder are not followed. */
+ * folder, by `bash -c` (or `sh`, `zsh`, `dash`), `cmd /c` or `eval` of a script that does, and by an interpreter's command
+ * line whose write call is given it, that calls a function of this package that appends a record, or that starts a
+ * child process beside a record's name (`CHILD_STARTS`); PowerShell's command line is read as a shell's too. Reading
+ * one passes, and so does text in quotes or a heredoc's body. A script fed on standard input, a path held in a shell
+ * variable, a record's name built from parts and a `cd` into the folder are not followed. */
 function recordWriteOf(command) {
   const words = shellWords(command, { groups: true, redirections: true });
   const { operators, redirections } = words;
@@ -640,15 +642,68 @@ function segmentRecordWrite(words, redirected) {
     const flag = args.findIndex((arg) => /^-[A-Za-z]*c$/.test(arg));
     return flag === -1 || args[flag + 1] === undefined ? null : recordWriteOf(args[flag + 1]);
   }
+  if (program === 'cmd') return cmdRecordWrite(args);
   if (!INTERPRETERS.has(program)) return null;
+  // The record the command line names anywhere, the script's arguments and environment among them, which a script reads
+  // as `process.argv` or `process.env` (JH 74).
+  const named = segment.map((word) => reviewRecordOf(word) ?? recordNamedIn(word)).find((name) => name !== null) ?? null;
   for (const arg of args) {
     const append = RECORD_APPENDS.exec(codeOf(arg));
     if (append !== null) return `this command calls ${append[1]}, which appends the record of a review`;
-    const name = scriptRecordWrite(arg);
+    const name = scriptRecordWrite(arg, named);
     if (name !== null) return writes(name);
+    const child = CHILD_STARTS[LANGUAGES[program]].test(arg) ? recordNamedIn(arg) ?? named : null;
+    if (child !== null) {
+      return `this command's script starts a child process beside ${child}, the record of a review, and what a child process `
+        + 'runs is not read here (read a record with cat or a file tool, or start the child process from a command that names no record)';
+    }
+    // PowerShell runs a command line as a shell does: its redirections, and the commands it starts, cmd among them.
+    if (POWERSHELLS.has(program) && recordWriteOf(backslashesKept(arg)) !== null) return recordWriteOf(backslashesKept(arg));
   }
   return null;
 }
+
+// What starts a child process, or a thread that runs a string, in the language of each interpreter (JH 74; found by
+// JH 72): a script that names a record and starts one is refused whole, since what the child runs (a command line, an
+// array of words, a name chosen at run time) is not read here. Matched in the script's strings too, where Node names its
+// module. A runtime that starts processes among other things (Deno, Bun) is refused whole, since a destructured name
+// or brackets rename its call (the independent verifier on 62470339); a read through one goes through cat. Python's os
+// is refused by its process functions, or brought in under another name, so its paths still read (the same, on
+// db220fe3). A module or a function whose name the script builds from parts is not followed.
+const CHILD_STARTS = {
+  js: /\b(?:child_process|worker_threads|Deno|Bun|binding|_linkedBinding|execve|dlopen)\b|['"]bun['"]/,
+  python: new RegExp([
+    /\b(?:posix|nt|_winapi|_posixsubprocess|subprocess|pty|asyncio|multiprocessing|ctypes|importlib|__import__)\b/,
+    /\bos\s*\.\s*(?:system|popen|exec|spawn|posix_spawn|fork|startfile|__dict__)/,
+    // An import's names run to its closing parenthesis, or over a backslash's line (Codex on 1189ae0..7ea64a7).
+    /\bfrom\s+os\s+import\s*(?:\([^)]*?|(?:\\\s*\n|[^;\n(])*?)(?:\*|\b(?:system|popen|exec|spawn|posix_spawn|fork|startfile))/,
+    /\bimport\s+os\s+as\b/,
+    /\b(?:getattr|vars)\s*\(\s*os\b|\bmodules\s*\[/,
+  ].map((part) => part.source).join('|')),
+  // A pipe open's pipe sits at its mode string's edge (`"|-"`, `'-|'`, `"cmd |"`), not in a block's `|f|` or `|| die`.
+  perlRuby: /`|\bqx\b|%x[^\w\s\\]|\b(?:system|exec|spawn|fork|syscall|readpipe|Open[23]|IPC|PTY|popen\w*)\b|\bopen\b[^;]*?(?:["']\s*\||\|\s*["'])/,
+  powershell: /\b(?:Start-Process|saps|start|Invoke-Expression|iex|Invoke-Command|icm|Invoke-Item|ii|Start-Job|Start-ThreadJob|Invoke-CimMethod|Invoke-WmiMethod|scriptblock|NewScriptBlock|InvokeScript|ComObject|ShellExecute)\b|Diagnostics\.Process|Win32_Process/i,
+};
+const LANGUAGES = { node: 'js', deno: 'js', bun: 'js', python: 'python', python3: 'python', py: 'python', perl: 'perlRuby', ruby: 'perlRuby', pwsh: 'powershell', powershell: 'powershell' };
+
+// cmd's own commands that write the file they are given, as a word of the line: first, or after a space, `&`, `|`, `(`
+// or `@`, so after `if` and `for … do` too, and not inside a name such as copy.jsonl.
+const CMD_WRITES = /(?:^|[\s&|(@])(?:copy|xcopy|robocopy|move|del|erase|ren|rename|mklink|replace)(?:\.exe)?(?=[\s/]|$)/i;
+
+/** What `cmd /c` (or `/k`) given `args` writes of the review records: its command line read as a shell reads it, or one
+ * of cmd's own writing commands beside a record's name. The flag may hold the line after it (`/c"echo x"`). */
+function cmdRecordWrite(args) {
+  const flag = args.findIndex((arg) => /^\/\/?[ck]/i.test(arg));
+  if (flag === -1) return null;
+  const line = [args[flag].replace(/^\/\/?[ck]/i, ''), ...args.slice(flag + 1)].join(' ');
+  const record = recordNamedIn(line);
+  if (record !== null && CMD_WRITES.test(line)) return `this command writes ${record}, the record of a review`;
+  return recordWriteOf(backslashesKept(line));
+}
+
+/** The command line `text` of a shell that takes no backslash for an escape (cmd, PowerShell), as a POSIX shell reads
+ * the same words: each backslash doubled, so a Windows path keeps its separators. */
+const backslashesKept = (text) => text.replace(/\\/g, '\\\\');
 
 /** The target and the sources of a `mv`, `cp`, `install` or `ln` given `args`, and the folder `-t` (alone or last among
  * short options, or `--target-directory`) names, which is then the target; else the target is the last path. */
@@ -710,8 +765,9 @@ const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Cont
 // so does every exec of a script that names RegExp as anything but a call, which may make it another function, or that
 // could make a RegExp's exec something else: eval named without a call, a prototype, a global or a member named in
 // brackets by a string (the independent verifier on 3982ae68). An exec named in brackets reads `.exec` with spaces
-// after it, and stays.
-const REGEXP_EXEC = /\b(?:new\s+)?RegExp\s*\([^()]*\)\s*\.exec\(/g;
+// after it, and stays. A RegExp named as a member (`obj.RegExp`, `obj. RegExp`) or within a longer name (`$RegExp`) is
+// another function, and stays too (gentle-ai R2 on 73fc8cf7..3982ae68).
+const REGEXP_EXEC = /(?<![\w$]|\.\s*)(?:new\s+)?RegExp\s*\([^()]*\)\s*\.exec\(/g;
 const REGEXP_NOT_CALLED = /\bRegExp\b(?!\s*\()|\b(?:function|class)\s+RegExp\b/;
 const REGEXP_REDIRECTED = /\b(?:eval|Function|constructor|prototype|__proto__|\w*[Pp]rototypeOf|define\w*|Reflect|Object|globalThis|global|window|self|this|with|atob|Buffer)\b|\[\s*['"`]/;
 
@@ -777,9 +833,9 @@ function literalOf(arg) {
  * a variable or a join of one, is taken for the record the script names anywhere, when it names one: reading a record
  * and writing to a variable is refused with it, the safe side. So is a write call the code holds without calling it
  * (`fs.writeFileSync.call`, `const w = fs.writeFileSync`). A record is named by its file name or by the package's
- * constant or function for it (`RECORD_HANDLES`). */
-function scriptRecordWrite(text) {
-  const anywhere = recordNamedIn(text);
+ * constant or function for it (`RECORD_HANDLES`), in the script or, as `named`, elsewhere on its command line. */
+function scriptRecordWrite(text, named = null) {
+  const anywhere = recordNamedIn(text) ?? named;
   const code = codeOf(text);
   if (anywhere !== null && HELD_WRITE.test(code)) return anywhere;
   for (const match of code.matchAll(WRITE_CALL)) {

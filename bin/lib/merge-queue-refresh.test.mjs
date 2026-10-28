@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { QUIET_WAIT_MINUTES, atWorkIn, lookOnce, waitForQuiet } from './merge-queue-refresh.mjs';
+import { QUIET_WAIT_MINUTES, atWorkIn, lookOnce, refreshAfterLand, waitForQuiet } from './merge-queue-refresh.mjs';
+import { REFRESH_FAILED } from './refresh-copy.mjs';
 
 // The wait of `merge-queue --land --refresh-copy` for the work sessions to be between runs, against listings of
 // `claude agents` written here: no claude runs, and the clock is the test's.
@@ -67,4 +68,22 @@ test('waitForQuiet gives up after its minutes with the sessions still at work, a
   // Not known is never "none": a listing that fails refreshes nothing.
   const blind = await waitForQuiet({ list: () => { throw new Error('claude is not on PATH'); }, roots, self: null, ...clock() });
   assert.deepEqual(blind, { quiet: false, why: 'claude agents could not say which sessions are at work (claude is not on PATH)' });
+});
+
+// gentle-ai on slice B of JH 72 (e30ae69d..7d8db831): the project's folders and the wait ran outside the try that keeps
+// the land record written, so a git that threw there, or a wait that did, ended the land before its record.
+test('refreshAfterLand turns a throw while it finds the folders or waits into a failed refresh, and refreshes nothing', async () => {
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const base = { code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, list: () => [], now: () => 0, stdout: () => {} };
+  for (const [what, overrides] of [
+    ['git', { run: () => { throw new Error('git is gone'); }, sleep: async () => {} }],
+    ['the wait', { run: () => ({ status: 1, stdout: '', stderr: '' }), list: () => [agent({ status: 'busy' })], sleep: async () => { throw new Error('the clock stopped'); } }],
+  ]) {
+    const errors = [];
+    let refreshed = 0;
+    const exit = await refreshAfterLand({ ...base, ...overrides, refresh: async () => { refreshed += 1; return 0; }, stderr: (line) => errors.push(line) });
+    assert.equal(exit, REFRESH_FAILED, what);
+    assert.equal(refreshed, 0, what);
+    assert.match(errors.join('\n'), /refresh failed: (git is gone|the clock stopped)/, what);
+  }
 });
