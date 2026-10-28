@@ -40,9 +40,13 @@ The session's, in the feature document's L3; with the lead: the `init` baseline 
   model leaves `inspection` open and nests `findings` and `evidence` in it (L11). This session's guess, that the
   answers quoted the diff's JSON, was wrong.
 
+  The lenses completed over `f9c10579..cd9c4220` after PR 640 gave them structured output, with 0 findings, which
+  paid the skip.
+- The gentle-ai line first wrapped six hashes onto a line that does not say gentle-ai, which the merge door does not
+  read; the line now names the range `9890615e..37cdab21`, and the `ready` notice for PR 638 was accepted.
+
 ## Left
-- A lens run that completes over `f9c10579..37cdab21`, waiting on the lead (L11); then the `ready` notice for PR
-  638.
+- PR 638, ready: the lead's to land.
 - The paid runs P1-P4, his to start.
 - 13 to 23 more eval cases section 14.4 counts, a later session's.
 - The `init` baseline line (L5), routed to JH 68.
