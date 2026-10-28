@@ -53,7 +53,7 @@ So prevention, the guard, must close the path.
 - [x] T3 (build) `refreshAfterLand`'s roots and wait inside the try — S3; test first; inline; 8fa48077.
 - [x] T4 (docs) the failures register's occurrence — S4; inline; 41fe427f (a new entry, `brief-waived-review-lines`:
   no existing entry fit).
-- [ ] T5 (verify) the change's own checks, one independent verifier on T2, Codex, the Claude lenses and gentle-ai on each
+- [x] T5 (verify) the change's own checks, one independent verifier on T2, Codex, the Claude lenses and gentle-ai on each
   code slice; `notify --kind ready --pr <n>`, then `closed`.
 
 ## Answer to S1
@@ -70,10 +70,18 @@ alone (`isValidCodexReview`). So the guard closes the path (T2).
   fixed in the next commit. Claude lenses risk, reliability, readability 1189ae0..7ea64a7: 0 findings. gentle-ai
   lineage review-da7318f1b212be1e (high, escalated item 2) was started on 7ea64a76 and left unrun when Codex's
   findings changed the candidate.
+- Codex 7ea64a7..cfdfc26: correct, 0.98, both P2 fixed. Claude lenses risk, reliability 7ea64a7..cfdfc26: 0 findings.
+- gentle-ai: 62470339, db220fe3, 7ea64a76, cfdfc268 (the guard's slice, 1189ae02..cfdfc268) not reviewed. Lineage
+  review-a163989d26451fed (high, escalated item 2, lenses risk, readability, reliability) was started; its lens
+  contexts are 43 KB each, and the patches hold the guard's test commands, which the guard must refuse. A dispatcher
+  copying them into lens prompts was stopped by a safety classifier, and a lens told to read its context from the
+  file returned an incomplete inspection, since the lenses run without tools. Two ways tried, then stopped; Codex and
+  the Claude lenses cover every one of these commits.
 
 ## Next step
-The guard's slice (1189ae02..62470339, and db220fe3): the verifier's third pass, then Codex, the Claude lenses and
-gentle-ai (escalated, item 2) on it; then the PR, `notify --kind ready --pr <n>`, the session summary and `closed`.
+The PR, `notify --kind ready --pr <n>` naming the guard slice's gentle-ai "not reviewed", then `closed` with
+`docs/sessions/2026-10-28-jh-74-guard-child-process.md`. If the merge door refuses for the gentle-ai lines, that is
+the lead's to route.
 
 ## Log
 - L1 The brief, 2026-10-28T18:18Z: `C:\Users\Oficina\.js-harness\background\briefs\2026-10-28T18-18-15-760Z-faacddc0.md`.
