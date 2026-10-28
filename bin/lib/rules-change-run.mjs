@@ -25,7 +25,7 @@ const BASE = 'origin/main';
 // The findings the new list gives before docs/RULES.md is rendered for it: the list is about to be written.
 const LIST_FINDINGS = ['docs/RULES.md is missing:', 'docs/RULES.md is not what the declarations render:'];
 // What each change costs, as the approved protocol asks to be said beside it.
-const COST = "cost: one gate, gentle-ai's assessment and a small Codex review";
+const COST = 'cost: one gate, a small Codex review and the Claude lenses';
 
 /** The list a text of rules-data.mjs declares: the JSON after `export const RULES = `, as `writeRules` writes it. */
 export function rulesOfText(text) {
