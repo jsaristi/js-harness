@@ -102,20 +102,23 @@ Reviews:
   case: L11 keeps it until he answers, and the codex-off landing test changes with that answer. R3-002 (the help
   test's `doesNotMatch` runs on a `find` that could be undefined) is left: an undefined argument throws, so the
   test still fails, only with a type error, and a test-only commit would cost three more reviews.
+- PR 3, f718c3f6 (the review starts and their throughput row leave): Codex 6c04759..f718c3f, 2 parts, passed
+  (172,708 input tokens); lenses reliability, readability: 0 findings (about 26,230 input tokens each; a first run
+  came back incomplete, readability's answer cut mid-JSON, and the one rerun was complete); gentle-ai on
+  `6c047591..f718c3f6`: approved (lineage review-050cc676b966128a), one suggestion left: R3-001 (the no-store test
+  wraps three fs calls, not every one) is covered by the same test's output assertion, which is what a person sees.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
 Not run yet.
 
 ## Next step
-#627 landed (main 13d8988); the lead lands #628. On branch f8-s11-reviews (stacked on f8-s11-presets, worktree
-D:/js-harness/.claude/worktrees/f8-s11), PR 3's first commit drops the merge door's and notify's gentle-ai line,
-deletes bin/lib/gentle-ai-evidence.mjs, and rewrites the shipped review text (protocols skill section 3, the
-orchestrator skill's gate line, the merge-queue and notify help); Codex, the lenses and gentle-ai reviewed it
-(Reviews). PR 3 is open, not announced ready. Next: the slice of the review starts (bin/lib/review-starts.mjs and the throughput
-row, L11), then T6/T7. Open, his: question 104 (L11), the agentsBlock line and its two tests
-(bin/lib/project.test.mjs:1954, bin/lib/template-block.test.mjs:30) stay until he answers; PR 3 is not announced
-ready before.
+#627 and #628 landed (main 170e09dd). PR 3 is draft #629 on f8-s11-reviews (base main, worktree
+D:/js-harness/.claude/worktrees/f8-s11): fc2a9a0f (the merge door asks for no gentle-ai line) and f718c3f6 (the review
+starts and their throughput row leave), each reviewed by Codex, the lenses and gentle-ai (Reviews). T5 is done but
+for question 104. Next: T6/T7 on a branch f8-s11-sweep from f8-s11-reviews, by L12's plan, then T8. Open, his:
+question 104 (L11); the agentsBlock line and its two tests (bin/lib/project.test.mjs:1954,
+bin/lib/template-block.test.mjs:30) stay until he answers, and PR 3 is not announced ready before.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
@@ -201,3 +204,18 @@ ready before.
   question 4 of odd/tasks/on-demand-functions.md (N6, 2026-10-24); with gentle-ai gone, what reviews a change in a
   project whose Codex review is off is his to say. Asked through the lead as question 104 (2026-10-28); until he answers, that line
   and its two tests stay, and PR 3 is not announced ready.
+- L12 (2026-10-28, decision within S5): the plan of the sweep, from a read-only map of every file of `bin/`, `evals/`
+  and `scripts/` that names gentle-ai (111 files; `grep -rliE 'gentle-ai|gentle_ai|gentleai'`, since the camelCase
+  `gentleAi` and `GENTLE_AI_TELEMETRY` escape the plain grep). The diet says gentle-ai leaves his machine only at
+  S2, after S11 and S12 (harness-diet.md:1339), so what guards his machine while it is there stays: the eval homes'
+  copy of `~/.gentle-ai/state.json` and the isolation probes' watch of `~/.gentle-ai`, the block arms and their
+  marker parser (`evals/arms.mjs:23-47`, `evals/without.mjs:182-232`), `GENTLE_AI_TELEMETRY`, and `init`'s
+  `.atl/` exclude (`bin/lib/project-exclude.mjs`) all become historical fixtures named in the list, each with S2 as
+  the step that retires it. The licence notices stay as the licences require (`bin/lib/lens-prompts.mjs` MIT,
+  `bin/lib/ported-skills.mjs` Apache-2.0) and are named. What goes: `evals/review/compare.mjs` runs
+  `codegraph init` itself instead of `gentle-ai codegraph init`; `rules-change-run`'s cost line and `summary`'s
+  placeholder stop naming gentle-ai; about 60 comments and test titles are rewritten or lose the name; six test
+  fixtures that use gentle-ai as an arbitrary id take a neutral one. The guard's refusal of a `gentle-ai review`
+  base (`bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/codex-reviews.mjs`, their tests and `js-harness.mjs`'s guard
+  help) is JH 69's surface: named in the list until the lead says otherwise, asked through it. `bin/lib/
+  gentle-ai-absence.test.mjs` holds the list and fails on a file outside it.
