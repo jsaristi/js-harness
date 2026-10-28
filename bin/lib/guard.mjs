@@ -516,7 +516,7 @@ const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby',
 // The words before a command that leave it the command: an assignment, and a few wrappers.
 const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
-const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open)(?:Sync)?\s*\(/gi;
+const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
 // A call of a function of this package that appends a record of a review and nothing else; its name alone is no call.
 const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun)\s*\(/;
@@ -574,7 +574,7 @@ function segmentRecordWrite(words, redirected) {
   }
   if (!INTERPRETERS.has(program)) return null;
   for (const arg of args) {
-    const append = RECORD_APPENDS.exec(arg);
+    const append = RECORD_APPENDS.exec(codeOf(arg));
     if (append !== null) return `this command calls ${append[1]}, which appends the record of a review`;
     const name = scriptRecordWrite(arg);
     if (name !== null) return writes(name);
@@ -629,17 +629,47 @@ function callArguments(text, from) {
   return args;
 }
 
+/** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
+ * at the same indexes; a template literal's `${…}` stays code. */
+function codeOf(text) {
+  let out = '';
+  const open = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    const top = open[open.length - 1];
+    if (top === "'" || top === '"' || top === '`') {
+      if (c === top) open.pop();
+      else if (top === '`' && c === '$' && text[i + 1] === '{') {
+        open.push('${');
+        out += '${';
+        i += 1;
+        continue;
+      } else {
+        const escaped = c === '\\' && i + 1 < text.length;
+        out += escaped ? '  ' : ' ';
+        if (escaped) i += 1;
+        continue;
+      }
+    } else if (c === "'" || c === '"' || c === '`') open.push(c);
+    else if (c === '{' && top !== undefined) open.push('{');
+    else if (c === '}' && top !== undefined) open.pop();
+    out += c;
+  }
+  return out;
+}
+
 /** The record the script `text` writes by a call given it, or null. What each call writes: `rename` both of its paths,
- * `copyFile` its second, `open` its first when a mode that writes follows, the others their first. A path given as no
- * string at all, a variable, is taken for the record the script names anywhere, when it names one: reading a record
- * and writing to a variable is refused with it, the safe side. */
+ * `copyFile` and `appendJsonLine` (this package's, given a folder and a record's name) their second, `open` its first
+ * when a mode that writes follows, the others their first. A call is looked for in the code, not inside a string. A path
+ * given as no string at all, a variable, is taken for the record the script names anywhere, when it names one: reading
+ * a record and writing to a variable is refused with it, the safe side. */
 function scriptRecordWrite(text) {
   const anywhere = RECORD_IN_TEXT.exec(text);
-  for (const match of text.matchAll(WRITE_CALL)) {
+  for (const match of codeOf(text).matchAll(WRITE_CALL)) {
     const call = match[1].toLowerCase();
     const args = callArguments(text, match.index + match[0].length);
     if (call === 'open' && !args.slice(1).some((arg) => /['"][^'"]*[wax+][^'"]*['"]/.test(arg))) continue;
-    const written = call === 'rename' ? args : call === 'copyfile' ? args.slice(1, 2) : args.slice(0, 1);
+    const written = call === 'rename' ? args : call === 'copyfile' || call === 'appendjsonline' ? args.slice(1, 2) : args.slice(0, 1);
     const named = written.map((arg) => RECORD_IN_TEXT.exec(arg)).find((found) => found !== null);
     if (named !== undefined) return named[1].toLowerCase();
     if (anywhere !== null && written.some((arg) => arg.trim() !== '' && !/['"`]/.test(arg))) return anywhere[1].toLowerCase();

@@ -565,6 +565,10 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "fs.appendFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), l)"',
     // A path held in a variable of the script (gentle-ai R3 on 0a832b2a).
     'node -e "const p = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(p, l)"',
+    // The package's own generic append, given a record's name (gentle-ai R3 on 9f4d1f23).
+    'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendJsonLine(\'.\', \'lens-reviews.jsonl\', {}))"',
+    // A template literal's interpolation is code, not text.
+    'node -e "console.log(`${m.appendLensReview(root, {})}`)"',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -591,6 +595,10 @@ test('reading a record, the commands that write one, and text that only names on
     // Quoted text and a name that is not called (Codex P2 on 0a832b2a); a redirection elsewhere is no copy's target.
     "echo '>.git/js-harness/lens-reviews.jsonl'",
     'node -e "console.log(\'appendLensReview\')"',
+    // Call-like text inside a string is no call (Codex's recheck of 9f4d1f23).
+    'node -e "console.log(\'appendLensReview(\')"',
+    'node -e "console.log(`m.startLensRun(root)`)"',
+    'node -e "fs.appendFileSync(\'ledger.jsonl\', \'appendJsonLine(x, lens-reviews.jsonl)\')"',
     'node -e "console.log(fs.readFileSync(\'bin/lib/lens-reviews.mjs\', \'utf8\').includes(\'appendLensReview\'))"',
     `cp ${RECORD} /tmp/copy.jsonl > /tmp/cp.log`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
