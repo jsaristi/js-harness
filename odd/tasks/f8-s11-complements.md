@@ -118,6 +118,11 @@ Reviews:
 - Lens reruns (2026-10-28, the lead: PR 630 makes older lens records stop counting; installed copy main 19f2d80):
   PR 629 over e0260e5..caaccd3, risk, reliability, readability: 0 findings (about 53,190 input tokens each); PR 632
   over caaccd3..83fcb8a, reliability, readability: 0 findings (about 39,320 input tokens each).
+- gentle-ai on `fc2a9a0f..fff61c60` (the range its Stop hook offered; new to it: 71e89a2b and the records): approved
+  (lineage review-f349eeab4a9cc763), two findings left. R3-001 (the test matches the dashed name only, not
+  `gentleAi` or `GENTLE_AI_TELEMETRY`): the dashed name is the diet's pass line, `grep -rl gentle-ai`; the other
+  spellings are old stack records a run still reads and a guard of his machine until S2 (L12). R3-002 (the test
+  needs git): every test here runs in a checkout, the GitHub gate included, and the failure names git.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
