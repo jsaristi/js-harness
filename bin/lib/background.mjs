@@ -135,7 +135,9 @@ export function appendRecord(home, entry) {
 export function strandEntry(home, entry) {
   const file = path.join(strandedDirOf(home), `${entry.id}.json`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
+  // Whole or not at all: a file cut midway would name no id, and no stop could close it (the verifier on 62315e6..7f068b9).
+  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
+  fs.renameSync(`${file}.tmp`, file);
   return file;
 }
 
@@ -173,19 +175,40 @@ function closeEntry(home, job, now) {
  * worktree and brief, so the two are undone together (`resumedChain`); `{ none: true }` when there is no record;
  * `{ unavailable }` when it could not be read. A line that is not an entry of this schema is skipped and counted
  * (`skipped`). The stranded starts (`strandEntry`) are read after the lines, each marked with its file (`stranded`),
- * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too. */
+ * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too. A record
+ * that could not be read gives them all the same, as `{ unavailable, stranded }`: each is a session that runs and that
+ * the record does not hold, so `sessions stop` and the machine uninstall undo it without the record (Codex P2 on
+ * 62315e6..e16b577). */
 export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
-  let text = null;
-  try {
-    text = readFile(recordFileOf(home));
-  } catch (err) {
-    if (err.code !== 'ENOENT') return { unavailable: err.code ?? err.message };
-  }
   let strandedNames = [];
   try {
     strandedNames = fs.readdirSync(strandedDirOf(home)).filter((name) => name.endsWith('.json'));
   } catch (err) {
     if (err.code !== 'ENOENT') return { unavailable: `${strandedDirOf(home)}: ${err.code ?? err.message}` };
+  }
+  /** The stranded starts whose removal is not in `removed`, and how many files are not such a start. */
+  const strandedOf = (removed) => {
+    const entries = [];
+    let unread = 0;
+    for (const name of strandedNames) {
+      const file = path.join(strandedDirOf(home), name);
+      let entry;
+      try {
+        entry = JSON.parse(readFile(file));
+      } catch {
+        unread += 1;
+        continue;
+      }
+      if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') unread += 1;
+      else if (!removed.has(entry.id)) entries.push({ ...entry, stranded: file });
+    }
+    return { entries, unread };
+  };
+  let text = null;
+  try {
+    text = readFile(recordFileOf(home));
+  } catch (err) {
+    if (err.code !== 'ENOENT') return { unavailable: err.code ?? err.message, stranded: strandedOf(new Set()).entries };
   }
   if (text === null && strandedNames.length === 0) return { none: true, sessions: [], started: [], resumedAs: new Map() };
   const open = new Map();
@@ -210,21 +233,11 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
       removed.add(entry.id);
     } else skipped += 1;
   }
-  for (const name of strandedNames) {
-    const file = path.join(strandedDirOf(home), name);
-    let entry;
-    try {
-      entry = JSON.parse(readFile(file));
-    } catch {
-      skipped += 1;
-      continue;
-    }
-    if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') skipped += 1;
-    else if (!removed.has(entry.id)) {
-      const kept = { ...entry, stranded: file };
-      open.set(entry.id, kept);
-      started.push(kept);
-    }
+  const stranded = strandedOf(removed);
+  skipped += stranded.unread;
+  for (const entry of stranded.entries) {
+    open.set(entry.id, entry);
+    started.push(entry);
   }
   const resumedAs = new Map([...open.values()].filter((entry) => open.has(entry.resumedFrom)).map((entry) => [entry.resumedFrom, entry]));
   return { sessions: [...open.values()], started, resumedAs, skipped };
@@ -328,22 +341,25 @@ export const atWork = (agent) => agent?.status === 'busy' || agent?.status === '
  * is kept; once none is left and every line of the record was read, the folder goes. `{ undone, kept, removedDir,
  * failed }`, each kept one with `settle`: `'at-work'`, `'refused'` (claude refused) or `'unknown'` (claude agents
  * could not say whether it is at work). A line that is not an entry may name a session that still runs, so it keeps the
- * folder and fails. */
+ * folder and fails. A record that could not be read fails too, after its stranded starts are undone. */
 export function undoBackground(home, { run, now = Date.now } = {}) {
   const record = readRecord(home);
-  if (record.unavailable !== undefined) return { undone: [], kept: [], failed: `${recordFileOf(home)} could not be read (${record.unavailable}): the background sessions it records are not undone; run js-harness uninstall machine again` };
+  const unread = record.unavailable === undefined ? null : `${recordFileOf(home)} could not be read (${record.unavailable}): the background sessions it records are not undone; run js-harness uninstall machine again`;
+  const sessions = unread === null ? record.sessions : record.stranded ?? [];
+  const resumedAs = record.resumedAs ?? new Map();
+  if (unread !== null && sessions.length === 0) return { undone: [], kept: [], failed: unread };
   const undone = [];
   const kept = [];
-  if (record.sessions.length > 0) {
+  if (sessions.length > 0) {
     let agents;
     try {
       agents = listAgents(run);
     } catch (err) {
-      return { undone, kept: record.sessions.map((entry) => ({ entry, settle: 'unknown', why: `it cannot be told whether it is at work: ${err.message}` })), failed: null };
+      return { undone, kept: sessions.map((entry) => ({ entry, settle: 'unknown', why: `it cannot be told whether it is at work: ${err.message}` })), failed: unread };
     }
-    for (const entry of record.sessions) {
+    for (const entry of sessions) {
       // A job a resume replaced is undone with the job that resumed it, or kept with it.
-      if (record.resumedAs.has(entry.id)) continue;
+      if (resumedAs.has(entry.id)) continue;
       const agent = agents.find((item) => item.id === entry.id);
       if (atWork(agent)) {
         kept.push({ entry, settle: 'at-work', why: `it is ${agent.status ?? agent.state}` });
@@ -354,6 +370,7 @@ export function undoBackground(home, { run, now = Date.now } = {}) {
       else undone.push({ entry, outcome: done.outcome, worktreeKept: done.worktreeKept });
     }
   }
+  if (unread !== null) return { undone, kept, removedDir: null, failed: unread };
   const dir = backgroundDir(home);
   if (record.skipped > 0) {
     const lines = `${record.skipped} line${record.skipped === 1 ? '' : 's'} of ${recordFileOf(home)} ${record.skipped === 1 ? 'is not an entry' : 'are not entries'} it can read`;

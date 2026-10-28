@@ -281,19 +281,29 @@ test('a start the record would not take and claude would not undo is kept in a f
   assert.ok(result.stderr.includes(`its entry is kept in ${strandedFile(world, '0db8bc5e')}: js-harness sessions stop 0db8bc5e`), result.stderr);
   const entry = JSON.parse(fs.readFileSync(strandedFile(world, '0db8bc5e'), 'utf8'));
   assert.deepEqual([entry.event, entry.id, entry.title], ['started', '0db8bc5e', 'Build the thing']);
-  mendRecord(world);
+  // While the record still cannot be read, stop undoes the stranded session all the same (Codex P2 on 62315e6..e16b577),
+  // and refuses any other id, which the record may hold.
+  patchState(world, { refuseRm: null });
+  assert.match(js(world, ['sessions', 'stop', 'f462dfd5']).stderr, /the record of background sessions could not be read/);
   const stop = js(world, ['sessions', 'stop', '0db8bc5e']);
   assert.equal(stop.code, 0, stop.stderr);
   assert.match(stop.stdout, /removed 0db8bc5e · Build the thing/);
   assert.equal(fs.existsSync(strandedFile(world, '0db8bc5e')), false);
-  assert.deepEqual(recordLines(world).map((line) => [line.event, line.id]), [['removed', '0db8bc5e']]);
-  // The machine uninstall undoes one as it undoes a recorded session, and then removes the folder.
+  mendRecord(world);
+  assert.equal(js(world, ['sessions', 'stop', '0db8bc5e']).code, 1, 'removed: the record holds it no more');
+  // The machine uninstall undoes one as it undoes a recorded session; with the record unread it keeps the folder and
+  // fails, and once the record reads it removes the folder.
   patchState(world, { breakRecord: true, refuseRm: 'Worktree has 2 unpushed commits', nextId: 'c779ed44' });
   assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief]).code, 1);
+  patchState(world, { refuseRm: null });
+  const blind = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(blind.code, 1);
+  assert.match(blind.stdout, /removed background session c779ed44 · Other/);
+  assert.match(blind.stderr, /sessions\.jsonl could not be read/);
+  assert.equal(fs.existsSync(strandedFile(world, 'c779ed44')), false);
   mendRecord(world);
   const uninstall = js(world, ['uninstall', 'machine', '--home', world.home]);
   assert.equal(uninstall.code, 0, uninstall.stderr);
-  assert.match(uninstall.stdout, /removed background session c779ed44 · Other/);
   assert.equal(fs.existsSync(path.join(world.home, '.js-harness', 'background')), false);
 }));
 

@@ -369,16 +369,18 @@ export function sessionsStopMain(argv, given = {}) {
   }
   const home = harnessHome({ given: homeFlag, env, cwd: deps.cwd, homedir: deps.homedir });
   const record = readRecord(home);
-  if (record.unavailable !== undefined) {
+  // A record that cannot be read still gives its stranded starts (readRecord): such a one is stopped; any other id is
+  // not, since the record may hold it.
+  const entry = recordedNamed(record.unavailable === undefined ? record.sessions : record.stranded ?? [], id);
+  if (record.unavailable !== undefined && entry === null) {
     stderr(`js-harness sessions stop: the record of background sessions could not be read (${record.unavailable}), so nothing was stopped`);
     return 1;
   }
-  const entry = recordedNamed(record.sessions, id);
   if (entry === null) {
     stderr(`js-harness sessions stop: no session js-harness sessions start recorded is named by ${JSON.stringify(id)}, so nothing was stopped: it stops only the sessions it started (claude agents lists the others)`);
     return 1;
   }
-  if (record.resumedAs.has(entry.id)) {
+  if (record.resumedAs?.has(entry.id)) {
     stderr(`js-harness sessions stop: ${resumedNote(record.resumedAs, entry.id, (last) => `js-harness sessions stop ${last} removes both`)}, since they share a worktree and a brief; nothing was stopped`);
     return 1;
   }
