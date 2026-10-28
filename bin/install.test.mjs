@@ -201,7 +201,7 @@ test('installMain and uninstallMain say what they did with the Rules block, and 
     assert.ok(again.outLines.includes(`the Rules block is already in ${file}`), again.outLines.join('\n'));
 
     const writeFile = (target, ...rest) => {
-      if (target === file) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      if (String(target).startsWith(file)) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
       return fs.writeFileSync(target, ...rest);
     };
     fs.appendFileSync(file, '# mine\n');

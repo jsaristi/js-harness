@@ -27,6 +27,39 @@ export const rulesBody = () => `## Rules\n${RULES_LINES.map((line) => `- ${line}
 
 const rulesFile = (home) => path.join(home, '.claude', 'CLAUDE.md');
 
+/** The texts install puts before the block; a record edited by hand to another one is read as none (the independent
+ * verifier of T7, L20: a separator such as his own line would take that line out). */
+const SEPARATORS = new Set(['', '\n', '\r\n', '\n\n', '\r\n\r\n']);
+const separatorOf = (record) => (SEPARATORS.has(record?.separator) ? record.separator : '');
+
+/** Writes `text` to `target` through a sibling renamed over it, so a write that fails partway leaves the file as it was
+ * (the verifier, L20); the sibling is removed when the write or the rename fails. */
+function writeWhole(target, text, writeFile = fs.writeFileSync) {
+  const tmp = `${target}.${process.pid}.tmp`;
+  try {
+    writeFile(tmp, text, 'utf8');
+    fs.renameSync(tmp, target);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+/** `before`, the text a removed block followed, without the line ends install put there: at most as many as
+ * `separator` holds, either kind, and never the last one when `rest`, text after the block, follows, so no two of his
+ * lines are joined (the verifier, L20). */
+function withoutSeparator(before, rest, separator) {
+  let left = (separator.match(/\n/g) ?? []).length;
+  if (rest !== '') left = Math.min(left, (before.match(/(?:\r?\n)+$/)?.[0].match(/\n/g) ?? []).length - 1);
+  let text = before;
+  for (; left > 0; left -= 1) {
+    const end = text.match(/\r?\n$/);
+    if (!end) break;
+    text = text.slice(0, -end[0].length);
+  }
+  return text;
+}
+
 /** The text of `file` and whether it was there; a file that is not there reads as empty, any other error throws. */
 function readText(file) {
   try {
@@ -56,19 +89,19 @@ export function holdRulesBlock(home, previous) {
   }
   const { text, existed } = read;
   const body = rulesBody();
-  const rendered = renderBlock(text, body);
-  const record = { path: target, createdFile: Boolean(previous?.createdFile) || !existed, separator: previous?.separator ?? '' };
+  const rendered = renderBlock(text, body, 'rules');
+  const record = { path: target, createdFile: previous?.createdFile === true || !existed, separator: separatorOf(previous) };
   if (rendered.state === 'current') return { held: { status: 'already', path: target }, record, keep: recordWith(null) };
   if (rendered.state === 'edited') return { held: { status: 'edited', path: target }, record: previous ?? null, keep: recordWith(null) };
   let next = rendered.text;
   if (rendered.state === 'none') {
     const lineEnd = text.includes('\r\n') ? '\r\n' : '\n';
     record.separator = text === '' ? '' : text.endsWith('\n') ? lineEnd : lineEnd + lineEnd;
-    next = `${text}${record.separator}${`${markedBlock(body)}\n`.replace(/\n/g, lineEnd)}`;
+    next = `${text}${record.separator}${`${markedBlock(body, 'rules')}\n`.replace(/\n/g, lineEnd)}`;
   }
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, next, 'utf8');
+    writeWhole(target, next);
   } catch (err) {
     return skipped(`not writable (${err.code ?? err.message})`);
   }
@@ -91,15 +124,14 @@ export function releaseRulesBlock(record, home, { writeFile = fs.writeFileSync, 
   } catch (err) {
     return { status: 'failed', path: at, code: err.code ?? err.message };
   }
-  const out = removeBlock(read.text);
+  const out = removeBlock(read.text, 'rules');
   if (!read.existed || out.state === 'none') return { status: 'gone', path: at };
   if (out.state === 'edited') return { status: 'edited', path: at };
-  const separator = typeof record.separator === 'string' ? record.separator : '';
-  let text = out.text;
-  if (separator !== '' && text.slice(out.at - separator.length, out.at) === separator) text = text.slice(0, out.at - separator.length) + text.slice(out.at);
+  const rest = out.text.slice(out.at);
+  const text = withoutSeparator(out.text.slice(0, out.at), rest, separatorOf(record)) + rest;
   try {
-    if (record.createdFile && text === '') removeFile(at);
-    else writeFile(at, text, 'utf8');
+    if (record.createdFile === true && text === '') removeFile(at);
+    else writeWhole(at, text, writeFile);
   } catch (err) {
     return { status: 'failed', path: at, code: err.code ?? 'unknown error' };
   }

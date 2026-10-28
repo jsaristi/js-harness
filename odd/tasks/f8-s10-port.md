@@ -249,3 +249,19 @@ branch after it.
   843 characters, about 210 tokens by chars/4 (its two marks add 138 more); S2 removes gentle-ai's. The block is high risk (it changes a file he already has, item 1): an
   independent verifier reads it after its checks. `manifest.mjs` sat at its ceiling, so the atomic write moved out
   first (`30ac3c3d`, -101 lines), and the ceiling ends at 1801, 97 under main's 1898.
+- L20 (2026-10-28, T7's independent verifier, opus, read only, on `30ac3c3d..380b9e77`, 113,965 tokens): 1 BLOCKER,
+  4 WARNINGs, 6 NOTEs, each reproduced in a scratch home unless said. BLOCKER 1: uninstall took the separator from
+  before the block even with text after it, joining two of his lines (`"A"`, install, `"C\n"` appended, gave
+  `"AC\n"`). WARNING 2: a separator compared byte for byte left a stray `\r` once his line ends changed. WARNING 3:
+  the Rules block shared the project block's mark, so a project block in his file was rendered over (reproduced).
+  WARNING 4: a write that failed partway truncated the file (read only). WARNING 5: a record edited by hand could
+  take his text (`separator` set to his own line; `createdFile: "yes"`). All five fixed test first: the separator
+  goes as line ends of either kind, at most as many as install put and never the last one before text that follows;
+  the Rules block has its own mark (`js-harness rules`); the file is written through a sibling renamed over it; a
+  record's separator must be one install writes and `createdFile` must be `true`. Kept as NOTEs, said here and not
+  fixed: a manifest lost between the file write and its own write leaves one blank line at uninstall; a block he
+  duplicated loses only its first copy; a block he moved to the top leaves one line end; a dangling link at the
+  path is written through. Checked sound by it: `30ac3c3d` is a pure move (diff of the 103 lines); `renderBlock`
+  behaves as before; rollback, the failed record, the uninstall order and exit codes. The probe, rerun after the
+  fixes in a scratch home: install exit 0, his text kept, 9 lines; `guard` denies both spellings of the planted key;
+  uninstall exit 0, the home byte for byte as before.

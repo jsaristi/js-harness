@@ -42,7 +42,7 @@ test('in an empty home install writes the file with the block alone, and uninsta
   try {
     const manifest = install(m.home, '1.0.0');
     assert.deepEqual(manifest.rulesHeld, { status: 'written', path: m.file });
-    assert.equal(m.read(), `${markedBlock(rulesBody())}\n`);
+    assert.equal(m.read(), `${markedBlock(rulesBody(), 'rules')}\n`);
     assert.deepEqual(readManifest(m.home).rulesBlock, { path: m.file, createdFile: true, separator: '' });
     const result = m.remove();
     assert.deepEqual(result.rulesBlock, { status: 'released', path: m.file });
@@ -98,7 +98,7 @@ test('a block of an earlier version, unedited, is rendered with these lines, and
   try {
     m.write('# mine\n');
     install(m.home, '1.0.0');
-    m.write(`${m.read().replace(markedBlock(rulesBody()), markedBlock('## Rules\n- An older line.\n'))}# added later\n`);
+    m.write(`${m.read().replace(markedBlock(rulesBody(), 'rules'), markedBlock('## Rules\n- An older line.\n', 'rules'))}# added later\n`);
     const again = install(m.home, '1.0.1');
     assert.deepEqual(again.rulesHeld, { status: 'updated', path: m.file });
     assert.equal(count(m.read(), '- An older line.'), 0);
@@ -186,13 +186,67 @@ test('a write that fails on uninstall keeps the record, so a second uninstall ta
     m.write('# mine\n');
     install(m.home, '1.0.0');
     const writeFile = (file, ...rest) => {
-      if (file === m.file) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      if (String(file).startsWith(m.file)) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
       return fs.writeFileSync(file, ...rest);
     };
     assert.deepEqual(m.remove({ writeFile }).rulesBlock, { status: 'failed', path: m.file, code: 'EBUSY' });
     assert.ok(readManifest(m.home).rulesBlock);
     assert.equal(m.remove().rulesBlock.status, 'released');
     assert.equal(m.read(), '# mine\n');
+  } finally {
+    m.done();
+  }
+});
+
+// The independent verifier of T7 (L20): uninstall never joins two of his lines, whatever came after the block, nor
+// leaves a stray carriage return when the file's line ends changed since install.
+for (const [name, before, after, expected] of [
+  ['text added after a block put after a file with no line end', 'A', (t) => `${t}C\n`, 'A\nC\n'],
+  ['CRLF text added after it', 'A\r\nB', (t) => `${t}C\r\n`, 'A\r\nB\r\nC\r\n'],
+  ['his line ends turned to CRLF', 'A\n', (t) => t.replace(/\r?\n/g, '\r\n'), 'A\r\n'],
+  ['his line ends turned to LF', 'A\r\nB', (t) => t.replace(/\r\n/g, '\n'), 'A\nB'],
+]) {
+  test(`uninstall joins none of his lines: ${name}`, () => {
+    const m = machine();
+    try {
+      m.write(before);
+      install(m.home, '1.0.0');
+      m.write(after(m.read()));
+      assert.equal(m.remove().rulesBlock.status, 'released');
+      assert.equal(m.read(), expected);
+    } finally {
+      m.done();
+    }
+  });
+}
+
+test('a project block in his CLAUDE.md is not the Rules block: install adds its own and leaves the other as it is', () => {
+  const m = machine();
+  try {
+    const project = markedBlock('## Working with the owner\n- A project line.\n');
+    m.write(`# mine\n\n${project}\n`);
+    install(m.home, '1.0.0');
+    assert.ok(m.read().includes(project), 'the project block is untouched');
+    assert.equal(count(m.read(), `- ${RULES_LINES[0]}`), 1);
+    m.remove();
+    assert.equal(m.read(), `# mine\n\n${project}\n`);
+  } finally {
+    m.done();
+  }
+});
+
+test('a record edited by hand cannot take his text: an unknown separator or a createdFile that is not true is ignored', () => {
+  const m = machine();
+  try {
+    m.write('keep me\n');
+    install(m.home, '1.0.0');
+    const file = path.join(m.home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    Object.assign(manifest.rulesBlock, { separator: 'keep me\n\n', createdFile: 'yes' });
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    assert.equal(m.remove().rulesBlock.status, 'released');
+    // The separator is read as none, so the blank line install put before the block stays: a line end, never his text.
+    assert.equal(m.read(), 'keep me\n\n');
   } finally {
     m.done();
   }
