@@ -84,15 +84,14 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
 Reviews:
 - Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
   removes the instruction settings an older engram or gentle-ai set before it deletes the files (fix commit after
-  cea68ea1). Lens review: not run yet.
+  cea68ea1); Codex cea68ea..28acfb5 passed (the P2 fixed). Lenses risk, reliability, readability over d2bc8ab..28acfb5: 0 findings.
 
 ## Probe
 Not run yet.
 
 ## Next step
-PR 1 (branch f8-s11-complements, worktree .claude/worktrees/f8-s11): commit the P2 fix, Codex review of
-that commit (--base cea68ea1), lens review --base d2bc8ab2 --lenses risk,reliability,readability, push, open the
-PR, notify the orchestrator ready --pr. Then T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
+PR 1 (branch f8-s11-complements, worktree .claude/worktrees/f8-s11): reviewed; push, open the PR, notify the
+orchestrator ready --pr. Then T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
 switch; the row-17 test scoped to the text files init writes) and T4 (extend the engram-plugin row: a plugin
 ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence test of mem_* text in shipped files).
 
