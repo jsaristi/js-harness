@@ -207,6 +207,7 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] The restart: before the user restarts or updates, the lead pauses every session at a safe point and only then says so in capitals (`rule:restart-announce`, the orchestrator skill's "The restart")
 - [x] The report as tables: when the user asks what was done, each section of the status report that holds items is a table (`rule:report-table`, the orchestrator skill's "The status report")
 - [x] Background sessions: `js-harness sessions start` runs `claude --bg` on a turn the user did not type, records it, and `sessions stop` and `uninstall machine` undo it; the board lists them (`odd/tasks/background-sessions.md`)
+- [ ] The stretch protocol: `js-harness stretch` plans a stretch with goals that are commands, shows its departure and its return in the chat, measures each item's time and failures from the records, learns the next estimates from the closed ones, and the live board shows the open one (`odd/tasks/stretch-protocol.md`)
 - [ ] Follow-up (Codex, 54c7e39..e7aa7ec, finding 6): the board lists background sessions even when the main checkout has no transcripts folder, which today ends the board with exit 1 before it reads them, as it did before they were listed
 - [ ] Follow-up (Codex, finding 4): a start whose record cannot be appended after claude ran, and whose rollback claude refuses, leaves a durable entry that `sessions stop` and uninstall can act on, not only the commands that remove it
 

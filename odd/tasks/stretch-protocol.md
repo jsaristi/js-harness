@@ -156,7 +156,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T2 (kind: build) the measure and the history, pure: lanes, corrections, item spans and lost time (`bin/lib/stretch.mjs`), test first, in 838c9fe1 and the commit after the readers. Spec 1, 4, 5. Route: inline.
 - [x] T3 (kind: build) the command and its record: `open`, `bind`, `status`, `close`, the dispatcher and index (`bin/stretch.mjs`), in b1d9f90a. Spec 1, 3, 5. Route: inline.
 - [x] T4 (kind: build) the renders (`bin/lib/stretch-render.mjs`), in b1d9f90a. Spec 2, 3, 4. Route: inline.
-- [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. Route: inline.
+- [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. In 4e6dbdd7. Route: inline.
 - [ ] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`. Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
 
@@ -195,6 +195,15 @@ itself is not limited to an absence: the skill text names it for any stretch.
   marked by hand. Not taken: one global correction instead of by kind (the brief and his request name kinds; the
   fallback covers the thin start); measuring tasks by the commits that close them (more machinery than one session
   per item, which is how this project already runs: one feature a session).
+- L5. 2026-10-28, the slice's reviews. Codex over 12e954b..4fbaa93 (5 parts, 865,957 input tokens): parts 1, 3 and 5
+  correct; parts 2 and 4 seven P2 findings, all taken in, test first, in b651463a: background starts and land gates
+  kept to the project's root (the background record and the gate log are the machine's); a gate naming another
+  session is that session's even in a shared worktree; a gate is a record until it ends; an unreadable Codex runs
+  record is said unavailable (the default reader read it as none); a cut last line is ended before an append.
+  Codex's recheck of 4fbaa93..b651463 (99,089 input tokens): correct, 0.94, 7 of 7 fixed. The Claude lenses
+  (reliability, resilience, readability) over 79e3430..b651463, after the lead refreshed the installed copy to main
+  19f2d80: complete, 0 findings, about 142,000 input tokens. Code commits approved by Codex and the lenses: 838c9fe1,
+  765baf9a, b1d9f90a, 4e6dbdd7, b651463a. No gentle-ai review ran on this slice.
 
 ## Next step
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
@@ -217,3 +226,6 @@ State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\st
   one run, its allowance about 1,200 input tokens a changed line, ~1,000 lines; the Claude lenses: one run of the
   pertinent lenses), their output written to the job tmp (`review-codex.log`, `review-lens.log`), findings taken in;
   then T6 on `rule/away-autonomy-stretch`; then push, PR, notify ready.
+- Update ~16:50Z: the slice's reviews are done and taken in (L5, fixes in b651463a). Next: T6 on
+  `rule/away-autonomy-stretch` from feat/stretch (manifest text, then `node bin/js-harness.mjs rules change
+  away-autonomy --dry-run`, then real, one commit, its two reviews); then push both, PRs, notify ready.
