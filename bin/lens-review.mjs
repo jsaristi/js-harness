@@ -55,7 +55,7 @@ export function lensEnv(env) {
 }
 
 /** The CLI arguments of one lens run, its prompt read from `promptFile` and its settings from `settingsFile`. The CLI
- * enforces the answer's schema and prints the answer as `structured_output` (L2). */
+ * enforces the answer's schema and prints the answer as `structured_output` (odd/tasks/lens-review-structured-output.md, L2). */
 export function claudeArgs(promptFile, settingsFile) {
   return ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', promptFile, '--settings', settingsFile, '--model', LENS_MODEL, '--output-format', 'json', '--json-schema', JSON.stringify(LENS_ANSWER_SCHEMA), '--no-session-persistence'];
 }
@@ -112,7 +112,7 @@ function lensOutcome(lens, ran, candidate, keep) {
     model: Object.keys(out?.modelUsage ?? {})[0] ?? null,
   };
   // Why the model stopped, which tells a text answer it ended from one cut off; a structured answer always stops at
-  // `tool_use`, since the CLI takes it through a tool of its own (L2).
+  // `tool_use`, since the CLI takes it through a tool of its own.
   const stopped = typeof out?.stop_reason === 'string' ? { stopReason: out.stop_reason } : {};
   // The object the CLI checked against the schema, else the text, read as before when a CLI that took the flags gives
   // none; a CLI that does not know them exits non-zero and is read as a run that gave no result.

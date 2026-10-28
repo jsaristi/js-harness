@@ -12,9 +12,10 @@ const list = (items, minItems = 0) => ({ type: 'array', items, ...(minItems && {
 const shape = (properties) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 
 /** The JSON Schema of a lens answer, which the CLI enforces (`--json-schema`, `../lens-review.mjs`), so an answer
- * always closes its object (odd/tasks/lens-review-structured-output.md, L1). It holds the shape `lensResult` reads and
- * no more: the hash is echoed and the paths listed by the lens, so whether they are the candidate's is still read
- * from its answer, never forced by the host. */
+ * always closes its object (odd/tasks/lens-review-structured-output.md, L1). It holds the shape `lensResult` reads, and
+ * one field less: `inspection` takes no field beside `status` and `paths`, which the parse lets pass, so it only narrows
+ * what a lens may write. The hash is echoed and the paths listed by the lens, so whether they are the candidate's is
+ * still read from its answer, never forced by the host. */
 export const LENS_ANSWER_SCHEMA = shape({
   subject_hash: filled,
   inspection: shape({ status: { type: 'string', enum: ['completed', 'incomplete'] }, paths: list(filled) }),

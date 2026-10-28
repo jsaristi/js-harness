@@ -119,8 +119,8 @@ function matches(schema, value) {
   if (schema.type === 'array') return Array.isArray(value) && value.length >= (schema.minItems ?? 0) && value.every((item) => matches(schema.items, item));
   if (schema.type !== 'object') throw new Error(`the test reads no type ${schema.type}`);
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  if (schema.additionalProperties === false && Object.keys(value).some((key) => !(key in schema.properties))) return false;
-  if ((schema.required ?? []).some((key) => !(key in value))) return false;
+  if (schema.additionalProperties === false && Object.keys(value).some((key) => !Object.hasOwn(schema.properties, key))) return false;
+  if ((schema.required ?? []).some((key) => !Object.hasOwn(value, key))) return false;
   return Object.entries(value).every(([key, item]) => matches(schema.properties[key], item));
 }
 
@@ -140,6 +140,7 @@ test('the lens answer schema admits the shape the parse reads and refuses the sh
     answer({ evidence: [] }),
     answer({ inspection: { status: 'done', paths: [] } }),
     answer({ inspection: { status: 'completed' } }),
+    answer({ constructor: 1 }),
     { inspection: answer().inspection, findings: [], evidence: ['e'] },
   ];
   for (const value of refused) {

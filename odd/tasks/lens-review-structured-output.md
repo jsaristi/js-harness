@@ -49,7 +49,7 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
 - [x] T1 (kind: build) S1, S2, S3: the schema, `--json-schema`, `--settings` with `language: English`, read
   `structured_output` first, the kept file as a fixture (route: inline; one commit)
 - [x] T2 (kind: verify) S4: one real lens-review over f9c10579..4c44d3bb on JH 73's commits (route: command)
-- [ ] T3 (kind: verify) Codex, the lenses, gentle-ai and one independent verifier over the code commit (route:
+- [x] T3 (kind: verify) Codex, the lenses, gentle-ai and one independent verifier over the code commit (route:
   commands and one read-only sub-agent)
 
 ## Log
@@ -102,3 +102,21 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
 - L9, the fixes of L8: the `stopReason` comment says a structured answer stops at `tool_use`; the read's comment and
   the Goal say what the fallback reaches; a test gives `structured_output` as `null`, `[]` and a string beside a
   valid `result`, each read from `result`. It passed at once: the guard was built, only unproved. GREEN 35 of 35.
+- L10, the reviews of c3a7454 (9c6ebb17..c3a7454):
+  - Codex: "the patch is correct" (0.98), no findings; 37,969 input tokens.
+  - Claude lenses reliability and readability: complete, 0 findings.
+  - gentle-ai: lineage review-0209e1a8721ea743 (lenses readability, reliability; tier medium), approved and
+    acknowledged, with one suggestion, R2-opaque-ledger-ref: a source comment named `(L2)` with no document.
+- L11, the independent verifier (read-only sub-agent, 88,926 tokens) over 729ba8fb..c3a7454: all five checks hold.
+  The old and new `lensResult` agree on 200,000 seeded mutated answers (0 differences, 27,907 accepted); a structured
+  object is read through the same parse, so no check is skipped; every answer the parse accepts meets the schema but
+  for extra fields inside `inspection`; the schema round-trips through `quoteWindowsArg` and a C-runtime parse; the
+  temp folder is removed when the spawn throws; 35 of 35; the fixture is not in `npm pack --dry-run`. Not checked: what
+  the real CLI does when an answer fails the schema, and a CLI older than 2.1.312. Two suggestions: S1, the schema's
+  comment said it held the parse's shape "and no more", but it forbids extra `inspection` fields the parse lets pass;
+  S2, the test's validator used `in`, which sees `Object.prototype` keys.
+- L12, the fixes of L10 and L11: the comments name their document; the schema's comment says it is one field narrower
+  than the parse inside `inspection` (the parse is left as it is, since refusing those fields would refuse answers that
+  count today); the validator uses `Object.hasOwn`, and an answer with a `constructor` field is among the refused
+  shapes, which the old validator would have thrown on. GREEN 35 of 35.
+- gentle-ai lines: 9c6ebb17 approved (review-1c6c8e13ac08b21e); c3a7454 approved (review-0209e1a8721ea743).
