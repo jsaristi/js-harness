@@ -66,6 +66,9 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - S8 (JH ORQ's note, 2026-10-28 04:13 local, from PR 618 section 13.3 row 12): "before he applies S10, make install and
   sync leave a file we installed whose bytes he changed, and say so, as uninstall does ..., instead of overwriting
   it"; proof: "a scratch-home test where an edited installed skill survives install and sync with a note".
+- S9 (the reverse-engineering document, 13.3 row 4, on main since PR 618): "**Adopt** for text we copy or ship: the
+  style, the two skills, the lens prompts. A change to them changes its pin in the same commit"; proof: "the test fails
+  when the text changes and the pin does not".
 
 ## Tasks
 - [x] T1 (kind: build) `notify` refuses a question whose text carries its own `Pregunta <n>:` — S7; inline; a1a84d74
@@ -76,7 +79,8 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [x] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`; PR 619, merged
 - [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
-- [ ] T8 (kind: build) `install` and `sync` leave an installed file he changed, and say so — S8; inline; `f8-s10-keep-edits`
+- [ ] T8 (kind: build) `install` and `sync` leave an installed file he changed, and say so — S8; inline; `f8-s10-keep-edits`; PR 621
+- [ ] T9 (kind: build) the style and the two ported skills pinned by hash — S9; inline; `f8-s10-pins`
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -170,21 +174,12 @@ Reviews:
   the skills, since a run that loads no user settings loads no user skills; that is seen once he applies S10.
 
 ## Next step
-State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
-`f8-s10-rules` (not pushed, no PR yet): `30ac3c3d` (the atomic write moved out), `380b9e77` (the Rules block),
-`d232c63a` (the verifier's fixes), `b27d0633` (gentle-ai's). Codex on `cca493e..b27d063`: part 2 incorrect, two P2s
-(L21). After the restart (PR 617 landed, main `cd194eb`; he keeps outputStyle Neutral, Q101): the two P2s' tests
-failed on GitHub's Linux run alone (7474 pass, 2 fail, run 40644538748), so they go in one commit with the fix
-(`realPlace` writes into the file a link names, a link to nothing is skipped; the sibling takes the file's mode).
-Codex's recheck on `6df890e..4e28ec3`: the link fixed; the mode half fixed (the sibling was readable by others
-until its chmod), so the next commit creates it with the mode; Codex rechecks no range that starts at `4e28ec3`, so
-the lenses review that commit. Lenses on `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
-gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in `8012d8d6`, which Codex, the
-lenses and gentle-ai approved (Reviews). PR 619 (T7) is open and `ready` (L22). T6 is on `f8-s10-probe`, chained on
-`f8-s10-rules`: `## Probe` holds the install probe and the five prompts, 5 of 5. Held: the incident rerun,
-until he applies S10 to his machine (the lead, L23). The ROADMAP and the register are done. Next: PR 4 (T6's
-record, docs only) and `ready`; once he has applied S10, the rerun once (about $13; if it fails, its cause is
-reported and it is not rerun), T6 closed, and the `closed` notice with its summary in `docs/sessions/`.
+State at 2026-10-28 ~05:00 local (context pause): PRs 620 (T6, docs) and 621 (T8) are `ready`, the merge queue takes
+both in order. T9 opened on `f8-s10-pins` (from `f8-s10-keep-edits`, worktree f8-s10-port): write
+`bin/lib/output-style.test.mjs` and `bin/lib/ported-skills.test.mjs`, each pinning its text's sha256 (style
+`1e7c0311...`, work units `b2cb9a11...`, chained PRs `d77410d6...`), failing with "update its pin in the same commit";
+commit; Codex `--base bf4ce950`, lenses, gentle-ai; push; PR 6; `ready`. Held: the incident rerun, until he applies
+S10 (L23). Then the `closed` notice with its summary in `docs/sessions/`.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -349,3 +344,7 @@ reported and it is not rerun), T6 closed, and the `closed` notice with its summa
   back to the recorded bytes is updated. Not in scope: a file at a component's path that install never recorded
   (still overwritten on a first install, as before). The write moves into its own module, since `manifest.mjs` is at
   its ceiling (1801). Not high risk by the sizing test (it makes install write less); the usual reviews.
+- L25 (2026-10-28): PR 621 (T8) opened and `ready`; PR 620 took main in by a docs merge (`a6303b1f`), since PR 618
+  added section 13's tasks to the roadmap line S10's record goes on. Section 13.5 puts rows 4, 12 and 15 into S10:
+  row 12 is T8; row 15 builds nothing (it keeps `chained-pr`, copied in T3, and `lens-review`'s input limit); row 4 is
+  T9, S9: no S10 slice touched a lens prompt, so T9 pins the style and the two skills only.
