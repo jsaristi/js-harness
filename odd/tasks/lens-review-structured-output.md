@@ -119,4 +119,9 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
   than the parse inside `inspection` (the parse is left as it is, since refusing those fields would refuse answers that
   count today); the validator uses `Object.hasOwn`, and an answer with a `constructor` field is among the refused
   shapes, which the old validator would have thrown on. GREEN 35 of 35.
-- gentle-ai lines: 9c6ebb17 approved (review-1c6c8e13ac08b21e); c3a7454 approved (review-0209e1a8721ea743).
+- L13, the reviews of 697a7a0 (c3a7454..697a7a0): Codex "the patch is correct" (0.99); Claude lenses reliability and
+  readability complete, 0 findings; gentle-ai lineage review-37264eed8b258075 (tier medium) approved and acknowledged,
+  with one suggestion, R2-schema-comment-one-field-less: "one field less" reads as a missing field, so the comment now
+  says the schema admits less in one place. A comment-only commit, reviewed by Codex, the lenses and gentle-ai.
+- gentle-ai lines: 9c6ebb17 approved (review-1c6c8e13ac08b21e); c3a7454 approved (review-0209e1a8721ea743); 697a7a0
+  approved (review-37264eed8b258075).

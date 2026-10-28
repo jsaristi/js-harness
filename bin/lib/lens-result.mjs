@@ -13,8 +13,8 @@ const shape = (properties) => ({ type: 'object', properties, required: Object.ke
 
 /** The JSON Schema of a lens answer, which the CLI enforces (`--json-schema`, `../lens-review.mjs`), so an answer
  * always closes its object (odd/tasks/lens-review-structured-output.md, L1). It holds the shape `lensResult` reads, and
- * one field less: `inspection` takes no field beside `status` and `paths`, which the parse lets pass, so it only narrows
- * what a lens may write. The hash is echoed and the paths listed by the lens, so whether they are the candidate's is
+ * admits less in one place: `inspection` may hold only `status` and `paths`, where the parse ignores any other key, so
+ * it only narrows what a lens may write. The hash is echoed and the paths listed by the lens, so whether they are the candidate's is
  * still read from its answer, never forced by the host. */
 export const LENS_ANSWER_SCHEMA = shape({
   subject_hash: filled,
