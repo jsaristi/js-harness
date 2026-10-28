@@ -438,6 +438,11 @@ test('tuiMain shows the update a named source folder holds, and its commands rea
   }
 });
 
+/** How many steps down Install is in the menu the first frame drew: one more when Install the stack is there. */
+function installIndex(stdout) {
+  return MENU_ITEMS.indexOf('install') + (stdout.chunks.join('').includes('Install the stack') ? 1 : 0);
+}
+
 test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
@@ -446,7 +451,8 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
   try {
     const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
     await flush();
-    for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
+    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install.
+    for (let i = 0; i < installIndex(stdout); i++) stdin.emit('data', 'j'); // down to Install
     stdin.emit('data', '\r'); // run it
     await flush();
     stdin.emit('data', 'q');
@@ -476,7 +482,8 @@ test('tuiMain takes an empty JS_HARNESS_HOME as no home: the install goes to the
   try {
     const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: '' }, spawn, { stdin, stdout });
     await flush();
-    for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
+    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install.
+    for (let i = 0; i < installIndex(stdout); i++) stdin.emit('data', 'j'); // down to Install
     stdin.emit('data', '\r'); // run it
     await flush();
     stdin.emit('data', 'q');
@@ -527,7 +534,7 @@ test('runTui redraws the menu in place when the selection moves', async () => {
 
 function makeDoctorRow(overrides = {}) {
   return {
-    id: 'gentle-ai',
+    id: 'engram',
     version: '3.7.0',
     installed: 'ok',
     claude: 'ok',
@@ -591,24 +598,24 @@ test('worstState breaks ties deterministically toward the first dimension', () =
 });
 
 test('summarizeStackRow reports the installed version and worst state when healthy', () => {
-  assert.deepEqual(summarizeStackRow(makeDoctorRow()), { id: 'gentle-ai', version: '3.7.0', state: 'ok' });
+  assert.deepEqual(summarizeStackRow(makeDoctorRow()), { id: 'engram', version: '3.7.0', state: 'ok' });
 });
 
 test('summarizeStackRow shows the installed state as the version when the tool is not ok', () => {
   const row = makeDoctorRow({ installed: 'missing', version: null });
-  assert.deepEqual(summarizeStackRow(row), { id: 'gentle-ai', version: 'missing', state: 'missing' });
+  assert.deepEqual(summarizeStackRow(row), { id: 'engram', version: 'missing', state: 'missing' });
 });
 
 test('render shows one compact line per tool above the menu when state.stack is an array', () => {
   const state = {
     ...initialState({ installedVersion: '0.1.0', updateAvailable: null }),
     stack: [
-      { id: 'gentle-ai', version: '3.7.0', state: 'ok' },
+      { id: 'engram', version: '3.7.0', state: 'ok' },
       { id: 'codegraph', version: '1.6.0', state: 'missing codex' },
     ],
   };
   const text = render(state).join('\n');
-  assert.match(text, /gentle-ai.*3\.7\.0.*ok/);
+  assert.match(text, /engram.*3\.7\.0.*ok/);
   assert.match(text, /codegraph.*1\.6\.0.*missing codex/);
 });
 
@@ -642,7 +649,7 @@ test('computeStackState resolves real rows from local probes without ever callin
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock', 'js-harness'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock', 'js-harness'],
     );
     assert.match(stack.find((row) => row.id === 'js-harness').version, /^[0-9a-f]{8}$/, "the harness's own rules, by their hash, main unread");
     assert.deepEqual(stack.find((row) => row.id === 'claude-account'), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');
@@ -745,7 +752,7 @@ test('tuiMain wires the Doctor menu item to the full doctorMain, with network pe
       true,
       'the Doctor menu item must be allowed to hit the network, unlike the startup stack block',
     );
-    assert.match(logged, /gentle-ai/);
+    assert.match(logged, /engram-plugin/);
   } finally {
     console.log = originalLog;
     fs.rmSync(home, { recursive: true, force: true });

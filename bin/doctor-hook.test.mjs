@@ -29,7 +29,6 @@ function fakeSpawnMissing() {
 /** A fully "healthy" fixture home, matching doctor.test.mjs's own — every tool installed and
  * configured everywhere it applies, so the report has zero gaps. */
 function seedHealthyHome(home, project) {
-  writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
   writeJson(path.join(home, '.claude.json'), {
     mcpServers: {
       engram: { command: 'engram' },
@@ -45,10 +44,10 @@ function seedHealthyHome(home, project) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'engram@engram': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }], 'engram@engram': [{ version: '0.1.19' }] },
   });
   fs.mkdirSync(path.join(project, '.codegraph'), { recursive: true });
 }
@@ -64,7 +63,7 @@ function healthySpawn(project, { codexCli = true } = {}) {
     if (codexCli && line === 'codex login status') return { status: 0, stdout: 'Logged in\n', stderr: '' };
     // On win32 a probe arrives as one shell command line ("codegraph --version"), so match its binary.
     const binary = cmd.split(' ')[0];
-    if (['gentle-ai', 'engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
+    if (['engram', 'codegraph'].includes(binary)) return { status: 0, stdout: `${binary} 9.9.9\n`, stderr: '' };
     return { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' };
   };
 }
@@ -139,8 +138,8 @@ test('doctor --hook prints again when the gaps change', async () => {
     const first = await runHook(['--hook', '--home', home, '--cwd', project], {}, deps);
     assert.ok(first.stdout.trim().length > 0);
 
-    // Close one gap: register gentle-ai for both hosts, changing the gap list and its digest.
-    writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
+    // Close one gap: register context7 in Claude Code, changing the gap list and its digest.
+    writeJson(path.join(home, '.claude.json'), { mcpServers: { context7: { type: 'http', url: 'https://mcp.context7.com/mcp' } } });
 
     const second = await runHook(['--hook', '--home', home, '--cwd', project], {}, deps);
     assert.equal(second.code, 0);
@@ -280,25 +279,25 @@ test('doctor --hook notifies once when a recorded launcher\'s server is down, an
 });
 
 // R3-001 (accepted T6b review follow-up): a fix may be a list of commands, and the hook must not
-// care — its message only counts gaps, so one report carrying a list fix (gentle-ai `upToDate`, a major
-// behind) and a one-step fix (codex `installed`, no Codex CLI) is still exactly one well-formed count line.
+// care — its message only counts gaps, so one report carrying a list fix (the engram plugin's `upToDate`, behind
+// the one its binary's tag ships) and a one-step fix (codex `installed`, no Codex CLI) is still exactly one
+// well-formed count line.
 test('doctor --hook prints one well-formed count line for a report whose gaps have list fixes', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home, project);
+    fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
+    const git = async () => ({ status: 0, stdout: JSON.stringify({ plugins: [{ name: 'engram', version: '0.2.0' }] }) });
     const fetchImpl = async (url) => ({
       ok: true,
-      json: async () =>
-        url.includes('registry.npmjs.org')
-          ? { version: '0.0.1' }
-          : { tag_name: url.includes('Gentleman-Programming/gentle-ai') ? 'v99.0.0' : 'v0.0.1' },
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : [{ tag_name: 'v0.0.1' }]),
     });
 
     const { code, stdout, stderr } = await runHook(
       ['--hook', '--home', home, '--cwd', project],
       {},
-      { spawn: healthySpawn(project, { codexCli: false }), fetch: fetchImpl },
+      { spawn: healthySpawn(project, { codexCli: false }), fetch: fetchImpl, git },
     );
 
     assert.equal(code, 0);
@@ -466,33 +465,34 @@ test('doctor --hook names a host update since the last review and a downloaded v
   }
 });
 
-// The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): a gentle-ai sync rewrites the global CLAUDE.md, so a new
-// gentle-ai version is named in the notice, still a `systemMessage`, beside a host update when both are due.
-test('doctor --hook names a gentle-ai version since the last review, once, and beside a host update', async () => {
+// The stack-update row (bin/lib/stack-update.mjs): a tool updated since its review is named in the notice, still a
+// `systemMessage`, beside a host update when both are due.
+test('doctor --hook names a stack tool updated since the last review, once, and beside a host update', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home, project);
     const fetchImpl = async (url) => ({
       ok: true,
-      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : [{ tag_name: 'v0.0.1' }]),
     });
     let versions = { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' };
-    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions, gentleAiSnapshots: () => [] };
+    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions, stackUpdate: true };
     const argv = ['--hook', '--home', home, '--cwd', project];
 
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the first reading is the reviewed baseline');
-    assert.equal(readCache(home).gentleAi.reviewed.version, '9.9.9');
+    const reviewed = readCache(home).stack.reviewed;
+    assert.equal(reviewed.versions.engram, '9.9.9');
 
-    writeCache(home, { ...readCache(home), gentleAi: { reviewed: { version: '9.8.0', at: '2026-10-16T00:00:00.000Z' } } });
+    writeCache(home, { ...readCache(home), stack: { reviewed: { ...reviewed, versions: { ...reviewed.versions, engram: '9.8.0' } } } });
     const updated = await runHook(argv, {}, deps);
-    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (gentle-ai 9.8.0 → 9.9.9 since the last review)' });
+    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (engram 9.8.0 → 9.9.9 since the last review)' });
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
 
     versions = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.295' };
     const both = await runHook(argv, {}, deps);
     assert.deepEqual(JSON.parse(both.stdout), {
-      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review; gentle-ai 9.8.0 → 9.9.9 since the last review)',
+      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review; engram 9.8.0 → 9.9.9 since the last review)',
     });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

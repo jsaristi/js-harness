@@ -24,7 +24,7 @@ function newWorld() {
 
 function read(world) {
   return ({ env } = {}) => ((world.reads ??= []).push(env), {
-    rows: ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => ({ id, version: '1.0.0', ...OK, fix: {}, ...world[id] })),
+    rows: ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => ({ id, version: '1.0.0', ...OK, fix: {}, ...world[id] })),
     functions: ON,
     prerequisites: [{ id: 'git', state: 'ok' }, { id: 'gh', state: 'ok' }],
   });
@@ -48,16 +48,22 @@ function spawnOf(world, home, manifestSeen = []) {
     }
     if (line === 'pnpm add -g @openai/codex') world.codex.installed = 'ok';
     if (line === 'pnpm add -g @colbymchenry/codegraph') world.codegraph.installed = 'ok';
+    // A registration names its server: context7 (F8 S11) or codegraph. Each writes its entry beside the others.
+    const server = / context7 /.test(` ${line} `) ? 'context7' : 'codegraph';
     if (line.startsWith('claude mcp add')) {
-      world.codegraph.claude = 'ok';
-      fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { codegraph: { command: 'codegraph', args: ['serve', '--mcp'] } } }));
+      world[server].claude = 'ok';
+      const file = path.join(home, '.claude.json');
+      const data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { mcpServers: {} };
+      data.mcpServers[server] = server === 'context7' ? { type: 'http', url: 'https://mcp.context7.com/mcp' } : { command: 'codegraph', args: ['serve', '--mcp'] };
+      fs.writeFileSync(file, JSON.stringify(data));
     }
     if (line.startsWith('codex mcp add')) {
-      world.codegraph.codex = 'ok';
+      world[server].codex = 'ok';
       // Codex writes the table where CODEX_HOME says.
       if (options.env?.CODEX_HOME) {
         fs.mkdirSync(options.env.CODEX_HOME, { recursive: true });
-        fs.writeFileSync(path.join(options.env.CODEX_HOME, 'config.toml'), '[mcp_servers.codegraph]\ncommand = "codegraph"\n');
+        const table = server === 'context7' ? '[mcp_servers.context7]\nurl = "https://mcp.context7.com/mcp"\n' : '[mcp_servers.codegraph]\ncommand = "codegraph"\n';
+        fs.appendFileSync(path.join(options.env.CODEX_HOME, 'config.toml'), table);
       }
     }
     return { status: 0, stdout: '' };
@@ -106,8 +112,29 @@ test('without a terminal and without --yes, stack install shows the plan and run
   assert.equal(readManifest(home), null);
 }));
 
+// F8 S11 (G11): context7 is required, so stack install registers it in both hosts, each recorded with its exact undo.
+test('stack install --tool context7 registers it in Claude Code and Codex, each recorded with what its undo applies to', withHome(async (home) => {
+  const world = newWorld();
+  world.context7 = { installed: 'missing', claude: 'missing', codex: 'missing' };
+  const { code, out, err } = await run(['--yes', '--tool', 'context7'], { world, home });
+  assert.equal(code, 0, err);
+  assert.deepEqual(world.lines.map((entry) => entry.line), [
+    'claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp',
+    'codex mcp add context7 --url https://mcp.context7.com/mcp',
+  ]);
+  assert.match(out, /context7 claude: done/);
+  assert.match(out, /context7 codex: done/);
+  const records = readManifest(home).stack;
+  assert.deepEqual(records.map((r) => [r.tool, r.dimension, r.kind, r.undo.join(' ')]), [
+    ['context7', 'claude', 'registration', 'claude mcp remove -s user context7'],
+    ['context7', 'codex', 'registration', 'codex mcp remove context7'],
+  ]);
+  assert.deepEqual(records[0].applies, { type: 'http', url: 'https://mcp.context7.com/mcp' });
+  assert.equal(records[1].applies, '[mcp_servers.context7]\nurl = "https://mcp.context7.com/mcp"');
+}));
+
 test('--yes needs --tool, and --tool names a tool stack install runs: else a usage error that runs nothing', withHome(async (home) => {
-  for (const argv of [['--yes'], ['--yes', '--tool', 'gentle-ai'], ['--tool'], ['--bogus']]) {
+  for (const argv of [['--yes'], ['--yes', '--tool', 'engram'], ['--tool'], ['--bogus']]) {
     const world = newWorld();
     const { code, err } = await run(argv, { world, home });
     assert.equal(code, 2, argv.join(' '));

@@ -121,90 +121,6 @@ function claudeEnabledPlugin(home, pluginId) {
   return data?.enabledPlugins?.[pluginId] === true ? 'ok' : 'missing';
 }
 
-/** `<home>/.gentle-ai/state.json` `installed_agents` membership. */
-function gentleAiInstalledAgent(home, agent) {
-  const { found, data } = readJsonFile(path.join(home, '.gentle-ai', 'state.json'));
-  if (!found) return 'missing';
-  if (data === undefined) return 'unknown';
-  return Array.isArray(data?.installed_agents) && data.installed_agents.includes(agent) ? 'ok' : 'missing';
-}
-
-// Where each host keeps its hooks, relative to the home.
-const HOST_HOOKS_FILES = {
-  claude: ['.claude', 'settings.json'],
-  codex: ['.codex', 'hooks.json'],
-};
-// `gentle-ai <command>` where a command can start, and nowhere else: at the start of the hook
-// command, after a separator (`;`, `&`, `|`, `(`, `{`, a newline), or right after the opening quote
-// of a shell's command-string flag (`-Command '`, `-c "`). Then an optional quote, an optional path
-// ending in `/` or `\`, the bare or `.exe` binary, an optional closing quote and the command word.
-// Anything else (`echo gentle-ai x`, `my-gentle-ai x`, text inside a quoted message) is left
-// unclassified on purpose: doctor makes no claim about a hook it cannot read as a call.
-const GENTLE_AI_CALL_RE =
-  /(?:^|[;&|({\n]|-[Cc](?:ommand)?\s+["'])\s*["']?(?:[^\s"']*[\\/])?gentle-ai(?:\.exe)?["']?\s+([A-Za-z][\w-]*)/g;
-
-/** Every hook command in a hooks config (`hooks.<Event>[].hooks[].command`, the shape both hosts
- * use), as `{ event, command }`. A missing or malformed file, or a shape that does not match,
- * contributes nothing: this is read-only evidence gathering, so it never throws. */
-function hookCommands(filePath) {
-  const hooks = readJsonFile(filePath).data?.hooks;
-  if (!hooks || typeof hooks !== 'object') return [];
-  const found = [];
-  for (const [event, groups] of Object.entries(hooks)) {
-    for (const group of Array.isArray(groups) ? groups : []) {
-      for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
-        if (typeof hook?.command === 'string') found.push({ event, command: hook.command });
-      }
-    }
-  }
-  return found;
-}
-
-/** The commands `gentle-ai help` lists: inside a section whose header line names `COMMANDS` (it ends
- * at the next unindented line), a line indented by exactly two spaces is a command line and its
- * first word is the command; deeper lines continue the one above. Other sections, such as `USAGE`,
- * are never read, so help that is only partly understood yields nothing. This is the only thing
- * ever run to learn them: probing a hook's own command could execute it. `null` when help cannot be
- * run or yields no command lines, so the caller makes no claim without evidence. */
-function gentleAiListedCommands(deps) {
-  const result = spawnProbe('gentle-ai', ['help'], deps);
-  if (!result || result.error || probeTimedOut(result) || result.status !== 0) return null;
-  const listed = new Set();
-  let inCommands = false;
-  for (const line of String(result.stdout ?? '').split(/\r?\n/)) {
-    if (/^\S/.test(line)) inCommands = line.includes('COMMANDS');
-    const match = inCommands ? /^ {2}([A-Za-z][\w-]*)(?:\s|$)/.exec(line) : null;
-    if (match) listed.add(match[1]);
-  }
-  return listed.size > 0 ? listed : null;
-}
-
-/** Per configured host, one fix line for each hook that runs a `gentle-ai` command `gentle-ai
- * help` does not list (gentle-ai 4 removed `sdd-*` but `sync` left its hooks behind). `help` is
- * spawned at most once, and only when some hook calls gentle-ai at all. */
-function deadGentleAiHooks(deps, cells) {
-  const withCalls = [];
-  for (const [host, parts] of Object.entries(HOST_HOOKS_FILES)) {
-    if (cells[host] !== 'ok') continue;
-    const hooks = hookCommands(path.join(deps.home, ...parts)).filter(({ command }) =>
-      command.match(GENTLE_AI_CALL_RE),
-    );
-    if (hooks.length > 0) withCalls.push({ host, file: `~/${parts.join('/')}`, hooks });
-  }
-  const listed = withCalls.length > 0 ? gentleAiListedCommands(deps) : null;
-  const dead = {};
-  for (const { host, file, hooks } of withCalls) {
-    for (const { event, command } of hooks) {
-      const unlisted = [...command.matchAll(GENTLE_AI_CALL_RE)].map((m) => m[1]).find((word) => !listed?.has(word));
-      if (!listed || !unlisted) continue;
-      (dead[host] ??= []).push(
-        `remove the hook "${command}" (${event}) from ${file}: "gentle-ai help" lists no "${unlisted}" command`,
-      );
-    }
-  }
-  return dead;
-}
-
 /** context7 has no CLI: its installed version comes from how Claude Code has it registered. A
  * hosted entry (`type: "http"` with a `url`) has no version of its own; a self-run one pins
  * `@upstash/context7-mcp@X` in its npx args. Registered only in Codex (whose config we only ever
@@ -269,13 +185,18 @@ function codexLoginState(deps) {
   return result && !result.error && result.status === 0 ? 'ok' : 'missing';
 }
 
-const GENTLE_AI_UPGRADE_FIX = ['gentle-ai upgrade', 'gentle-ai sync'];
-
 const ENGRAM_PLUGIN = 'engram@engram';
 // The catalog first: on 2026-10-20 the installed plugin's commit was the marketplace clone's HEAD, 21 commits behind
 // the refs Claude Code had fetched, its catalog still naming 0.1.12. Both commands verified by `--help` that day,
 // neither run (odd/tasks/engram-plugin-lag.md, D3).
 const ENGRAM_PLUGIN_UPDATE_FIX = ['claude plugin marketplace update engram', `claude plugin update ${ENGRAM_PLUGIN}`];
+/** Where engram's README installs its binary from (v3.6.0, "Install"): its releases, or Homebrew on a Mac. It has no
+ * package on npm or pnpm, so the line is the person's to follow (odd/tasks/f8-s11-complements.md, L3 and L4). */
+export const ENGRAM_INSTALL =
+  'install engram from https://github.com/Gentleman-Programming/engram/releases (on a Mac: brew install gentleman-programming/tap/engram)';
+/** engram's own setup of Claude Code: the plugin's marketplace, the plugin, and the MCP entry, which it reads back and
+ * never writes over one with another command (engram v3.6.0, `internal/setup/setup.go`, `installClaudeCode`). */
+export const ENGRAM_SETUP_CLAUDE = 'engram setup claude-code';
 
 /** The global install of `spec` as the machine's package manager runs it: `resolveStackPm` decides it, as `planStack` does,
  * so a pnpm machine is told `pnpm add -g` and never `npm` (the stack rule). npm keeps `i -g`, the line doctor always
@@ -299,42 +220,9 @@ function installLine(spec, { env, platform = process.platform }) {
  * twice. `when`, when given, decides whether a tool is shown at all (`probeStack` leaves out a tool
  * whose `when` says no). Adding a tool never touches
  * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
- * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`, `gentle-ai
- * --help`) — see odd/tasks/stack-doctor.md. */
+ * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`) — see odd/tasks/stack-doctor.md;
+ * engram's own read in its v3.6.0 source on 2026-10-28 (odd/tasks/f8-s11-complements.md, L3). */
 export const tools = [
-  {
-    id: 'gentle-ai',
-    installed: (deps) => probeVersionCommand('gentle-ai', ['version'], deps),
-    // A configured host whose hooks call a command `gentle-ai help` no longer lists is `stale`;
-    // `staleHooks` (its fix lines per host) is internal: `probeTool` never copies it into the row.
-    configured: (deps) => {
-      const cells = {
-        claude: gentleAiInstalledAgent(deps.home, 'claude-code'),
-        codex: gentleAiInstalledAgent(deps.home, 'codex'),
-      };
-      const staleHooks = deadGentleAiHooks(deps, cells);
-      for (const host of Object.keys(staleHooks)) cells[host] = 'stale';
-      return Object.keys(staleHooks).length > 0 ? { ...cells, staleHooks } : cells;
-    },
-    project: () => 'n/a',
-    // `gentle-ai upgrade` cannot cross a Go major (v4 lives at a new module path, so from 3.7.0 it
-    // upgraded engram and left gentle-ai behind): then the fix is `go install` for that path. It
-    // needs the latest version, which is only known once `doctor` has resolved it, so `doctor`
-    // applies it on top of `fix.upToDate`. Unknown or unparseable versions keep `fix.upToDate`.
-    upToDateFix: (installed, latest) => {
-      const [from, to] = [installed, latest].map((v) => SEMVER_RE.exec(v ?? '')?.[1]);
-      const [fromMajor, toMajor] = [from, to].map((v) => v?.split('.')[0]);
-      if (!from || !to || Number(toMajor) <= Number(fromMajor)) return GENTLE_AI_UPGRADE_FIX;
-      const module = `github.com/gentleman-programming/gentle-ai/v${toMajor}/cmd/gentle-ai`;
-      return [`go install ${module}@v${to}`, 'gentle-ai sync'];
-    },
-    fix: (_deps, configured) => ({
-      installed: 'see https://github.com/Gentleman-Programming/gentle-ai',
-      claude: configured?.staleHooks?.claude ?? 'gentle-ai install',
-      codex: configured?.staleHooks?.codex ?? 'gentle-ai install',
-      upToDate: GENTLE_AI_UPGRADE_FIX,
-    }),
-  },
   {
     id: 'engram',
     installed: (deps) => probeVersionCommand('engram', ['version'], deps),
@@ -343,20 +231,21 @@ export const tools = [
       codex: hasCodexMcpServer(codexHomeOf(deps), 'engram') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
+    // engram's own commands (F8 S11): its binary from its releases, and `engram setup` for each host, which writes the
+    // MCP entry with the binary's absolute path (and, in Claude Code, the plugin).
     fix: () => ({
-      installed: 'gentle-ai upgrade',
-      claude: 'gentle-ai sync',
-      codex: 'gentle-ai sync',
-      upToDate: 'gentle-ai upgrade',
+      installed: ENGRAM_INSTALL,
+      claude: ENGRAM_SETUP_CLAUDE,
+      codex: 'engram setup codex',
+      upToDate: ENGRAM_INSTALL,
     }),
   },
   {
-    // engram's Claude Code plugin, whose hooks run in every Claude session: shown only while it is installed and
-    // enabled, so a machine without it sees no row and no gap. Its latest version is the one the engram binary's
-    // own release tag ships (`LOCAL_SOURCES` in latest.mjs), not the newest plugin: an update of the binary alone
-    // left the plugin two versions behind on 2026-10-20 (odd/tasks/engram-plugin-lag.md).
+    // engram's Claude Code plugin, whose hooks run in every Claude session: a row on every machine since F8 S11, which
+    // installs it with engram's own setup, so a missing or disabled plugin is a gap. Its latest version is the one the
+    // engram binary's own release tag ships (`LOCAL_SOURCES` in latest.mjs), not the newest plugin: an update of the
+    // binary alone left the plugin two versions behind on 2026-10-20 (odd/tasks/engram-plugin-lag.md).
     id: 'engram-plugin',
-    when: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN).state === 'ok' && claudeEnabledPlugin(home, ENGRAM_PLUGIN) === 'ok',
     installed: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN),
     configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
     project: () => 'n/a',
@@ -366,7 +255,7 @@ export const tools = [
       const binary = rows.find((row) => row.id === 'engram')?.version;
       return [`plugin ${installed} is behind ${latest}, the plugin engram v${binary} ships; update it, then restart Claude Code:`, ...ENGRAM_PLUGIN_UPDATE_FIX];
     },
-    fix: () => ({ upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),
+    fix: () => ({ installed: ENGRAM_SETUP_CLAUDE, claude: `claude plugin enable ${ENGRAM_PLUGIN}`, upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),
   },
   {
     id: 'codegraph',
@@ -388,7 +277,7 @@ export const tools = [
       installed: installLine('@colbymchenry/codegraph', { env, platform }),
       claude: 'claude mcp add -s user codegraph -- codegraph serve --mcp',
       codex: 'codex mcp add codegraph -- codegraph serve --mcp',
-      project: `gentle-ai codegraph init --cwd ${project || '<project root>'}`,
+      project: `codegraph init --yes ${project ? shownWord(project, platform) : '<project root>'}`,
       upToDate: installLine('@colbymchenry/codegraph', { env, platform }),
     }),
   },

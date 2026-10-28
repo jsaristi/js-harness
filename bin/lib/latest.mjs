@@ -11,19 +11,6 @@ import { compareSemver } from './version.mjs';
 
 const TIMEOUT_MS = 5000;
 
-async function fetchGithubReleaseVersion(owner, repo, fetchImpl) {
-  try {
-    const res = await fetchImpl(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return typeof data?.tag_name === 'string' ? data.tag_name.replace(/^v/, '') : null;
-  } catch {
-    return null;
-  }
-}
-
 // An engram release is a plain `v<semver>` tag: the releases lookup accepts only those, and the plugin read asks git
 // for exactly that tag, so both read the same rule here.
 const PLAIN_SEMVER = String.raw`\d+\.\d+\.\d+`;
@@ -125,7 +112,6 @@ function runGit(args) {
  * ever invoked when it is not hosted (see `fetchLatestVersions` below), since a hosted entry has
  * no version of its own to compare against npm. */
 const SOURCES = {
-  'gentle-ai': ({ fetch: fetchImpl }) => fetchGithubReleaseVersion('Gentleman-Programming', 'gentle-ai', fetchImpl),
   engram: ({ fetch: fetchImpl }) => fetchGithubStreamVersion('Gentleman-Programming', 'engram', fetchImpl),
   codegraph: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@colbymchenry/codegraph', fetchImpl),
   context7: ({ fetch: fetchImpl }) => fetchNpmLatestVersion('@upstash/context7-mcp', fetchImpl),
