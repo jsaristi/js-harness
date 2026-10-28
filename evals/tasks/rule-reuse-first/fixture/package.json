@@ -1,0 +1,13 @@
+{
+  "name": "blog",
+  "version": "0.4.0",
+  "description": "The routes of a small static blog",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

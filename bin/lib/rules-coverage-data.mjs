@@ -344,6 +344,8 @@ export const COVERAGE = {
     "incident-10-done-not-in-git",
     "lost-updates",
     "resolver",
+    "rule-away-autonomy",
+    "rule-reuse-first",
     "spec-drift"
   ],
   "messages": [
