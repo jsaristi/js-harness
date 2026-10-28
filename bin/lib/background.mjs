@@ -122,16 +122,18 @@ export function appendRecord(home, entry) {
 }
 
 /** The sessions the record under `home` holds, those started and not removed: `{ sessions }`, a list of their start
- * entries, oldest first; `{ none: true }` when there is no record; `{ unavailable }` when it could not be read. A line
- * that is not an entry of this schema is skipped and counted (`skipped`). */
+ * entries, oldest first, and `started`, every start entry it holds, of removed sessions too; `{ none: true }` when
+ * there is no record; `{ unavailable }` when it could not be read. A line that is not an entry of this schema is
+ * skipped and counted (`skipped`). */
 export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   let text;
   try {
     text = readFile(recordFileOf(home));
   } catch (err) {
-    return err.code === 'ENOENT' ? { none: true, sessions: [] } : { unavailable: err.code ?? err.message };
+    return err.code === 'ENOENT' ? { none: true, sessions: [], started: [] } : { unavailable: err.code ?? err.message };
   }
   const open = new Map();
+  const started = [];
   let skipped = 0;
   for (const line of text.split(/\r?\n/)) {
     if (line.trim() === '') continue;
@@ -143,11 +145,13 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
       continue;
     }
     if (entry?.schema !== BACKGROUND_SCHEMA || typeof entry.id !== 'string') skipped += 1;
-    else if (entry.event === 'started') open.set(entry.id, entry);
-    else if (entry.event === 'removed') open.delete(entry.id);
+    else if (entry.event === 'started') {
+      open.set(entry.id, entry);
+      started.push(entry);
+    } else if (entry.event === 'removed') open.delete(entry.id);
     else skipped += 1;
   }
-  return { sessions: [...open.values()], skipped };
+  return { sessions: [...open.values()], started, skipped };
 }
 
 /** The recorded session `given` names: its id, or the start of its session id, eight characters or more. */

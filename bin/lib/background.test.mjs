@@ -18,7 +18,7 @@ test('startArgs puts --add-dir first, so -n ends its list of folders, and the pr
 test('readRecord holds the sessions started and not removed, and counts the lines it cannot read', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-bg-record-'));
   try {
-    assert.deepEqual(readRecord(home), { none: true, sessions: [] });
+    assert.deepEqual(readRecord(home), { none: true, sessions: [], started: [] });
     fs.mkdirSync(path.dirname(recordFileOf(home)), { recursive: true });
     const line = (entry) => JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry });
     fs.writeFileSync(recordFileOf(home), [
@@ -31,6 +31,8 @@ test('readRecord holds the sessions started and not removed, and counts the line
     ].join('\n'));
     const record = readRecord(home);
     assert.deepEqual(record.sessions.map((entry) => entry.id), ['bbbb2222']);
+    // Every start is kept apart from what is open: a removed session's title still holds its number.
+    assert.deepEqual(record.started.map((entry) => entry.id), ['aaaa1111', 'bbbb2222']);
     assert.equal(record.skipped, 2);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as channel from './channel.mjs';
+import { appendRecord, recordFileOf } from './background.mjs';
 
 // Every test writes under a home of its own in the temp folder: nothing here reads or writes the real
 // home, and the transcripts are synthetic.
@@ -765,6 +766,19 @@ test('nextSessionNumber says which source it could not read, so a guess is not t
   // A torn line of the record may hold the highest number too: it is said, not dropped (Codex, P2).
   fs.appendFileSync(channel.recordPath(home, SLUG), '{"schema":"js-harness.channel-notice/v1","from":{"title":"JH 32 · t\n', 'utf8');
   assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 6, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
+}));
+
+// JH 68 and JH 69 were started with sessions start and had sent nothing yet, and --next-number printed JH 68 (2026-10-28).
+test('nextSessionNumber counts the titles sessions start recorded, of a removed session too, and of this project only', withHome((home) => {
+  const root = 'C:\\proj';
+  appendRecord(home, { event: 'started', at: AT, id: 'aaaa1111', title: 'JH 68 · stack', root, cwd: root });
+  appendRecord(home, { event: 'started', at: AT, id: 'bbbb2222', title: 'JH 69 · records', root, cwd: root });
+  appendRecord(home, { event: 'removed', at: AT, id: 'bbbb2222' });
+  appendRecord(home, { event: 'started', at: AT, id: 'cccc3333', title: 'JH 90 · another project', root: 'C:\\other', cwd: 'C:\\other' });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 70 });
+  // A line of that record it cannot read may hold the highest number: it is said, not dropped.
+  fs.appendFileSync(recordFileOf(home), '{"schema":"js-harness.background-session/v1","event":"started","title":"JH 75\n', 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 70, unavailable: [`background sessions ${recordFileOf(home)} (1 line not readable as an entry)`] });
 }));
 
 // --- where a notice is run from ---
