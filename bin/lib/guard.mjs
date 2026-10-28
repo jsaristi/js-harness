@@ -478,12 +478,12 @@ const RECORD_PATH = new RegExp(`(?:^|/)js-harness/(${RECORD_NAMES})$`, 'i');
 // A record's name in a script's text, where its folder may be joined apart from it.
 const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\w.-])`, 'i');
 const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
-// The folder itself, removed or moved whole: named by the git dir above it, so a project folder named `js-harness` is
-// not it; and this checkout's git dir, `.git` from where the command runs (another project's `.git` is not it, and an
-// absolute path to this one is not followed). A glob in the folder, or in the git dir, takes what it matches
+// The folder itself, removed or moved whole, and this checkout's git dir above it: both read from `.git` where the
+// command runs, so a project folder named `js-harness` is not it, another project's `.git` is not it, and an absolute
+// path to this one is not followed. A glob in the folder, or in the git dir, takes what it matches
 // (`globTakesRecord`).
-const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git\/js-harness\/?$|^\.git\/?$/i;
-const RECORDS_GLOB = /(?:^|\/)\.git\/(?:(js-harness)\/)?([^/]*[*?[][^/]*)$/i;
+const COMMON_RECORDS_FOLDER = /^\.git(?:\/js-harness)?\/?$/i;
+const RECORDS_GLOB = /^\.git\/(?:(js-harness)\/)?([^/]*[*?[][^/]*)$/i;
 
 // A glob from where the command runs that can name `.git`: a shell's `*` leaves out a dot file, so it opens with one.
 const GIT_DIR_GLOB = /^(\.[^/]*[*?[][^/]*)$/;
@@ -555,7 +555,7 @@ const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
 // A write call the code names without calling it: passed on, held or destructured.
-const HELD_WRITE = /\b(?:appendFile|writeFile|createWriteStream|copyFile|appendJsonLine)(?:Sync)?\b(?!\s*\()/;
+const HELD_WRITE = /\b(?:appendFile|writeFile|createWriteStream|copyFile|appendJsonLine|rename|truncate|unlink)(?:Sync)?\b(?!\s*\()/;
 // The package's constants and functions that name a record, each with the record it names.
 export const RECORD_HANDLES = Object.freeze({
   LENS_REVIEWS_FILE: 'lens-reviews.jsonl',

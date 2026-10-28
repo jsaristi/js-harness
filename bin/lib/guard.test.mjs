@@ -556,10 +556,10 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     'cp -vt .git/js-harness /tmp/codex-reviews.jsonl',
     'mv -ft .git/js-harness /tmp/lens-reviews.jsonl',
     'rm -rf .git/js-harness',
-    'rm -rf D:/r/.git/js-harness/',
+    `node -e "const r = fs.renameSync; r('x', '${RECORD}')"`,
     // Moving the folder away loses every record as its removal does (gentle-ai R3 on 9c291a1e).
     'mv .git/js-harness /tmp/kept',
-    'mv D:/r/.git/js-harness/ D:/r/.git/old',
+    'mv .git/js-harness/ .git/old',
     // `-t` names the target, so the folder after it is a source (Codex P2 and the reliability lens on d61b5588).
     'mv -t /tmp .git/js-harness',
     'mv --target-directory=/tmp .git/js-harness',
@@ -690,6 +690,8 @@ test('reading a record, the commands that write one, and text that only names on
     // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
     'rm -rf vendor/lib/.git',
     'rm -rf /tmp/scratch/.git',
+    'rm -rf vendor/.git/js-harness',
+    'rm -rf vendor/.git/js-harness/*',
     // A write call held but given no record, and a record's constant only read (gentle-ai R3 on 0e192478).
     'node -e "const w = fs.writeFileSync; w(\'/tmp/x.json\', l)"',
     'node -e "console.log(m.LENS_REVIEWS_FILE)"',
