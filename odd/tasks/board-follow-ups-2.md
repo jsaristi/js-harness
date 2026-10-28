@@ -47,15 +47,38 @@ on; `--address` answers "none" past record lines it skipped; `stop` says a workt
    with a note, after verifying the pin. Do not run a refresh: the lead does."
 
 ## Tasks
-- [ ] T1 (verify) S1: the stretch protocol's goals, checked; the box ticked only if all hold.
-- [ ] T2 (build) S2: the board with no sessions folder lists the recorded background sessions. Route: inline.
-- [ ] T3 (build) S3: a start or resume whose record line cannot be appended leaves a stranded entry file. Route: inline.
-- [ ] T4 (build) S4: `--address` not known past skipped lines; `stop` names a worktree that was never there. Route: inline.
-- [ ] T5 (verify) S4: refreshAfterLand and REGEXP_EXEC, already fixed on main, checked.
-- [ ] T6 (verify) S5: the two readings, written below.
+- [x] T1 (verify) S1: the stretch protocol's goals, checked: the fifth does not hold, so the box stays open (L2).
+- [x] T2 (build) S2: the board with no sessions folder lists the recorded background sessions: `7f068b91`.
+- [x] T3 (build) S3: a start or resume whose record line cannot be appended leaves a stranded entry file: `e44519b7`,
+  `59767bcd` (Codex P2: undone while the record is unread; written whole).
+- [x] T4 (build) S4: `--address` not known past skipped lines (`7f068b91`); `stop` names a worktree that was never
+  there (`e44519b7`). Cheap follow-ups taken: R3-005's two paths (`7f068b91`), projectRoots outside the main checkout
+  and the untested resume paths (`e16b5770`). Left: `waitForQuiet` calling `lookOnce` and `undoSession` taking `started`
+  from its caller (refactors, no behavior); a resume that exits non-zero after printing an id (a design choice); the
+  uninstall's kept report of a replaced job (bin/uninstall.mjs, outside the surfaces); the chmod test under root.
+  New: `--address`'s unread line names the main folder's path for a session read from its worktree's folder.
+- [x] T5 (verify) S4: refreshAfterLand and REGEXP_EXEC, already fixed on main, checked (L3).
+- [x] T6 (verify) S5: the two readings (L4, L5).
 - [ ] T7 (verify) the verifier, Codex, the lenses and gentle-ai per slice; push, PR, `notify --kind ready`.
 
+## Next step (state, ~23:40Z)
+Commits: e44519b7 (stranded entry, stop worktree), 7f068b91 (board and --address with no folder), e16b5770 (tests),
+59767bcd (Codex P2 fix + atomic stranded write). Both gentle-ai slices approved and acknowledged. Next: push, PR,
+`js-harness notify --to orchestrator --kind ready --pr <n>`, summary in docs/sessions/, `notify --kind closed --summary`.
+
 ## Reviews
+- Codex `62315e6..e16b577`: incorrect (0.96), one P2 (stranded entries unreachable while the record is unread);
+  recheck `e16b577..59767bc`: correct (0.97), 1 of 1 fixed.
+- Claude lenses risk, resilience, reliability, readability over `62315e6..59767bc`: 4 complete, 0 findings.
+- Independent verifier on `62315e6..7f068b9`: the same P2, and a torn stranded file no stop could close; both fixed in
+  `59767bcd`.
+- gentle-ai on `62315e61..e44519b7` (slice 1: `e44519b7`; worktree jh77-a, high (item 1, escalated), four lenses,
+  lineage review-9f7b9f640d66d759): approved and acknowledged; seven warnings and three suggestions, non-blocking.
+  R4-strand-nonatomic-write and the unread-record path are fixed in `59767bcd`; the rest are follow-ups (R1-001,
+  R2-001, R2-002, R3-001 to R3-005, R4-missing-worktree-on-retry, in the job's capture file).
+- gentle-ai on `e44519b7..59767bcd` (slice 2: `7f068b91`, `e16b5770`, `59767bcd`; high (item 1, escalated), four
+  lenses, lineage review-faa53f21ae9ee25e): approved and acknowledged; five warnings and three suggestions, non-blocking,
+  left as follow-ups (R1-001, R2-001, R2-002, R2-003, R3-001, R3-002, R3-003, R4-001, in the job's capture file).
 
 ## Log
 - L1 The brief, 2026-10-28T22:33Z: `C:\Users\Oficina\.js-harness\background\briefs\2026-10-28T22-33-50-006Z-6322ae93.md`.
