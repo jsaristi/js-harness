@@ -485,10 +485,18 @@ const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
 const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git\/js-harness\/?$|^\.git\/?$/i;
 const RECORDS_GLOB = /(?:^|\/)\.git\/(?:(js-harness)\/)?([^/]*[*?[][^/]*)$/i;
 
-/** Whether `arg` is a glob in the records' folder that can match a record's name, or one in the git dir that can match
- * the folder. */
+// A glob from where the command runs that can name `.git`: a shell's `*` leaves out a dot file, so it opens with one.
+const GIT_DIR_GLOB = /^(\.[^/]*[*?[][^/]*)$/;
+
+/** Whether `arg` is a glob in the records' folder that can match a record's name, one in the git dir that can match the
+ * folder, or one that can match the git dir itself; a trailing slash changes none of these. */
 function globTakesRecord(arg) {
-  const [, inFolder, glob] = RECORDS_GLOB.exec(slashed(arg)) ?? [];
+  const path = slashed(arg).replace(/(.)\/+$/, '$1');
+  const inGit = RECORDS_GLOB.exec(path);
+  const top = GIT_DIR_GLOB.exec(path);
+  const [names, glob] = inGit !== null
+    ? [inGit[1] === undefined ? ['js-harness'] : REVIEW_RECORD_FILES, inGit[2]]
+    : [['.git'], top?.[1]];
   if (glob === undefined) return false;
   // `*`, `?` and a bracketed class as the shell reads them (`[!…]` or `[^…]` negated), every other character as itself.
   const source = glob.replace(/\[([!^]?)(\]?[^\]]*)\]|\*|\?|[.+^${}()|\\[\]]/g, (part, negated, members) => {
@@ -503,7 +511,7 @@ function globTakesRecord(arg) {
   } catch {
     return true;
   }
-  return (inFolder === undefined ? ['js-harness'] : REVIEW_RECORD_FILES).some((name) => pattern.test(name));
+  return names.some((name) => pattern.test(name));
 }
 
 /** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */
@@ -556,7 +564,7 @@ export function reviewRecordWriteRefusal(command) {
 /** What the shell command `command` writes of the review records, said as a refusal opens, or null. A record is written
  * by a redirection to it, by a command of `WRITES_EACH` given it, by one of `WRITES_INTO` aimed at it or at the records'
  * folder with a record's name, by `sed` or `perl` with an in-place option, by `dd of=` it, by `rm` of the records'
- * folder, by `bash -c` (or `sh`, `zsh`, `dash`) of a script that does, and by an interpreter's command line whose
+ * folder, by `bash -c` (or `sh`, `zsh`, `dash`) or `eval` of a script that does, and by an interpreter's command line whose
  * write call is given it or that calls a function of this package that appends a record. Reading one passes, and so
  * does text in quotes or a heredoc's body. A script fed on standard input, a path held in a shell variable and a `cd`
  * into the folder are not followed. */
@@ -595,6 +603,7 @@ function segmentRecordWrite(words, redirected) {
   if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
   if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
+  if (program === 'eval') return recordWriteOf(args.join(' '));
   if (SHELLS.has(program)) {
     const flag = args.findIndex((arg) => /^-[A-Za-z]*c$/.test(arg));
     return flag === -1 || args[flag + 1] === undefined ? null : recordWriteOf(args[flag + 1]);

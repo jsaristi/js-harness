@@ -567,6 +567,13 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     // A glob in the git dir that can match the records' folder (gentle-ai R3 on b98b42a6).
     'rm -rf .git/*',
     'rm -rf .git/js-harn*',
+    // The same with a trailing slash, a glob that takes the git dir, and eval (gentle-ai R3 on 1ac52968).
+    'rm -rf .git/*/',
+    'rm -rf .git/js-harn*/',
+    'rm -rf .g*',
+    'rm -rf ./.gi?',
+    `eval 'echo x >> ${RECORD}'`,
+    'eval rm -rf .git/js-harness',
     'rm -rf .git',
     'rm -rf ./.git/',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
@@ -658,7 +665,6 @@ test('reading a record, the commands that write one, and text that only names on
     'mv -t .git/js-harness /tmp/notes.txt',
     'node -e "setTimeout(() => console.log(\'appendLensReview(\'), 0)"',
     'node -e "setTimeout(function () { console.log(\'appendLensReview(\') }, 0)"',
-    // Space before the function (the reliability lens on d153e61e).
     // A glob in the records' folder that can match no record (Codex P2 on d153e61e).
     'rm -f .git/js-harness/*.tmp',
     'rm -f .git/js-harness/sessions*.jsonl',
@@ -668,6 +674,10 @@ test('reading a record, the commands that write one, and text that only names on
     // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
     'rm -rf vendor/lib/.git',
     'rm -rf /tmp/scratch/.git',
+    // A shell's `*` leaves out a dot file, so it takes no `.git` (gentle-ai R3 on 1ac52968).
+    'rm -rf *',
+    'rm -rf ./*',
+    // Space before the function (the reliability lens on d153e61e).
     'node -e "setTimeout( () => console.log(\'appendLensReview(\'), 0)"',
     'node -e "setTimeout(\n  function () { console.log(\'appendLensReview(\') }, 0)"',
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
