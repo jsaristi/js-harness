@@ -18,8 +18,11 @@ const readRepo = (file) => {
 };
 // What a hook answers with: a message to the session or the model, or a decision with its reason.
 const HOOK_OUTPUT = /\bsystemMessage\b|\badditionalContext\b|\bpermissionDecisionReason\b|decision: 'block'|"decision"/;
-// This list and the coverage code name those keys without building a message.
-const NOT_PRODUCERS = new Set(['bin/lib/rules-sources.mjs', 'bin/lib/rules-coverage.mjs']);
+// What builds a prompt an agent is sent: a function named for it, and the pause notice.
+const PROMPT_BUILDER = /export function (?:\w+Prompt|cutRule)\(/;
+// This list and the coverage code name those keys without building a message, and runPrompt reads which prompt a
+// review run was asked with, a word.
+const NOT_PRODUCERS = new Set(['bin/lib/rules-sources.mjs', 'bin/lib/rules-coverage.mjs', 'bin/lib/codex-review-runs.mjs']);
 
 /** Every module under `dir` of the repository, tests and test kits left out, as repository paths. */
 function modulesUnder(dir) {
@@ -46,9 +49,10 @@ test("every file install writes whole is a source, one for both hosts, and so ar
   for (const source of sources) assert.ok(source.text.trim().length > 0, `${source.id} has text`);
 });
 
-test('every module that answers a hook with a message is a source of messages', () => {
-  const found = modulesUnder('bin').filter((rel) => !NOT_PRODUCERS.has(rel) && HOOK_OUTPUT.test(fs.readFileSync(path.join(REPO, rel), 'utf8'))).sort();
-  assert.deepEqual([...MESSAGE_SOURCES].sort(), found, 'add a new producer of hook messages to MESSAGE_SOURCES, and remove one that no longer is');
+test('every module that answers a hook with a message or builds a prompt is a source of messages', () => {
+  const builds = (text) => HOOK_OUTPUT.test(text) || PROMPT_BUILDER.test(text);
+  const found = modulesUnder('bin').filter((rel) => !NOT_PRODUCERS.has(rel) && builds(fs.readFileSync(path.join(REPO, rel), 'utf8'))).sort();
+  assert.deepEqual([...MESSAGE_SOURCES].sort(), found, 'add a new producer of hook messages or prompts to MESSAGE_SOURCES, and remove one that no longer is');
 });
 
 test('every Markdown file init writes into a new project is the text of a source', () => {

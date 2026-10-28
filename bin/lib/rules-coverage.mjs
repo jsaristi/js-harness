@@ -33,7 +33,9 @@ const LIST_MARK = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/;
 const ITEM = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
 const FENCE = /^\s*(`{3,}|~{3,})/;
 const HEADING = /^\s{0,3}#{1,6}(?:\s|$)/;
-const MARKER = /^\s*<!--.*-->\s*$/;
+// A block's marker line, which tools read and rewrite: gentle-ai's, and js-harness's with its hash. Any other comment
+// is words an agent reads, and a span.
+const MARKER = /^\s*<!--\s*(?:\/?gentle-ai:[a-z0-9-]+|js-harness block (?:end|[0-9a-f]+:.*?))\s*-->\s*$/;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
 const TABLE_RULE = /^\s*\|?(?:\s*:?-+:?\s*\|)+\s*:?-*:?\s*\|?\s*$/;
 // Where a sentence ends: its mark, any closing quote, bracket or emphasis, then space before a capital, a digit or
@@ -83,7 +85,7 @@ function sentencesOf(text, start, end) {
 }
 
 /** The spans of `text`, in order: `{ id, kind, text, start, end }`, `kind` one of `sentence`, `item`, `row`, `code`
- * and `line`. A heading, a marker comment, a table's rule line and a blank line are structure, and no span. */
+ * `line` and `heading`. A block's marker comment, a table's rule line and a blank line are structure, and no span. */
 export function cutSpans(text) {
   const lines = linesOf(text);
   const spans = [];
@@ -109,7 +111,10 @@ export function cutSpans(text) {
       const last = Math.min(close, lines.length - 1);
       push('code', start, lines[last].end);
       index = last + 1;
-    } else if (line.trim() === '' || HEADING.test(line) || MARKER.test(line) || TABLE_RULE.test(line)) {
+    } else if (line.trim() === '' || MARKER.test(line) || TABLE_RULE.test(line)) {
+      index += 1;
+    } else if (HEADING.test(line)) {
+      push('heading', start, lines[index].end);
       index += 1;
     } else if (TABLE_ROW.test(line)) {
       push('row', start, lines[index].end);
@@ -234,8 +239,9 @@ export const entryHash = (entry) => (typeof entry === 'string' ? entry : entry.h
 /** `entries`, a source's spans as the register lists them in order, against `spans`, its current untied spans in
  * order: `kept` pairs a span with its entry, `edited` pairs a span with the entry it replaced one for one in the same
  * place, `added` are spans with no entry, and `gone` entries with no span. The pairing is the longest common
- * sequence of hashes; in each stretch between two kept spans, the first entries and spans pair up as edits, and what
- * is left over is gone or added. */
+ * sequence of hashes; a span that left that sequence and still has an entry of its hash elsewhere moved, and is
+ * kept; then in each stretch between two kept spans, the first entries and spans pair up as edits, and what is left
+ * over is gone or added. */
 export function alignSpans(entries, spans) {
   const a = entries.map(entryHash);
   const b = spans.map((span) => span.id);
@@ -245,33 +251,41 @@ export function alignSpans(entries, spans) {
     for (let j = b.length - 1; j >= 0; j -= 1) lengths[i][j] = a[i] === b[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
   }
   const out = { kept: [], edited: [], added: [], gone: [] };
-  let removed = [];
-  let inserted = [];
-  const settle = () => {
-    const pairs = Math.min(removed.length, inserted.length);
-    for (let k = 0; k < pairs; k += 1) out.edited.push({ entry: removed[k], span: inserted[k] });
-    out.gone.push(...removed.slice(pairs));
-    out.added.push(...inserted.slice(pairs));
-    removed = [];
-    inserted = [];
-  };
+  const stretches = [{ removed: [], inserted: [] }];
   let i = 0;
   let j = 0;
   while (i < a.length || j < b.length) {
     if (i < a.length && j < b.length && a[i] === b[j]) {
-      settle();
       out.kept.push({ entry: entries[i], span: spans[j] });
+      stretches.push({ removed: [], inserted: [] });
       i += 1;
       j += 1;
     } else if (j < b.length && (i === a.length || lengths[i][j + 1] >= lengths[i + 1][j])) {
-      inserted.push(spans[j]);
+      stretches.at(-1).inserted.push(spans[j]);
       j += 1;
     } else {
-      removed.push(entries[i]);
+      stretches.at(-1).removed.push(entries[i]);
       i += 1;
     }
   }
-  settle();
+  // A moved span: the same words left one place and came back in another, so it is neither gone nor new.
+  const left = stretches.flatMap((stretch) => stretch.removed);
+  for (const stretch of stretches) {
+    stretch.inserted = stretch.inserted.filter((span) => {
+      const at = left.findIndex((entry) => entryHash(entry) === span.id);
+      if (at < 0) return true;
+      out.kept.push({ entry: left[at], span });
+      for (const other of stretches) other.removed = other.removed.filter((entry) => entry !== left[at]);
+      left.splice(at, 1);
+      return false;
+    });
+  }
+  for (const { removed, inserted } of stretches) {
+    const pairs = Math.min(removed.length, inserted.length);
+    for (let k = 0; k < pairs; k += 1) out.edited.push({ entry: removed[k], span: inserted[k] });
+    out.gone.push(...removed.slice(pairs));
+    out.added.push(...inserted.slice(pairs));
+  }
   return out;
 }
 
@@ -357,7 +371,7 @@ export function coverageOf({ register, sources, messages, rules, cases, readFile
   for (const file of messages) {
     const owed = register.messages.includes(file);
     report.messages.push({ path: file, owed });
-    if (!owed) findings.push(`${file} builds hook messages and is not in the register: a source of messages after the baseline is not owed, so its messages are cut and declared`);
+    if (!owed) findings.push(`${file} builds messages or prompts an agent is sent and is not in the register: a source of messages after the baseline is not owed, so its messages are cut and declared`);
   }
   for (const file of register.messages) if (!messages.includes(file)) stale.push(`the register lists ${file} as a source of messages, which it is no more ${REFRESH}`);
 

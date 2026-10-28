@@ -10,9 +10,9 @@ const BASELINE = '2026-10-28';
 
 // ── spans ───────────────────────────────────────────────────────────────────────────────────────
 
-test('a paragraph is cut into its sentences, a list item and a table row are one span each, by their text', () => {
+test('a paragraph is cut into its sentences; a heading, a list item, a table row and a comment are one span each', () => {
   const text = [
-    '# A heading is no span',
+    '# A heading is a span',
     '',
     'The first sentence ends here. The second one follows it',
     'over a wrapped line! A third? Yes.',
@@ -24,10 +24,15 @@ test('a paragraph is cut into its sentences, a list item and a table row are one
     '| a | b |',
     '|---|---|',
     '| one | two |',
-    '<!-- a marker line -->',
+    '<!-- gentle-ai:persona -->',
+    '<!-- /gentle-ai:persona -->',
+    '<!-- js-harness block 68e09fd67f5a: sync renders the lines to the end marker -->',
+    '<!-- js-harness block end -->',
+    '<!-- Always keep this file short. -->',
   ].join('\n');
   const spans = cutSpans(text);
   assert.deepEqual(spans.map((span) => [span.kind, span.text]), [
+    ['heading', '# A heading is a span'],
     ['sentence', 'The first sentence ends here.'],
     ['sentence', 'The second one follows it\nover a wrapped line!'],
     ['sentence', 'A third?'],
@@ -36,6 +41,7 @@ test('a paragraph is cut into its sentences, a list item and a table row are one
     ['item', '1. A numbered item.'],
     ['row', '| a | b |'],
     ['row', '| one | two |'],
+    ['sentence', '<!-- Always keep this file short. -->'],
   ]);
   for (const span of spans) assert.equal(text.slice(span.start, span.end), span.text, 'each span is where its offsets say');
 });
@@ -130,6 +136,15 @@ test('alignment keeps a span in place, pairs a one-for-one change as an edit, an
   assert.deepEqual(shrunk.gone, ['b']);
 });
 
+test('a span moved to another place keeps its entry, even where its new place holds an edit; only new words are new', () => {
+  const moved = alignSpans(['a', 'b', 'c', 'd'], [{ id: 'd' }, { id: 'a' }, { id: 'b' }, { id: 'c' }]);
+  assert.deepEqual(moved.kept.map(({ entry }) => entry).sort(), ['a', 'b', 'c', 'd']);
+  assert.deepEqual([moved.edited, moved.added, moved.gone], [[], [], []]);
+  const mixed = alignSpans(['a', 'x', 'b', 'c'], [{ id: 'c' }, { id: 'a' }, { id: 'X' }, { id: 'b' }]);
+  assert.deepEqual(mixed.edited.map(({ entry, span }) => [entry, span.id]), [['x', 'X']]);
+  assert.deepEqual([mixed.added, mixed.gone], [[], []]);
+});
+
 test("a source's coverage: tied spans, owed, context, an edited owed span still owed, a changed context reopened, a new span a gap", () => {
   const text = [
     'Always ask the user before any paid run starts.',
@@ -207,7 +222,7 @@ test('rules check refuses each new gap: a span, a rule with no control, a messag
   assert.deepEqual(report.findings, [
     `skill: ${UNDECLARED('A brand new sentence.')}`,
     `new-skill: ${UNDECLARED('Its only sentence.')}`,
-    'bin/new-hook.mjs builds hook messages and is not in the register: a source of messages after the baseline is not owed, so its messages are cut and declared',
+    'bin/new-hook.mjs builds messages or prompts an agent is sent and is not in the register: a source of messages after the baseline is not owed, so its messages are cut and declared',
     'rule "ask-first": no control: it names a check, an eval case, a line, a protocol, a measurement or a dated owed',
     'the register holds a control for "no-such-rule", which is no live rule',
     'the case new-case names no rule: it names the rules it tests in task.json "rules"',

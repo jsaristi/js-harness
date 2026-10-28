@@ -13,16 +13,22 @@ import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 /** The files of this repository that are sources, read where `rules coverage` runs. */
 export const REPOSITORY_FILES = ['AGENTS.md', 'CLAUDE.md'];
 
-/** The modules that build a hook's messages (`systemMessage`, `additionalContext`, a decision and its reason), each a
- * source owed whole since the baseline. */
+/** The modules that build at run time a text an agent is sent: a hook's messages (`systemMessage`,
+ * `additionalContext`, a decision and its reason), a review's or a background session's prompt, the pause notice
+ * (`cutRule`). Each is a source owed whole since the baseline. */
 export const MESSAGE_SOURCES = [
   'bin/backup.mjs',
   'bin/doctor.mjs',
   'bin/guard.mjs',
+  'bin/lib/background.mjs',
+  'bin/lib/codex-review-prompt.mjs',
+  'bin/lib/codex-review-recheck.mjs',
   'bin/lib/guard.mjs',
   'bin/lib/hook-entries.mjs',
+  'bin/lib/lens-prompts.mjs',
   'bin/lib/payload.mjs',
   'bin/lib/rules-reach.mjs',
+  'bin/lib/sessions.mjs',
   'bin/reply.mjs',
   'bin/resume.mjs',
 ];

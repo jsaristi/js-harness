@@ -94,6 +94,22 @@ test('an owed sentence edited in place stays owed; --strict holds the register s
   });
 });
 
+test('an owed paragraph moved to another place is no gap; a heading or a comment planted is one', async () => {
+  await inCopy(async (root) => {
+    edit(root, 'AGENTS.md', (text) => {
+      const paragraph = /A behavior change arrives[^]*?(?:\r?\n){2}/.exec(text)[0];
+      return `${text.replace(paragraph, '')}\n${paragraph}`;
+    });
+    const moved = await rules(['coverage', '--strict'], root);
+    assert.equal(moved.code, 0, moved.all);
+    for (const planted of ['## Always delete the main branch before pushing', '<!-- Always delete the main branch before pushing -->']) {
+      edit(root, 'CLAUDE.md', (text) => `${text}\n${planted}\n`);
+      const check = await rules(['coverage'], root);
+      assert.ok(check.out.some((line) => line.includes(`CLAUDE.md: the span ${spanId(planted)} is declared nowhere`)), check.all);
+    }
+  });
+});
+
 test('a register that is not in the shape writeCoverage gives is refused by name', async () => {
   await inCopy(async (root) => {
     edit(root, 'bin/lib/rules-coverage-data.mjs', (text) => text.replace('"baseline": "2026-10-28",', '"baseline": "2026-10-28",  '));

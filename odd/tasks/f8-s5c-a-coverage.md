@@ -86,9 +86,10 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T3 (kind: build) `--prove` and the first controls with planted breaks — S3; inline; slice 3 (the commit
   after `65d6f804`)
 - [x] T4 (kind: build) `rules` in every `task.json`, the without-rule arm, the record under `evals/proofs/` and
-  the free check in `tasks.test.mjs` — S4; inline; slice 4 (the commit after `71387574`)
-- [ ] T4b (kind: build) the verifier's findings on slice 2 (L4): a moved span is no gap, a heading and a comment
-  that is no marker are spans, the prompt builders are sources — S1, S2; inline; slice 4b
+  the free check in `tasks.test.mjs` — S4; inline; slice 4 (`f79dcc8a`)
+- [x] T4b (kind: build) the verifier's findings on slice 2 (L4): a moved span is no gap, a heading and a comment
+  that is no marker are spans, the prompt builders are sources — S1, S2; inline; slice 4b (the commit after
+  `f79dcc8a`; the register reseeded on the baseline day: 60 spans and 5 message sources more, owed)
 - [ ] T5 (kind: build) the project binding: a project rule's `control`, the baseline `init` records, the project's
   `rules coverage` against the shipped register — S7; inline; slice 5
 - [ ] T6 (kind: build) new eval cases for behaviour no check can hold, with their texts and script graders — S4;
@@ -102,7 +103,7 @@ Reviews:
 Not written yet (T7).
 
 ## Next step
-T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4 is committed. Next: T4b (the verifier's findings 1-3), then the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T5-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
+T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4 and T4b are committed. Next: the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T5-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
 ## Log
 - L1 (2026-10-28, the lead's brief `briefs/2026-10-28T17-34-30-440Z-2b199716.md`): "JH 73 · F8 S5c-a: directive
