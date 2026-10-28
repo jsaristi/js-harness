@@ -565,6 +565,7 @@ function segmentRecordWrite(words, redirected) {
   const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
   if (WRITES_EACH.has(program) && first !== null) return writes(first);
   if (program === 'rm' && args.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command removes the folder that holds every record of a review';
+  if (program === 'mv' && args.slice(0, -1).some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command moves away the folder that holds every record of a review';
   if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
   if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
@@ -629,8 +630,8 @@ function callArguments(text, from) {
   return args;
 }
 
-// A call that runs a string as code: what that string holds is code too.
-const RUNS_TEXT = /\b(?:eval|Function|exec|compile|runIn\w*Context|runInThisContext)\s*\(/;
+// A call that runs a string as code, here or in a child process: what that string holds is code too.
+const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|setTimeout|setInterval|system|popen|Popen|check_output|check_call)\s*\(|\b(?:subprocess|child_process)\b/;
 
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
  * at the same indexes; a template literal's `${…}` stays code, and a `//` or `/* … *\/` comment opens no string. On the

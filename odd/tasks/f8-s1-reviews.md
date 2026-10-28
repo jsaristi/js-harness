@@ -283,6 +283,14 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     it): a script whose code holds any other `/` is read whole; a path in one string is a record only in the records'
     folder, while a join is still read by its parts; `open`'s mode is its second argument or `mode=`; `-t` counts last
     among short options.
+  - 9c291a1e closed those: Codex's recheck correct (0.97, both P2 fixed, 36,194 input tokens); lenses risk and
+    reliability no finding (about 6,040 input each). gentle-ai approved `e7bc4215..9c291a1e` (lineage
+    review-cc741a22bd352fda) with two warnings and a suggestion. Taken test first in the next commit (two red before
+    it): a string a child process runs (`execFileSync`, `execSync`, `subprocess.run`, `setTimeout`) is code, so the
+    script is read whole; `mv` of `.git/js-harness` away is refused as its `rm` is. Left as is: a `cp` or `mv` into a
+    folder named `js-harness` with no `.git` above it is refused for a file named like a record; it is the rule
+    `reviewRecordOf` holds for a path (`js-harness/<record>`), a refusal on the safe side, and narrowing the folder
+    alone would set the two apart.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -298,6 +306,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `e7bc4215..0a832b2a` (0a832b2a): medium, reviewed and approved (lineage review-2bb142cdacbcd360, lens reliability), two warnings and a suggestion, all taken in the next commit (L16); Codex on `d2bc8ab2..0a832b2a` incorrect on part 1 (two P2, taken), correct on part 2; lenses no finding.
 - gentle-ai on `e7bc4215..9f4d1f23` (0a832b2a, 9f4d1f23): medium, reviewed and approved (lineage review-a8c1461fb038d6d9), a warning and a suggestion, both taken in the next commit (L16); Codex's recheck of `0a832b2a..9f4d1f23` incorrect (one P2 left, taken); lenses no finding.
 - gentle-ai on `e7bc4215..b2bc9596` (0a832b2a to b2bc9596): medium, reviewed and approved (lineage review-8be2952b691d6ab9, lens reliability), a warning and two suggestions, all taken in the next commit (L16); Codex on `e7bc4215..b2bc9596` incorrect (two P2, taken); lenses on e56114a4 one warning (taken in b2bc9596), on b2bc9596 no finding.
+- gentle-ai on `e7bc4215..9c291a1e` (0a832b2a to 9c291a1e): medium, reviewed and approved (lineage review-cc741a22bd352fda, lens reliability), two warnings and a suggestion: the child-process warning and the suggestion taken in the next commit, the `js-harness` folder warning left with its reason (L16); Codex's recheck of `b2bc9596..9c291a1e` correct (0.97); lenses no finding.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -318,10 +327,10 @@ run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
 T7 (JH 69, 2026-10-28 ~12:50Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`: commits
-e7bc4215, 0a832b2a, 9f4d1f23, e56114a4, b2bc9596 and the sixth (regex `/`, literal paths, `open` mode, `-vt`). Left,
-in order: Codex `js-harness codex-review --base b2bc9596` (a recheck of the review that ended at b2bc9596) and lenses
-with `node bin/js-harness.mjs lens-review --base b2bc9596 --lenses risk,reliability --reason ...` (the branch's
-command, so the record has its run line); gentle-ai when the Stop hook offers the sixth commit; then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
+e7bc4215, 0a832b2a, 9f4d1f23, e56114a4, b2bc9596, 9c291a1e and the seventh (child processes, `mv` of the folder).
+Left, in order: Codex `js-harness codex-review --base 9c291a1e` and lenses with `node bin/js-harness.mjs lens-review
+--base 9c291a1e --lenses risk,reliability --reason ...` (the branch's command, so the record has its run line);
+gentle-ai when the Stop hook offers the seventh commit; then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
 <n>` saying the bad news: nothing works until a release with it is installed, and every in-flight branch reruns
 `lens-review` over its range once it is (older lens records stop counting); then close T7's box.
 

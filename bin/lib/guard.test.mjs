@@ -550,6 +550,9 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     'mv -ft .git/js-harness /tmp/lens-reviews.jsonl',
     'rm -rf .git/js-harness',
     'rm -rf D:/r/.git/js-harness/',
+    // Moving the folder away loses every record as its removal does (gentle-ai R3 on 9c291a1e).
+    'mv .git/js-harness /tmp/kept',
+    'mv D:/r/.git/js-harness/ D:/r/.git/old',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
     "printf '{}'>>.git/js-harness/lens-reviews.jsonl",
     `echo x>>${RECORD}`,
@@ -579,6 +582,10 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "// it\'s the record\nm.appendLensReview(root, {}) // don\'t"',
     // Two regex literals whose quotes balance blank no code between them (Codex P2 on b2bc9596).
     'node -e "const a = /\'/; fs.appendFileSync(\'.git/js-harness/lens-reviews.jsonl\', \'{}\'); const b = /\'/"',
+    // A string a child process runs is code too (gentle-ai R3 on 9c291a1e).
+    'node -e "execFileSync(\'node\', [\'-e\', \'m.appendLensReview(root, {})\'])"',
+    'node -e "require(\'child_process\').execSync(\'node -e m.startLensRun(root)\')"',
+    'python -c "subprocess.run([\'node\', \'-e\', \'m.appendLensReview(root, {})\'])"',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
