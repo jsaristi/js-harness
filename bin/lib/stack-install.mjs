@@ -13,6 +13,9 @@ const offIn = (functions, name) => functions?.[name]?.value === 'off';
 const codexWanted = (functions) => !offIn(functions, 'codexReview');
 const codeMapWanted = (functions) => !offIn(functions, 'codeMap');
 
+/** The hosted context7 server, as doctor's fix names it (bin/lib/stack.mjs). */
+const CONTEXT7_URL = 'https://mcp.context7.com/mcp';
+
 /** The rows the module runs, in the order it runs them (D2): the Codex CLI first, so a registration in Codex has a
  * Codex to register in. A row is runnable only while `wanted` holds for the project's switches. */
 export const RUNNABLE = [
@@ -34,6 +37,23 @@ export const RUNNABLE = [
     undo: ['codex', 'mcp', 'remove', 'codegraph'],
     wanted: (functions) => codeMapWanted(functions) && codexWanted(functions),
   },
+  // context7 is always on (G11, F8 S11): hosted, so its registrations are its whole install.
+  {
+    tool: 'context7',
+    dimension: 'claude',
+    kind: 'registration',
+    run: ['claude', 'mcp', 'add', '-s', 'user', '--transport', 'http', 'context7', CONTEXT7_URL],
+    undo: ['claude', 'mcp', 'remove', '-s', 'user', 'context7'],
+    wanted: () => true,
+  },
+  {
+    tool: 'context7',
+    dimension: 'codex',
+    kind: 'registration',
+    run: ['codex', 'mcp', 'add', 'context7', '--url', CONTEXT7_URL],
+    undo: ['codex', 'mcp', 'remove', 'context7'],
+    wanted: codexWanted,
+  },
 ];
 
 /** The folder a global install under `prefix` puts its binaries in: the prefix itself for npm on Windows, its `bin`
@@ -53,18 +73,21 @@ export function packageWords(pm, spec, platform, prefix = null) {
   return { run: [...pm.words, ...args], undo: [...pm.words, ...remove], env: prefix && pm.kind !== 'pnpm' ? { ...env, PATH: prefixBinOf(pm.kind, prefix, platform) } : env };
 }
 
-const GENTLE_AI_AGENTS = { claude: 'claude-code', codex: 'codex' };
-const GENTLE_AI_INSTALL = 'go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@latest';
-const GENTLE_AI_RESTORE = 'gentle-ai restore <the backup id gentle-ai install printed>';
+const PLUGIN_UNDO = ['claude plugin uninstall engram@engram', 'claude plugin marketplace remove engram'];
 
-/** gentle-ai's own install and undo for the hosts `dimensions` name: his step, never run (F1, option 1). */
-function gentleAiStep(dimensions, functions) {
-  const hosts = (dimensions.includes('installed') ? ['claude', 'codex'].filter((host) => host === 'claude' || codexWanted(functions)) : dimensions)
-    .map((host) => GENTLE_AI_AGENTS[host]);
-  const agents = hosts.join(',');
-  const steps = [...(dimensions.includes('installed') ? [GENTLE_AI_INSTALL] : []), `gentle-ai install --agents ${agents}`];
-  return { why: "gentle-ai's own installer: your step, since its uninstall is not an exact undo (F1)", steps, undo: [`gentle-ai uninstall --agents ${agents} --yes`, GENTLE_AI_RESTORE] };
-}
+/** The undo of what engram's own commands write, per dimension: the binary, and what `engram setup` writes in each
+ * host, as engram's docs and source name it (v3.6.0, `docs/AGENT-SETUP.md`, `internal/setup/setup.go`;
+ * odd/tasks/f8-s11-complements.md, L3). Named, never run: `stack install` runs only an undo it can read back. */
+export const ENGRAM_UNDO = {
+  claude: [...PLUGIN_UNDO, 'claude mcp remove engram --scope user'],
+  codex: [
+    'codex plugin remove engram@engram',
+    'codex plugin marketplace remove engram',
+    'codex mcp remove engram',
+    'delete engram-instructions.md and engram-compact-prompt.md beside the Codex config.toml',
+  ],
+  installed: ['delete the engram binary your shell runs (which engram; on Windows, where.exe engram)'],
+};
 
 const PREREQUISITE_STEPS = {
   git: 'install git (https://git-scm.com)',
@@ -76,15 +99,15 @@ function gapsOf(row, functions) {
   return MACHINE.filter((dimension) => (dimension !== 'codex' || codexWanted(functions)) && GAP_STATES.has(row?.[dimension]));
 }
 
-/** `doctor`'s fixes of `dimensions`, each named once: engram's two registrations share one `gentle-ai sync`. */
+/** `doctor`'s fixes of `dimensions`, each named once, so two dimensions that share a command name it once. */
 const fixesOf = (row, dimensions) => [...new Set(dimensions.flatMap((dimension) => [row.fix?.[dimension] ?? []].flat()))];
 
 /** The plan, as `{ mandatory, manual, optional }`:
  *  - `mandatory`: the runnable rows that are `missing`, in run order, each `{ tool, dimension, kind, run, undo, env }`
  *    (words, and the variables both are given), a package's with its `bin`;
- *  - `manual`: what he does himself, each `{ tool, dimensions, why, steps, undo }`: gentle-ai's installer (F1),
- *    engram (which it brings), a runnable row in another gap state, a login, a missing prerequisite;
- *  - `optional`: context7 and typescript-lsp gaps with `doctor`'s fix, never run.
+ *  - `manual`: what he does himself, each `{ tool, dimensions, why, steps, undo }`: engram and its plugin, by
+ *    engram's own commands (F8 S11), a runnable row in another gap state, a login, a missing prerequisite;
+ *  - `optional`: typescript-lsp's gaps with `doctor`'s fix, never run.
  * `rows` are `probeStack`'s (a row its switch hides is absent), `functions` the resolved switches, `prerequisites`
  * `[{ id, state }]`, `pm` the resolved package manager `{ words, kind }`, `prefix` the folder packages go to (`null`:
  * the manager's own). A state that is no gap (`unknown`, `n/a`) plans nothing. */
@@ -107,7 +130,7 @@ export function planStack({ rows, functions, prerequisites = [], pm, prefix = nu
   }
 
   // A runnable row in a gap state other than `missing` is not run: grouped per tool, with doctor's fix.
-  for (const tool of ['codex', 'codegraph']) {
+  for (const tool of ['codex', 'codegraph', 'context7']) {
     const r = byId.get(tool);
     if (!r || (tool === 'codegraph' && !codeMapWanted(functions))) continue;
     const others = gapsOf(r, functions).filter((dimension) => runnableKeys.has(`${tool}.${dimension}`) && r[dimension] !== 'missing'
@@ -117,21 +140,25 @@ export function planStack({ rows, functions, prerequisites = [], pm, prefix = nu
     }
   }
 
-  // gentle-ai's installer is the step only for what is missing; a stale hook or an old version keeps doctor's own fix
-  // (Codex on 553900a..12e46c4).
-  const gentleAi = byId.get('gentle-ai');
-  const gentleAiGaps = gentleAi ? gapsOf(gentleAi, functions) : [];
-  const gentleAiMissing = gentleAiGaps.filter((dimension) => gentleAi[dimension] === 'missing');
-  const gentleAiOthers = gentleAiGaps.filter((dimension) => gentleAi[dimension] !== 'missing');
-  if (gentleAiMissing.length > 0) manual.push({ tool: 'gentle-ai', dimensions: gentleAiMissing, ...gentleAiStep(gentleAiMissing, functions) });
-  if (gentleAiOthers.length > 0) {
-    manual.push({ tool: 'gentle-ai', dimensions: gentleAiOthers, why: `${gentleAiOthers.map((d) => gentleAi[d]).join(', ')}: doctor's fix`, steps: fixesOf(gentleAi, gentleAiOthers), undo: [] });
-  }
-
+  // engram's own commands write more than one thing and read their own entry back, so they are his (F8 S11, L4).
   const engram = byId.get('engram');
   const engramGaps = engram ? gapsOf(engram, functions) : [];
   if (engramGaps.length > 0) {
-    manual.push({ tool: 'engram', dimensions: engramGaps, why: "brought by gentle-ai's installer, your step (F1)", steps: fixesOf(engram, engramGaps), undo: [] });
+    const undo = ['claude', 'codex', 'installed'].filter((dimension) => engramGaps.includes(dimension)).flatMap((dimension) => ENGRAM_UNDO[dimension]);
+    manual.push({ tool: 'engram', dimensions: engramGaps, why: "engram's own install and setup: your step, since setup writes more than one thing and reads its own entry back", steps: fixesOf(engram, engramGaps), undo });
+  }
+  // The plugin: `engram setup claude-code` installs and enables it, so a missing one is that step alone.
+  const plugin = byId.get('engram-plugin');
+  const pluginGaps = plugin ? gapsOf(plugin, functions) : [];
+  if (pluginGaps.length > 0) {
+    const missing = plugin.installed === 'missing';
+    manual.push({
+      tool: 'engram-plugin',
+      dimensions: pluginGaps,
+      why: missing ? "engram's own setup installs it: your step" : 'installed and not enabled: your step',
+      steps: fixesOf(plugin, missing ? ['installed'] : pluginGaps),
+      undo: missing ? PLUGIN_UNDO : ['claude plugin disable engram@engram'],
+    });
   }
 
   const codex = byId.get('codex');
@@ -144,7 +171,7 @@ export function planStack({ rows, functions, prerequisites = [], pm, prefix = nu
   }
 
   const optional = [];
-  for (const tool of ['context7', 'typescript-lsp']) {
+  for (const tool of ['typescript-lsp']) {
     const r = byId.get(tool);
     const gaps = r ? gapsOf(r, functions) : [];
     if (gaps.length > 0) optional.push({ tool, dimensions: gaps, steps: fixesOf(r, gaps) });

@@ -14,7 +14,7 @@ function row(id, cells = {}) {
 }
 
 function stack(overrides = {}, prerequisites = [{ id: 'git', state: 'ok' }, { id: 'gh', state: 'ok' }]) {
-  const rows = ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => row(id, overrides[id]));
+  const rows = ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => row(id, overrides[id]));
   return () => ({ rows, functions: ON, prerequisites });
 }
 
@@ -42,18 +42,18 @@ test('stack lists each install with its command and its undo, and exits 1', asyn
 });
 
 test('stack names his own steps and exits 1 when only they are left', async () => {
-  const { code, out } = await run([], { read: stack({ 'gentle-ai': { installed: 'missing' } }) });
+  const { code, out } = await run([], { read: stack({ engram: { claude: 'missing', fix: { claude: 'engram setup claude-code' } } }) });
   assert.equal(code, 1);
   assert.match(out, /Your steps \(never run\)/);
-  assert.match(out, /gentle-ai install --agents claude-code,codex/);
-  assert.match(out, /undo: gentle-ai uninstall --agents claude-code,codex --yes/);
+  assert.match(out, /engram setup claude-code/);
+  assert.match(out, /undo: claude plugin uninstall engram@engram/);
 });
 
 test('optional gaps alone exit 0', async () => {
-  const { code, out } = await run([], { read: stack({ context7: { claude: 'missing' } }) });
+  const { code, out } = await run([], { read: stack({ 'typescript-lsp': { installed: 'missing', codex: 'n/a' } }) });
   assert.equal(code, 0);
   assert.match(out, /Optional \(never run\)/);
-  assert.match(out, /claude fix context7/);
+  assert.match(out, /fix typescript-lsp/);
 });
 
 test('stack --json prints the plan in the shape onboarding reads', async () => {
@@ -136,12 +136,13 @@ test('stack --help and stack install --help print the usage of both, with the --
   assert.equal(read, 0);
 });
 
-test('stack takes an empty JS_HARNESS_HOME as unset: gentle-ai state is read from the user home, not the working directory', () => {
+test("stack takes an empty JS_HARNESS_HOME as unset: engram's registration is read from the user home, not the working directory", () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-stack-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
   try {
-    fs.mkdirSync(path.join(home, '.gentle-ai'));
-    fs.writeFileSync(path.join(home, '.gentle-ai', 'state.json'), JSON.stringify({ installed_agents: ['claude-code'] }));
+    // Registered in Claude Code in the user home: read from there, `claude` is no gap; read from the working
+    // directory, which holds nothing, it would be one. Codex's side is missing either way.
+    fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { engram: { command: 'engram' } } }));
 
     const run = spawnSync(process.execPath, [fileURLToPath(new URL('./js-harness.mjs', import.meta.url)), 'stack', '--json', '--cwd', work], {
       cwd: work,
@@ -149,12 +150,10 @@ test('stack takes an empty JS_HARNESS_HOME as unset: gentle-ai state is read fro
       env: { ...process.env, HOME: home, USERPROFILE: home, JS_HARNESS_HOME: '' },
     });
 
-    // The row must be there and still ask for codex: an absent row would also hold "no claude". It asks for
-    // `installed` too on a machine without gentle-ai, so only codex and claude are pinned.
-    const gentleAi = JSON.parse(run.stdout).manual.filter((row) => row.tool === 'gentle-ai');
-    assert.equal(gentleAi.length, 1, run.stdout);
-    assert.equal(gentleAi[0].dimensions.includes('codex'), true, run.stdout);
-    assert.equal(gentleAi[0].dimensions.includes('claude'), false, run.stdout);
+    const engram = JSON.parse(run.stdout).manual.filter((row) => row.tool === 'engram');
+    assert.equal(engram.length, 1, run.stdout);
+    assert.equal(engram[0].dimensions.includes('codex'), true, run.stdout);
+    assert.equal(engram[0].dimensions.includes('claude'), false, run.stdout);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });

@@ -438,6 +438,11 @@ test('tuiMain shows the update a named source folder holds, and its commands rea
   }
 });
 
+/** How many steps down Install is in the menu the first frame drew: one more when Install the stack is there. */
+function installIndex(stdout) {
+  return MENU_ITEMS.indexOf('install') + (stdout.chunks.join('').includes('Install the stack') ? 1 : 0);
+}
+
 test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
@@ -446,7 +451,8 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
   try {
     const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
     await flush();
-    for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
+    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install.
+    for (let i = 0; i < installIndex(stdout); i++) stdin.emit('data', 'j'); // down to Install
     stdin.emit('data', '\r'); // run it
     await flush();
     stdin.emit('data', 'q');
@@ -476,7 +482,8 @@ test('tuiMain takes an empty JS_HARNESS_HOME as no home: the install goes to the
   try {
     const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: '' }, spawn, { stdin, stdout });
     await flush();
-    for (let i = 0; i < MENU_ITEMS.indexOf('install'); i++) stdin.emit('data', 'j'); // down to Install
+    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install.
+    for (let i = 0; i < installIndex(stdout); i++) stdin.emit('data', 'j'); // down to Install
     stdin.emit('data', '\r'); // run it
     await flush();
     stdin.emit('data', 'q');
