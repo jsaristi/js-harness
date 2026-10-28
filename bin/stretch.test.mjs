@@ -37,7 +37,7 @@ function scratch({ notices = [], starts = [], gates = [] } = {}) {
 }
 
 /** Runs the command in `place` at hour `hours` after T0; `goals` maps a goal's command to its exit. */
-async function stretch(place, argv, { hours = 0, goals = {}, ran = [] } = {}) {
+async function stretch(place, argv, { hours = 0, goals = {}, ran = [], deps = {} } = {}) {
   const out = [];
   const err = [];
   const code = await stretchMain([...argv, '--home', place.home, '--cwd', place.project], {}, {
@@ -52,6 +52,7 @@ async function stretch(place, argv, { hours = 0, goals = {}, ran = [] } = {}) {
       ran.push(command);
       return { status: goals[command] ?? 0, stdout: '', stderr: '' };
     },
+    ...deps,
   });
   return { code, out: out.join('\n'), err: err.join('\n') };
 }
@@ -167,6 +168,30 @@ test('close runs the goals, records the items measured, and the next stretch\'s 
   assert.deepEqual(next.items.find((one) => one.id === 'W1').correction, { factor: 2, samples: 3, from: 'kind' });
   // docs has no history of its own: every kind together says 2.
   assert.deepEqual(next.items.find((one) => one.id === 'W2').corrected, [8, 12]);
+});
+
+test('a last line an interrupted write cut is ended before the next event, so the event is read', async () => {
+  const place = scratch();
+  const file = stretchFile(place.home, projectSlug(place.project));
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `{"schema":"${RECORD_SCHEMA}","id":"cut`);
+  assert.equal((await stretch(place, ['open', '--plan', planFile(place, PLAN)])).code, 0);
+  assert.equal((await stretch(place, ['status'], { hours: 1 })).code, 0);
+});
+
+test('a Codex record that is there and cannot be read is said unavailable, never read as no failure', async () => {
+  const place = scratch();
+  const gitDir = path.join(place.project, '.git');
+  // The record's place is a folder: reading it fails, as a file locked or without permission would.
+  fs.mkdirSync(path.join(gitDir, 'js-harness', 'codex-review-runs.jsonl'), { recursive: true });
+  const run = (command, args) => (command === 'git' && args[0] === 'rev-parse'
+    ? { status: 0, stdout: `${args.slice(1).map(() => gitDir).join('\n')}\n`, stderr: '' }
+    : { status: 1, stdout: '', stderr: 'no' });
+  const deps = { run, readCodexRuns: undefined, readLands: undefined };
+  assert.equal((await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps })).code, 0);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 1, deps })).out);
+  assert.match(view.unavailable.codex ?? '', /EISDIR/);
+  assert.equal(view.unavailable.lands, undefined);
 });
 
 test('status and close with no stretch open exit 1', async () => {

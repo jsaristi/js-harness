@@ -145,7 +145,8 @@ const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * case, as the file system does. */
 const folderKey = (folder) => String(folder).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
-/** The session `label` (such as `JH 71`) in the records: the background starts (`started` events) and the channel's
+/** The session `label` (such as `JH 71`) in the records: the background starts (`started` events) of the project at
+ * `root` and the channel's
  * notices whose title begins with it, a longer number being another session. `{ ids, cwds, firstAt, lastAt,
  * closes, stoppedAt }`: its session ids, the worktrees its notices ran in other than `root` (the main checkout, where
  * every session starts; the background record's `worktreePath` is that checkout too, so it is not read), its first and
@@ -154,11 +155,12 @@ const folderKey = (folder) => String(folder).replace(/\\/g, '/').replace(/\/+$/,
 export function sessionTrail(label, { notices, starts, root }) {
   const head = new RegExp(`^${escaped(label)}(?![0-9A-Za-z])`);
   const timed = (one) => Number.isFinite(Date.parse(one?.at));
+  const main = folderKey(root);
   const mine = notices.filter((one) => timed(one) && head.test(String(one?.from?.title ?? '')));
-  const started = starts.filter((one) => timed(one) && one.event === 'started' && head.test(String(one.title ?? '')));
+  // The background record is the machine's: a start of another project, or one that names none, is not this one's.
+  const started = starts.filter((one) => timed(one) && one.event === 'started' && head.test(String(one.title ?? '')) && isText(one.root) && folderKey(one.root) === main);
   if (mine.length === 0 && started.length === 0) return null;
   const ids = new Set([...mine.map((one) => one.from.id), ...started.map((one) => one.sessionId)].filter(isText));
-  const main = folderKey(root);
   const cwds = [...new Set(mine.map((one) => one.cwd).filter(isText).map(folderKey))].filter((folder) => folder !== main);
   const times = [...mine, ...started].map((one) => Date.parse(one.at));
   const closes = mine.filter((one) => one.kind === 'closed').map((one) => Date.parse(one.at)).sort((a, b) => a - b);
@@ -198,10 +200,11 @@ const failed = (result) => typeof result === 'string' && result !== 'pass' && re
 /** Whether a gate ran in a merge queue's candidate folder: the lead's land, never a work session's. */
 const inLand = (gate) => /merge-queue/.test(String(gate.cwd ?? ''));
 
-/** Whether `gate` ran for the session of `trail`: by its session id, or in one of its worktrees. */
+/** Whether `gate` ran for the session of `trail`: by its session id, or, when it names none, in one of its
+ * worktrees. A gate that names another session is that session's, even in a worktree the two share. */
 function gateOf(gate, trail) {
   if (inLand(gate)) return false;
-  if (gate.session && trail.ids.has(gate.session)) return true;
+  if (isText(gate.session)) return trail.ids.has(gate.session);
   if (!isText(gate.cwd)) return false;
   const folder = folderKey(gate.cwd);
   return trail.cwds.some((cwd) => folder === cwd || folder.startsWith(`${cwd}/`));
@@ -240,7 +243,9 @@ const STALL_MS = ruleValue('session-stall', 'minutes') * 60_000;
 export function itemMeasure(entry, trail, { openedAt, now, gates }) {
   if (trail === null) return { ...entry, state: 'queued', clipped: false, lastAt: null, from: null, to: null, realHours: 0, lostHours: 0, failures: [] };
   const mine = gates.filter((gate) => gateOf(gate, trail));
-  const lastAt = Math.max(trail.lastAt ?? trail.firstAt, ...mine.map((gate) => Date.parse(gate.startedAt)).filter((at) => at <= now));
+  // A gate is a record of its session until it ends; one still running, from its start.
+  const gateLast = (gate) => Math.min(now, Date.parse(gate.startedAt) + (Number.isFinite(gate.seconds) ? gate.seconds * 1000 : 0));
+  const lastAt = Math.max(trail.lastAt ?? trail.firstAt, ...mine.filter((gate) => Date.parse(gate.startedAt) <= now).map(gateLast));
   const from = Math.max(openedAt, trail.firstAt);
   // A session that closed or was removed before the opening, with no record after it, is done at the opening.
   const doneBefore = lastAt <= from;
@@ -269,11 +274,14 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
 /** What failed inside `[from, to)` that is no item's: the lands that did not exit 0 (`landFacts`), the failed gates
  * run in a land's folder (`gateRuns`), which a land that bisects and lands passes over, and the Codex runs whose
  * outcome is `failed` (`codexFacts`), whose record names no session. A land's gate and the land overlap in time, and
- * `lostHoursOf` counts that time once. */
-export function stretchLost({ lands, codex, gates = [] }, { from, to }) {
+ * `lostHoursOf` counts that time once. The gate log is the machine's: a land's gate counts only when its folder is
+ * inside `root`, the main checkout, whose git directory holds the project's merge-queue folders. */
+export function stretchLost({ lands, codex, gates = [] }, { from, to, root }) {
+  const project = `${folderKey(root)}/`;
+  const ours = (gate) => isText(gate.cwd) && folderKey(gate.cwd).startsWith(project);
   return [
     ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`)),
-    ...clippedTo(gates.filter((one) => inLand(one) && failed(one.result)), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
+    ...clippedTo(gates.filter((one) => inLand(one) && ours(one) && failed(one.result)), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
     ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed')),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { recordFileOf } from './lib/background.mjs';
 import { readNotices } from './lib/channel.mjs';
-import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -19,7 +19,11 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, scaled, sessionTrail, stretchLost } from './lib/stretch.mjs';
 import { renderDeparture, renderView } from './lib/stretch-render.mjs';
 import { codexFacts, landFacts } from './lib/throughput.mjs';
-import { readLandRecord } from './throughput.mjs';
+import { readLandRecord, readRecordLines } from './throughput.mjs';
+
+/** The Codex review runs of the repository at `root`, read so that a record there and unreadable throws:
+ * `readCodexReviewRuns` reads it as none, which would show its failures as no failure. */
+const readCodexRunRecord = (root, run, fileSystem) => readRecordLines(codexReviewRunsPath(root, { spawn: run }), fileSystem);
 
 export const RECORD_SCHEMA = 'js-harness.stretch/v1';
 
@@ -113,7 +117,15 @@ function readEvents(file, fileSystem) {
 
 function appendEvent(file, fileSystem, event) {
   fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-  fileSystem.appendFileSync(file, `${JSON.stringify({ schema: RECORD_SCHEMA, ...event })}\n`, 'utf8');
+  let text = '';
+  try {
+    text = fileSystem.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  // A line left without its newline (a writer stopped mid-line) is ended first, so the new event is whole.
+  const unterminated = text !== '' && !text.endsWith('\n');
+  fileSystem.appendFileSync(file, `${unterminated ? '\n' : ''}${JSON.stringify({ schema: RECORD_SCHEMA, ...event })}\n`, 'utf8');
 }
 
 /** The open stretch of `events`: the last `open` with no `close` after it, with its binds and goal checks; `null`. */
@@ -187,7 +199,7 @@ function measure(ctx, stretch, now) {
     const trail = item.session ? sessionTrail(item.session, { notices: records.notices, starts: records.starts, root: ctx.root }) : null;
     return itemMeasure(item, trail, { openedAt, now: end, gates: records.gates });
   });
-  const failures = stretchLost(records, { from: openedAt, to: end });
+  const failures = stretchLost(records, { from: openedAt, to: end, root: ctx.root });
   const counted = items.filter((item) => !item.waitsFor);
   const real = sum(items.map((item) => item.realHours));
   const lost = round(sum(items.map((item) => item.lostHours)) + lostHoursOf(failures));
@@ -349,7 +361,7 @@ export function boardStretch({ home, root, slug, now, run, fileSystem = fs }) {
   }
   const stretch = openStretch(events);
   if (!stretch) return null;
-  const ctx = { root, home, slug, fileSystem, readLands: (folder) => readLandRecord(folder, run, fileSystem), readCodexRuns: (folder) => readCodexReviewRuns(folder, { spawn: run }) };
+  const ctx = { root, home, slug, fileSystem, readLands: (folder) => readLandRecord(folder, run, fileSystem), readCodexRuns: (folder) => readCodexRunRecord(folder, run, fileSystem) };
   const view = measure(ctx, stretch, now);
   const { met, total, checkedAt } = view.goals;
   return {
@@ -376,7 +388,7 @@ export async function stretchMain(
     run = (command, args, options) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options }),
     homedir = os.homedir,
     fileSystem = fs,
-    readCodexRuns = (root) => readCodexReviewRuns(root, { spawn: run }),
+    readCodexRuns = (root) => readCodexRunRecord(root, run, fileSystem),
     readLands = (root) => readLandRecord(root, run, fileSystem),
     // `runSensor` of `check.mjs`, as `contract run` runs a done-when command: it stops the whole tree at the timeout.
     // Imported when a goal runs, since `check.mjs` is large.
