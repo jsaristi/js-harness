@@ -408,7 +408,9 @@ function measureSession(id, modifiedAt, file, readers, io, readings) {
  * with the reason), where the window starts (ms), and the channel's record as its reader gives it. Or `{ unlisted }`
  * when the folder could not be listed, with the system's code for why, or its message when it gave no code.
  * `ENOENT` is a project with no sessions folder; any other is a folder that may hold sessions and did not show
- * them, which is not the same answer to every caller (`--address`). `unseen` reads its sessions through this too,
+ * them, which is not the same answer to every caller (`--address`). With `mayBeMissing` (the record of `sessions start`
+ * holds a session of the project, or may) `ENOENT` is a folder with no session, and `alsoRead` is read all the same
+ * (Codex finding 6 on 54c7e39..e7aa7ec): those sessions write in their worktrees' folders. `unseen` reads through this too,
  * so the two never parse a transcript in two ways. `io` is `{ readFile, readdir, stat, readFacts }`. `measureReaders`
  * (`{ told(sessionId, after, at), kept(query) }`, optional) judges each session's last automatic compaction (`missOf`);
  * without it no session has a miss. */
@@ -435,12 +437,12 @@ function heldOutsideWindow(file, changedAt, now, io) {
   }
 }
 
-export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders, alsoRead = [] }) {
-  let names;
+export function readSessionsWindow({ projectDir, slug, harnessHome, hours, now, tasksRoot, tail, contextWindow, contextPause, contextCompactionDefault, self, io, measureReaders, alsoRead = [], mayBeMissing = false }) {
+  let names = [];
   try {
     names = io.readdir(projectDir);
   } catch (err) {
-    return { unlisted: err.code ?? err.message };
+    if (!(mayBeMissing && err.code === 'ENOENT')) return { unlisted: err.code ?? err.message };
   }
   const generatedAt = now();
   const since = generatedAt - hours * 3600 * 1000;
@@ -550,18 +552,14 @@ export async function sessionsMain(
   // The session that asked: Claude Code names it in the environment of every command it runs.
   const self = parsed.self ?? env.CLAUDE_CODE_SESSION_ID ?? null;
 
-  /** One look at the transcripts: `{ generatedAt, since, sessions, record }`, the sessions whose transcript
-   * changed in the window, the most recent first, and where that window starts (ms); or `{ unlisted }`
-   * when the sessions folder could not be listed, with the system's code for why, or its message when it
-   * gave no code. `ENOENT` is a project with no sessions folder; any other is a folder that may hold
-   * sessions and did not show them, which is not the same answer to every caller (`--address`).
-   *
-   * `record` is the channel's record as its reader gives it (`readNotices`), read in the same look: a
-   * session whose transcript carries no title has the one of the opening it read (`titledByReadings`),
-   * so it is on the board, and holds its role, under that title. */
-  const lookAtSessions = (alsoRead) =>
+  /** One look at the transcripts, as `readSessionsWindow` says: the sessions whose transcript changed in the window, the
+   * most recent first, beside those of `alsoRead`; or `{ unlisted }` when the folder could not be listed, and `ENOENT`
+   * only while `mayBeMissing` is false.
+   * `record` is the channel's record as its reader gives it (`readNotices`), read in the same look: a session whose
+   * transcript carries no title has the one of the opening it read (`titledByReadings`), and holds its role so. */
+  const lookAtSessions = (alsoRead, mayBeMissing) =>
     readSessionsWindow({
-      alsoRead,
+      alsoRead, mayBeMissing,
       projectDir,
       slug,
       harnessHome: home,
@@ -597,7 +595,9 @@ export async function sessionsMain(
   /** One look at the machine: the board, or `null` (said on stderr) when the sessions folder could not be
    * listed: there is then no board to print, whatever the reason, and the line gives it. */
   const look = () => {
-    const seen = lookAtSessions();
+    // The sessions `sessions start` recorded write in their worktrees' folders: with one, no sessions folder is no row.
+    const recorded = recordedFolders(home, root, { readFile });
+    const seen = lookAtSessions(recorded.items, recorded.held > 0);
     if (seen.unlisted !== undefined) {
       stderr(noFolder(seen.unlisted));
       return null;
@@ -853,7 +853,7 @@ export async function sessionsMain(
     const role = parsed.address.role === 'orchestrator' ? 'the orchestrator' : `work session ${parsed.address.number}`;
     // A session `sessions start` started in a worktree writes its transcript in that worktree's sessions folder.
     const background = recordedFolders(home, root, { readFile });
-    const seen = lookAtSessions(background.items);
+    const seen = lookAtSessions(background.items, background.held > 0 || background.unknown !== null);
     if (seen.unlisted === 'ENOENT') {
       stderr(noFolder(seen.unlisted));
       return 1;
@@ -885,8 +885,8 @@ export async function sessionsMain(
       stderr(`js-harness sessions: not known whether a session carries the title of ${role}: ${recordUnread}, and a session opened from the phone is known by it`);
       return 2;
     }
-    if (holders.length === 0 && background.unavailable !== undefined) {
-      stderr(`js-harness sessions: not known whether a session carries the title of ${role}: the record of background sessions ${recordFileOf(home)} could not be read (${background.unavailable}), and a session in a worktree is found by it`);
+    if (holders.length === 0 && background.unknown !== null) {
+      stderr(`js-harness sessions: not known whether a session carries the title of ${role}: the record of background sessions ${recordFileOf(home)} ${background.unknown}, and a session in a worktree is found by it`);
       return 2;
     }
     if (holders.length === 0) {

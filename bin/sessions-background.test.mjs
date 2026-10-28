@@ -30,6 +30,12 @@ const lost = (id) => { out("No job matching '" + id + "'. Run 'claude agents' to
 if (argv.includes('--bg')) {
   if (state.refuseStart) { err(state.refuseStart); save(); process.exit(1); }
   if (state.agentsFailAfterStart) state.agentsFail = state.agentsFailAfterStart;
+  if (state.breakRecord) {
+    // The record turns into a folder while claude runs: it was a file when start opened it, and no line goes in now.
+    const record = path.join(process.env.JS_HARNESS_HOME, '.js-harness', 'background', 'sessions.jsonl');
+    if (fs.existsSync(record)) fs.renameSync(record, record + '.held');
+    fs.mkdirSync(record, { recursive: true });
+  }
   const name = argv[argv.indexOf('-n') + 1];
   const id = state.nextId;
   let cwd = process.cwd();
@@ -258,6 +264,64 @@ test('sessions start runs nothing when the record cannot be written', withWorld(
   assert.deepEqual(actions(world), []);
 }));
 
+/** The record the fake turned into a folder (`breakRecord`), a file again with the lines it held. */
+const mendRecord = (world) => {
+  fs.rmSync(recordFile(world), { recursive: true, force: true });
+  if (fs.existsSync(`${recordFile(world)}.held`)) fs.renameSync(`${recordFile(world)}.held`, recordFile(world));
+  patchState(world, { breakRecord: false, refuseRm: null });
+};
+const strandedFile = (world, id) => path.join(world.home, '.js-harness', 'background', 'stranded', `${id}.json`);
+
+// Codex finding 4 on 54c7e39..e7aa7ec: a start whose line the record would not take after claude ran, and whose rollback
+// claude refused, left only the commands that remove it, which nothing on the machine kept.
+test('a start the record would not take and claude would not undo is kept in a file of its own, which stop and uninstall act on', withWorld((world) => {
+  patchState(world, { breakRecord: true, refuseRm: 'Worktree has 2 unpushed commits' });
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(result.code, 1);
+  assert.ok(result.stderr.includes(`its entry is kept in ${strandedFile(world, '0db8bc5e')}: js-harness sessions stop 0db8bc5e`), result.stderr);
+  const entry = JSON.parse(fs.readFileSync(strandedFile(world, '0db8bc5e'), 'utf8'));
+  assert.deepEqual([entry.event, entry.id, entry.title], ['started', '0db8bc5e', 'Build the thing']);
+  // While the record still cannot be read, stop undoes the stranded session all the same (Codex P2 on 62315e6..e16b577),
+  // and refuses any other id, which the record may hold.
+  patchState(world, { refuseRm: null });
+  assert.match(js(world, ['sessions', 'stop', 'f462dfd5']).stderr, /the record of background sessions could not be read/);
+  const stop = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(stop.code, 0, stop.stderr);
+  assert.match(stop.stdout, /removed 0db8bc5e · Build the thing/);
+  assert.equal(fs.existsSync(strandedFile(world, '0db8bc5e')), false);
+  mendRecord(world);
+  assert.equal(js(world, ['sessions', 'stop', '0db8bc5e']).code, 1, 'removed: the record holds it no more');
+  // The machine uninstall undoes one as it undoes a recorded session; with the record unread it keeps the folder and
+  // fails, and once the record reads it removes the folder.
+  patchState(world, { breakRecord: true, refuseRm: 'Worktree has 2 unpushed commits', nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief]).code, 1);
+  patchState(world, { refuseRm: null });
+  const blind = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(blind.code, 1);
+  assert.match(blind.stdout, /removed background session c779ed44 · Other/);
+  assert.match(blind.stderr, /sessions\.jsonl could not be read/);
+  assert.equal(fs.existsSync(strandedFile(world, 'c779ed44')), false);
+  mendRecord(world);
+  const uninstall = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(uninstall.code, 0, uninstall.stderr);
+  assert.equal(fs.existsSync(path.join(world.home, '.js-harness', 'background')), false);
+}));
+
+test('a resume the record would not take is kept in a file of its own, and stop undoes it with the job it resumed', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  endJob(world, '0db8bc5e');
+  patchState(world, { breakRecord: true, nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 1);
+  assert.ok(resumed.stderr.includes(`it was stopped, and its entry is kept in ${strandedFile(world, 'c779ed44')}`), resumed.stderr);
+  mendRecord(world);
+  assert.match(js(world, ['sessions', 'stop', '0db8bc5e']).stderr, /0db8bc5e was resumed as c779ed44/);
+  const stop = js(world, ['sessions', 'stop', 'c779ed44']);
+  assert.equal(stop.code, 0, stop.stderr);
+  assert.deepEqual(recordLines(world).slice(1).map((line) => [line.event, line.id]), [['removed', '0db8bc5e'], ['removed', 'c779ed44']]);
+  assert.equal(fs.existsSync(strandedFile(world, 'c779ed44')), false);
+}));
+
 test('sessions start refuses a missing brief, a missing title and an unknown flag before claude runs', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'x', '--brief', path.join(world.dir, 'none.md')]).code, 2);
   assert.equal(js(world, ['sessions', 'start', '--brief', world.brief]).code, 2);
@@ -368,7 +432,9 @@ test('sessions start records the worktree claude makes, and stop names it for a 
   patchState(world, { agents: [] });
   const stale = js(world, ['sessions', 'stop', 'e141d3f5']);
   assert.equal(stale.code, 0, stale.stderr);
-  assert.ok(stale.stdout.includes(`its worktree ${path.join(entry.root, '.claude', 'worktrees', 'docs')} is gone`), stale.stdout);
+  // claude never made that worktree: it was not there before the stop, so the stop did not remove it (R3-004).
+  assert.ok(stale.stdout.includes(`its worktree ${path.join(entry.root, '.claude', 'worktrees', 'docs')} was not there when stop ran`), stale.stdout);
+  assert.doesNotMatch(stale.stdout, /is gone/);
   assert.ok(!stale.stdout.includes(`its worktree ${entry.root} stays`), stale.stdout);
   const kept = js(world, ['sessions', 'stop', '0db8bc5e']);
   assert.ok(kept.stdout.includes(`its worktree ${worktree} stays`), kept.stdout);
@@ -408,6 +474,32 @@ const endJob = (world, id) => {
   Object.assign(state.agents.find((agent) => agent.id === id), { status: undefined, state: 'failed', pid: undefined });
   writeState(world, state);
 };
+
+// gentle-ai on slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
+test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const [first] = recordLines(world);
+  // After a restart claude agents may not list the stopped job at all.
+  patchState(world, { agents: [], nextId: 'c779ed44', refuseStart: 'resume refused: made up' });
+  const refused = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(refused.code, 1);
+  assert.match(refused.stderr, /claude did not resume 0db8bc5e · Build the thing \(exit 1\), and nothing was recorded:\s+resume refused: made up/);
+  assert.equal(recordLines(world).length, 1);
+  patchState(world, { refuseStart: null });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', 'haiku', '--no-remote-control']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  const call = actions(world).at(-1);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call.includes('--remote-control')], ['haiku', false]);
+  const entry = recordLines(world).at(-1);
+  assert.deepEqual([entry.id, entry.model, entry.remoteControl], ['c779ed44', 'haiku', false]);
+  // A folder that is gone is not resumed into.
+  endJob(world, 'c779ed44');
+  fs.rmSync(path.join(first.root, '.claude', 'worktrees', 'thing'), { recursive: true, force: true });
+  patchState(world, { nextId: 'a1b2c3d4' });
+  const gone = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
+  assert.equal(gone.code, 1);
+  assert.match(gone.stderr, /the folder c779ed44 · Build the thing worked in, .*thing, is gone, so it was not resumed/);
+}));
 
 // Codex P1 on 79e3430..318f952: the job a resume replaced shares its worktree and brief with the new one; undone alone
 // it would delete them under the new job, and resumed again it would put two jobs on one conversation.
