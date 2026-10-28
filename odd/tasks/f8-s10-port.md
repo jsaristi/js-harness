@@ -109,14 +109,17 @@ Reviews:
   write fails took back every deny of the list, the ones the manifest on disk records too), fixed test first in the
   next commit: `applySettings` returns what the call alone wrote, and that is what a rollback undoes; 348,300 input
   tokens.
+- Codex on `1f607cb..e2c38a1` (the recheck): correct (0.97), the P2 fixed; 39,680 input tokens.
+- Lenses on `d0d6807..e2c38a1` (risk, reliability, readability, resilience): complete, 0 findings; about 172,500
+  input tokens.
+- gentle-ai: the Stop hook offered the whole branch from `d6867d86`; only its read-only status ran (`unrelated`, no
+  change in the working tree), nothing started, as CLAUDE.md says of a branch.
 
 ## Next step
-State at 01:30Z, 2026-10-28: T5 (`f2480611`), T4's lens findings (`cbce05e2`), and the fixes of T5's verifier (L13):
-the guard's reading of a path (`88b53455`) and the clone's denies as a list key, format 3 (the commit after it).
-Then, one at a time: `js-harness codex-review --base d0d68079^` (covers d0d68079, the T4 fix it owed, T5 and its
-fixes), the lenses on `d0d6807..HEAD` (`js-harness lens-review --base d0d6807`), then PR 2 on `f8-s10-permissions`
-(base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in its body; then T6;
-T7 waits on question 99.
+State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings
+`cbce05e2`, the verifier's fixes `88b53455` and `1f607cb8`, Codex's P2 `e2c38a15`. Next: PR 2 on
+`f8-s10-permissions` (base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in
+its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a branch after it; T7 waits on question 99.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
