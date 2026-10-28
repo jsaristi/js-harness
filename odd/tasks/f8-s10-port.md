@@ -155,6 +155,12 @@ Reviews:
   `0d97e528..14649ec6` (granted run, lineage review-34b49ce5b2947003): approved, acknowledged; one SUGGESTION
   (R3-001: no command-level test of what an unreadable recorded file prints) not taken: that record is a `skipped` one
   without `edited`, whose line, stream and exit code `bin/install.test.mjs:398-427` already pin.
+- T9 is `79d547c0`. Codex on `e078257..79d547c`: correct (0.98), 42,326 input tokens. Lenses on the same range
+  (reliability, readability): 0 findings. gentle-ai on `e0782570..79d547c0` (granted run, lineage
+  review-67493d5151f1f0a5): approved, acknowledged; none of its three taken. R3-001 and R3-002 (a CRLF checkout
+  would change the digest) do not hold: each text is a template literal in its module, and `.gitattributes` checks
+  `bin/**` out `eol=lf` (`git check-attr eol bin/lib/output-style.mjs`: lf). R3-003 (show the observed digest): a
+  failed `assert.equal` already prints `actual` and `expected` under its message, seen with a scratch test.
 
 ## Probe
 - Install and uninstall, in a scratch home (`mktemp -d`, no credentials file), from `f8-s10-rules` (L20, rerun after
@@ -174,12 +180,9 @@ Reviews:
   the skills, since a run that loads no user settings loads no user skills; that is seen once he applies S10.
 
 ## Next step
-State at 2026-10-28 ~05:00 local (context pause): PRs 620 (T6, docs) and 621 (T8) are `ready`, the merge queue takes
-both in order. T9 opened on `f8-s10-pins` (from `f8-s10-keep-edits`, worktree f8-s10-port): write
-`bin/lib/output-style.test.mjs` and `bin/lib/ported-skills.test.mjs`, each pinning its text's sha256 (style
-`1e7c0311...`, work units `b2cb9a11...`, chained PRs `d77410d6...`), failing with "update its pin in the same commit";
-commit; Codex `--base bf4ce950`, lenses, gentle-ai; push; PR 6; `ready`. Held: the incident rerun, until he applies
-S10 (L23). Then the `closed` notice with its summary in `docs/sessions/`.
+State at 2026-10-28 ~05:10 local: PRs 620 (T6, docs) and 621 (T8) are `ready`. T9's reviews are done (Reviews);
+push `f8-s10-pins`, open its PR after 621, `merge-queue --dry-run`, `ready`. Held: the incident rerun, until he
+applies S10 (L23). Then the `closed` notice with its summary in `docs/sessions/`.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
