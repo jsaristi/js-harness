@@ -488,7 +488,13 @@ const RECORDS_GLOB = /(?:^|\/)\.git\/js-harness\/([^/]*[*?[][^/]*)$/i;
 function globTakesRecord(arg) {
   const glob = RECORDS_GLOB.exec(slashed(arg))?.[1];
   if (glob === undefined) return false;
-  const source = glob.replace(/\[!/g, '[^').replace(/[.+^${}()|\\]/g, (c) => `\\${c}`).replace(/\*/g, '.*').replace(/\?/g, '.');
+  // `*`, `?` and a bracketed class as the shell reads them (`[!…]` or `[^…]` negated), every other character as itself.
+  const source = glob.replace(/\[([!^]?)(\]?[^\]]*)\]|\*|\?|[.+^${}()|\\[\]]/g, (part, negated, members) => {
+    if (part === '*') return '.*';
+    if (part === '?') return '.';
+    if (members === undefined) return `\\${part}`;
+    return `[${negated === '' ? '' : '^'}${members.replace(/[\\^\]]/g, (c) => `\\${c}`)}]`;
+  });
   let pattern;
   try {
     pattern = new RegExp(`^${source}$`, 'i');
@@ -711,8 +717,8 @@ function literalOf(arg) {
  * `copyFile` and `appendJsonLine` (this package's, given a folder and a record's name) their second, `open` its first
  * when its mode (the second argument, or `mode=`) writes, the others their first. A call is looked for in the code, not
  * inside a string. A path written whole in one string is a record only in the records' folder (`reviewRecordOf`); one
- * assembled from parts, a join, is taken for a record when a part names one. A path given as no string at all, a
- * variable, is taken for the record the script names anywhere, when it names one: reading a record and writing to a
+ * assembled from parts, a join, is taken for a record when a part names one. A path given as anything but one string,
+ * a variable or a join of one, is taken for the record the script names anywhere, when it names one: reading a record and writing to a
  * variable is refused with it, the safe side. */
 function scriptRecordWrite(text) {
   const anywhere = RECORD_IN_TEXT.exec(text);
@@ -730,7 +736,7 @@ function scriptRecordWrite(text) {
     };
     const named = written.map(recordIn).find((name) => name !== null);
     if (named !== undefined) return named;
-    if (anywhere !== null && written.some((arg) => arg.trim() !== '' && !/['"`]/.test(arg))) return anywhere[1].toLowerCase();
+    if (anywhere !== null && written.some((arg) => arg.trim() !== '' && literalOf(arg) === null)) return anywhere[1].toLowerCase();
   }
   const named = CMDLET_WRITE.test(text) ? RECORD_IN_TEXT.exec(text) : null;
   return named === null ? null : named[1].toLowerCase();

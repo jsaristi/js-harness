@@ -561,6 +561,9 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     'rm -f .git/js-harness/*.jsonl',
     'rm -f .git/js-harness/lens-*',
     'rm -f .git/js-harness/codex-review?.jsonl',
+    // A negated class keeps its negation (Codex P2 and the reliability lens on 4eb7449a).
+    'rm -f .git/js-harness/[!a]*',
+    'rm -f .git/js-harness/[^x]*',
     'rm -rf .git',
     'rm -rf ./.git/',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
@@ -581,6 +584,9 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "fs.appendFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), l)"',
     // A path held in a variable of the script (gentle-ai R3 on 0a832b2a).
     'node -e "const p = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(p, l)"',
+    // The same variable inside an argument that also holds a string (gentle-ai R3 on 4eb7449a).
+    'node -e "const f = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(path.resolve(\'.\', f), l)"',
+    'node -e "const p = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(p + \'\', l)"',
     // The package's own generic append, given a record's name (gentle-ai R3 on 9f4d1f23).
     'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendJsonLine(\'.\', \'lens-reviews.jsonl\', {}))"',
     // A template literal's interpolation is code, not text.
@@ -653,6 +659,7 @@ test('reading a record, the commands that write one, and text that only names on
     // A glob in the records' folder that can match no record (Codex P2 on d153e61e).
     'rm -f .git/js-harness/*.tmp',
     'rm -f .git/js-harness/sessions*.jsonl',
+    'rm -f .git/js-harness/[!cl]*',
     // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
     'rm -rf vendor/lib/.git',
     'rm -rf /tmp/scratch/.git',
