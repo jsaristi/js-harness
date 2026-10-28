@@ -5,6 +5,7 @@
 // measured here, and the command says so.
 
 import { TASK_KINDS } from './contract.mjs';
+import { ruleValue } from './rules.mjs';
 import { busySeconds, median } from './throughput.mjs';
 
 const HOUR_MS = 3_600_000;
@@ -40,6 +41,7 @@ function itemProblem(entry) {
   if (!TASK_KINDS.includes(entry.kind)) return `item ${entry.id} names the kind "${entry.kind}": one of ${TASK_KINDS.join(', ')}`;
   if (!isRange(entry.hours)) return `item ${entry.id} needs hours as [low, high], both above 0 and low first`;
   if (entry.session !== undefined && entry.session !== null && !isText(entry.session)) return `item ${entry.id} names its session as text, such as "JH 71"`;
+  if (entry.waitsFor !== undefined && !isText(entry.waitsFor)) return `item ${entry.id} says what it waitsFor as text: what only the user can give`;
   return null;
 }
 
@@ -70,7 +72,7 @@ export function parsePlan(value) {
       hours: value.hours,
       slots: value.slots,
       goals: value.goals.map(({ id, text, command }) => ({ id, text, command })),
-      items: value.items.map(({ id, title, kind, hours, session }) => ({ id, title, kind, hours: [...hours], session: session ?? null })),
+      items: value.items.map(({ id, title, kind, hours, session, waitsFor }) => ({ id, title, kind, hours: [...hours], session: session ?? null, ...(waitsFor ? { waitsFor } : {}) })),
       waits: value.waits ?? [],
     },
   };
@@ -109,11 +111,14 @@ const round = (n) => Math.round(n * 100) / 100;
 /** `range` times `factor`, to the hundredth. */
 export const scaled = (range, factor) => range.map((n) => round(n * factor));
 
-/** The items (`{ id, corrected: [low, high] }`) laid in `slots` lanes in their order, each to the lane that frees
- * first by the middle estimate: `{ lanes: [{ items: [{ id, start, end }], end }], queued, fills, idle }`, each time a
- * `[low, high]` of hours from the opening. The stretch is filled when no lane ends before `hours` by the low estimate;
- * `idle` is the session-hours left without work before the return by that estimate, and from which hour. */
-export function laneOut(items, { slots, hours }) {
+/** The items (`{ id, corrected: [low, high], waitsFor? }`) laid in `slots` lanes in their order, each to the lane that
+ * frees first by the middle estimate: `{ lanes: [{ items: [{ id, start, end }], end }], queued, fills, idle }`, each
+ * time a `[low, high]` of hours from the opening, one layout drawn by both ends. An item that waits for the user cannot
+ * run while they are away, so it takes no lane and counts in no total. The stretch is filled when no lane ends before
+ * `hours` by the low estimate; `idle` is the session-hours left without work before the return by that estimate, and
+ * from which hour. An item's hours are the work left at the opening, so one already running is laid as what remains. */
+export function laneOut(all, { slots, hours }) {
+  const items = all.filter((one) => !one.waitsFor);
   const lanes = Array.from({ length: slots }, () => ({ items: [], end: [0, 0] }));
   for (const one of items) {
     const lane = lanes.reduce((best, next) => (middle(next.end) < middle(best.end) ? next : best));
@@ -141,10 +146,10 @@ const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const folderKey = (folder) => String(folder).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
 /** The session `label` (such as `JH 71`) in the records: the background starts (`started` events) and the channel's
- * notices whose title begins with it, a longer number being another session. `{ ids, cwds, firstAt, closes,
- * stoppedAt }`: its session ids, the worktrees its notices ran in other than `root` (the main checkout, where every
- * session starts; the background record's `worktreePath` is that checkout too, so it is not read), its first record,
- * the times of its `closed` notices in order, and when the background record says it was removed; times in ms. `null`
+ * notices whose title begins with it, a longer number being another session. `{ ids, cwds, firstAt, lastAt,
+ * closes, stoppedAt }`: its session ids, the worktrees its notices ran in other than `root` (the main checkout, where
+ * every session starts; the background record's `worktreePath` is that checkout too, so it is not read), its first and
+ * last record, the times of its `closed` notices in order, and when the background record says it was removed; times in ms. `null`
  * when no record names it. */
 export function sessionTrail(label, { notices, starts, root }) {
   const head = new RegExp(`^${escaped(label)}(?![0-9A-Za-z])`);
@@ -159,7 +164,7 @@ export function sessionTrail(label, { notices, starts, root }) {
   const closes = mine.filter((one) => one.kind === 'closed').map((one) => Date.parse(one.at)).sort((a, b) => a - b);
   const startIds = new Set(started.map((one) => one.id).filter(isText));
   const removed = starts.filter((one) => timed(one) && one.event === 'removed' && startIds.has(one.id)).map((one) => Date.parse(one.at));
-  return { ids, cwds, firstAt: Math.min(...times), closes, stoppedAt: removed.length === 0 ? null : Math.max(...removed) };
+  return { ids, cwds, firstAt: Math.min(...times), lastAt: Math.max(...times), closes, stoppedAt: removed.length === 0 ? null : Math.max(...removed) };
 }
 
 /** The gate runs of the gate log's events (`readGateLog`): each start with its end, `{ id, startedAt, seconds,
@@ -204,33 +209,52 @@ function gateOf(gate, trail) {
 
 const hoursOf = (ms) => round(ms / HOUR_MS);
 
+/** The runs among `runs` (`{ startedAt, seconds }`) that overlap `[from, to)`, each cut to its part inside, oldest
+ * first: a failure that began before the span or ran past it counts only there. A run with no end yet is left out. */
+function clippedTo(runs, from, to) {
+  return runs.flatMap((run) => {
+    const start = Date.parse(run.startedAt);
+    if (!Number.isFinite(run.seconds) || !Number.isFinite(start)) return [];
+    const inStart = Math.max(start, from);
+    const inEnd = Math.min(start + run.seconds * 1000, to);
+    return inEnd > inStart ? [{ ...run, startedAt: new Date(inStart).toISOString(), seconds: (inEnd - inStart) / 1000 }] : [];
+  }).sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+}
+
 /** One failure as the return lists it. */
 const failure = (startedAt, seconds, what) => ({ at: new Date(Date.parse(startedAt)).toISOString(), seconds, what });
 
 /** The hours `failures` cover, two at once counted once. */
 export const lostHoursOf = (failures) => round(busySeconds(failures.map((one) => [Date.parse(one.at), Date.parse(one.at) + one.seconds * 1000])) / 3600);
 
+/** How long a running session may go with no record before it reads as silent: the board's stall. */
+const STALL_MS = ruleValue('session-stall', 'minutes') * 60_000;
+
 /** The item `entry` (the plan's, with its `corrected` estimate) measured from its session's `trail` up to `now`:
- * `{ ...entry, state, clipped, from, to, realHours, lostHours, failures }`. It runs from the later of `openedAt` and
- * the session's first record (`clipped` when the session started before), to its first `closed` notice after that
- * (`finished`), else to its removal from the background record (`stopped`), else to now (`running`); with no trail it
- * is `queued`. What failed is each failed gate of its session that started inside that span. */
+ * `{ ...entry, state, clipped, lastAt, from, to, realHours, lostHours, failures }`. It runs from the later of
+ * `openedAt` and the session's first record (`clipped` when the session started before), to its first `closed` notice
+ * after that (`finished`), else to its removal from the background record (`stopped`), else to now (`running`), or,
+ * when its last record (a notice, a start or a gate of its own) is older than the stall rule, to that record
+ * (`silent`): no record says it worked after it. With no trail it is `queued`. What failed is each failed gate of its
+ * session that overlaps that span, the part inside it. */
 export function itemMeasure(entry, trail, { openedAt, now, gates }) {
-  if (trail === null) return { ...entry, state: 'queued', clipped: false, from: null, to: null, realHours: 0, lostHours: 0, failures: [] };
+  if (trail === null) return { ...entry, state: 'queued', clipped: false, lastAt: null, from: null, to: null, realHours: 0, lostHours: 0, failures: [] };
+  const mine = gates.filter((gate) => gateOf(gate, trail));
+  const lastAt = Math.max(trail.lastAt ?? trail.firstAt, ...mine.map((gate) => Date.parse(gate.startedAt)).filter((at) => at <= now));
   const from = Math.max(openedAt, trail.firstAt);
   const close = trail.closes.find((one) => one >= from && one <= now);
   const stopped = close === undefined && trail.stoppedAt !== null && trail.stoppedAt >= from && trail.stoppedAt <= now;
-  const state = close !== undefined ? 'finished' : stopped ? 'stopped' : 'running';
-  const to = state === 'finished' ? close : stopped ? trail.stoppedAt : Math.max(from, now);
-  const failures = gates
-    .filter((gate) => failed(gate.result) && Number.isFinite(gate.seconds) && gateOf(gate, trail))
-    .filter((gate) => Date.parse(gate.startedAt) >= from && Date.parse(gate.startedAt) < to)
-    .map((gate) => failure(gate.startedAt, gate.seconds, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`))
-    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const silent = close === undefined && !stopped && now - lastAt > STALL_MS;
+  const state = close !== undefined ? 'finished' : stopped ? 'stopped' : silent ? 'silent' : 'running';
+  const end = { finished: close, stopped: trail.stoppedAt, silent: lastAt, running: now }[state];
+  const to = Math.max(from, end);
+  const failures = clippedTo(mine.filter((gate) => failed(gate.result)), from, to)
+    .map((gate) => failure(gate.startedAt, gate.seconds, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`));
   return {
     ...entry,
     state,
     clipped: trail.firstAt < openedAt,
+    lastAt: new Date(lastAt).toISOString(),
     from: new Date(from).toISOString(),
     to: new Date(to).toISOString(),
     realHours: hoursOf(to - from),
@@ -244,10 +268,9 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
  * outcome is `failed` (`codexFacts`), whose record names no session. A land's gate and the land overlap in time, and
  * `lostHoursOf` counts that time once. */
 export function stretchLost({ lands, codex, gates = [] }, { from, to }) {
-  const inside = (one) => Date.parse(one.startedAt) >= from && Date.parse(one.startedAt) < to && Number.isFinite(one.seconds);
   return [
-    ...lands.filter((one) => inside(one) && Number.isInteger(one.exit) && one.exit !== 0).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`)),
-    ...gates.filter((one) => inside(one) && inLand(one) && failed(one.result)).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
-    ...codex.filter((one) => inside(one) && one.outcome === 'failed').map((one) => failure(one.startedAt, one.seconds, 'Codex review failed')),
+    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`)),
+    ...clippedTo(gates.filter((one) => inLand(one) && failed(one.result)), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
+    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed')),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

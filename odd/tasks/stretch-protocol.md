@@ -20,8 +20,8 @@ the next estimate learns nothing.
 - `npm run check` exits 0
 - `node --test bin/stretch.test.mjs bin/lib/stretch.test.mjs bin/lib/stretch-render.test.mjs bin/sessions-live.test.mjs` exits 0
 - `node bin/js-harness.mjs stretch --help` exits 0
-- `node bin/js-harness.mjs rules away-autonomy --json` prints his words of 2026-10-28 among its quotes (on the rule branch)
-- A stretch opened, checked and closed on this machine over a real stretch, its departure and return renders shown
+- `node bin/js-harness.mjs rules away-autonomy` prints his words of 2026-10-28 among its quotes (on the rule branch)
+- A stretch opened, checked and closed on this machine over a real stretch, its departure and return renders shown (by hand)
 
 ## In scope / Out of scope
 - In: `bin/stretch.mjs`, `bin/lib/stretch*.mjs`, the dispatcher and command index, `bin/sessions-live.mjs` and
@@ -66,44 +66,62 @@ and his words already decide the feature.
 
 - `open --plan <file>`: the lead writes the plan as JSON and the command checks it, records it and prints the
   departure. The plan: `hours` (the stretch's length), `slots` (work sessions at once), `goals` (each `{ id, text,
-  command }`), `items` (each `{ id, title, kind, hours: [low, high], session? }`, `kind` one of the task contract's
-  kinds: design, build, verify, docs; `session` the session's label, such as `JH 71`, once it has one), and `waits`
-  (what only he can give, said as fact). Refused, exit 1, while another stretch of the project is open, and for a
-  plan that does not hold that shape (exit 2).
+  command }`), `items` (each `{ id, title, kind, hours: [low, high], session?, waitsFor? }`), and `waits` (what only
+  he can give, said as fact). An item is one session's work: `kind` is one of the task contract's kinds (design,
+  build, verify, docs) for what that session mostly does; `hours` is the work left at the opening, so a session
+  already running is planned by what remains; `session` is its label, such as `JH 71`, once it has one, and no two
+  items name the same session; `waitsFor` names what of his it cannot start without. Refused, exit 1, while another
+  stretch of the project is open (`close` ends any stretch, a forgotten one too), and exit 2 for a plan that does
+  not hold that shape.
 - `bind <item> <session>`: names the session a queued item got once it started (the lead numbers a session when it
-  opens it, so a queued item has none at departure).
-- `status`: the open stretch now. Runs each goal's command (as `contract run` does, through a shell in the project
-  root, with `rule:contract-run-timeout`) and records the result; measures each item so far.
-- `close`: the same as `status`, then records the stretch closed with each item's estimate, real time and lost time,
+  opens it, so a queued item has none at departure). Refused for a session another item holds.
+- `status`: the open stretch now, measured from the records; with `--goals` it also runs each goal's command (as
+  `contract run` does, through a shell in the main checkout, one at a time, with `rule:contract-run-timeout`) and
+  records the result. A goal is a cheap read (git, `gh`), never a gate: the gate takes the lock the work sessions
+  need.
+- `close`: runs the goals, measures, records the stretch closed with each item's estimate, real time and lost time,
   and prints the return. Exit 0 whether or not the goals were met: the record and the render say which.
 
 ### The departure (spec 1)
-Each item's estimate is shown twice: as written and as corrected by the history of its kind (below). The items are
-laid in `slots` lanes in the plan's order, each item to the lane that frees first, by its low and its high corrected
-estimate. The work fills the stretch when no lane runs out before `hours` by the low estimate; otherwise the
-departure says how many session-hours sit idle before he returns, and from which hour. The total queued, the return
-time (local and UTC), the goals and the waits complete it.
+Each item's estimate is shown twice: as written and as corrected by the history (below). The items are laid in
+`slots` lanes in the plan's order, each to the lane that frees first by the middle of its corrected estimate; that
+one layout is drawn by both its low and its high ends. An item that waits for him takes no lane: it cannot run while
+he is away, and the departure lists it under what waits for him. The work fills the stretch when no lane runs out
+before `hours` by the low estimate; otherwise the departure says how many session-hours sit idle before he returns,
+and from which hour. The total queued, the return time (local and UTC), the goals and the waits complete it.
 
 ### Measuring (specs 4 and 5)
-A session is found by its label at the head of a title: the background start record
-(`<home>/.js-harness/background/sessions.jsonl`, event `started`) and the notices of the channel record whose
-`from.title` begins with it. An item runs from the later of the stretch's opening and the session's first record to
-the session's `closed` notice, or to now while it has none. Its real time is that span. Its lost time is what the
-records hold as failed inside that span, attributed to the session by its session ids (the notices' `from.id`, the
-background record's `sessionId`) or by the worktree its notices name:
+A session is found by its label at the head of a title, a longer number being another session (`JH 7` is not
+`JH 71`): the background start record (`<home>/.js-harness/background/sessions.jsonl`, event `started`, and its
+`removed`) and the notices of the channel record whose `from.title` begins with it. Its worktrees are the `cwd` of
+its notices other than the main checkout; the background record's `worktreePath` is the main checkout and is not
+read. An item runs from the later of the stretch's opening and the session's first record (marked `clipped` when the
+session started before) to:
 
-- a gate whose end is not a pass (`fail`, `exit` not 0) in the gate log: its seconds;
-- the stretch, not an item, carries the failed lands (`exit` not 0 in `lands.jsonl`) and the Codex runs whose
-  outcome is `failed`, since neither record names a session.
+- its first `closed` notice after that (`finished`); a session that closes and goes on is done at its first;
+- else its `removed` line in the background record (`stopped`);
+- else, when its last record (a notice, its start, a gate of its own) is older than `rule:session-stall`, that record
+  (`silent`): nothing says it worked after it, and silence is never counted as work;
+- else now (`running`).
 
-What no record holds (a rewrite after a review, a wait for an answer, a session stuck without a notice) is not
-measured, and the return says so in one line instead of guessing it.
+Its real time is that span. Its lost time is what the gate log holds as failed (an end that is not `pass` or
+`exit 0`) and overlaps the span, the part inside it, attributed by the gate's `session` id or by a worktree of the
+session. A gate run under another's lock (`lock: parent`, the check inside a `gate --`) is folded into the one around
+it: its failing tests are named there and its time counts once; two failures at once count once. A gate in a
+merge-queue folder is the lead's land and never an item's. The stretch, not an item, carries the lands that did not
+exit 0 (`lands.jsonl`, whose `session` is the lead's), the failed gates of its lands (a land that bisects and lands
+passes over them) and the Codex runs whose outcome is `failed` (their `session` is a mode, not a session id), each
+cut to the stretch.
+
+What the records do not hold is named in the return as not measured, apart from what is unavailable (a record that
+cannot be read, said with why): a rewrite after a review, a wait for his answer, a session working without a record.
 
 ### What the next estimate learns (the history)
-`close` stores each finished item as `{ kind, estimate: [low, high], realHours, lostHours }`. An item not finished
-at close is stored as unfinished and teaches nothing. The correction of a kind is the median of real over the
-estimate's middle among its last 10 finished items, used from 3 of them on; with fewer the estimate stands as
-written and the departure says there is no history yet.
+`close` stores each item as `{ kind, estimate: [low, high], realHours, lostHours, state, clipped }`, the estimate as
+written. An item teaches when it was measured whole (not `clipped`) and either finished or still running already
+past its high estimate, which is then a floor of its real time: leaving every unfinished item out would keep the
+overruns out and read low. The correction is the median of real over the estimate's middle among the last 10 items
+that teach: the kind's own from 3 of them, else all kinds together from 3, else none, said as no history yet.
 
 ### The record
 One JSON line an event in `<home>/.js-harness/throughput/<project>/stretches.jsonl`: `open` (the plan, the
@@ -115,13 +133,17 @@ sits beside the throughput days, so `uninstall` keeps it and names it with them.
 renders he liked (`antes_de_irte_8_horas`, `ejemplo_ya_volvi_metas`, `ejemplo_ya_volvi_tiempos`): the departure as
 lanes on an hour scale with the return marked; the return as the goals each met or not with its command's result,
 then per item an estimate bar against a real bar whose lost part is red, on one scale, with the totals and the
-failures listed. The lead shows that file in the chat as it is; it never draws the numbers by hand.
+failures listed, and the not-measured line. The lead never draws the numbers by hand: in the desktop app it passes
+the file's HTML whole to the in-chat visual tool (`show_widget`, where it drew the three renders he liked); where the
+host has none (a Claude Code terminal), it publishes the file as an Artifact and gives the link. `status --html`
+renders the open stretch the same way, for "cómo vamos".
 
 ### The live board (spec 5)
 `sessions live --out` puts the open stretch into `board-checked.json`, which the board merges into `board/summary`:
-the elapsed and remaining hours, the goals met at the last check, each item's state and real against estimated hours.
-It reads the record and runs no goal command; the lead runs `stretch status` on its heartbeat before it. The page
-(`docs/live-board.html`) shows that block while a stretch is open.
+the elapsed and remaining hours, each item's state and real against estimated hours as of that run, and the goals
+met with the time of their last check, a separate time, since goals run only on `status --goals` and `close`. It
+reads the record and runs no goal command. The page (`docs/live-board.html`) shows that block while a stretch is
+open.
 
 ### The rule
 `rule:away-autonomy` gains his two additions through `js-harness rules change away-autonomy` on
@@ -130,8 +152,8 @@ in that reply; when he says he is back, `stretch close` and the return render be
 itself is not limited to an absence: the skill text names it for any stretch.
 
 ## Tasks
-- [ ] T1 (kind: design) this document, read by two blind readers, one Claude and one Codex (rule:double-review). Route: inline, readers delegated.
-- [ ] T2 (kind: build) the measure and the history, pure: lanes, corrections, item spans and lost time (`bin/lib/stretch.mjs`), test first. Spec 1, 4, 5. Route: inline.
+- [x] T1 (kind: design) this document, read by two blind readers, one Claude and one Codex (rule:double-review), in 12e954b6 and the revision after them. Route: inline, readers delegated.
+- [x] T2 (kind: build) the measure and the history, pure: lanes, corrections, item spans and lost time (`bin/lib/stretch.mjs`), test first, in 838c9fe1 and the commit after the readers. Spec 1, 4, 5. Route: inline.
 - [ ] T3 (kind: build) the command and its record: `open`, `bind`, `status`, `close`, the dispatcher and index (`bin/stretch.mjs`). Spec 1, 3, 5. Route: inline.
 - [ ] T4 (kind: build) the renders (`bin/lib/stretch-render.mjs`). Spec 2, 3, 4. Route: inline.
 - [ ] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. Route: inline.
@@ -151,3 +173,25 @@ itself is not limited to an absence: the skill text names it for any stretch.
   Codex runs are reused), `report --mark` (facts since the last report, no estimates), `progress --pace` (tasks
   closed a day, no hours), `sessions live` (the board's rows and `board/summary`), `contract run` (runs commands that
   exit 0: its runner is reused for goals). None holds a plan, an estimate or a goal for a stretch.
+- L4. 2026-10-28, double review of the design (rule:double-review), two blind readers given the document and the
+  records, not the author's view. Claude, 6/10: blockers, a failure counted twice (the gate log writes a `gate --` and
+  the check under its lock, `lock: parent` with no `session`: 146 such starts in the log, checked) and an item's time
+  being its whole session's while one session runs several kinds; should-fix, which `closed` notice ends an item (JH
+  21 sent six), a dead session running on forever, a correction biased low (clipped items, unfinished overruns left
+  out, three a kind rarely reached), running work laid as whole, lands do carry the lead's `session`, merge-queue
+  gates unplaced, goals on every heartbeat (a check is 424 s and takes the lock), the root goals run in; nits, the
+  label boundary, `worktreePath` is the main checkout, one layout or two, spec 2's delivery unnamed, the last
+  done-when line not a command. Codex, 4/10: blockers, silence counted as work, attribution (`landFacts` and
+  `gateFacts` drop `session` and `cwd`), loss counted several times, "fills" counting work that waits for him;
+  should-fix, the estimate's meaning (work left), failures crossing the stretch's edges, delivery into the chat,
+  goal checks' cost, separate freshness times, "not measured" too sweeping. Taken in, all: an item is one session's
+  work and two items cannot name one session; the first `closed` after the start ends it, a `removed` line stops it,
+  a session with no record past `rule:session-stall` is silent and measured to its last record; nested gates fold
+  into the one around them, failures are cut to the span and unioned, land gates and failed lands go to the stretch,
+  the gate log read directly (not `gateFacts`) to keep `session` and `cwd`; `waitsFor` keeps an item out of the
+  lanes; hours are the work left; history skips clipped items, keeps unfinished overruns as floors, and falls back to
+  all kinds together; goals run only on `status --goals` and `close`, as cheap reads in the main checkout, with their
+  own check time on the board; delivery named (the in-chat visual tool, else an Artifact); the last done-when line
+  marked by hand. Not taken: one global correction instead of by kind (the brief and his request name kinds; the
+  fallback covers the thin start); measuring tasks by the commits that close them (more machinery than one session
+  per item, which is how this project already runs: one feature a session).

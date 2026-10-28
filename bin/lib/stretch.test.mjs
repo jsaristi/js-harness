@@ -93,6 +93,16 @@ test('a stretch whose every lane runs past it by the low estimate is filled, wit
   assert.deepEqual(out.idle, { hours: 0, from: null });
 });
 
+test('an item that waits for the user is read with what it waits for, and laid in no lane: it cannot run while they are away', () => {
+  const read = parsePlan(plan({ items: [{ ...item('W1', 'build', [2, 3]), waitsFor: 'the spend of S5c-a' }] }));
+  assert.equal(read.plan.items[0].waitsFor, 'the spend of S5c-a');
+  assert.match(parsePlan(plan({ items: [{ ...item('W1', 'build', [2, 3]), waitsFor: 3 }] })).error, /W1.*waitsFor/);
+  const out = laneOut([{ id: 'A', corrected: [9, 12] }, { id: 'B', corrected: [9, 9], waitsFor: 'his yes' }], { slots: 2, hours: 8 });
+  assert.deepEqual(out.lanes.map((lane) => lane.items.map((one) => one.id)), [['A'], []]);
+  assert.deepEqual(out.queued, [9, 12]);
+  assert.equal(out.fills, false);
+});
+
 test('a slot with no item at all is idle the whole stretch', () => {
   const out = laneOut([{ id: 'A', corrected: [9, 12] }], { slots: 2, hours: 8 });
   assert.equal(out.fills, false);
@@ -109,6 +119,7 @@ test('a session is found by its label at the head of a title, and a longer numbe
   const trail = sessionTrail('JH 71', { notices, starts, root: 'D:\\p' });
   assert.equal(trail.firstAt, T0 + 0.5 * H);
   assert.deepEqual(trail.closes, [T0 + 5 * H]);
+  assert.equal(trail.lastAt, T0 + 5 * H);
   assert.equal(trail.stoppedAt, null);
   assert.deepEqual([...trail.ids].sort(), ['s71', 's71-bg']);
   assert.deepEqual(trail.cwds, ['d:/p/.claude/worktrees/stretch']);
@@ -148,13 +159,27 @@ test('an item runs from the later of the opening and its first record to its fir
 });
 
 test('an item whose session has not closed runs to now, one removed is stopped, and one with no record has not started', () => {
-  const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0 + H, closes: [], stoppedAt: null };
+  const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0 + H, lastAt: T0 + 3.5 * H, closes: [], stoppedAt: null };
   const running = measure(trail, T0 + 4 * H);
   assert.deepEqual([running.state, running.realHours, running.clipped], ['running', 3, false]);
   const stopped = measure({ ...trail, stoppedAt: T0 + 2 * H }, T0 + 4 * H);
   assert.deepEqual([stopped.state, stopped.realHours], ['stopped', 1]);
   const queued = itemMeasure({ ...item('W2', 'docs', [1, 1]), corrected: [1, 1] }, null, { openedAt: T0, now: T0 + 4 * H, gates: [] });
   assert.deepEqual([queued.state, queued.realHours, queued.lostHours], ['queued', 0, 0]);
+});
+
+test('a running session with no record for longer than the stall rule is silent, measured to its last record and not past it', () => {
+  const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0, lastAt: T0 + H, closes: [], stoppedAt: null };
+  const silent = measure(trail, T0 + 4 * H, [gate(1.5, 600, 'pass', { session: 's1' })]);
+  // Its last gate started at 1.5 h, later than its last notice: that is its last record.
+  assert.deepEqual([silent.state, silent.realHours, silent.lastAt], ['silent', 1.5, at(1.5)]);
+});
+
+test('a failure that crosses the edge of the span counts only its part inside it', () => {
+  const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0, lastAt: T0 + 2 * H, closes: [T0 + 2 * H], stoppedAt: null };
+  const measured = measure(trail, T0 + 4 * H, [gate(-0.5, 3600, 'fail', { session: 's1' }), gate(1.5, 3600, 'fail', { session: 's1' })]);
+  assert.equal(measured.lostHours, 1);
+  assert.deepEqual(measured.failures.map((one) => one.seconds), [1800, 1800]);
 });
 
 test('a gate the lead ran in a merge-queue folder is never an item\'s', () => {
@@ -184,4 +209,6 @@ test('the stretch carries the failed lands, their failed gates and the failed Co
   const gates = [gate(4, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-1-2' }), gate(5, 300, 'fail', { cwd: 'D:\\p\\w' })];
   const lost = stretchLost({ lands, codex, gates }, { from: T0, to: T0 + 8 * H });
   assert.deepEqual(lost.map((one) => [one.at, one.seconds, one.what]), [[at(1), 600, 'land exit 1'], [at(3), 120, 'Codex review failed'], [at(4), 300, 'land gate fail']]);
+  // A land that started before the stretch and ended inside it counts its part inside.
+  assert.deepEqual(stretchLost({ lands: [{ startedAt: at(-0.25), seconds: 1800, exit: 1 }], codex: [] }, { from: T0, to: T0 + 8 * H }).map((one) => one.seconds), [900]);
 });
