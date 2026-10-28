@@ -83,7 +83,7 @@ on the way is named in the plan as his, not taken.
 - [x] T4 (kind: docs) `README.md` checked against `js-harness --help`, each command's `--help` and the code; gaps fixed — S3; one sub-agent, README only — this commit
 - [x] T5 (kind: docs) `docs/GUIDE.md` kept as the newcomer's path: the review step and the stack as they are now, and what F8 changes — S3; inline — ef3397b0
 - [x] T6 (kind: verify) the double review, one Claude and one Codex blind reader; fixes once — all; inline — this commit
-- [ ] T7 (kind: verify) `npm run check`, push, pull requests (chained if large), the Spanish Artifact, the ready notice — all; inline
+- [x] T7 (kind: verify) `npm run check`, push, pull requests (chained if large), the Spanish Artifact, the ready notice — all; inline — PR 626, https://claude.ai/artifact/RJheCkzoPdSFHZpA4A52fm
 
 ## Review
 Two blind readers over `d2bc8ab2..4978e351` (docs, README), given the files and the two checks
@@ -126,5 +126,6 @@ is 40 (`grep -rl gentle-ai bin --include=*.mjs | grep -vc test.mjs`).
   open: `upgrade --help` says npm by default while `bin/update.mjs:50` picks `--pm`, then
   `JS_HARNESS_PM`, then the installing manager; `bin/lib/gentle-ai-update.mjs:2-3` still says
   js-harness never writes the global CLAUDE.md, stale since S10's Rules block.
-- Next step (state at the compaction of 06:39): commit README (T4); the double review (T6); the
-  Spanish page is drafted at the job's `tmp/plan-y-mapa-js-harness.html`, not yet published.
+- L4 (2026-10-28): one PR, not a chain: about 930 changed lines, all documentation, one commit a
+  document; the review-fix commit spans all five files, so a chain would rewrite them. PR 626; the
+  Spanish page published. Next step: none in this session; the lead lands PR 626.
