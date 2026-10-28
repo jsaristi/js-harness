@@ -77,11 +77,11 @@ on the way is named in the plan as his, not taken.
 - **No new document.** The roadmap, the specification, the README and the guide hold all of it.
 
 ## Tasks
-- [ ] T1 (kind: docs) this document — all; inline
-- [ ] T2 (kind: docs) the roadmap's `## F8 plan`, and the step 4 pointer — S2; inline
-- [ ] T3 (kind: docs) `docs/SPEC.md`: the problem and the bet as of F8, `## The architecture`, `## After F8` — S3; inline
-- [ ] T4 (kind: docs) `README.md` checked against `js-harness --help`, each command's `--help` and the code; gaps fixed — S3; one sub-agent, README only
-- [ ] T5 (kind: docs) `docs/GUIDE.md` kept as the newcomer's path: the review step and the stack as they are now, and what F8 changes — S3; inline
+- [x] T1 (kind: docs) this document — all; inline — 89ccab6f
+- [x] T2 (kind: docs) the roadmap's `## F8 plan`, and the step 4 pointer — S2; inline — d366daae
+- [x] T3 (kind: docs) `docs/SPEC.md`: the problem and the bet as of F8, `## The architecture`, `## After F8` — S3; inline — 84e80169, bae1f72e
+- [x] T4 (kind: docs) `README.md` checked against `js-harness --help`, each command's `--help` and the code; gaps fixed — S3; one sub-agent, README only — this commit
+- [x] T5 (kind: docs) `docs/GUIDE.md` kept as the newcomer's path: the review step and the stack as they are now, and what F8 changes — S3; inline — ef3397b0
 - [ ] T6 (kind: verify) the double review, one Claude and one Codex blind reader; fixes once — all; inline
 - [ ] T7 (kind: verify) `npm run check`, push, pull requests (chained if large), the Spanish Artifact, the ready notice — all; inline
 
@@ -97,3 +97,10 @@ on the way is named in the plan as his, not taken.
   summaries; `estado-28oct.html` is not in the scratchpad folder the brief names (ENOENT). JH 68's
   and JH 69's worktrees hold no feature document yet (`ls odd/tasks` in each), so S11 and the S1
   records fix are described from the diet and the reverse-engineering document, as planned.
+- L3 (2026-10-28): the README sub-agent fixed about 30 sections against each `--help` and the
+  code (`node --test bin/readme.test.mjs` 5/5, `rules check` PASS). Out of this surface and left
+  open: `upgrade --help` says npm by default while `bin/update.mjs:50` picks `--pm`, then
+  `JS_HARNESS_PM`, then the installing manager; `bin/lib/gentle-ai-update.mjs:2-3` still says
+  js-harness never writes the global CLAUDE.md, stale since S10's Rules block.
+- Next step (state at the compaction of 06:39): commit README (T4); the double review (T6); the
+  Spanish page is drafted at the job's `tmp/plan-y-mapa-js-harness.html`, not yet published.
