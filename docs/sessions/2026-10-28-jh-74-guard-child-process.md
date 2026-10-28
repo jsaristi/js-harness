@@ -1,37 +1,46 @@
 # JH 74 · Guard gap: review records written through a child process
 
 Brief: `C:\Users\Oficina\.js-harness\background\briefs\2026-10-28T18-18-15-760Z-faacddc0.md`. Branch
-`fix/guard-child-process`, worktree `.claude/worktrees/guard-child-process`, base main `59b3e1cd`. Feature document:
-`odd/tasks/guard-child-process.md` (contract, specs, reviews, log, follow-ups).
+`fix/guard-child-process`, PR 637, base main `59b3e1cd`. Feature document: `odd/tasks/guard-child-process.md`.
 
-## Bad news first
-- gentle-ai did not review the guard's slice (1189ae02..cfdfc268): its 43 KB lens contexts hold the guard's test
-  commands, a dispatcher copying them was stopped by a safety classifier, and a lens cannot read them from a file
-  (it runs without tools). Recorded "not reviewed"; the merge door may refuse on it. Codex and the lenses cover it.
-- The guard follows a child process by refusing it whole beside a record's name, not by reading what it runs: a read
-  that starts one (or uses Deno or Bun at all) is refused and goes through cat instead.
-- Still not followed (log, follow-ups): a direct write in Perl, Ruby, Deno, Bun or PowerShell code; a record's name
-  built from parts; a script read from stdin or a file; outer-shell wrappers missing from WRAPPERS (`timeout`, `wsl`,
-  `xargs`, `find -exec`, a git alias, `busybox`), which the verifier read as older than this branch, unrun.
-- The session was compacted once by the host (14:21 local); the feature document held the state.
+## Goal
+Close the guard's gap found by JH 72, where a script starting a child process could write a review record, and say
+whether prevention or provenance holds it; with three follow-ups of JH 72: `REGEXP_EXEC` and member calls,
+`refreshAfterLand`'s try, and a `- Seen:` line for the lead's brief of JH 72.
 
-## Done
-- `1189ae02` the feature document.
-- `62470339` S1 and S2: the guard refuses a script that starts a child process beside a record (in the script, its
-  arguments or its environment), reads `cmd /c` and PowerShell's command line, and REGEXP_EXEC skips a member call.
-  S1's answer: prevention, not provenance (a child can append a run line and the record naming it; Codex records have
-  no provenance).
-- `8fa48077` S3: `refreshAfterLand`'s folders and wait inside the try that keeps the land record written.
-- `41fe427f` S4: `docs/FAILURES.md`, `brief-waived-review-lines`, its Seen line.
-- `db220fe3`, `7ea64a76`, `cfdfc268`: the independent verifier's second and third passes and Codex's two P2.
+## The user's words
+The lead's brief (not Sebastián's words): "make prevention close this path too, or show with a test why provenance
+alone holds it, and say which." No message from Sebastián in this session.
 
-## Checked
-- `node --test bin/lib/guard.test.mjs bin/guard.test.mjs`: 78 pass, 0 fail. `npm run check` PASS before each commit.
-- Independent verifier: three passes (d91e379f's design replaced, 62470339, db220fe3); each finding fixed with a test.
-- Codex: 6247033..41fe427 correct 0.98; 1189ae0..7ea64a7 incorrect (two P2, fixed); 7ea64a7..cfdfc26 correct 0.98.
-- Claude lenses: 0 findings on 62470339..8fa48077, 1189ae0..7ea64a7 and 7ea64a7..cfdfc26.
-- gentle-ai: slice B approved and acknowledged (review-b2834bc1391b9caf); the guard's slice not reviewed (above).
+## Delivered
+- `62470339`, `db220fe3`, `7ea64a76`, `cfdfc268`: the guard refuses a script that starts a child process beside a
+  record's name (in the script, its arguments or its environment), reads `cmd /c` and PowerShell's command line, and
+  `REGEXP_EXEC` skips a member call. 78 guard tests pass.
+- `8fa48077`: `refreshAfterLand`'s folders and wait inside the try that keeps the land record written.
+- `41fe427f`: `docs/FAILURES.md`, `brief-waived-review-lines`.
+- `1189ae02`, `cce831fc`, `7d42cdee`: the feature document and this summary.
 
-## Left
-- Local branch `jh74-draft` (the first design, never pushed) and the review worktrees under
-  `D:\js-harness-worktrees\jh74-*` until the lead says otherwise.
+## Decisions
+- S1: prevention, not provenance. A child process can append a run line and the record naming it, and Codex records
+  carry no provenance (`isValidCodexReview`).
+- The guard refuses a child-process start beside a record whole rather than reading what the child runs: the first
+  design (reading the call's command) leaked through arrays, aliases and other runtimes, by the independent verifier.
+  A read that starts a child process, or uses Deno or Bun at all, goes through cat instead.
+- gentle-ai on the guard's slice recorded "not reviewed" after two ways failed (below); Codex and the lenses cover it.
+
+## Failures and lessons
+- gentle-ai could not review the guard's slice (1189ae02..cfdfc268): its 43 KB lens contexts hold the guard's refused
+  test commands; a dispatcher copying them into prompts was stopped by a safety classifier, and a lens told to read
+  its context from a file returned an incomplete inspection, since the lenses run without tools. The merge door may
+  refuse on it; that is the lead's to route.
+- The first commit carried AI attribution lines, against CLAUDE.md; amended before any push.
+- Follow-ups left open (feature document, log): direct writes in Perl, Ruby, Deno, Bun or PowerShell code; a record's
+  name built from parts; a script from stdin or a file; outer-shell wrappers missing from WRAPPERS; a few reads
+  refused (cmd copy out of a record, `start` in a PowerShell string, Deno and Bun reads).
+- Local branch `jh74-draft` (the first design, never pushed, its WIP commit skipped the hook) is kept for the lead.
+
+## Cost
+Measured where the commands printed it, not totalled: Codex 50,077, 124,747 and 32,404 input tokens on the last three
+runs (earlier runs in the Codex records); Claude lenses about 13,600 input tokens a lens on 1189ae0..7ea64a7 and 3,800
+on 7ea64a7..cfdfc26; the independent verifier about 127,000 and 148,000 subagent tokens on its last two passes;
+gentle-ai lens agents about 20,000 each. No evals.
