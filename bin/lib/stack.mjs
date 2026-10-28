@@ -16,7 +16,7 @@ import { readManifest } from './manifest.mjs';
 import { entryPlaces, snakeEvent, trustedPlaces } from './codex-trust.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
-import { INSTALL_NEWEST } from './version.mjs';
+import { INSTALL_NEWEST, compareSemver } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
@@ -266,6 +266,10 @@ export const tools = [
     upToDateFix: (installed, latest, rows = []) => {
       if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
       const binary = rows.find((row) => row.id === 'engram')?.version;
+      // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin.
+      if (compareSemver(installed, latest) > 0) {
+        return [`plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols; update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
+      }
       return [`plugin ${installed} is behind ${latest}, the plugin engram v${binary} ships; update it, then restart Claude Code:`, ...ENGRAM_PLUGIN_UPDATE_FIX];
     },
     fix: () => ({ installed: ENGRAM_SETUP_CLAUDE, claude: `claude plugin enable ${ENGRAM_PLUGIN}`, upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),

@@ -100,6 +100,14 @@ test('engram-plugin upToDate fix names the installed version, the one the engram
   assert.deepEqual(upToDateFix('0.1.12', null, rows), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
 });
 
+test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag updates the binary, not the plugin (row 11)', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', [{ id: 'engram', installed: 'ok', version: '3.5.1' }]), [
+    'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:',
+    ENGRAM_INSTALL,
+  ]);
+});
+
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {

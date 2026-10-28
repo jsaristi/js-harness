@@ -71,8 +71,8 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   inline; PR 1
 - [x] T3 (kind: build) presets: `init --preset`, the `engramPlugin` switch, the context7 project row, and a test
   per preset — S2, S3; inline; PR 2
-- [ ] T4 (kind: build) row 11: a test that nothing js-harness writes carries engram's protocol, and the
-  `engram-protocol` doctor row with its two fixtures — S6; inline; PR 2
+- [x] T4 (kind: build) row 11: a test that nothing js-harness writes carries engram's protocol, and the
+  engram-plugin row's `mismatch` with its two fixtures (L10) — S6; inline; PR 2
 - [ ] T5 (kind: build) the review sweep: the merge door's gentle-ai evidence, the pull-request body line, the
   review-starts row and the shipped text that sends a session to gentle-ai — S5; inline; PR 3
 - [ ] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
@@ -162,3 +162,11 @@ ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence tes
   row-17 test reads the files `init`'s manifest lists; the settings key that silences codegraph's prompt hook in a
   lean clone (`env.CODEGRAPH_NO_PROMPT_HOOK`) stays, since it is what keeps a machine-wide codegraph out of it, and
   it lives in the clone's own `.claude/settings.local.json`, no committed file.
+- L10 (2026-10-28, decision, within S6): the "doctor row" of row 11 is the engram-plugin row, not a new one: its
+  latest is already the plugin the engram binary's own tag ships (odd/tasks/engram-plugin-lag.md), so a plugin
+  behind it is `outdated` (the fixture that was there) and one ahead of it is now `mismatch`, whose fix updates the
+  binary; the two fixtures are those two `doctor` tests. "Writes no engram text of its own" is held by a test over
+  every shipped component, the rules block and `init`'s templates, which finds no `mem_*` tool name and no save
+  rule. The js-harness skill's "When Engram fails" stays: it is js-harness's own backup and its restore, not
+  engram's protocol or its context recovery (searched: `grep -rln "mem_save|mem_search|mem_context" bin`, only
+  test files and evals fixtures).
