@@ -215,6 +215,8 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - L7. 2026-10-28, gentle-ai: `gentle-ai review assess --committed-only` from the branch point rated the feature
   (18 paths, 1,733 lines) medium, under_budget, not due, so gentle-ai was not asked to review. The code commits
   838c9fe1, 765baf9a, b1d9f90a, 4e6dbdd7 and b651463a, gentle-ai not due, are approved by Codex and the lenses (L5).
+- L8. 2026-10-28, the rule branch: `gentle-ai review assess --committed-only` from the merge it starts at rated it
+  (6 paths, 76 lines) medium, under_budget, not due; 865ec2e7, gentle-ai not due, is approved by Codex and the lenses (L6).
 
 ## Next step
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
