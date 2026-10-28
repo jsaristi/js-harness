@@ -78,7 +78,7 @@ const CEILINGS = {
   'bin/backup.mjs': 1303,
   'bin/remote.mjs': 1118,
   'scripts/practice-lib.mjs': 1174,
-  'bin/resume.mjs': 1134,
+  'bin/resume.mjs': 1123,
   'evals/suite.mjs': 1129,
   'bin/sessions.mjs': 1018,
   'bin/merge-queue.mjs': 1044,

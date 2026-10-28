@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, questionFacts, reviewFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputDues, throughputRows, withReadyAt } from './throughput.mjs';
+import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, questionFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputDues, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -416,71 +416,11 @@ test('the test files row counts only local gates among those that traced, and a 
   assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { 'gate log': 'EBUSY' } })]), 'test files').value, 'not read: 2026-10-17 EBUSY');
 });
 
-test('a day\'s gentle-ai reviews: acknowledged once the record is there and the folder gone, started from when this machine began recording them', () => {
-  const start = (lineage, at, seenAt = '2026-10-17T08:00:00.000Z') => ({ v: 1, lineage, at, from: 'birthtime', seenAt });
-  const record = {
-    starts: [
-      start('old', '2026-10-15T09:00:00.000Z'), // live when recording began, born before it: not counted as started
-      start('acked', '2026-10-17T09:00:00.000Z'),
-      start('acked', '2026-10-17T09:00:00.000Z', '2026-10-17T09:40:00.000Z'), // a second session's line of the same folder: one start
-      start('open', '2026-10-17T10:00:00.000Z'),
-      start('gone', '2026-10-17T11:00:00.000Z'),
-      start('burning', '2026-10-17T12:00:00.000Z'),
-    ],
-    ends: [
-      { lineage: 'acked', at: '2026-10-17T09:24:00.000Z' },
-      { lineage: 'burning', at: '2026-10-17T12:10:00.000Z' }, // record written, folder not yet deleted: not ended
-      { lineage: 'before', at: '2026-10-16T10:00:00.000Z' },
-      { lineage: 'untimed', at: '2026-10-17T13:00:00.000Z' },
-    ],
-    live: ['old', 'open', 'burning'],
-  };
-  const facts = reviewFacts(record, dayBounds('2026-10-17'));
-  assert.equal(facts.since, '2026-10-17T08:00:00.000Z');
-  assert.deepEqual(facts.started.map((one) => one.lineage), ['acked', 'open', 'gone', 'burning']);
-  assert.deepEqual(facts.ended, [{ lineage: 'acked', at: '2026-10-17T09:24:00.000Z', minutes: 24 }, { lineage: 'untimed', at: '2026-10-17T13:00:00.000Z', minutes: null }]);
-  assert.deepEqual([facts.open, facts.gone], [['open', 'burning'], ['gone']]);
-  const before = reviewFacts(record, dayBounds('2026-10-16'));
-  assert.deepEqual([before.started, before.ended.map((one) => one.lineage)], [[], ['before']]);
-
-  const row = rowOf(throughputRows([dayOf({ day: '2026-10-16', reviews: before }), dayOf({ day: '2026-10-17', reviews: facts })]), 'gentle-ai reviews');
-  assert.equal(row.value, '3 acknowledged, median 24 min (1 timed, one lineage each); 4 started, 2 open, 1 gone without acknowledgement; started not recorded: 2026-10-16 (this machine records starts from 2026-10-17 08:00Z)');
-  assert.match(row.source, /review-transactions/);
-  // No start recorded on this machine at all; a day whose store could not be read says so.
-  const none = reviewFacts({ starts: [], ends: [], live: [] }, dayBounds('2026-10-17'));
-  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', reviews: none })]), 'gentle-ai reviews').value, '0 acknowledged; started not recorded: 2026-10-17 (no review start recorded on this machine)');
-  assert.equal(rowOf(throughputRows([dayOf({ day: '2026-10-17', unavailable: { reviews: 'EACCES' } })]), 'gentle-ai reviews').value, 'not read: 2026-10-17 EACCES');
-});
-
-test('the reviews row keeps the acknowledgements when only the starts could not be read, and ties between ends of one lineage are settled by time', () => {
-  const start = (lineage, at) => ({ v: 1, lineage, at, from: 'birthtime', seenAt: '2026-10-17T08:00:00.000Z' });
-  const ends = [{ lineage: 'again', at: '2026-10-17T11:00:00.000Z' }, { lineage: 'again', at: '2026-10-17T09:10:00.000Z' }];
-  const starts = [start('again', '2026-10-17T10:00:00.000Z')];
-  // The end kept is the first at or after the lineage's start, whatever order the records were listed in.
-  for (const order of [ends, [...ends].reverse()]) {
-    assert.deepEqual(reviewFacts({ starts, ends: order, live: [] }, dayBounds('2026-10-17')).ended, [{ lineage: 'again', at: '2026-10-17T09:10:00.000Z', minutes: null }, { lineage: 'again', at: '2026-10-17T11:00:00.000Z', minutes: 60 }]);
-  }
-  const acked = reviewFacts({ starts: [], ends: [{ lineage: 'x', at: '2026-10-17T09:00:00.000Z' }], live: [] }, dayBounds('2026-10-17'));
-  const row = rowOf(throughputRows([dayOf({ day: '2026-10-17', reviews: acked, unavailable: { 'review starts': 'EBUSY' } })]), 'gentle-ai reviews');
-  assert.equal(row.value, '1 acknowledged; started not read: 2026-10-17 EBUSY');
-  // A day whose store could not be read beside one that was: the row says what was not read.
-  const mixed = rowOf(throughputRows([dayOf({ day: '2026-10-16', unavailable: { reviews: 'EACCES' } }), dayOf({ day: '2026-10-17', reviews: acked })]), 'gentle-ai reviews');
-  assert.equal(mixed.value, 'not read: 2026-10-16 EACCES');
-});
-
-test('an id used again after a burn is two reviews, each its start with the first end after it', () => {
-  const start = (at) => ({ v: 1, lineage: 'again', at, from: 'birthtime', seenAt: '2026-10-17T08:00:00.000Z' });
-  const record = {
-    starts: [start('2026-10-17T09:00:00.000Z'), start('2026-10-17T12:00:00.000Z')],
-    ends: [{ lineage: 'again', at: '2026-10-17T09:20:00.000Z' }, { lineage: 'again', at: '2026-10-17T12:40:00.000Z' }],
-    live: [],
-  };
-  const facts = reviewFacts(record, dayBounds('2026-10-17'));
-  assert.deepEqual(facts.started.map((one) => one.at), ['2026-10-17T09:00:00.000Z', '2026-10-17T12:00:00.000Z']);
-  assert.deepEqual(facts.ended.map((one) => one.minutes), [20, 40]);
-  // The second life still running: its first life ended, it is open.
-  const running = reviewFacts({ ...record, ends: [record.ends[0]], live: ['again'] }, dayBounds('2026-10-17'));
-  assert.deepEqual([running.ended.map((one) => one.minutes), running.open, running.gone], [[20], ['again'], []]);
+test('the table has no gentle-ai row, and a day kept before F8 S11 with its review facts still reads (L11)', () => {
+  const kept = dayOf({ reviews: { since: null, started: [], ended: [], open: [], gone: [] }, unavailable: { reviews: 'EACCES' } });
+  const rows = throughputRows([kept]);
+  assert.ok(rows.length > 0);
+  for (const row of rows) assert.doesNotMatch(`${row.label} ${row.value} ${row.source}`, /gentle-ai|review starts/);
 });
 
 test('a day\'s questions: those recorded in it, and those an answer or a withdrawal closed in it, with the answer\'s own times once B4 keeps them', () => {

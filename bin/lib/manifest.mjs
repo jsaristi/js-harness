@@ -1257,7 +1257,7 @@ export function uninstall(home, deps = {}) {
 }
 
 /** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
- * the gates of days the gate log has rotated away. The gentle-ai review starts the pause hook keeps beside them
+ * the gates of days the gate log has rotated away. The review starts the pause hook kept beside them until F8 S11
  * (`review-starts.jsonl`, B6) are the only copy of those starts, and stay too. Named, with how many days and how many
  * projects' starts they hold (`null` where the folder could not be listed), so the person knows what stays; `{}`
  * when there is no folder. */
