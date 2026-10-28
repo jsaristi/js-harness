@@ -110,6 +110,10 @@ Reviews:
 - Codex again on `62f4a623..d0954123` (`--again`, the command's own advice after it refused a second recheck from
   `f9c10579`; 2 parts, 353,905 input tokens): part 2 clean, part 1 one finding P2, fixed by the commit after
   `d0954123` (L9). The lenses on `f9c10579..d0954123` ran twice and were incomplete both times (L9).
+- Codex's recheck of `d0954123..37cdab21` (38,018 input tokens): 1 fixed, 0 not fixed; the patch is correct (0.98).
+- The lenses on `f9c10579..37cdab21`: a third run, incomplete again (risk cut short; reliability and readability
+  complete, 0 findings), so a skip is recorded with `--unavailable` and its reason. `check`, `doctor` and the merge
+  queue list it until a lens run covers the range: the debt is open, and is the lead's to route.
 
 ## Paid runs
 None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
@@ -133,8 +137,9 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 ## Next step
 T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
 seven by `f9c10579` (L7), what their recheck left by `d0954123` (L8), and Codex's last finding by the commit after
-it (L9). Next: Codex on that commit (a recheck from `d0954123`) and the lenses from `f9c10579`, the tree untouched
-while they run; then push, the pull request and `js-harness notify --to orchestrator --kind ready --pr <n>`.
+it (`37cdab21`, L9). Codex covers every code commit and left nothing open; the lenses cover all but
+`f9c10579..37cdab21`, a recorded skip (three runs cut short). Next: push, the pull request and
+`js-harness notify --to orchestrator --kind ready --pr <n>`; the lens skip is paid by a run that completes.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
