@@ -756,6 +756,10 @@ test('a script that starts a child process beside a record\'s name is refused, w
     `python -c "import nt; nt.system('echo x >> ${RECORD}')"`,
     `python -c "import os; getattr(os, 'sys' + 'tem')('echo x >> ${RECORD}')"`,
     `python -c "from os import *; system('echo x >> ${RECORD}')"`,
+    // An import over several lines, and Windows' startfile (Codex on 1189ae0..7ea64a7).
+    `python -c "from os import (\n    path,\n    system,\n)\nsystem('echo x >> ${RECORD}')"`,
+    `python -c "from os import path, \\\\\n    system\nsystem('echo x >> ${RECORD}')"`,
+    `python -c "import os; os.startfile('cmd', arguments='/c echo x >> ${RECORD}')"`,
     `node -e "process['binding']('spawn_sync')" ${RECORD}`,
     `pwsh -c "$ExecutionContext.InvokeCommand.NewScriptBlock('''x'' >> ${RECORD}').Invoke()"`,
     `pwsh -c "(New-Object -ComObject WScript.Shell).Run('cmd /c echo x >> ${RECORD}')"`,

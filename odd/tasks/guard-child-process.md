@@ -66,6 +66,10 @@ alone (`isValidCodexReview`). So the guard closes the path (T2).
 - gentle-ai: 8fa48077 (slice 62470339..8fa48077, refreshAfterLand), lineage review-b2834bc1391b9caf, medium, lenses
   review-resilience and review-reliability, 0 findings, approved and acknowledged.
 - Codex 6247033..41fe427: correct, 0.98. Claude lenses resilience, reliability 62470339..8fa48077: 0 findings.
+- Codex 1189ae0..7ea64a7 (the guard): incorrect, 0.98, two P2 (a Python import over several lines, os.startfile),
+  fixed in the next commit. Claude lenses risk, reliability, readability 1189ae0..7ea64a7: 0 findings. gentle-ai
+  lineage review-da7318f1b212be1e (high, escalated item 2) was started on 7ea64a76 and left unrun when Codex's
+  findings changed the candidate.
 
 ## Next step
 The guard's slice (1189ae02..62470339, and db220fe3): the verifier's third pass, then Codex, the Claude lenses and

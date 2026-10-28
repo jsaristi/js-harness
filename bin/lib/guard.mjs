@@ -674,8 +674,10 @@ const CHILD_STARTS = {
   js: /\b(?:child_process|worker_threads|Deno|Bun|binding|_linkedBinding|execve|dlopen)\b|['"]bun['"]/,
   python: new RegExp([
     /\b(?:posix|nt|_winapi|_posixsubprocess|subprocess|pty|asyncio|multiprocessing|ctypes|importlib|__import__)\b/,
-    /\bos\s*\.\s*(?:system|popen|exec|spawn|posix_spawn|fork|__dict__)/,
-    /\bfrom\s+os\s+import\b[^;\n]*(?:\*|\b(?:system|popen|exec|spawn|posix_spawn|fork))|\bimport\s+os\s+as\b/,
+    /\bos\s*\.\s*(?:system|popen|exec|spawn|posix_spawn|fork|startfile|__dict__)/,
+    // An import's names run to its closing parenthesis, or over a backslash's line (Codex on 1189ae0..7ea64a7).
+    /\bfrom\s+os\s+import\s*(?:\([^)]*?|(?:\\\s*\n|[^;\n(])*?)(?:\*|\b(?:system|popen|exec|spawn|posix_spawn|fork|startfile))/,
+    /\bimport\s+os\s+as\b/,
     /\b(?:getattr|vars)\s*\(\s*os\b|\bmodules\s*\[/,
   ].map((part) => part.source).join('|')),
   // A pipe open's pipe sits at its mode string's edge (`"|-"`, `'-|'`, `"cmd |"`), not in a block's `|f|` or `|| die`.
