@@ -69,7 +69,7 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   context7 required and runnable, the gentle-ai row and its installer step out — S1, S4; inline; PR 1
 - [x] T2 (kind: build) the `gentle-ai-sync` row, `doctor --gentle-ai-reviewed` and the install watch out — S4;
   inline; PR 1
-- [ ] T3 (kind: build) presets: `init --preset`, the `engramPlugin` switch, the context7 project row, and a test
+- [x] T3 (kind: build) presets: `init --preset`, the `engramPlugin` switch, the context7 project row, and a test
   per preset — S2, S3; inline; PR 2
 - [ ] T4 (kind: build) row 11: a test that nothing js-harness writes carries engram's protocol, and the
   `engram-protocol` doctor row with its two fixtures — S6; inline; PR 2
@@ -151,3 +151,14 @@ ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence tes
   failed on GitHub Actions (run 40687865647): `evals/suite.mjs` read that row for the eval stack's `gentleAi`
   field, 9 tests of `evals/suite.test.mjs`. The field leaves the stack a run records and compares; a results file
   recorded before keeps its `gentleAi` key, unread, so an old run resumes on a machine without gentle-ai.
+- L9 (2026-10-28, decision, within S2 and S3): `init --preset complete|lean|custom` is optional; with none, `init`
+  writes the `harness.json` it wrote before, with no `"functions"`, so no project changes by this slice. A preset
+  writes its `"functions"` (`PRESETS`, `bin/lib/functions.mjs`): every one declares `codexReview` and `lensReview`
+  `on`, since no preset drops a review; `lean` adds `codeMap: "off"`, so `init` runs no `codegraph init`; `custom`
+  starts from complete and takes `--codegraph on|off` (`codeMap` `on-demand` or `off`) and `--engram-plugin on|off`,
+  a new switch `engramPlugin` (`auto` is on) that hides the engram-plugin row where off; either choice with another
+  preset, or without one, is a usage error that writes nothing. context7 and engram have no switch: every preset
+  holds them (G11), and a preset prints that context7 is required where `~/.claude.json` has it nowhere (L6). The
+  row-17 test reads the files `init`'s manifest lists; the settings key that silences codegraph's prompt hook in a
+  lean clone (`env.CODEGRAPH_NO_PROMPT_HOOK`) stays, since it is what keeps a machine-wide codegraph out of it, and
+  it lives in the clone's own `.claude/settings.local.json`, no committed file.
