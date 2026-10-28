@@ -71,7 +71,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
-- [ ] T7 (kind: build) the Rules block (question 99 answered, L18) — S5
+- [ ] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -236,3 +236,16 @@ branch after it.
   (Recomendada)", which asked that install write into `~/.claude/CLAUDE.md` "un bloque pequeño y registrado con tus 9
   líneas de D7, que se puede deshacer con uninstall. No toca nada más de ~/.claude." T7 is open, on a branch after
   PR 2.
+- L19 (2026-10-28, T7's design, on `f8-s10-rules`, PR 3): the nine lines are the nine under "Kept from the global
+  file" in the root `CLAUDE.md` (his D7 answer); they live once in code, `RULES_LINES` of `bin/lib/rules-block.mjs`,
+  and a test holds them equal to that section word for word. The block is the marked block of
+  `bin/lib/project-template.mjs` (a mark with the hash of its lines, then an end mark), under a `## Rules` heading:
+  install puts it at the end of `~/.claude/CLAUDE.md`, renders it again while unedited, and leaves an edited one as
+  his; the record is `{ path, createdFile, separator }`, the text put before the block, so uninstall gives the file
+  its bytes back; the file goes only when install made it and nothing else is left. A file that cannot be read or
+  written is skipped by install and, on uninstall, a failure that stays recorded (exit 1), as the permissions are.
+  Nothing else of `~/.claude` is written, and Codex's `~/.codex/AGENTS.md` is not touched: his answer names only the
+  Claude file. Until S2 his other projects load these lines twice (gentle-ai's Rules list holds them too), about
+  843 characters, about 210 tokens by chars/4 (its two marks add 138 more); S2 removes gentle-ai's. The block is high risk (it changes a file he already has, item 1): an
+  independent verifier reads it after its checks. `manifest.mjs` sat at its ceiling, so the atomic write moved out
+  first (`30ac3c3d`, -101 lines), and the ceiling ends at 1801, 97 under main's 1898.

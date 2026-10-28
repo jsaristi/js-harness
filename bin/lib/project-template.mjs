@@ -1,6 +1,7 @@
 // The files that hold the harness's lines in a project, AGENTS.md and CLAUDE.md, and their marked block that `sync`
-// renders again while it is unedited (odd/tasks/rule-hierarchy.md, T16f; odd/tasks/f8-s3-split.md, S3). The lines
-// themselves stay in project.mjs, which passes them in.
+// renders again while it is unedited (odd/tasks/rule-hierarchy.md, T16f; odd/tasks/f8-s3-split.md, S3). The user's own
+// `~/.claude/CLAUDE.md` holds one too, his Rules lines (./rules-block.mjs). The lines themselves stay with their
+// callers, which pass them in.
 import path from 'node:path';
 import { sha256 } from './manifest.mjs';
 
@@ -19,8 +20,7 @@ export function agentsFile(root, body) {
 <where the work lives: the code, the data, the documents>. The single command that checks a change:
 \`<command>\`.
 
-${templateBlockMark(body)}
-${body}${TEMPLATE_BLOCK_END}
+${markedBlock(body)}
 
 ## Constraints
 - <a real constraint> — <the reason behind it>
@@ -36,8 +36,7 @@ export function claudeFile(body) {
   return `<!-- Written by \`js-harness init\`. Claude loads this file and the AGENTS.md it imports on every turn: keep it short. -->
 @AGENTS.md
 
-${templateBlockMark(body)}
-${body}${TEMPLATE_BLOCK_END}
+${markedBlock(body)}
 `;
 }
 
@@ -48,6 +47,20 @@ export const TEMPLATE_BLOCK_MARK = /^<!-- js-harness block ([0-9a-f]{12}): .*-->
 /** The hash a block's mark carries: of its lines with LF line ends, so a checkout with CRLF ones reads as unedited. */
 const blockHash = (body) => sha256(body.replace(/\r\n/g, '\n')).slice(0, 12);
 const templateBlockMark = (body) => `<!-- js-harness block ${blockHash(body)}: sync renders the lines to the end mark again while they are unedited -->`;
+/** `body`, lines that end with a line end, in the harness's marked block: its mark, the lines, its end mark. */
+export const markedBlock = (body) => `${templateBlockMark(body)}\n${body}${TEMPLATE_BLOCK_END}`;
+
+/** Where the harness's block of `text` is, `{ start, from, to }`: its mark, its lines and its end mark; or its `state`,
+ * `none` when there is no mark and `edited` when the lines no longer match the mark's hash or there is no end mark. */
+function blockIn(text) {
+  const opened = TEMPLATE_BLOCK_MARK.exec(text);
+  if (opened === null) return { state: 'none' };
+  const after = opened.index + opened[0].length;
+  const from = after + (text.startsWith('\n', after) ? 1 : 0);
+  const to = text.indexOf(TEMPLATE_BLOCK_END, from);
+  if (to === -1 || blockHash(text.slice(from, to)) !== opened[1]) return { state: 'edited' };
+  return { start: opened.index, from, to };
+}
 
 /** `text`, an `AGENTS.md` or a `CLAUDE.md`, with the harness's block rendered as `body`, this version's lines for that
  * file: `{ text, state }`. The state
@@ -55,14 +68,21 @@ const templateBlockMark = (body) => `<!-- js-harness block ${blockHash(body)}: s
  * they are this version's already, `edited` when they no longer match their mark (or the block has no end mark), and
  * `none` when the file has no block. Every line outside the block is kept, and the file's line ends with them. */
 export function renderBlock(text, body) {
-  const opened = TEMPLATE_BLOCK_MARK.exec(text);
-  if (opened === null) return { text, state: 'none' };
-  const after = opened.index + opened[0].length;
-  const from = after + (text.startsWith('\n', after) ? 1 : 0);
-  const to = text.indexOf(TEMPLATE_BLOCK_END, from);
-  if (to === -1 || blockHash(text.slice(from, to)) !== opened[1]) return { text, state: 'edited' };
+  const found = blockIn(text);
+  if (found.state) return { text, state: found.state };
+  const { start, from, to } = found;
   if (text.slice(from, to).replace(/\r\n/g, '\n') === body) return { text, state: 'current' };
   const lineEnd = text.includes('\r\n') ? '\r\n' : '\n';
   const block = `${templateBlockMark(body)}\n${body}`.replace(/\n/g, lineEnd);
-  return { text: text.slice(0, opened.index) + block + text.slice(to), state: 'rendered' };
+  return { text: text.slice(0, start) + block + text.slice(to), state: 'rendered' };
+}
+
+/** `text` with the harness's block taken out, with the line end after its end mark: `{ text, state, at }`. The state is
+ * `removed`, with `at` where the block began; or, with `text` as it was, `edited` or `none`, as `blockIn` says. */
+export function removeBlock(text) {
+  const found = blockIn(text);
+  if (found.state) return { text, state: found.state };
+  const end = found.to + TEMPLATE_BLOCK_END.length;
+  const tail = text.startsWith('\r\n', end) ? 2 : text.startsWith('\n', end) ? 1 : 0;
+  return { text: text.slice(0, found.start) + text.slice(end + tail), state: 'removed', at: found.start };
 }

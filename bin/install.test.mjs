@@ -182,7 +182,48 @@ test('uninstallMain sends a permissions record it cannot clear to its own file, 
     manifest.permissions.path = elsewhere;
     fs.writeFileSync(file, JSON.stringify(manifest));
     const kept = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(kept.code, 1);
     assert.ok(kept.errLines.includes(`left the permission entries install wrote as they are (the record names another file than the user settings): they are no longer recorded; remove them by hand from ${elsewhere}, the file the record names`), kept.errLines.join('\n'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// F8 S10, T7: what install and uninstall do with the Rules block of the user's CLAUDE.md is said; a block he edited is
+// his and does not fail the uninstall, and one that could not be taken out goes to stderr and fails it.
+test('installMain and uninstallMain say what they did with the Rules block, and a failure goes to stderr', async () => {
+  const home = makeTmpHome();
+  try {
+    const file = path.join(home, '.claude', 'CLAUDE.md');
+    const installed = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(installed.outLines.includes(`wrote the Rules block into ${file}`), installed.outLines.join('\n'));
+    const again = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(again.outLines.includes(`the Rules block is already in ${file}`), again.outLines.join('\n'));
+
+    const writeFile = (target, ...rest) => {
+      if (target === file) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      return fs.writeFileSync(target, ...rest);
+    };
+    fs.appendFileSync(file, '# mine\n');
+    const failed = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
+    assert.equal(failed.code, 1);
+    assert.ok(failed.errLines.includes(`could not take the Rules block out of ${file} (EBUSY): it is still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove it by hand`), failed.errLines.join('\n'));
+    const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(removed.code, 0);
+    assert.ok(removed.outLines.includes(`took the Rules block out of ${file}`), removed.outLines.join('\n'));
+
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('- Verify a claim before building on it.', '- Verify every claim.'));
+    const edited = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(edited.outLines.includes(`left the Rules block in ${file} as it is: its lines were edited, so they are yours`), edited.outLines.join('\n'));
+    const keptEdited = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(keptEdited.code, 0);
+    assert.ok(keptEdited.outLines.includes(`kept the Rules block in ${file} (modified by you)`), keptEdited.outLines.join('\n'));
+
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    const skipped = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(skipped.errLines.some((line) => line.startsWith(`skipped the Rules block in ${file}: not readable (`)), skipped.errLines.join('\n'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
