@@ -58,7 +58,8 @@ test('an answer that is not one complete object is still refused, and says what 
 
 // JH 75: three answers of JH 73's were "not closed (it opens at character 0)" over a diff that holds JSON in strings
 // (`put(root, 'b-case.json', '{"written":"again"}')`). Escaped, such a quote is read; left unescaped, the refusal says
-// where the JSON breaks, or that the answer ends first, so the reason alone tells a stray quote from a cut answer.
+// where the JSON breaks, or that the answer ends first. A cut answer with prose after it breaks at the prose, so only
+// the kept output (lens-review.mjs, `answerFile`) tells every stray quote from every cut.
 test('an answer quoting JSON from a diff is read when escaped, and refused with where it breaks when not', () => {
   const quoting = { ...finding, claim: "put(root, 'evals/proofs/rules/b-case.json', '{\"written\":\"again\"}') rewrites a kept proof", proof_refs: ["bin/rules.test.mjs:234 put(root, 'task.json', '{\"changed\":true}')"] };
   const escaped = JSON.stringify(answer({ findings: [quoting] }));
@@ -78,6 +79,9 @@ test('an answer quoting JSON from a diff is read when escaped, and refused with 
   for (const text of [escaped.replace('"read both"', '"read evals\\\\results\\"'), escaped.slice(0, -1)]) {
     assert.match(lensResult(text, candidate).why, /not closed \(it opens at character 0\): the answer ends before it closes$/, text);
   }
+  // A break the parser names no character for is given in its own words, never taken for a cut (gentle-ai R3-001).
+  const bare = escaped.replace('"read both"]}', 'tru "read both]}');
+  assert.match(lensResult(bare, candidate).why, /not closed \(it opens at character 0\): the parser says Unexpected token/);
 });
 
 test('the prompt asks for every quote and backslash in a string escaped, a quoted patch included', () => {

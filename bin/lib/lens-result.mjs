@@ -51,14 +51,18 @@ function parseFault(json, offset, err) {
  * character points at it; a cut answer, or a backslash before a closing quote, ends the text first (JH 75). */
 function unclosedFault(text, start) {
   const rest = text.slice(start);
+  let message = '';
   let at = null;
   try {
     JSON.parse(rest);
   } catch (err) {
+    message = err.message;
     at = breakOf(err);
   }
   const opens = `an object in it is not closed (it opens at character ${start})`;
-  if (at === null || at >= rest.trimEnd().length) return `${opens}: the answer ends before it closes`;
+  // A message that names no character is given as it is: only the parser knows whether it broke at the end.
+  if (at === null) return /end of JSON input/.test(message) ? `${opens}: the answer ends before it closes` : `${opens}: the parser says ${message}`;
+  if (at >= rest.trimEnd().length) return `${opens}: the answer ends before it closes`;
   return `${opens}: it breaks at character ${start + at}, near ${nearText(rest, at)}`;
 }
 

@@ -36,6 +36,7 @@ export const LENS_ANSWERS_FOLDER = 'lens-answers';
 /** Keeps `text`, what the lens `lens` of the run `run` printed, whole in `lens-answers/<run>-<lens>.stdout` beside the
  * records and returns the file's path; throws outside a git repository. */
 export function keepLensAnswer(root, { run, lens, text }, deps = {}) {
+  // `jsonLinesPath` only resolves a name under `<git common dir>/js-harness/`; this file is plain text no reader parses.
   const file = jsonLinesPath(root, path.join(LENS_ANSWERS_FOLDER, `${run}-${lens}.stdout`), deps);
   if (!file) throw new Error(`not a git repository: ${root}`);
   fs.mkdirSync(path.dirname(file), { recursive: true });

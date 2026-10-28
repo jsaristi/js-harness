@@ -93,3 +93,28 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
     `stopReason`; stderr prints the file on a line of its own; an object that never closes says "it breaks at
     character N, near ..." or "the answer ends before it closes".
   - Not changed: what a check admits, and a complete lens keeps no file.
+- L8, the reviews of a93558f1 (30191550..a93558f1):
+  - Codex: "the patch is correct" (0.91), no findings; recorded in `codex-reviews.jsonl`.
+  - Claude lenses risk, resilience, reliability and readability: complete, 0 findings; recorded.
+  - gentle-ai: a93558f1 reviewed in lineage review-548d31cef271fb3e (lenses risk, readability, reliability; tier high
+    by item 2), approved and acknowledged, with four advisory findings: R2-001 (`jsonLinesPath` names a JSONL record
+    for a plain file), R3-001 (a parser message with no character read as a cut), R3-002 (the tests rest on V8's
+    message wording), R3-003 (no test of a failed write).
+  - The independent verifier: all five checks hold (no refused answer can count, the file stays in `lens-answers/`, the
+    reason points at the right character in 15 probes, RED 5 and GREEN 27 reproduced from the parent's sources, no
+    output or doc broken). Minor: a cut answer with prose after it breaks at the prose, so the reason alone does not
+    tell every cut; the file is stdout, not stderr; nothing guards or prunes `lens-answers/`; `answerFile` is absolute.
+  - My slip: the first `gentle-ai review start` went through `| head -80`, which cut the identifiers its output carried;
+    a second start with the same flags resumed the lineage and gave them back. A state-changing command's output goes to
+    a file, never through `head`.
+- L9, the fixes of L8, test first:
+  - R3-001: `{"a":tru "b` breaks mid-text with "Unexpected token ' '" and no character, and was read as a cut (RED). A
+    message with no character is now given in the parser's words, and only "end of JSON input" is called a cut.
+  - R3-003: a test makes `lens-answers` a file, so the write fails; the record holds `answerNotKept`, stderr says it,
+    and the run keeps its record. It passed at once: the behavior was built, only unproved.
+  - R2-001: a comment says `jsonLinesPath` only resolves the name. SPEC says stdout, not output. The test comment no
+    longer claims the reason alone tells every cut.
+  - R3-002 left: the neighbouring `parseFault` test rests on the same V8 wording, Node is the repo's one runtime, and a
+    change of wording now falls to the parser's own words rather than to a wrong reason.
+  - Left open for the lead: guarding or pruning `lens-answers/`, a relative `answerFile`, and `--json-schema` (L4).
+  - GREEN: 28 of 28 in the three files.

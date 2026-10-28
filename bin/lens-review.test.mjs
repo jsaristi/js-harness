@@ -135,6 +135,26 @@ test('a lens whose CLI printed no JSON keeps that output too; one that printed n
   assert.equal(readability.answerFile, undefined);
 });
 
+// gentle-ai R3-003: a write that fails is said and recorded, and the run keeps its record.
+test('an output that cannot be kept is recorded as not kept, and the run still has its record', () => {
+  const folder = path.join(git('rev-parse', '--absolute-git-dir'), 'js-harness', 'lens-answers');
+  fs.rmSync(folder, { recursive: true, force: true });
+  fs.writeFileSync(folder, 'a file where the folder goes');
+  try {
+    const before = readLensReviews(dir).length;
+    const claude = fakeClaude(() => 'Looks fine.');
+    const { code, err } = run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens });
+    assert.equal(code, 1);
+    assert.equal(readLensReviews(dir).length, before + 1);
+    const [risk] = readLensReviews(dir).at(-1).results;
+    assert.equal(risk.answerFile, undefined);
+    assert.match(risk.answerNotKept, /\S/);
+    assert.ok(err.split('\n').includes(`  what its CLI printed could not be kept: ${risk.answerNotKept}`), err);
+  } finally {
+    fs.rmSync(folder, { force: true });
+  }
+});
+
 test('a skip is recorded with its reason and runs no lens; a range with no code records nothing to review', () => {
   const claude = fakeClaude(clean);
   assert.equal(run(['--base', 'HEAD~1', '--unavailable', 'the plan is out of turns'], { runLens: claude.runLens }).code, 0);
