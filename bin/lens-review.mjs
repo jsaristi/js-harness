@@ -7,7 +7,8 @@
 // customizations (`--safe-mode`), on the user's own CLI login, as `codex-review` runs on his Codex login: a review
 // is work, never an eval, so the eval token and any API key are taken out of its environment. What it reads is the
 // block `./lib/lens-candidate.mjs` packages, and what it answers counts only as `./lib/lens-result.mjs` says. One
-// record a run (`./lib/lens-reviews.mjs`); `--unavailable <reason>` records a skip, which the push lets through and
+// record a run (`./lib/lens-reviews.mjs`), naming the run line written before any lens ran, since a check admits no
+// record that names none; `--unavailable <reason>` records a skip, which the push lets through and
 // `check`, `doctor` and the merge door keep listing until a review covers it.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,7 +19,7 @@ import { NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { lensResult } from './lib/lens-result.mjs';
-import { appendLensReview, INCOMPLETE, LENS_REVIEW_SCHEMA } from './lib/lens-reviews.mjs';
+import { appendLensReview, INCOMPLETE, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model gentle-ai's lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
 export const LENS_MODEL = 'sonnet';
@@ -170,7 +171,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     paths: candidate.manifest.length,
     leftOut: { files: candidate.leftOut.length, marked: { files: candidate.markedLeftOut } },
   };
-  const write = (fields) => appendLensReview(cwd, { ...record, ...fields, reviewedAt: new Date().toISOString() });
+  // The run line goes first, before any lens runs, and the record names it: a check admits no record that names none.
+  let runId = null;
+  const start = () => (runId ??= startLensRun(cwd, record));
+  const write = (fields) => appendLensReview(cwd, { ...record, run: start(), ...fields, reviewedAt: new Date().toISOString() });
   if (skip !== undefined) {
     const file = write({ outcome: 'unavailable', reason: skip });
     stdout(`Recorded a skip of the Claude lenses over ${range} (${skip}) in ${file}: the push lets it through, and check, doctor and merge-queue list it until a review covers the range.`);
@@ -198,6 +202,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   }
 
   const run = deps.runLens ?? runLens;
+  start();
   const results = [];
   for (const lens of picked.names) {
     stdout(`${lens}: running over ${range}...`);

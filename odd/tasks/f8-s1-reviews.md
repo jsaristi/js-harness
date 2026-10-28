@@ -18,6 +18,7 @@ are worth keeping, but they read only what gentle-ai's provider builds, so S1 bu
 
 ## Done when
 - `node --test bin/lib/lens-candidate.test.mjs bin/lib/lens-result.test.mjs bin/lib/lens-reviews.test.mjs bin/lens-review.test.mjs bin/lib/lens-review-rows.test.mjs` exits 0
+- `node --test bin/lib/guard.test.mjs bin/guard.test.mjs bin/check-codex-reviews.test.mjs` exits 0 (T7)
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s1-reviews.md` exits 0
 - `npm run check` exits 0, and its `review` row names no gentle-ai
 - `grep -ci "gentle-ai.*review\|review.*gentle-ai" AGENTS.md` prints 0
@@ -69,6 +70,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
 - [x] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`; 4834997f, 023eceb9, fixed in e35eb7dc (PR 613); `CLAUDE.md` in the commit that checks this box (L12)
 - [x] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline; the probe 6 of 6 (L13), the incident set 13 of 20, no worse (L14)
+- [ ] T7 (kind: build) the records only the commands write (reverse-engineering doc, section 13.3, row 3): `guard` refuses a file tool or a shell write to a review record, and a lens record counts only when it names the run line `lens-review` wrote first; test first — S1; inline, branch `f8-s1-records`; L16
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 62 · F8 S1: two reviews on every slice ...
@@ -215,6 +217,26 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   - A Codex run was wasted: `docs/FAILURES.md` was edited while Codex reviewed, so it recorded nothing
     (`edit-during-review`). Run again on `d6867d8..b71ddb0`: correct (0.87); its first run's P2 (tilde fences) fixed
     in eaa577e6. Lenses risk and reliability on `d6867d8..b71ddb0`: complete, no finding.
+- L16 (2026-10-28, JH 69, the S1 defect task row 3 of section 13.3 of the reverse-engineering document gives, due once
+  S10 merged; the lead's brief): "guard refuses a file tool (Write, Edit, MultiEdit, NotebookEdit) or a shell write to
+  those record paths" and "A lens record is admitted only when it names a run line that the command wrote first, as
+  Codex's records already do". Decisions, the lead's by default:
+  - **The run line has a file of its own**, `lens-review-runs.jsonl` beside the records, as Codex's runs do; it holds
+    the run's id, range and subject hash and is written before any lens runs, and before a skip or a nothing-to-review
+    record. A record is admitted only when it is the first to name a run line of its own range and hash, so a second
+    line naming an incomplete run's id never makes it good.
+  - **No cut-over**: a lens record written before this names no run line and stops counting. A cut-over by date would
+    be read from the record a forger writes; a rerun costs cents a lens. A branch in flight whose lens records are older
+    reruns `lens-review` over its unpushed range once this is installed.
+  - **What the guard reads**: a path ending `js-harness/<one of the four record files>`, any case and separator, for
+    `Write`, `Edit`, `MultiEdit` and `NotebookEdit` (`Read` and `Grep` stay free); in a Bash command, a redirection to
+    one, `tee`, `truncate`, `rm`, `shred` or `mv` of one, `cp`, `install` or `ln` onto one, `sed`/`perl -i`, `dd of=`,
+    and an interpreter's command line that names one beside a call that writes a file, or calls a function of this
+    package that appends a record. A path in a variable or a script on standard input is not followed: prevention stops
+    the accident, provenance refuses the forgery.
+  - **Outside the brief's surface, by need**: `bin/lib/lens-review-rows.mjs` is where `check --push` reads the lens
+    records (the brief's `bin/lib/check*.mjs` names no file that exists); `bin/merge-queue.test.mjs` and
+    `bin/check-codex-reviews.test.mjs` wrote lens records with no run line, one line each.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).

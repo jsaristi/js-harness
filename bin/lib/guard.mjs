@@ -455,6 +455,95 @@ export function driveRootRemovalRefusal(command) {
 // The words after which a command starts, as after an operator: a group's `{` and the bodies of if, for and while.
 const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
 
+// The records of both reviews, each in `<git common dir>/js-harness/` (./codex-reviews.mjs, ./codex-review-runs.mjs,
+// ./lens-reviews.mjs; a test holds this list to their names). Only the commands that make a review write them: a
+// line a session writes there by hand reads as a review nobody made (docs/proposals/gentle-ai-reverse-engineering.md,
+// section 13.3, row 3). This stops the accident; the lens record's run line is what refuses a forgery past it.
+export const REVIEW_RECORD_FILES = Object.freeze(['codex-reviews.jsonl', 'codex-review-runs.jsonl', 'lens-reviews.jsonl', 'lens-review-runs.jsonl']);
+const RECORD_NAMES = REVIEW_RECORD_FILES.map((name) => name.replace(/\./g, '\\.')).join('|');
+const RECORD_PATH = new RegExp(`(?:^|[\\\\/])js-harness[\\\\/](${RECORD_NAMES})$`, 'i');
+const RECORD_NAMED = new RegExp(`(?:^|[\\\\/])js-harness[\\\\/](${RECORD_NAMES})(?![\\w.-])`, 'i');
+
+/** The name of the review record the path `file` is, or null when it is none: a file of `REVIEW_RECORD_FILES` in a
+ * folder named `js-harness`, in any spelling of the path. */
+export function reviewRecordOf(file) {
+  const match = typeof file === 'string' ? RECORD_PATH.exec(file.trim()) : null;
+  return match === null ? null : match[1].toLowerCase();
+}
+
+/** The refusal of a write to a review record, after `what` says which write and which record. */
+const recordReason = (what) => `js-harness guard: ${what}, and only the command that makes the review writes one `
+  + '(js-harness lens-review, js-harness codex-review): a line written by hand reads as a review nobody made, and '
+  + 'check --push counts no lens record that names no run line of its own. Run the review instead; reading a record '
+  + 'is free, and removing one is the user\'s to do.';
+
+/** Why the file tool `tool` is refused for writing the path `file`, or null when it is no review record. */
+export function reviewRecordFileRefusal(tool, file) {
+  const name = reviewRecordOf(file);
+  return name === null ? null : recordReason(`${tool} of ${file} is refused: it is ${name}, the record of a review`);
+}
+
+// The commands that write every file they are given, and those that write the last one (the others are read, but
+// `mv` moves them away, which writes them too).
+const WRITES_EACH = new Set(['tee', 'truncate', 'rm', 'shred', 'mv']);
+const WRITES_LAST = new Set(['cp', 'install', 'ln']);
+const IN_PLACE = new Set(['sed', 'perl']);
+const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby', 'deno', 'bun', 'pwsh', 'powershell']);
+// The words before a command that leave it the command: an assignment, and a few wrappers.
+const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
+// What a script does to write a file it names, and the functions of this package that append a record.
+const FILE_WRITE = /\b(?:appendFile|appendFileSync|writeFile|writeFileSync|createWriteStream|truncate|truncateSync|rename|renameSync|copyFile|copyFileSync|unlink|unlinkSync|rmSync|Add-Content|Set-Content|Out-File)\b|\bopen\s*\([^)]*?,\s*['"][^'"]*[wax+]/;
+const RECORD_APPENDS = /\b(?:appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun|appendJsonLine)\b/;
+
+/** Why the Bash command `command` is refused for writing a review record, or null. A record is written by a
+ * redirection to it, by a command of `WRITES_EACH` given it, by one of `WRITES_LAST` given it last, by `sed` or `perl`
+ * with an in-place option, by `dd of=` it, and by a script on a command line that names it beside a call that writes a
+ * file, or that calls a function of this package that appends a record. Reading one passes, and so does text in quotes
+ * or a heredoc's body. A script fed on standard input, or a path held in a variable, is not followed: this stops the
+ * accident, and the lens record's run line refuses a forgery (./lens-reviews.mjs). */
+export function reviewRecordWriteRefusal(command) {
+  const words = shellWords(command, { groups: true });
+  const { operators } = words;
+  let start = 0;
+  for (let i = 0; i <= words.length; i += 1) {
+    if (i < words.length && !operators.has(i)) continue;
+    const what = segmentRecordWrite(words.slice(start, i));
+    if (what !== null) return recordReason(what);
+    start = i + 1;
+  }
+  return null;
+}
+
+/** What the words of one simple command write of the review records, said as the refusal opens, or null. */
+function segmentRecordWrite(segment) {
+  const writes = (name) => (name === null ? null : `this command writes ${name}, the record of a review`);
+  for (let i = 0; i < segment.length; i += 1) {
+    const word = segment[i];
+    // `> file` and `>> file`, a descriptor before them or not; or `>file` in one word, which holds no space unquoted.
+    if (/^(?:\d*|&)>>?\|?$/.test(word) && reviewRecordOf(segment[i + 1]) !== null) return writes(reviewRecordOf(segment[i + 1]));
+    const after = word.includes('>') ? word.slice(word.lastIndexOf('>') + 1) : '';
+    if (after !== '' && !/\s/.test(after) && reviewRecordOf(after) !== null) return writes(reviewRecordOf(after));
+  }
+  let at = 0;
+  while (at < segment.length && (COMMAND_KEYWORDS.has(segment[at]) || WRAPPERS.has(segment[at]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at]))) at += 1;
+  const program = String(segment[at] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd)$/, '');
+  const args = segment.slice(at + 1);
+  const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
+  if (WRITES_EACH.has(program)) return writes(first);
+  const paths = args.filter((arg) => !arg.startsWith('-'));
+  if (WRITES_LAST.has(program)) return paths.length > 1 ? writes(reviewRecordOf(paths[paths.length - 1])) : null;
+  if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
+  if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null) ?? null);
+  if (!INTERPRETERS.has(program)) return null;
+  for (const arg of args) {
+    const append = RECORD_APPENDS.exec(arg);
+    if (append !== null) return `this command calls ${append[0]}, which appends the record of a review`;
+    const named = RECORD_NAMED.exec(arg);
+    if (named !== null && FILE_WRITE.test(arg)) return writes(named[1].toLowerCase());
+  }
+  return null;
+}
+
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
 export function denial(reason) {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } };

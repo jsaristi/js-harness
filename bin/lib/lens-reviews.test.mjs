@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidLensReview, LENS_REVIEW_SCHEMA } from './lens-reviews.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { admittedLensReviews, appendLensReview, isValidLensReview, LENS_REVIEW_RUN_SCHEMA, LENS_REVIEW_RUNS_FILE, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns, startLensRun } from './lens-reviews.mjs';
 
 const record = (over = {}) => ({
   schema: LENS_REVIEW_SCHEMA, base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64), reviewedAt: '2026-10-27T17:00:00Z',
@@ -26,3 +29,49 @@ test('a record with no subject hash, a short commit id or another schema is no e
   }
   assert.equal(isValidLensReview(null), false);
 });
+
+/** Runs `body(deps)` with the records in a scratch folder that stands for the git common dir. */
+function inScratch(body) {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-reviews-'));
+  try {
+    body({ where: { commonGitDir: folder } });
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: a record is admitted only when it names the
+// run line `lens-review` wrote before it, so a well-shaped line a session wrote by hand covers nothing.
+test('a record is admitted only when it is the first to name a run line of its own range and subject hash', () => inScratch((deps) => {
+  const range = { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) };
+  const run = startLensRun('.', range, deps);
+  const other = startLensRun('.', { ...range, head: 'd'.repeat(40) }, deps);
+  const [line] = readLensRuns('.', deps);
+  assert.deepEqual({ ...line, startedAt: typeof line.startedAt }, { schema: LENS_REVIEW_RUN_SCHEMA, id: run, ...range, startedAt: 'string' });
+  appendLensReview('.', record({ run }), deps);
+  appendLensReview('.', record(), deps);
+  appendLensReview('.', record({ run: 'f'.repeat(36) }), deps);
+  appendLensReview('.', record({ run: other }), deps);
+  appendLensReview('.', record({ run }), deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [true, false, false, false, false]);
+}));
+
+test('the record that names a run first claims it: an incomplete run is never made good by a later line', () => inScratch((deps) => {
+  const run = startLensRun('.', { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) }, deps);
+  appendLensReview('.', record({ run, outcome: 'incomplete', results: [{ lens: 'risk', outcome: 'incomplete' }] }), deps);
+  appendLensReview('.', record({ run }), deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [false, false]);
+}));
+
+test('a line of another schema is no run line, and a record read by no reader of the file is never admitted', () => inScratch((deps) => {
+  const run = startLensRun('.', { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) }, deps);
+  const file = path.join(deps.where.commonGitDir, 'js-harness', LENS_REVIEW_RUNS_FILE);
+  const forged = { ...readLensRuns('.', deps)[0], id: 'e'.repeat(36), schema: 'js-harness.codex-review-run/v1' };
+  fs.appendFileSync(file, `${JSON.stringify(forged)}\n`);
+  appendLensReview('.', record({ run: forged.id }), deps);
+  const { admitted } = admittedLensReviews('.', deps);
+  assert.equal(admitted(readLensReviews('.', deps)[0]), false);
+  assert.equal(admitted(record({ run })), false);
+}));

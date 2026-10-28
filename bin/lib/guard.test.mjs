@@ -6,6 +6,10 @@ import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, sessionEffortRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
+import { REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
+import { codexReviewsPath } from './codex-reviews.mjs';
+import { codexReviewRunsPath } from './codex-review-runs.mjs';
+import { LENS_REVIEW_RUNS_FILE, LENS_REVIEWS_FILE } from './lens-reviews.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -492,4 +496,64 @@ test('the first-parent lookup reads the branch down to its base, not the whole h
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: the records of both reviews live in the git
+// common dir, out of the worktree, and only the commands that make a review write them; a session never does by hand.
+const RECORD = 'D:/js-harness/.git/js-harness/lens-reviews.jsonl';
+
+test('the record files the guard holds are those the review modules write, by name', () => {
+  const where = { commonGitDir: 'D:/r/.git' };
+  const written = [codexReviewsPath('D:/r', { where }), codexReviewRunsPath('D:/r', { where }), path.join('D:/r/.git/js-harness', LENS_REVIEWS_FILE), path.join('D:/r/.git/js-harness', LENS_REVIEW_RUNS_FILE)];
+  assert.deepEqual(written.map((file) => path.basename(file)).sort(), [...REVIEW_RECORD_FILES].sort());
+  for (const file of written) assert.equal(reviewRecordOf(file), path.basename(file), file);
+});
+
+test('a record path is told by its folder and its name, in any spelling of the path; any other file is not one', () => {
+  for (const file of [RECORD, 'D:\\js-harness\\.git\\js-harness\\codex-reviews.jsonl', '/d/r/.git/js-harness/CODEX-REVIEW-RUNS.jsonl', '.git/js-harness/lens-review-runs.jsonl']) {
+    assert.notEqual(reviewRecordOf(file), null, file);
+  }
+  for (const file of ['D:/r/lens-reviews.jsonl', 'D:/r/.git/js-harness/sessions.jsonl', 'D:/r/bin/lib/lens-reviews.mjs', 'D:/r/js-harness/lens-reviews.jsonl.bak', '', null]) {
+    assert.equal(reviewRecordOf(file), null, String(file));
+  }
+});
+
+test('a shell write to a record is refused: a redirection, tee, a copy or move onto it, an in-place edit, a removal', () => {
+  for (const command of [
+    `echo '{}' >> ${RECORD}`,
+    `echo '{}' >>${RECORD}`,
+    'printf x > "$(git rev-parse --git-common-dir)/js-harness/codex-reviews.jsonl"',
+    `cat forged.jsonl 1>> ${RECORD}`,
+    `echo x | tee -a ${RECORD}`,
+    `cp /tmp/forged.jsonl ${RECORD}`,
+    'mv /tmp/forged.jsonl .git/js-harness/codex-review-runs.jsonl',
+    `sed -i 's/incomplete/reviewed/' ${RECORD}`,
+    `rm ${RECORD}`,
+    `truncate -s 0 ${RECORD}`,
+    `cd D:/js-harness && echo x >> ${RECORD}`,
+  ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review.*only the command/s, command);
+});
+
+test('a script that writes a record, or calls a function that appends one, is refused', () => {
+  for (const command of [
+    `node -e "require('fs').appendFileSync('${RECORD}', '{}')"`,
+    'node --input-type=module -e "import(\'./bin/lib/lens-reviews.mjs\').then((m) => m.appendLensReview(\'.\', {}))"',
+    `python -c "open('${RECORD}', 'a').write('{}')"`,
+    'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendCodexReview(\'.\', {}))"',
+  ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
+});
+
+test('reading a record, the commands that write one, and text that only names one pass', () => {
+  for (const command of [
+    `cat ${RECORD}`,
+    `tail -n 3 ${RECORD} | node -e "process.stdin.pipe(process.stdout)"`,
+    `grep -c reviewed ${RECORD} > /tmp/count.txt`,
+    `cp ${RECORD} /tmp/lens-reviews.copy.jsonl`,
+    `node -e "console.log(require('fs').readFileSync('${RECORD}', 'utf8').length)"`,
+    'js-harness lens-review --base abc1234 --lenses risk --reason "the guard"',
+    'js-harness codex-review --base abc1234',
+    'git commit -m "guard the lens-reviews.jsonl record"',
+    'grep -rn appendLensReview bin/',
+    "cat > notes.md <<'EOF'\necho x >> .git/js-harness/lens-reviews.jsonl\nEOF",
+  ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

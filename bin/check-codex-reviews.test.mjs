@@ -14,7 +14,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-revie
 import { priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
-import { appendLensReview, LENS_REVIEW_SCHEMA } from './lib/lens-reviews.mjs';
+import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -158,7 +158,7 @@ function record(root, base, head, extra = {}) {
   // reviewed by the lenses as well, unless the test says otherwise with a Codex outcome of its own.
   if (extra.outcome !== undefined) return;
   const { subjectHash } = lensCandidate(root, { base, head });
-  if (subjectHash) appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: '2026-09-29T00:00:00.000Z', outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
+  if (subjectHash) appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run: startLensRun(root, { base, head, subjectHash }), reviewedAt: '2026-09-29T00:00:00.000Z', outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
 }
 
 const short = (root, rev) => git(root, 'rev-parse', '--short', rev);
