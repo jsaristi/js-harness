@@ -72,7 +72,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [ ] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`
-- [ ] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
+- [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -132,6 +132,13 @@ Reviews:
 - gentle-ai on `cca493e0..c7fe8137` (granted run, lineage review-397ff05feeb36359): approved; its WARNING (uninstall
   removes a link he put where the file install made was, and leaves the block in the file it names) and its SUGGESTION
   (no test of the rollback that removes a file install made) taken test first in the next commit.
+- The fix is `8012d8d6`. Codex on `c7fe813..8012d8d`: correct (0.97), 56,228 input tokens. Codex again from
+  `d232c63..2d246cf` (`--again`, T7a: no second recheck runs, and no record covered `c7fe8137`): correct (0.87), 74,433
+  input tokens. Lenses on `c7fe813..2d246cf` (risk, reliability, resilience): 0 findings.
+- gentle-ai on `c7fe8137..2d246cf7` (granted run, lineage review-f6a8781dedd4a885): approved, acknowledged; one
+  informational SUGGESTION (R3-place-identity: `place === at` would fail if the path were ever normalized for a plain
+  file) not taken: `realPlace` returns its argument itself for anything that is not a link (`rules-block.mjs:85-88`),
+  so the two are the same string by construction, and the link test pins the other side.
 
 ## Next step
 State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
@@ -143,8 +150,8 @@ failed on GitHub's Linux run alone (7474 pass, 2 fail, run 40644538748), so they
 Codex's recheck on `6df890e..4e28ec3`: the link fixed; the mode half fixed (the sibling was readable by others
 until its chmod), so the next commit creates it with the mode; Codex rechecks no range that starts at `4e28ec3`, so
 the lenses review that commit. Lenses on `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
-gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in the commit after `c7fe8137`. Next:
-Codex and the lenses on that commit (base `c7fe8137`), gentle-ai on it, push, PR 3 with base `f8-s10-permissions` or main, `ready
+gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in `8012d8d6`, which Codex, the
+lenses and gentle-ai approved (Reviews). Next: push, PR 3 with base `f8-s10-permissions` or main, `ready
 --pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
 (about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).
 
