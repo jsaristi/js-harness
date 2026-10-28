@@ -6,6 +6,10 @@ import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, sessionEffortRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
+import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
+import { codexReviewsPath } from './codex-reviews.mjs';
+import { codexReviewRunsPath } from './codex-review-runs.mjs';
+import { LENS_REVIEW_RUNS_FILE, LENS_REVIEWS_FILE } from './lens-reviews.mjs';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -492,4 +496,236 @@ test('the first-parent lookup reads the branch down to its base, not the whole h
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: the records of both reviews live in the git
+// common dir, out of the worktree, and only the commands that make a review write them; a session never does by hand.
+const RECORD = 'D:/js-harness/.git/js-harness/lens-reviews.jsonl';
+
+test('the record files the guard holds are those the review modules write, by name', () => {
+  const where = { commonGitDir: 'D:/r/.git' };
+  const written = [codexReviewsPath('D:/r', { where }), codexReviewRunsPath('D:/r', { where }), path.join('D:/r/.git/js-harness', LENS_REVIEWS_FILE), path.join('D:/r/.git/js-harness', LENS_REVIEW_RUNS_FILE)];
+  assert.deepEqual(written.map((file) => path.basename(file)).sort(), [...REVIEW_RECORD_FILES].sort());
+  for (const file of written) assert.equal(reviewRecordOf(file), path.basename(file), file);
+  // The package's handles for them name the same records.
+  assert.deepEqual(RECORD_HANDLES, {
+    LENS_REVIEWS_FILE,
+    LENS_REVIEW_RUNS_FILE,
+    codexReviewsPath: path.basename(codexReviewsPath('D:/r', { where })),
+    codexReviewRunsPath: path.basename(codexReviewRunsPath('D:/r', { where })),
+  });
+});
+
+test('a record path is told by its folder and its name, in any spelling of the path; any other file is not one', () => {
+  for (const file of [RECORD, 'D:\\js-harness\\.git\\js-harness\\codex-reviews.jsonl', '/d/r/.git/js-harness/CODEX-REVIEW-RUNS.jsonl', '.git/js-harness/lens-review-runs.jsonl',
+    'D:/r/.git/js-harness/./lens-reviews.jsonl', 'D:/r/.git/js-harness//lens-reviews.jsonl', 'D:/r/.git/js-harness/sub/../lens-reviews.jsonl']) {
+    assert.notEqual(reviewRecordOf(file), null, file);
+  }
+  for (const file of ['D:/r/lens-reviews.jsonl', 'D:/r/.git/js-harness/sessions.jsonl', 'D:/r/bin/lib/lens-reviews.mjs', 'D:/r/js-harness/lens-reviews.jsonl.bak', '', null]) {
+    assert.equal(reviewRecordOf(file), null, String(file));
+  }
+});
+
+test('a shell write to a record is refused: a redirection, tee, a copy or move onto it, an in-place edit, a removal', () => {
+  for (const command of [
+    `echo '{}' >> ${RECORD}`,
+    `echo '{}' >>${RECORD}`,
+    'printf x > "$(git rev-parse --git-common-dir)/js-harness/codex-reviews.jsonl"',
+    `cat forged.jsonl 1>> ${RECORD}`,
+    `echo x | tee -a ${RECORD}`,
+    `cp /tmp/forged.jsonl ${RECORD}`,
+    'mv /tmp/forged.jsonl .git/js-harness/codex-review-runs.jsonl',
+    `sed -i 's/incomplete/reviewed/' ${RECORD}`,
+    `rm ${RECORD}`,
+    `truncate -s 0 ${RECORD}`,
+    `cd D:/js-harness && echo x >> ${RECORD}`,
+    // The branches a reviewer found untested (gentle-ai R3 on e7bc4215), and the forms the verifier found past the guard.
+    `env A=1 sudo tee ${RECORD} < /tmp/forged.jsonl`,
+    `A=1 rm ${RECORD}`,
+    `dd if=/tmp/forged.jsonl of=${RECORD}`,
+    `install -m 644 /tmp/forged.jsonl ${RECORD}`,
+    `ln -sf /tmp/forged.jsonl ${RECORD}`,
+    `shred -u ${RECORD}`,
+    `perl -pi -e 's/incomplete/reviewed/' ${RECORD}`,
+    `bash -c "echo x >> ${RECORD}"`,
+    `sh -c 'printf x > ${RECORD}'`,
+    'mv /tmp/lens-reviews.jsonl .git/js-harness/',
+    'cp --target-directory=.git/js-harness /tmp/codex-reviews.jsonl',
+    'cp -t .git/js-harness /tmp/codex-reviews.jsonl',
+    // `-t` among other short options (gentle-ai R3 on b2bc9596).
+    'cp -vt .git/js-harness /tmp/codex-reviews.jsonl',
+    'mv -ft .git/js-harness /tmp/lens-reviews.jsonl',
+    'rm -rf .git/js-harness',
+    `node -e "const r = fs.renameSync; r('x', '${RECORD}')"`,
+    // Moving the folder away loses every record as its removal does (gentle-ai R3 on 9c291a1e).
+    'mv .git/js-harness /tmp/kept',
+    'mv .git/js-harness/ .git/old',
+    // `-t` names the target, so the folder after it is a source (Codex P2 and the reliability lens on d61b5588).
+    'mv -t /tmp .git/js-harness',
+    'mv --target-directory=/tmp .git/js-harness',
+    // Removing what the folder holds, or the git dir above it (gentle-ai R3 on 9e167848).
+    'rm -rf .git/js-harness/*',
+    'rm -f .git/js-harness/*.jsonl',
+    'rm -f .git/js-harness/lens-*',
+    'rm -f .git/js-harness/codex-review?.jsonl',
+    // A negated class keeps its negation (Codex P2 and the reliability lens on 4eb7449a).
+    'rm -f .git/js-harness/[!a]*',
+    'rm -f .git/js-harness/[^x]*',
+    // A glob in the git dir that can match the records' folder (gentle-ai R3 on b98b42a6).
+    'rm -rf .git/*',
+    'rm -rf .git/js-harn*',
+    // The same with a trailing slash, a glob that takes the git dir, and eval (gentle-ai R3 on 1ac52968).
+    'rm -rf .git/*/',
+    'rm -rf .git/js-harn*/',
+    'rm -rf .g*',
+    'rm -rf ./.gi?',
+    `eval 'echo x >> ${RECORD}'`,
+    'eval rm -rf .git/js-harness',
+    // eval's `--` ends its options (Codex P2 on 0e192478).
+    "eval -- 'rm -rf .git/js-harness'",
+    'rm -rf .git',
+    'rm -rf ./.git/',
+    // The folder by an absolute path, or under another prefix: refusing more is the safe side (the risk and reliability
+    // lenses on d6c504a7).
+    'rm -rf D:/r/.git/js-harness/',
+    'rm -rf D:/r/.git/js-harness/*',
+    'mv D:/r/.git/js-harness /tmp/kept',
+    'rm -rf vendor/.git/js-harness',
+    // A glob in the git dir's own name, with the folder after it (gentle-ai R3 on d6c504a7).
+    'rm -rf .gi?/js-harness',
+    'rm -rf .g*/js-harness',
+    'rm -rf .g*/js-harn*',
+    'mv .g*/js-harness /tmp/x',
+    // A folder of forged records copied into the git dir, or a folder's contents into the records' folder (gentle-ai
+    // R3 on d6c504a7).
+    'cp -r /tmp/scratch/js-harness .git',
+    'cp -r /tmp/scratch/js-harness/ .git/',
+    'cp -r /tmp/scratch/. .git',
+    'cp -r /tmp/scratch/* .git',
+    'mv /tmp/scratch/js-harness .git',
+    'cp -r -t .git /tmp/scratch/js-harness',
+    'cp -r /tmp/scratch/. .git/js-harness',
+    'cp /tmp/scratch/lens-* .git/js-harness',
+    // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
+    "printf '{}'>>.git/js-harness/lens-reviews.jsonl",
+    `echo x>>${RECORD}`,
+    `echo x 2>>${RECORD}`,
+    `echo x >| ${RECORD}`,
+    `echo x &>> ${RECORD}`,
+  ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review.*only the command/s, command);
+});
+
+test('a script that writes a record, or calls a function that appends one, is refused', () => {
+  for (const command of [
+    `node -e "require('fs').appendFileSync('${RECORD}', '{}')"`,
+    'node --input-type=module -e "import(\'./bin/lib/lens-reviews.mjs\').then((m) => m.appendLensReview(\'.\', {}))"',
+    `python -c "open('${RECORD}', 'a').write('{}')"`,
+    'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendCodexReview(\'.\', {}))"',
+    'node -e "fs.appendFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), l)"',
+    // A path held in a variable of the script (gentle-ai R3 on 0a832b2a).
+    'node -e "const p = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(p, l)"',
+    // The same variable inside an argument that also holds a string (gentle-ai R3 on 4eb7449a).
+    'node -e "const f = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(path.resolve(\'.\', f), l)"',
+    'node -e "const p = \'.git/js-harness/lens-reviews.jsonl\'; fs.appendFileSync(p + \'\', l)"',
+    // The package's own generic append, given a record's name (gentle-ai R3 on 9f4d1f23).
+    'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendJsonLine(\'.\', \'lens-reviews.jsonl\', {}))"',
+    // A template literal's interpolation is code, not text.
+    'node -e "console.log(`${m.appendLensReview(root, {})}`)"',
+    // A string that is run is code, and a quote left open blanks nothing (the risk lens on e56114a4).
+    'node -e "eval(\'m.appendLensReview(root, {})\')"',
+    'node -e "new Function(\'m\', \'m.appendLensReview(root, {})\')(m)"',
+    'node -e "/\'/.test(x); m.appendLensReview(root, {})"',
+    'node -e "// it\'s the record\nm.appendLensReview(root, {}) // don\'t"',
+    // Two regex literals whose quotes balance blank no code between them (Codex P2 on b2bc9596).
+    'node -e "const a = /\'/; fs.appendFileSync(\'.git/js-harness/lens-reviews.jsonl\', \'{}\'); const b = /\'/"',
+    // A write call reached by reference, and a record named by the package's constant or path function
+    // (gentle-ai R3 on 0e192478).
+    `node -e "fs.appendFileSync.call(fs, '${RECORD}', l)"`,
+    `node -e "const w = fs.writeFileSync; w('${RECORD}', l)"`,
+    `node -e "const { appendFileSync: w } = fs; w('${RECORD}', l)"`,
+    'node -e "m.appendJsonLine(\'.\', m.LENS_REVIEWS_FILE, {})"',
+    'node -e "fs.appendFileSync(m.codexReviewsPath(\'.\'), l)"',
+    // A string a child process runs is code too (gentle-ai R3 on 9c291a1e).
+    'node -e "execFileSync(\'node\', [\'-e\', \'m.appendLensReview(root, {})\'])"',
+    'node -e "require(\'child_process\').execSync(\'node -e m.startLensRun(root)\')"',
+    'python -c "subprocess.run([\'node\', \'-e\', \'m.appendLensReview(root, {})\'])"',
+    'node -e "setTimeout(\'m.appendLensReview(root, {})\', 0)"',
+    // A timer given a string through a variable (the risk lens on 9e167848).
+    'node -e "const s = \'m.appendLensReview(root, {})\'; setTimeout(s, 0)"',
+    // A function reached by a reference or a bracketed name (gentle-ai R3 on d61b5588).
+    'node -e "m.appendLensReview.call(null, root, {})"',
+    'node -e "const f = m.appendLensReview; f(root, {})"',
+    'node -e "m[\'appendLensReview\'](root, {})"',
+    `node -e "fs['appendFileSync']('${RECORD}', '{}')"`,
+    // The same in a script read whole, here for its division (gentle-ai R3 on 9e167848).
+    `node -e "const n = 4 / 2; fs['appendFileSync']('${RECORD}', '{}')"`,
+  ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
+});
+
+test('reading a record, the commands that write one, and text that only names one pass', () => {
+  for (const command of [
+    `cat ${RECORD}`,
+    `tail -n 3 ${RECORD} | node -e "process.stdin.pipe(process.stdout)"`,
+    `grep -c reviewed ${RECORD} > /tmp/count.txt`,
+    `cp ${RECORD} /tmp/lens-reviews.copy.jsonl`,
+    `node -e "console.log(require('fs').readFileSync('${RECORD}', 'utf8').length)"`,
+    'js-harness lens-review --base abc1234 --lenses risk --reason "the guard"',
+    'js-harness codex-review --base abc1234',
+    'git commit -m "guard the lens-reviews.jsonl record"',
+    'grep -rn appendLensReview bin/',
+    "cat > notes.md <<'EOF'\necho x >> .git/js-harness/lens-reviews.jsonl\nEOF",
+    // What a reviewer and the verifier found refused that writes no record (gentle-ai R3 and the verifier on e7bc4215).
+    'node -e "fs.appendFileSync(\'ledger.jsonl\', appendJsonLine.toString())"',
+    `node -e "const r = fs.readFileSync('${RECORD}', 'utf8'); fs.writeFileSync('/tmp/o.json', r)"`,
+    `echo "a>${RECORD}"`,
+    `git commit -m "a>${RECORD}"`,
+    `cp -t /tmp ${RECORD}`,
+    'rm -rf D:/js-harness-worktrees/practice/js-harness',
+    `bash -c "cat ${RECORD}"`,
+    // Quoted text and a name that is not called (Codex P2 on 0a832b2a); a redirection elsewhere is no copy's target.
+    "echo '>.git/js-harness/lens-reviews.jsonl'",
+    'node -e "console.log(\'appendLensReview\')"',
+    // Call-like text inside a string is no call (Codex's recheck of 9f4d1f23).
+    'node -e "console.log(\'appendLensReview(\')"',
+    'node -e "console.log(`m.startLensRun(root)`)"',
+    'node -e "fs.appendFileSync(\'ledger.jsonl\', \'appendJsonLine(x, lens-reviews.jsonl)\')"',
+    'node -e "console.log(fs.readFileSync(\'bin/lib/lens-reviews.mjs\', \'utf8\').includes(\'appendLensReview\'))"',
+    `cp ${RECORD} /tmp/copy.jsonl > /tmp/cp.log`,
+    // A path written whole in one string is a record only in the records' folder (Codex P2 on b2bc9596).
+    'node -e "fs.writeFileSync(\'/tmp/lens-reviews.jsonl\', \'{}\')"',
+    'python -c "open(\'/tmp/codex-reviews.jsonl\', \'w\').write(\'{}\')"',
+    'python -c "open(\'lens-reviews.jsonl\', \'w\').write(\'{}\')"',
+    // A read whose other arguments hold a w, a, x or + is no write (gentle-ai R3 on b2bc9596).
+    `python -c "print(open('${RECORD}', 'r', encoding='ascii').read())"`,
+    `python -c "print(open('${RECORD}', encoding='latin-1').read())"`,
+    // A move into the records' folder of a file that is no record, and a timer given a function (Codex P2 on d61b5588).
+    'mv -t .git/js-harness /tmp/notes.txt',
+    'node -e "setTimeout(() => console.log(\'appendLensReview(\'), 0)"',
+    'node -e "setTimeout(function () { console.log(\'appendLensReview(\') }, 0)"',
+    // A glob in the records' folder that can match no record (Codex P2 on d153e61e).
+    'rm -f .git/js-harness/*.tmp',
+    'rm -f .git/js-harness/sessions*.jsonl',
+    'rm -f .git/js-harness/[!cl]*',
+    'rm -rf .git/refs/*',
+    'rm -f .git/*.lock',
+    // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
+    'rm -rf vendor/lib/.git',
+    'rm -rf /tmp/scratch/.git',
+    // A copy into the git dir of what can hold no records' folder, and a dot file a `*` leaves out.
+    'cp hooks/pre-commit .git/hooks/',
+    'cp /tmp/scratch/notes.txt .git',
+    'rm -rf */js-harness',
+    'cp /tmp/scratch/*.txt .git/js-harness',
+    // A write call held but given no record, and a record's constant only read (gentle-ai R3 on 0e192478).
+    'node -e "const w = fs.writeFileSync; w(\'/tmp/x.json\', l)"',
+    'node -e "console.log(m.LENS_REVIEWS_FILE)"',
+    // A shell's `*` leaves out a dot file, so it takes no `.git` (gentle-ai R3 on 1ac52968).
+    'rm -rf *',
+    'rm -rf ./*',
+    // A trailing slash keeps only folders, and every record is a file (Codex P2 on 0e192478).
+    'rm -rf .git/js-harness/*/',
+    // Space before the function (the reliability lens on d153e61e).
+    'node -e "setTimeout( () => console.log(\'appendLensReview(\'), 0)"',
+    'node -e "setTimeout(\n  function () { console.log(\'appendLensReview(\') }, 0)"',
+  ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

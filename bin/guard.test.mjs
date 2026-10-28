@@ -365,6 +365,29 @@ test('a NotebookEdit, a MultiEdit or a Grep of a secret\'s place is denied too',
   }
 });
 
+// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: a review's record is written by the command
+// that made the review, never by a session's file tool or shell; a Read of one stays free.
+test('a Write, an Edit, a MultiEdit or a NotebookEdit of a review record is denied, and so is a shell append to one', async () => {
+  const lens = 'D:/project/.git/js-harness/lens-reviews.jsonl';
+  const codex = 'D:\\project\\.git\\js-harness\\codex-reviews.jsonl';
+  const calls = [
+    ['Write', { file_path: lens, content: '{}' }],
+    ['Edit', { file_path: lens, old_string: 'incomplete', new_string: 'reviewed' }],
+    ['Edit', { file_path: codex, old_string: 'unavailable', new_string: 'reviewed' }],
+    ['MultiEdit', { file_path: 'D:/project/.git/js-harness/lens-review-runs.jsonl', edits: [] }],
+    ['NotebookEdit', { notebook_path: 'D:/project/.git/js-harness/codex-review-runs.jsonl', new_source: 'x' }],
+    ['Bash', { command: `echo '{}' >> ${lens}` }],
+  ];
+  for (const [tool, input] of calls) {
+    const result = await hook({ tool_name: tool, cwd: 'D:/project', tool_input: input });
+    assert.equal(result.code, 0);
+    assert.equal(denied(result).permissionDecision, 'deny', `${tool} ${JSON.stringify(input)}`);
+    assert.match(denied(result).permissionDecisionReason, /js-harness guard: .*record of a review.*only the command/s);
+  }
+  assert.deepEqual(await hook({ tool_name: 'Read', cwd: 'D:/project', tool_input: { file_path: lens } }), { code: 0, out: '', err: '' });
+  assert.deepEqual(await hook({ tool_name: 'Write', cwd: 'D:/project', tool_input: { file_path: 'D:/project/evals/out.jsonl', content: '{}' } }), { code: 0, out: '', err: '' });
+});
+
 test('a Read of any other file passes with nothing printed', async () => {
   for (const file of ['D:/project/bin/guard.mjs', 'D:/project/.envrc', 'C:/Users/u/.claude/settings.json']) {
     assert.deepEqual(await hook({ tool_name: 'Read', cwd: 'D:/project', tool_input: { file_path: file } }), { code: 0, out: '', err: '' }, file);

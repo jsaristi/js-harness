@@ -9,7 +9,7 @@ import { actionsState, failedRows, failingTests, landingLines, localSuite, merge
 import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
-import { appendLensReview, LENS_REVIEW_SCHEMA } from './lib/lens-reviews.mjs';
+import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
@@ -786,7 +786,7 @@ function writeRecord(root, { base, head, lens = 'reviewed' }) {
 function writeLensRecord(root, { base, head, outcome }) {
   const { subjectHash } = lensCandidate(root, { base, head });
   const said = outcome === 'reviewed' ? { results: [{ lens: 'risk', outcome: 'complete', findings: [] }] } : { reason: 'the plan is out of turns' };
-  appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: REVIEWED_AT, outcome, ...said });
+  appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run: startLensRun(root, { base, head, subjectHash }), reviewedAt: REVIEWED_AT, outcome, ...said });
 }
 
 /** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, whose second line is

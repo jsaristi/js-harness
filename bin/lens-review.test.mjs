@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { claudeArgs, LENS_ANSWER_KEPT, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
-import { readLensReviews } from './lib/lens-reviews.mjs';
+import { admittedLensReviews, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
 import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
 let dir;
@@ -107,6 +107,32 @@ test('a skip is recorded with its reason and runs no lens; a range with no code 
   assert.equal(run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens }).code, 0);
   assert.equal(readLensReviews(dir).at(-1).outcome, 'nothing-to-review');
   assert.equal(claude.calls.length, 0);
+  // Both name the run line the command wrote, so both are admitted (the verifier on e7bc4215).
+  const { records, admitted } = admittedLensReviews(dir);
+  assert.deepEqual(records.slice(-2).map(admitted), [true, true]);
+});
+
+// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: every record the command writes names the run
+// line it wrote first, before any lens ran, so a check admits it, and a line written by hand names none.
+test('each record names the run line the command wrote before any lens ran, so every outcome is admitted', () => {
+  const seen = [];
+  const claude = fakeClaude((lens, subject) => {
+    seen.push(readLensRuns(dir).length);
+    return lens === 'risk' ? clean(lens, subject) : 'Looks fine.';
+  });
+  const before = readLensRuns(dir).length;
+  // From the first commit, so the range holds code whatever the tests before this one committed.
+  const root = git('rev-list', '--max-parents=0', 'HEAD');
+  assert.equal(run(['--base', root, '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens }).code, 0);
+  assert.equal(run(['--base', root, '--lenses', 'readability', '--reason', 'r'], { runLens: claude.runLens }).code, 1);
+  assert.equal(run(['--base', root, '--unavailable', 'the plan is out of turns'], { runLens: claude.runLens }).code, 0);
+  assert.deepEqual(seen, [before + 1, before + 2]);
+  const runs = readLensRuns(dir).slice(before);
+  const records = readLensReviews(dir).slice(-3);
+  assert.deepEqual(records.map((rec) => rec.outcome), ['reviewed', 'incomplete', 'unavailable']);
+  assert.deepEqual(records.map((rec) => rec.run), runs.map((line) => line.id));
+  const { records: read, admitted } = admittedLensReviews(dir);
+  assert.deepEqual(read.slice(-3).map(admitted), [true, false, true]);
 });
 
 test('--plan records nothing over a range with no code either, and does not go with --unavailable', () => {
