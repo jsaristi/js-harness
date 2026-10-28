@@ -373,6 +373,34 @@ test('sessions start records the worktree claude makes, and stop names it for a 
   assert.ok(kept.stdout.includes(`its worktree ${worktree} stays`), kept.stdout);
 }));
 
+// A reboot ends every background job; the lead resumed one by hand with claude --bg --resume, and the board listed the
+// job as not started by js-harness (2026-10-28).
+test('sessions start --resume resumes a recorded session that stopped, in its worktree, and records the new job', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--effort', 'high']).code, 0);
+  const [first] = recordLines(world);
+  const worktree = path.join(first.root, '.claude', 'worktrees', 'thing');
+  // One that still runs is not resumed: two jobs would write one conversation.
+  const busy = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(busy.code, 1);
+  assert.match(busy.stderr, /0db8bc5e · Build the thing is busy/);
+  assert.equal(actions(world).length, 1);
+  const state = readState(world);
+  Object.assign(state.agents[0], { status: undefined, state: 'failed', pid: undefined });
+  writeState(world, { ...state, nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  assert.match(resumed.stdout, /resumed 0db8bc5e as c779ed44 · Build the thing/);
+  const call = actions(world).at(-1);
+  assert.deepEqual(call.slice(0, 3), ['--bg', '--resume', first.sessionId]);
+  assert.deepEqual([call[call.indexOf('-n') + 1], call[call.indexOf('--effort') + 1], call.includes('-w')], ['Build the thing', 'high', false]);
+  assert.equal(path.resolve(readState(world).agents.find((agent) => agent.id === 'c779ed44').cwd), path.resolve(worktree));
+  const entry = recordLines(world).at(-1);
+  assert.deepEqual([entry.event, entry.id, entry.resumedFrom, entry.title, entry.worktree, entry.worktreePath, entry.effort], ['started', 'c779ed44', '0db8bc5e', 'Build the thing', 'thing', worktree, 'high']);
+  // Only a session the record holds is resumed, and a resume names no title, worktree or folder of its own.
+  assert.equal(js(world, ['sessions', 'start', '--resume', 'f462dfd5']).code, 1);
+  assert.equal(js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--title', 'Other']).code, 2);
+}));
+
 test('uninstall machine removes the recorded sessions that rest, keeps a working one and fails until it is stopped', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Busy', '--brief', world.brief]).code, 0);
   patchState(world, { nextId: 'c779ed44' });

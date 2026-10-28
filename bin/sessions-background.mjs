@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, saidBy, startArgs, startPrompt, undoSession, within, worktreeOf } from './lib/background.mjs';
+import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumePrompt, saidBy, startArgs, startPrompt, undoSession, within, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { nextSessionNumber } from './lib/channel.mjs';
@@ -21,6 +21,7 @@ export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 export const START_USAGE = [
   'Usage: js-harness sessions start --title <title> --brief <file> [--worktree <name>] [--model <model>] [--effort <level>]',
   '                                 [--no-remote-control] [--cwd <path>] [--home <path>]',
+  '       js-harness sessions start --resume <id> [--brief <file>] [--model <model>] [--effort <level>] [--no-remote-control] [--home <path>]',
   '       js-harness sessions stop <id> [--home <path>]',
   '         start runs claude --bg in the folder (a worktree of its own with --worktree), titled as start_session titles a session,',
   '         with Remote Control on (claude.ai/code and the phone reach it) unless --no-remote-control; the session reads a copy',
@@ -28,6 +29,8 @@ export const START_USAGE = [
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
   '         usage error or a title or effort the rules session-title and session-effort refuse, where they are declared.',
   '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
+  '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
+  '         new job in its folder, under its title, model and effort, and records the new job; one that still runs is refused.',
   '         The lead uses it only on a turn the user did not type, where start_session would leave a card: a background session',
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
   '         (a permission prompt included) and whether start recorded it; --watch returns when one starts waiting.',
@@ -39,7 +42,7 @@ export const START_USAGE = [
 
 class StartArgError extends Error {}
 
-const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--cwd', 'cwd'], ['--home', 'home']]);
+const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--cwd', 'cwd'], ['--home', 'home'], ['--resume', 'resume']]);
 
 function parseStart(argv) {
   const parsed = { remoteControl: true };
@@ -54,6 +57,12 @@ function parseStart(argv) {
     if (value === undefined || value === '' || value.startsWith('--')) throw new StartArgError(`${token} requires a value`);
     parsed[VALUED.get(token)] = value;
     i += 1;
+  }
+  if (parsed.resume !== undefined) {
+    // A resumed session is the one recorded: its title, worktree and folder are the record's.
+    const own = ['title', 'worktree', 'cwd'].find((name) => parsed[name] !== undefined);
+    if (own !== undefined) throw new StartArgError(`--resume takes no --${own}: the session is resumed with the record's`);
+    return parsed;
   }
   if (parsed.title === undefined) throw new StartArgError('--title is required: the session\'s title, as the board and notify read it');
   if (parsed.brief === undefined) throw new StartArgError('--brief is required: the file that says what the session does');
@@ -101,6 +110,7 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(`${err.message}\n\n${START_USAGE}`);
     return 2;
   }
+  if (parsed.resume !== undefined) return resumeStart(parsed, deps);
   let brief;
   try {
     brief = readFile(path.resolve(deps.cwd, parsed.brief));
@@ -201,6 +211,71 @@ export function sessionsStartMain(argv, given = {}) {
   stdout(`started ${id} · ${parsed.title}`);
   stdout(`  js-harness sessions stop ${id} removes it; claude attach ${id} opens it here; js-harness sessions lists it`);
   if (parsed.remoteControl) stdout("  Remote Control is on: claude.ai/code and the user's phone reach it");
+  return 0;
+}
+
+/** `sessions start --resume <id>`: the recorded session `id` names, whose job stopped (a restart of the machine ends every
+ * one), resumed with `claude --bg --resume` in a new job, in the folder it worked in, under its title, model and effort
+ * (`--model`, `--effort` and `--brief` replace the record's). The new job is recorded with `resumedFrom`; the stopped one
+ * stays recorded, since `claude rm` of it could remove the worktree the new job works in. Exit 0 once the new job runs
+ * and is recorded; 1 when the record holds no such session, it still runs or that cannot be told, its folder is gone,
+ * or claude refuses or prints no id; 2 for a brief that cannot be read. */
+function resumeStart(parsed, deps) {
+  const { stdout, stderr, env, now, readFile } = deps;
+  const refuse = (line, code = 1) => {
+    stderr(`js-harness sessions start --resume: ${line}`);
+    return code;
+  };
+  const home = harnessHome({ given: parsed.home, env, cwd: deps.cwd, homedir: deps.homedir });
+  const record = readRecord(home);
+  if (record.unavailable !== undefined) return refuse(`the record of background sessions could not be read (${record.unavailable}), so nothing was resumed`);
+  const entry = recordedNamed(record.sessions, parsed.resume);
+  if (entry === null || typeof entry.sessionId !== 'string') {
+    return refuse(`no session js-harness sessions start recorded with its conversation is named by ${JSON.stringify(parsed.resume)}, so nothing was resumed`);
+  }
+  const name = `${entry.id} · ${entry.title}`;
+  const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
+  if (claude === null) return refuse('claude is not on PATH: install the Claude Code CLI, then run this again');
+  let agent;
+  try {
+    agent = listAgents(claude).find((item) => item.id === entry.id);
+  } catch (err) {
+    return refuse(`whether ${name} still runs cannot be told (${err.message}), so it was not resumed`);
+  }
+  if (atWork(agent)) return refuse(`${name} is ${agent.status ?? agent.state}: one that still runs is not resumed (claude attach ${entry.id} opens it)`);
+  const folder = worktreeOf(entry) ?? entry.cwd;
+  if (typeof folder !== 'string' || !fs.existsSync(folder)) return refuse(`the folder ${name} worked in, ${folder}, is gone, so it was not resumed`);
+  let copy = entry.brief;
+  if (parsed.brief !== undefined) {
+    let text;
+    try {
+      text = readFile(path.resolve(deps.cwd, parsed.brief));
+    } catch (err) {
+      return refuse(`could not read the brief ${parsed.brief} (${err.code ?? err.message})`, 2);
+    }
+    copy = path.join(briefsDirOf(home), `${new Date(now()).toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}.md`);
+    fs.mkdirSync(briefsDirOf(home), { recursive: true });
+    fs.writeFileSync(copy, briefCopyOf(text));
+  }
+  const model = parsed.model ?? entry.model ?? undefined;
+  const effort = parsed.effort ?? entry.effort ?? undefined;
+  const remoteControl = parsed.remoteControl && entry.remoteControl !== false;
+  const result = claude(startArgs({ title: entry.title, briefs: briefsDirOf(home), model, effort, remoteControl, prompt: resumePrompt(copy), resume: entry.sessionId }), { cwd: folder });
+  const id = idOfStart(result.stdout ?? '');
+  if (id === null && copy !== entry.brief) fs.rmSync(copy, { force: true });
+  if (id === null) return refuse(`claude did not resume ${name} (${result.error ? result.error.message : `exit ${result.status}`}), and nothing was recorded:\n${saidBy(result)}`);
+  let resumed;
+  try {
+    resumed = listAgents(claude).find((item) => item.id === id);
+  } catch {
+    // The new session id is a convenience of the record, as in a start.
+  }
+  appendRecord(home, {
+    event: 'started', at: new Date(now()).toISOString(), id, sessionId: resumed?.sessionId ?? null, title: entry.title, root: entry.root, cwd: entry.cwd,
+    worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, remoteControl, brief: copy, resumedFrom: entry.id,
+  });
+  stdout(`resumed ${entry.id} as ${id} · ${entry.title}`);
+  stdout(`  js-harness sessions stop ${id} removes the new job, and sessions stop ${entry.id} the one that stopped; claude attach ${id} opens it here`);
   return 0;
 }
 

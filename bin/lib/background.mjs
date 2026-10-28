@@ -45,11 +45,17 @@ export function startPrompt(copy) {
   return `Your brief is in ${copy}: read it whole before anything else, and do the work it gives you. Its last section says how you report.`;
 }
 
-/** The arguments of `claude` that start the session. `--add-dir` lets it read its brief's copy without a prompt; it
- * takes several folders, so it comes first and `-n` ends it. */
-export function startArgs({ title, briefs, worktree, model, effort, remoteControl, prompt }) {
+/** The one-line prompt a background session resumed after its job stopped starts with: it keeps its conversation, and
+ * is told why it was stopped and where its brief is. */
+export function resumePrompt(copy) {
+  return `Your background job stopped (a restart of the machine ends every one) and js-harness sessions start --resume resumed it. Your brief is in ${copy}: go on from where your work stands, checked against your feature document and git, and report as its last section says.`;
+}
+
+/** The arguments of `claude` that start the session, or resume the conversation `resume` (a session id) in a new job.
+ * `--add-dir` lets it read its brief's copy without a prompt; it takes several folders, so `-n` ends it. */
+export function startArgs({ title, briefs, worktree, model, effort, remoteControl, prompt, resume }) {
   return [
-    '--bg', '--add-dir', briefs, '-n', title,
+    '--bg', ...(resume === undefined ? [] : ['--resume', resume]), '--add-dir', briefs, '-n', title,
     ...(worktree === undefined ? [] : ['-w', worktree]),
     ...(model === undefined ? [] : ['--model', model]),
     ...(effort === undefined ? [] : ['--effort', effort]),
