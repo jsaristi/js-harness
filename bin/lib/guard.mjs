@@ -518,8 +518,9 @@ const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
 const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
-// A call of a function of this package that appends a record of a review and nothing else; its name alone is no call.
-const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun)\s*\(/;
+// A function of this package that appends a record of a review and nothing else, named in a script's code: called,
+// passed on or held, it is refused; named in a string, it is text.
+const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReviewRun|appendCodexReview)\b/;
 
 /** Why the Bash command `command` is refused for writing a review record, or null (`recordWriteOf`). */
 export function reviewRecordWriteRefusal(command) {
@@ -565,7 +566,7 @@ function segmentRecordWrite(words, redirected) {
   const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
   if (WRITES_EACH.has(program) && first !== null) return writes(first);
   if (program === 'rm' && args.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command removes the folder that holds every record of a review';
-  if (program === 'mv' && args.slice(0, -1).some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command moves away the folder that holds every record of a review';
+  if (program === 'mv' && moveParts(args).sources.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command moves away the folder that holds every record of a review';
   if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
   if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
@@ -583,17 +584,22 @@ function segmentRecordWrite(words, redirected) {
   return null;
 }
 
-/** The record a `mv`, `cp`, `install` or `ln` given `args` writes: its target when that is a record, or a record's name
- * among its sources when the target is the records' folder; else null. The target is the folder `-t` (alone or last
- * among short options, or `--target-directory`) names, else the last path. */
-function writtenInto(args) {
+/** The target and the sources of a `mv`, `cp`, `install` or `ln` given `args`, and the folder `-t` (alone or last among
+ * short options, or `--target-directory`) names, which is then the target; else the target is the last path. */
+function moveParts(args) {
   const flag = args.findIndex((arg) => /^-[A-Za-z]*t$/.test(arg) || arg === '--target-directory');
   const long = args.find((arg) => arg.startsWith('--target-directory='));
   const folder = flag !== -1 ? args[flag + 1] : long?.slice('--target-directory='.length);
   const paths = args.filter((arg, i) => !arg.startsWith('-') && !(flag !== -1 && i === flag + 1));
-  if (folder === undefined && paths.length < 2) return null;
-  const target = folder ?? paths[paths.length - 1];
-  const sources = folder === undefined ? paths.slice(0, -1) : paths;
+  if (folder !== undefined) return { folder, target: folder, sources: paths };
+  return { folder, target: paths.length < 2 ? undefined : paths[paths.length - 1], sources: paths.slice(0, -1) };
+}
+
+/** The record a `mv`, `cp`, `install` or `ln` given `args` writes: its target when that is a record, or a record's name
+ * among its sources when the target is the records' folder; else null (`moveParts`). */
+function writtenInto(args) {
+  const { folder, target, sources } = moveParts(args);
+  if (target === undefined) return null;
   if (folder === undefined && reviewRecordOf(target) !== null) return reviewRecordOf(target);
   if (!RECORDS_FOLDER.test(slashed(target ?? ''))) return null;
   const source = sources.find(recordNamed);
@@ -630,14 +636,17 @@ function callArguments(text, from) {
   return args;
 }
 
-// A call that runs a string as code, here or in a child process: what that string holds is code too.
-const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|setTimeout|setInterval|system|popen|Popen|check_output|check_call)\s*\(|\b(?:subprocess|child_process)\b/;
+// A call that runs a string as code, here or in a child process: what that string holds is code too. A timer runs one
+// only when it is given a string, not a function.
+const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*['"`]|\b(?:subprocess|child_process)\b/;
 
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
- * at the same indexes; a template literal's `${…}` stays code, and a `//` or `/* … *\/` comment opens no string. On the
- * safe side, `text` comes back whole when its code holds any other `/` (a regex literal's quotes would mislead it), a
- * quote is left open, or the script runs a string (`RUNS_TEXT`). */
-function codeOf(text) {
+ * at the same indexes; a template literal's `${…}` stays code, a member named in brackets (`fs['writeFileSync']`) is
+ * read as `.writeFileSync`, and a `//` or `/* … *\/` comment opens no string. On the safe side, `text` comes back whole
+ * when its code holds any other `/` (a regex literal's quotes would mislead it), a quote is left open, or the script
+ * runs a string (`RUNS_TEXT`). */
+function codeOf(script) {
+  const text = script.replace(/\[\s*(['"`])([A-Za-z_$][\w$]*)\1\s*\]/g, (whole, _, name) => `.${name}`.padEnd(whole.length));
   let out = '';
   const open = [];
   for (let i = 0; i < text.length; i += 1) {
@@ -652,7 +661,7 @@ function codeOf(text) {
       continue;
     }
     // A regex literal may hold a quote, and telling one from a division needs a parser: read the script whole.
-    if (top !== "'" && top !== '"' && top !== '`' && c === '/') return text;
+    if (top !== "'" && top !== '"' && top !== '`' && c === '/') return script;
     if (top === "'" || top === '"' || top === '`') {
       if (c === top) open.pop();
       else if (top === '`' && c === '$' && text[i + 1] === '{') {
@@ -671,7 +680,7 @@ function codeOf(text) {
     else if (c === '}' && top !== undefined) open.pop();
     out += c;
   }
-  return open.length > 0 || RUNS_TEXT.test(out) ? text : out;
+  return open.length > 0 || RUNS_TEXT.test(out) ? script : out;
 }
 
 /** What the call argument `arg` holds when it is one string literal and nothing else, or null. */

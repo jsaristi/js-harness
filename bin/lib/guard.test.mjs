@@ -553,6 +553,9 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     // Moving the folder away loses every record as its removal does (gentle-ai R3 on 9c291a1e).
     'mv .git/js-harness /tmp/kept',
     'mv D:/r/.git/js-harness/ D:/r/.git/old',
+    // `-t` names the target, so the folder after it is a source (Codex P2 and the reliability lens on d61b5588).
+    'mv -t /tmp .git/js-harness',
+    'mv --target-directory=/tmp .git/js-harness',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
     "printf '{}'>>.git/js-harness/lens-reviews.jsonl",
     `echo x>>${RECORD}`,
@@ -586,6 +589,12 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "execFileSync(\'node\', [\'-e\', \'m.appendLensReview(root, {})\'])"',
     'node -e "require(\'child_process\').execSync(\'node -e m.startLensRun(root)\')"',
     'python -c "subprocess.run([\'node\', \'-e\', \'m.appendLensReview(root, {})\'])"',
+    'node -e "setTimeout(\'m.appendLensReview(root, {})\', 0)"',
+    // A function reached by a reference or a bracketed name (gentle-ai R3 on d61b5588).
+    'node -e "m.appendLensReview.call(null, root, {})"',
+    'node -e "const f = m.appendLensReview; f(root, {})"',
+    'node -e "m[\'appendLensReview\'](root, {})"',
+    `node -e "fs['appendFileSync']('${RECORD}', '{}')"`,
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -625,5 +634,8 @@ test('reading a record, the commands that write one, and text that only names on
     // A read whose other arguments hold a w, a, x or + is no write (gentle-ai R3 on b2bc9596).
     `python -c "print(open('${RECORD}', 'r', encoding='ascii').read())"`,
     `python -c "print(open('${RECORD}', encoding='latin-1').read())"`,
+    // A move into the records' folder of a file that is no record, and a timer given a function (Codex P2 on d61b5588).
+    'mv -t .git/js-harness /tmp/notes.txt',
+    'node -e "setTimeout(() => console.log(\'appendLensReview(\'), 0)"',
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });
