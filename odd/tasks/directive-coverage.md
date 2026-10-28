@@ -25,12 +25,12 @@ His words (transcript `0f71b2c6`, line 6690, 2026-10-28T09:23Z, read with `js-ha
 - Eval spend beyond the plan's limits (D2).
 
 ## Tasks
-- [ ] T1 (kind: design) inventory, mechanism, init and S12, cost, F8 place: section 14 and the ROADMAP line
-- [ ] T2 (kind: verify) two blind readers, one fix batch
+- [x] T1 (kind: design) inventory, mechanism, init and S12, cost, F8 place: section 14 and the ROADMAP line
+- [x] T2 (kind: verify) two blind readers, one fix batch (Claude 6, Codex 5; fixed in one batch, L3)
 - [ ] T3 (kind: docs) PR, Spanish page, ready notice
 
 ## Next step
-Section 14 and the ROADMAP line are committed. Next: T2. (Done: the ROADMAP line in F8 step 4 (append after "rows 13 and 14 into S8": directive coverage, section 14, as S5c-a after S11 and before S13, S5c-b beside S5, with its pass line); then T2, the two blind readers on section 14 only; one fix batch; then T3.
+T2 done: both readers graded section 14 and one fix batch is committed. Next: T3, the docs-only PR from `docs/directive-coverage`, the Spanish page for him, and `notify --kind ready --pr <n>`; then a declared wait on the PR, and `closed --summary` once it lands.
 
 ## Log
 - L1 (2026-10-28, the lead's message relaying his request, line 6690): write the directive-coverage proposal as section 14 with a ROADMAP line; double review; docs PR; Spanish page; ready.
@@ -39,3 +39,4 @@ Section 14 and the ROADMAP line are committed. Next: T2. (Done: the ROADMAP line
   - `docs/FAILURES.md`: 104 headings; controls 70 check, 8 protocol, 2 measured, 1 line, 1 owed; 39 lines say "owed".
   - Evals (`evals/tasks`): 19 tasks; 10 incident cases (`incident-01`..`10`, each `case.json` names its source directive or failure; the set is 10 cases × 2 = 20 trials, `evals/incident-score.mjs:20`), 5 directive tasks (`commit-no-attribution`, `doc-goal`, `false-premise-flag`, `honest-unknown`, `house-rules`), 4 capability tasks (`format-v2`, `lost-updates`, `resolver`, `spec-drift`). No case names a rule id; the link is prose in `case.json` `source`.
   - Prose files: `CLAUDE.md` 136 lines, 2,010 words; `AGENTS.md` 60 lines, 677 words; installed skills `js-harness-protocols` 115 lines, `js-harness-orchestrator` 152, `js-harness` 66. Projects already get `docs/rules.json` held by `rules check` (phrases, sensors, no deletion) (`js-harness rules --help`).
+- L3 (2026-10-28, T2): blind Claude reader 6/10, blind Codex reader 5/10 (`codex exec -s read-only`). Checked before fixing: `docs/RULES.md:214,220,226,295` read `Read by: none`; `bin/lib/failures.mjs:12-29` holds the control levels and states; `evals/task-proof.mjs` proves each task; `bin/lib/manifest.mjs:301-314` ships the output style and two ported skills; `bin/lib/project-rules.mjs:1-4` says the harness never writes a project's list; diet section 10 puts S13 and S12 before S5. Fixed in one batch: value rules counted as read, not held (at most 42, 4 unread); prose holders mapped by behaviour, composite rules split into obligations; uncounted sources listed (ported skills, output style, hook messages, `FAILURES_TEMPLATE`); 134 sentences, not 135 instructions, and spans by hash, not lines; 38 phrases from 19 rules; 9 tasks name no source; the mechanism reuses the failure register's `Control`/`Proof` and `task-proof.mjs`, with a planted break and a without-the-rule arm as proof; a context span is hashed; a bootstrap seeds `owed` so S5c-a cannot block itself; projects: the harness never writes their list, harness-written text is bound to the release's bytes, S12 records a baseline date; cost adds the project runner, proving the new cases, S5c-a's rerun and S8, about $70 to $90 over the envelope, which goes to him; the pass line is commands; S5c placed in step 4's order list; 65 corrected to 66.
