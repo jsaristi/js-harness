@@ -1284,7 +1284,7 @@ test('every backup subcommand refuses an unknown flag with a usage error, and ke
 
   deps.stderr = sink();
   assert.equal(await backupMain(['run', '--allow-shrink'], deps), 0, deps.stderr.text);
-  // The host's entry point keeps its promise to exit 0 (gentle-ai on 46e3842..5067fdd): a refusal there would read as a
+  // The host's entry point keeps its promise to exit 0: a refusal there would read as a
   // broken hook, so it is not gated.
   deps.stderr = sink();
   assert.equal(await backupMain(['--session-start', '--no-such-flag'], deps), 0, deps.stderr.text);

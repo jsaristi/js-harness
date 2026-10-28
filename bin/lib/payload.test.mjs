@@ -280,7 +280,7 @@ test('hooks are listed in configured order, and a Stop hook is not read', () => 
         hooks: {
           UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'codegraph.cmd prompt-hook' }] }],
           SessionStart: [
-            { hooks: [{ type: 'command', command: 'gentle-ai review stop-hook' }] },
+            { hooks: [{ type: 'command', command: 'other-tool review stop-hook' }] },
             { hooks: [{ type: 'command', command: 'js-harness doctor --hook' }] },
           ],
           Stop: [{ hooks: [{ type: 'command', command: 'should-not-appear' }] }],
@@ -290,7 +290,7 @@ test('hooks are listed in configured order, and a Stop hook is not read', () => 
     const { hosts } = measurePayload({ home, cwd });
     assert.deepEqual(hosts[0].hooks, [
       { event: 'UserPromptSubmit', command: 'codegraph.cmd prompt-hook' },
-      { event: 'SessionStart', command: 'gentle-ai review stop-hook' },
+      { event: 'SessionStart', command: 'other-tool review stop-hook' },
       { event: 'SessionStart', command: 'js-harness doctor --hook' },
     ]);
   });
@@ -581,7 +581,7 @@ test('Codex project instructions prefer AGENTS.override.md over AGENTS.md in cwd
   });
 });
 
-// --- model_instructions_file resolves relative to the config.toml directory (gentle-ai WARNING follow-up) ---
+// --- model_instructions_file resolves relative to the config.toml directory ---
 
 test('a relative model_instructions_file value resolves against the config.toml directory (<home>/.codex)', () => {
   withFixture((home, cwd) => {

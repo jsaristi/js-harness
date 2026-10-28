@@ -1,6 +1,6 @@
 // T7 of odd/tasks/f8-s10-port.md: `install` writes his nine Rules lines (his answer D7) into the user's own
 // `~/.claude/CLAUDE.md`, in a small recorded block, and `uninstall` takes out exactly that (his answer to question 99,
-// G12). The text around the block is his or gentle-ai's and is never changed. Every test runs in a scratch home.
+// G12). The text around the block is his or the global file's and is never changed. Every test runs in a scratch home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -54,9 +54,9 @@ test('in an empty home install writes the file with the block alone, and uninsta
 });
 
 for (const [name, before] of [
-  ['ends with a line end', '# gentle-ai\n\nIts own lines.\n'],
-  ['ends without one', '# gentle-ai\n\nIts own lines.'],
-  ['has CRLF line ends', '# gentle-ai\r\n\r\nIts own lines.\r\n'],
+  ['ends with a line end', '# other-tool\n\nIts own lines.\n'],
+  ['ends without one', '# other-tool\n\nIts own lines.'],
+  ['has CRLF line ends', '# other-tool\r\n\r\nIts own lines.\r\n'],
 ]) {
   test(`over a file that ${name}, install adds the block after its text and uninstall gives the file its bytes back`, () => {
     const m = machine();
@@ -154,7 +154,7 @@ test('when the manifest cannot be written, the block install wrote is taken back
   }
 });
 
-// gentle-ai on cca493e0..c7fe8137: the rollback's other path, a file install made, is taken away again.
+// A review of cca493e0..c7fe8137: the rollback's other path, a file install made, is taken away again.
 test('when the manifest cannot be written, a CLAUDE.md install made is removed again', () => {
   const m = machine();
   try {
@@ -265,7 +265,7 @@ test('a record edited by hand cannot take his text: an unknown separator or a cr
   }
 });
 
-// gentle-ai on T7's slice: his file is renamed into place as the manifest is, tried again while Windows holds it open.
+// A review of T7's slice: his file is renamed into place as the manifest is, tried again while Windows holds it open.
 test('the rename that puts his file in place is tried again while Windows holds it, and fails on the third refusal', () => {
   const held = (times) => {
     let calls = 0;
@@ -332,7 +332,7 @@ test('his CLAUDE.md as a link stays a link: the block goes into the file it name
   }
 });
 
-// gentle-ai on cca493e0..c7fe8137: a file install made, which he then moved into dotfiles behind a link, is emptied
+// A review of cca493e0..c7fe8137: a file install made, which he then moved into dotfiles behind a link, is emptied
 // there; the link is not what goes.
 test('a CLAUDE.md install made and he moved behind a link is emptied in the file it names, and the link stays', { skip: !canLink && 'this machine cannot make links' }, () => {
   const m = machine();

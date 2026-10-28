@@ -219,3 +219,7 @@ bin/lib/template-block.test.mjs:30) stay until he answers, and PR 3 is not annou
   base (`bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/codex-reviews.mjs`, their tests and `js-harness.mjs`'s guard
   help) is JH 69's surface: named in the list until the lead says otherwise, asked through it. `bin/lib/
   gentle-ai-absence.test.mjs` holds the list and fails on a file outside it.
+- L13 (2026-10-28 09:45, the lead, a notice on the channel): "the guard's gentle-ai review-base refusal stays until S2.
+  gentle-ai still reviews here until then, and the refusal is a guard (high risk), so JH 69 keeps its scope. Name those
+  files in S11's allowed list". S2 removes the refusal with gentle-ai (`bin/guard.mjs`, `bin/lib/guard.mjs`,
+  `bin/lib/codex-reviews.mjs`, their tests, and `bin/js-harness.mjs`'s guard help line).

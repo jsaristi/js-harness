@@ -693,7 +693,7 @@ test('upgrade with pnpm keeps a fresh bin lock another install may hold', async 
   assert.doesNotMatch(run.err, /removed pnpm's bin lock/);
 });
 
-// T2, gentle-ai R1-002 and Codex P2 on 839b194..eae1e83: a lock taken during this run's install may be another
+// T2, review R1-002 and Codex P2 on 839b194..eae1e83: a lock taken during this run's install may be another
 // pnpm's that is still linking, so no lock is removed while any pnpm runs, or while the process list cannot be read.
 test('upgrade with pnpm keeps a bin lock taken during its install while another pnpm runs', async () => {
   const running = `${process.pid} node /x/js-harness.mjs upgrade --pm pnpm\n4242 /usr/local/bin/pnpm add -g other\n`;

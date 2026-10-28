@@ -5741,7 +5741,7 @@ test('a merge of main below HEAD on a branch whose covered work is small is not 
   assert.deepEqual(result.out.split('\n'), plannedPlan(root, main, after, [{ files: ['a.txt', 'm.txt'], changedLines: 4 }]));
 });
 
-// The ways the turn at a merge below HEAD can fail, each with what it leaves (gentle-ai R3 and the verifier of
+// The ways the turn at a merge below HEAD can fail, each with what it leaves (review R3 and the verifier of
 // pull request 338): a run that cannot go on says why, launches no session it would not finish and leaves no
 // worktree.
 test('a run of two turns with no Codex refuses before it makes the worktree of the merge, and launches nothing (verifier, PR 338)', async () => {
@@ -5764,7 +5764,7 @@ test('a run of two turns with no Codex refuses before it makes the worktree of t
   assert.deepEqual(turnWorktrees(repo.root), []);
 });
 
-test('a run whose worktree at the merge cannot be made says so and launches nothing (gentle-ai R3, PR 338)', async () => {
+test('a run whose worktree at the merge cannot be made says so and launches nothing (review R3, PR 338)', async () => {
   const repo = mergeBelowHead({ mineLines: 300 });
   // git refuses to add the worktree.
   const fake = fakeCodexInParts();
@@ -5776,7 +5776,7 @@ test('a run whose worktree at the merge cannot be made says so and launches noth
   assert.deepEqual(turnWorktrees(repo.root), []);
 });
 
-test('a run whose tracked files change during the turn at the merge reviews nothing after it, and says to run it again (gentle-ai R3, PR 338)', async () => {
+test('a run whose tracked files change during the turn at the merge reviews nothing after it, and says to run it again (review R3, PR 338)', async () => {
   const repo = mergeBelowHead({ mineLines: 300 });
   const during = () => fs.writeFileSync(path.join(repo.root, 'a.txt'), 'changed during the turn\n', 'utf8');
   // A second session would fail the run: only one is listed.

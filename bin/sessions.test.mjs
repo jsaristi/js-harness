@@ -1682,7 +1682,7 @@ test('--next-number prints the next free work number of the code the project dec
   assert.deepEqual([none.code, none.stdout], [1, '']);
   assert.match(none.stderr, /harness\.json declares no "code"/);
   // A code that is no single word, or a harness.json that is not JSON, is exit 2: it cannot be read.
-  // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (gentle-ai, R3/R4).
+  // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (a review, R3/R4).
   for (const text of [JSON.stringify({ code: 'J H' }), JSON.stringify({ code: 'ORQ' }), JSON.stringify({ code: 'jh' }), JSON.stringify({ code: 'J-H' }), JSON.stringify({ code: 7 }), '{ not json']) {
     fs.writeFileSync(path.join(machine.root, 'harness.json'), text, 'utf8');
     const broken = await runSessions(machine, ['--next-number']);
