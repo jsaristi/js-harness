@@ -131,7 +131,10 @@ Reviews:
 State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
 `f8-s10-rules` (not pushed, no PR yet): `30ac3c3d` (the atomic write moved out), `380b9e77` (the Rules block),
 `d232c63a` (the verifier's fixes), `b27d0633` (gentle-ai's). Codex on `cca493e..b27d063`: part 2 incorrect, two P2s
-(L21). Next: the fix of those two P2s (tests already written, uncommitted), then Codex on the fix alone (a recheck),
+(L21). After the restart (PR 617 landed, main `cd194eb`; he keeps outputStyle Neutral, Q101): the two P2s' tests
+failed on GitHub's Linux run alone (7474 pass, 2 fail, run 40644538748), so they go in one commit with the fix
+(`realPlace` writes into the file a link names, a link to nothing is skipped; the sibling takes the file's mode).
+Next: Codex on that commit alone (a recheck, base `6df890ec`),
 the lenses on `cca493e0..` the fix, gentle-ai on the fix, push, PR 3 with base `f8-s10-permissions` or main, `ready
 --pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
 (about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).

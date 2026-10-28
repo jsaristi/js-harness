@@ -281,6 +281,59 @@ test('install writes his file through a fresh sibling: a file already at a sibli
   }
 });
 
+// Codex on cca493e..b27d063, part 2: his CLAUDE.md as a link (into a dotfiles repository) stays a link, the block going
+// into the file it names; a link to nothing is skipped; and the file keeps its mode.
+const canLink = (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-link-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'a'), '');
+    fs.symlinkSync(path.join(dir, 'a'), path.join(dir, 'b'), 'file');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+})();
+
+test('his CLAUDE.md as a link stays a link: the block goes into the file it names and comes out of it', { skip: !canLink && 'this machine cannot make links' }, () => {
+  const m = machine();
+  try {
+    const real = path.join(m.home, 'dotfiles', 'CLAUDE.md');
+    fs.mkdirSync(path.dirname(real), { recursive: true });
+    fs.writeFileSync(real, '# from dotfiles\n');
+    fs.mkdirSync(path.dirname(m.file), { recursive: true });
+    fs.symlinkSync(real, m.file, 'file');
+    assert.equal(install(m.home, '1.0.0').rulesHeld.status, 'written');
+    assert.ok(fs.lstatSync(m.file).isSymbolicLink(), 'still a link after install');
+    assert.equal(count(fs.readFileSync(real, 'utf8'), `- ${RULES_LINES[0]}`), 1);
+    assert.equal(m.remove().rulesBlock.status, 'released');
+    assert.ok(fs.lstatSync(m.file).isSymbolicLink(), 'still a link after uninstall');
+    assert.equal(fs.readFileSync(real, 'utf8'), '# from dotfiles\n');
+
+    fs.rmSync(real);
+    const dangling = install(m.home, '1.0.0').rulesHeld;
+    assert.equal(dangling.status, 'skipped');
+    assert.equal(fs.existsSync(real), false, 'nothing is written through a link to nothing');
+  } finally {
+    m.done();
+  }
+});
+
+test('his CLAUDE.md keeps its mode through install and uninstall', { skip: process.platform === 'win32' && 'Windows keeps no Unix mode' }, () => {
+  const m = machine();
+  try {
+    m.write('# private\n');
+    fs.chmodSync(m.file, 0o600);
+    install(m.home, '1.0.0');
+    assert.equal(fs.statSync(m.file).mode & 0o777, 0o600);
+    m.remove();
+    assert.equal(fs.statSync(m.file).mode & 0o777, 0o600);
+  } finally {
+    m.done();
+  }
+});
+
 test('a record that names another file is left as it is, said, and not kept', () => {
   const m = machine();
   try {

@@ -37,11 +37,19 @@ const separatorOf = (record) => (SEPARATORS.has(record?.separator) ? record.sepa
 /** Writes `text` to `target` through a fresh sibling renamed over it, so a write that fails partway leaves the file as
  * it was (the verifier, L20). The sibling is created exclusively under a random name, so nothing already there is
  * written through, and the rename is tried again while Windows holds the file (gentle-ai on T7's slice); the sibling
- * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours. */
+ * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours.
+ * The sibling takes the mode of the file it replaces, so a private file stays private (Codex on cca493e..b27d063). */
 function writeWhole(target, text, writeFile = fs.writeFileSync) {
   const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  let mode = null;
+  try {
+    mode = fs.statSync(target).mode & 0o7777;
+  } catch {
+    // A file not there yet takes the default mode.
+  }
   try {
     writeFile(tmp, text, { encoding: 'utf8', flag: 'wx' });
+    if (mode !== null) fs.chmodSync(tmp, mode);
     renameOver(tmp, target);
   } catch (err) {
     if (err.code !== 'EEXIST') fs.rmSync(tmp, { force: true });
@@ -62,6 +70,20 @@ function withoutSeparator(before, rest, separator) {
     text = text.slice(0, -end[0].length);
   }
   return text;
+}
+
+/** The file `file` names: itself, or the one it links to, so his `CLAUDE.md` linked into a dotfiles repository stays a
+ * link and the block goes into the file it names (Codex on cca493e..b27d063). A link to nothing throws (`ENOENT`):
+ * nothing is written through it. */
+function realPlace(file) {
+  let link;
+  try {
+    link = fs.lstatSync(file).isSymbolicLink();
+  } catch (err) {
+    if (err.code === 'ENOENT') return file;
+    throw err;
+  }
+  return link ? fs.realpathSync(file) : file;
 }
 
 /** The text of `file` and whether it was there; a file that is not there reads as empty, any other error throws. */
@@ -85,9 +107,11 @@ function readText(file) {
 export function holdRulesBlock(home, previous) {
   const target = rulesFile(home);
   const skipped = (reason) => ({ held: { status: 'skipped', path: target, reason }, record: previous ?? null, keep: recordWith(null) });
+  let place;
   let read;
   try {
-    read = readText(target);
+    place = realPlace(target);
+    read = readText(place);
   } catch (err) {
     return skipped(`not readable (${err.code ?? err.message})`);
   }
@@ -104,12 +128,12 @@ export function holdRulesBlock(home, previous) {
     next = `${text}${record.separator}${`${markedBlock(body, 'rules')}\n`.replace(/\n/g, lineEnd)}`;
   }
   try {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    writeWhole(target, next);
+    fs.mkdirSync(path.dirname(place), { recursive: true });
+    writeWhole(place, next);
   } catch (err) {
     return skipped(`not writable (${err.code ?? err.message})`);
   }
-  const putBack = () => (existed ? fs.writeFileSync(target, text, 'utf8') : fs.rmSync(target, { force: true }));
+  const putBack = () => (existed ? writeWhole(place, text) : fs.rmSync(place, { force: true }));
   const status = rendered.state === 'none' ? 'written' : 'updated';
   return { held: { status, path: target }, record, keep: recordWith(putBack) };
 }
@@ -122,9 +146,11 @@ export function holdRulesBlock(home, previous) {
 export function releaseRulesBlock(record, home, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
   const at = rulesFile(home);
   if (!sameFile(record.path, at)) return { status: 'kept', path: String(record.path), reason: "the record names another file than the user's CLAUDE.md" };
+  let place;
   let read;
   try {
-    read = readText(at);
+    place = realPlace(at);
+    read = readText(place);
   } catch (err) {
     return { status: 'failed', path: at, code: err.code ?? err.message };
   }
@@ -135,7 +161,7 @@ export function releaseRulesBlock(record, home, { writeFile = fs.writeFileSync, 
   const text = withoutSeparator(out.text.slice(0, out.at), rest, separatorOf(record)) + rest;
   try {
     if (record.createdFile === true && text === '') removeFile(at);
-    else writeWhole(at, text, writeFile);
+    else writeWhole(place, text, writeFile);
   } catch (err) {
     return { status: 'failed', path: at, code: err.code ?? 'unknown error' };
   }
