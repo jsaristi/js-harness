@@ -6,7 +6,8 @@ lens-review: structured output so a lens answer always closes its JSON`; deliver
 
 ## Goal
 Each lens run asks the CLI for structured output against the lens answer's schema and answers in English, so the host
-enforces the shape the parse then reads; the text parse and the kept-file refusal stay as the fallback.
+enforces the shape the parse then reads; the text parse and the kept-file refusal stay as the fallback for a CLI that
+takes the flags and gives no structured output.
 
 ## Why
 JH 73's lens rerun over f9c10579..4c44d3bb was refused again (readability): its kept stdout shows `stop_reason`
@@ -45,9 +46,9 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
   JH 73's commits ... Say what the run cost."
 
 ## Tasks
-- [ ] T1 (kind: build) S1, S2, S3: the schema, `--json-schema`, `--settings` with `language: English`, read
+- [x] T1 (kind: build) S1, S2, S3: the schema, `--json-schema`, `--settings` with `language: English`, read
   `structured_output` first, the kept file as a fixture (route: inline; one commit)
-- [ ] T2 (kind: verify) S4: one real lens-review over f9c10579..4c44d3bb on JH 73's commits (route: command)
+- [x] T2 (kind: verify) S4: one real lens-review over f9c10579..4c44d3bb on JH 73's commits (route: command)
 - [ ] T3 (kind: verify) Codex, the lenses, gentle-ai and one independent verifier over the code commit (route:
   commands and one read-only sub-agent)
 
@@ -82,3 +83,22 @@ Nothing of this feature is his: no spend past a few lens runs (cents each), noth
     `structured_output` when the CLI gives an object there, else from `result` as before. `TOP` and `FINDING` are now
     read from the schema, so the shape is named once.
   - Not changed: the parse and what it refuses, the record's fields, the prompt, what a check admits.
+- L7, T2, the proof run (S4): JH 73's branch `f8-s5c-a-coverage` fetched (cd9c4220, 4c44d3bb on it), nothing written
+  to it; `node bin/js-harness.mjs lens-review --base f9c10579 --head 4c44d3bb --lenses risk,reliability,readability`
+  from this worktree at 9c6ebb17, the lenses JH 73 picked. All three complete, 0 findings, evidence in English; run
+  35c1dd72-18d7-4144-9e49-239ca9ef9ea5 at 21:30:17Z. Cost $0.1555 (risk $0.0595, reliability $0.0484, readability
+  $0.0476), about 29 s of lens time. The record says not which field was read, so one more readability run through
+  `runLens` with no record (`one-lens.mjs`, scratch; $0.016) showed it: `structured_output` an object, `result` the
+  same object as text, `stop_reason` `tool_use`, `num_turns` 3, the parse complete. This record covers JH 73's range
+  with this branch's code, which main does not hold yet.
+- L8, the reviews of 9c6ebb17 (729ba8fb..9c6ebb17):
+  - Codex (`--doc` this document, `--prompt own`): "the patch is correct" (0.91), no findings; 86,359 input tokens.
+  - Claude lenses risk, resilience, reliability and readability (installed 0.97.0): complete, 0 findings; $0.248.
+  - gentle-ai: lineage review-1c6c8e13ac08b21e (lenses risk, readability, reliability; tier high by item 2), approved
+    and acknowledged, with three suggestions: R2-001 (with structured output every run stops at `tool_use`, which the
+    `stopReason` comment did not say), R3-fallback-guard-untested (no test of a `structured_output` that is no
+    object), R3-fallback-reach (the fallback covers a CLI that takes the flags and gives no `structured_output`; one
+    that does not know them exits non-zero, incomplete).
+- L9, the fixes of L8: the `stopReason` comment says a structured answer stops at `tool_use`; the read's comment and
+  the Goal say what the fallback reaches; a test gives `structured_output` as `null`, `[]` and a string beside a
+  valid `result`, each read from `result`. It passed at once: the guard was built, only unproved. GREEN 35 of 35.

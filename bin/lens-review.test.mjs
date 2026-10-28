@@ -173,6 +173,22 @@ test('a lens answer is read from structured_output when the CLI gives it, whatev
   assert.deepEqual(rec.results.map((r) => [r.lens, r.outcome, r.evidence]), [['risk', 'complete', ['risk: read a.mjs']], ['readability', 'complete', ['readability: read a.mjs']]]);
 });
 
+// gentle-ai R3-fallback-guard-untested: only an object counts as structured output; anything else leaves the text.
+test('a structured_output that is no object is passed over, and the answer is read from result', () => {
+  const given = { risk: null, resilience: [], readability: 'text' };
+  const runLens = ({ lens, block }) => {
+    const subject = JSON.parse(block.split('\n')[0].replace(/^\S+ /, ''));
+    return { status: 0, durationMs: 800, stdout: JSON.stringify({ type: 'result', is_error: false, result: clean(lens, subject), structured_output: given[lens] }) };
+  };
+  const { code, out } = run(['--base', 'HEAD~1', '--lenses', 'risk,resilience,readability', '--reason', 'r'], { runLens });
+  assert.equal(code, 0, out);
+  assert.deepEqual(readLensReviews(dir).at(-1).results.map((r) => [r.lens, r.outcome, r.evidence]), [
+    ['risk', 'complete', ['risk: read a.mjs']],
+    ['resilience', 'complete', ['resilience: read a.mjs']],
+    ['readability', 'complete', ['readability: read a.mjs']],
+  ]);
+});
+
 test('a structured_output the parse refuses is incomplete: the host checks the shape, the parse still decides', () => {
   const runLens = ({ lens }) => {
     const structured = { subject_hash: 'e'.repeat(64), inspection: { status: 'completed', paths: ['a.mjs'] }, findings: [], evidence: [`${lens}: read a.mjs`] };

@@ -111,9 +111,11 @@ function lensOutcome(lens, ran, candidate, keep) {
     durationMs,
     model: Object.keys(out?.modelUsage ?? {})[0] ?? null,
   };
-  // Why the model stopped, which tells an answer it ended from one cut off.
+  // Why the model stopped, which tells a text answer it ended from one cut off; a structured answer always stops at
+  // `tool_use`, since the CLI takes it through a tool of its own (L2).
   const stopped = typeof out?.stop_reason === 'string' ? { stopReason: out.stop_reason } : {};
-  // The object the CLI checked against the schema, else the text, read as before for a CLI that gives none.
+  // The object the CLI checked against the schema, else the text, read as before when a CLI that took the flags gives
+  // none; a CLI that does not know them exits non-zero and is read as a run that gave no result.
   const structured = out?.structured_output;
   const answer = structured !== null && typeof structured === 'object' && !Array.isArray(structured) ? JSON.stringify(structured) : out?.result;
   if (ran.error || ran.status !== 0 || !out || out.is_error || typeof answer !== 'string') {
