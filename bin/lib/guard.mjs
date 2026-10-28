@@ -478,43 +478,61 @@ const RECORD_PATH = new RegExp(`(?:^|/)js-harness/(${RECORD_NAMES})$`, 'i');
 // A record's name in a script's text, where its folder may be joined apart from it.
 const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\w.-])`, 'i');
 const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
-// The folder itself, removed or moved whole, and this checkout's git dir above it: both read from `.git` where the
-// command runs, so a project folder named `js-harness` is not it, another project's `.git` is not it, and an absolute
-// path to this one is not followed. A glob in the folder, or in the git dir, takes what it matches
-// (`globTakesRecord`).
-const COMMON_RECORDS_FOLDER = /^\.git(?:\/js-harness)?\/?$/i;
-const RECORDS_GLOB = /^\.git\/(?:(js-harness)\/)?([^/]*[*?[][^/]*)$/i;
+// The folder itself is `js-harness` in a git dir, so a project folder named `js-harness` is not it. Each part of a path
+// may be a glob (`partMatches`). A `.git` under any prefix counts, an absolute path to this one among them, refusing
+// more being the safe side; a bare `.git` removed whole is this checkout's only from where the command runs, since
+// another project's is removed often and an absolute path to this one is not followed.
 
-// A glob from where the command runs that can name `.git`: a shell's `*` leaves out a dot file, so it opens with one.
-const GIT_DIR_GLOB = /^(\.[^/]*[*?[][^/]*)$/;
-
-/** Whether `arg` is a glob in the records' folder that can match a record's name, one in the git dir that can match the
- * folder, or one that can match the git dir itself. A trailing slash keeps only folders: it changes the last two, and
- * takes no record, each a file, from the first. */
-function globTakesRecord(arg) {
-  const folderOnly = /.\/+$/.test(slashed(arg));
-  const path = slashed(arg).replace(/(.)\/+$/, '$1');
-  const inGit = RECORDS_GLOB.exec(path);
-  if (folderOnly && inGit?.[1] !== undefined) return false;
-  const top = GIT_DIR_GLOB.exec(path);
-  const [names, glob] = inGit !== null
-    ? [inGit[1] === undefined ? ['js-harness'] : REVIEW_RECORD_FILES, inGit[2]]
-    : [['.git'], top?.[1]];
-  if (glob === undefined) return false;
-  // `*`, `?` and a bracketed class as the shell reads them (`[!…]` or `[^…]` negated), every other character as itself.
-  const source = glob.replace(/\[([!^]?)(\]?[^\]]*)\]|\*|\?|[.+^${}()|\\[\]]/g, (part, negated, members) => {
-    if (part === '*') return '.*';
-    if (part === '?') return '.';
-    if (members === undefined) return `\\${part}`;
+/** Whether the part of a path `part`, a name or a glob, matches `name` as a shell reads it: `*`, `?` and a bracketed
+ * class (`[!…]` or `[^…]` negated), every other character as itself, and a leading dot matched only by a dot. */
+function partMatches(part, name) {
+  if (part === undefined) return false;
+  if (name.startsWith('.') && !part.startsWith('.')) return false;
+  const source = part.replace(/\[([!^]?)(\]?[^\]]*)\]|\*|\?|[.+^${}()|\\[\]]/g, (piece, negated, members) => {
+    if (piece === '*') return '.*';
+    if (piece === '?') return '.';
+    if (members === undefined) return `\\${piece}`;
     return `[${negated === '' ? '' : '^'}${members.replace(/[\\^\]]/g, (c) => `\\${c}`)}]`;
   });
-  let pattern;
   try {
-    pattern = new RegExp(`^${source}$`, 'i');
+    return new RegExp(`^${source}$`, 'i').test(name);
   } catch {
     return true;
   }
-  return names.some((name) => pattern.test(name));
+}
+
+/** The parts of the path `arg`, and whether a trailing slash keeps only folders. */
+function pathParts(arg) {
+  return { folderOnly: /.\/+$/.test(slashed(arg)), parts: slashed(arg).replace(/(.)\/+$/, '$1').split('/') };
+}
+
+const isGitDir = (part) => partMatches(part, '.git');
+const isRecordsFolder = (part) => partMatches(part, 'js-harness');
+const isRecord = (part) => REVIEW_RECORD_FILES.some((name) => partMatches(part, name));
+
+/** Whether removing or moving away the path `arg` takes a record: it is this checkout's git dir, the records' folder,
+ * or a record in it, which a trailing slash leaves out, every record being a file. */
+function takesRecords(arg) {
+  const { folderOnly, parts } = pathParts(arg);
+  const back = (n) => parts[parts.length - n];
+  if (parts.length === 1 && isGitDir(back(1))) return true;
+  if (isGitDir(back(2)) && isRecordsFolder(back(1))) return true;
+  return !folderOnly && isGitDir(back(3)) && isRecordsFolder(back(2)) && isRecord(back(1));
+}
+
+/** Whether a `mv`, `cp`, `install` or `ln` given `args` writes the records' folder whole: one copied into a git dir, or
+ * what a folder holds (`<folder>/.`, or a glob that can match a record) copied into the git dir or the folder. */
+function folderWrittenInto(args) {
+  const { target, sources } = moveParts(args);
+  if (target === undefined) return false;
+  const { parts } = pathParts(target);
+  const holds = (source) => /\/\.\/*$/.test(String(source).replace(/\\/g, '/'));
+  const last = (source) => pathParts(source).parts.pop();
+  if (isGitDir(parts[parts.length - 1])) return sources.some((source) => holds(source) || isRecordsFolder(last(source)));
+  if (isGitDir(parts[parts.length - 2]) && isRecordsFolder(parts[parts.length - 1])) {
+    return sources.some((source) => holds(source) || isRecord(last(source)));
+  }
+  return false;
 }
 
 /** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */
@@ -611,8 +629,9 @@ function segmentRecordWrite(words, redirected) {
   const args = segment.slice(at + 1);
   const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
   if (WRITES_EACH.has(program) && first !== null) return writes(first);
-  if (program === 'rm' && args.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)) || globTakesRecord(arg))) return 'this command removes the folder that holds every record of a review';
-  if (program === 'mv' && moveParts(args).sources.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)) || globTakesRecord(arg))) return 'this command moves away the folder that holds every record of a review';
+  if (program === 'rm' && args.some(takesRecords)) return 'this command removes the folder that holds every record of a review';
+  if (program === 'mv' && moveParts(args).sources.some(takesRecords)) return 'this command moves away the folder that holds every record of a review';
+  if (WRITES_INTO.has(program) && writtenInto(args) === null && folderWrittenInto(args)) return 'this command writes the folder that holds every record of a review';
   if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
   if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));

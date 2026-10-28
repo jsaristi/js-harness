@@ -585,6 +585,27 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     "eval -- 'rm -rf .git/js-harness'",
     'rm -rf .git',
     'rm -rf ./.git/',
+    // The folder by an absolute path, or under another prefix: refusing more is the safe side (the risk and reliability
+    // lenses on d6c504a7).
+    'rm -rf D:/r/.git/js-harness/',
+    'rm -rf D:/r/.git/js-harness/*',
+    'mv D:/r/.git/js-harness /tmp/kept',
+    'rm -rf vendor/.git/js-harness',
+    // A glob in the git dir's own name, with the folder after it (gentle-ai R3 on d6c504a7).
+    'rm -rf .gi?/js-harness',
+    'rm -rf .g*/js-harness',
+    'rm -rf .g*/js-harn*',
+    'mv .g*/js-harness /tmp/x',
+    // A folder of forged records copied into the git dir, or a folder's contents into the records' folder (gentle-ai
+    // R3 on d6c504a7).
+    'cp -r /tmp/scratch/js-harness .git',
+    'cp -r /tmp/scratch/js-harness/ .git/',
+    'cp -r /tmp/scratch/. .git',
+    'cp -r /tmp/scratch/* .git',
+    'mv /tmp/scratch/js-harness .git',
+    'cp -r -t .git /tmp/scratch/js-harness',
+    'cp -r /tmp/scratch/. .git/js-harness',
+    'cp /tmp/scratch/lens-* .git/js-harness',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
     "printf '{}'>>.git/js-harness/lens-reviews.jsonl",
     `echo x>>${RECORD}`,
@@ -690,8 +711,11 @@ test('reading a record, the commands that write one, and text that only names on
     // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
     'rm -rf vendor/lib/.git',
     'rm -rf /tmp/scratch/.git',
-    'rm -rf vendor/.git/js-harness',
-    'rm -rf vendor/.git/js-harness/*',
+    // A copy into the git dir of what can hold no records' folder, and a dot file a `*` leaves out.
+    'cp hooks/pre-commit .git/hooks/',
+    'cp /tmp/scratch/notes.txt .git',
+    'rm -rf */js-harness',
+    'cp /tmp/scratch/*.txt .git/js-harness',
     // A write call held but given no record, and a record's constant only read (gentle-ai R3 on 0e192478).
     'node -e "const w = fs.writeFileSync; w(\'/tmp/x.json\', l)"',
     'node -e "console.log(m.LENS_REVIEWS_FILE)"',

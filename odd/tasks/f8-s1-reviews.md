@@ -351,6 +351,16 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     matched under any prefix (`vendor/.git/js-harness`), against the narrowing to this checkout's `.git`. Both taken in
     the next commit, tests first (two red before it): `HELD_WRITE` holds the three; both patterns are anchored at the
     `.git` where the command runs. `rm` and `open` stay out of `HELD_WRITE`: as bare words they are too common.
+  - d6c504a7: Codex correct (0.96, 94,590 input tokens). Lenses risk and reliability one warning each, the same: the
+    anchoring let `rm -rf D:/r/.git/js-harness/` through, which the base refused. My reading of gentle-ai's warning was
+    wrong: its comment narrowed the bare `.git` to this checkout, not `.git/js-harness`, and I narrowed the code to
+    the unsafe side. gentle-ai approved `e7bc4215..d6c504a7` (lineage review-a6fdd82604eac83d) with two warnings, not
+    regressions: a glob in the git dir's own name with the folder after it (`rm -rf .g*/js-harness`) passed; and a
+    folder of forged records copied into the git dir (`cp -r /tmp/scratch/js-harness .git`) passed. All taken in the
+    next commit, tests first (16 cases, each passing HEAD's guard and refused by the fix): a path is read part by
+    part, each part a glob as the shell reads it (a leading dot matched only by a dot), `.git/js-harness` under any
+    prefix; a copy into a git dir of a folder that can be the records' folder, or of what a folder holds (`dir/.`),
+    is refused, and so is one into the records' folder of what a folder holds or of a glob that can match a record.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -375,6 +385,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `e7bc4215..1ac52968` (0a832b2a to 1ac52968): medium, reviewed and approved (lineage review-dd4dbff44f862097, lens reliability), two warnings and a suggestion, all taken in the next commit (L16); Codex on `b98b42a6..1ac52968` correct (0.94); lenses no finding.
 - gentle-ai on `e7bc4215..0e192478` (0a832b2a to 0e192478): medium, reviewed and approved (lineage review-06603c68dfa91912, lens reliability), two warnings, both taken in the next commit (L16); Codex on `1ac52968..0e192478` incorrect (two P2, taken); lenses no finding.
 - gentle-ai on `e7bc4215..e604ad1f` (0a832b2a to e604ad1f): medium, reviewed and approved (lineage review-af2044e046085837, lens reliability), one warning, taken in the next commit (L16); Codex's recheck of `0e192478..e604ad1f` correct (0.98); lens reliability one warning (taken), risk no finding.
+- gentle-ai on `e7bc4215..d6c504a7` (0a832b2a to d6c504a7): medium, reviewed and approved (lineage review-a6fdd82604eac83d, lens reliability), two warnings, both taken in the next commit (L16); Codex on `e604ad1f..d6c504a7` correct (0.96); lenses risk and reliability one warning, the same regression (taken).
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -396,9 +407,9 @@ run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 ## Next step
 T7 (JH 69, 2026-10-28 ~14:30Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`: commits
 e7bc4215, 0a832b2a, 9f4d1f23, e56114a4, b2bc9596, 9c291a1e, d61b5588, 9e167848, d153e61e, 4eb7449a, b98b42a6,
-1ac52968, 0e192478, e604ad1f and the fifteenth (held renames, folder anchored at `.git`). Left, in order:
-Codex `js-harness codex-review --base e604ad1f` (nothing is edited while it runs) and lenses with `node
-bin/js-harness.mjs lens-review --base e604ad1f --lenses risk,reliability --reason ...` (the branch's command, so the
+1ac52968, 0e192478, e604ad1f, d6c504a7 and the sixteenth (paths read part by part, folder copies). Left, in order:
+Codex `js-harness codex-review --base d6c504a7` (nothing is edited while it runs) and lenses with `node
+bin/js-harness.mjs lens-review --base d6c504a7 --lenses risk,reliability --reason ...` (the branch's command, so the
 record has its run line); then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
 <n>` saying the bad news: nothing works until a release with it is installed, and every in-flight branch reruns
 `lens-review` over its range once it is (older lens records stop counting); then close T7's box.
