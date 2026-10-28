@@ -479,8 +479,24 @@ const RECORD_PATH = new RegExp(`(?:^|/)js-harness/(${RECORD_NAMES})$`, 'i');
 const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\w.-])`, 'i');
 const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
 // The folder itself, removed or moved whole: named by the git dir above it, so a project folder named `js-harness` is
-// not it; the git dir itself; and a glob inside the folder, which takes what it holds.
-const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git(?:\/js-harness(?:\/[^/]*[*?[][^/]*)?)?\/?$/i;
+// not it; and this checkout's git dir, `.git` from where the command runs (another project's `.git` is not it, and an
+// absolute path to this one is not followed). A glob inside the folder takes what it matches (`globTakesRecord`).
+const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git\/js-harness\/?$|^\.git\/?$/i;
+const RECORDS_GLOB = /(?:^|\/)\.git\/js-harness\/([^/]*[*?[][^/]*)$/i;
+
+/** Whether `arg` is a glob in the records' folder that can match a record's name. */
+function globTakesRecord(arg) {
+  const glob = RECORDS_GLOB.exec(slashed(arg))?.[1];
+  if (glob === undefined) return false;
+  const source = glob.replace(/\[!/g, '[^').replace(/[.+^${}()|\\]/g, (c) => `\\${c}`).replace(/\*/g, '.*').replace(/\?/g, '.');
+  let pattern;
+  try {
+    pattern = new RegExp(`^${source}$`, 'i');
+  } catch {
+    return true;
+  }
+  return REVIEW_RECORD_FILES.some((name) => pattern.test(name));
+}
 
 /** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */
 const slashed = (file) => path.posix.normalize(String(file).trim().replace(/\\/g, '/'));
@@ -566,8 +582,8 @@ function segmentRecordWrite(words, redirected) {
   const args = segment.slice(at + 1);
   const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
   if (WRITES_EACH.has(program) && first !== null) return writes(first);
-  if (program === 'rm' && args.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command removes the folder that holds every record of a review';
-  if (program === 'mv' && moveParts(args).sources.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command moves away the folder that holds every record of a review';
+  if (program === 'rm' && args.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)) || globTakesRecord(arg))) return 'this command removes the folder that holds every record of a review';
+  if (program === 'mv' && moveParts(args).sources.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)) || globTakesRecord(arg))) return 'this command moves away the folder that holds every record of a review';
   if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
   if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
@@ -639,7 +655,7 @@ function callArguments(text, from) {
 
 // A call that runs a string as code, here or in a child process: what that string holds is code too. A timer may run
 // what it is given unless that is a function written in place.
-const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*(?!\(|function\b|async\b|[\w$]+\s*=>)|\b(?:subprocess|child_process)\b/;
+const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*(?![\s(]|function\b|async\b|[\w$]+\s*=>)|\b(?:subprocess|child_process)\b/;
 
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
  * at the same indexes; a template literal's `${…}` stays code, a member named in brackets (`fs['writeFileSync']`) is
