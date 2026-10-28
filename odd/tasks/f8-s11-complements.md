@@ -82,13 +82,19 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
 - [ ] T8 (kind: verify) the probe in a scratch home, and `doctor` read on his machine — S7; inline
 
 Reviews:
-- none yet.
+- Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
+  removes the instruction settings an older engram or gentle-ai set before it deletes the files (fix commit after
+  cea68ea1). Lens review: not run yet.
 
 ## Probe
 Not run yet.
 
 ## Next step
-T3 and T4 (PR 2), after PR 1's reviews.
+PR 1 (branch f8-s11-complements, worktree .claude/worktrees/f8-s11): commit the P2 fix, Codex review of
+that commit (--base cea68ea1), lens review --base d2bc8ab2 --lenses risk,reliability,readability, push, open the
+PR, notify the orchestrator ready --pr. Then T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
+switch; the row-17 test scoped to the text files init writes) and T4 (extend the engram-plugin row: a plugin
+ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence test of mem_* text in shipped files).
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:

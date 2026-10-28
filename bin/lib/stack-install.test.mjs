@@ -118,6 +118,11 @@ test('engram is his step: engram\'s own install and setup per dimension, each wi
 test('engram\'s undo for a host is engram\'s own uninstall of what its setup wrote there', () => {
   assert.deepEqual(ENGRAM_UNDO.claude, ['claude plugin uninstall engram@engram', 'claude plugin marketplace remove engram', 'claude mcp remove engram --scope user']);
   assert.deepEqual(ENGRAM_UNDO.codex.slice(0, 3), ['codex plugin remove engram@engram', 'codex plugin marketplace remove engram', 'codex mcp remove engram']);
+  // An older engram or gentle-ai pointed Codex's instruction settings at those files: they go before the files do
+  // (Codex review of ac0725d..cea68ea, P2), or Codex is left reading files that are not there.
+  const settings = ENGRAM_UNDO.codex.findIndex((step) => /model_instructions_file/.test(step) && /experimental_compact_prompt_file/.test(step));
+  const files = ENGRAM_UNDO.codex.findIndex((step) => /^delete engram-instructions\.md/.test(step));
+  assert.ok(settings >= 0 && settings < files, ENGRAM_UNDO.codex.join('\n'));
   const [step] = plan({ engram: { codex: 'missing' } }).manual;
   assert.deepEqual(step.undo, ENGRAM_UNDO.codex, 'one host gap names that host\'s undo alone');
 });
