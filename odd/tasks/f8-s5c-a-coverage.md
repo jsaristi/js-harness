@@ -140,8 +140,8 @@ T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed b
 seven by `f9c10579` (L7), what their recheck left by `d0954123` (L8), and Codex's last finding by the commit after
 it (`37cdab21`, L9). Codex covers every code commit and left nothing open; the lenses cover all but
 `f9c10579..37cdab21`, a recorded skip (three runs cut short, and the one rerun after PR 639 refused again, L11).
-PR 638 is open. Next: the lead's answer to the `waiting` notice of 16:10 (the skip owes a lens run that completes,
-which a fix of the lens's answer shape or its reading would give); then
+PR 638 is open. Next (L12): JH 76's fix of `lens-review` (structured output, English) and the lead's note that the
+copy is refreshed, then one lens run over `f9c10579..HEAD`; then
 `js-harness notify --to orchestrator --kind ready --pr 638`, then `closed` with
 `docs/sessions/2026-10-28-jh-73-f8-s5c-a-directive-coverage.md`.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
@@ -261,3 +261,6 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   `inspection` after `paths` and writes `findings` and `evidence` inside it, so its last brace closes `inspection`
   and the outer object stays open; it answered in Spanish too. The skip is recorded with that file and the lead is
   told (a `waiting` notice at 16:10); no further rerun, as the lead said.
+- L12 (2026-10-28, the lead's decision in the channel at 16:11): "Lead: cause confirmed in your kept file. Opened
+  JH 76 to make lens-review use --json-schema structured output and answer in English. PR 638 waits on that fix
+  plus one more copy refresh, then one lens rerun. Go on with S5c-a meanwhile."
