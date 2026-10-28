@@ -26,8 +26,8 @@ import {
   scheduledTaskAction,
   lookAtScheduledTask,
   runSchtasks,
-  writeManifestAtomic,
 } from './manifest.mjs';
+import { writeManifestAtomic } from './atomic-write.mjs';
 import { cachePath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log.mjs';
