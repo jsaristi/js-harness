@@ -510,7 +510,8 @@ test('the record files the guard holds are those the review modules write, by na
 });
 
 test('a record path is told by its folder and its name, in any spelling of the path; any other file is not one', () => {
-  for (const file of [RECORD, 'D:\\js-harness\\.git\\js-harness\\codex-reviews.jsonl', '/d/r/.git/js-harness/CODEX-REVIEW-RUNS.jsonl', '.git/js-harness/lens-review-runs.jsonl']) {
+  for (const file of [RECORD, 'D:\\js-harness\\.git\\js-harness\\codex-reviews.jsonl', '/d/r/.git/js-harness/CODEX-REVIEW-RUNS.jsonl', '.git/js-harness/lens-review-runs.jsonl',
+    'D:/r/.git/js-harness/./lens-reviews.jsonl', 'D:/r/.git/js-harness//lens-reviews.jsonl', 'D:/r/.git/js-harness/sub/../lens-reviews.jsonl']) {
     assert.notEqual(reviewRecordOf(file), null, file);
   }
   for (const file of ['D:/r/lens-reviews.jsonl', 'D:/r/.git/js-harness/sessions.jsonl', 'D:/r/bin/lib/lens-reviews.mjs', 'D:/r/js-harness/lens-reviews.jsonl.bak', '', null]) {
@@ -531,6 +532,21 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     `rm ${RECORD}`,
     `truncate -s 0 ${RECORD}`,
     `cd D:/js-harness && echo x >> ${RECORD}`,
+    // The branches a reviewer found untested (gentle-ai R3 on e7bc4215), and the forms the verifier found past the guard.
+    `env A=1 sudo tee ${RECORD} < /tmp/forged.jsonl`,
+    `A=1 rm ${RECORD}`,
+    `dd if=/tmp/forged.jsonl of=${RECORD}`,
+    `install -m 644 /tmp/forged.jsonl ${RECORD}`,
+    `ln -sf /tmp/forged.jsonl ${RECORD}`,
+    `shred -u ${RECORD}`,
+    `perl -pi -e 's/incomplete/reviewed/' ${RECORD}`,
+    `bash -c "echo x >> ${RECORD}"`,
+    `sh -c 'printf x > ${RECORD}'`,
+    'mv /tmp/lens-reviews.jsonl .git/js-harness/',
+    'cp --target-directory=.git/js-harness /tmp/codex-reviews.jsonl',
+    'cp -t .git/js-harness /tmp/codex-reviews.jsonl',
+    'rm -rf .git/js-harness',
+    'rm -rf D:/r/.git/js-harness/',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review.*only the command/s, command);
 });
 
@@ -540,6 +556,7 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node --input-type=module -e "import(\'./bin/lib/lens-reviews.mjs\').then((m) => m.appendLensReview(\'.\', {}))"',
     `python -c "open('${RECORD}', 'a').write('{}')"`,
     'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendCodexReview(\'.\', {}))"',
+    'node -e "fs.appendFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), l)"',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -555,5 +572,13 @@ test('reading a record, the commands that write one, and text that only names on
     'git commit -m "guard the lens-reviews.jsonl record"',
     'grep -rn appendLensReview bin/',
     "cat > notes.md <<'EOF'\necho x >> .git/js-harness/lens-reviews.jsonl\nEOF",
+    // What a reviewer and the verifier found refused that writes no record (gentle-ai R3 and the verifier on e7bc4215).
+    'node -e "fs.appendFileSync(\'ledger.jsonl\', appendJsonLine.toString())"',
+    `node -e "const r = fs.readFileSync('${RECORD}', 'utf8'); fs.writeFileSync('/tmp/o.json', r)"`,
+    `echo "a>${RECORD}"`,
+    `git commit -m "a>${RECORD}"`,
+    `cp -t /tmp ${RECORD}`,
+    'rm -rf D:/js-harness-worktrees/practice/js-harness',
+    `bash -c "cat ${RECORD}"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });

@@ -65,6 +65,17 @@ test('the record that names a run first claims it: an incomplete run is never ma
   assert.deepEqual(records.map(admitted), [false, false]);
 }));
 
+// gentle-ai R3 on e7bc4215: a line naming a run's id with another range must not take the run from the record the
+// command writes after it.
+test('a record of another range that names a run claims nothing, so the command\'s own record is still admitted', () => inScratch((deps) => {
+  const range = { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) };
+  const run = startLensRun('.', range, deps);
+  appendLensReview('.', record({ run, head: 'd'.repeat(40) }), deps);
+  appendLensReview('.', record({ run }), deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [false, true]);
+}));
+
 test('a line of another schema is no run line, and a record read by no reader of the file is never admitted', () => inScratch((deps) => {
   const run = startLensRun('.', { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) }, deps);
   const file = path.join(deps.where.commonGitDir, 'js-harness', LENS_REVIEW_RUNS_FILE);

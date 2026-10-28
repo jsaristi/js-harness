@@ -107,6 +107,9 @@ test('a skip is recorded with its reason and runs no lens; a range with no code 
   assert.equal(run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens: claude.runLens }).code, 0);
   assert.equal(readLensReviews(dir).at(-1).outcome, 'nothing-to-review');
   assert.equal(claude.calls.length, 0);
+  // Both name the run line the command wrote, so both are admitted (the verifier on e7bc4215).
+  const { records, admitted } = admittedLensReviews(dir);
+  assert.deepEqual(records.slice(-2).map(admitted), [true, true]);
 });
 
 // Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: every record the command writes names the run

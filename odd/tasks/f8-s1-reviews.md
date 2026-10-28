@@ -237,6 +237,18 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   - **Outside the brief's surface, by need**: `bin/lib/lens-review-rows.mjs` is where `check --push` reads the lens
     records (the brief's `bin/lib/check*.mjs` names no file that exists); `bin/merge-queue.test.mjs` and
     `bin/check-codex-reviews.test.mjs` wrote lens records with no run line, one line each.
+  - e7bc4215 built it. Its independent verifier (high-risk item 2, guards; one sub-agent, about 116k tokens) found no
+    blocker and two should-fix: provenance does not refuse a session that writes a run line and a record both, which
+    no file the session can write would fix, so the comments now say what it refuses and that only `guard` stands in
+    the other's way; and nothing works until a release with it is installed, since the pre-push hook runs the branch's
+    own `check` and the sessions the installed `lens-review` (said to the lead with the ready notice). Its nits taken,
+    test first: paths with `/./`, `//` or `..`; `bash -c`; `mv` and `cp -t` into the records' folder; `rm -rf
+    .git/js-harness`; a script's write call is read for what it writes, so reading a record and writing elsewhere
+    passes; a `>` inside quoted text passes. Left: a `cd` into the folder, a path in a variable, a script on stdin.
+  - gentle-ai approved e7bc4215 (lineage review-17f0584aece227d8, lens reliability) with a warning and two
+    suggestions, all taken test first: `appendJsonLine` left the list of appends (it writes any file); a record of
+    another range naming a run no longer claims it; the untested branches (`env`, assignments, `dd`, `install`, `ln`,
+    `shred`, `perl -i`) have cases.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -248,6 +260,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `d6867d86..7b8a0a6e` (7b8a0a6e): medium, reviewed and approved (lineage review-0174f325f0f58bea, lenses risk and reliability), three advisory findings taken in 41c08b96 and 484df031 (L15).
 - gentle-ai on `7b8a0a6e..41c08b96` (41c08b96): medium, reviewed and approved (lineage review-6b678a0a52436631, lens reliability), two advisory findings: the comma tests taken in 484df031; a comma beside the object stays refused, since a refusal costs a run and a false complete breaks S1's rule.
 - gentle-ai on `484df031..eaa577e6` (484df031, eaa577e6): medium, reviewed and approved (lineage review-e23cd3803964664e, lens reliability), two advisory findings left for later work: a `~~~` prose line on one side of a bare object is now refused (the safe side), and no test reads an object inside a tilde fence as complete.
+- gentle-ai on `d2bc8ab2..e7bc4215` (e7bc4215): medium, reviewed and approved (lineage review-17f0584aece227d8, lens reliability), a warning and two suggestions, all taken test first in the next commit (L16).
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27

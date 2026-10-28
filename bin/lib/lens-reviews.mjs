@@ -9,14 +9,18 @@
 // Provenance (docs/proposals/gentle-ai-reverse-engineering.md, section 13.3, row 3). The command writes a run line to
 // a file of its own, `lens-review-runs.jsonl` beside it, before any lens runs, and the record it writes after names
 // that line by its id (`run`), as a Codex review record names its run line (`./codex-review-runs.mjs`). A check
-// admits a record only when it is the first to name a run line of its own range and subject hash
-// (`admittedLensReviews`), so a well-shaped line a session appended by hand covers nothing, and neither does a second
-// record naming a run another already claimed, an incomplete run's among them. A record written before run lines
-// existed names none and is no longer evidence: its range is reviewed again (cents a lens). `guard` refuses a file
-// tool or a shell write to either file (`reviewRecordOf` in ./guard.mjs), which stops an accident; this is what
-// refuses a forgery that got past it.
+// admits a record only when it is the first of its range and subject hash to name a run line of that range and hash
+// (`admittedLensReviews`), so a well-shaped line a session appended by hand with no run line covers nothing, and
+// neither does a later record naming a run another already claimed, an incomplete run's among them. A record written
+// before run lines existed names none and is no longer evidence: its range is reviewed again (cents a lens).
+//
+// What it does not do: a run line is a plain line with a random id, so a session that writes a run line and a record
+// both, or claims the line of a run that was cut off before its record, is not refused here. Only `guard`, which
+// refuses a file tool or a shell write to either file (`reviewRecordOf` in ./guard.mjs), stands in its way.
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { appendJsonLine, NOTHING_TO_REVIEW, readJsonLines } from './codex-reviews.mjs';
+import { gitDirs } from './project.mjs';
 
 export const LENS_REVIEW_SCHEMA = 'js-harness.lens-review/v1';
 export const LENS_REVIEWS_FILE = 'lens-reviews.jsonl';
@@ -51,17 +55,19 @@ export function readLensRuns(root, deps = {}) {
 const runKey = ({ id, base, head, subjectHash }) => JSON.stringify([id, base, head, subjectHash]);
 
 /** The records, oldest first, and `admitted(rec)`, true only for one of them that is evidence (`isValidLensReview`)
- * and the first record to name a run line of its own range and subject hash. A record of another read is never
- * admitted, so `records` is what a check reads with it. */
-export function admittedLensReviews(root, deps = {}) {
+ * and the first record to name a run line of its own range and subject hash; a record of another range naming that
+ * run claims nothing. A record of another read is never admitted, so `records` is what a check reads with it. The git
+ * common dir is asked once for both files (`where`, as `jsonLinesPath` takes it). */
+export function admittedLensReviews(root, { spawn = spawnSync, where } = {}) {
+  const deps = { spawn, where: where ?? { commonGitDir: gitDirs(root, spawn).commonGitDir } };
   const records = readLensReviews(root, deps);
   const runs = new Set(readLensRuns(root, deps).filter((line) => line.schema === LENS_REVIEW_RUN_SCHEMA).map(runKey));
   const claimed = new Set();
   const admitted = new Set();
   for (const rec of records) {
-    if (typeof rec.run !== 'string' || claimed.has(rec.run)) continue;
+    if (typeof rec.run !== 'string' || claimed.has(rec.run) || !runs.has(runKey({ ...rec, id: rec.run }))) continue;
     claimed.add(rec.run);
-    if (runs.has(runKey({ ...rec, id: rec.run })) && isValidLensReview(rec)) admitted.add(rec);
+    if (isValidLensReview(rec)) admitted.add(rec);
   }
   return { records, admitted: (rec) => admitted.has(rec) };
 }

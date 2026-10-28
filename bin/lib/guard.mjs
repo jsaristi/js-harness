@@ -3,6 +3,7 @@
 // an older js-harness on the path answers 2 to a command it does not know, and 2 blocks the host, so every hook
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -458,18 +459,29 @@ const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
 // The records of both reviews, each in `<git common dir>/js-harness/` (./codex-reviews.mjs, ./codex-review-runs.mjs,
 // ./lens-reviews.mjs; a test holds this list to their names). Only the commands that make a review write them: a
 // line a session writes there by hand reads as a review nobody made (docs/proposals/gentle-ai-reverse-engineering.md,
-// section 13.3, row 3). This stops the accident; the lens record's run line is what refuses a forgery past it.
+// section 13.3, row 3). This is the only thing that stops a session writing a lens record and its run line both; the
+// run line (./lens-reviews.mjs) refuses a record written with none.
 export const REVIEW_RECORD_FILES = Object.freeze(['codex-reviews.jsonl', 'codex-review-runs.jsonl', 'lens-reviews.jsonl', 'lens-review-runs.jsonl']);
 const RECORD_NAMES = REVIEW_RECORD_FILES.map((name) => name.replace(/\./g, '\\.')).join('|');
-const RECORD_PATH = new RegExp(`(?:^|[\\\\/])js-harness[\\\\/](${RECORD_NAMES})$`, 'i');
-const RECORD_NAMED = new RegExp(`(?:^|[\\\\/])js-harness[\\\\/](${RECORD_NAMES})(?![\\w.-])`, 'i');
+const RECORD_PATH = new RegExp(`(?:^|/)js-harness/(${RECORD_NAMES})$`, 'i');
+// A record's name in a script's text, where its folder may be joined apart from it.
+const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\w.-])`, 'i');
+const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
+// The folder itself, removed whole: named by the git dir above it, so a project folder named `js-harness` is not it.
+const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git\/js-harness\/?$/i;
+
+/** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */
+const slashed = (file) => path.posix.normalize(String(file).trim().replace(/\\/g, '/'));
 
 /** The name of the review record the path `file` is, or null when it is none: a file of `REVIEW_RECORD_FILES` in a
  * folder named `js-harness`, in any spelling of the path. */
 export function reviewRecordOf(file) {
-  const match = typeof file === 'string' ? RECORD_PATH.exec(file.trim()) : null;
+  const match = typeof file === 'string' && file.trim() !== '' ? RECORD_PATH.exec(slashed(file)) : null;
   return match === null ? null : match[1].toLowerCase();
 }
+
+/** Whether the path `file` names a review record by its file name alone. */
+const recordNamed = (file) => REVIEW_RECORD_FILES.includes(slashed(file).split('/').pop().toLowerCase());
 
 /** The refusal of a write to a review record, after `what` says which write and which record. */
 const recordReason = (what) => `js-harness guard: ${what}, and only the command that makes the review writes one `
@@ -483,32 +495,42 @@ export function reviewRecordFileRefusal(tool, file) {
   return name === null ? null : recordReason(`${tool} of ${file} is refused: it is ${name}, the record of a review`);
 }
 
-// The commands that write every file they are given, and those that write the last one (the others are read, but
-// `mv` moves them away, which writes them too).
+// The commands that write every file they are given (`mv` moves them away, which writes them too), and those that write
+// into a target: the last path, or the folder `-t` names.
 const WRITES_EACH = new Set(['tee', 'truncate', 'rm', 'shred', 'mv']);
-const WRITES_LAST = new Set(['cp', 'install', 'ln']);
+const WRITES_INTO = new Set(['mv', 'cp', 'install', 'ln']);
 const IN_PLACE = new Set(['sed', 'perl']);
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby', 'deno', 'bun', 'pwsh', 'powershell']);
 // The words before a command that leave it the command: an assignment, and a few wrappers.
 const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
-// What a script does to write a file it names, and the functions of this package that append a record.
-const FILE_WRITE = /\b(?:appendFile|appendFileSync|writeFile|writeFileSync|createWriteStream|truncate|truncateSync|rename|renameSync|copyFile|copyFileSync|unlink|unlinkSync|rmSync|Add-Content|Set-Content|Out-File)\b|\bopen\s*\([^)]*?,\s*['"][^'"]*[wax+]/;
-const RECORD_APPENDS = /\b(?:appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun|appendJsonLine)\b/;
+// The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
+const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open)(?:Sync)?\s*\(/gi;
+const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
+// The functions of this package that append a record of a review and nothing else.
+const RECORD_APPENDS = /\b(?:appendLensReview|startLensRun|appendCodexReview|appendCodexReviewRun)\b/;
 
-/** Why the Bash command `command` is refused for writing a review record, or null. A record is written by a
- * redirection to it, by a command of `WRITES_EACH` given it, by one of `WRITES_LAST` given it last, by `sed` or `perl`
- * with an in-place option, by `dd of=` it, and by a script on a command line that names it beside a call that writes a
- * file, or that calls a function of this package that appends a record. Reading one passes, and so does text in quotes
- * or a heredoc's body. A script fed on standard input, or a path held in a variable, is not followed: this stops the
- * accident, and the lens record's run line refuses a forgery (./lens-reviews.mjs). */
+/** Why the Bash command `command` is refused for writing a review record, or null (`recordWriteOf`). */
 export function reviewRecordWriteRefusal(command) {
+  const what = recordWriteOf(command);
+  return what === null ? null : recordReason(what);
+}
+
+/** What the shell command `command` writes of the review records, said as a refusal opens, or null. A record is written
+ * by a redirection to it, by a command of `WRITES_EACH` given it, by one of `WRITES_INTO` aimed at it or at the records'
+ * folder with a record's name, by `sed` or `perl` with an in-place option, by `dd of=` it, by `rm` of the records'
+ * folder, by `bash -c` (or `sh`, `zsh`, `dash`) of a script that does, and by an interpreter's command line whose
+ * write call is given it or that calls a function of this package that appends a record. Reading one passes, and so
+ * does text in quotes or a heredoc's body. A script fed on standard input, a path held in a variable and a `cd` into
+ * the folder are not followed. */
+function recordWriteOf(command) {
   const words = shellWords(command, { groups: true });
   const { operators } = words;
   let start = 0;
   for (let i = 0; i <= words.length; i += 1) {
     if (i < words.length && !operators.has(i)) continue;
     const what = segmentRecordWrite(words.slice(start, i));
-    if (what !== null) return recordReason(what);
+    if (what !== null) return what;
     start = i + 1;
   }
   return null;
@@ -516,32 +538,99 @@ export function reviewRecordWriteRefusal(command) {
 
 /** What the words of one simple command write of the review records, said as the refusal opens, or null. */
 function segmentRecordWrite(segment) {
-  const writes = (name) => (name === null ? null : `this command writes ${name}, the record of a review`);
+  const writes = (name) => (name === null || name === undefined ? null : `this command writes ${name}, the record of a review`);
   for (let i = 0; i < segment.length; i += 1) {
-    const word = segment[i];
-    // `> file` and `>> file`, a descriptor before them or not; or `>file` in one word, which holds no space unquoted.
-    if (/^(?:\d*|&)>>?\|?$/.test(word) && reviewRecordOf(segment[i + 1]) !== null) return writes(reviewRecordOf(segment[i + 1]));
-    const after = word.includes('>') ? word.slice(word.lastIndexOf('>') + 1) : '';
-    if (after !== '' && !/\s/.test(after) && reviewRecordOf(after) !== null) return writes(reviewRecordOf(after));
+    // `> file` and `>> file`, a descriptor before them or not, or the same in one word: `>>file`.
+    const redirect = /^(?:\d*|&)>>?\|?(.*)$/.exec(segment[i]);
+    if (redirect !== null) {
+      const name = reviewRecordOf(redirect[1] === '' ? segment[i + 1] : redirect[1]);
+      if (name !== null) return writes(name);
+    }
   }
   let at = 0;
   while (at < segment.length && (COMMAND_KEYWORDS.has(segment[at]) || WRAPPERS.has(segment[at]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at]))) at += 1;
   const program = String(segment[at] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd)$/, '');
   const args = segment.slice(at + 1);
   const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
-  if (WRITES_EACH.has(program)) return writes(first);
-  const paths = args.filter((arg) => !arg.startsWith('-'));
-  if (WRITES_LAST.has(program)) return paths.length > 1 ? writes(reviewRecordOf(paths[paths.length - 1])) : null;
+  if (WRITES_EACH.has(program) && first !== null) return writes(first);
+  if (program === 'rm' && args.some((arg) => COMMON_RECORDS_FOLDER.test(slashed(arg)))) return 'this command removes the folder that holds every record of a review';
+  if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
-  if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null) ?? null);
+  if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
+  if (SHELLS.has(program)) {
+    const flag = args.findIndex((arg) => /^-[A-Za-z]*c$/.test(arg));
+    return flag === -1 || args[flag + 1] === undefined ? null : recordWriteOf(args[flag + 1]);
+  }
   if (!INTERPRETERS.has(program)) return null;
   for (const arg of args) {
     const append = RECORD_APPENDS.exec(arg);
     if (append !== null) return `this command calls ${append[0]}, which appends the record of a review`;
-    const named = RECORD_NAMED.exec(arg);
-    if (named !== null && FILE_WRITE.test(arg)) return writes(named[1].toLowerCase());
+    const name = scriptRecordWrite(arg);
+    if (name !== null) return writes(name);
   }
   return null;
+}
+
+/** The record a `mv`, `cp`, `install` or `ln` given `args` writes: its target when that is a record, or a record's name
+ * among its sources when the target is the records' folder; else null. The target is the folder `-t` (or
+ * `--target-directory`) names, else the last path. */
+function writtenInto(args) {
+  const flag = args.findIndex((arg) => arg === '-t' || arg === '--target-directory');
+  const long = args.find((arg) => arg.startsWith('--target-directory='));
+  const folder = flag !== -1 ? args[flag + 1] : long?.slice('--target-directory='.length);
+  const paths = args.filter((arg, i) => !arg.startsWith('-') && !(flag !== -1 && i === flag + 1));
+  if (folder === undefined && paths.length < 2) return null;
+  const target = folder ?? paths[paths.length - 1];
+  const sources = folder === undefined ? paths.slice(0, -1) : paths;
+  if (folder === undefined && reviewRecordOf(target) !== null) return reviewRecordOf(target);
+  if (!RECORDS_FOLDER.test(slashed(target ?? ''))) return null;
+  const source = sources.find(recordNamed);
+  return source === undefined ? null : slashed(source).split('/').pop().toLowerCase();
+}
+
+/** The top-level arguments of the call whose `(` ends just before `from` in `text`, as written. */
+function callArguments(text, from) {
+  const args = [];
+  let current = '';
+  let depth = 0;
+  let quote = null;
+  for (let i = from; i < text.length; i += 1) {
+    const c = text[i];
+    if (quote !== null) {
+      current += c;
+      if (c === '\\') current += text[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') quote = c;
+    else if ('([{'.includes(c)) depth += 1;
+    else if (')]}'.includes(c)) {
+      if (depth === 0) break;
+      depth -= 1;
+    } else if (c === ',' && depth === 0) {
+      args.push(current);
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  args.push(current);
+  return args;
+}
+
+/** The record the script `text` writes by a call given it, or null. What each call writes: `rename` both of its paths,
+ * `copyFile` its second, `open` its first when a mode that writes follows, the others their first. */
+function scriptRecordWrite(text) {
+  for (const match of text.matchAll(WRITE_CALL)) {
+    const call = match[1].toLowerCase();
+    const args = callArguments(text, match.index + match[0].length);
+    if (call === 'open' && !args.slice(1).some((arg) => /['"][^'"]*[wax+][^'"]*['"]/.test(arg))) continue;
+    const written = call === 'rename' ? args : call === 'copyfile' ? args.slice(1, 2) : args.slice(0, 1);
+    const named = written.map((arg) => RECORD_IN_TEXT.exec(arg)).find((found) => found !== null);
+    if (named !== undefined) return named[1].toLowerCase();
+  }
+  const named = CMDLET_WRITE.test(text) ? RECORD_IN_TEXT.exec(text) : null;
+  return named === null ? null : named[1].toLowerCase();
 }
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
