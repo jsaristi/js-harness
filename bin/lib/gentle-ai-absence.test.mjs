@@ -9,6 +9,7 @@
 // list with why. The list only shrinks (bin/lib/ratchet.testkit.mjs): a listed file that stops naming it leaves it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ratchet } from './ratchet.testkit.mjs';
@@ -78,16 +79,16 @@ const NAMED = {
   'bin/lib/template-block.test.mjs': Q104,
 };
 
-/** Every file under `dir`, as a path from the repository with forward slashes. */
-function filesUnder(dir) {
-  return fs.readdirSync(path.join(REPO, dir), { withFileTypes: true }).flatMap((entry) => {
-    const name = `${dir}/${entry.name}`;
-    return entry.isDirectory() ? filesUnder(name) : entry.isFile() ? [name] : [];
-  });
+/** The files git tracks under the roots, as paths from the repository with forward slashes: what a commit holds, so a
+ * scratch file, an eval's output or an index left in the worktree decides nothing (review R3-001 on 61829b9f). */
+function trackedFiles() {
+  const listed = spawnSync('git', ['ls-files', '-z', '--', ...ROOTS], { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  assert.equal(listed.status, 0, `git ls-files failed: ${listed.stderr || listed.error?.message}`);
+  return listed.stdout.split('\0').filter((file) => file !== '' && fs.existsSync(path.join(REPO, file)));
 }
 
 test('no file under bin, evals or scripts names gentle-ai but the named ones, each with why (F8 S11, L12)', () => {
-  const checked = ROOTS.flatMap(filesUnder);
+  const checked = trackedFiles();
   const broken = checked.filter((file) => NAMES.test(fs.readFileSync(path.join(REPO, file), 'utf8')));
   assert.deepEqual(ratchet({ checked, broken, legacy: NAMED }), []);
 });
