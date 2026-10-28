@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lensResult } from './lens-result.mjs';
-import { LENS_NAMES, lensPrompt } from './lens-prompts.mjs';
+import { LENS_ANSWER_SCHEMA, lensResult } from './lens-result.mjs';
+import { LENS_NAMES, lensPrompt, SEVERITIES } from './lens-prompts.mjs';
+import { UNCLOSED_INSPECTION_STDOUT } from './lens-review-answers.testkit.mjs';
 
 const candidate = { subjectHash: 'f'.repeat(64), manifest: [{ path: 'bin/a.mjs' }, { path: 'bin/b.mjs' }] };
 const finding = { location: 'bin/a.mjs:3', severity: 'WARNING', claim: 'c', evidence_class: 'deterministic', causal_disposition: 'introduced', proof_refs: ['p'] };
@@ -105,6 +106,59 @@ test('anything else is incomplete and says why: prose, another hash, a missing p
     assert.equal(read.complete, false, text);
     assert.match(read.why, why, text);
   }
+});
+
+/** Whether `value` matches `schema`, in the few JSON Schema keywords the lens answer's schema uses; throws on another,
+ * so the schema cannot grow a keyword this test does not read. */
+function matches(schema, value) {
+  const known = ['type', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'minItems', 'minLength'];
+  const unread = Object.keys(schema).filter((key) => !known.includes(key));
+  if (unread.length) throw new Error(`the test reads no ${unread.join(', ')}`);
+  if (schema.enum && !schema.enum.includes(value)) return false;
+  if (schema.type === 'string') return typeof value === 'string' && value.length >= (schema.minLength ?? 0);
+  if (schema.type === 'array') return Array.isArray(value) && value.length >= (schema.minItems ?? 0) && value.every((item) => matches(schema.items, item));
+  if (schema.type !== 'object') throw new Error(`the test reads no type ${schema.type}`);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (schema.additionalProperties === false && Object.keys(value).some((key) => !Object.hasOwn(schema.properties, key))) return false;
+  if ((schema.required ?? []).some((key) => !Object.hasOwn(value, key))) return false;
+  return Object.entries(value).every(([key, item]) => matches(schema.properties[key], item));
+}
+
+// JH 76: the CLI enforces this schema (`--json-schema`), so a lens answer always closes its object. The parse stays the
+// authority: the schema holds the shape, and leaves the echo of the hash and the manifest's paths to the answer.
+test('the lens answer schema admits the shape the parse reads and refuses the shapes it refuses', () => {
+  for (const value of [answer(), answer({ findings: [] }), answer({ inspection: { status: 'incomplete', paths: [] } })]) {
+    assert.equal(matches(LENS_ANSWER_SCHEMA, value), true, JSON.stringify(value));
+  }
+  assert.equal(lensResult(JSON.stringify(answer()), candidate).complete, true);
+  const refused = [
+    answer({ extra: 1 }),
+    answer({ findings: [{ ...finding, severity: 'HIGH' }] }),
+    answer({ findings: [{ ...finding, proof_refs: 'p' }] }),
+    answer({ findings: [{ ...finding, proof_refs: [] }] }),
+    answer({ findings: [{ ...finding, note: 'n' }] }),
+    answer({ evidence: [] }),
+    answer({ inspection: { status: 'done', paths: [] } }),
+    answer({ inspection: { status: 'completed' } }),
+    answer({ constructor: 1 }),
+    { inspection: answer().inspection, findings: [], evidence: ['e'] },
+  ];
+  for (const value of refused) {
+    assert.equal(matches(LENS_ANSWER_SCHEMA, value), false, JSON.stringify(value));
+    assert.equal(lensResult(JSON.stringify(value), candidate).complete, false, JSON.stringify(value));
+  }
+  assert.deepEqual(LENS_ANSWER_SCHEMA.properties.findings.items.properties.severity.enum, SEVERITIES);
+  // It crosses cmd.exe as one argument when the CLI is an npm shim, which none of these can cross.
+  assert.doesNotMatch(JSON.stringify(LENS_ANSWER_SCHEMA), /[&|<>^%\r\n]/);
+});
+
+// The text parse is the fallback for a CLI that gives no structured output; it still refuses JH 73's answer.
+test("JH 73's kept readability answer, whose inspection never closes, is refused as an object not closed", () => {
+  const out = JSON.parse(UNCLOSED_INSPECTION_STDOUT);
+  assert.equal(out.stop_reason, 'end_turn');
+  const read = lensResult(out.result, { subjectHash: 'c496132cead5c7fffe356a192f8339454c870998d560dc8f26964064c170eed1', manifest: [] });
+  assert.equal(read.complete, false);
+  assert.match(read.why, /not closed \(it opens at character 0\): the answer ends before it closes$/);
 });
 
 test('each of the four lenses has its prompt, which reads our block and names its scope', () => {

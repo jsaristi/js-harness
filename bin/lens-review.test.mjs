@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { claudeArgs, LENS_ANSWER_KEPT, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
 import { admittedLensReviews, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
+import { LENS_ANSWER_SCHEMA } from './lib/lens-result.mjs';
+import { UNCLOSED_INSPECTION_STDOUT } from './lib/lens-review-answers.testkit.mjs';
 import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
 let dir;
@@ -156,6 +158,64 @@ test('an output that cannot be kept is recorded as not kept, and the run still h
   }
 });
 
+// JH 76: with `--json-schema` the CLI prints the answer as `structured_output`, an object the host checked against the
+// schema, beside `result`, the same object as text (odd/tasks/lens-review-structured-output.md, L2).
+test('a lens answer is read from structured_output when the CLI gives it, whatever its result text holds', () => {
+  const runLens = ({ lens, block }) => {
+    const subject = JSON.parse(block.split('\n')[0].replace(/^\S+ /, ''));
+    const structured = JSON.parse(clean(lens, subject));
+    const result = lens === 'risk' ? '{"subject_hash":' : JSON.stringify(structured);
+    return { status: 0, durationMs: 800, stdout: JSON.stringify({ type: 'result', is_error: false, stop_reason: 'tool_use', result, structured_output: structured, usage: { output_tokens: 200 } }) };
+  };
+  const { code, out } = run(['--base', 'HEAD~1', '--lenses', 'risk,readability', '--reason', 'r'], { runLens });
+  assert.equal(code, 0, out);
+  const [rec] = readLensReviews(dir).slice(-1);
+  assert.deepEqual(rec.results.map((r) => [r.lens, r.outcome, r.evidence]), [['risk', 'complete', ['risk: read a.mjs']], ['readability', 'complete', ['readability: read a.mjs']]]);
+});
+
+// gentle-ai R3-fallback-guard-untested: only an object counts as structured output; anything else leaves the text.
+test('a structured_output that is no object is passed over, and the answer is read from result', () => {
+  const given = { risk: null, resilience: [], readability: 'text' };
+  const runLens = ({ lens, block }) => {
+    const subject = JSON.parse(block.split('\n')[0].replace(/^\S+ /, ''));
+    return { status: 0, durationMs: 800, stdout: JSON.stringify({ type: 'result', is_error: false, result: clean(lens, subject), structured_output: given[lens] }) };
+  };
+  const { code, out } = run(['--base', 'HEAD~1', '--lenses', 'risk,resilience,readability', '--reason', 'r'], { runLens });
+  assert.equal(code, 0, out);
+  assert.deepEqual(readLensReviews(dir).at(-1).results.map((r) => [r.lens, r.outcome, r.evidence]), [
+    ['risk', 'complete', ['risk: read a.mjs']],
+    ['resilience', 'complete', ['resilience: read a.mjs']],
+    ['readability', 'complete', ['readability: read a.mjs']],
+  ]);
+});
+
+test('a structured_output the parse refuses is incomplete: the host checks the shape, the parse still decides', () => {
+  const runLens = ({ lens }) => {
+    const structured = { subject_hash: 'e'.repeat(64), inspection: { status: 'completed', paths: ['a.mjs'] }, findings: [], evidence: [`${lens}: read a.mjs`] };
+    return { status: 0, durationMs: 800, stdout: JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(structured), structured_output: structured }) };
+  };
+  const { code, err } = run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'r'], { runLens });
+  assert.equal(code, 1);
+  const [risk] = readLensReviews(dir).at(-1).results;
+  assert.equal(risk.outcome, 'incomplete');
+  assert.match(risk.why, /subject_hash/);
+  assert.match(err, /^risk: incomplete, its subject_hash/m);
+});
+
+// The fallback, for a CLI that gives no structured output: JH 73's readability answer, as its CLI printed it.
+test("a CLI that gives no structured_output is read from result as before: JH 73's unclosed answer is refused and kept whole", () => {
+  const runLens = () => ({ status: 0, durationMs: 6787, stdout: UNCLOSED_INSPECTION_STDOUT });
+  const { code, err } = run(['--base', 'HEAD~1', '--lenses', 'readability', '--reason', 'r'], { runLens });
+  assert.equal(code, 1);
+  const [readability] = readLensReviews(dir).at(-1).results;
+  assert.equal(readability.outcome, 'incomplete');
+  assert.match(readability.why, /not closed \(it opens at character 0\): the answer ends before it closes$/);
+  assert.equal(readability.stopReason, 'end_turn');
+  assert.deepEqual([readability.outputTokens, readability.costUsd, readability.model], [842, 0.049128, 'claude-sonnet-5-5']);
+  assert.equal(fs.readFileSync(readability.answerFile, 'utf8'), UNCLOSED_INSPECTION_STDOUT);
+  assert.ok(err.split('\n').includes(`  what its CLI printed is kept whole in ${readability.answerFile}`), err);
+});
+
 test('a skip is recorded with its reason and runs no lens; a range with no code records nothing to review', () => {
   const claude = fakeClaude(clean);
   assert.equal(run(['--base', 'HEAD~1', '--unavailable', 'the plan is out of turns'], { runLens: claude.runLens }).code, 0);
@@ -219,7 +279,10 @@ test('a Claude CLI that is an npm shim runs as one quoted command line: the empt
     assert.equal(calls[0].options.input, 'b');
     assert.match(calls[0].command, /--tools "" /);
     // The path is quoted when it holds a space, as `quoteWindowsArg` quotes any argument.
-    assert.match(calls[0].command, /--system-prompt-file ("[^"]*js-harness-lens-[^"]*prompt\.md"|\S*js-harness-lens-\S*prompt\.md) --model/);
+    assert.match(calls[0].command, /--system-prompt-file ("[^"]*js-harness-lens-[^"]*prompt\.md"|\S*js-harness-lens-\S*prompt\.md) --settings /);
+    assert.match(calls[0].command, /--settings ("[^"]*js-harness-lens-[^"]*settings\.json"|\S*js-harness-lens-\S*settings\.json) --model/);
+    // The schema is one quoted argument, its quotes escaped as cmd.exe hands them to the CLI.
+    assert.ok(calls[0].command.includes(`--json-schema "${JSON.stringify(LENS_ANSWER_SCHEMA).replaceAll('"', '\\"')}"`), calls[0].command);
   } finally {
     fs.rmSync(bin, { recursive: true, force: true });
   }
@@ -241,9 +304,33 @@ test('--plan starts nothing and records nothing; a usage error is exit 2', () =>
 test('a lens runs tool-less on the CLI login: no eval token, no API key, no customizations', () => {
   const env = lensEnv({ JS_HARNESS_EVAL_OAUTH_TOKEN: 'e', CLAUDE_CODE_OAUTH_TOKEN: 'o', ANTHROPIC_API_KEY: 'k', PATH: 'p' });
   assert.deepEqual(env, { PATH: 'p' });
-  const args = claudeArgs('prompt.txt');
+  const args = claudeArgs('prompt.txt', 'settings.json');
   for (const flag of ['-p', '--safe-mode', '--no-session-persistence']) assert.ok(args.includes(flag), flag);
-  assert.deepEqual(args.slice(args.indexOf('--tools'), args.indexOf('--tools') + 2), ['--tools', '']);
-  assert.deepEqual(args.slice(args.indexOf('--system-prompt-file'), args.indexOf('--system-prompt-file') + 2), ['--system-prompt-file', 'prompt.txt']);
-  assert.deepEqual(args.slice(args.indexOf('--output-format'), args.indexOf('--output-format') + 2), ['--output-format', 'json']);
+  const valueOf = (flag) => args.slice(args.indexOf(flag), args.indexOf(flag) + 2);
+  assert.deepEqual(valueOf('--tools'), ['--tools', '']);
+  assert.deepEqual(valueOf('--system-prompt-file'), ['--system-prompt-file', 'prompt.txt']);
+  assert.deepEqual(valueOf('--output-format'), ['--output-format', 'json']);
+  // The host enforces the answer's shape (JH 76, L2), and the user's language setting gives way to English (L3).
+  assert.deepEqual(valueOf('--json-schema'), ['--json-schema', JSON.stringify(LENS_ANSWER_SCHEMA)]);
+  assert.deepEqual(valueOf('--settings'), ['--settings', 'settings.json']);
+});
+
+test('a lens run hands the CLI a settings file that sets its language to English, and removes it after', () => {
+  const calls = [];
+  const spawn = (command, args) => {
+    const file = args[args.indexOf('--settings') + 1];
+    calls.push({ file, settings: JSON.parse(fs.readFileSync(file, 'utf8')) });
+    return { status: 0, stdout: '{}', stderr: '' };
+  };
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-bin-'));
+  try {
+    const exe = process.platform === 'win32' ? 'claude.exe' : 'claude';
+    fs.writeFileSync(path.join(bin, exe), '');
+    runLens({ prompt: 'p', block: 'b', env: { PATH: bin } }, { spawn });
+  } finally {
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].settings, { language: 'English' });
+  assert.equal(fs.existsSync(calls[0].file), false);
 });
