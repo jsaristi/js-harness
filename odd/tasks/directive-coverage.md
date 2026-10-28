@@ -27,10 +27,10 @@ His words (transcript `0f71b2c6`, line 6690, 2026-10-28T09:23Z, read with `js-ha
 ## Tasks
 - [x] T1 (kind: design) inventory, mechanism, init and S12, cost, F8 place: section 14 and the ROADMAP line
 - [x] T2 (kind: verify) two blind readers, one fix batch (Claude 6, Codex 5; fixed in one batch, L3)
-- [ ] T3 (kind: docs) PR, Spanish page, ready notice
+- [x] T3 (kind: docs) PR, Spanish page, ready notice (PR 622; page https://claude.ai/artifact/T4b4vuNC2UhL9P389wRneX)
 
 ## Next step
-T2 done: both readers graded section 14 and one fix batch is committed. Next: T3, the docs-only PR from `docs/directive-coverage`, the Spanish page for him, and `notify --kind ready --pr <n>`; then a declared wait on the PR, and `closed --summary` once it lands.
+T3 done: PR 622 open, the Spanish page published, ready sent to the orchestrator. Next: a declared `js-harness wait --pr 622`; when it lands, `notify --kind closed --summary <file>`. Open for him: the eval spend over the envelope (about $70 to $90 [i]), asked when S5c-a starts.
 
 ## Log
 - L1 (2026-10-28, the lead's message relaying his request, line 6690): write the directive-coverage proposal as section 14 with a ROADMAP line; double review; docs PR; Spanish page; ready.
