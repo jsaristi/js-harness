@@ -71,7 +71,8 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
-- [ ] T7 (kind: build) the Rules block (question 99 answered, L18) — S5
+- [ ] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`
+- [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -121,13 +122,38 @@ Reviews:
 - Codex on `e792eaa..8b046c0`: correct (0.97), 47,536 input tokens; lenses (reliability, readability) 0 findings.
 - gentle-ai on `e792eaab..8b046c0f` (granted run): approved, 1 SUGGESTION (the new test does not check the exit code
   of the `kept` case), taken in T7's first slice.
+- T7's independent verifier (opus, read only) on `30ac3c3d..380b9e77`: 1 BLOCKER, 4 WARNINGs, all fixed test first
+  in `d232c63a` (L20).
+- gentle-ai on `cca493e0..d232c63a` (T7's slice; granted run): approved; its WARNING (the rename of his file is not
+  tried again while Windows holds it) and its 2 SUGGESTIONs (a sibling name that is not exclusive; no command test of
+  `updated` and of `kept` with exit 1) taken test first in the next commit.
+- Codex's recheck on `6df890e..4e28ec3`: the link fixed, the mode half fixed (fixed in `c7fe8137`); lenses on
+  `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
+- gentle-ai on `cca493e0..c7fe8137` (granted run, lineage review-397ff05feeb36359): approved; its WARNING (uninstall
+  removes a link he put where the file install made was, and leaves the block in the file it names) and its SUGGESTION
+  (no test of the rollback that removes a file install made) taken test first in the next commit.
+- The fix is `8012d8d6`. Codex on `c7fe813..8012d8d`: correct (0.97), 56,228 input tokens. Codex again from
+  `d232c63..2d246cf` (`--again`, T7a: no second recheck runs, and no record covered `c7fe8137`): correct (0.87), 74,433
+  input tokens. Lenses on `c7fe813..2d246cf` (risk, reliability, resilience): 0 findings.
+- gentle-ai on `c7fe8137..2d246cf7` (granted run, lineage review-f6a8781dedd4a885): approved, acknowledged; one
+  informational SUGGESTION (R3-place-identity: `place === at` would fail if the path were ever normalized for a plain
+  file) not taken: `realPlace` returns its argument itself for anything that is not a link (`rules-block.mjs:85-88`),
+  so the two are the same string by construction, and the link test pins the other side.
 
 ## Next step
-State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings
-`cbce05e2`, the verifier's fixes `88b53455` and `1f607cb8`, Codex's P2 `e2c38a15`. Next: PR 2 on
-`f8-s10-permissions` (base `worktree-f8-s10-port`) with L11's Read cost, the defaultMode note and L13's open items in
-its body, `ready --pr` once the merge queue's dry run takes it; then T7 (question 99 answered, L18) and T6 on a
-branch after it.
+State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
+`f8-s10-rules` (not pushed, no PR yet): `30ac3c3d` (the atomic write moved out), `380b9e77` (the Rules block),
+`d232c63a` (the verifier's fixes), `b27d0633` (gentle-ai's). Codex on `cca493e..b27d063`: part 2 incorrect, two P2s
+(L21). After the restart (PR 617 landed, main `cd194eb`; he keeps outputStyle Neutral, Q101): the two P2s' tests
+failed on GitHub's Linux run alone (7474 pass, 2 fail, run 40644538748), so they go in one commit with the fix
+(`realPlace` writes into the file a link names, a link to nothing is skipped; the sibling takes the file's mode).
+Codex's recheck on `6df890e..4e28ec3`: the link fixed; the mode half fixed (the sibling was readable by others
+until its chmod), so the next commit creates it with the mode; Codex rechecks no range that starts at `4e28ec3`, so
+the lenses review that commit. Lenses on `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
+gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in `8012d8d6`, which Codex, the
+lenses and gentle-ai approved (Reviews). Next: push, PR 3 with base `f8-s10-permissions` or main, `ready
+--pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
+(about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -236,3 +262,40 @@ branch after it.
   (Recomendada)", which asked that install write into `~/.claude/CLAUDE.md` "un bloque pequeño y registrado con tus 9
   líneas de D7, que se puede deshacer con uninstall. No toca nada más de ~/.claude." T7 is open, on a branch after
   PR 2.
+- L19 (2026-10-28, T7's design, on `f8-s10-rules`, PR 3): the nine lines are the nine under "Kept from the global
+  file" in the root `CLAUDE.md` (his D7 answer); they live once in code, `RULES_LINES` of `bin/lib/rules-block.mjs`,
+  and a test holds them equal to that section word for word. The block is the marked block of
+  `bin/lib/project-template.mjs` (a mark with the hash of its lines, then an end mark), under a `## Rules` heading:
+  install puts it at the end of `~/.claude/CLAUDE.md`, renders it again while unedited, and leaves an edited one as
+  his; the record is `{ path, createdFile, separator }`, the text put before the block, so uninstall gives the file
+  its bytes back; the file goes only when install made it and nothing else is left. A file that cannot be read or
+  written is skipped by install and, on uninstall, a failure that stays recorded (exit 1), as the permissions are.
+  Nothing else of `~/.claude` is written, and Codex's `~/.codex/AGENTS.md` is not touched: his answer names only the
+  Claude file. Until S2 his other projects load these lines twice (gentle-ai's Rules list holds them too), about
+  843 characters, about 210 tokens by chars/4 (its two marks add 138 more); S2 removes gentle-ai's. The block is high risk (it changes a file he already has, item 1): an
+  independent verifier reads it after its checks. `manifest.mjs` sat at its ceiling, so the atomic write moved out
+  first (`30ac3c3d`, -101 lines), and the ceiling ends at 1801, 97 under main's 1898.
+- L20 (2026-10-28, T7's independent verifier, opus, read only, on `30ac3c3d..380b9e77`, 113,965 tokens): 1 BLOCKER,
+  4 WARNINGs, 6 NOTEs, each reproduced in a scratch home unless said. BLOCKER 1: uninstall took the separator from
+  before the block even with text after it, joining two of his lines (`"A"`, install, `"C\n"` appended, gave
+  `"AC\n"`). WARNING 2: a separator compared byte for byte left a stray `\r` once his line ends changed. WARNING 3:
+  the Rules block shared the project block's mark, so a project block in his file was rendered over (reproduced).
+  WARNING 4: a write that failed partway truncated the file (read only). WARNING 5: a record edited by hand could
+  take his text (`separator` set to his own line; `createdFile: "yes"`). All five fixed test first: the separator
+  goes as line ends of either kind, at most as many as install put and never the last one before text that follows;
+  the Rules block has its own mark (`js-harness rules`); the file is written through a sibling renamed over it; a
+  record's separator must be one install writes and `createdFile` must be `true`. Kept as NOTEs, said here and not
+  fixed: a manifest lost between the file write and its own write leaves one blank line at uninstall; a block he
+  duplicated loses only its first copy; a block he moved to the top leaves one line end; a dangling link at the
+  path is written through. Checked sound by it: `30ac3c3d` is a pure move (diff of the 103 lines); `renderBlock`
+  behaves as before; rollback, the failed record, the uninstall order and exit codes. The probe, rerun after the
+  fixes in a scratch home: install exit 0, his text kept, 9 lines; `guard` denies both spellings of the planted key;
+  uninstall exit 0, the home byte for byte as before.
+- L21 (2026-10-28, 22:50 local): gentle-ai on `cca493e0..d232c63a` approved, its findings taken in `b27d0633`. Codex
+  on `cca493e..b27d063` (3 parts, 334,825 input tokens): parts 1 and 3 correct (0.86, 0.90); part 2 incorrect (0.99),
+  two P2s on `bin/lib/rules-block.mjs:44-45` (the rename of the sibling): his `CLAUDE.md` as a link (into a dotfiles
+  repository) is replaced by a regular file, and on Unix a 0600 file comes back 0644. Planned fix: write into the file
+  the link names (`fs.realpathSync` after an `lstat`), skip a link to nothing, and give the sibling the file's mode
+  (`chmodSync`) before the rename. Its two tests are written in `bin/lib/rules-block.test.mjs`, uncommitted: both
+  skip on this machine (it cannot make links; Windows keeps no Unix mode), so only CI's Linux run proves them. JH
+  ORQ asked a pause for his restart (Claude Desktop, gentle-ai, Codex): nothing ran at that point; nothing pushed.

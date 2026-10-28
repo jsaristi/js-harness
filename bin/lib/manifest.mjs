@@ -18,6 +18,10 @@ import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';
 import { holdPermissions, releasePermissions, removeMadeFile } from './permissions.mjs';
+import { holdRulesBlock, releaseRulesBlock } from './rules-block.mjs';
+import { writeManifestAtomic } from './atomic-write.mjs';
+// Re-exported for ./project.mjs, which writes a project's manifest with it.
+export { writeManifestAtomic };
 import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
 import { chainedPrsSkillContent, workUnitsSkillContent } from './ported-skills.mjs';
 import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, webFailureHookEntry } from './hook-entries.mjs';
@@ -780,110 +784,6 @@ export function installedVersion(home) {
   return readManifest(home)?.version ?? null;
 }
 
-/** Writes `data` to `target` atomically: serialized to a uniquely-named `.tmp` sibling first
- * (`<target>.<pid>.<random>.tmp`, created exclusively with `flag: 'wx'` so it is always a brand
- * new file — never opened through something already there, ordinary file or link, T2e item 3),
- * then a single rename over `target`, so a reader never sees a partially-written manifest and a
- * failure never corrupts or truncates whatever was there before. `target` itself is never touched
- * directly — matters most for the codegraph-retry update, which must not lose an existing, valid
- * manifest just because this write failed partway through (T2d Codex P2 atomic manifest writes).
- *
- * `deps` (`{ open, write, close }`, each independently injectable, defaulting to real
- * `fs.openSync(path, 'wx')` / `fs.writeSync(fd, buffer, offset, length, position)` /
- * `fs.closeSync(fd)`) is split into these three steps, rather than one opaque
- * `writeFile(path, content, options)` call, specifically so this function can tell "the exclusive
- * create itself never happened" (`open` throws — `EEXIST` or anything else; `tmp` is not ours to
- * touch) apart from "the create succeeded, and something *after* it failed" (`write`, `close`, or
- * the rename below; `tmp` exists and is this call's own file, so it is removed). A single combined
- * call (the old `writeFile(tmp, content, {flag:'wx',...})` shape) cannot make that distinction from
- * the outside — whatever it does internally, its caller only ever sees "it threw" or "it didn't"
- * (T2g R3-001, Codex P2: moving that one call outside the try/catch correctly stopped deleting a
- * foreign file on `EEXIST`, per T2f item 1, but then left this call's *own* just-created file
- * leaking on a write failure that happens after the open — e.g. `ENOSPC`, `EIO` partway through
- * filling it). Splitting `open` out as its own step means only *its* own failure is
- * ambiguous-ownership territory; every failure after it succeeds is unambiguously this call's to
- * clean up.
- *
- * `write` is called in a loop, each call resuming exactly where the last one left off
- * (`buffer`/`offset`/`length`/`position` all reflect only the unwritten remainder), until every
- * byte is written — `fs.writeSync`'s buffer form returns however many bytes it actually wrote,
- * which is not guaranteed to be all of them in one call (T3b item 4, Codex P2: the single-shot
- * `write(fd, content)` this used to be trusted a short write never happens, the same assumption
- * `fs.writeFileSync` itself does *not* make internally).
- *
- * The rename (`deps.rename`, default `fs.renameSync`) is tried again while Windows holds the target open
- * (`renameHeld`); `deps.pause` and `deps.platform` are its seams. */
-export function writeManifestAtomic(target, data, deps = {}) {
-  const open = deps.open ?? ((p) => fs.openSync(p, 'wx'));
-  const write = deps.write ?? ((fd, buffer, offset, length, position) => fs.writeSync(fd, buffer, offset, length, position));
-  const close = deps.close ?? ((fd) => fs.closeSync(fd));
-  const rename = deps.rename ?? fs.renameSync;
-
-  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  const buffer = Buffer.from(JSON.stringify(data, null, 2) + '\n', 'utf8');
-
-  const fd = open(tmp); // if this throws, nothing was created by this call — tmp is not ours to touch
-  try {
-    let written = 0;
-    while (written < buffer.length) {
-      const count = write(fd, buffer, written, buffer.length - written, written);
-      // A write that makes no progress (0 bytes, or no byte count at all) would spin forever or pass
-      // a truncated manifest as complete; fail it so the cleanup below runs (T3c, Codex P2 +
-      // R3-short-write-loop-no-progress-guard).
-      if (!Number.isInteger(count) || count <= 0) throw new Error(`manifest write made no progress (${count})`);
-      written += count;
-    }
-    close(fd);
-  } catch (err) {
-    try {
-      close(fd);
-    } catch {
-      // Best-effort; `fd` may already be closed or invalid depending on how `write` failed.
-    }
-    try {
-      fs.rmSync(tmp, { force: true });
-    } catch {
-      // Best-effort cleanup; `err` is still the one thrown below regardless.
-    }
-    throw err;
-  }
-
-  try {
-    renameHeld(tmp, target, rename, deps.pause ?? sleepSync, deps.platform ?? process.platform);
-  } catch (err) {
-    try {
-      fs.rmSync(tmp, { force: true });
-    } catch {
-      // Best-effort cleanup; `target` was never written to directly, so it is untouched regardless.
-    }
-    throw err;
-  }
-}
-
-/** The codes of a rename Windows refuses for a moment while another process (an antivirus, the indexer, an editor)
- * holds the file open, as `claimTicket` of bin/lib/gate-first.mjs meets them. Elsewhere they are a refusal that
- * stays, so they are tried once. */
-const HELD = new Set(['EPERM', 'EBUSY', 'EACCES']);
-const HELD_TRIES = 3;
-const HELD_PAUSE_MS = 25;
-
-/** Renames `from` to `to`, trying again after `pause` while the file is held on Windows; throws the last error. */
-function renameHeld(from, to, rename, pause, platform) {
-  const tries = platform === 'win32' ? HELD_TRIES : 1;
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      rename(from, to);
-      return;
-    } catch (err) {
-      if (!HELD.has(err?.code) || attempt === tries) throw err;
-      pause(HELD_PAUSE_MS);
-    }
-  }
-}
-
-/** Blocks for `ms`: the write is synchronous, and a hold lasts milliseconds. */
-const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-
 function writeManifest(home, manifest) {
   const file = manifestPath(home);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -949,7 +849,7 @@ function forgetRecord(home, key, matches, listDir) {
   const left = manifest[key].filter((entry) => !matches(entry));
   const { [key]: dropped, ...rest } = manifest;
   const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0
-    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0) && !rest.permissions;
+    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0) && !rest.permissions && !rest.rulesBlock;
   if (left.length > 0) {
     writeManifest(home, { ...manifest, [key]: left });
   } else if (empty) {
@@ -1218,9 +1118,10 @@ export function install(home, version, deps = {}) {
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
   const { held, record: permissions, keep } = holdPermissions(home, previous?.permissions);
-  const manifest = { version, files, entries, ...(permissions && { permissions }), ...carried };
-  keep(() => writeManifest(home, manifest));
-  Object.defineProperty(manifest, 'permissionsHeld', { value: held, enumerable: false });
+  const rules = holdRulesBlock(home, previous?.rulesBlock);
+  const manifest = { version, files, entries, ...(permissions && { permissions }), ...(rules.record && { rulesBlock: rules.record }), ...carried };
+  keep(() => rules.keep(() => writeManifest(home, manifest)));
+  Object.defineProperties(manifest, { permissionsHeld: { value: held }, rulesHeld: { value: rules.held } });
   return manifest;
 }
 
@@ -1439,6 +1340,7 @@ function uninstallInstalled(home, deps) {
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
   const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
   const permissions = manifest.permissions && releasePermissions(manifest.permissions, home, listDir, { writeFile: deps.writeFile, removeFile });
+  const rulesBlock = manifest.rulesBlock && releaseRulesBlock(manifest.rulesBlock, home, { writeFile: deps.writeFile, removeFile });
 
   // Codex keys a hook's trust by its place, so where each group of a Codex hooks.json goes is read before any entry
   // of it is taken out, and the trust follows the entries once they are out.
@@ -1488,13 +1390,14 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed') {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
       ...(settings.failedRecords.length > 0 && { settings: settings.failedRecords.map(madeFile) }),
       ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
+      ...(rulesBlock?.status === 'failed' && { rulesBlock: manifest.rulesBlock }),
     });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
@@ -1507,7 +1410,7 @@ function uninstallInstalled(home, deps) {
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

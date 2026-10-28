@@ -18,8 +18,9 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const union = (a, b) => [...new Set([...a, ...b])];
 
 /** Runs the write of the manifest that records what was held; when it throws, `undo` takes the settings back first, so
- * no entry is left that nothing records (Codex on c7445ca..e523ac7, as `acceptSessionMessages` does). */
-const recordWith = (undo) => (write) => {
+ * no entry is left that nothing records (Codex on c7445ca..e523ac7, as `acceptSessionMessages` does). The Rules block
+ * (./rules-block.mjs) is held the same way. */
+export const recordWith = (undo) => (write) => {
   try {
     write();
   } catch (err) {
@@ -102,7 +103,7 @@ export function holdPermissions(home, previous) {
 }
 
 /** Whether `a` and `b` name one file: resolved, and in any case on Windows, whose paths ignore it. */
-function sameFile(a, b) {
+export function sameFile(a, b) {
   const [x, y] = [path.resolve(String(a)), path.resolve(b)];
   return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
