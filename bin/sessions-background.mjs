@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, saidBy, startArgs, startPrompt, undoSession, within } from './lib/background.mjs';
+import { appendRecord, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, saidBy, startArgs, startPrompt, undoSession, within, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { nextSessionNumber } from './lib/channel.mjs';
@@ -191,7 +191,7 @@ export function sessionsStartMain(argv, given = {}) {
   try {
     appendRecord(home, {
       event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-      worktree: parsed.worktree ?? null, worktreePath: parsed.worktree ? agent?.cwd ?? null : null, model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
+      worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
     });
   } catch (err) {
     const undone = [claude(['stop', id]), claude(['rm', id])].every((step) => !step.error && step.status === 0);
@@ -240,5 +240,6 @@ export function sessionsStopMain(argv, given = {}) {
   }
   stdout(done.outcome === 'gone' ? `${name} was already gone: its record is closed` : `removed ${name}: its transcript stays, as every session's does`);
   if (done.worktreeKept) stdout(`  its worktree ${done.worktreeKept} stays: claude keeps a worktree with uncommitted changes, locked; git worktree remove --force twice removes it once they are not needed`);
+  if (done.worktreeGone) stdout(`  its worktree ${done.worktreeGone} is gone`);
   return 0;
 }

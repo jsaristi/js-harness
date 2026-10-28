@@ -32,12 +32,15 @@ if (argv.includes('--bg')) {
   const name = argv[argv.indexOf('-n') + 1];
   const id = state.nextId;
   let cwd = process.cwd();
+  let worktree;
   if (argv.includes('-w')) {
-    cwd = path.join(cwd, '.claude', 'worktrees', argv[argv.indexOf('-w') + 1]);
-    fs.mkdirSync(cwd, { recursive: true });
+    worktree = path.join(cwd, '.claude', 'worktrees', argv[argv.indexOf('-w') + 1]);
+    fs.mkdirSync(worktree, { recursive: true });
+    // claude lists a session it just started in the folder it was started from, and in its worktree only later.
+    if (!state.rootCwd) cwd = worktree;
   }
   if (state.sibling) state.agents.push({ ...state.sibling, kind: 'background', startedAt: state.now, name, status: 'busy' });
-  if (!state.ghost) state.agents.push({ pid: 4242, id, cwd, kind: 'background', startedAt: state.now, sessionId: id + '-0000-4000-8000-000000000000', name, status: 'busy', state: 'working' });
+  if (!state.ghost) state.agents.push({ pid: 4242, id, cwd, worktree, kind: 'background', startedAt: state.now, sessionId: id + '-0000-4000-8000-000000000000', name, status: 'busy', state: 'working' });
   save();
   out(state.quiet ? 'started' : 'backgrounded · ' + id + ' · ' + name);
   out('  claude agents             list sessions');
@@ -65,7 +68,7 @@ if (argv[0] === 'rm') {
   if (!agent) lost(argv[1]);
   state.agents = state.agents.filter((item) => item !== agent);
   // claude rm keeps a worktree that holds uncommitted changes (odd/tasks/background-sessions.md, L10).
-  if (!state.keepWorktree && agent.cwd.includes(path.join('.claude', 'worktrees'))) fs.rmSync(agent.cwd, { recursive: true, force: true });
+  if (!state.keepWorktree && agent.worktree) fs.rmSync(agent.worktree, { recursive: true, force: true });
   save();
   out('removed ' + argv[1]);
   process.exit(0);
@@ -345,7 +348,29 @@ test('sessions stop says so when claude keeps the session\'s worktree', withWorl
   assert.ok(result.stdout.includes(`its worktree ${worktree} stays`), result.stdout);
   patchState(world, { keepWorktree: false, nextId: 'c779ed44' });
   assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief, '--worktree', 'other']).code, 0);
-  assert.doesNotMatch(js(world, ['sessions', 'stop', 'c779ed44']).stdout, /worktree/);
+  const gone = js(world, ['sessions', 'stop', 'c779ed44']).stdout;
+  assert.ok(gone.includes(`its worktree ${path.join(world.project, '.claude', 'worktrees', 'other')} is gone`), gone);
+  patchState(world, { nextId: 'a1b2c3d4' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Plain', '--brief', world.brief]).code, 0);
+  assert.doesNotMatch(js(world, ['sessions', 'stop', 'a1b2c3d4']).stdout, /worktree/);
+}));
+
+// claude agents lists a session it just started in the folder it was started from: the record and stop name the
+// worktree all the same, and so does stop for a record written before, which holds the main checkout (2026-10-28).
+test('sessions start records the worktree claude makes, and stop names it for a record that holds the main checkout', withWorld((world) => {
+  patchState(world, { rootCwd: true, keepWorktree: true });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const [entry] = recordLines(world);
+  const worktree = path.join(entry.root, '.claude', 'worktrees', 'thing');
+  assert.equal(entry.worktreePath, worktree);
+  fs.appendFileSync(recordFile(world), `${JSON.stringify({ ...entry, id: 'e141d3f5', worktree: 'docs', worktreePath: entry.root })}\n`);
+  patchState(world, { agents: [] });
+  const stale = js(world, ['sessions', 'stop', 'e141d3f5']);
+  assert.equal(stale.code, 0, stale.stderr);
+  assert.ok(stale.stdout.includes(`its worktree ${path.join(entry.root, '.claude', 'worktrees', 'docs')} is gone`), stale.stdout);
+  assert.ok(!stale.stdout.includes(`its worktree ${entry.root} stays`), stale.stdout);
+  const kept = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.ok(kept.stdout.includes(`its worktree ${worktree} stays`), kept.stdout);
 }));
 
 test('uninstall machine removes the recorded sessions that rest, keeps a working one and fails until it is stopped', withWorld((world) => {

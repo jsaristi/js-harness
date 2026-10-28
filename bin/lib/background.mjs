@@ -155,13 +155,22 @@ export function recordedNamed(sessions, given) {
   return sessions.find((entry) => entry.id === given || (given.length >= 8 && String(entry.sessionId ?? '').startsWith(given))) ?? null;
 }
 
+/** The folder of the worktree a recorded session works in, or null for one started without a worktree: where claude
+ * makes a worktree of that name, under the main checkout `root`. claude agents lists a session it just started in the
+ * folder it was started from, so a record written before 2026-10-28 holds the main checkout as its `worktreePath`. */
+export function worktreeOf(entry) {
+  if (typeof entry.worktree !== 'string' || entry.worktree === '') return null;
+  if (typeof entry.worktreePath === 'string' && path.basename(entry.worktreePath) === entry.worktree) return entry.worktreePath;
+  return typeof entry.root === 'string' ? path.join(entry.root, '.claude', 'worktrees', entry.worktree) : null;
+}
+
 const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(saidBy(result));
 
 /** Stops and removes the recorded session `entry` with `claude stop` and `claude rm`, deletes the copy of its brief,
- * then records the removal: `{ outcome: 'removed', worktreeKept }`, or `'gone'` when claude no longer knows it, or
- * `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it recorded, so a
- * second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps one that
- * holds uncommitted changes (odd/tasks/background-sessions.md, L10). */
+ * then records the removal: `{ outcome: 'removed', worktreeKept, worktreeGone }`, or `'gone'` when claude no longer
+ * knows it, or `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it
+ * recorded, so a second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps
+ * one that holds uncommitted changes (odd/tasks/background-sessions.md, L10); `worktreeGone` is the one it removed. */
 export function undoSession(entry, { home, run, now }) {
   const stopped = run(['stop', entry.id]);
   if ((stopped.error || stopped.status !== 0) && !lostSaid(stopped)) return { outcome: 'kept', why: `claude stop ${entry.id}: ${saidBy(stopped)}` };
@@ -175,8 +184,9 @@ export function undoSession(entry, { home, run, now }) {
     }
   }
   appendRecord(home, { event: 'removed', at: new Date(now()).toISOString(), id: entry.id });
-  const worktreeKept = typeof entry.worktreePath === 'string' && fs.existsSync(entry.worktreePath) ? entry.worktreePath : null;
-  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept };
+  const worktree = worktreeOf(entry);
+  const kept = worktree !== null && fs.existsSync(worktree);
+  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept: kept ? worktree : null, worktreeGone: worktree !== null && !kept ? worktree : null };
 }
 
 /** A session at work: busy, or waiting on something (a permission prompt). */
