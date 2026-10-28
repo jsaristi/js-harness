@@ -91,8 +91,8 @@ Reviews:
 Not run yet.
 
 ## Next step
-PR 1 (branch f8-s11-complements, worktree .claude/worktrees/f8-s11): reviewed; push, open the PR, notify the
-orchestrator ready --pr. Then T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
+PR 1 is #627, pushed and notified ready (2026-10-28). Next, on branch f8-s11-presets stacked on
+f8-s11-complements in the same worktree: T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
 switch; the row-17 test scoped to the text files init writes) and T4 (extend the engram-plugin row: a plugin
 ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence test of mem_* text in shipped files).
 
