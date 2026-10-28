@@ -19,7 +19,7 @@ import { NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { lensResult } from './lib/lens-result.mjs';
-import { appendLensReview, INCOMPLETE, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
+import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model gentle-ai's lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
 export const LENS_MODEL = 'sonnet';
@@ -29,7 +29,8 @@ export const LENS_INPUT_LIMIT = 150_000;
 // A lens answers in under two minutes on a slice; a run past this has stalled.
 export const LENS_TIMEOUT_MS = 10 * 60 * 1000;
 // How many characters of an answer that is no lens result its record keeps: enough to tell prose from a broken
-// object, so why it failed is read before the lens runs again (odd/tasks/f8-s1-reviews.md, L10).
+// object, so why it failed is read before the lens runs again (odd/tasks/f8-s1-reviews.md, L10). The whole of what
+// the CLI printed goes to a file the result names (`answerFile`), since these did not tell why JH 73's broke (JH 75).
 export const LENS_ANSWER_KEPT = 300;
 // What the child must not inherit: a review runs on the user's CLI login, never on the eval token or a key.
 const NOT_INHERITED = ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
@@ -73,8 +74,20 @@ export function runLens({ prompt, block, env }, deps = {}) {
   }
 }
 
-/** What one lens run gave: the `result` entry of the run's record. */
-function lensOutcome(lens, ran, candidate) {
+/** Where an incomplete lens's output went: `{ answerFile }` from `keep(stdout)`, `{ answerNotKept }` when that threw,
+ * or nothing when the CLI printed nothing. A failed write never costs the run its record. */
+function keptOutput(ran, keep) {
+  if (typeof ran.stdout !== 'string' || ran.stdout === '') return {};
+  try {
+    return { answerFile: keep(ran.stdout) };
+  } catch (err) {
+    return { answerNotKept: err.message };
+  }
+}
+
+/** What one lens run gave: the `result` entry of the run's record. `keep(text)` keeps an incomplete lens's whole
+ * output and returns the file. */
+function lensOutcome(lens, ran, candidate, keep) {
   const durationMs = ran.durationMs ?? null;
   let out = null;
   try {
@@ -90,14 +103,16 @@ function lensOutcome(lens, ran, candidate) {
     durationMs,
     model: Object.keys(out?.modelUsage ?? {})[0] ?? null,
   };
+  // Why the model stopped, which tells an answer it ended from one cut off.
+  const stopped = typeof out?.stop_reason === 'string' ? { stopReason: out.stop_reason } : {};
   if (ran.error || ran.status !== 0 || !out || out.is_error || typeof out.result !== 'string') {
     const why = ran.error ? ran.error.message : out?.is_error ? `the CLI reported an error: ${String(out.result ?? '').slice(0, 200)}` : `the CLI exited ${ran.status} with no result${ran.stderr ? `: ${String(ran.stderr).trim().split('\n')[0]}` : ''}`;
-    return { lens, outcome: INCOMPLETE, why, findings: [], ...spent };
+    return { lens, outcome: INCOMPLETE, why, findings: [], ...stopped, ...spent, ...keptOutput(ran, keep) };
   }
   const read = lensResult(out.result, candidate);
   return read.complete
     ? { lens, outcome: 'complete', findings: read.findings, evidence: read.evidence, ...spent }
-    : { lens, outcome: INCOMPLETE, why: read.why, answered: answerKept(out.result), findings: [], ...spent };
+    : { lens, outcome: INCOMPLETE, why: read.why, answered: answerKept(out.result), findings: [], ...stopped, ...spent, ...keptOutput(ran, keep) };
 }
 
 /** The start of an answer the lens result could not read, on one line, as its record keeps it: cut by characters, not
@@ -206,13 +221,16 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   const results = [];
   for (const lens of picked.names) {
     stdout(`${lens}: running over ${range}...`);
-    results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens), block: candidate.block, env: lensEnv(env), cwd }), candidate));
+    const keep = (text) => keepLensAnswer(cwd, { run: runId, lens, text });
+    results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens), block: candidate.block, env: lensEnv(env), cwd }), candidate, keep));
   }
   const complete = results.every((result) => result.outcome === 'complete');
   const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results });
   for (const result of results) {
     if (result.outcome !== 'complete') {
       stderr(`${result.lens}: incomplete, ${result.why}${result.answered === undefined ? '' : `; it answered: ${JSON.stringify(result.answered)}`}`);
+      if (result.answerFile) stderr(`  what its CLI printed is kept whole in ${result.answerFile}`);
+      if (result.answerNotKept) stderr(`  what its CLI printed could not be kept: ${result.answerNotKept}`);
       continue;
     }
     stdout(`${result.lens}: complete, ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}, ${result.inputTokens} input and ${result.outputTokens} output tokens`);

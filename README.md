@@ -1044,7 +1044,8 @@ subject hash, the paths a review reads and each path's patch. Markdown files and
 `.gitattributes` marks `-codex-review` are left out, as Codex leaves them out.
 A result counts only when it echoes the hash and inspected every path; otherwise the run is recorded
 as incomplete, exits 1 and covers nothing, and the start of an answer it could not read is kept and
-printed, so why it failed is read before it runs again. Runs are recorded in `<git common dir>/js-harness/lens-reviews.jsonl`.
+printed, so why it failed is read before it runs again; what that lens's CLI printed is kept whole in
+`<git common dir>/js-harness/lens-answers/`, in a file the record names. Runs are recorded in `<git common dir>/js-harness/lens-reviews.jsonl`.
 `--plan` prints the candidate and starts nothing; `--unavailable <reason>` records a skip, which the
 push lets through and `check`, `doctor` and `merge-queue` list until a review covers the range. The
 two do not go together.

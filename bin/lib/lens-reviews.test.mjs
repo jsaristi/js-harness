@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { admittedLensReviews, appendLensReview, isValidLensReview, LENS_REVIEW_RUN_SCHEMA, LENS_REVIEW_RUNS_FILE, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns, startLensRun } from './lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, isValidLensReview, keepLensAnswer, LENS_ANSWERS_FOLDER, LENS_REVIEW_RUN_SCHEMA, LENS_REVIEW_RUNS_FILE, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns, startLensRun } from './lens-reviews.mjs';
 
 const record = (over = {}) => ({
   schema: LENS_REVIEW_SCHEMA, base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64), reviewedAt: '2026-10-27T17:00:00Z',
@@ -97,4 +97,14 @@ test('a line of another schema is no run line, and a record read by no reader of
   const { admitted } = admittedLensReviews('.', deps);
   assert.equal(admitted(readLensReviews('.', deps)[0]), false);
   assert.equal(admitted(record({ run })), false);
+}));
+
+// JH 75: what a lens's CLI printed is kept whole beside the records, in a file of its run and lens, since the first
+// characters a record kept did not tell why three answers of JH 73's broke.
+test('a lens run\'s output is kept whole in a file of its run and lens beside the records', () => inScratch((deps) => {
+  const text = `{"subject_hash":"h","evidence":["put(root, 'b.json', '{"written":"again"}') rewrites "it"]}\n\nDone. 🙂`;
+  const file = keepLensAnswer('.', { run: 'r-1', lens: 'risk', text }, deps);
+  assert.equal(file, path.join(deps.where.commonGitDir, 'js-harness', LENS_ANSWERS_FOLDER, 'r-1-risk.stdout'));
+  assert.equal(fs.readFileSync(file, 'utf8'), text);
+  assert.throws(() => keepLensAnswer('.', { run: 'r-1', lens: 'risk', text }, { where: { commonGitDir: null } }), /not a git repository/);
 }));

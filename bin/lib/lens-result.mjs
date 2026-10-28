@@ -30,13 +30,43 @@ function spanEnd(text, start) {
   return -1;
 }
 
+/** Where the parser breaks reading `json`, the character it names, or `null` when it names none. */
+const breakOf = (err) => {
+  const position = /at position (\d+)/.exec(err.message);
+  return position ? Number(position[1]) : null;
+};
+
+/** The text of `json` around the character `at`, on one line, quoted. */
+const nearText = (json, at) => JSON.stringify(json.slice(Math.max(0, at - 40), at + 40).replace(/\s+/g, ' '));
+
 /** Why the span `json` does not parse, with where it breaks and the text there when the parser names a position. */
 function parseFault(json, offset, err) {
-  const position = /at position (\d+)/.exec(err.message);
-  if (!position) return `an object in it does not parse: ${err.message}`;
-  const at = Number(position[1]);
-  const near = json.slice(Math.max(0, at - 40), at + 40).replace(/\s+/g, ' ');
-  return `an object in it does not parse at character ${offset + at}, near ${JSON.stringify(near)}`;
+  const at = breakOf(err);
+  if (at === null) return `an object in it does not parse: ${err.message}`;
+  return `an object in it does not parse at character ${offset + at}, near ${nearText(json, at)}`;
+}
+
+/** Why the object that opens at `start` never closes: where the parser breaks reading from there, or that the text
+ * ends first. A stray quote reads every string after it inside out, the last brace among them, so the parser's
+ * character points at it; a cut answer, or a backslash before a closing quote, ends the text first (JH 75). */
+function unclosedFault(text, start) {
+  const rest = text.slice(start);
+  let message = '';
+  let at = null;
+  try {
+    JSON.parse(rest);
+  } catch (err) {
+    message = err.message;
+    at = breakOf(err);
+  }
+  const opens = `an object in it is not closed (it opens at character ${start})`;
+  // A message that names no character is given as it is: only the parser knows whether it broke at the end.
+  if (at === null) {
+    if (!message) return `${opens}: the parser reads it whole, so the scanner and the parser disagree`;
+    return /end of JSON input/.test(message) ? `${opens}: the answer ends before it closes` : `${opens}: the parser says ${message}`;
+  }
+  if (at >= rest.trimEnd().length) return `${opens}: the answer ends before it closes`;
+  return `${opens}: it breaks at character ${start + at}, near ${nearText(rest, at)}`;
 }
 
 /** The one JSON object `text` holds, `{ value }`, or `{ why }` when it holds none, more than one, one that does not
@@ -47,7 +77,7 @@ function objectOf(text) {
   const objects = [];
   for (let start = text.indexOf('{'); start !== -1; ) {
     const end = spanEnd(text, start);
-    if (end === -1) return { why: `an object in it is not closed (it opens at character ${start})` };
+    if (end === -1) return { why: unclosedFault(text, start) };
     const json = text.slice(start, end);
     let value;
     try {
