@@ -154,6 +154,18 @@ test('when the manifest cannot be written, the block install wrote is taken back
   }
 });
 
+// gentle-ai on cca493e0..c7fe8137: the rollback's other path, a file install made, is taken away again.
+test('when the manifest cannot be written, a CLAUDE.md install made is removed again', () => {
+  const m = machine();
+  try {
+    fs.writeFileSync(path.join(m.home, '.js-harness'), 'a file where the manifest\'s folder goes');
+    assert.throws(() => install(m.home, '1.0.0'));
+    assert.equal(fs.existsSync(m.file), false);
+  } finally {
+    m.done();
+  }
+});
+
 test('a file that cannot be read is skipped by install, and on uninstall it is a failure that stays recorded', () => {
   const m = machine();
   try {
@@ -315,6 +327,24 @@ test('his CLAUDE.md as a link stays a link: the block goes into the file it name
     const dangling = install(m.home, '1.0.0').rulesHeld;
     assert.equal(dangling.status, 'skipped');
     assert.equal(fs.existsSync(real), false, 'nothing is written through a link to nothing');
+  } finally {
+    m.done();
+  }
+});
+
+// gentle-ai on cca493e0..c7fe8137: a file install made, which he then moved into dotfiles behind a link, is emptied
+// there; the link is not what goes.
+test('a CLAUDE.md install made and he moved behind a link is emptied in the file it names, and the link stays', { skip: !canLink && 'this machine cannot make links' }, () => {
+  const m = machine();
+  try {
+    assert.equal(install(m.home, '1.0.0').rulesHeld.status, 'written');
+    const real = path.join(m.home, 'dotfiles', 'CLAUDE.md');
+    fs.mkdirSync(path.dirname(real), { recursive: true });
+    fs.renameSync(m.file, real);
+    fs.symlinkSync(real, m.file, 'file');
+    assert.equal(m.remove().rulesBlock.status, 'released');
+    assert.ok(fs.lstatSync(m.file).isSymbolicLink(), 'still a link after uninstall');
+    assert.equal(fs.readFileSync(real, 'utf8'), '');
   } finally {
     m.done();
   }

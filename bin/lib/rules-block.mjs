@@ -162,7 +162,9 @@ export function releaseRulesBlock(record, home, { writeFile = fs.writeFileSync, 
   const rest = out.text.slice(out.at);
   const text = withoutSeparator(out.text.slice(0, out.at), rest, separatorOf(record)) + rest;
   try {
-    if (record.createdFile === true && text === '') removeFile(at);
+    // A file install made goes once empty, but never a link he put there since: the file it names keeps his text
+    // (gentle-ai on cca493e0..c7fe8137).
+    if (record.createdFile === true && text === '' && place === at) removeFile(at);
     else writeWhole(place, text, writeFile);
   } catch (err) {
     return { status: 'failed', path: at, code: err.code ?? 'unknown error' };

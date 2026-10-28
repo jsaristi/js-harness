@@ -126,6 +126,11 @@ Reviews:
 - gentle-ai on `cca493e0..d232c63a` (T7's slice; granted run): approved; its WARNING (the rename of his file is not
   tried again while Windows holds it) and its 2 SUGGESTIONs (a sibling name that is not exclusive; no command test of
   `updated` and of `kept` with exit 1) taken test first in the next commit.
+- Codex's recheck on `6df890e..4e28ec3`: the link fixed, the mode half fixed (fixed in `c7fe8137`); lenses on
+  `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
+- gentle-ai on `cca493e0..c7fe8137` (granted run, lineage review-397ff05feeb36359): approved; its WARNING (uninstall
+  removes a link he put where the file install made was, and leaves the block in the file it names) and its SUGGESTION
+  (no test of the rollback that removes a file install made) taken test first in the next commit.
 
 ## Next step
 State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
@@ -136,8 +141,9 @@ failed on GitHub's Linux run alone (7474 pass, 2 fail, run 40644538748), so they
 (`realPlace` writes into the file a link names, a link to nothing is skipped; the sibling takes the file's mode).
 Codex's recheck on `6df890e..4e28ec3`: the link fixed; the mode half fixed (the sibling was readable by others
 until its chmod), so the next commit creates it with the mode; Codex rechecks no range that starts at `4e28ec3`, so
-the lenses review that commit. Next:
-the lenses on `cca493e0..` the fix, gentle-ai on the fix, push, PR 3 with base `f8-s10-permissions` or main, `ready
+the lenses review that commit. Lenses on `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
+gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in the commit after `c7fe8137`. Next:
+Codex and the lenses on that commit (base `c7fe8137`), gentle-ai on it, push, PR 3 with base `f8-s10-permissions` or main, `ready
 --pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
 (about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).
 
