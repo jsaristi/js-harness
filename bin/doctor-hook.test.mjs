@@ -466,33 +466,34 @@ test('doctor --hook names a host update since the last review and a downloaded v
   }
 });
 
-// The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): a gentle-ai sync rewrites the global CLAUDE.md, so a new
-// gentle-ai version is named in the notice, still a `systemMessage`, beside a host update when both are due.
-test('doctor --hook names a gentle-ai version since the last review, once, and beside a host update', async () => {
+// The stack-update row (bin/lib/stack-update.mjs): a tool updated since its review is named in the notice, still a
+// `systemMessage`, beside a host update when both are due.
+test('doctor --hook names a stack tool updated since the last review, once, and beside a host update', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home, project);
     const fetchImpl = async (url) => ({
       ok: true,
-      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : { tag_name: 'v0.0.1' }),
+      json: async () => (url.includes('registry.npmjs.org') ? { version: '0.0.1' } : [{ tag_name: 'v0.0.1' }]),
     });
     let versions = { found: true, desktop: '2.37337.1', staged: null, code: '2.1.295' };
-    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions, gentleAiSnapshots: () => [] };
+    const deps = { spawn: healthySpawn(project), fetch: fetchImpl, platform: 'win32', host: () => versions, stackUpdate: true };
     const argv = ['--hook', '--home', home, '--cwd', project];
 
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the first reading is the reviewed baseline');
-    assert.equal(readCache(home).gentleAi.reviewed.version, '9.9.9');
+    const reviewed = readCache(home).stack.reviewed;
+    assert.equal(reviewed.versions.engram, '9.9.9');
 
-    writeCache(home, { ...readCache(home), gentleAi: { reviewed: { version: '9.8.0', at: '2026-10-16T00:00:00.000Z' } } });
+    writeCache(home, { ...readCache(home), stack: { reviewed: { ...reviewed, versions: { ...reviewed.versions, engram: '9.8.0' } } } });
     const updated = await runHook(argv, {}, deps);
-    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (gentle-ai 9.8.0 → 9.9.9 since the last review)' });
+    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (engram 9.8.0 → 9.9.9 since the last review)' });
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
 
     versions = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.295' };
     const both = await runHook(argv, {}, deps);
     assert.deepEqual(JSON.parse(both.stdout), {
-      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review; gentle-ai 9.8.0 → 9.9.9 since the last review)',
+      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review; engram 9.8.0 → 9.9.9 since the last review)',
     });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

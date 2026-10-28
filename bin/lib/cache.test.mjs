@@ -82,19 +82,18 @@ test('readCache keeps a well-formed host record, so every writer of the cache ke
   }
 });
 
-test('readCache keeps a well-formed gentle-ai record beside the host one, and drops a malformed one', () => {
+// F8 S11: the gentle-ai-sync row left with gentle-ai, so the record it kept is read as nothing and drops at the next
+// write, while the host record beside it stays.
+test('readCache drops the gentle-ai record the gentle-ai-sync row kept, and keeps the host one beside it', () => {
   const home = makeTmpHome();
   try {
     const host = { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } };
     const gentleAi = { reviewed: { version: '4.2.0', at: '2026-10-16T00:00:00.000Z' } };
     writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, host, gentleAi });
+    assert.equal('gentleAi' in readCache(home), false);
     writeCache(home, { ...readCache(home), notified: 'abc' });
-    assert.deepEqual(readCache(home).gentleAi, gentleAi, 'a write of another key keeps the record');
-    assert.deepEqual(readCache(home).host, host);
-    for (const broken of [{ reviewed: 'nope' }, { reviewed: { version: 4, at: 'x' } }, { reviewed: { version: '4.2.0' } }, 'nope']) {
-      writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, gentleAi: broken });
-      assert.equal('gentleAi' in readCache(home), false, JSON.stringify(broken));
-    }
+    assert.deepEqual(readCache(home).host, host, 'a write of another key keeps the record');
+    assert.equal('gentleAi' in JSON.parse(fs.readFileSync(cachePath(home), 'utf8')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -103,12 +102,12 @@ test('readCache keeps a well-formed gentle-ai record beside the host one, and dr
 test('readCache keeps a well-formed stack record beside the others, and drops a malformed one whole', () => {
   const home = makeTmpHome();
   try {
-    const gentleAi = { reviewed: { version: '4.2.0', at: '2026-10-16T00:00:00.000Z' } };
+    const host = { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } };
     const stack = { reviewed: { versions: { claude: '2.1.296', engram: '3.3.0' }, at: '2026-10-16T00:00:00.000Z' } };
-    writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, gentleAi, stack });
+    writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, host, stack });
     writeCache(home, { ...readCache(home), notified: 'abc' });
     assert.deepEqual(readCache(home).stack, stack, 'a write of another key keeps the record');
-    assert.deepEqual(readCache(home).gentleAi, gentleAi);
+    assert.deepEqual(readCache(home).host, host);
     for (const broken of [{ reviewed: 'nope' }, { reviewed: { versions: { engram: 3 }, at: 'x' } }, { reviewed: { versions: [], at: 'x' } }, { reviewed: { versions: {} } }, 'nope']) {
       writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null, stack: broken });
       assert.equal('stack' in readCache(home), false, JSON.stringify(broken));

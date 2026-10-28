@@ -22,7 +22,6 @@ import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
-import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
@@ -33,7 +32,7 @@ import { harnessHome } from './lib/home.mjs';
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
-export const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--gentle-ai-reviewed] [--stack-reviewed]';
+export const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--stack-reviewed]';
 
 // R3-003 (accepted T1 review follow-up): a flag with no value (end of argv, or immediately
 // followed by another `--flag`) is a usage error, not a silently-swallowed token.
@@ -47,7 +46,7 @@ function requireValue(argv, i, flag) {
 
 // Every flag `doctor` takes, for `unknownArgument`: a flag it does not know is refused before the
 // report, which writes its cache under the home (T1 of odd/tasks/commands-and-doctor.md).
-const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook', '--host-reviewed', '--gentle-ai-reviewed', '--stack-reviewed'] };
+const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook', '--host-reviewed', '--stack-reviewed'] };
 
 function parseArgs(argv, env) {
   const unknown = unknownArgument(argv, KNOWN);
@@ -204,8 +203,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   ]);
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
-    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major) and on another row (the engram
-    // plugin's names the engram binary's version).
+    // A tool's fix can depend on the latest version and on another row (the engram plugin's names the engram binary's
+    // version).
     const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows);
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
@@ -220,19 +219,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
-  const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
-  if (!deps.gentleAiSnapshots) return withClean;
-  const gentleAi = rows.find((row) => row.id === 'gentle-ai')?.version ?? null;
-  return [...withClean, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
-}
-
-/** The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): the gentle-ai version against the one last reviewed,
- * recorded like the host-update row's, so a sync that rewrote the global CLAUDE.md stays a gap until reviewed. */
-function gentleAiRow(version, snapshots, home, now) {
-  const cache = readCache(home);
-  const { row, record } = gentleAiUpdateRow({ version, reviewed: cache.gentleAi?.reviewed ?? null, snapshots: version ? snapshots(home) : [], home, now });
-  if (record) writeCache(home, { ...cache, gentleAi: { reviewed: record } });
-  return row;
+  return deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
 }
 
 /** The versions the stack-update row watches: the tools of `rows` and the Claude CLI on PATH. */
@@ -332,13 +319,12 @@ function reviewSkipsRow(reviewSkips, project) {
   return { ...row, project: 'stale', fix: { project: [`${count}, and a pull request that holds a lens skip does not land: run the review it skipped`, ...found] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, permissions, host-update, clean and gentle-ai-sync rows. Their checks are
- * given only here, so `doctorMain` alone keeps the rows its callers give it. */
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, permissions, host-update,
+ * stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
     unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
     host: (home) => readHostVersions({ home }),
-    gentleAiSnapshots: (home) => claudeMdSnapshots(home),
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
     reviewSkips: (cwd) => owedSkipLines(cwd),
@@ -370,7 +356,6 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   }
   const { home, cwd, json, offline } = parsed;
   if (argv.includes('--host-reviewed')) return recordHostReview(home, json, deps);
-  if (argv.includes('--gentle-ai-reviewed')) return recordGentleAiReview(home, json, deps);
   if (argv.includes('--stack-reviewed')) return recordStackReview({ home, cwd, json }, deps);
   const rows = await buildReport({ home, cwd, offline, interactive: true, env }, deps);
 
@@ -419,22 +404,6 @@ function recordHostReview(home, json, deps) {
   return 0;
 }
 
-/** `doctor --gentle-ai-reviewed`: records the installed gentle-ai version as reviewed, the last step of the review
- * the gentle-ai-sync row lists; with `--json` it prints `{ reviewed }`, the record written. With no version read it
- * records nothing and exits 1. */
-function recordGentleAiReview(home, json, deps) {
-  const probe = tools.find((tool) => tool.id === 'gentle-ai').installed({ spawn: deps.spawn ?? spawnSync, platform: deps.platform ?? process.platform, home });
-  if (!probe.version) {
-    console.error('js-harness doctor: could not read the gentle-ai version: nothing was recorded.');
-    return 1;
-  }
-  const now = deps.now ?? (() => new Date());
-  const reviewed = { version: probe.version, at: now().toISOString() };
-  writeCache(home, { ...readCache(home), gentleAi: { reviewed } });
-  console.log(json ? JSON.stringify({ reviewed }) : `Recorded gentle-ai ${probe.version} as reviewed.`);
-  return 0;
-}
-
 /** `doctor --stack-reviewed`: records the versions of the stack's tools and of the Claude CLI read now as reviewed, the
  * last step of the review the stack-update row lists; with `--json` it prints `{ reviewed }`, the record written. With
  * no version read it records nothing and exits 1. */
@@ -471,12 +440,11 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     const rows = await buildReport({ home, cwd, offline: false, env }, deps);
 
     const gaps = gapList(rows);
-    // A host or gentle-ai update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md,
+    // A host or stack update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md,
     // Decided). Its versions enter the digest, so another update before the review is recorded is a new notice (Codex,
     // 2026-10-15).
     const host = [
       hostNotice(rows.find((row) => row.id === 'host-update')),
-      gentleAiNotice(rows.find((row) => row.id === 'gentle-ai-sync')),
       stackNotice(rows.find((row) => row.id === 'stack-update')),
       cleanNotice(rows.find((row) => row.id === 'clean')),
     ]
