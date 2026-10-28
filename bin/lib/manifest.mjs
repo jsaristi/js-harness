@@ -19,6 +19,7 @@ import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';
 import { holdPermissions, releasePermissions, removeMadeFile } from './permissions.mjs';
 import { holdRulesBlock, releaseRulesBlock } from './rules-block.mjs';
+import { writeComponent } from './component-write.mjs';
 import { writeManifestAtomic } from './atomic-write.mjs';
 // Re-exported for ./project.mjs, which writes a project's manifest with it.
 export { writeManifestAtomic };
@@ -1100,18 +1101,9 @@ export function install(home, version, deps = {}) {
   const files = [];
   for (const component of components) {
     const target = component.target(home);
-    const content = component.content(version);
-    try {
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      writeFile(target, content, 'utf8');
-      files.push({ path: target, sha256: sha256(content), skipped: false });
-    } catch (err) {
-      const previousRecord = previous?.files?.find((f) => f.path === target);
-      if (previousRecord) {
-        files.push({ path: previousRecord.path, sha256: previousRecord.sha256, skipped: true, reason: err.message });
-      }
-      // else: never installed before, so there is nothing to carry forward or report as orphaned.
-    }
+    // A file the user changed is left and its record carried forward (./component-write.mjs), as one whose write failed.
+    const record = writeComponent(target, component.content(version), previous?.files?.find((f) => f.path === target), writeFile);
+    if (record) files.push(record);
   }
   const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
