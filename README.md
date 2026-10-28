@@ -834,6 +834,40 @@ lock busy, h                             before 14.3    after 16.8    not judged
 …
 ```
 
+### js-harness stretch
+
+A stretch of work, planned and measured from the records (`odd/tasks/stretch-protocol.md`): most
+often the hours the user is away, but any stretch the lead plans. `stretch open --plan <file>`
+reads a JSON plan: `hours`, `slots` (work sessions at once), `goals` (each a `text` and a
+`command` that exits 0 when it is met, so no goal is graded by the session that ran it), `items`
+(each one session's work: a `title`, a `kind` of the task contract, `hours: [low, high]` left,
+its `session` label once it has one, and `waitsFor` when it cannot start without the user) and
+`waits`. It records the plan and prints the departure: each estimate as written and as the last
+closed stretches correct it (the median of real over estimate, the kind's own from three items,
+else every kind's), the items in lanes, and whether they fill the hours or how many
+session-hours sit idle from which hour.
+
+`stretch status` measures the open stretch from the records: an item runs from its session's
+first record (or the opening) to its first `closed` notice, its removal from the background
+record, its last record once it is silent past `session-stall`, or now; its lost time is its
+session's failed gates inside that span, a nested gate folded into the one around it. The
+stretch itself carries the failed lands, their failed gates and the failed Codex runs. What no
+record holds (a rewrite after a review, a wait for an answer) is named as not measured. `status
+--goals` and `stretch close` run the goals, one at a time in the main checkout; `close` records
+each item's estimate, real and lost time, which the next `open` learns from. `stretch bind <item>
+<session>` names a queued item's session once it starts. `--json` prints the view and `--html
+<file>` writes it as the Spanish fragment the lead shows in the chat. The record is
+`.js-harness/throughput/<project>/stretches.jsonl` under the home, which `uninstall` keeps.
+
+```console
+$ js-harness stretch open --plan plan.json
+stretch 2026-10-28T12:00:00.000Z: 8 h, back at 2026-10-28T20:00:00.000Z
+queued 6-9 h in 2 lanes; 10 session-hours idle from hour 2
+  W1 registros (build, JH 69): 2-3 h, corrected 2-3 h
+  W2 documentación (docs): 4-6 h, corrected 4-6 h
+  goal G1 PR 630 en main: git merge-base --is-ancestor 79e3430 origin/main
+```
+
 ### js-harness contract
 
 Task contracts: `template` prints the skeleton a feature document opens with, `check`

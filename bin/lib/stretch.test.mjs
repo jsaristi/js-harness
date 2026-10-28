@@ -168,6 +168,16 @@ test('an item whose session has not closed runs to now, one removed is stopped, 
   assert.deepEqual([queued.state, queued.realHours, queued.lostHours], ['queued', 0, 0]);
 });
 
+test('a session that closed or was removed before the opening, with no record after, is done at the opening: 0 h, never running', () => {
+  const closed = measure({ ids: new Set(['s1']), cwds: [], firstAt: T0 - 3 * H, lastAt: T0 - H, closes: [T0 - H], stoppedAt: T0 - 0.5 * H }, T0 + 0.5 * H);
+  assert.deepEqual([closed.state, closed.realHours], ['finished', 0]);
+  const removed = measure({ ids: new Set(['s1']), cwds: [], firstAt: T0 - 3 * H, lastAt: T0 - H, closes: [], stoppedAt: T0 - 0.5 * H }, T0 + 0.5 * H);
+  assert.deepEqual([removed.state, removed.realHours], ['stopped', 0]);
+  // A record after the opening means it went on: it runs again.
+  const reopened = measure({ ids: new Set(['s1']), cwds: [], firstAt: T0 - 3 * H, lastAt: T0 + 0.25 * H, closes: [T0 - H], stoppedAt: null }, T0 + 0.5 * H);
+  assert.equal(reopened.state, 'running');
+});
+
 test('a running session with no record for longer than the stall rule is silent, measured to its last record and not past it', () => {
   const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0, lastAt: T0 + H, closes: [], stoppedAt: null };
   const silent = measure(trail, T0 + 4 * H, [gate(1.5, 600, 'pass', { session: 's1' })]);

@@ -242,11 +242,14 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
   const mine = gates.filter((gate) => gateOf(gate, trail));
   const lastAt = Math.max(trail.lastAt ?? trail.firstAt, ...mine.map((gate) => Date.parse(gate.startedAt)).filter((at) => at <= now));
   const from = Math.max(openedAt, trail.firstAt);
-  const close = trail.closes.find((one) => one >= from && one <= now);
-  const stopped = close === undefined && trail.stoppedAt !== null && trail.stoppedAt >= from && trail.stoppedAt <= now;
+  // A session that closed or was removed before the opening, with no record after it, is done at the opening.
+  const doneBefore = lastAt <= from;
+  const close = trail.closes.find((one) => one >= from && one <= now) ?? (doneBefore && trail.closes.some((one) => one <= from) ? from : undefined);
+  const stoppedAt = trail.stoppedAt !== null && trail.stoppedAt < from && doneBefore ? from : trail.stoppedAt;
+  const stopped = close === undefined && stoppedAt !== null && stoppedAt >= from && stoppedAt <= now;
   const silent = close === undefined && !stopped && now - lastAt > STALL_MS;
   const state = close !== undefined ? 'finished' : stopped ? 'stopped' : silent ? 'silent' : 'running';
-  const end = { finished: close, stopped: trail.stoppedAt, silent: lastAt, running: now }[state];
+  const end = { finished: close, stopped: stoppedAt, silent: lastAt, running: now }[state];
   const to = Math.max(from, end);
   const failures = clippedTo(mine.filter((gate) => failed(gate.result)), from, to)
     .map((gate) => failure(gate.startedAt, gate.seconds, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`));
