@@ -916,6 +916,8 @@ test('lean-codegraph adds the CodeGraph server of the user\'s configuration to t
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(fake.order, ['tool', 'review'], 'the index is built before the review that uses it');
   assert.deepEqual(fake.tools.map(launched), [initWith(clone)]);
+  // As `init` runs it: codegraph writes no telemetry queue or update cache under the home (Codex P2 on eef7e095).
+  assert.equal(fake.tools[0].opts.env.DO_NOT_TRACK, '1');
   assert.deepEqual(launched(fake.calls[0]), launchedWith(leanCell(m.repository.base, 'codex', { extraConfig: CODEGRAPH })));
   assert.deepEqual([reading(m, 'lean-codegraph', 'real').session, reading(m, 'lean-codegraph', 'real').effort], ['lean', 'medium']);
   // No other cell builds an index or names the server.

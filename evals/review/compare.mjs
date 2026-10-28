@@ -450,7 +450,8 @@ const INDEX_TIMEOUT_MS = 10 * 60 * 1000;
 function ensureIndex({ spawn, env, platform, checkout, log }) {
   if (fs.existsSync(path.join(checkout, '.codegraph'))) return;
   const args = ['init', '--yes', '.'];
-  const options = { cwd: checkout, env, encoding: 'utf8', timeout: INDEX_TIMEOUT_MS, windowsHide: true };
+  // DO_NOT_TRACK, as `runCodegraphInit` sets it: codegraph then writes no telemetry queue or update cache under the home.
+  const options = { cwd: checkout, env: { ...env, DO_NOT_TRACK: '1' }, encoding: 'utf8', timeout: INDEX_TIMEOUT_MS, windowsHide: true };
   log(`Building the CodeGraph index of ${checkout}: codegraph ${args.join(' ')} in ${checkout}`);
   const ran = platform === 'win32' ? spawn(windowsCommandLine('codegraph', args), [], { ...options, shell: true }) : spawn('codegraph', args, options);
   if (ran?.error || ran?.status !== 0) {
