@@ -635,6 +635,10 @@ run. The full record is that document's `## Baseline`.
 - Incident set: `current` 13 of 20 and `current-without-claude-md` 13 of 20, both at L and above the worse line of 10; false premise 2 of 4 on each arm, as in the baseline. Cases 01, 02 and 05 still fail every trial.
 - Cost: $16.95 for the 40 trials ($11.22 `current`, $5.73 without `CLAUDE.md`), about $0.42 a trial.
 
+**S10, run against it (2026-10-28).** `f8-s10-incidents`, the `current` arm at effort high, on `4ccb184f`, after he applied S10 to his machine (question 102), so each trial home copies his `~/.claude` with S10's permissions, style, skills and Rules block (`odd/tasks/f8-s10-port.md`, L26):
+- Incident set: 13 of 20 (false premise 2 of 4), at the baseline's L of 13 and above its worse line of 10, so no worse; cases 01, 02 and 05 still fail every trial, and 10 passed 1 of 2.
+- Cost: $10.61 for the 20 trials, about $0.53 a trial.
+
 ### 7.2 The long-session eval, designed now and built in parallel
 
 It is S8's confirmation, not a gate on any cut. A scripted simulated user drives one session of

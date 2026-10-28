@@ -76,11 +76,11 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T3 (kind: build) the two skills, adapted, with `THIRD_PARTY_NOTICES`, shipped in the package — S2; inline; the style-and-skills commit
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
-- [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
+- [x] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
 - [x] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`; PR 619, merged
 - [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
-- [ ] T8 (kind: build) `install` and `sync` leave an installed file he changed, and say so — S8; inline; `f8-s10-keep-edits`; PR 621
-- [ ] T9 (kind: build) the style and the two ported skills pinned by hash — S9; inline; `f8-s10-pins`
+- [x] T8 (kind: build) `install` and `sync` leave an installed file he changed, and say so — S8; inline; `f8-s10-keep-edits`; PR 621
+- [x] T9 (kind: build) the style and the two ported skills pinned by hash — S9; inline; `f8-s10-pins`; PR 623
 
 Reviews:
 - gentle-ai on `d6867d86..883747f2`: medium, not due (under_budget, 918 lines).
@@ -180,9 +180,7 @@ Reviews:
   the skills, since a run that loads no user settings loads no user skills; that is seen once he applies S10.
 
 ## Next step
-State at 2026-10-28 ~05:10 local: PRs 620 (T6, docs) and 621 (T8) are `ready`. T9's reviews are done (Reviews);
-push `f8-s10-pins`, open its PR after 621, `merge-queue --dry-run`, `ready`. Held: the incident rerun, until he
-applies S10 (L23). Then the `closed` notice with its summary in `docs/sessions/`.
+None: S10 is closed (L26). PRs 615, 617, 619, 620, 621 and 623 are merged.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -351,3 +349,10 @@ applies S10 (L23). Then the `closed` notice with its summary in `docs/sessions/`
   added section 13's tasks to the roadmap line S10's record goes on. Section 13.5 puts rows 4, 12 and 15 into S10:
   row 12 is T8; row 15 builds nothing (it keeps `chained-pr`, copied in T3, and `lens-review`'s input limit); row 4 is
   T9, S9: no S10 slice touched a lens prompt, so T9 pins the style and the two skills only.
+- L26 (2026-10-28, 05:40 local): PRs 620, 621 and 623 merged. He answered question 102 "Aplicar ahora" (transcript
+  `0f71b2c6`, line 7242, read before the run); the lead installed S10 on his machine at 05:14. The incident rerun ran
+  once, `f8-s10-incidents` (results committed), the `current` arm at effort high on `4ccb184f`, 10:17Z to 10:39Z:
+  13 of 20 (false premise 2 of 4), at the baseline's L of 13 and above its worse line of 10, so no worse; cases 01, 02 and 05 still fail every trial, and 10 passed 1 of 2; $10.61. S6's pass line holds: the probe 5 of 5 and the incident set no worse. Not checked: that the
+  trial homes held his post-install files byte for byte (the run started three minutes after the install wrote them;
+  the setup's item hashes differ from his files', and the sandbox may rewrite them). His `outputStyle` stays Neutral
+  (Q101), so the `js-harness` style is installed but not selected in these trials.
