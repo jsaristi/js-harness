@@ -193,12 +193,18 @@ function isQuestionNumber(value) {
   return Number.isSafeInteger(value) && value >= 1;
 }
 
+/** A question's text that numbers itself: the record gives the number only once it is written, so a session that
+ * wrote the prefix by hand guessed it, and JH 62's guess named another question (docs/FAILURES.md,
+ * question-numbered-by-hand). */
+const HAND_NUMBERED = /^pregunta\s+\d+\s*[:.\-–—]/i;
+
 /** The fields of a question as a notice keeps them, checked: `text` one line of `QUESTION_TEXT_MAX`, `options`
  * a list of at most `QUESTION_OPTIONS_MAX` (the recommended one first; an empty list is a question with nothing
  * to tap), no two with one label, and `waits` one line. It is the one check of a question, whether it comes
  * from standard input (`questionFieldsOf`) or from a caller (`newNotice`). Throws a `ChannelInputError`. */
 function checkedQuestion({ text, options, waits }) {
   const line = oneLine(text, QUESTION_TEXT_MAX, 'the text of a question');
+  if (HAND_NUMBERED.test(line)) throw new ChannelInputError('the text of a question starts with its own "Pregunta <n>": drop it; the record numbers the question and prints the prefix to ask it with');
   if (!Array.isArray(options)) throw new ChannelInputError('the options of a question are a list, the recommended one first');
   if (options.length > QUESTION_OPTIONS_MAX) throw new ChannelInputError(`a question has ${options.length} options, ${QUESTION_OPTIONS_MAX} at most`);
   const checked = options.map(optionOf);

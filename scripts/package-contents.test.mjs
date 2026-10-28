@@ -48,10 +48,11 @@ test(
       commandFiles(),
       'the files of bin/ that are not tests, all of them and only them',
     );
+    // The notices are named in `files`: the ported skills' Apache-2.0 asks that whoever gets them gets the license.
     assert.deepEqual(
       packed.filter((file) => !file.startsWith('bin/') && !ALWAYS_PACKED.test(file)),
-      [],
-      'something outside bin/ is in the package',
+      ['THIRD_PARTY_NOTICES.md'],
+      'something outside bin/ but the notices is in the package, or the notices are not',
     );
   },
 );

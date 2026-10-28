@@ -166,6 +166,14 @@ test('the text of a question is one line, not empty, of 2000 characters at most'
   assert.equal(channel.questionFieldsOf(questionJson({ text: 'x'.repeat(2000) })).text.length, 2000);
 });
 
+test('the text of a question carries no "Pregunta <n>:" of its own: the record numbers it, and a number guessed by hand named another (docs/FAILURES.md, question-numbered-by-hand)', () => {
+  for (const text of ['Pregunta 94: Which budget?', '  pregunta 7 : Which budget?', 'Pregunta 12. Which budget?', 'PREGUNTA 3 - Which budget?']) {
+    questionRefusedIn(questionJson({ text }), /the text of a question starts with its own "Pregunta <n>": drop it; the record numbers the question and prints the prefix to ask it with/);
+  }
+  assert.equal(channel.questionFieldsOf(questionJson({ text: 'Una pregunta: Which budget?' })).text, 'Una pregunta: Which budget?', 'the word alone, not at the start or with no number, is no prefix');
+  assert.equal(channel.questionFieldsOf(questionJson({ text: 'Preguntas 5 y 6 se parecen: ¿cuál?' })).text, 'Preguntas 5 y 6 se parecen: ¿cuál?');
+});
+
 test('the options of a question are a list of six at most, each a label and a description and no other key, and no two share a label', () => {
   const many = (count) => Array.from({ length: count }, (_, i) => ({ label: `Option ${i}` }));
   questionRefusedIn(questionJson({ options: undefined }), /the options of a question are a list, the recommended one first/);
