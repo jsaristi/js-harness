@@ -114,6 +114,7 @@ Reviews:
 - The lenses on `f9c10579..37cdab21`: a third run, incomplete again (risk cut short; reliability and readability
   complete, 0 findings), so a skip is recorded with `--unavailable` and its reason. `check`, `doctor` and the merge
   queue list it until a lens run covers the range: the debt is open, and is the lead's to route.
+- PR 638 is open; `notify --kind ready` refuses it while the lens skip holds (L10).
 
 ## Paid runs
 None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
@@ -138,8 +139,11 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
 seven by `f9c10579` (L7), what their recheck left by `d0954123` (L8), and Codex's last finding by the commit after
 it (`37cdab21`, L9). Codex covers every code commit and left nothing open; the lenses cover all but
-`f9c10579..37cdab21`, a recorded skip (three runs cut short). Next: push, the pull request and
-`js-harness notify --to orchestrator --kind ready --pr <n>`; the lens skip is paid by a run that completes.
+`f9c10579..37cdab21`, a recorded skip (three runs cut short). PR 638 is open. Next (L10): when the lead says the
+lens-review fix has landed and the installed copy is refreshed, `js-harness lens-review --base f9c10579
+--lenses risk,reliability,readability --reason "..."` once (head `37cdab21` or later), then
+`js-harness notify --to orchestrator --kind ready --pr 638`, then `closed` with
+`docs/sessions/2026-10-28-jh-73-f8-s5c-a-directive-coverage.md`.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -244,3 +248,9 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   (readability, then reliability; "an object in it is not closed"), the other two complete with 0 findings; the
   parser in `bin/lib/lens-result.mjs` reads strings, so the answer itself was cut. Not this branch's code: the
   next lens run covers this commit too, and a third failure is recorded as a skip with its reason.
+- L10 (2026-10-28, the lead's decision in the channel at 15:14, answering this session's `waiting` notice):
+  "Lead: no fourth rerun, since three cut answers make a defect, not bad luck. I am opening a session to fix
+  lens-review's parse of answers that quote JSON. Go on with the rest of S5c-a meanwhile. When the fix lands and
+  the copy is refreshed, rerun the lenses once over f9c10579..37cdab21." The incomplete answers had 571 to 911
+  output tokens, a whole answer's size, so they were not cut by length; the guess that they quote the diff's JSON
+  unescaped is unconfirmed, since a record keeps the first 300 characters (`LENS_ANSWER_KEPT`).
