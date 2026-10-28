@@ -465,6 +465,32 @@ const endJob = (world, id) => {
   writeState(world, state);
 };
 
+// gentle-ai on slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
+test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const [first] = recordLines(world);
+  // After a restart claude agents may not list the stopped job at all.
+  patchState(world, { agents: [], nextId: 'c779ed44', refuseStart: 'resume refused: made up' });
+  const refused = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(refused.code, 1);
+  assert.match(refused.stderr, /claude did not resume 0db8bc5e · Build the thing \(exit 1\), and nothing was recorded:\s+resume refused: made up/);
+  assert.equal(recordLines(world).length, 1);
+  patchState(world, { refuseStart: null });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', 'haiku', '--no-remote-control']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  const call = actions(world).at(-1);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call.includes('--remote-control')], ['haiku', false]);
+  const entry = recordLines(world).at(-1);
+  assert.deepEqual([entry.id, entry.model, entry.remoteControl], ['c779ed44', 'haiku', false]);
+  // A folder that is gone is not resumed into.
+  endJob(world, 'c779ed44');
+  fs.rmSync(path.join(first.root, '.claude', 'worktrees', 'thing'), { recursive: true, force: true });
+  patchState(world, { nextId: 'a1b2c3d4' });
+  const gone = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
+  assert.equal(gone.code, 1);
+  assert.match(gone.stderr, /the folder c779ed44 · Build the thing worked in, .*thing, is gone, so it was not resumed/);
+}));
+
 // Codex P1 on 79e3430..318f952: the job a resume replaced shares its worktree and brief with the new one; undone alone
 // it would delete them under the new job, and resumed again it would put two jobs on one conversation.
 test('a resumed job replaces the one it resumed: that one is neither resumed nor stopped alone, and stopping the new job undoes both', withWorld((world) => {
