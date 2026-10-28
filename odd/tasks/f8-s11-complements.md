@@ -69,10 +69,10 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   context7 required and runnable, the gentle-ai row and its installer step out — S1, S4; inline; PR 1
 - [x] T2 (kind: build) the `gentle-ai-sync` row, `doctor --gentle-ai-reviewed` and the install watch out — S4;
   inline; PR 1
-- [ ] T3 (kind: build) presets: `init --preset`, the `engramPlugin` switch, the context7 project row, and a test
+- [x] T3 (kind: build) presets: `init --preset`, the `engramPlugin` switch, the context7 project row, and a test
   per preset — S2, S3; inline; PR 2
-- [ ] T4 (kind: build) row 11: a test that nothing js-harness writes carries engram's protocol, and the
-  `engram-protocol` doctor row with its two fixtures — S6; inline; PR 2
+- [x] T4 (kind: build) row 11: a test that nothing js-harness writes carries engram's protocol, and the
+  engram-plugin row's `mismatch` with its two fixtures (L10) — S6; inline; PR 2
 - [ ] T5 (kind: build) the review sweep: the merge door's gentle-ai evidence, the pull-request body line, the
   review-starts row and the shipped text that sends a session to gentle-ai — S5; inline; PR 3
 - [ ] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
@@ -85,16 +85,27 @@ Reviews:
 - Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
   removes the instruction settings an older engram or gentle-ai set before it deletes the files (fix commit after
   cea68ea1); Codex cea68ea..28acfb5 passed (the P2 fixed). Lenses risk, reliability, readability over d2bc8ab..28acfb5: 0 findings.
+- PR 2: Codex fd70e26..ac28c99, 1 part, passed, no finding (174,553 input tokens); lenses risk, reliability,
+  readability over fd70e26..ac28c99: 0 findings (about 23,830 input tokens each).
+- gentle-ai on `fd70e263..ac28c992`: approved (lineage review-4739c69c341b3d15, lens review-reliability), three
+  advisory findings. R3-001 (init's context7 notice would throw without an `os` import) does not hold:
+  `bin/init.mjs:5` imports it. R3-002 (the engramPlugin switch hiding the row is proved by a unit call only) is
+  taken: a `probeStack` test in the commit after ac28c992. R3-003 (a Windows drive letter in another case would
+  read a disabled context7 as `ok`) is left: `claudeJsonMcpServer` reads the same `projects` keys exactly, so one
+  cell matching by case would make two rules for one file, and it fails open, never a false gap.
+- f63536e9 (R3-002's test): Codex ac28c99..f63536e passed (35,412 input tokens); lens reliability, 0 findings;
+  gentle-ai on `ac28c992..f63536e9`: approved, no finding (lineage review-02e16e1f6bf65507).
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
 Not run yet.
 
 ## Next step
-PR 1 is #627, pushed and notified ready (2026-10-28). Next, on branch f8-s11-presets stacked on
-f8-s11-complements in the same worktree: T3 (init --preset; lean writes functions.codeMap off; an engramPlugin
-switch; the row-17 test scoped to the text files init writes) and T4 (extend the engram-plugin row: a plugin
-ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence test of mem_* text in shipped files).
+PR 1 is #627 and PR 2 (T3, T4) is on branch f8-s11-presets, stacked on it, every code commit reviewed by
+Codex, the lenses and gentle-ai (2026-10-28). Next, on a branch f8-s11-reviews stacked on f8-s11-presets: T5,
+the review sweep (the merge door's gentle-ai evidence, the pull-request body line, the review-starts row, the
+shipped text at bin/lib/manifest.mjs, bin/lib/protocols-skill.mjs and agentsBlock in bin/lib/project.mjs), leaving
+bin/lib/guard.mjs to JH 69.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
@@ -151,3 +162,22 @@ ahead of its binary's tag is mismatch; fixtures behind and ahead; an absence tes
   failed on GitHub Actions (run 40687865647): `evals/suite.mjs` read that row for the eval stack's `gentleAi`
   field, 9 tests of `evals/suite.test.mjs`. The field leaves the stack a run records and compares; a results file
   recorded before keeps its `gentleAi` key, unread, so an old run resumes on a machine without gentle-ai.
+- L9 (2026-10-28, decision, within S2 and S3): `init --preset complete|lean|custom` is optional; with none, `init`
+  writes the `harness.json` it wrote before, with no `"functions"`, so no project changes by this slice. A preset
+  writes its `"functions"` (`PRESETS`, `bin/lib/functions.mjs`): every one declares `codexReview` and `lensReview`
+  `on`, since no preset drops a review; `lean` adds `codeMap: "off"`, so `init` runs no `codegraph init`; `custom`
+  starts from complete and takes `--codegraph on|off` (`codeMap` `on-demand` or `off`) and `--engram-plugin on|off`,
+  a new switch `engramPlugin` (`auto` is on) that hides the engram-plugin row where off; either choice with another
+  preset, or without one, is a usage error that writes nothing. context7 and engram have no switch: every preset
+  holds them (G11), and a preset prints that context7 is required where `~/.claude.json` has it nowhere (L6). The
+  row-17 test reads the files `init`'s manifest lists; the settings key that silences codegraph's prompt hook in a
+  lean clone (`env.CODEGRAPH_NO_PROMPT_HOOK`) stays, since it is what keeps a machine-wide codegraph out of it, and
+  it lives in the clone's own `.claude/settings.local.json`, no committed file.
+- L10 (2026-10-28, decision, within S6): the "doctor row" of row 11 is the engram-plugin row, not a new one: its
+  latest is already the plugin the engram binary's own tag ships (odd/tasks/engram-plugin-lag.md), so a plugin
+  behind it is `outdated` (the fixture that was there) and one ahead of it is now `mismatch`, whose fix updates the
+  binary; the two fixtures are those two `doctor` tests. "Writes no engram text of its own" is held by a test over
+  every shipped component, the rules block and `init`'s templates, which finds no `mem_*` tool name and no save
+  rule. The js-harness skill's "When Engram fails" stays: it is js-harness's own backup and its restore, not
+  engram's protocol or its context recovery (searched: `grep -rln "mem_save|mem_search|mem_context" bin`, only
+  test files and evals fixtures).

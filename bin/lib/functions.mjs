@@ -17,7 +17,41 @@ export const SWITCHES = {
   codexReview: { values: ['auto', 'on', 'off'], fallback: CODEX_REVIEW_DEFAULT, strict: 'on' },
   pushUnasked: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'off' },
   lensReview: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
+  engramPlugin: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
 };
+
+/** The presets `init --preset` writes (G14, odd/tasks/f8-s11-complements.md, L9): the switches each declares. Every
+ * one turns both reviews on, which no preset drops; context7 and engram have no switch, since every preset holds
+ * them. `custom` starts from `complete` and takes `presetFunctions`'s choices. */
+export const PRESETS = {
+  complete: { codexReview: 'on', lensReview: 'on' },
+  lean: { codexReview: 'on', lensReview: 'on', codeMap: 'off' },
+  custom: { codexReview: 'on', lensReview: 'on' },
+};
+
+/** What a custom preset may choose, and the switch and value each choice declares. */
+const CHOICES = {
+  codegraph: { on: ['codeMap', 'on-demand'], off: ['codeMap', 'off'] },
+  engramPlugin: { on: ['engramPlugin', 'on'], off: ['engramPlugin', 'off'] },
+};
+const CHOICE_WORDS = { codegraph: 'codegraph', engramPlugin: 'the engram plugin' };
+
+/** The `"functions"` the preset `name` writes, as `{ functions }`, or `{ error }`: `choices` (`{ codegraph,
+ * engramPlugin }`, each `on` or `off`) only for `custom`, where an absent one keeps complete's. */
+export function presetFunctions(name, choices = {}) {
+  if (!Object.hasOwn(PRESETS, name)) return { error: `no preset "${name}"; the presets are ${Object.keys(PRESETS).join(', ')}` };
+  const given = Object.entries(choices).filter(([, value]) => value !== undefined);
+  if (name !== 'custom' && given.length > 0) {
+    return { error: `only the custom preset chooses ${Object.values(CHOICE_WORDS).join(' or ')}; ${name} is fixed` };
+  }
+  const functions = { ...PRESETS[name] };
+  for (const [choice, value] of given) {
+    if (!Object.hasOwn(CHOICES, choice) || !Object.hasOwn(CHOICES[choice], value)) return { error: `${choice} must be on or off; it is ${JSON.stringify(value)}` };
+    const [switchName, switchValue] = CHOICES[choice][value];
+    functions[switchName] = switchValue;
+  }
+  return { functions };
+}
 
 const quoted = (names) => names.map((name) => `"${name}"`).join(', ');
 
@@ -133,6 +167,8 @@ export function resolveFunctions(values, tree) {
     pushUnasked: () => ({ value: 'off', because: 'the project asks until its owner turns it on' }),
     // Auto is off: a project asks for a lens record only once it turns the review on (odd/tasks/f8-s1-reviews.md, L9).
     lensReview: () => ({ value: 'off', because: 'a commit asks for a lens record only where the project turns the lens review on' }),
+    // Auto is on: engram's setup installs the plugin on every machine, and a preset drops it only by declaring off.
+    engramPlugin: () => ({ value: 'on', because: 'the engram plugin is part of every preset until the project turns it off' }),
   };
 
   return Object.fromEntries(

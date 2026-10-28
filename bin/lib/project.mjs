@@ -737,10 +737,10 @@ function codegraphStep(root, spawn, platform, actions) {
 }
 
 /** What the switches of the project at `root` ask of this clone (bin/lib/project-apply.mjs), read from its
- * working tree: `{ resolved, plan }`, or `{ errors }` when `harness.json` or its `"functions"` cannot be
- * read, which applies nothing. */
-function functionsPlan(root, spawn) {
-  const { errors, resolved } = functionsOf(harnessOfTree(root), workingTree(gitIn(root, spawn)));
+ * working tree, or `declared`, a preset's: `{ resolved, plan }`, or `{ errors }` when `harness.json` or its
+ * `"functions"` cannot be read, which applies nothing. */
+function functionsPlan(root, spawn, declared = null) {
+  const { errors, resolved } = functionsOf(declared ? { declared: { functions: declared } } : harnessOfTree(root), workingTree(gitIn(root, spawn)));
   if (errors.length > 0) return { errors };
   return { resolved, plan: planFunctions(resolved, { indexPresent: fs.existsSync(codegraphDirPath(root)) }) };
 }
@@ -782,8 +782,8 @@ function codegraphWhereWanted(root, spawn, platform, actions, functions) {
  * `clone` is the fresh-clone setup `sync` runs (T4 design): the same gate, codegraph and manifest,
  * but `harness.json` and an existing `AGENTS.md` are committed files, recorded as `kept` and never
  * written, so the manifest's `files` holds only what this clone wrote and `uninstall` there removes
- * only that. */
-function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, clone = false) {
+ * only that. `preset` is the `"functions"` an `init --preset` writes into `harness.json` (F8 S11, L9). */
+function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone = false, preset = null } = {}) {
   const createdPaths = [];
   const createdDirs = [];
   const reportedDirs = [];
@@ -796,7 +796,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     const actions = [];
     const files = [];
     // The switches are read before anything is written, from the project as it stands.
-    const functions = functionsPlan(root, spawn);
+    const functions = functionsPlan(root, spawn, preset);
     if (functions.errors) actions.push(functionsProblem(functions.errors));
 
     // harness.json: the pin — computed now (its content never depends on anything written after
@@ -806,7 +806,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     // (odd/tasks/session-title.md, S5): his answer of 2026-10-19, "la idea es que tenga el udentificador del proyecto".
     const harnessJsonPath = path.join(root, 'harness.json');
     const code = codeOfName(path.basename(root));
-    const harnessJsonContent = JSON.stringify({ version, ...(code !== null && { code }), reply: true }, null, 2) + '\n';
+    const harnessJsonContent = JSON.stringify({ version, ...(code !== null && { code }), reply: true, ...(preset && { functions: preset }) }, null, 2) + '\n';
     const harnessJsonRel = toRepoRelative(root, harnessJsonPath);
     const harnessJsonHash = sha256(harnessJsonContent);
     if (clone) {
@@ -1078,7 +1078,7 @@ export function initProject(cwd, version, deps = {}) {
     return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
   }
 
-  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps);
+  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { preset: deps.functions });
 }
 
 /** Resolves one `files`/`dirs` manifest entry back to its absolute path: repo-relative against
@@ -1885,7 +1885,7 @@ export function syncProject(cwd, version, deps = {}) {
   if (pin !== version) return { code: 1, pinMismatch: true, pin, version };
 
   if (!manifestPresent) {
-    const result = writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, true);
+    const result = writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone: true });
     return syncTemplateBlock(root, { ...result, version, setUp: true }, writeFile, lstat);
   }
   return syncTemplateBlock(root, syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps), writeFile, lstat);

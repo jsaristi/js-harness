@@ -97,12 +97,15 @@ function rowGaps(row) {
  * account one or the remote server one, not a tool): it has no version at all. Every other tool
  * compares its installed version against the fetched/cached latest, and is `unknown` whenever
  * either side is missing or unparseable (never `n/a`, since every other tool does have a
- * latest-version source). */
+ * latest-version source). The engram plugin's latest is the one its binary's tag ships, so a plugin ahead of it
+ * serves another protocol than the binary: `mismatch` (row 11, odd/tasks/f8-s11-complements.md, S6). */
 function computeUpToDate(row, latestVersion) {
   if (row.installed === 'n/a') return 'n/a';
   if (row.id === 'context7' && row.version === 'hosted') return 'n/a';
   if (row.installed !== 'ok' || !latestVersion) return 'unknown';
-  return compareSemver(row.version, latestVersion) >= 0 ? 'ok' : 'outdated';
+  const order = compareSemver(row.version, latestVersion);
+  if (order > 0 && row.id === 'engram-plugin') return 'mismatch';
+  return order >= 0 ? 'ok' : 'outdated';
 }
 
 /** Resolves each row's latest version: from the cache alone in `--offline` mode or while it is

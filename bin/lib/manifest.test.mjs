@@ -4104,3 +4104,20 @@ test('statedHours gives minutes as hours to one decimal place at most, so a skil
   const { statedHours } = await import('./manifest.mjs');
   assert.deepEqual([480, 450, 470, 30].map(statedHours), ['8', '7.5', '7.8', '0.5']);
 });
+
+// Row 11 (odd/tasks/f8-s11-complements.md, S6): engram's protocol and its context recovery come from engram alone, its
+// MCP instructions and its plugin. What js-harness writes may name Engram and its backup, never its tools or rules.
+// Not a RED test: no shipped text carried them when it was written (2026-10-28); this pins it, so a port that brings them back fails.
+test('no text js-harness ships carries engram\'s protocol: its tool names or its save rules', async () => {
+  const { rulesBody } = await import('./rules-block.mjs');
+  const { templateBlock, FAILURES_TEMPLATE } = await import('./project.mjs');
+  const texts = [
+    ...components.map((component) => [component.id, component.content('9.9.9')]),
+    ['rules block', rulesBody()],
+    ['init template', templateBlock()],
+    ['failures register', FAILURES_TEMPLATE],
+  ];
+  const protocol = /\bmem_[a-z_]+|PROACTIVE SAVE|topic_key|Persistent Memory/i;
+  const carrying = texts.flatMap(([id, text]) => text.split('\n').filter((line) => protocol.test(line)).map((line) => `${id}: ${line}`));
+  assert.deepEqual(carrying, []);
+});

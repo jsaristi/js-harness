@@ -208,6 +208,30 @@ test('doctorMain --offline shows the engram plugin outdated against the plugin t
   }
 });
 
+// Row 11 (odd/tasks/f8-s11-complements.md, S6): the binary and the plugin serve different protocol versions both ways.
+// Behind is the fixture above, `outdated`; ahead, a plugin newer than the one the binary's tag ships, is this one.
+test('doctorMain --offline shows the engram plugin as a mismatch when it is ahead of the plugin the engram binary\'s tag ships', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const manifest = JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.10' }] });
+    const { spawn, git } = seedEngramPluginLag(home, { gitShow: () => ({ status: 0, stdout: manifest, stderr: '' }) });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, git, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    assert.match(
+      output,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:\n {4}install engram from /,
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('doctorMain fails open to unknown for the engram plugin when the clone cannot answer, and shows no gap for it', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

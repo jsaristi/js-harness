@@ -16,7 +16,7 @@ import { readManifest } from './manifest.mjs';
 import { entryPlaces, snakeEvent, trustedPlaces } from './codex-trust.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
-import { INSTALL_NEWEST } from './version.mjs';
+import { INSTALL_NEWEST, compareSemver } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
@@ -111,6 +111,17 @@ export function claudeJsonMcpServer(home, name, projectRoot) {
   const projectEntry = projectRoot ? data?.projects?.[projectRoot]?.mcpServers?.[name] : undefined;
   const entry = globalEntry ?? projectEntry;
   return { state: entry ? 'ok' : 'missing', entry };
+}
+
+/** Whether Claude Code turns context7 off for the project `project`: `/mcp` writes `projects[<root>].disabledMcpServers`
+ * into `<home>/.claude.json` (odd/tasks/f8-s11-complements.md, L5), keyed with forward slashes on Windows. `missing`
+ * where it lists context7, `unknown` for malformed JSON, else `ok`. */
+function context7ProjectState(home, project) {
+  const { found, data } = readJsonFile(path.join(home, '.claude.json'));
+  if (!found) return 'ok';
+  if (data === undefined) return 'unknown';
+  const entry = data?.projects?.[project] ?? data?.projects?.[project.replaceAll('\\', '/')];
+  return Array.isArray(entry?.disabledMcpServers) && entry.disabledMcpServers.includes('context7') ? 'missing' : 'ok';
 }
 
 /** `<home>/.claude/settings.json` `enabledPlugins["<id>"]`. */
@@ -246,6 +257,8 @@ export const tools = [
     // engram binary's own release tag ships (`LOCAL_SOURCES` in latest.mjs), not the newest plugin: an update of the
     // binary alone left the plugin two versions behind on 2026-10-20 (odd/tasks/engram-plugin-lag.md).
     id: 'engram-plugin',
+    // Shown unless the project's engramPlugin switch is off (a custom preset that drops it, F8 S11 L9).
+    when: (deps) => deps.functions?.engramPlugin?.value !== 'off',
     installed: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN),
     configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
     project: () => 'n/a',
@@ -253,6 +266,10 @@ export const tools = [
     upToDateFix: (installed, latest, rows = []) => {
       if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
       const binary = rows.find((row) => row.id === 'engram')?.version;
+      // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin.
+      if (compareSemver(installed, latest) > 0) {
+        return [`plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols; update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
+      }
       return [`plugin ${installed} is behind ${latest}, the plugin engram v${binary} ships; update it, then restart Claude Code:`, ...ENGRAM_PLUGIN_UPDATE_FIX];
     },
     fix: () => ({ installed: ENGRAM_SETUP_CLAUDE, claude: `claude plugin enable ${ENGRAM_PLUGIN}`, upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),
@@ -288,12 +305,15 @@ export const tools = [
       claude: claudeJsonMcpServer(deps.home, 'context7', deps.project).state,
       codex: hasCodexMcpServer(codexHomeOf(deps), 'context7') ? 'ok' : 'missing',
     }),
-    project: () => 'n/a',
+    // Required in every project (G11): a gap where Claude Code turns it off for this one (F8 S11, L6).
+    project: ({ home, project }) => (project ? context7ProjectState(home, project) : 'n/a'),
     // No `installed` fix: context7 has no CLI of its own to install — being registered nowhere
     // already shows up as both `claude` and `codex` gaps, each with its own registration command.
     fix: () => ({
       claude: 'claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp',
       codex: 'codex mcp add context7 --url https://mcp.context7.com/mcp',
+      // No command turns a user-scope server back on for one project (L5): `/mcp` does, inside it.
+      project: 'in a Claude Code session in this project, run /mcp and enable context7',
       // Hosted context7 is never `outdated` (see doctor.mjs's computeUpToDate) — this only fires
       // for a self-run registration, whose fix is reinstalling pinned to npm's newest version.
       upToDate: 'claude mcp add -s user context7 -- npx -y @upstash/context7-mcp@latest',

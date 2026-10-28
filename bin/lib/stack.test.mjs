@@ -100,6 +100,14 @@ test('engram-plugin upToDate fix names the installed version, the one the engram
   assert.deepEqual(upToDateFix('0.1.12', null, rows), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
 });
 
+test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag updates the binary, not the plugin (row 11)', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', [{ id: 'engram', installed: 'ok', version: '3.5.1' }]), [
+    'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:',
+    ENGRAM_INSTALL,
+  ]);
+});
+
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
@@ -147,9 +155,9 @@ test('codegraph registers Claude and Codex through their own mcp add commands, n
   assert.match(fix.codex, /^codex mcp add /);
 });
 
-test('context7 fix covers claude, codex and upToDate but has no installed or project fix', () => {
+test('context7 fix covers claude, codex, project and upToDate but has no installed fix', () => {
   const fix = findTool('context7').fix({});
-  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'upToDate']);
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'project', 'upToDate']);
 });
 
 test('typescript-lsp fix covers installed, claude and upToDate but has no codex or project fix', () => {
@@ -766,6 +774,51 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
   }
 });
 
+test('the engram-plugin row is left out only where the engramPlugin switch resolves off (F8 S11, L9)', () => {
+  const when = findTool('engram-plugin').when;
+  assert.equal(when({ functions: { engramPlugin: { value: 'off' } } }), false);
+  assert.equal(when({ functions: { engramPlugin: { value: 'on' } } }), true);
+  assert.equal(when({}), true, 'with no switches resolved the row is shown');
+});
+
+test('probeStack leaves the engram-plugin row out only when engramPlugin resolves off, and no other row (gentle-ai R3-002)', () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome('js-harness-stack-project-engram-plugin-');
+  try {
+    const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
+    const all = ids({ engramPlugin: { value: 'on' } });
+    assert.equal(all.includes('engram-plugin'), true);
+    assert.deepEqual(ids({ engramPlugin: { value: 'off' } }), all.filter((id) => id !== 'engram-plugin'));
+    assert.deepEqual(ids(undefined), all, 'with no switches resolved the row is shown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- context7's project cell: a gap where Claude Code turns it off for the project (F8 S11, L5 and L6) ---
+
+test('context7 project is missing where ~/.claude.json disables it for the project, by either slash, with /mcp as the fix', () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome('js-harness-stack-project-context7-');
+  try {
+    const tool = findTool('context7');
+    assert.equal(tool.project({ home, project }), 'ok', 'no ~/.claude.json disables nothing');
+    writeJson(path.join(home, '.claude.json'), { projects: { [project]: { disabledMcpServers: ['context7'] } } });
+    assert.equal(tool.project({ home, project }), 'missing');
+    writeJson(path.join(home, '.claude.json'), { projects: { [project.replaceAll('\\', '/')]: { disabledMcpServers: ['context7'] } } });
+    assert.equal(tool.project({ home, project }), 'missing', 'Claude Code keys a Windows project with forward slashes');
+    writeJson(path.join(home, '.claude.json'), { projects: { [project]: { disabledMcpServers: ['engram'] } } });
+    assert.equal(tool.project({ home, project }), 'ok');
+    assert.equal(tool.project({ home }), 'n/a', 'no project, no project cell');
+    fs.writeFileSync(path.join(home, '.claude.json'), '{ not json');
+    assert.equal(tool.project({ home, project }), 'unknown');
+    assert.match(tool.fix({ project }).project, /\/mcp/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
 
 // --- R3-004: Claude MCP configured also reads a project-scoped registration ---
 
@@ -847,7 +900,7 @@ test('codegraph configured for the project is missing when .codegraph/ does not 
 });
 
 test('project is n/a for every tool that has no per-project meaning', () => {
-  for (const id of ['engram', 'engram-plugin', 'context7', 'typescript-lsp', 'codex']) {
+  for (const id of ['engram', 'engram-plugin', 'typescript-lsp', 'codex']) {
     assert.equal(findTool(id).project({ project: '/does/not/matter' }), 'n/a');
   }
 });
