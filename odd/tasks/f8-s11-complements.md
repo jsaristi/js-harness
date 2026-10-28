@@ -101,11 +101,14 @@ Reviews:
 Not run yet.
 
 ## Next step
-PR 1 is #627 and PR 2 (T3, T4) is on branch f8-s11-presets, stacked on it, every code commit reviewed by
-Codex, the lenses and gentle-ai (2026-10-28). Next, on a branch f8-s11-reviews stacked on f8-s11-presets: T5,
-the review sweep (the merge door's gentle-ai evidence, the pull-request body line, the review-starts row, the
-shipped text at bin/lib/manifest.mjs, bin/lib/protocols-skill.mjs and agentsBlock in bin/lib/project.mjs), leaving
-bin/lib/guard.mjs to JH 69.
+#627 landed (main 13d8988); the lead lands #628. On branch f8-s11-reviews (stacked on f8-s11-presets, worktree
+D:/js-harness/.claude/worktrees/f8-s11), PR 3's first commit drops the merge door's and notify's gentle-ai line,
+deletes bin/lib/gentle-ai-evidence.mjs, and rewrites the shipped review text (protocols skill section 3, the
+orchestrator skill's gate line, the merge-queue and notify help). Next: its Codex and lens reviews (base: the
+f8-s11-presets head, e0260e51), then the slice of the review starts (bin/lib/review-starts.mjs and the throughput
+row, L11), then T6/T7. Open, his: question 104 (L11), the agentsBlock line and its two tests
+(bin/lib/project.test.mjs:1954, bin/lib/template-block.test.mjs:30) stay until he answers; PR 3 is not announced
+ready before.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
@@ -181,3 +184,13 @@ bin/lib/guard.mjs to JH 69.
   rule. The js-harness skill's "When Engram fails" stays: it is js-harness's own backup and its restore, not
   engram's protocol or its context recovery (searched: `grep -rln "mem_save|mem_search|mem_context" bin`, only
   test files and evals fixtures).
+- L11 (2026-10-28, decision within S5, and one question that is his): the merge door and `notify --kind ready` stop
+  asking for a gentle-ai line in the pull request's body and on the feature document (`bin/lib/gentle-ai-evidence.mjs`
+  leaves); they ask for what the project's switches ask, a Codex record where `codexReview` is on and a complete lens
+  record where `lensReview` is on, as before. T5 splits: PR 3 holds that and the shipped text; the review starts the
+  pause hook keeps and their `throughput` row (`bin/lib/review-starts.mjs`, reaching `install`, `resume` and
+  `throughput`) go in a slice after it. **Open, his:** the line of `init`'s `AGENTS.md` block "Where the Codex review
+  is off (`js-harness functions`), gentle-ai's assessment decides when a change is reviewed" is his answer to
+  question 4 of odd/tasks/on-demand-functions.md (N6, 2026-10-24); with gentle-ai gone, what reviews a change in a
+  project whose Codex review is off is his to say. Asked through the lead as question 104 (2026-10-28); until he answers, that line
+  and its two tests stay, and PR 3 is not announced ready.

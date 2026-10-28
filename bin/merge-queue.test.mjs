@@ -10,7 +10,6 @@ import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/cha
 import { appendGateEvent } from './lib/gate-log.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA } from './lib/lens-reviews.mjs';
-import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
@@ -76,7 +75,7 @@ const queueRepo = repoTemplate((top) => {
   return { main, heads };
 });
 
-const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: passive', headRefOid: head, headRefName: branch, ...over });
+const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none', headRefOid: head, headRefName: branch, ...over });
 
 /** A runner that runs git for real and answers gh with `prs`, as GitHub does: `gh pr list --base <b>` lists the pull
  * requests based on b only, and `--limit <n>` the first n of them (`prs` in GitHub's order, newest first). `gh.view()` answers `gh repo view`, `gh.edit(args)` answers `gh pr edit`, each a
@@ -179,9 +178,9 @@ test('a pull request whose code commits have no Codex review record is left out,
 
 test('with no pull request ready the queue says so and exits 0 having built nothing', async () => {
   const { root, heads } = makeQueueRepo();
-  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a'], { body: 'no checks' })]);
+  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a'], { isDraft: true })]);
   assert.equal(code, 0);
-  assert.deepEqual(out, ['PR 1 is left out: PR 1: its body has no gentle-ai line.', 'No pull request is ready to merge: nothing was built.']);
+  assert.deepEqual(out, ['PR 1 is left out: PR 1 is a draft.', 'No pull request is ready to merge: nothing was built.']);
   assert.equal(git(root, 'worktree', 'list').split('\n').length, 1);
 });
 
@@ -768,7 +767,7 @@ test('the main worktree is made beside the candidate, and removed with it: on su
   assert.deepEqual(fs.readdirSync(path.join(red.root, '.git', 'js-harness')), ['lands.jsonl'], 'only the land record is left (odd/tasks/land-unattended.md, B2), neither the candidate nor main');
 });
 
-// gentle-ai's evidence on the pull request's own branch, and the coverage commit by commit (odd/tasks/rule-hierarchy.md,
+// The reviews of the pull request's own commits, and the coverage commit by commit (odd/tasks/rule-hierarchy.md,
 // "The merge door (T16e)", items 5 and 6). These runs read the Codex records and the branch for real: no `covered` stub.
 
 const REVIEWED_AT = '2026-10-16T12:00:00.000Z';
@@ -789,10 +788,9 @@ function writeLensRecord(root, { base, head, outcome }) {
   appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: REVIEWED_AT, outcome, ...said });
 }
 
-/** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, whose second line is
- * `line({ code, short, main })`. With `codex` on, main's harness.json turns the Codex review on and a record covers
+/** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, a note. With `codex` on, main's harness.json turns the Codex review on and a record covers
  * main..feat/g, and a lens record whose outcome is `lens` (`writeRecord`). `{ root, origin, main, code, head }`. */
-function makeEvidenceRepo(line, { codex = true, lens = 'reviewed' } = {}) {
+function makeEvidenceRepo({ codex = true, lens = 'reviewed' } = {}) {
   const made = makeQueueRepo();
   const { root } = made;
   const commit = (file, text, message) => {
@@ -809,42 +807,40 @@ function makeEvidenceRepo(line, { codex = true, lens = 'reviewed' } = {}) {
   }
   git(root, 'checkout', '--quiet', '-b', 'feat/g', main);
   const code = commit('g.txt', 'g\n', 'feat/g code');
-  const head = commit('odd/tasks/g.md', `# G\n${line({ code, short: code.slice(0, 7), main })}\n`, 'feat/g evidence');
+  const head = commit('odd/tasks/g.md', '# G\n- notes\n', 'feat/g evidence');
   git(root, 'push', '--quiet', 'origin', 'feat/g');
   git(root, 'checkout', '--quiet', '--detach', main);
   if (codex) writeRecord(root, { base: main, head, lens });
   return { ...made, main, code, head };
 }
 
-/** `--dry-run` with no `covered` stub and the cut-over at `cutover`: `{ code, out }`. */
-async function dryRunEvidence(root, prs, cutover = '2000-01-01T00:00:00Z') {
+/** `--dry-run` with no `covered` stub: `{ code, out }`. */
+async function dryRunEvidence(root, prs) {
   const { run } = runner(prs);
   const out = [];
-  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, cutover, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   return { code, out };
 }
 
-const noEvidence = (short) => `PR 1 is left out: no written gentle-ai evidence for ${short} on this branch: name it, or its range, on a gentle-ai line of its feature document.`;
-
-test('a code commit named by its short hash on a gentle-ai line of the branch\'s feature document is ready, and the coverage is printed commit by commit', async () => {
-  const { root, main, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short} approved`);
+test('a code commit its Codex and lens records cover is ready, and the coverage is printed commit by commit', async () => {
+  const { root, main, code, head } = makeEvidenceRepo();
   const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.equal(exit, 0, out.join('\n'));
   assert.deepEqual(out.slice(0, 3), [
     'PR 1, commit by commit:',
-    `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}; gentle-ai odd/tasks/g.md:2`,
+    `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}`,
     `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`,
   ]);
 });
 
 test('a code commit no complete lens record covers leaves the pull request out (odd/tasks/f8-s1-reviews.md, T5)', async () => {
-  const { root, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short} approved`, { lens: null });
+  const { root, head } = makeEvidenceRepo({ lens: null });
   const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.match(out[0], /^PR 1 is left out: lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
 });
 
 test('a lens skip leaves the pull request out until a review of the same commits pays it (S7)', async () => {
-  const { root, main, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short} approved`, { lens: 'unavailable' });
+  const { root, main, head } = makeEvidenceRepo({ lens: 'unavailable' });
   const skipped = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.match(skipped.out[0], new RegExp(`^PR 1 is left out: it holds a lens review skip, which owes a review before it lands: unavailable ${main.slice(0, 7)}\\.\\.${head.slice(0, 7)}: the plan is out of turns`));
   writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
@@ -852,54 +848,15 @@ test('a lens skip leaves the pull request out until a review of the same commits
   assert.ok(paid.out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), paid.out.join('\n'));
 });
 
-test('a commit named only on a line that does not say gentle-ai, or named nowhere, leaves the pull request out', async () => {
-  for (const line of [({ short }) => `- reviewed ${short}`, () => '- gentle-ai: approved']) {
-    const { root, code, head } = makeEvidenceRepo(line);
-    const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-    assert.equal(exit, 0, out.join('\n'));
-    assert.deepEqual(out, [noEvidence(code.slice(0, 7)), 'No pull request is ready to merge: nothing was built.']);
-  }
-});
-
-test('a range a..b on a gentle-ai line holds a and every commit git lists for a..b', async () => {
-  const ranges = [({ short, main }) => `- gentle-ai: \`${main.slice(0, 7)}..${short}\` approved`, ({ code }) => `- gentle-ai: ${code}..${code} approved`];
-  for (const line of ranges) {
-    const { root, main, head } = makeEvidenceRepo(line);
-    const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-    assert.equal(exit, 0, out.join('\n'));
-    assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), out.join('\n'));
-  }
-});
-
-test('a hash on a gentle-ai line that is no commit of the branch leaves it out, and says a rebase changes the hashes', async () => {
-  const { root, code, main, head } = makeEvidenceRepo(({ main: base }) => `- gentle-ai: ${base.slice(0, 7)} approved`);
-  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-  assert.equal(out[0], `${noEvidence(code.slice(0, 7)).replace(/\.$/, '')}; ${main.slice(0, 7)} on odd/tasks/g.md:2 is no commit of this branch: a rebase changes the hashes, so name the new ones.`);
-});
-
-test('a range whose end is no commit of the branch holds nothing, and the hint names that end', async () => {
-  const { root, code, main, head } = makeEvidenceRepo(({ short, main: base }) => `- gentle-ai: ${short}..${base.slice(0, 7)} approved`);
-  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-  assert.equal(out[0], `${noEvidence(code.slice(0, 7)).replace(/\.$/, '')}; ${main.slice(0, 7)} on odd/tasks/g.md:2 is no commit of this branch: a rebase changes the hashes, so name the new ones.`);
-});
-
-test('a code commit made before the cut-over asks for no line, and its coverage line says so', async () => {
-  const { root, main, code, head } = makeEvidenceRepo(() => '- no line of the review here');
-  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)], '2999-01-01T00:00:00Z');
+test('with the Codex review off, a code commit is one that changes a file that is not Markdown, and it lands asking for no gentle-ai line (L11)', async () => {
+  const { root, code, head } = makeEvidenceRepo({ codex: false });
+  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.equal(exit, 0, out.join('\n'));
-  assert.equal(out[1], `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}; gentle-ai not asked, committed before the cut-over`);
+  assert.equal(out[1], `  ${code.slice(0, 7)} feat/g code: the Codex review is off`, out.join('\n'));
+  assert.ok(!out.some((line) => /gentle-ai/i.test(line)), out.join('\n'));
 });
 
-test('with the Codex review off, a code commit is one that changes a file that is not Markdown, and it still needs its line', async () => {
-  const named = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
-  const ready = await dryRunEvidence(named.root, [pr(1, 'feat/g', named.head)]);
-  assert.equal(ready.out[1], `  ${named.code.slice(0, 7)} feat/g code: the Codex review is off; gentle-ai odd/tasks/g.md:2`, ready.out.join('\n'));
-  const bare = makeEvidenceRepo(() => '- nothing', { codex: false });
-  const refused = await dryRunEvidence(bare.root, [pr(1, 'feat/g', bare.head)]);
-  assert.equal(refused.out[0], noEvidence(bare.code.slice(0, 7)), refused.out.join('\n'));
-});
-
-test('a pull request of documents alone asks for no gentle-ai line and prints no coverage', async () => {
+test('a pull request of documents alone prints no coverage', async () => {
   const { root, main } = makeQueueRepo();
   git(root, 'checkout', '--quiet', '-b', 'feat/docs', main);
   fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
@@ -914,8 +871,8 @@ test('a pull request of documents alone asks for no gentle-ai line and prints no
   assert.equal(out[0], `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/docs).`);
 });
 
-test('a merge of main into the branch, with an edit written in it, asks for no gentle-ai line', async () => {
-  const { root, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`);
+test('a merge of main into the branch, with an edit written in it, lands on the records that cover it', async () => {
+  const { root, code, head } = makeEvidenceRepo();
   // main moves, and the branch merges it with a line written in the merge itself.
   git(root, 'checkout', '--quiet', '-b', 'moved', 'origin/main');
   fs.writeFileSync(path.join(root, 'm.txt'), 'm\n', 'utf8');
@@ -937,18 +894,8 @@ test('a merge of main into the branch, with an edit written in it, asks for no g
   assert.ok(out.some((one) => one.startsWith(`  ${code.slice(0, 7)} feat/g code:`)), out.join('\n'));
 });
 
-test('the gentle-ai lines are read from the repository\'s root when the queue runs in a folder below it', () => {
-  const { root, main, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`);
-  const below = path.join(root, 'odd', 'tasks');
-  fs.mkdirSync(below, { recursive: true });
-  const codeCommits = [{ id: code, shortId: code.slice(0, 7), parentCount: 1 }];
-  const evidence = gentleAiEvidence(below, { main, head, codeCommits, cutover: '2000-01-01T00:00:00Z' });
-  assert.deepEqual(evidence.missing, []);
-  assert.equal(evidence.where.get(code), 'odd/tasks/g.md:2');
-});
-
 test('with the Codex review off, a Markdown file whose name git quotes is no code', async () => {
-  const { root, main, code } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
+  const { root, main, code } = makeEvidenceRepo({ codex: false });
   // Written to the index alone, NTFS's guard off: Windows names no file with a double quote, and git quotes such a name.
   git(root, 'checkout', '--quiet', 'feat/g');
   const scratch = path.join(root, '.git', 'quoted-blob');
@@ -963,26 +910,7 @@ test('with the Codex review off, a Markdown file whose name git quotes is no cod
   git(root, 'checkout', '--quiet', '--detach', main);
   // The evidence alone is asserted: Windows cannot write the file into the candidate, which a merge then says.
   const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-  assert.deepEqual(out.slice(0, 2), ['PR 1, commit by commit:', `  ${code.slice(0, 7)} feat/g code: the Codex review is off; gentle-ai odd/tasks/g.md:2`], out.join('\n'));
-});
-
-test('with the Codex review off, a merge of another branch with an edit written in it needs its own line', async () => {
-  const { root } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
-  git(root, 'checkout', '--quiet', '-b', 'sibling', 'origin/main');
-  fs.writeFileSync(path.join(root, 's.txt'), 's\n', 'utf8');
-  git(root, 'add', 's.txt');
-  git(root, 'commit', '--quiet', '-m', 'sibling code');
-  git(root, 'checkout', '--quiet', 'feat/g');
-  git(root, 'merge', '--quiet', '--no-ff', '--no-commit', 'sibling');
-  fs.writeFileSync(path.join(root, 's.txt'), 's, edited in the merge\n', 'utf8');
-  git(root, 'add', 's.txt');
-  git(root, 'commit', '--quiet', '-m', 'merge sibling');
-  git(root, 'push', '--quiet', 'origin', 'feat/g');
-  const merged = git(root, 'rev-parse', 'HEAD');
-  git(root, 'checkout', '--quiet', '--detach', 'origin/main');
-  const sibling = git(root, 'rev-parse', 'sibling');
-  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', merged)]);
-  assert.equal(out[0], noEvidence(`${merged.slice(0, 7)}, ${sibling.slice(0, 7)}`), out.join('\n'));
+  assert.deepEqual(out.slice(0, 2), ['PR 1, commit by commit:', `  ${code.slice(0, 7)} feat/g code: the Codex review is off`], out.join('\n'));
 });
 
 // A land of documents alone (the throughput plan's item 7, 2026-10-16): the suite is not run on this machine for a

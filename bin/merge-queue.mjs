@@ -20,7 +20,6 @@ import { CI_WORKFLOW } from './lib/ci-gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
-import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
@@ -31,14 +30,11 @@ import { harnessHome } from './lib/home.mjs';
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
 Builds the candidate the default branch would be: origin's default branch (what origin's HEAD names, else what gh names)
-with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a gentle-ai line in its body, a Codex
+with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a Codex
 review record and a complete Claude lens record (no lens skip) for every code commit, and no conflict with the candidate so far. A pull request GitHub
 has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
-Each code commit committed after the cut-over (${GENTLE_AI_CUTOVER}) needs gentle-ai's evidence on its own branch: its
-hash (seven characters or more), or a range a..b that holds it (a and what git rev-list a..b lists), on a line the
-pull request adds to a feature document (odd/tasks/<name>.md) that says gentle-ai; a merge of main needs none. For
-each ready pull request the queue prints, commit by commit, the Codex record that covers it and that line.
+For each ready pull request the queue prints, commit by commit, the Codex record that covers it.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
@@ -294,7 +290,7 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
 /** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
  * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. A merge changes
  * the files it leaves as none of its parents has them (`--diff-merges=combined`), which is where an edit made in it
- * is; whether it needs a line is `gentleAiEvidence`'s call. `null` when git does not answer. */
+ * is. `null` when git does not answer. */
 function markdownlessCommits(cwd, main, head) {
   // The log `reviewCoverage` reads, by the same reader: names as git has them (`-z`), no signature before a commit.
   const log = gitOut(spawnSync, cwd, ['log', '-z', '--diff-merges=combined', '--root', '--no-show-signature', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${main}..${head}`]);
@@ -304,10 +300,10 @@ function markdownlessCommits(cwd, main, head) {
 
 /** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
  * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused as `lensDoor` refuses
- * (no complete lens record, or a lens skip), or when a code commit committed after `cutover` has no gentle-ai line on its
- * branch (`gentleAiEvidence`), and, when it passes, `lines`: one for each code commit, with the Codex record that covers it
- * and the gentle-ai line that names it, so the lead reads the coverage commit by commit and needs no look of their own. */
-export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } = {}) {
+ * (no complete lens record, or a lens skip), and, when it passes, `lines`: one for each code commit, with the Codex record
+ * that covers it, so the lead reads the coverage commit by commit and needs no look of their own. No line of the feature
+ * document is asked for since F8 S11 (odd/tasks/f8-s11-complements.md, L11). */
+export function reviewEvidence(cwd, main, head) {
   const codex = checkCodexReviews(cwd, head);
   const refused = codex.pass ? lensDoor(cwd, head) : codex;
   if (refused) return refused;
@@ -315,20 +311,12 @@ export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } 
   const coverage = off ? null : reviewCoverage(cwd, { from: main, tip: head });
   const codeCommits = off ? markdownlessCommits(cwd, main, head) : coverage.unknown ? null : coverage.codeCommits;
   if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read' };
-  const evidence = gentleAiEvidence(cwd, { main, head, codeCommits, cutover });
-  if (evidence.unknown) return { pass: false, detail: 'its gentle-ai lines could not be read' };
-  const refusal = evidenceRefusal(evidence);
-  if (refusal !== null) return { pass: false, detail: refusal };
   const lines = codeCommits.map((commit) => {
     const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;
     const codexSaid = off ? 'the Codex review is off'
       : record ? `Codex ${record.base.slice(0, 7)}..${record.head.slice(0, 7)} ${record.outcome} ${record.reviewedAt.slice(0, 10)}`
         : 'no Codex record read for it';
-    const named = evidence.where.get(commit.id);
-    // A due commit no line names refused above, so one that is not named here is not due: a merge of main, or older.
-    const notAsked = commit.parentCount > 1 ? 'a merge of main' : 'committed before the cut-over';
-    const gentleSaid = named ? `gentle-ai ${named}` : `gentle-ai not asked, ${notAsked}`;
-    return `${commit.shortId} ${commit.subject}: ${codexSaid}; ${gentleSaid}`;
+    return `${commit.shortId} ${commit.subject}: ${codexSaid}`;
   });
   return { pass: true, detail: codex.detail, lines };
 }
@@ -927,7 +915,7 @@ export function staleBin(self, main, gitIn) {
   return stale.sort();
 }
 
-async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
+async function queueRun(args, { run = spawnSync, covered = null, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
   const cwd = args.cwd;
   const fail = (line) => {
     stderr(`merge-queue: ${line}`);
@@ -956,7 +944,7 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
       return fail(`${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/${defaultBranch}.`);
     }
   }
-  const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
+  const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head));
   let listed;
   try {
     listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', defaultBranch, '--limit', '100', '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName'], cwd).out);
