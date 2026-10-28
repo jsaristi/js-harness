@@ -275,7 +275,7 @@ the switch that resumes it. `check` names what is still missing and the stage it
 back to (`check --plan` reads only the roadmap and its ties to the pre-plan); `hash` prints what an
 approval records; `template feature|origin|roadmap|adr` prints a skeleton and, with `--write`, writes
 it, never over a file, and `template adr <slug>` numbers the next decision record under `docs/adr/`.
-It exits 1 when `check` finds something, a template's file exists, the project has a plan of its
+It exits 1 when `check` finds something, a template's file exists or a link is in the way, the project has a plan of its
 own, it is no initialized project or a profile cannot tell what it needs, and 2 for a usage error.
 
 ```console
@@ -558,7 +558,8 @@ Its `unseen` row counts what `js-harness unseen` would clear, and an interactive
 `worktrees` row for the worktrees on branches main already holds and a `review-skips` row for the
 skips of both reviews that still owe one (a pull request holding a lens skip does not land). `--json` prints the rows.
 `--hook` is the session-start hook `install` registers: it computes the same report and prints one
-line only when there are gaps and they differ from the last ones it told, and it always exits 0.
+line only when there are gaps and they differ from the last ones it told, and it exits 0 (2, with
+the usage, for an argument it does not know).
 
 Its `codex-trust` row reads the `config.toml` of the Codex home (`CODEX_HOME` when the home is the
 real one and it is set, else `~/.codex`) for a `trusted_hash` of each harness hook of

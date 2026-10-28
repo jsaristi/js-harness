@@ -331,7 +331,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in the committed `.claude/settings.json`, which the
   `payload` row reads; `init` ships the split.
 - **Files:** `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json`, `bin/lib/payload.mjs`,
-  `bin/lib/project.mjs`, `bin/lib/rules-data.mjs`, `bin/check.mjs`.
+  `bin/lib/project.mjs`, `bin/lib/rules-data.mjs`, `bin/lib/claude-md-budget.mjs` (e5e36473),
+  `bin/check.mjs`.
 - **Probe and pass:** a restarted worktree session's `/context` shows each project file once and no
   user file; `check` green with the budget row; the incident set no worse; `fixed load` at most
   80,000 over five sessions.
@@ -387,7 +388,9 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   file tool on a denied path.
 - **Files:** `bin/lib/manifest.mjs`, `bin/lib/permissions.mjs`, `bin/lib/output-style.mjs`,
   `bin/lib/ported-skills.mjs`, `bin/lib/project-apply.mjs`, `bin/guard.mjs`, `bin/lib/guard.mjs`,
-  `bin/doctor.mjs`, `THIRD_PARTY_NOTICES.md`.
+  `bin/lib/rules-block.mjs` (380b9e77), `bin/lib/deny-paths.mjs` (f2480611),
+  `bin/lib/component-write.mjs` (98f91454), `bin/lib/hook-entries.mjs`, `bin/doctor.mjs`,
+  `THIRD_PARTY_NOTICES.md`.
 - **Probe and pass:** in a scratch home, `install` writes all of it and `uninstall` leaves the home
   byte for byte; `guard` refuses a read of a planted credentials path; five Spanish prompts answer
   in tú with no voseo form, 5 of 5; the incident set no worse.
@@ -458,7 +461,12 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   write; a `doctor` row that the root `CLAUDE.md` imports `AGENTS.md` and nothing above turns it off
   (13.3 row 16); a read-only scan of what gentle-ai left in a project (`.atl/`, its review store).
   Today neither `update` nor a second `init` refreshes a project (`bin/update.mjs:373-397`,
-  `bin/lib/project.mjs:1062-1091`, as the diet cites them).
+  `bin/lib/project.mjs:1062-1091`, as the diet cites them), but `sync` inside a project already
+  carries part of it: it rewires the pre-push check, writes the style and the denies into the
+  clone's `.claude/settings.local.json` and renders the `CLAUDE.md` block again where the split
+  exists (`updateRecorded`, `bin/lib/project.mjs:1593-1639`, `:1895-1905`). The migration builds on
+  `sync` for those and adds what it does not do: the split in a project without it, context7, the
+  baseline, and a project whose manifest an old release wrote.
 - **Files** [i, planned]: `bin/lib/project.mjs`, `bin/init.mjs` or a new command, `bin/doctor.mjs`.
 - **Probe and pass:** the migration on a copy of a project initialized by an old release keeps his
   edits and records each write; each moved project's session shows its `CLAUDE.md`, our style and

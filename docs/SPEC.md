@@ -83,8 +83,9 @@ of the capabilities, not to this layout ("The specification stays alive", Discar
   install, doctor, stack            Claude CLI: the lens runs, evals
   evals (evals/, not shipped)
      │
-     ├── writes in the project: harness.json, AGENTS.md, CLAUDE.md, docs/, .githooks or the hooks path
-     ├── writes in the clone's git data: js-harness/manifest.json and the review records
+     ├── writes in the project: harness.json, AGENTS.md, CLAUDE.md, docs/, .githooks or the hooks path,
+     │   and the clone's .claude/settings.local.json
+     ├── writes in the clone's git data: js-harness/manifest.json, the review records and the lands
      └── writes in the home: ~/.js-harness (the manifest, the channel, the gate log, ...),
          and recorded entries in ~/.claude and ~/.codex
 ```
@@ -117,6 +118,7 @@ first-turn median of 105,565 tokens over five desktop sessions (`odd/tasks/f8-s0
 | `~/.claude/CLAUDE.md`: gentle-ai's blocks and the Rules block `install` writes (G12) | gentle-ai until S2, then js-harness's block only | excluded in this repository by `.claude/settings.json` (`claudeMdExcludes`) until S2 |
 | The output style `js-harness` (neutral Spanish with tú) | js-harness (`claude-output-style`) | pinned by hash |
 | Skill descriptions: `js-harness`, the orchestrator, the protocols, the two ported skills; gentle-ai's until S2 | js-harness (`claude-skill`, ...) | one line each; bodies load on demand |
+| The auto-memory index, `memory/MEMORY.md` of the main checkout's project folder (`bin/lib/payload.mjs:266`) | the host, written by sessions | measured by `payload`; S5 holds it to 0.5k |
 | The MCP servers' instructions: engram, codegraph, context7 | each tool | reported by `payload` |
 | What hooks print at session start and each prompt | each hook's owner | the doctor's notice is a `systemMessage`, which costs no model tokens |
 
@@ -163,7 +165,9 @@ and S4a's row holds it there.
    writes its record under the git common directory (The Codex review; The Claude lens review).
    Until S2, gentle-ai's own review also runs where its consent envelope offers it.
 4. **Push.** `.githooks/pre-push` runs `check --push`, which refuses a code commit that a complete
-   record of each review does not cover, unless a skip is recorded; a skip is a debt that `check`'s
+   record of each review does not cover, where the project turns that review on (`codexReview` is on
+   by default where Codex is installed, `lensReview` off until the project turns it on,
+   `bin/lib/functions.mjs:131-135`; this repository turns both on), unless a skip is recorded; a skip is a debt that `check`'s
    `review` row and `doctor`'s `review-skips` row list.
 5. **Land.** `js-harness merge-queue` builds main plus each ready pull request, tests the candidate
    on CI (a `queue/` branch) and on this machine, refuses a pull request whose commits hold a lens
@@ -179,6 +183,9 @@ to them (diet section 10, "The rule pass").
 
 | Record | Where | Written by | Read by |
 |---|---|---|---|
+| The project's settings | `harness.json`: the pin, `code`, `functions`, the reply check | `init`, `functions apply`, `sync` | nearly every command |
+| The clone's Claude keys | `.claude/settings.local.json`: the style and the denies | `init`, `sync` (`bin/lib/project-apply.mjs:12`) | the host; `uninstall` by the clone's manifest |
+| The project's own rules | `docs/rules.json` | sessions | `rules`, `rules check` |
 | The plan | `docs/ROADMAP.md`; frozen origin `docs/origin.md` | sessions, by hand | `progress`, `report`, every session at start |
 | A feature | `odd/tasks/<feature>.md`, mirrored in engram (`odd/<feature>/tasks`) | the session that holds it | `contract`, `check`'s `contracts` row, `resume` |
 | Rules | `bin/lib/rules-data.mjs`, sources in `docs/rule-sources.json`, rendered to `docs/RULES.md` | `js-harness rules change` on a `rule/` branch | `ruleValue` in code, `rules check`, `rules --hook` |
@@ -189,14 +196,18 @@ to them (diet section 10, "The rule pass").
 | The machine manifest | `~/.js-harness/manifest.json` | `install`, `stack install`, opt-ins | `uninstall`, `status`, `doctor` |
 | A clone's manifest | `js-harness/manifest.json` at `git rev-parse --git-path` (`bin/lib/project.mjs:1063`) | `init` | `uninstall` in the project, `sync` |
 | Review records | `<git common dir>/js-harness/codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl` | `codex-review`, `lens-review` | `check --push`, the merge door, `doctor`, `throughput` |
+| Lands | `<git common dir>/js-harness/lands.jsonl` | `merge-queue --land` | `throughput` |
+| Codex review homes | `~/.js-harness/codex-review-homes` (`bin/lib/codex-review-home.mjs:65`) | `codex-review` | `codex-review` (`--keep-home`) |
 | The channel | `~/.js-harness/channel/<project>.jsonl`; the lead's relief file in `~/.js-harness/relief/` | `notify` | `wait`, `sessions`, `report`, `sessions live`, `resume` |
 | Background sessions | `~/.js-harness/background/` | `sessions start` | `sessions`, `sessions stop`, `uninstall` |
 | Loops | `~/.js-harness/loops/<project>/` | `loop` | `loop status`, the heartbeat |
-| Gates | `~/.js-harness/gate-log`; the lock under `~/.js-harness/gate` | `gate`, `check` | `gate`, `throughput`, `quiet` |
-| Throughput snapshots | `~/.js-harness/throughput/` | `throughput snapshot` | `throughput` |
+| Gates | `~/.js-harness/gate-log`; the lock under `~/.js-harness/gate`; the gate-first tickets in `gate-first` (`bin/lib/gate-first.mjs:41`); the WSL gate's state in `gate-wsl.json` (`bin/lib/gate-wsl.mjs:38`) | `gate`, `check` | `gate`, `throughput`, `quiet` |
+| Throughput snapshots | `~/.js-harness/throughput/` | `throughput snapshot`, and each tick of `loop heartbeat` for settled days without one | `throughput` |
+| The remote server | `~/.js-harness/remote/`: the supervisor record, log, lock, stop marker and task file (`bin/lib/remote.mjs:632-643`) | `remote` | `remote status`, `remote stop` |
+| Refresh backups | `~/.js-harness/refresh-backups` (`bin/lib/refresh-copy.mjs:287`) | `merge-queue --land --refresh-copy`, the settings before it brings the installed copy up to main | the undo line that refresh prints |
 | The doctor's cache and reviews | `~/.js-harness/doctor.json` | `doctor` | `doctor` and its hook |
 | Clean | `~/.js-harness/clean.json`, `clean-log.jsonl` | `clean` | `clean`, `doctor` |
-| Memory | engram's store (`~/.engram`); Claude's memory folders; the backup clones under `~/.js-harness/memory-backup/` | engram, the host, `backup run` | sessions; `backup`, the fallback hook |
+| Memory | engram's store (`~/.engram`); Claude's memory folders; the backup clones under `~/.js-harness/memory-backup/`; a memory pass's lock, snapshots and journal under `~/.js-harness/memory-hygiene/<project>` (`bin/lib/memory-hygiene.mjs:37-52`) | engram, the host, `backup run`, `memory` | sessions; `backup`, the fallback hook |
 
 ### Sessions and the lead
 
@@ -918,7 +929,7 @@ Each is designed, with its step, and enters "Capabilities" with its proof when i
 | Capability | Step | What it must do | Its proof, planned |
 |---|---|---|---|
 | Directive coverage | S5c-a, S5c-b | `js-harness rules coverage` lists every source, every span tied to a rule or listed as context, and every obligation's control; `--strict` exits 1 on a gap the pass line forbids, `--prove` applies each planted break in a scratch copy and its test must go red; a new gap is refused by `rules check`; projects get the same, bound to the release that wrote their text (reverse-engineering document, section 14) | `rules coverage --strict` and `--prove` exit 0; `node --test evals/tasks.test.mjs` |
-| The migration of an initialized project | S12 | Reads the version the project's manifest recorded, writes what later versions add, keeps the owner's edits (merged or left with a note, never overwritten) and records each write | a test on a copy of a project an old release initialized |
+| The migration of an initialized project | S12 | Builds on `sync`, which already rewires the pre-push check and writes the clone's style and denies (`bin/lib/project.mjs:1593-1639`): reads the version the project's manifest recorded, writes what later versions add and `sync` does not (the split, context7, the baseline), keeps the owner's edits (merged or left with a note, never overwritten) and records each write | a test on a copy of a project an old release initialized |
 | The full backup and restore drill | S2 | `js-harness stack backup`, run from a plain terminal with every session closed: one backup outside the repository, recorded; a drill on a scratch home that hashes it, restores it, puts back a deleted file and removes a created one, and proves engram answers an observation recorded before | the drill's own checks, which stop at the first failure |
 | The attribution hook and the hook count | S4a | A `commit-msg` hook strips attribution lines; a `check` row counts hook entries by event and owner and fails above 14 or on a new owner | a scratch commit lands without `Co-Authored-By`; one extra `Stop` entry turns the row red |
 | The rehearsal | S13 | The whole path of a project, from `install` to `uninstall machine`, walked on a scratch project, comparing only the paths the manifests recorded | every row of the reverse-engineering document's 11.1 does what it says; exact undo |

@@ -82,8 +82,32 @@ on the way is named in the plan as his, not taken.
 - [x] T3 (kind: docs) `docs/SPEC.md`: the problem and the bet as of F8, `## The architecture`, `## After F8` — S3; inline — 84e80169, bae1f72e
 - [x] T4 (kind: docs) `README.md` checked against `js-harness --help`, each command's `--help` and the code; gaps fixed — S3; one sub-agent, README only — this commit
 - [x] T5 (kind: docs) `docs/GUIDE.md` kept as the newcomer's path: the review step and the stack as they are now, and what F8 changes — S3; inline — ef3397b0
-- [ ] T6 (kind: verify) the double review, one Claude and one Codex blind reader; fixes once — all; inline
+- [x] T6 (kind: verify) the double review, one Claude and one Codex blind reader; fixes once — all; inline — this commit
 - [ ] T7 (kind: verify) `npm run check`, push, pull requests (chained if large), the Spanish Artifact, the ready notice — all; inline
+
+## Review
+Two blind readers over `d2bc8ab2..4978e351` (docs, README), given the files and the two checks
+(completeness, accuracy), not this document: a Claude Opus reader (an Explore sub-agent, 8
+findings) and Codex (`codex exec -s read-only`, 4 findings; it could not run `--help`, so its
+findings are source-checked). Each finding was checked against the code before it was fixed;
+fixed once, in one commit:
+- S12 said nothing refreshes a project; `sync` already rewires the pre-push check and writes the
+  clone's style and denies (`bin/lib/project.mjs:1593-1639`): the plan and the SPEC's After F8 row
+  now build the migration on `sync` (Claude reader).
+- "Where state lives" lacked `harness.json`, `.claude/settings.local.json`, `docs/rules.json`,
+  `lands.jsonl`, `~/.js-harness/remote/`, `memory-hygiene/`, `gate-first`, `gate-wsl.json`,
+  `refresh-backups`, `codex-review-homes`; the throughput row lacked the heartbeat (both readers).
+  Checked while fixing: `refresh-backups` is written by `merge-queue --land --refresh-copy`
+  (`bin/lib/refresh-copy.mjs:287`), not by `install`.
+- The per-turn table lacked the auto-memory index (`bin/lib/payload.mjs:266`) (Codex).
+- GUIDE and SPEC said pre-push refuses code without both reviews; it does for each review the
+  project turns on, and `lensReview` is off by default (`bin/lib/functions.mjs:134-135`) (Codex).
+- README: `doctor --hook` exits 2 on an unknown argument (`bin/doctor.mjs:355-360`); `onboard`'s
+  exit 1 includes a link in the way (`onboard --help`) (Claude reader).
+- S3's and S10's Files lists lacked the modules those steps added (Claude reader).
+- The architecture diagram lacked `.claude/settings.local.json` and the lands (Claude reader).
+Not fixed, with the reason: the Claude reader counted 41 source files naming gentle-ai; the count
+is 40 (`grep -rl gentle-ai bin --include=*.mjs | grep -vc test.mjs`).
 
 ## Log
 - L1 (2026-10-28, JH 70's brief from the lead, his request sent to the orchestrator mid-turn): "Listo
