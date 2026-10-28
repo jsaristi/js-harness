@@ -1,8 +1,15 @@
 # js-harness user guide
 
-js-harness sets up Claude Code and Codex for a project and gets out of the way: a short `AGENTS.md`, a
-pre-commit gate, task contracts and hooks, all recorded so they can be removed exactly. This guide takes you
-from nothing to a working project. The README holds the full reference of every command.
+js-harness sets up Claude Code and Codex for a project and gets out of the way: a short `CLAUDE.md` and
+`AGENTS.md`, a pre-commit gate, two reviews on every slice of code, task contracts and hooks, all recorded so
+they can be removed exactly. This guide takes you from nothing to a working project. The README holds the
+full reference of every command; [the specification](SPEC.md) says what each piece is for and holds the map
+of how they connect ("The architecture").
+
+js-harness is in the middle of its reorganization, F8 ([the roadmap's F8 plan](ROADMAP.md#f8-plan)). Today
+gentle-ai is still part of the stack and brings engram; at F8's S11 js-harness installs engram, codegraph and
+context7 itself, and at S2 gentle-ai leaves the machine. Where this guide says "today", that is what
+changes; [the specification's "After F8"](SPEC.md#after-f8) says where each piece ends.
 
 ## Quick path
 
@@ -65,19 +72,26 @@ Back, or Escape, returns to the menu without running anything.
 Once per machine:
 
 1. **`js-harness install`** writes the skills and the session hooks for Claude Code and Codex under your home,
-   and records each in a manifest, so `uninstall` removes exactly them.
-2. **`js-harness doctor`** lists each tool of the stack (gentle-ai, engram, codegraph, Codex and the optional
-   ones) with what is missing and the command that fixes it. Where engram's Claude Code plugin is installed, it
-   also says when the plugin is older than the one the engram binary's release ships.
+   and, for Claude Code, the `js-harness` output style (neutral Spanish with tú), the `permissions` object's
+   allow entry and denies where they are missing, and a small block of your Rules lines in
+   `~/.claude/CLAUDE.md`. Each is recorded in a manifest, so `uninstall` removes exactly them, and a file you
+   edited after it was installed is left as yours.
+2. **`js-harness doctor`** lists each tool of the stack (today gentle-ai, engram, codegraph, Codex and the
+   optional ones) with what is missing and the command that fixes it. Where engram's Claude Code plugin is
+   installed, it also says when the plugin is older than the one the engram binary's release ships.
 3. **`js-harness stack install`** runs the installs js-harness can undo exactly, in order, asking y/N for each
-   and recording it before it starts. What it never runs is printed as your own step: gentle-ai's installer
-   (which brings engram), logins, and `git` and `gh`. `js-harness stack` alone lists the same, read-only.
+   and recording it before it starts. What it never runs is printed as your own step: today gentle-ai's
+   installer (which brings engram), logins, and `git` and `gh`. `js-harness stack` alone lists the same,
+   read-only.
 
 Once per project, in its git repository:
 
 4. **`js-harness init`** writes `harness.json` (the pinned version, the project's `code` that its sessions'
-   titles start with, and the reply check), a base `AGENTS.md` where none exists, an empty failures register
-   (`docs/FAILURES.md`) and the pre-commit gate. Commit what it wrote.
+   titles start with, and the reply check), a base `AGENTS.md` where none exists and, where the project has
+   neither file, a root `CLAUDE.md` that imports it, an empty failures register (`docs/FAILURES.md`), the
+   pre-commit gate and, in a project with code, the pre-push check. In the clone's own
+   `.claude/settings.local.json` it selects the `js-harness` style and adds the denies. Commit what it wrote
+   to tracked files.
 5. **`js-harness onboard`**, run by a Claude Code or Codex session you talk to, writes the project's pre-plan
    (`docs/origin.md`) and roadmap (`docs/ROADMAP.md`) through a short interview, one question at a time. The
    command calls no model: it prints the stage the onboarding is in and what the session does next, so a new
@@ -98,9 +112,9 @@ Optionally, once per machine:
 
 | Step | Command | What to expect |
 |---|---|---|
-| Check | `js-harness check` | The gate: the `AGENTS.md` budget, the task contracts, the project's tests, lint and typecheck, and whether the change is due a review. Red means the commit is not ready. |
+| Check | `js-harness check` | The gate: the `AGENTS.md` and `CLAUDE.md` budgets, the task contracts, the project's tests, lint and typecheck, and which code still waits for its reviews. Red means the commit is not ready. |
 | Commit | `git commit` | The pre-commit hook runs the same gate, so a red check stops the commit. |
-| Review | gentle-ai's review, then `js-harness codex-review --base <rev>` | `check` says when a change is due a gentle-ai review. Where the project's `codexReview` function is on, Codex reviews `<rev>..HEAD` and records it, and the pre-push check refuses code commits no record covers. |
+| Review | `js-harness codex-review --base <rev>` and `js-harness lens-review --base <rev> --lenses <list> --reason <why>` | Each slice of code gets two reviews of `<rev>..HEAD`: Codex's, where the project's `codexReview` function is on, and one to four Claude lenses (risk, resilience, readability, reliability). Each is recorded, and the pre-push check refuses code commits the records do not cover. A review that cannot run is recorded with `--unavailable <reason>`: the push goes through, and `check` and `doctor` list the skip until a review pays it. |
 | Progress | `js-harness progress` | Each roadmap phase and feature, counted from the checkboxes of `docs/ROADMAP.md` and `odd/tasks/*.md`. |
 
 A feature's work is tracked in `odd/tasks/<feature>.md`; `js-harness contract template` prints the skeleton it
@@ -146,4 +160,4 @@ leads other sessions; you rarely type those by hand. The README lists all of the
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit (the orchestrator and its sessions) |
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, lens-review, codex-meter, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit, quiet (the orchestrator and its sessions) |
