@@ -296,3 +296,148 @@ export function sourceCoverage({ spans, entries, rules }) {
   }
   return coverage;
 }
+
+/** The most of the live obligations that may be owed once `OWED_CAP_FROM` is a day (S8 sets it): until then `--strict`
+ * reports the share and does not hold it, since S5c-a seeds every obligation as owed. */
+export const OWED_CAP = 0.1;
+export const OWED_CAP_FROM = null;
+const HASH = new RegExp(`^[0-9a-f]{${SPAN_ID_LENGTH}}$`);
+const REGISTER_FILE = 'bin/lib/rules-coverage-data.mjs';
+const REFRESH = '(js-harness rules coverage --refresh)';
+
+/** The faults that make `register` unreadable, one line each; `[]` when it reads. */
+export function registerFaults(register) {
+  if (!isObject(register)) return ['the register is not an object'];
+  const faults = [];
+  if (!(typeof register.baseline === 'string' && DATE_PATTERN.test(register.baseline))) faults.push('the baseline is not a day written YYYY-MM-DD');
+  if (!isObject(register.controls)) faults.push('the controls are an object of rule ids');
+  if (!Array.isArray(register.cases) || !register.cases.every(isText)) faults.push('the cases are a list of task names');
+  if (!Array.isArray(register.messages) || !register.messages.every(isPath)) faults.push('the messages are a list of paths');
+  if (!isObject(register.sources)) faults.push('the sources are an object of source ids');
+  else {
+    for (const [id, entries] of Object.entries(register.sources)) {
+      const entry = (item) => (typeof item === 'string' && HASH.test(item)) || (isObject(item) && Object.keys(item).sort().join(',') === 'context,hash' && HASH.test(item.hash) && isText(item.context));
+      if (!Array.isArray(entries) || !entries.every(entry)) faults.push(`${id}: an entry is a hash of ${SPAN_ID_LENGTH} hexadecimal characters, or { hash, context: <reason> }`);
+    }
+  }
+  return faults;
+}
+
+/** A span's words for a line of the report, cut at 160 characters. */
+const said = (span) => {
+  const words = squash(span.text);
+  return words.length > 160 ? `${words.slice(0, 157)}...` : words;
+};
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/** The whole coverage of the harness: `register` as rules-coverage-data.mjs holds it, the text `sources` (`{ id, from,
+ * text }`), the `messages` producers found, the declared `rules`, the eval `cases` (`{ name, rules }`, `rules` as
+ * `task.json` names them), and `readFile` and `caseExists` for the files a control names. It gives each source's
+ * coverage, each live rule's levels, each case, the `findings` that `rules check` refuses (a gap opened after the
+ * baseline), the `stale` lines `--strict` adds (the register no longer says what the texts hold) and the `totals`. */
+export function coverageOf({ register, sources, messages, rules, cases, readFile, caseExists }) {
+  const { baseline } = register;
+  const findings = [];
+  const stale = [];
+  const report = { baseline, sources: [], messages: [], rules: [], cases: [], findings, stale };
+  for (const source of sources) {
+    const coverage = sourceCoverage({ spans: cutSpans(source.text), entries: register.sources[source.id] ?? [], rules });
+    report.sources.push({ id: source.id, from: source.from, ...coverage });
+    for (const span of coverage.gaps) {
+      findings.push(`${source.id}: the span ${span.id} is declared nowhere: "${said(span)}" (name its rule as \`rule:<id>\`, or list it as context with its reason in ${REGISTER_FILE})`);
+    }
+    for (const { span, reason } of coverage.reopened) findings.push(`${source.id}: the context span ${span.id} changed: "${said(span)}" (it was listed as "${reason}"; list it again)`);
+    if (coverage.edited.length > 0) stale.push(`${source.id}: ${plural(coverage.edited.length, 'owed span', 'owed spans')} edited in place since the register was written ${REFRESH}`);
+    if (coverage.gone.length > 0) stale.push(`${source.id}: ${plural(coverage.gone.length, 'span of the register is', 'spans of the register are')} in the source no more ${REFRESH}`);
+  }
+  for (const id of Object.keys(register.sources)) if (!sources.some((source) => source.id === id)) stale.push(`the register lists the source ${id}, which is no source ${REFRESH}`);
+  for (const file of messages) {
+    const owed = register.messages.includes(file);
+    report.messages.push({ path: file, owed });
+    if (!owed) findings.push(`${file} builds hook messages and is not in the register: a source of messages after the baseline is not owed, so its messages are cut and declared`);
+  }
+  for (const file of register.messages) if (!messages.includes(file)) stale.push(`the register lists ${file} as a source of messages, which it is no more ${REFRESH}`);
+
+  const live = rules.filter((rule) => !Object.hasOwn(rule, 'retired'));
+  for (const rule of live) {
+    const control = Object.hasOwn(register.controls, rule.id) ? register.controls[rule.id] : undefined;
+    const shape = controlFaults(control, { baseline, ruleSince: rule.since });
+    const faults = shape.length > 0 ? shape : controlFileFaults(control, { readFile, caseExists });
+    const levels = control === undefined ? [] : (Array.isArray(control) ? control : [control]).map((item) => item?.level);
+    report.rules.push({ id: rule.id, levels, faults });
+    for (const fault of faults) findings.push(`rule "${rule.id}": ${fault}`);
+  }
+  for (const id of Object.keys(register.controls)) if (!live.some((rule) => rule.id === id)) findings.push(`the register holds a control for "${id}", which is no live rule`);
+
+  for (const { name, rules: named } of cases) {
+    const ids = Array.isArray(named) ? named : [];
+    const owed = ids.length === 0 && register.cases.includes(name);
+    report.cases.push({ name, rules: ids, owed });
+    if (ids.length === 0 && !owed) findings.push(`the case ${name} names no rule: it names the rules it tests in task.json "rules"`);
+    for (const id of ids) if (!live.some((rule) => rule.id === id)) findings.push(`the case ${name} names "${id}", which is no live rule`);
+  }
+  for (const name of register.cases) if (!report.cases.some((item) => item.name === name && item.owed)) stale.push(`the register owes the case ${name}, which names its rules or is gone ${REFRESH}`);
+
+  const levels = Object.fromEntries(LEVELS.map((level) => [level, 0]));
+  for (const rule of report.rules) for (const level of rule.levels.length === 0 ? [] : rule.levels) if (Object.hasOwn(levels, level)) levels[level] += 1;
+  const spanDebt = report.sources.reduce((sum, source) => sum + source.owed.length + source.edited.length, 0);
+  levels.owed += spanDebt + report.messages.filter((item) => item.owed).length;
+  const gaps = report.sources.reduce((sum, source) => sum + source.gaps.length + source.reopened.length, 0);
+  const obligations = Object.values(levels).reduce((sum, n) => sum + n, 0) + gaps + report.rules.filter((rule) => rule.levels.length === 0).length;
+  report.totals = { obligations, owed: levels.owed, levels, context: report.sources.reduce((sum, source) => sum + source.context.length, 0), gaps };
+  return report;
+}
+
+/** `register` brought up to `report`, its coverage: each source's entries in the order of its spans, an edited owed
+ * span under its new hash, a gone one dropped, a reopened context span dropped (so it stays open until listed again),
+ * and no gap added; the cases and message sources it owes that are gone, or name their rules, dropped. The controls
+ * and the baseline are kept. A refresh only shrinks the debt. */
+export function refreshRegister(register, report) {
+  const sources = {};
+  for (const source of report.sources) {
+    const contextOf = new Map(source.context.map(({ span, reason }) => [span, reason]));
+    const spans = [...source.owed, ...source.edited, ...contextOf.keys()].sort((a, b) => a.start - b.start);
+    const entries = spans.map((span) => (contextOf.has(span) ? { hash: span.id, context: contextOf.get(span) } : span.id));
+    if (entries.length > 0) sources[source.id] = entries;
+  }
+  return {
+    baseline: register.baseline,
+    controls: register.controls,
+    cases: register.cases.filter((name) => report.cases.some((item) => item.name === name && item.owed)),
+    messages: register.messages.filter((file) => report.messages.some((item) => item.path === file)),
+    sources,
+  };
+}
+
+// The first lines of rules-coverage-data.mjs, which writeCoverage gives first.
+const COVERAGE_HEADER = [
+  '// The register of directive coverage (F8 S5c-a, odd/tasks/f8-s5c-a-coverage.md): the day the debt was seeded, each',
+  "// live rule's control, the eval cases and message sources owed since then, and each source's spans that no rule",
+  '// holds, in order: a hash is owed, `{ hash, context }` is context with its reason. Data that imports nothing; its',
+  '// text is what `writeCoverage` of ./rules-coverage.mjs gives, and `js-harness rules coverage --refresh` rewrites it.',
+].map((line) => `${line}\n`).join('');
+
+/** The register of a rules-coverage-data.mjs `text`, read as JSON and never imported, as `{ register }` or `{ fault }`. */
+export function readCoverageText(text) {
+  const start = text.indexOf('export const COVERAGE = ');
+  const end = text.lastIndexOf(';');
+  if (start < 0 || end < start) return { fault: `${REGISTER_FILE} is not in the shape writeCoverage gives` };
+  let register;
+  try {
+    register = JSON.parse(text.slice(start + 'export const COVERAGE = '.length, end));
+  } catch (err) {
+    return { fault: `${REGISTER_FILE} is not in the shape writeCoverage gives: ${err.message}` };
+  }
+  const faults = registerFaults(register);
+  if (faults.length > 0) return { fault: `${REGISTER_FILE}: ${faults.join('; ')}` };
+  if (writeCoverage(register) !== text.replace(/\r\n/g, '\n')) return { fault: `${REGISTER_FILE} is not what writeCoverage gives for it: write it with js-harness rules coverage --refresh` };
+  return { register };
+}
+
+/** The whole text of rules-coverage-data.mjs for `register`, its keys in one order and its controls sorted by id. */
+export function writeCoverage(register) {
+  const controls = Object.fromEntries(Object.keys(register.controls).sort().map((id) => [id, register.controls[id]]));
+  const sources = Object.fromEntries(Object.keys(register.sources).sort().map((id) => [id, register.sources[id]]));
+  const ordered = { baseline: register.baseline, controls, cases: [...register.cases].sort(), messages: [...register.messages].sort(), sources };
+  return `${COVERAGE_HEADER}export const COVERAGE = ${JSON.stringify(ordered, null, 2)};\n`;
+}

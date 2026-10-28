@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alignSpans, controlFaults, controlFileFaults, cutSpans, sourceCoverage, spanId, tiesOf } from './rules-coverage.mjs';
+import { alignSpans, controlFaults, controlFileFaults, coverageOf, cutSpans, refreshRegister, registerFaults, sourceCoverage, spanId, tiesOf, writeCoverage } from './rules-coverage.mjs';
 
 const PROSE = { id: 'ask-first', subject: 'a rule in prose', owner: 'project', since: '2026-10-01', path: 'bin/lib/x.mjs', phrases: ['Ask the user before any paid run starts'] };
 const VALUE = { id: 'some-value', subject: 'a value', owner: 'project', since: '2026-10-01', value: 3, unit: 'minutes' };
@@ -152,4 +152,97 @@ test("a source's coverage: tied spans, owed, context, an edited owed span still 
   const reopened = sourceCoverage({ spans: changed, entries: [{ hash: context.id, context: 'it says what the file is' }], rules: RULES });
   assert.deepEqual(reopened.reopened.map(({ span, reason }) => [span.text, reason]), [['A context sentence that changed.', 'it says what the file is']]);
   assert.deepEqual(reopened.gaps, []);
+});
+
+// ── the whole coverage ──────────────────────────────────────────────────────────────────────────
+
+const OWED = { level: 'owed', since: BASELINE };
+const CHECK = { level: 'check', test: 'bin/x.test.mjs', break: { path: 'bin/x.mjs', find: 'const a = 1;', replace: 'const a = 2;' } };
+const FILES = { 'bin/x.test.mjs': 'test', 'bin/x.mjs': 'const a = 1;\n' };
+const held = { readFile: (file) => (Object.hasOwn(FILES, file) ? FILES[file] : null), caseExists: (name) => name === 'incident-02-review-consent' };
+
+/** A register over one source of two sentences, both owed, the rules owed or checked, one case owed. */
+function register(overrides = {}) {
+  return {
+    baseline: BASELINE,
+    controls: { 'ask-first': OWED, 'some-value': CHECK },
+    cases: ['incident-01-paid-eval'],
+    messages: ['bin/guard.mjs'],
+    sources: { skill: [spanId('One owed sentence.'), spanId('Another owed sentence.')] },
+    ...overrides,
+  };
+}
+const SOURCES = [{ id: 'skill', from: 'install', text: 'One owed sentence. Another owed sentence. Always ask the user before any paid run starts.' }];
+const CASES = [{ name: 'incident-01-paid-eval', rules: [] }, { name: 'incident-02-review-consent', rules: ['ask-first'] }];
+const whole = (overrides = {}) => coverageOf({ register: register(overrides.register), sources: overrides.sources ?? SOURCES, messages: overrides.messages ?? ['bin/guard.mjs'], rules: RULES, cases: overrides.cases ?? CASES, ...held });
+const UNDECLARED = (text) => `the span ${spanId(text)} is declared nowhere: "${text}" (name its rule as \`rule:<id>\`, or list it as context with its reason in bin/lib/rules-coverage-data.mjs)`;
+
+test('the seeded baseline holds: no finding, every count said, and the owed share of the obligations', () => {
+  const report = whole();
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(report.stale, []);
+  assert.deepEqual(report.sources.map((source) => [source.id, source.tied.length, source.owed.length, source.gaps.length]), [['skill', 1, 2, 0]]);
+  assert.deepEqual(report.rules.map((rule) => [rule.id, rule.levels]), [['ask-first', ['owed']], ['some-value', ['check']]]);
+  assert.deepEqual(report.totals, { obligations: 5, owed: 4, levels: { check: 1, eval: 0, line: 0, protocol: 0, measured: 0, owed: 4 }, context: 0, gaps: 0 });
+});
+
+test('rules check refuses each new gap: a span, a rule with no control, a message source, a case naming nothing or an unknown rule', () => {
+  const report = whole({
+    sources: [{ id: 'skill', from: 'install', text: `${SOURCES[0].text} A brand new sentence.` }, { id: 'new-skill', from: 'install', text: 'Its only sentence.' }],
+    register: { controls: { 'some-value': CHECK, 'no-such-rule': OWED } },
+    messages: ['bin/guard.mjs', 'bin/new-hook.mjs'],
+    cases: [...CASES, { name: 'new-case' }, { name: 'other-case', rules: ['old-rule', 'nope'] }],
+  });
+  assert.deepEqual(report.findings, [
+    `skill: ${UNDECLARED('A brand new sentence.')}`,
+    `new-skill: ${UNDECLARED('Its only sentence.')}`,
+    'bin/new-hook.mjs builds hook messages and is not in the register: a source of messages after the baseline is not owed, so its messages are cut and declared',
+    'rule "ask-first": no control: it names a check, an eval case, a line, a protocol, a measurement or a dated owed',
+    'the register holds a control for "no-such-rule", which is no live rule',
+    'the case new-case names no rule: it names the rules it tests in task.json "rules"',
+    'the case other-case names "old-rule", which is no live rule',
+    'the case other-case names "nope", which is no live rule',
+  ]);
+});
+
+test('a changed context span is a finding until listed again; a gone span and an edited owed one are stale, for --strict', () => {
+  const text = 'A context sentence that changed. Another owed sentence, edited.';
+  const report = whole({
+    sources: [{ id: 'skill', from: 'install', text }],
+    register: { sources: { skill: [{ hash: spanId('A context sentence.'), context: 'it names the file' }, spanId('Another owed sentence.'), spanId('A sentence that left.')] } },
+  });
+  assert.deepEqual(report.findings, [`skill: the context span ${spanId('A context sentence that changed.')} changed: "A context sentence that changed." (it was listed as "it names the file"; list it again)`]);
+  assert.deepEqual(report.stale, [
+    'skill: 1 owed span edited in place since the register was written (js-harness rules coverage --refresh)',
+    'skill: 1 span of the register is in the source no more (js-harness rules coverage --refresh)',
+  ]);
+});
+
+test('a refresh keeps each span where it stands, renames an edited owed one, drops what is gone, and adds no debt', () => {
+  // An edit is judged by its place: the first entry of a stretch pairs with its first span, and the rest is gone.
+  const text = 'Another owed sentence, edited. One owed sentence. A brand new sentence.';
+  const entries = [spanId('Another owed sentence.'), spanId('A sentence that left.'), spanId('One owed sentence.')];
+  const before = register({ sources: { skill: entries, gone: ['abcdefabcdef'] }, cases: ['incident-01-paid-eval', 'deleted-case'], messages: ['bin/guard.mjs', 'bin/gone.mjs'] });
+  const report = coverageOf({ register: before, sources: [{ id: 'skill', from: 'install', text }], messages: ['bin/guard.mjs'], rules: RULES, cases: CASES, ...held });
+  const after = refreshRegister(before, report);
+  assert.deepEqual(after.sources, { skill: [spanId('Another owed sentence, edited.'), spanId('One owed sentence.')] });
+  assert.deepEqual(report.sources[0].gaps.map((span) => span.text), ['A brand new sentence.'], 'a refresh adds no gap to the register');
+  assert.deepEqual(after.cases, ['incident-01-paid-eval']);
+  assert.deepEqual(after.messages, ['bin/guard.mjs']);
+  assert.deepEqual(after.controls, before.controls);
+  assert.equal(after.baseline, BASELINE);
+});
+
+test('the register is written in one shape, and a register of another shape is refused by name', () => {
+  const text = writeCoverage(register());
+  assert.ok(text.startsWith('// '), 'a header comment');
+  assert.match(text, /^export const COVERAGE = \{\n/m);
+  assert.deepEqual(registerFaults(register()), []);
+  assert.deepEqual(registerFaults({ baseline: 'soon', controls: [], sources: { skill: [3] } }), [
+    'the baseline is not a day written YYYY-MM-DD',
+    'the controls are an object of rule ids',
+    'the cases are a list of task names',
+    'the messages are a list of paths',
+    'skill: an entry is a hash of 12 hexadecimal characters, or { hash, context: <reason> }',
+  ]);
 });
