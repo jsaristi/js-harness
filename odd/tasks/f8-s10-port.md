@@ -146,6 +146,11 @@ Reviews:
 - T8 is `98f91454`. Codex on `0d97e52..98f9145`: incorrect (0.96), one P2 (a recorded file that cannot be read was
   taken as missing and written over), fixed test first in the next commit with `bin/lib/component-write.test.mjs`; 111,434
   input tokens.
+- The fix is `14649ec6`. Codex's recheck on `98f9145..14649ec`: the P2 fixed, correct (0.98), 31,903 input tokens.
+  Lenses on `0d97e52..14649ec` (risk, reliability, resilience, readability): 0 findings. gentle-ai on
+  `0d97e528..14649ec6` (granted run, lineage review-34b49ce5b2947003): approved, acknowledged; one SUGGESTION
+  (R3-001: no command-level test of what an unreadable recorded file prints) not taken: that record is a `skipped` one
+  without `edited`, whose line, stream and exit code `bin/install.test.mjs:398-427` already pin.
 
 ## Probe
 - Install and uninstall, in a scratch home (`mktemp -d`, no credentials file), from `f8-s10-rules` (L20, rerun after
