@@ -2,6 +2,8 @@
 
 Status: proposal, 2026-10-26 (seventh pass: corrected after two blind grades, section 12), part of F8 (`docs/ROADMAP.md`). It answers his request of the same
 day, quoted in full in section 8, and his change of direction the same evening (the section below).
+Section 13 (2026-10-28, read at gentle-ai v4.3.1) answers his later request: how gentle-ai is built
+so a model works well inside it, and which of those mechanisms we adopt, adapt or drop.
 It sits beside [the harness diet](harness-diet.md) ("the diet" below), which stays the plan of
 record; this document holds the matrix, the TUI and the idea watch (S9).
 
@@ -729,3 +731,234 @@ before anything changed; the diet's section 19 has the whole list. Here:
 Limited recheck of `18785956`: Claude 7.4, Codex 8.0. The residuals (the review identity now
 holds the head commit too, the GitHub web merge named as open, who runs S2's first steps, per-entry
 failure assignment) are fixed in the diet's section 19 and sections 3 and 11 here.
+
+## 13. How it works, and what we copy of the way it works (2026-10-28)
+
+His request (transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f` line 6030, 2026-10-28T06:29Z, read
+with `js-harness sessions --quote`, his typed answer to question 101):
+
+> "tambien me gustaria saber como hace gentle-ai para funcionar tan bien y ser una arnes que no se
+> equivoca osea debe tener las cosas estructuradas para funcionar muy bien todo el tiempo, osea sus
+> directrices con muchisimas y aun asi funciona todo, quiero no solo copiar las directivas que nos
+> funcionen sino tambien ver como trabaja y copiarlo para que nuestro arnes funcione igual o
+> muchisimo mejor que el de gentle-ai, hazme una investigacion profunda por favor."
+
+Read as a need: sections 3 and 5 say *which* pieces we copy; this section says *how gentle-ai is
+built* so a model works inside it, and which of those mechanisms js-harness adopts, adapts or
+drops. The same answer confirms the direction: gentle-ai leaves his machine (S2) and its
+repository is only read for ideas (S9, section 5).
+
+**Sources for this section.** "G" here is gentle-ai at tag v4.3.1 (commit `2dba7784`), cloned
+read-only into a `mktemp -d` folder; "E" is engram's `main` (`v3.6.0-19-gee1d5ad`), cloned the
+same way; "H" is the installed `~/.claude/CLAUDE.md` written by gentle-ai 4.3.1 (`gentle-ai
+version`) [c]. Four read-only explorers mapped one area each; every claim they returned that this
+section uses was rechecked here against the file and line cited, and one path was corrected
+(the module budget test lives in `internal/components/agentguidance/`, not `internal/assets/`).
+Nothing outside this repository was changed.
+
+### 13.1 The answer, short
+
+gentle-ai does not work because the model obeys 93 KB of rules. It works for three reasons, in
+order of weight, and the third has a cost.
+
+1. **What must be right is decided by code, and the model is handed the next step as data.** The
+   review is the clearest case. The CLI returns `next_transition` and the parent "runs that command
+   verbatim" (G `docs/review-integration.md:146-148`) [c]. Consent arrives as two ready commands
+   whose bytes are compared with the renderer's own and never parsed from what the caller sends
+   (G `internal/cli/review_consent_contract.go:285-288`) [c]. The lens reviewer is a process the
+   code starts, `claude --print --tools "" --setting-sources ""` with a fixed system prompt, in an
+   empty folder (G `internal/reviewerprovider/claude_adapter.go:29-43`) [c]. Its answer counts only
+   when it echoes the candidate's `subject_hash` and inspected every path of the frozen manifest
+   (G `internal/reviewtransaction/artifact_admission.go:399`) [c]. So the model cannot drift from
+   the procedure it is in: it only routes.
+2. **The prose is maintained like code, so it stays consistent release after release.** One
+   canonical source of each section (`internal/assets/skills/_shared/odd-orchestrator-sections.md`,
+   224 lines) is expanded into each host's file by placeholders, and a render that leaves a
+   `{{GENTLE_AI_` placeholder fails (G `internal/components/agentguidance/orchestrator.go:197-278`)
+   [c]. Tests pin the result: 128 test functions in 33 files under `internal/assets` alone [c,
+   `grep -c "func Test"`], with sha256 goldens, required and banned phrases, byte ceilings and a
+   cap on how many versions of each section the 12 hosts may carry (G
+   `internal/assets/orchestrator_drift_ratchet_test.go:21-26`) [c]. These tests keep the text
+   *consistent*; they say themselves that they do not prove a model follows it: "This proves
+   shipped policy text, not live model compliance" (G
+   `internal/assets/orchestrator_evidence_budget_test.go:8`) [c].
+3. **A strong model tolerates the rest, and pays for it in context.** No gate of gentle-ai's runs a
+   model on its shipped prompt. Its organic E2E runs a real agent "with no prompt", so "this suite
+   does not cover the shipped orchestrator prompt" (G `docs/testing-agents-deterministically.md:64`)
+   [c]; its bench calls no model (G `bench/README.md:10`) [c]. What keeps a session on track past
+   the code paths is the model's own judgment, at the cost the diet measured: 30.7k tokens every
+   turn (diet §2), the same score as a slim arm at 3.1× the cost (diet §9), and ten contradiction
+   pairs that the model settles arbitrarily (diet §3).
+
+So "it never fails" is partly how it looks from outside. Section 13.4 lists what failed here, with
+the register's entries. **Where js-harness can do much better:** keep (1) and (2), which we have
+in part, and replace (3) with what gentle-ai does not have: every directive tied to a check or an
+eval case that runs a real model (`rules check`, `docs/FAILURES.md` controls, the evals of the
+diet's section 7), and a much smaller text that loads every turn.
+
+### 13.2 The mechanisms, one by one
+
+**Directives: structure and loading.**
+- *Marker blocks in one global file.* Install replaces only the text between
+  `<!-- gentle-ai:<id> -->` and its closing marker (G `orchestrator.go:502-503`) [c]. H is 92,915
+  bytes with six blocks; `orchestrator` alone is about 53.7 KB (`wc -c`, marker grep) [c]. The
+  per-host render takes Claude's 18,713-byte asset to about 53.6 KB rendered (G
+  `testdata/orchestrator-module-baseline.json:2`) [c]. Almost all of it loads on every turn: the
+  opt-in `--claude-orchestrator-modules` moves 6,166 bytes to files read on demand (G
+  `orchestrator_module_budget_test.go:33-35`), and that test "proves nothing about whether or when"
+  Claude reads them (`:45`) [c].
+- *Skills on demand by a trigger.* A test holds each skill's frontmatter: `name` equals its
+  folder, `description` is one quoted line with `Trigger:` and at most 160 characters (G
+  `internal/assets/skills_frontmatter_test.go:14-24,67-80`) [c]. That one line is what Claude
+  always sees, so it is what decides loading [i]. The body has a written ceiling of 1000 tokens
+  (G `docs/skill-style-guide.md:34`) that no test holds: `issue-creation` is 1,792 words and
+  `branch-pr` 9,190 bytes [c, `wc`].
+- *A skill registry refreshed by a hook on every prompt*, and the parent passes exact skill paths
+  to a sub-agent, which reports how it resolved them (H, the "Skills to load before work" lines)
+  [c]. Already dropped (G4); the host's own skill list does the loading here.
+- *ODD as a resume test, not a count.* Small when the work "could be resumed from the original
+  request and `git diff` alone"; large only when that fails (H:516, H:529-531) [c]. Large work
+  gets `odd/tasks/<feature>.md`; workers "read the document until `## Log`" and report which
+  `S#` they covered (H:581) [c]: a handoff by reference, never by paraphrase. Nothing in Go
+  validates the document's shape [c, explorer's grep for `## Log` in Go: only
+  `review_defect_report.go` and `routing.go`]. Ours does: `js-harness contract check`.
+- *Sub-agents get no packaged context*, only the prompt the parent writes, with edit surfaces and
+  checks named (H, "Allowed edit surfaces") [c]. The phase model presets still use `sdd-*` keys
+  and no `sdd-*` agent ships for Claude, so ODD's explorer and writer get no model routing (G
+  `internal/model/claude_model.go:135-151`, `internal/assets/claude/agents/` holds only `jd-*` and
+  `review-*`) [c].
+
+**Self-checks.**
+- *Text pinned by hash, phrase and size*, as in 13.1 (2). Ratchets only shrink: the per-section
+  variant caps, a dead-code ratchet that freezes 230 unreachable functions
+  (G `scripts/deadcode-ratchet.sh:2-18`), and a 4,096-byte module overhead ceiling to "raise only
+  as a reviewed decision, never to make a failing run pass" (G
+  `orchestrator_module_budget_test.go:17-22`) [c].
+- *A bench of the CLI's friction*, about 108 journeys, scored on seven measures it refuses to
+  combine into one (prompts to the human, manual tokens, commands to finish, blocks, recovery
+  round trips, model runs, stderr bytes), with no model called (G `bench/README.md:7-11,108-127`)
+  [c]. It measures how hard the tool is to drive, not whether the prompt works.
+- *CI on every PR* (`gofmt`, `go test ./...`, the bench, the dead-code ratchet, Windows and macOS
+  runtime jobs, one Windows test 100 times to catch a flake, G `.github/workflows/ci.yml:322`) and
+  a PR policy: over 400 changed lines fails without a `size:exception` label, and a PR needs an
+  approved issue (G `.github/workflows/pr-check.yml:21`, `CONTRIBUTING.md:26-36`) [c].
+- *A release preflight that checks what PR CI does not.* A stable tag must point at the exact
+  `origin/main` commit with CI green on it, the configs must equal copies built into the code,
+  and `go mod tidy -diff` must leave the tree unchanged (G `scripts/release-preflight.sh:55`,
+  `internal/releasepolicy/policy.go:22-60`) [c]. **v4.3.0 failed exactly there:** a PTY test
+  imported `charmbracelet/x/term` directly, so tidy moved it out of the indirect block, and "the
+  release preflight's module-immutability check refused the untidy go.mod" (G commit `800be5ab3`)
+  [c]; v4.3.1 is that one-line fix. No PR workflow runs the tidy check [c, explorer's grep over
+  `.github`; i that a PR-time check would have caught it sooner]. The lesson is general: **a check
+  that runs only at release finds its defect only at release.**
+
+**The review.** 13.1 (1) holds its core. Beside it:
+- *The candidate is frozen and re-checked live*: its target is a sha256 over base tree, candidate
+  tree and paths digest (G `internal/reviewtransaction/snapshot.go:1737-1757`), rebuilt from git
+  and compared before each step (`:425-458`) [c, explorer; spot-checked].
+- *The refuter* takes every severe inferential finding, must answer each with concrete proof, and
+  a missing or duplicate answer escalates the batch; one refuter batch and one bounded correction,
+  never a loop (G `internal/reviewtransaction/transaction.go:619-672`) [c, explorer].
+- *The Stop hook nudges once*: it blocks the stop only when a high-risk candidate is due and
+  differs from the session's baseline, once per session and candidate, and stays silent when
+  `stop_hook_active` is set (G `internal/cli/review_stop_hook.go:166`, `:222`) [c].
+- *Its stated threat model leaves the model out*: it excludes "a malicious same-user local actor"
+  and review never decides delivery (G `docs/review-authority-threat-model.md`;
+  `docs/review-integration.md:294-296`) [c]. `review capture-result --input` still reaches the
+  admitter without the runtime frozen at the start being checked, so a result the model wrote
+  itself might be admitted; only prose forbids it (G `internal/cli/review_artifact.go:163-176`)
+  [i: read, not run].
+
+**Engram.**
+- *One protocol source rendered per host*, slim for Claude Code with engram 1.4.0 or later (G
+  `internal/components/engram/protocol.go:22,122-127`) [c]. The slim block says the full
+  protocol comes from the MCP instructions and the SessionStart hook, but the hook prints it only
+  when the mode is not slim (E `plugin/claude-code/scripts/session-start.sh:173-178`) [c]: in slim
+  mode Claude Code gets the full protocol from no channel [i: from reading the three texts].
+- *The two sources now disagree*: gentle-ai says save "IMMEDIATELY and WITHOUT BEING ASKED" and
+  that the summary "is NOT optional" (G `internal/assets/engram/protocol.md:25,133`) [c]; engram's
+  `main` says "Ordinary task completion does not require a summary" (E `session-start.sh:216`)
+  [c]; the installed engram still serves the older "MANDATORY" text (this session's MCP
+  instructions) [c].
+- *One hook enforces anything*: a PreToolUse hook on engram's writing tools confirms the session
+  and blocks the write when it cannot (E `cmd/engram/hook_claude.go:47,124-148`, plugin
+  `hooks/hooks.json` `onFailure: block`) [c, explorer]. Saves upsert by `topic_key` and dedupe by
+  hash within 15 minutes in the store (E `internal/store/store.go:4317-4393`) [c, explorer].
+  Conflict judging returns `judgment_required` and waits for `mem_judge`; nothing forces it [c].
+  The save nudge is a no-op under Windows Git Bash (E `user-prompt-submit.sh:26-31`) [c,
+  explorer], so it is likely off on this machine [i].
+
+**Sync and ownership.**
+- *Marker rewrite with repair*: `InjectMarkdownSection` replaces inside markers, strips unpaired
+  markers and drops duplicate pairs (G `internal/components/filemerge/section.go:236-372`) [c,
+  explorer]. An edit he makes inside a block is overwritten silently [c: no hash of the block].
+- *A snapshot before every write*, a tar.gz with a manifest whose absent entries are deleted on
+  restore, five kept (G `internal/backup/restore.go:215-316`, `retention.go:15`) [c]. Its targets
+  are a hand list kept apart from the write paths, and one write had no snapshot (issue #1794, G
+  `internal/cli/sync.go:775-779`) [c, explorer].
+- *A byte-ownership ledger, narrowly*: orchestrator modules and review assets refuse a file
+  "modified or not owned by Gentle AI" by its sha256 (G
+  `internal/components/agentguidance/orchestrator_module_install.go:176-181`) [c, explorer]. The
+  general manifest with user and managed extents (G `internal/state/manifest.go:40-82`) has no
+  caller outside its package [c, `grep -rn "state\.ReadManifest|state\.WriteManifestAtomic|OwnedExtent"`:
+  none]. The lock covers `state.json` only, not the file writes of a sync (G
+  `internal/statecoord/statecoord.go:27-41`) [c, explorer].
+- **Ours already does more here.** Our manifest records the sha256 of every file `install`
+  writes and `uninstall` refuses one whose bytes changed (`bin/lib/manifest.mjs:1251`, `:1891`,
+  reason `edited`) [c].
+
+### 13.3 What we adopt, adapt or drop
+
+Cost is effort on our side, with no eval spend unless the row says so [i: estimates].
+
+| # | Mechanism | Evidence | Verdict | Cost | Lands | The check that proves it works for us |
+|---|---|---|---|---|---|---|
+| 1 | The tool hands the model its next step as data | G `docs/review-integration.md:146-148`; consent bytes compared, `review_consent_contract.go:285-288` | **Adapt.** Every refusal of `check`, `check --push`, `lens-review`, `codex-review` and the merge door ends with the exact command to run next; prose stops describing those steps | a convention test plus one line per refusal | S4b (replace prose with checks) | a `bin/conventions-*.test.mjs` row that fails on a refusal without a runnable next command; its legacy list reaches 0 |
+| 2 | Code starts the reviewer, tool-less and fresh; the answer counts only by hash and full coverage | G `claude_adapter.go:29-43`, `artifact_admission.go:399` | **Keep ours**: S1 built the same (`bin/lens-review.mjs:53`, `bin/lib/lens-result.mjs:97`) [c] | none | done (S1) | the existing `lens-review` tests |
+| 3 | The records a review writes cannot be written by the model | gentle-ai's gap: `--input` reaches the admitter (`review_artifact.go:163-176`) [i] | **Adapt, ours has the same gap**: `guard` does not name `lens-reviews.jsonl` or Codex's records (`grep -n "lens-reviews\|codex-reviews" bin/lib/guard.mjs`: nothing) [c], so a session could append a record by hand. `guard` refuses a file tool or shell write to them; only the commands write | about 50 lines and tests | an S1 defect task after S10 merges (S10 owns `bin/guard.mjs` now) | a `guard` test: an Edit, a Write and a `>>` to either record are denied; a `check` row flags a record no run produced |
+| 4 | Prose pinned like code: hash goldens, required phrases, size ceilings | G `orchestrator_evidence_budget_test.go:8`, `orchestrator_module_budget_test.go:17-35` | **Adopt** for text we copy or ship: the style, the two skills, the lens prompts. A change to them changes its pin in the same commit | a test each, about 30 lines | S10 (style, skills); lens prompts with the first S10 slice that touches them | the test fails when the text changes and the pin does not |
+| 5 | One canonical section expanded into 12 hosts, with a drift cap | G `orchestrator_drift_ratchet_test.go:21-26` | **Drop**: one host; Codex reads `AGENTS.md` only as a reviewer | none | — | — |
+| 6 | Ratchets that only shrink | G `deadcode-ratchet.sh`, the 4,096-byte ceiling | **Keep ours**: the conventions' legacy lists only shrink (`AGENTS.md`), `claude-md-budget` rises only by his answer (question 97) | none | done | `npm run check` |
+| 7 | Skill frontmatter held by a test; body ceiling written but not held | G `skills_frontmatter_test.go:14-24`; `docs/skill-style-guide.md:34` against 1,792 words | **Adopt the lint and hold the body ceiling they do not**: one-line description with its trigger first, a length limit, and the body under S5's 3k | a test over `skills/` and the generated skills | S5 | the test; then S5's measure, the protocols skill loads in ≤ 3 of 10 sessions |
+| 8 | Skill registry hook on every prompt | H; G `internal/components/agenthooks/skill_registry.go:79-86` | **Drop** (G4) | none | S2 | the S4a hook-count row stays at 14 |
+| 9 | Resume-test sizing; handoff by reference; workers report the `S#` they covered | H:516, H:529-531, H:581 | **Keep ours** (the directives pass wrote it into `CLAUDE.md`; `contract check` validates the document, which gentle-ai never does) and **adapt** the report: a writer's brief names the `S#` and its return says which it covered | a line in the orchestrator skill's brief | S7 (writer prompts) | in S7's 5 Sonnet writer slices, each return names its `S#`; ≤ 1 unrequested file |
+| 10 | Hooks as the only hard enforcement, each firing once and never looping | G `review_stop_hook.go:166`; E `hook_claude.go:124-148` | **Keep ours**: `reply` and `guard` already honour `stop_hook_active` (`bin/reply.mjs:9`, `bin/guard.mjs:199`) [c]; the pre-push refusal is stricter than a nudge | none | done | the existing hook tests |
+| 11 | Engram's protocol, one source per host, slim mode, and two texts that disagree | G `protocol.md:25,133`; E `session-start.sh:173-178,216` | **Adapt at S11**: js-harness writes no engram text of its own; the protocol comes from engram alone (its MCP instructions and plugin), and our memory policy stays in `CLAUDE.md` by `rule:<id>`. A `doctor` row flags a binary and plugin that serve different protocol versions | a stack row's fix and a `doctor` row | S11 | after S2, `/context` holds one engram text; the `doctor` row turns red on a planted version mismatch |
+| 12 | Snapshot before write, absent entries deleted on restore; ownership by hash | G `backup/restore.go:215-316`; `orchestrator_module_install.go:176-181` | **Keep ours** (every file hashed, `bin/lib/manifest.mjs:1891`); **adopt** the snapshot with absent entries for S2's one full backup, and the hash rule for S12, so a file he edited is never overwritten | inside S2's and S12's own work | S2, S12 | S2's restore drill puts back a deleted planted file and removes a created one; S12's test leaves an edited managed file with a note |
+| 13 | Release preflight; the v4.3.0 lesson | G `release-preflight.sh:55`, commit `800be5ab3` | **Adapt**: our release check, `scripts/release-proof.mjs`, is "NOT part of `npm run check`" (`:5`) [c]. It runs on the candidate commit before a tag is announced, and any part of it fast enough runs in the gate | a release step; no model spend | S8 | S8 records a `release-proof` run on the released commit, exit 0 |
+| 14 | A bench of separate measures never combined | G `bench/README.md:108-127` | **Adapt** for S8's report: one row per measure, no composite score. **Keep ours** for what theirs lacks: evals that run a real model on our text | none | S8 | S8's report has no composite number |
+| 15 | PR size and issue-first policy | G `pr-check.yml:21`; `CONTRIBUTING.md:26-36` | **Keep ours** for size (`chained-pr`, copied at S10); **drop** issue-first (`branch-pr` dropped, section 3) | none | S10 | — |
+
+### 13.4 What fails, or costs, despite all this
+
+- **Context.** H loads 30.7k tokens every turn and in every sub-agent but Explore and Plan (diet
+  §2). It grew from ≈17.6k on 2026-09-26 (diet §2, `docs/origin.md:41`). In the diet's small eval
+  the current arm scored the same as the slim arm at 3.1× the cost, $3.82 against $1.25 for 9
+  runs each, with 8-9 turns against 4-6 on the commit task (diet §9) [c, the diet's table].
+- **Contradictions it carries.** Ten pairs, among them gentle-ai against itself on lens selection
+  (diet §3, row 7); the persona block calls the injected skill list "authoritative" while the
+  orchestrator says not to treat it as complete (H:53, H:454) [c, explorer]; the delegation
+  triggers are written twice (H:218 and H:546 in the 4.3.1 file; H:219 in section 3's 4.2.0
+  file); the Key Learnings heading is
+  `## Key Learnings:` in engram's text and `## Key Learnings` in the orchestrator's (G
+  `internal/assets/engram/protocol.md:190,193`) [c].
+- **Its review tool, seen here** (`docs/FAILURES.md`): `operation_timeout` left candidates
+  unreviewed on at least five days (`review-tool-timeout`); a 2,540-line commit hit
+  `lens_context_budget_exceeded` (`commit-too-large-to-review`); `review assess` sized 26,343 lines
+  after `main` was merged in (`assessment-counts-main`); an untracked folder made the assessment
+  "unassessable" (`stray-folder-untracked`); a design document passed gentle-ai and still dropped
+  his decisions (`design-not-faithful`) [c, the register's `Seen:` lines].
+- **Gaps in the mechanisms themselves**, from 13.2: a user edit inside a marker block is
+  overwritten silently; the ownership manifest has no caller; the sync lock covers `state.json`
+  only; the slim engram mode leaves the full protocol on no channel; the skill body ceiling is not
+  held; ODD's helpers get no model routing; `--input` may admit a self-written result [i].
+- **Pace.** v4.2.0 to v4.3.1 changed 584 files, +57,955 and −3,975 lines (`git diff --shortstat
+  v4.2.0 v4.3.1`) [c]; section 5's watch reads it by area for that reason.
+
+### 13.5 What this changes in F8
+
+No step moves and nothing is spent. The new work is small and goes into steps that already exist:
+row 1 into S4b; row 3 as an S1 defect task once S10 merges; rows 4 and 15 into S10; row 7 into
+S5; row 9 into S7; row 11 into S11; row 12 into S2 and S12; rows 13 and 14 into S8. Rows 3 and 13
+fix a gap in shipped behaviour, so they meet the scope freeze; the others refine a step already
+planned.
