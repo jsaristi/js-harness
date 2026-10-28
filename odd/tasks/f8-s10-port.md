@@ -134,7 +134,9 @@ State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (
 (L21). After the restart (PR 617 landed, main `cd194eb`; he keeps outputStyle Neutral, Q101): the two P2s' tests
 failed on GitHub's Linux run alone (7474 pass, 2 fail, run 40644538748), so they go in one commit with the fix
 (`realPlace` writes into the file a link names, a link to nothing is skipped; the sibling takes the file's mode).
-Next: Codex on that commit alone (a recheck, base `6df890ec`),
+Codex's recheck on `6df890e..4e28ec3`: the link fixed; the mode half fixed (the sibling was readable by others
+until its chmod), so the next commit creates it with the mode; Codex rechecks no range that starts at `4e28ec3`, so
+the lenses review that commit. Next:
 the lenses on `cca493e0..` the fix, gentle-ai on the fix, push, PR 3 with base `f8-s10-permissions` or main, `ready
 --pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
 (about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).

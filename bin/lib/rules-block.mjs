@@ -48,7 +48,9 @@ function writeWhole(target, text, writeFile = fs.writeFileSync) {
     // A file not there yet takes the default mode.
   }
   try {
-    writeFile(tmp, text, { encoding: 'utf8', flag: 'wx' });
+    // Created with the mode already, which the umask can only narrow, so a private text is never readable by others
+    // for a moment (Codex's recheck on 6df890e..4e28ec3); the chmod then gives it the exact mode.
+    writeFile(tmp, text, { encoding: 'utf8', flag: 'wx', ...(mode !== null && { mode }) });
     if (mode !== null) fs.chmodSync(tmp, mode);
     renameOver(tmp, target);
   } catch (err) {
