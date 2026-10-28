@@ -234,6 +234,52 @@ test('sync keeps a file no longer shipped that was changed since it was written,
   }
 });
 
+// F8 S10, T8 (odd/tasks/f8-s10-port.md, S8): a file install wrote and he changed is his, as uninstall already holds;
+// install and sync leave it, keep the record that says it was ours, and report it.
+test('install and sync leave an installed file he changed, keep its record as his, and uninstall keeps it', () => {
+  const home = makeTmpHome();
+  try {
+    const skill = components.find((component) => component.target(home).includes(`${path.sep}skills${path.sep}`));
+    const file = skill.target(home);
+    install(home, '0.1.0');
+    fs.writeFileSync(file, 'his own skill', 'utf8');
+
+    for (const [run, version] of [[install, '0.2.0'], [sync, '0.3.0']]) {
+      const manifest = run(home, version);
+      assert.equal(fs.readFileSync(file, 'utf8'), 'his own skill');
+      assert.deepEqual(manifest.files.find((record) => record.path === file), { path: file, sha256: sha256(skill.content('0.1.0')), skipped: true, edited: true, reason: 'changed since it was written' });
+      assert.deepEqual(readManifest(home), manifest);
+      const other = components.find((component) => component !== skill);
+      assert.equal(fs.readFileSync(other.target(home), 'utf8'), other.content(version), 'the files he did not change are written');
+    }
+    assert.ok(uninstall(home).kept.includes(file));
+    assert.equal(fs.readFileSync(file, 'utf8'), 'his own skill');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an installed file he deleted, or put back as it was written, is written again with this version', () => {
+  const home = makeTmpHome();
+  try {
+    const skill = components.find((component) => component.target(home).includes(`${path.sep}skills${path.sep}`));
+    const file = skill.target(home);
+    install(home, '0.1.0');
+    fs.rmSync(file);
+    install(home, '0.2.0');
+    assert.equal(fs.readFileSync(file, 'utf8'), skill.content('0.2.0'));
+
+    fs.writeFileSync(file, 'his own skill', 'utf8');
+    install(home, '0.3.0');
+    fs.writeFileSync(file, skill.content('0.2.0'), 'utf8');
+    const manifest = install(home, '0.4.0');
+    assert.equal(fs.readFileSync(file, 'utf8'), skill.content('0.4.0'));
+    assert.deepEqual(manifest.files.find((record) => record.path === file), { path: file, sha256: sha256(skill.content('0.4.0')), skipped: false });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // harness-review a4: one component that could not be read threw out of uninstall halfway, the manifest left behind.
 test('uninstall keeps a component it cannot read, says why, and still finishes', () => {
   const home = makeTmpHome();
@@ -2587,6 +2633,15 @@ test('the installed skill names sessions and its --watch', () => {
 
 // --- the orchestrator skill: read by a session that supervises the others, and by one that works next to others ---
 
+/** Puts at `target` the text an older release wrote there, recorded as that release recorded it: a text the manifest
+ * does not record would be the user's, which install leaves (T8). */
+function olderRelease(home, target) {
+  fs.writeFileSync(target, 'an older text', 'utf8');
+  const manifest = readManifest(home);
+  manifest.files.find((record) => record.path === target).sha256 = sha256('an older text');
+  fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
+}
+
 test('the orchestrator skill is installed for Claude Code and for Codex with the same text, re-written by sync and removed by uninstall', () => {
   const home = makeTmpHome();
   try {
@@ -2597,7 +2652,7 @@ test('the orchestrator skill is installed for Claude Code and for Codex with the
 
     install(home, '0.1.0');
     assert.equal(fs.readFileSync(claudeOrchestrator.target(home), 'utf8'), claudeOrchestrator.content('0.1.0'));
-    fs.writeFileSync(codexOrchestrator.target(home), 'an older text', 'utf8');
+    olderRelease(home, codexOrchestrator.target(home));
     sync(home, '0.2.0');
     assert.equal(fs.readFileSync(codexOrchestrator.target(home), 'utf8'), codexOrchestrator.content('0.2.0'));
 
@@ -2624,7 +2679,7 @@ test('the protocols skill is installed for Claude Code and for Codex with the sa
 
     install(home, '0.1.0');
     assert.equal(fs.readFileSync(claudeProtocols.target(home), 'utf8'), claudeProtocols.content('0.1.0'));
-    fs.writeFileSync(codexProtocols.target(home), 'an older text', 'utf8');
+    olderRelease(home, codexProtocols.target(home));
     sync(home, '0.2.0');
     assert.equal(fs.readFileSync(codexProtocols.target(home), 'utf8'), codexProtocols.content('0.2.0'));
 

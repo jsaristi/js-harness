@@ -124,6 +124,26 @@ test('installMain then uninstallMain give a Claude settings file with no hooks k
   }
 });
 
+// F8 S10, T8: an installed skill he changed survives install and sync, which say so and how to take this version's.
+test('installMain and syncMain leave an installed skill he changed and say so, as uninstall does', async () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(await installMain(['--home', home]), 0);
+    const skill = readManifest(home).files.find((record) => record.path.includes(`${path.sep}skills${path.sep}`)).path;
+    fs.writeFileSync(skill, 'his own skill', 'utf8');
+    const note = `kept (modified by you) ${skill}: this version's text was not written; move the file away and run js-harness sync to take it`;
+    for (const run of [() => installMain(['--home', home]), () => syncMain(['--global', '--home', home])]) {
+      const { code, outLines, errLines } = await captureConsole(run);
+      assert.equal(code, 0);
+      assert.ok(outLines.includes(note), outLines.join('\n'));
+      assert.equal(errLines.some((line) => line.includes(skill)), false, errLines.join('\n'));
+      assert.equal(fs.readFileSync(skill, 'utf8'), 'his own skill');
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // F8 S10, T4: what install does with the permissions is said, and a settings file it could not hold them in goes to
 // stderr; uninstall says what it took out, and one it could not write fails it with what to do.
 test('installMain and uninstallMain say what they did with the permissions, and a failure goes to stderr', async () => {
