@@ -781,6 +781,21 @@ test('the engram-plugin row is left out only where the engramPlugin switch resol
   assert.equal(when({}), true, 'with no switches resolved the row is shown');
 });
 
+test('probeStack leaves the engram-plugin row out only when engramPlugin resolves off, and no other row (gentle-ai R3-002)', () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome('js-harness-stack-project-engram-plugin-');
+  try {
+    const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
+    const all = ids({ engramPlugin: { value: 'on' } });
+    assert.equal(all.includes('engram-plugin'), true);
+    assert.deepEqual(ids({ engramPlugin: { value: 'off' } }), all.filter((id) => id !== 'engram-plugin'));
+    assert.deepEqual(ids(undefined), all, 'with no switches resolved the row is shown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- context7's project cell: a gap where Claude Code turns it off for the project (F8 S11, L5 and L6) ---
 
 test('context7 project is missing where ~/.claude.json disables it for the project, by either slash, with /mcp as the fix', () => {

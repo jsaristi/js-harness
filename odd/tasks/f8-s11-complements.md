@@ -85,6 +85,14 @@ Reviews:
 - Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
   removes the instruction settings an older engram or gentle-ai set before it deletes the files (fix commit after
   cea68ea1); Codex cea68ea..28acfb5 passed (the P2 fixed). Lenses risk, reliability, readability over d2bc8ab..28acfb5: 0 findings.
+- PR 2: Codex fd70e26..ac28c99, 1 part, passed, no finding (174,553 input tokens); lenses risk, reliability,
+  readability over fd70e26..ac28c99: 0 findings (about 23,830 input tokens each).
+- gentle-ai on `fd70e263..ac28c992`: approved (lineage review-4739c69c341b3d15, lens review-reliability), three
+  advisory findings. R3-001 (init's context7 notice would throw without an `os` import) does not hold:
+  `bin/init.mjs:5` imports it. R3-002 (the engramPlugin switch hiding the row is proved by a unit call only) is
+  taken: a `probeStack` test in the commit after ac28c992. R3-003 (a Windows drive letter in another case would
+  read a disabled context7 as `ok`) is left: `claudeJsonMcpServer` reads the same `projects` keys exactly, so one
+  cell matching by case would make two rules for one file, and it fails open, never a false gap.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
