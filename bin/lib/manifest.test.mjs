@@ -65,9 +65,8 @@ function ourHooks(file, event) {
   return componentsIn(file).filter((component) => component.pointer.join('.') === `hooks.${event}`).map((component) => component.entry());
 }
 
-/** Our whole host file `file` as install writes it: each event key at the place its first entry is declared. */
-/** What install leaves in the host file `file` that held nothing: our hooks, and in Claude's settings the permissions it
- * holds after them (F8 S10, ./permissions.mjs). */
+/** Our whole host file `file` as install writes it into one that held nothing: each event key at the place its first
+ * entry is declared, and in Claude's settings the permissions it holds after them (F8 S10, ./permissions.mjs). */
 function ourFile(file) {
   const events = [...new Set(componentsIn(file).map((component) => component.pointer.at(-1)))];
   const hooks = Object.fromEntries(events.map((event) => [event, ourHooks(file, event)]));

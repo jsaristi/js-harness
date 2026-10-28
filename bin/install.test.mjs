@@ -147,6 +147,12 @@ test('installMain and uninstallMain say what they did with the permissions, and 
     assert.ok(removed.outLines.includes(`took 25 permission entries install wrote out of ${settings}`), removed.outLines.join('\n'));
 
     fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }));
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(settings, '{}');
+    const restored = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(restored.outLines.includes(`put back defaultMode "bypassPermissions" in ${settings}, adopted at an earlier install; to keep it out, set "permissions.defaultMode" to "default"`), restored.outLines.join('\n'));
+
     fs.writeFileSync(settings, '{ not json');
     const skipped = await captureConsole(() => installMain(['--home', home]));
     assert.ok(skipped.errLines.includes(`skipped the permissions in ${settings}: malformed JSON; js-harness doctor shows the entries missing`), skipped.errLines.join('\n'));

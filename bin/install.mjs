@@ -279,6 +279,7 @@ function logEntries(entries) {
  * file it could not hold them in goes to stderr, and `doctor` keeps the gap: the entries are not there. */
 function logPermissions(held) {
   if (held?.status === 'written') console.log(`wrote the permissions js-harness holds into ${held.path}`);
+  if (held?.restoredMode !== undefined) console.log(`put back defaultMode ${JSON.stringify(held.restoredMode)} in ${held.path}, adopted at an earlier install; to keep it out, set "permissions.defaultMode" to "default"`);
   else if (held?.status === 'already') console.log(`the permissions js-harness holds are already in ${held.path}`);
   else if (held?.status === 'skipped') console.error(`skipped the permissions in ${held.path}: ${held.reason}; js-harness doctor shows the entries missing`);
 }

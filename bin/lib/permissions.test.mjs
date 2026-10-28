@@ -110,7 +110,8 @@ test('once gentle-ai\'s uninstall took the object away, the next install writes 
     install(m.home, '1.0.0');
     m.write({ theme: 'dark' });
     const afterGentle = m.read();
-    sync(m.home, '1.0.1');
+    // Putting a mode back is said, never silent: the user may have taken it out on purpose.
+    assert.equal(sync(m.home, '1.0.1').permissionsHeld.restoredMode, 'bypassPermissions');
     assert.deepEqual(m.data().permissions, { allow: PERMISSIONS_ALLOW, deny: PERMISSIONS_DENY, defaultMode: 'bypassPermissions' });
     const record = readManifest(m.home).permissions;
     assert.equal(record.wroteMode, true);

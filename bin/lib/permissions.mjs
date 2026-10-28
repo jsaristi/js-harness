@@ -42,9 +42,9 @@ function permissionsOf(data) {
 
 /** Adds to the user settings under `home` every entry of `PERMISSIONS_ALLOW` and `PERMISSIONS_DENY` they lack, and
  * puts back a `defaultMode` adopted before that has gone missing; never invents one. Returns `{ held, record, keep }`:
- * `held` is `{ status, path }`, `written` or `already`, or `skipped` with a `reason` (a file that cannot be read or
- * written, or a `permissions` that is not the shape it holds), and then nothing is written and `record` is
- * `previous`. `record` is what `uninstall` undoes, `{ path, added: { allow, deny }, defaultMode, wroteMode,
+ * `held` is `{ status, path }`, `written` (with `restoredMode` when it put a mode back) or `already`, or `skipped`
+ * with a `reason` (a file that cannot be read or written, or a `permissions` that is not the shape it holds), and then
+ * nothing is written and `record` is `previous`. `record` is what `uninstall` undoes, `{ path, added: { allow, deny }, defaultMode, wroteMode,
  * createdFile, createdObject, createdLists }`: `added` only the entries this wrote, carried over from `previous`, the
  * record of an earlier install, as its flags are. `keep(write)` runs the caller's write of the manifest, and takes the
  * settings back when it throws. */
@@ -76,10 +76,11 @@ export function holdPermissions(home, previous) {
   // A mode there now is adopted, unless it is the one this wrote back earlier; one adopted earlier and gone is put back.
   let defaultMode = previous?.defaultMode ?? null;
   let wroteMode = Boolean(previous?.wroteMode);
+  let restored = null;
   if (permissions.defaultMode !== undefined) {
     if (!(wroteMode && permissions.defaultMode === defaultMode)) [defaultMode, wroteMode] = [permissions.defaultMode, false];
   } else if (defaultMode !== null) {
-    permissions.defaultMode = defaultMode;
+    permissions.defaultMode = restored = defaultMode;
     wroteMode = true;
     changed = true;
   }
@@ -97,7 +98,7 @@ export function holdPermissions(home, previous) {
     return skipped(`not writable (${err.code ?? err.message})`);
   }
   const putBack = () => (existed ? fs.writeFileSync(target, settings.raw, 'utf8') : fs.rmSync(target, { force: true }));
-  return { held: { status: 'written', path: target }, record, keep: recordWith(putBack) };
+  return { held: { status: 'written', path: target, ...(restored !== null && { restoredMode: restored }) }, record, keep: recordWith(putBack) };
 }
 
 /** Takes out of the settings what `record` says `install` wrote: its entries, the `defaultMode` it wrote back while it
