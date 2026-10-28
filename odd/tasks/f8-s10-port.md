@@ -217,3 +217,7 @@ its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a bra
   `capture-result --agent=claude-code` with the collect arguments), then push, add gentle-ai lines to Reviews for
   `c7445caa..e2c38a15` (L14), `edcd2bfd..8c684535` (L15) and this range, and `ready --pr 617` when the merge queue's
   dry run takes it; then T6. T7 waits on question 99.
+- L17 (2026-10-28, 21:37 local, JH ORQ's note, not yet checked against his words): "Q99 (G12) answered by him:
+  install writes the recorded Rules block (his 9 D7 lines) into ~/.claude/CLAUDE.md, undone by uninstall. Go ahead
+  with T7." Before T7: read his answer with `js-harness sessions --quote` (question 99). The host killed this
+  session's background waits for low memory at 21:3x; the lead was told.
