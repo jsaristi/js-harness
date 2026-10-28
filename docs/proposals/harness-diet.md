@@ -99,11 +99,11 @@ document; he can reverse any of them. Each removal of S2 is also asked, at that 
 | D8 | The engram prompt hook | blocking (his configuration) | answered 2026-10-26: "Apagarlo" (transcript `e41d1e8d`, line 3740) | off, backed up and recorded so it can be turned back on; applied at S4a with the hook-count row, after S0's baseline has measured it on | step 2 |
 | G3 | The rest of the TUI, against F8 | blocking (priority) | slice 1 is PR #596, open | beside F8, in its own session, after #596 merges | when #596 merges |
 | G7 | Recurring certification spend after F8 | blocking (spend) | open | at most one certification a week, batching CLI updates, ~$25 each, ≤ $100 a month | after S8 |
-| G12 | What his other projects load once gentle-ai's global file is gone | blocking (his global file) | open | `install` writes a small recorded block of his Rules lines (per D7) into `~/.claude/CLAUDE.md` | S10 |
+| G12 | What his other projects load once gentle-ai's global file is gone | blocking (his global file) | answered 2026-10-28: "Bloque de reglas (Recomendada)" (transcript `0f71b2c6`, line 5233, his answer to question 99) | `install` writes a small recorded block of his Rules lines (per D7) into `~/.claude/CLAUDE.md` | S10 |
 | D4 | The `fixed load` budget | by default | open | 80,000 failing once S2 is measured; 75,000 after S5 and S6 | after S2 |
 | G2 | TUI approach | by default | open | (a) port the design to zero-dependency Node | step 2 |
-| G8 | Which gentle-ai skills to copy | by default | open | two, each for a stated need: `work-unit-commits`, `chained-pr` | S10 |
-| G10n | The output style's name | by default | open | `js-harness` | S10 |
+| G8 | Which gentle-ai skills to copy | by default | taken by the lead with the default (2026-10-27, the brief of S10; `odd/tasks/f8-s10-port.md`) | two, each for a stated need: `work-unit-commits`, `chained-pr` | S10 |
+| G10n | The output style's name | by default | taken by the lead with the default (2026-10-27, the brief of S10) | `js-harness` | S10 |
 | G14 | Our presets' names | by default | open | **complete** (engram, codegraph, context7, both reviews, the split) and **lean** (the same without codegraph); **custom** may add or drop codegraph and the engram plugin, never context7 or the reviews | S11 |
 | G13 | When a review cannot run | decided by the lead (2026-10-26) | — | `--unavailable <reason>` lets the push through, but the skip is a debt: a `check` and a `doctor` row list each unreviewed skip, and the PR is not merged until each has its review (S1) | — |
 | D1 | Log the CLI back in | — | done 2026-10-26 | — | — |
