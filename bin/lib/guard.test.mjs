@@ -741,6 +741,22 @@ test('a script that starts a child process beside a record\'s name is refused, w
     `node -e "obj?.RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
     `node -e "obj. RegExp('').exec('fs.appendFileSync(\\'${RECORD}\\', 1)')"`,
     `node -e '$RegExp("").exec("fs.appendFileSync(\\x27${RECORD}\\x27, 1)")'`,
+    // An import, an alias or a destructured name renames the call; a module that starts processes is refused whole
+    // (the independent verifier on 62470339).
+    `bun -e "import { $ } from 'bun'; await $\\\`echo x >> ${RECORD}\\\`"`,
+    `bun -e "const { spawnSync } = Bun; spawnSync(['sh', '-c', 'echo x >> ${RECORD}'])"`,
+    `bun -e "Bun['spawnSync'](['sh', '-c', 'echo x >> ${RECORD}'])"`,
+    `deno eval "const { Command } = Deno; new Command('sh', { args: ['-c', 'echo x >> ${RECORD}'] }).outputSync()"`,
+    `node -e "process.execve('/bin/sh', ['sh', '-c', 'echo x >> ${RECORD}'])"`,
+    `python -c "from os import system; system('echo x >> ${RECORD}')"`,
+    `python -c "import os as o; o.system('echo x >> ${RECORD}')"`,
+    `python -c "__import__('os').system('echo x >> ${RECORD}')"`,
+    `python -c "import ctypes; ctypes.CDLL(None).system(b'echo x >> ${RECORD}')"`,
+    `perl -e 'readpipe("echo x >> ${RECORD}")'`,
+    `perl -e 'use IPC::Open2; open2(my $o, my $i, "tee -a ${RECORD}")'`,
+    `pwsh -c "[scriptblock]::Create('''x'' >> ${RECORD}').Invoke()"`,
+    `cmd /c "if 1==1 copy nul .git\\js-harness\\lens-reviews.jsonl"`,
+    `cmd /c "for %f in (x) do copy nul .git\\js-harness\\lens-reviews.jsonl"`,
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
@@ -763,6 +779,11 @@ test('a read that starts no child process, and a child process beside no record,
     `pwsh -c "Get-Content ${RECORD}"`,
     // A RegExp's own exec, and a name that only ends in RegExp.
     `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(new RegExp('x').exec(t), myRegExp)"`,
+    // A pipe that is no pipe open, a format with %x, and a key named commands (the independent verifier on 62470339).
+    `ruby -e 'File.open("${RECORD}") { |f| puts f.read }'`,
+    `perl -e 'open(F, "<", "${RECORD}") || die "no: $!"; print <F>'`,
+    `perl -e 'printf("%x\\n", -s "${RECORD}")'`,
+    `python -c "import json; print([json.loads(l).get('commands') for l in open('${RECORD}')])"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
 });
 

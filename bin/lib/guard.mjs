@@ -666,17 +666,21 @@ function segmentRecordWrite(words, redirected) {
 // What starts a child process, or a thread that runs a string, in the language of each interpreter (JH 74; found by
 // JH 72): a script that names a record and starts one is refused whole, since what the child runs (a command line, an
 // array of words, a name chosen at run time) is not read here. Matched in the script's strings too, where Node names its
-// module. A module or a function whose name the script builds from parts is not followed.
+// module. A module that starts processes among other things (Python's os, Deno, Bun) is refused whole, since an import,
+// an alias or a destructured name renames its call (the independent verifier on 62470339); a read through one goes
+// through cat. A module or a function whose name the script builds from parts is not followed.
 const CHILD_STARTS = {
-  js: /\b(?:child_process|worker_threads)\b|\bDeno\s*\.\s*(?:Command|run)\b|\bBun\s*\.\s*(?:spawn\w*|\$)/,
-  python: /\b(?:subprocess|pty|commands)\b|\bos\s*\.\s*(?:system|popen\w*|exec\w*|spawn\w*|posix_spawn\w*|fork\w*)\b|create_subprocess_\w+/,
-  perlRuby: /`|\bqx\b|%x|\b(?:system|exec|spawn|fork|syscall|Open3|popen\w*)\b|\bopen\b[^;]*\|/,
-  powershell: /\b(?:Start-Process|saps|start|Invoke-Expression|iex|Invoke-Command|icm|Invoke-Item|ii|Start-Job|Start-ThreadJob)\b|Diagnostics\.Process/i,
+  js: /\b(?:child_process|worker_threads|Deno|Bun)\b|['"]bun['"]|\bprocess\s*\.\s*(?:binding|_linkedBinding|execve|dlopen)\b/,
+  python: /\b(?:os|posix|subprocess|pty|asyncio|multiprocessing|ctypes|importlib|__import__)\b/,
+  // A pipe open's pipe sits at its mode string's edge (`"|-"`, `'-|'`, `"cmd |"`), not in a block's `|f|` or `|| die`.
+  perlRuby: /`|\bqx\b|%x[^\w\s\\]|\b(?:system|exec|spawn|fork|syscall|readpipe|Open[23]|IPC|PTY|popen\w*)\b|\bopen\b[^;]*?(?:["']\s*\||\|\s*["'])/,
+  powershell: /\b(?:Start-Process|saps|start|Invoke-Expression|iex|Invoke-Command|icm|Invoke-Item|ii|Start-Job|Start-ThreadJob|Invoke-CimMethod|Invoke-WmiMethod|scriptblock|InvokeScript)\b|Diagnostics\.Process|Win32_Process/i,
 };
 const LANGUAGES = { node: 'js', deno: 'js', bun: 'js', python: 'python', python3: 'python', py: 'python', perl: 'perlRuby', ruby: 'perlRuby', pwsh: 'powershell', powershell: 'powershell' };
 
-// cmd's own commands that write the file they are given, where a command starts: first, or after `&`, `|`, `(` or `@`.
-const CMD_WRITES = /(?:^|[&|(@])\s*(?:copy|xcopy|robocopy|move|del|erase|ren|rename|mklink|replace)(?:\.exe)?(?=[\s/]|$)/i;
+// cmd's own commands that write the file they are given, as a word of the line: first, or after a space, `&`, `|`, `(`
+// or `@`, so after `if` and `for … do` too, and not inside a name such as copy.jsonl.
+const CMD_WRITES = /(?:^|[\s&|(@])(?:copy|xcopy|robocopy|move|del|erase|ren|rename|mklink|replace)(?:\.exe)?(?=[\s/]|$)/i;
 
 /** What `cmd /c` (or `/k`) given `args` writes of the review records: its command line read as a shell reads it, or one
  * of cmd's own writing commands beside a record's name. The flag may hold the line after it (`/c"echo x"`). */
