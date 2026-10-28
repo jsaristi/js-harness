@@ -219,3 +219,13 @@ bin/lib/template-block.test.mjs:30) stay until he answers, and PR 3 is not annou
   base (`bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/codex-reviews.mjs`, their tests and `js-harness.mjs`'s guard
   help) is JH 69's surface: named in the list until the lead says otherwise, asked through it. `bin/lib/
   gentle-ai-absence.test.mjs` holds the list and fails on a file outside it.
+- L14 (2026-10-28 22:59Z, his answer to question 104, tapped on the board, read with `js-harness sessions --quote
+  0f71b2c6-cbce-43ca-a031-276a4b2c381f 11879`): "Las lentes Claude (Recomendada)", the option that read "Donde Codex
+  está apagado, la revisión de lentes queda encendida: la línea dice eso y la puerta de merge exige su registro."
+  So `init`'s `AGENTS.md` block says "Where the Codex review is off (`js-harness functions`), the Claude lens review
+  stays on: the merge door asks for its record before a change lands", in place of his answer to question 4 of
+  odd/tasks/on-demand-functions.md, and `lensDoor` asks for a complete lens record of every code commit whose own tree
+  turns the Codex review off, even with `lensReview` off (`whereCodexOff`). The push rows do not change: his answer
+  S9 there lets a push through with the Codex review off, and the door is where the record is asked. The block's
+  bytes move, so a project whose block is unedited gets it rendered again on its next sync, which git undoes, and an
+  edited one is kept (`syncTemplateBlock`).

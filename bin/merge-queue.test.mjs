@@ -848,8 +848,11 @@ test('a lens skip leaves the pull request out until a review of the same commits
   assert.ok(paid.out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), paid.out.join('\n'));
 });
 
-test('with the Codex review off, a code commit is one that changes a file that is not Markdown, and it lands asking for no gentle-ai line (L11)', async () => {
-  const { root, code, head } = makeEvidenceRepo({ codex: false });
+test('with the Codex review off, a code commit is one that changes a file that is not Markdown, and it lands on its lens record alone (L11, L14)', async () => {
+  const { root, main, code, head } = makeEvidenceRepo({ codex: false });
+  const unreviewed = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.match(unreviewed.out[0], /^PR 1 is left out: lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
   const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.equal(exit, 0, out.join('\n'));
   assert.equal(out[1], `  ${code.slice(0, 7)} feat/g code: the Codex review is off`, out.join('\n'));
@@ -908,6 +911,7 @@ test('with the Codex review off, a Markdown file whose name git quotes is no cod
   git(root, 'push', '--quiet', 'origin', 'feat/g');
   const head = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '--detach', main);
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
   // The evidence alone is asserted: Windows cannot write the file into the candidate, which a merge then says.
   const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.deepEqual(out.slice(0, 2), ['PR 1, commit by commit:', `  ${code.slice(0, 7)} feat/g code: the Codex review is off`], out.join('\n'));

@@ -180,6 +180,23 @@ test('the merge door asks for the lens review with the Codex review off: that ex
   assert.equal(lensDoor(dir, 'HEAD'), null);
 });
 
+// Question 104 (odd/tasks/f8-s11-complements.md, L14): where the Codex review is off, the lens review stays on at the door.
+test('the merge door asks for the lens review where the Codex review is off, even with the lens review switched off', () => {
+  const tip = withoutAutoMaintenance(() => commit('harness.json', '{ "functions": { "codexReview": "off", "lensReview": "off" } }\n', 'chore: both reviews off'));
+  assert.equal(row().pass, true);
+  assert.match(lensDoor(dir, 'HEAD').detail, /^lens review: 2 of 2 code commits since origin\/main have no complete Claude lens record/);
+  record(base, tip);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
+test('the merge door asks for no lens record where the Codex review is on and the lens review off', () => {
+  withoutAutoMaintenance(() => {
+    git('reset', '-q', '--hard', base);
+    commit('harness.json', '{ "functions": { "codexReview": "on", "lensReview": "off" } }\n', 'chore: the Codex review alone');
+  });
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
 // L9: a commit is asked by the switch its own tree holds, so the commits of a branch made before the lens review was
 // turned on are never asked, wherever that branch lands, and a project that never turns it on is never asked.
 test('a code commit asks for a lens record only where its own tree turns the lens review on', () => {
