@@ -272,13 +272,17 @@ export function worktreeOf(entry, platform = process.platform) {
 
 /** The sessions `sessions start` recorded for the project at `root`, those not removed, by the folder each works in:
  * `{ items }`, each `{ id, folder }`, its session id and its worktree, or the folder it was started in when it has none;
- * or `{ items: [], unavailable }` when the record could not be read. claude writes a session's transcript under the
- * folder it works in, so one in a worktree is not among the main checkout's. */
+ * `held`, how many sessions of the project it holds, with a session id or not; and `unknown`, null or why it may hold
+ * one more, in words: it could not be read (`unavailable`, with no items), or it holds lines it skipped, any of which
+ * may be one (R3-002). claude writes a session's transcript under the folder it works in, so one in a worktree is not
+ * among the main checkout's. */
 export function recordedFolders(home, root, { readFile, platform = process.platform } = {}) {
   const record = readRecord(home, { readFile });
-  if (record.unavailable !== undefined) return { items: [], unavailable: record.unavailable };
-  const ours = record.sessions.filter((entry) => typeof entry.root === 'string' && typeof entry.sessionId === 'string' && within(entry.root, root, platform) && within(root, entry.root, platform));
-  return { items: ours.map((entry) => ({ id: entry.sessionId, folder: worktreeOf(entry) ?? entry.cwd ?? entry.root })) };
+  if (record.unavailable !== undefined) return { items: [], held: 0, unavailable: record.unavailable, unknown: `could not be read (${record.unavailable})` };
+  const ours = record.sessions.filter((entry) => typeof entry.root === 'string' && within(entry.root, root, platform) && within(root, entry.root, platform));
+  const items = ours.filter((entry) => typeof entry.sessionId === 'string').map((entry) => ({ id: entry.sessionId, folder: worktreeOf(entry) ?? entry.cwd ?? entry.root }));
+  const skipped = record.skipped ?? 0;
+  return { items, held: ours.length, unknown: skipped > 0 ? `holds ${skipped} line${skipped === 1 ? '' : 's'} it could not read` : null };
 }
 
 const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(saidBy(result));
