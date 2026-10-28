@@ -71,7 +71,7 @@ step (one run, ~$13 API-equivalent); if it fails, its cause is reported and it i
 - [x] T4 (kind: build) the permissions object held and recorded by `install`, undone exactly, and a `doctor` row — S3; inline; independent verifier; the permissions commit (PR 2)
 - [x] T5 (kind: build) `guard` refuses a file tool on a denied path; a clone's `outputStyle` and deny keys — S1, S4; inline; independent verifier; the guard commit (PR 2)
 - [ ] T6 (kind: verify) the probe in a scratch home, the five prompts, the incident rerun — S6; inline
-- [ ] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`
+- [x] T7 (kind: build) the Rules block (question 99 answered, L18; design L19) — S5; `f8-s10-rules`; PR 619, merged
 - [x] T7a (kind: verify) Codex's finding left open by its recheck on `6df890e..4e28ec3` (the sibling readable by others until its chmod), fixed in `c7fe8137`: Codex reads it again from `d232c63a` (`--again`), since it runs no second recheck and no record covers `c7fe8137` — S5; inline
 
 Reviews:
@@ -140,6 +140,23 @@ Reviews:
   file) not taken: `realPlace` returns its argument itself for anything that is not a link (`rules-block.mjs:85-88`),
   so the two are the same string by construction, and the link test pins the other side.
 
+## Probe
+- Install and uninstall, in a scratch home (`mktemp -d`, no credentials file), from `f8-s10-rules` (L20, rerun after
+  the verifier's fixes): `install` exit 0; the style `~/.claude/output-styles/js-harness.md` written; the skills
+  written, the two ported ones among them; `permissions` holds allow 1 and the 24 denies; the Rules block written
+  after his text, kept, with its 9 lines. `guard` denies a Read of a planted `~/.ssh/id_ed25519` and of
+  `id_ed25519::$DATA`. `uninstall` exit 0, and the scratch home is byte for byte as before.
+- Five Spanish prompts (L22): 5 of 5 pass. They were run in a scratch project that selects the style as `install`
+  writes it, with `claude -p` (Claude Code 2.1.312, claude-opus-5-5) using `--setting-sources project
+  --strict-mcp-config --tools '' --no-session-persistence`, and with the prompt on stdin. A reply passes when:
+  - the session's `init` event names `js-harness` as its output style;
+  - the reply answers the question (it names its subject and does not say the message was cut);
+  - it holds no voseo form (`vos`, `tenés`, `podés`, `querés`, `sabés`, `mirá`, `dale`, `che`) and no `usted`;
+  - it uses tú forms (e.g. `tienes`, `puedes`, `quieres`, `revisa`, `tú`).
+
+  The run cost 0.12 USD API-equivalent, on his plan. Not checked here: a restarted session's `/context` listing
+  the skills, since a run that loads no user settings loads no user skills; that is seen once he applies S10.
+
 ## Next step
 State at 03:50Z, 2026-10-28 (paused for his restart, L21): PR 2 (617) is ready (`ready` sent 02:55Z). T7 is on
 `f8-s10-rules` (not pushed, no PR yet): `30ac3c3d` (the atomic write moved out), `380b9e77` (the Rules block),
@@ -151,9 +168,11 @@ Codex's recheck on `6df890e..4e28ec3`: the link fixed; the mode half fixed (the 
 until its chmod), so the next commit creates it with the mode; Codex rechecks no range that starts at `4e28ec3`, so
 the lenses review that commit. Lenses on `cca493e..c7fe813` (risk, reliability, readability, resilience): 0 findings.
 gentle-ai on `cca493e0..c7fe8137`: approved, a WARNING and a SUGGESTION, taken in `8012d8d6`, which Codex, the
-lenses and gentle-ai approved (Reviews). Next: push, PR 3 with base `f8-s10-permissions` or main, `ready
---pr` once the merge queue's dry run takes it; then T6: the probe is recorded (L20), left are the five Spanish prompts
-(about $1-2 API-equivalent, plan quota) and the incident rerun (about $13, once, the lead's).
+lenses and gentle-ai approved (Reviews). PR 619 (T7) is open and `ready` (L22). T6 is on `f8-s10-probe`, chained on
+`f8-s10-rules`: `## Probe` holds the install probe and the five prompts, 5 of 5. Held: the incident rerun,
+until he applies S10 to his machine (the lead, L23). The ROADMAP and the register are done. Next: PR 4 (T6's
+record, docs only) and `ready`; once he has applied S10, the rerun once (about $13; if it fails, its cause is
+reported and it is not rerun), T6 closed, and the `closed` notice with its summary in `docs/sessions/`.
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 65 · F8 S10: port style, skills,
@@ -299,3 +318,15 @@ lenses and gentle-ai approved (Reviews). Next: push, PR 3 with base `f8-s10-perm
   (`chmodSync`) before the rename. Its two tests are written in `bin/lib/rules-block.test.mjs`, uncommitted: both
   skip on this machine (it cannot make links; Windows keeps no Unix mode), so only CI's Linux run proves them. JH
   ORQ asked a pause for his restart (Claude Desktop, gentle-ai, Codex): nothing ran at that point; nothing pushed.
+- L22 (2026-10-28, T6): PR 619 (T7) opened and `ready` sent (the merge queue's dry run takes it after PR 618). The five
+  Spanish prompts, on `f8-s10-probe`: the first run is void. Its probe passed each prompt to `claude -p` through a
+  shell (`shell: true` on Windows), which cut it at its first space, and its score passed five replies that only said
+  the message was cut (0.06 USD). Read before it was reported; the rerun puts the prompt on stdin with no shell and
+  counts a reply only when it answers: 5 of 5 (`## Probe`, 0.12 USD). The incident rerun is held, not run: the
+  current arm copies his real `~/.claude` into each trial home (`evals/home.mjs:41`, `:258`) and runs this checkout's
+  `init` in the workspace (`evals/home.mjs:454-458`), so run now it would measure his home without S10's user-level
+  part, with a clone that selects a style the trial home lacks; about $13 for a measure of neither. Asked of the lead
+  (its planned step): run it once S10 is applied to his machine, or now as it is.
+- L23 (2026-10-28, 02:19 local, JH ORQ's note): "Lead's call: run the incident rerun only after he applies S10 to his
+  machine, so it measures S10 as he will run it. Hold it". The ROADMAP and the diet's register are updated on
+  `f8-s10-probe` (`5da88074`); T7 is marked done (PR 619 merged, main `e1725c83`).

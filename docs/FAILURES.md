@@ -207,6 +207,9 @@ session's claim.
   was claimed in a message and written in a document of another branch; the merge queue now asks
   for it on the pull request's own branch (odd/tasks/rule-hierarchy.md, "The merge door (T16e)",
   item 5)
+- Seen: 2026-10-28 — odd/tasks/f8-s10-port.md, L22 — the style probe scored 5 of 5 on replies it had not
+  read, which only said the prompt was cut at its first space; read before it was reported, and the
+  rerun counts a reply only when it answers
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### citations-test-reads-clock
