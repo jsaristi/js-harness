@@ -340,8 +340,8 @@ export function registerFaults(register) {
   return faults;
 }
 
-/** A span's words for a line of the report, cut at 160 characters. */
-const said = (span) => {
+/** A span's words for a line of a report, cut at 160 characters: the harness's and a project's (./project-coverage.mjs). */
+export const spanWords = (span) => {
   const words = squash(span.text);
   return words.length > 160 ? `${words.slice(0, 157)}...` : words;
 };
@@ -361,9 +361,9 @@ export function coverageOf({ register, sources, messages, rules, cases, readFile
     const coverage = sourceCoverage({ spans: cutSpans(source.text), entries: register.sources[source.id] ?? [], rules });
     report.sources.push({ id: source.id, from: source.from, ...coverage });
     for (const span of coverage.gaps) {
-      findings.push(`${source.id}: the span ${span.id} is declared nowhere: "${said(span)}" (name its rule as \`rule:<id>\`, or list it as context with its reason in ${REGISTER_FILE})`);
+      findings.push(`${source.id}: the span ${span.id} is declared nowhere: "${spanWords(span)}" (name its rule as \`rule:<id>\`, or list it as context with its reason in ${REGISTER_FILE})`);
     }
-    for (const { span, reason } of coverage.reopened) findings.push(`${source.id}: the context span ${span.id} changed: "${said(span)}" (it was listed as "${reason}"; list it again)`);
+    for (const { span, reason } of coverage.reopened) findings.push(`${source.id}: the context span ${span.id} changed: "${spanWords(span)}" (it was listed as "${reason}"; list it again)`);
     if (coverage.edited.length > 0) stale.push(`${source.id}: ${plural(coverage.edited.length, 'owed span', 'owed spans')} edited in place since the register was written ${REFRESH}`);
     if (coverage.gone.length > 0) stale.push(`${source.id}: ${plural(coverage.gone.length, 'span of the register is', 'spans of the register are')} in the source no more ${REFRESH}`);
   }

@@ -101,7 +101,10 @@ mechanism here, before S13 rehearses it and S12 ships it.
   notice goes with the pull request, after the reviews)
 
 Reviews:
-- none yet.
+- lenses risk, reliability, readability on `947ac91c..62f4a62` (`lens-reviews.jsonl`): 0, 2 and 1 findings, fixed
+  by the commit after `62f4a623` (L6); that fix is reviewed with the rest by the next Codex run.
+- Codex on `947ac91c..62f4a62`: not recorded; the first run was refused at 8 parts, the second broke at part 2
+  (L6). Next: `js-harness codex-review --base 947ac91c --max-parts <n>` over the fix as well.
 
 ## Paid runs
 None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
@@ -122,7 +125,11 @@ record. Each `--plan` first prints the trials and starts nothing. The 13 to 23 c
 write, on both arms twice, are about $30 to $60 more, when a later session writes them.
 
 ## Next step
-T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4, T4b, T5 and T6 are committed (slice 6 by the commit after slice 5). T7 is written (`## Paid runs`, the ROADMAP's S5c-a state). Next: the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T6-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
+T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' three findings are fixed in the commit after it (L6).
+Next: one Codex run over `947ac91c..HEAD` with `--max-parts`, the tree untouched while it runs; its findings fixed
+and their fix reviewed; then push, the pull request and `js-harness notify --to orchestrator --kind ready --pr <n>`.
+Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
+passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
 ## Log
 - L1 (2026-10-28, the lead's brief `briefs/2026-10-28T17-34-30-440Z-2b199716.md`): "JH 73 · F8 S5c-a: directive
@@ -187,3 +194,14 @@ T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-re
   in. The ready patch for `init`, in `writeProject` beside `if (exclude) manifest.exclude = exclude;`:
   `manifest.coverage = { baseline: <today, YYYY-MM-DD>, release: version };`, with a test that a new project's
   manifest holds it, and a look at `formatFor` (a key a reader of an older format refuses needs its format).
+- L6 (2026-10-28, evidence, the lenses on `947ac91c..62f4a62` and the Codex runs): reliability found that
+  `rules coverage --prove --json` printed the proof lines before the JSON, in the harness and in a project, so the
+  output did not parse; and that a project manifest that does not parse, or parses to `null`, threw a raw
+  `SyntaxError` or `TypeError` out of `readProjectRules`. Readability found the span helper `said` written twice.
+  Fixed: with `--json` the proofs go into the one document (`bin/rules.mjs`, `bin/lib/project-coverage.mjs`), the
+  manifest that is no JSON object is said by its path (`coverageRecord`), and `spanWords` is the one helper
+  (`bin/lib/rules-coverage.mjs`); the tests are in `bin/rules-coverage.test.mjs`,
+  `bin/lib/project-coverage.test.mjs` and `bin/lib/project-rules-read.test.mjs`. Codex: the first run stopped at
+  its 8 parts, over the 6 a run starts without `--max-parts`; the second, with `--max-parts 8`, passed part 1 and
+  broke after part 2 because this session wrote a test file while it ran (353,663 input tokens, nothing recorded;
+  `docs/FAILURES.md`, `edit-during-review`). From here no file is written while a review runs.

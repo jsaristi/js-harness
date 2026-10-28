@@ -97,3 +97,11 @@ test('the baseline the project manifest records makes every live rule name its c
   write(root, { '.git/js-harness/manifest.json': JSON.stringify({ version: '0.98.0', coverage: { baseline: 'soon' } }) });
   assert.throws(() => readProjectRules(root), /coverage record .* is not \{ baseline, release \}/);
 });
+
+test('a manifest that does not parse, or is no object, is said as the manifest, never a raw parse error', (t) => {
+  const root = project(t, { 'docs/rules.json': listOf([prose]), 'AGENTS.md': '- Never deploy by hand.\n' });
+  for (const text of ['{ not json', 'null', '[]']) {
+    write(root, { '.git/js-harness/manifest.json': text });
+    assert.throws(() => readProjectRules(root), (err) => err.constructor === Error && /the project manifest .*manifest\.json is not a JSON object/.test(err.message), text);
+  }
+});

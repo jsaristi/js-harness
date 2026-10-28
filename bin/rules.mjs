@@ -460,25 +460,27 @@ function coverageForm(parsed, root, { run, stdout, stderr }) {
   const overCap = OWED_CAP_FROM !== null && report.totals.owed > OWED_CAP * report.totals.obligations;
   const failing = parsed.strict ? [...report.findings, ...report.stale, ...(overCap ? [`owed is ${percent(report.totals.owed, report.totals.obligations)} of the obligations, over the cap of ${percent(OWED_CAP, 1)}`] : [])] : report.findings;
   // Each planted break is applied in a copy of the checkout, and its test must go red there.
-  if (parsed.prove) {
-    const proofs = proveBreaks(root, read.register, { spawn: run, tmpdir: os.tmpdir() });
+  const proofs = parsed.prove ? proveBreaks(root, read.register, { spawn: run, tmpdir: os.tmpdir() }) : null;
+  const open = proofs === null ? 0 : proofs.filter((proof) => !proof.red).length;
+  // With `--json` the output is the one document, the proofs in it, so that it parses.
+  if (parsed.json) {
+    stdout(JSON.stringify(proofs === null ? report : { ...report, proofs }, null, 2));
+    return open > 0 || (parsed.strict && failing.length > 0) ? 1 : 0;
+  }
+  if (proofs !== null) {
     for (const proof of proofs) {
       const what = `${proof.rule}${proof.of === undefined ? '' : ` (${proof.of})`}: ${proof.test} with the break in ${proof.path}`;
       stdout(proof.red ? `PROVEN  ${what} went red` : `FAIL    ${what} ${proof.status === null ? 'did not finish' : 'stayed green'}`);
     }
-    const open = proofs.filter((proof) => !proof.red).length;
     stdout(open === 0 ? `PASS  prove  ${proofs.length} planted ${proofs.length === 1 ? 'break turns its test' : 'breaks turn their tests'} red` : `FAIL  prove  ${open} of ${proofs.length} planted breaks left their test green`);
     if (open > 0) return 1;
-    if (!parsed.strict && !parsed.json) return 0;
+    if (!parsed.strict) return 0;
   }
-  if (parsed.json) stdout(JSON.stringify(report, null, 2));
-  else {
-    for (const line of coverageLines(report)) stdout(line);
-    const word = parsed.strict ? 'strict' : 'coverage';
-    stdout(failing.length === 0 ? `PASS  ${word}  no gap opened since the baseline${parsed.strict ? ', and the register says what the texts hold' : ''}` : `FAIL  ${word}  ${failing.length} ${failing.length === 1 ? 'finding' : 'findings'}`);
-    for (const line of failing) stdout(`      ${line}`);
-    if (!parsed.strict) for (const line of report.stale) stdout(`note: ${line}`);
-  }
+  for (const line of coverageLines(report)) stdout(line);
+  const word = parsed.strict ? 'strict' : 'coverage';
+  stdout(failing.length === 0 ? `PASS  ${word}  no gap opened since the baseline${parsed.strict ? ', and the register says what the texts hold' : ''}` : `FAIL  ${word}  ${failing.length} ${failing.length === 1 ? 'finding' : 'findings'}`);
+  for (const line of failing) stdout(`      ${line}`);
+  if (!parsed.strict) for (const line of report.stale) stdout(`note: ${line}`);
   return parsed.strict && failing.length > 0 ? 1 : 0;
 }
 

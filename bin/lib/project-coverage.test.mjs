@@ -65,6 +65,22 @@ test('rules coverage in a project says each text init wrote, the project\'s side
   assert.equal(form({ command: 'coverage', refresh: true }, root).code, 1, 'a project has no register to refresh');
 });
 
+test('rules coverage --prove --json prints one JSON document, each planted break\'s proof in it', (t) => {
+  const control = { level: 'check', test: 'held.test.mjs', break: { path: 'value.mjs', find: 'value = 1', replace: 'value = 2' } };
+  const root = project(t, {
+    'value.mjs': 'export const value = 1;\n',
+    'held.test.mjs': "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { value } from './value.mjs';\ntest('held', () => assert.equal(value, 1));\n",
+    'docs/rules.json': JSON.stringify({ format: 1, rules: [{ id: 'value-one', subject: 'the value is one', since: '2026-10-14', sensor: 'held', control }] }),
+  });
+  for (const strict of [false, true]) {
+    const { code, out, all } = form({ command: 'coverage', prove: true, json: true, strict }, root);
+    assert.equal(out.length, 1, all);
+    const document = JSON.parse(out[0]);
+    assert.deepEqual(document.proofs.map((proof) => [proof.rule, proof.red]), [['value-one', true]]);
+    assert.equal(code, strict && document.findings.length > 0 ? 1 : 0, all);
+  }
+});
+
 test('a project with no coverage record says init records it, and holds no rule to a control', async (t) => {
   const root = project(t, { 'AGENTS.md': agentsTemplate('app') });
   const plain = form({ command: 'coverage', strict: true }, root);

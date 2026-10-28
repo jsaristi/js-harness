@@ -36,7 +36,16 @@ export function coverageRecord(root, run = gitShow) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
     throw new Error(`cannot read the project manifest: ${err.code ?? err.message}`);
   }
-  const record = JSON.parse(text).coverage;
+  let manifest;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    manifest = null;
+  }
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    throw new Error(`the project manifest ${file} is not a JSON object, so the baseline its coverage record dates the rules' controls from cannot be read`);
+  }
+  const record = manifest.coverage;
   if (record === undefined) return null;
   if (!(record !== null && typeof record === 'object' && isDay(record.baseline) && typeof record.release === 'string')) {
     throw new Error(`the coverage record of ${file} is not { baseline, release }: a day written YYYY-MM-DD and the release that set it`);

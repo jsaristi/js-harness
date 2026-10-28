@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rulesMain } from './rules.mjs';
-import { readCoverageText, spanId } from './lib/rules-coverage.mjs';
+import { readCoverageText, spanId, writeCoverage } from './lib/rules-coverage.mjs';
 import { plantedBreaks } from './lib/rules-coverage-read.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,6 +51,24 @@ test('the real package holds its baseline: rules coverage --strict exits 0 and s
   assert.ok(out.some((line) => line.startsWith('  CLAUDE.md (repository): ')), all);
   assert.ok(out.some((line) => line.startsWith('  protocols-skill (install): ')), all);
   assert.equal(out.at(-1), 'PASS  strict  no gap opened since the baseline, and the register says what the texts hold');
+});
+
+test('rules coverage --prove --json prints one JSON document, the proofs in it', async () => {
+  await inCopy(async (root) => {
+    // Every control owed, so the proof plants no break and the document is all there is to read.
+    edit(root, 'bin/lib/rules-coverage-data.mjs', (text) => {
+      const { register } = readCoverageText(text);
+      const owed = { level: 'owed', since: register.baseline };
+      const controls = Object.fromEntries(Object.entries(register.controls).map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...owed })) : owed]));
+      return writeCoverage({ ...register, controls });
+    });
+    const { code, out, all } = await rules(['coverage', '--prove', '--json'], root);
+    assert.equal(code, 0, all);
+    assert.equal(out.length, 1, all);
+    const document = JSON.parse(out[0]);
+    assert.deepEqual(document.proofs, []);
+    assert.ok(Array.isArray(document.findings), all);
+  });
 });
 
 test('a directive planted with no control makes rules check exit 1 and names it; the plain report says it and exits 0', async () => {
