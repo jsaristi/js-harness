@@ -97,16 +97,32 @@ mechanism here, before S13 rehearses it and S12 ships it.
   inline; slice 6 (the commit after slice 5): 2 of 14.4's 15 to 25, `rule-reuse-first` (6 hidden tests, the
   protocols skill holds 2 tied spans) and `rule-away-autonomy` (5, the orchestrator skill holds 4), each proven by
   `task-proof` and owed in the register until its paid run; the other 13 to 23 are a later session's
-- [ ] T7 (kind: docs) the paid runs as ready commands, the ROADMAP line, the ready notice — S8; inline
+- [x] T7 (kind: docs) the paid runs as ready commands, the ROADMAP line, the ready notice — S8; inline (the ready
+  notice goes with the pull request, after the reviews)
 
 Reviews:
 - none yet.
 
 ## Paid runs
-Not written yet (T7).
+None started; each waits for his yes, through the lead. Estimates [i] at 14.4's $0.56 to $0.65 a trial, API
+equivalent on his Max plan; the flags are S0's (`evals/results/f8-s0-a-incidents.json`: claude.exe, high effort,
+`bypassPermissions`, work root `D:/js-harness-evals-work`). A run takes one kind of config, so each arm is its own run.
+
+| Run | Command | Trials | Estimate |
+|---|---|---|---|
+| P1 current arm of the two new cases | `node evals/suite.mjs --claude C:/Users/Oficina/.local/bin/claude.exe --configs current --efforts high --repeats 2 --tasks rule-reuse-first,rule-away-autonomy --permission-mode bypassPermissions --work-root D:/js-harness-evals-work --name f8-s5c-a-rules-current` | 4 | $2.24 to $2.60 |
+| P2 without reuse-first | the same with `--configs current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-without-reuse-first` | 2 | $1.12 to $1.30 |
+| P3 without away-autonomy | the same with `--configs current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-without-away-autonomy` | 2 | $1.12 to $1.30 |
+| P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents`, then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents` | 20 | about $13 |
+
+In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
+evals/results/f8-s5c-a-rules-current.json evals/results/f8-s5c-a-without-reuse-first.json` (and the same for
+`rule-away-autonomy` with P3), then drop the case from the register's `cases` so `evals/tasks.test.mjs` holds its
+record. Each `--plan` first prints the trials and starts nothing. The 13 to 23 cases 14.4 counts that T6 did not
+write, on both arms twice, are about $30 to $60 more, when a later session writes them.
 
 ## Next step
-T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4, T4b, T5 and T6 are committed (slice 6 by the commit after slice 5). Next: T7's `## Paid runs` (suite.mjs with `--configs current,current-without-rule-<id>`, 2 trials an arm a case, then `node evals/rule-proof.mjs <case> <current results> <without results>`; the incident rerun, 20 trials), then the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T6-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
+T3 is committed: `proveBreaks` and `plantedBreaks` in `bin/lib/rules-coverage-read.mjs` with `bin/lib/rules-coverage-read.test.mjs` (3 of 3), `--prove` in `bin/rules.mjs`, and 11 check controls in the register (the value rules `bin/lib/rules-bindings.test.mjs` holds, each break `('<id>', '<unit>')` to `('<id>', '<unit>') + 1` in its reader, since a break that holds `ruleValue(` reads as the register reading the rule and is now refused): `rules coverage --prove` gave 11 of 11 red in 20 s. The verifier read slice 2 (L4). T4, T4b, T5 and T6 are committed (slice 6 by the commit after slice 5). T7 is written (`## Paid runs`, the ROADMAP's S5c-a state). Next: the reviews (Codex and the lenses) of slices 1-4b from base `7899f5ee` (Codex's plan for slices 1-3: 5 parts, 2,057 lines, about 0.95 to 1.57 million input tokens), then T6-T7. Known limit for the Log: an edit is judged by its place, so a new sentence written over an owed one in the same place passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
 ## Log
 - L1 (2026-10-28, the lead's brief `briefs/2026-10-28T17-34-30-440Z-2b199716.md`): "JH 73 · F8 S5c-a: directive
