@@ -271,6 +271,315 @@ shrinks (`bin/lib/ratchet.testkit.mjs`; `odd/tasks/conventions.md`).
 - [x] Part 1, js-harness itself: the refused-argument wording, the error split, pure modules and the shipped voice held by tests; the review lines; the protocols skill's trigger (`jsaristi/js-harness#496`)
 - [ ] Part 2, onboarding profiles: the conventions a project picks at onboarding, after onboarding v4 closes
 
+## F8 plan
+
+F8's step 4 and step 5 in detail, one step at a time, in the order of the checklist (step 4's
+paragraph above is the record of what each step did; this section is the plan). The depth lives in
+[the diet's section 10](proposals/harness-diet.md#10-migration-one-reversible-step-at-a-time),
+its migration table, and in [the reverse-engineering document's sections 13 and
+14](proposals/gentle-ai-reverse-engineering.md#13-how-it-works-and-what-we-copy-of-the-way-it-works-2026-10-28);
+the register of his decisions is [the diet's section 1](proposals/harness-diet.md#1-what-is-his-to-decide);
+the one cost table is the diet's D2. What the harness must look like once F8 is done is
+[the specification's "After F8"](SPEC.md#after-f8). Nothing here is a checkbox: a step's state is
+read in its feature document, and `js-harness progress` counts only the checklist.
+
+Every step is one reversible change, measured against S0's baseline with the one noise rule (diet
+section 7): on the incident set a step is **worse** below `L − max(s, 3)`, with L 13 and s 1, so
+below 10 of 20 (`odd/tasks/f8-s0-baseline.md`, `## Frozen thresholds`, `## Baseline`). Costs are
+`total_cost_usd`, API-equivalent, drawn on his Max plan's limits, with no fixed cap (D2, "Sin tope
+fijo"); a figure marked [i] is an estimate.
+
+**The order and its dependencies.**
+
+```
+S0 ─► S3 ─► directives ─► S1 ─► S10 ─► S11 ─► S5c-a ─► S13 ─► S12 ─► S2 ─► S4a, S4b, S5 + S5c-b, S6, S7 ─► S8
+                          └─ S1 records fix (after S10) ┘                 └─► S9 (any time after S2)
+beside: the long-session eval (for S8); the TUI's rest (G3, after PR 596)
+```
+
+- S3 first because it banks the 30.7k saving at once; S1 next because between S3 and S1 gentle-ai's
+  review ran without its prose (diet section 11).
+- S10 and S11 are the replacements: nothing is removed until what it gave is ours.
+- S5c-a before S13, so the rehearsal shows directive coverage and S12's migration carries it
+  (reverse-engineering document, 14.5).
+- S13 before S12 and S2: the whole path is proven on a scratch project before his projects move and
+  before anything is removed.
+- S2 last of the migration: removal is machine-wide and needs every replacement, a backup and a
+  restore drill first.
+- S4a to S7 are cuts measured one at a time against the cleaned machine; S8 certifies the end.
+
+**Spent so far** (each from its run's record): S0 $59.64, S3 $16.95, S1 $11.35, S10 $10.61, in all
+$98.55 (`odd/tasks/f8-s0-baseline.md`, `## Baseline`; diet section 7.1; `odd/tasks/f8-s1-reviews.md`,
+L14; `odd/tasks/f8-s10-port.md`, L26). **Still forecast** [i]: about $141 inside the diet's envelope
+(the incident reruns after S4b and S5, the post-removal measure, S6's two cases, two scratch-project
+walks, S8 and the long-session eval, the slack), plus S5c's $95 to $130 above it, which goes to him
+before it runs. Reviews (Codex and the lenses on every slice) draw on his plans apart from this.
+
+### S0 Baseline
+- **Changes:** the thresholds frozen in a commit; the credentials guard in `evals/home.mjs`; the
+  three small tasks and the ten incident cases in `evals/tasks/`; the desktop's flags in the runner.
+- **Probe and pass:** three runs: incidents 13, 14 and 13 of 20, so L 13, s 1, worse below 10, S8's
+  target 17; `honest-unknown` 3 of 3 and the three tasks 3 of 3 a task, both arms; false premise 2 of
+  4, below its line of 3 of 4.
+- **Cost:** $59.64, measured.
+- **State:** done (`odd/tasks/f8-s0-baseline.md`); its T8, the closing check and notice, is
+  unticked there. The long-session eval's build plan is written there, for S8.
+
+### S3 The split, and the interim exclusion
+- **Changes:** a root `CLAUDE.md` that imports `@AGENTS.md` and holds how Claude works here;
+  `AGENTS.md` cut to what a reviewer needs (D3); the `claude-md-budget` rule and row; the interim
+  `claudeMdExcludes: ["**/.claude/CLAUDE.md"]` in the committed `.claude/settings.json`, which the
+  `payload` row reads; `init` ships the split.
+- **Files:** `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json`, `bin/lib/payload.mjs`,
+  `bin/lib/project.mjs`, `bin/lib/rules-data.mjs`, `bin/lib/claude-md-budget.mjs` (e5e36473),
+  `bin/check.mjs`.
+- **Probe and pass:** a restarted worktree session's `/context` shows each project file once and no
+  user file; `check` green with the budget row; the incident set no worse; `fixed load` at most
+  80,000 over five sessions.
+- **Cost:** $16.95, measured (`f8-s3-incidents`: 13 of 20 on both arms).
+- **His decisions:** D3 and D7 (answered).
+- **State:** built (PRs 602, 603, 604; `odd/tasks/f8-s3-split.md`). The `/context` check passed in
+  the directives pass (`odd/tasks/f8-directives.md`, T0); the fixed load over five sessions is not
+  recorded in either document (searched for "fixed load" in both).
+
+### The directives pass
+- **Changes:** every directive of the plan written where it is dogfooded: the ODD sizing test and
+  the feature document's order, and protocols 3, 5, 6 and 7 in `CLAUDE.md`; protocols 4 and 8 in
+  `AGENTS.md`; `claude-md-budget` from 2,500 to 3,200 by his answer to question 97.
+- **Probe and pass:** S3's promise checked in a fresh session; `npm run check` green.
+- **Cost:** none in evals.
+- **State:** done (PR 606; `odd/tasks/f8-directives.md`).
+
+### S1 Two reviews on every slice
+- **Changes:** `js-harness lens-review` runs one to four Claude lenses over a commit range, fresh
+  and tool-less, and records each run pinned to the head commit and the subject hash; `check --push`
+  refuses a code commit either review leaves uncovered; a skip is a debt that `check`'s `review` row
+  and `doctor`'s `review-skips` row list and the merge door refuses (G9, G13).
+- **Files:** `bin/lens-review.mjs`, `bin/lib/lens-candidate.mjs`, `bin/lib/lens-prompts.mjs`,
+  `bin/lib/lens-result.mjs`, `bin/lib/lens-reviews.mjs`, `bin/lib/lens-review-rows.mjs`,
+  `bin/check.mjs`, `bin/doctor.mjs`, `bin/merge-queue.mjs`.
+- **Probe and pass:** in a scratch repo, six cases behave as stated (both records push; an
+  incomplete lens is refused; an amend after review is refused; a skip pushes, is listed, and its PR
+  is refused by the door); tokens per lens recorded; the incident set no worse.
+- **Cost:** $11.35 for the incident rerun, measured; a lens run costs cents: $0.006 each in the
+  probe, $0.051 for three lenses over a real range (`odd/tasks/f8-s1-reviews.md`, L13 and L15).
+- **His decisions:** G9 and G13 (answered and decided).
+- **State:** done: the probe 6 of 6, the incident set 13 of 20 (PRs 607, 608, 613, 614).
+
+### The S1 records fix (row 3 of the reverse-engineering document's 13.3)
+- **Changes:** the review records cannot be written by the model. Prevention: `guard` refuses a file
+  tool or shell write to `lens-reviews` and `codex-reviews` under the git common directory.
+  Provenance: a lens record is admitted only when it names a run line the command wrote first, as
+  Codex's records do (`bin/lib/codex-review-runs.mjs:9-11`).
+- **Files** [i, planned]: `bin/lib/guard.mjs`, `bin/lib/lens-reviews.mjs`, `bin/lens-review.mjs`,
+  `bin/check.mjs`, their tests.
+- **Probe and pass:** a `guard` test denies an Edit, a Write and a `>>` to either record; a
+  well-shaped lens record with no run line is not counted by `check --push`.
+- **Cost:** about 100 lines and tests [i]; no eval.
+- **Order:** after S10, which owned `bin/guard.mjs`.
+- **State:** in progress, JH 69, worktree `f8-s1-records`; its feature document is not written yet.
+
+### S10 The port: style, skills, permissions, guard
+- **Changes:** `install` writes the `js-harness` output style (neutral Spanish with tú, G10, G10n),
+  the two ported skills (`js-harness-work-units`, `js-harness-chained-prs`, G8) with their notices,
+  the whole `permissions` object, and G12's Rules block into `~/.claude/CLAUDE.md`, each recorded
+  and undone exactly; `install` and `sync` leave a file he edited and say so; the style and skills
+  are pinned by hash; `init` selects the style and writes the denies into a clone; `guard` refuses a
+  file tool on a denied path.
+- **Files:** `bin/lib/manifest.mjs`, `bin/lib/permissions.mjs`, `bin/lib/output-style.mjs`,
+  `bin/lib/ported-skills.mjs`, `bin/lib/project-apply.mjs`, `bin/guard.mjs`, `bin/lib/guard.mjs`,
+  `bin/lib/rules-block.mjs` (380b9e77), `bin/lib/deny-paths.mjs` (f2480611),
+  `bin/lib/component-write.mjs` (98f91454), `bin/lib/hook-entries.mjs`, `bin/doctor.mjs`,
+  `THIRD_PARTY_NOTICES.md`.
+- **Probe and pass:** in a scratch home, `install` writes all of it and `uninstall` leaves the home
+  byte for byte; `guard` refuses a read of a planted credentials path; five Spanish prompts answer
+  in tú with no voseo form, 5 of 5; the incident set no worse.
+- **Cost:** $10.61, measured (13 of 20).
+- **His decisions:** G12 (answered, question 99); applying it to his machine (question 102, "Aplicar
+  ahora").
+- **State:** done (PRs 615, 617, 619, 620, 621, 623; `odd/tasks/f8-s10-port.md`).
+
+### S11 The complements under js-harness
+- **Changes:** `stack`'s engram, engram-plugin, codegraph and context7 rows install and register
+  with their own commands and exact undo; context7 required and on (G11); the presets (G14:
+  complete, lean, custom); the `gentle-ai` and `gentle-ai-sync` rows of `doctor` and the install
+  watch of `bin/lib/gentle-ai-update.mjs` leave; engram's protocol and context recovery come from
+  engram alone, with a `doctor` row for a binary and plugin that serve different protocol versions
+  (13.3 row 11); a preset's files name no tool it leaves out (row 17); `bin/` and `evals/` stop
+  depending on gentle-ai, the block arms of `evals/arms.mjs` kept as named historical fixtures.
+- **Files** [i, planned]: `bin/lib/stack.mjs`, `bin/lib/stack-install.mjs`, `bin/stack.mjs`,
+  `bin/doctor.mjs`, `bin/lib/gentle-ai-update.mjs`, `bin/lib/project.mjs`, `evals/arms.mjs`,
+  `evals/home.mjs`, and the sweep: today 40 source and 56 test files under `bin/` and 32 files
+  under `evals/` name gentle-ai (`grep -rl gentle-ai bin --include=*.mjs`, split by `*.test.mjs`;
+  `grep -rl gentle-ai evals`, 2026-10-28), against 32, 51 and 20 in the diet's count of 2026-10-26.
+- **Probe and pass:** `stack` on a scratch home with no gentle-ai lists each complement with its own
+  command and undo; `grep -rl gentle-ai bin evals` lists only the idea watch, the named fixtures and
+  the tests that assert its absence; `check` and `doctor` green with gentle-ai still installed.
+- **Cost:** no eval (its own probes).
+- **His decisions:** G14, the presets' names, by default (the lead takes the stated default).
+- **State:** in progress, JH 68, worktree `f8-s11`, branch `f8-s11-complements`; its feature
+  document is not written yet.
+
+### S5c-a Directive coverage, the mechanism
+- **Changes:** every source the harness ships or sends to an agent is listed by a test; each source
+  is cut into spans tied to a rule, a rule's phrases or a listed context line; every obligation names
+  its control (a `check` with a planted break, an `eval` case, `line`, `protocol`, `measured`, or a
+  dated `owed`), every span found seeded as `owed` that day; eval cases name their rules in
+  `task.json`; a without-rule arm; `js-harness rules coverage` (`--json`, `--strict`, `--prove`); an
+  INFO row in `check`; `init` and the project binding (reverse-engineering document, 14.2 and 14.3).
+- **Files** [i, planned]: `bin/lib/rules.mjs`, a new `bin/lib/rules-coverage.mjs`, `bin/rules.mjs`,
+  `bin/check.mjs`, `evals/without.mjs`, `evals/tasks.test.mjs`, `evals/tasks/*/task.json`,
+  `bin/lib/project.mjs`.
+- **Probe and pass:** `rules coverage --strict` and `--prove` exit 0 on main with the seeded debt;
+  `node --test evals/tasks.test.mjs` holds every case to its rules; the incident set no worse.
+- **Cost** [i]: about 700 lines and tests (300 for the mechanism, 100 for the arm, 150 for `init` and
+  the binding, 150 for the project eval runner); its share of S5c's eval spend is the incident rerun,
+  about $13.
+- **Order:** after S11, before S13.
+- **His decisions:** S5c's eval spend, about $95 to $130 above the envelope, goes to him when S5c-a
+  starts (D2 left no cap, but this overrun is named his in 14.4).
+- **State:** designed (`odd/tasks/directive-coverage.md`, PR 622); nothing built.
+
+### S13 The rehearsal on a scratch project
+- **Changes:** nothing new; the whole path of the reverse-engineering document's 11.1 walked on a
+  scratch project in a scratch home: `install` with a preset, `stack install`, `init`, a feature, a
+  slice with both reviews, a push to a local bare remote, then `uninstall project` and `uninstall
+  machine`; the day-to-day guide of 11.3 checked there; engram's recovery after a start and a
+  compaction (13.3 row 11); a `CLAUDE.md` planted above the project turns the import row red (row
+  16); a planted directive without a control makes `rules check` exit 1 (14.5).
+- **Files** [i, planned]: a rehearsal test beside `scripts/practice-lib.mjs`.
+- **Probe and pass:** the nine rows of 11.1 do what they say; nothing of gentle-ai, Orca or herdr
+  takes part; after the uninstalls every path the manifests recorded is gone or back to its bytes.
+- **Cost:** one walk, about $5 [i].
+- **Order:** after S5c-a; before S12 and S2.
+- **State:** to do.
+
+### S12 Moving his projects
+- **Changes:** builds what does not exist: a migration of an initialized project, which reads the
+  version its manifest recorded, writes what later versions add (the split, context7, the deny list,
+  the two-review pre-push check, directive coverage's baseline), keeps his edits and records each
+  write; a `doctor` row that the root `CLAUDE.md` imports `AGENTS.md` and nothing above turns it off
+  (13.3 row 16); a read-only scan of what gentle-ai left in a project (`.atl/`, its review store).
+  Today neither `update` nor a second `init` refreshes a project (`bin/update.mjs:373-397`,
+  `bin/lib/project.mjs:1062-1091`, as the diet cites them), but `sync` inside a project already
+  carries part of it: it rewires the pre-push check, writes the style and the denies into the
+  clone's `.claude/settings.local.json` and renders the `CLAUDE.md` block again where the split
+  exists (`updateRecorded`, `bin/lib/project.mjs:1593-1639`, `:1895-1905`). The migration builds on
+  `sync` for those and adds what it does not do: the split in a project without it, context7, the
+  baseline, and a project whose manifest an old release wrote.
+- **Files** [i, planned]: `bin/lib/project.mjs`, `bin/init.mjs` or a new command, `bin/doctor.mjs`.
+- **Probe and pass:** the migration on a copy of a project initialized by an old release keeps his
+  edits and records each write; each moved project's session shows its `CLAUDE.md`, our style and
+  context7; every listed project moved, or named as left with his yes.
+- **Cost:** no eval (S2's measure covers it).
+- **His decisions:** the project list, frozen in the feature document before the first move
+  (projects with a manifest or a Claude Code session in the last 30 days); a project left out is
+  his yes.
+- **State:** to do.
+
+### S2 Removing gentle-ai, Orca and herdr
+- **Changes:** in order (diet section 10, "S2, the removal"): writers quiesced; one full backup,
+  recorded, with the whole `permissions` object and the complements' MCP entries named; a restore
+  drill on a scratch home that proves engram answers and puts back a deleted file and removes a
+  created one (13.3 row 12); then each removal asked at that moment: `gentle-ai uninstall --all`,
+  the PowerShell skill-registry hook by hand, the binary and `~/.gentle-ai`, GGA where a project
+  has it; Orca; herdr; `install` and `stack install` right after; the interim exclusion reverted; a
+  read-only verification; an S13 smoke walk; every session restarted and checked.
+- **Files** [i, planned]: a new `js-harness stack backup` (the command he runs from a plain terminal
+  for steps 1 to 3), `.claude/settings.json` (reverted).
+- **Probe and pass:** hooks 32 → 14 (today 32: js-harness 13, Orca 12, gentle-ai 5, herdr 1,
+  codegraph 1, read from `~/.claude/settings.json` on 2026-10-28); `~/.engram` hashes as before;
+  `claude mcp list` shows engram, codegraph and context7; the incident set no worse; `fixed load` at
+  most 80,000 over five sessions.
+- **Cost:** about $13 for the incident set, and a scratch walk of about $5 [i].
+- **His decisions:** each removal, asked at that moment; D4, the `fixed load` budget, right after.
+- **State:** to do.
+
+### S4a The attribution hook and the hook count
+- **Changes:** a `commit-msg` hook that strips attribution lines (`.githooks/` has none today:
+  `pre-commit`, `pre-merge-commit`, `pre-push`); a `check` row counting hook entries by event and
+  owner; `init` installs the hook.
+- **Probe and pass:** a scratch commit with `Co-Authored-By` lands without it; one extra `Stop` entry
+  turns the row red; 0 attribution lines in the next 50 commits on `main`; the row fails above 14
+  entries or on a new owner. D8, the engram prompt hook turned off, is applied here.
+- **Cost:** no eval.
+- **His decisions:** D8 (answered: "Apagarlo").
+- **State:** to do.
+
+### S4b Contradictions to zero
+- **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of
+  the diet's section 3 closed; a refusal with a next step ends with the exact command bound to the
+  range it was computed for (13.3 row 1, a conventions test whose legacy list reaches 0).
+- **Probe and pass:** a new document without `## Goal` is refused; 10 of 10 pairs closed or his
+  decision; a printed command refuses once the head moved; the incident set no worse.
+- **Cost:** about $13, the incident rerun [i].
+- **State:** to do.
+
+### S5 Skills, memory and rules
+- **Changes:** skill bodies at most 3k and the skill lint (13.3 row 7); `MEMORY.md` at most 0.5k;
+  the rule pass: each rule and each register control classified as a check or hook, prose that
+  stays, or retired, counted from the register on the day it runs (66 live rules on `86491fa`, not
+  the diet's 65); the record rule (committed documents are canonical; engram mirrors); the lens flag
+  parity probe (row 2).
+- **Probe and pass:** the protocols skill loads in at most 3 of the next 10 sessions; every rule and
+  control classified; a headless lens run with a planted user hook shows the hook did not fire; the
+  incident set no worse.
+- **Cost:** about $13, the incident rerun [i].
+- **State:** to do.
+
+### S5c-b Directive coverage, the filling
+- **Changes:** beside S5's rule pass: every span declared; each seeded `owed` closed by a check or an
+  eval case; about 15 to 25 new cases for behaviour no check can hold, each proven on both arms.
+- **Probe and pass:** `rules coverage --strict` with `owed` at most 10% at S8; every case names its
+  rules and has a current proof record.
+- **Cost** [i]: about $34 to $65 to prove the new cases, inside S5c's $95 to $130.
+- **State:** to do.
+
+### S6 The read surface
+- **Changes:** the roadmap's Next and Decided at most 10k; a `## State` head in feature documents;
+  the relief file by month; the contract template.
+- **Probe and pass:** the read-surface measure at most 15k (13,413 at S0); incident cases 9 and 10 no
+  worse.
+- **Cost:** about $3, two cases.
+- **State:** to do.
+
+### S7 Topology and routing
+- **Changes:** the lead cut at a phase's close or after two compactions; Haiku 5.5 helpers with
+  `omitClaudeMd`; Sonnet writer prompts whose brief names its `S#` and whose return says which it
+  covered (13.3 row 9).
+- **Probe and pass:** the first turn of five Haiku sub-agents at most 30k; at most one unrequested
+  file in five Sonnet writer slices, each naming its `S#`.
+- **Cost:** no eval beyond those runs [i].
+- **State:** to do.
+
+### S9 The idea watch (any time after S2)
+- **Changes:** `bin/lib/gentle-ai-update.mjs` becomes the idea watch of the reverse-engineering
+  document's section 5: each gentle-ai release read by area and classified adopt, adapt or ignore;
+  nothing installs.
+- **Probe and pass:** a fixture diff with one path per area and one unmatched: each path in its area,
+  the unmatched one listed for hand classification, an `ignore`-only release one batched line.
+- **Cost:** none.
+- **State:** to do.
+
+### S8 Certification (step 5)
+- **Changes:** nothing; it measures. Section 7's S0 and S8 measures; a Claude audit and a Codex audit,
+  three runs each, side by side with the baseline; the closing count of each failure class (tool,
+  machine, unseen-state); the release check on the tagged commit (13.3 row 13); one row per measure,
+  no combined score (row 14); directive coverage's full run.
+- **Probe and pass:** the incident set at least 17 of 20 (`max(17, min(20, L + 3))`, frozen); 17
+  measures pass and 4 deferred are reported as not built; the long-session eval at least 90% of its
+  moments; `rules coverage --strict` with `owed` at most 10%.
+- **Cost** [i]: about $25 for the measures, at most $50 for the long-session eval, about $45 to $52
+  for directive coverage's run.
+- **His decisions:** G7, the recurring certification spend, after S8.
+- **State:** to do.
+
+### Beside F8
+- **The long-session eval**, built in a session of its own (`odd/tasks/f8-s0-baseline.md`, its build
+  plan), run at S8 only.
+- **The TUI's rest**, after PR 596 (slice 1, open) merges and G3 is answered.
+- **The Session board's two follow-ups** and the other open checkboxes of the checklist are not F8's.
+
 ## F5 result
 
 Concluded: on these five tasks the minimal config scores as the current stack does and costs about half as much (the current stack costs 1.68x to 2.54x). Full text: [odd/tasks/evals.md](../odd/tasks/evals.md).
@@ -341,7 +650,8 @@ does not serve a step waits, unless it breaks shipped behaviour.
    `/context`, the `fixed load` row and a 10-case incident set, run twice so "worse" means beyond
    their spread. The credentials guard lands first, inside `evals/home.mjs`, because an eval broke
    his login. The long-session eval is built in parallel and confirms at the end.
-5. **Migration (step 4).** One step at a time, in the diet's section 10 order:
+5. **Migration (step 4).** One step at a time, in the diet's section 10 order; each step's change,
+   files, probe, cost, dependencies and his decisions are under [F8 plan](#f8-plan):
    - S3, the split, with an interim exclusion of gentle-ai's global file in this repo, so the
      30.7k saving lands first; S2 reverts it.
    - S1, the two reviews, with the Claude lens runner built whole (the candidate as a commit range,

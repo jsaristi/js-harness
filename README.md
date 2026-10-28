@@ -1,9 +1,10 @@
 # js-harness
 
 js-harness sets up Claude Code and Codex for AI-assisted development in a project, on top of a
-stack it does not rebuild: gentle-ai owns the workflow, task documents and review, engram owns
+stack it does not rebuild: gentle-ai owns the workflow, task documents and TDD, engram owns
 memory, codegraph owns code structure. js-harness adds the thin layer those leave open: a short
-`AGENTS.md`, a pre-commit gate that runs the project's checks, task contracts whose end is a set
+`AGENTS.md`, a pre-commit gate that runs the project's checks, the two reviews every slice gets
+(Codex's, `codex-review`, and the Claude lenses', `lens-review`), task contracts whose end is a set
 of commands that exit 0, and a record of everything it writes, so that it can be removed exactly.
 
 **New here? Start with the [user guide](docs/GUIDE.md):** install, the menu, the first run, a typical day and
@@ -113,7 +114,7 @@ that leads other sessions, and are rarely typed by hand:
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, functions, remote, memory, fetch, backup | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, wait |
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, codex-meter, lens-review, functions, remote, memory, fetch, backup, clean | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, quiet, wait |
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
 `my-project` is the project's folder. A line `…` marks output left out; output that grows with
@@ -168,6 +169,13 @@ before any work: the median of the latest five sessions, read from their transcr
 `~/.claude/projects` (and, from a worktree, its main checkout's). It never fails a commit, and warns
 over `rule:fixed-load-budget` tokens.
 
+The `review` row informs and fails nothing: it names the code commits since the default branch that
+no Claude lens record covers, with the `lens-review` command that makes one, and the skips of both
+reviews (`--unavailable`) that still owe one; where the Codex review is off it says the lenses are
+the one review. In the harness's own repository the `commit-size` row also fails a staged change
+whose lines a review reads number more than `rule:reviewed-commit-lines`, so it is split before it
+is committed.
+
 ```console
 $ js-harness check --verbose
 PASS  budget  639 estimated tokens (budget 1500)
@@ -193,6 +201,9 @@ Three more forms of `check` share the same command:
 - `js-harness check --push` is the pre-push check of a project with the Codex review on. Its Codex row
   refuses a push whose code commits no Codex record covers, and a push whose head is a review that
   owes a correction never rechecked; a recheck that left findings open passes with a warning. Its
+  `lens-review` row refuses, the same way, a code commit no complete Claude lens record covers,
+  where that commit's own `harness.json` turns `lensReview` on, and names the command that makes the
+  record; a skip passes and is listed. A first push to a remote that holds no branch passes both. Its
   `rules` row lists the lines the push brings past the remote's default branch, as INFO: the push
   reports them, and the merge door refuses them. A pushed `vX.Y.Z` tag is refused when `package.json` at the
   tagged commit names another version than the tag without its `v` (`check --push --ref`, which the
@@ -261,8 +272,11 @@ merge and onboarded, which hands off to the build orchestrator with the opening 
 `js-harness-orchestrator` skill gives a new lead) and what the session does next, so a new session, a compaction or the other
 host resumes by running it again; an onboarding on another branch is named with its worktree or
 the switch that resumes it. `check` names what is still missing and the stage it sends the work
-back to; `hash` prints what an approval records; `template` writes a skeleton, never over a file,
-and `template adr <slug>` numbers the next decision record under `docs/adr/`.
+back to (`check --plan` reads only the roadmap and its ties to the pre-plan); `hash` prints what an
+approval records; `template feature|origin|roadmap|adr` prints a skeleton and, with `--write`, writes
+it, never over a file, and `template adr <slug>` numbers the next decision record under `docs/adr/`.
+It exits 1 when `check` finds something, a template's file exists or a link is in the way, the project has a plan of its
+own, it is no initialized project or a profile cannot tell what it needs, and 2 for a usage error.
 
 ```console
 $ js-harness onboard
@@ -316,7 +330,14 @@ $ js-harness onboard profile platform --checklist advice --size small
 ### js-harness install
 
 Writes the skills and the session hooks for Claude Code and Codex under the home, and records a
-manifest of them.
+manifest of them. It also holds two things in the user's Claude files, recording only what it
+wrote so `uninstall` takes out exactly that: the permissions of the Claude settings (an allow for
+codegraph's tools, and denies of a wipe of the root or the home and of a read or edit of the places
+of secrets) and a marked Rules
+block in `~/.claude/CLAUDE.md`, rendered again while unedited and left as yours once you edit it.
+`--accept-session-messages` also sets Claude Code's `crossSessionInbound` to `"accept"` in the user
+settings, so a message from a session of another permission class arrives; `uninstall` puts back
+what was there.
 
 ```console
 $ js-harness install
@@ -327,7 +348,7 @@ registered hook entry in ~\.claude\settings.json: js-harness resume --hook (Sess
 registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
-registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)
+registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)
 registered hook entry in ~\.claude\settings.json: js-harness permit --hook || exit 0 (PermissionRequest)
 registered hook entry in ~\.claude\settings.json: js-harness guard --stop || exit 0 (Stop)
 registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (UserPromptSubmit)
@@ -351,8 +372,11 @@ keeper) under an owner record, so two sessions never stop each other's loops. `r
 command in the foreground of a background task, so its end still wakes the session, and records the
 owner session, its own process and the command's by pid and creation time, the purpose and what
 ends it. `stop` refuses a live loop another session owns unless `--take-over`, and exits 0 only when
-a second look at the process table finds none of its processes left. `heartbeat` and
-`channel-watch` are bodies for `run`.
+a second look at the process table finds none of its processes left (exit 1 when one survives, 3
+for a loop another session owns). The owner is `--owner`, else `CLAUDE_CODE_SESSION_ID`. `run`
+refuses a live loop of the same name (exit 2) unless `--restart`, which stops it first under the
+rule of `stop`. `heartbeat` and `channel-watch` are bodies for `run`; `channel-watch` ends on the
+first notice of another session, or after `--for` minutes (30, exit 1).
 
 `heartbeat` ends on a quiet machine (no gate-log or channel write for `--quiet` minutes) and on a
 stalled work session: one the orchestrator handed work to, by a notice to its number or its
@@ -365,7 +389,7 @@ its `Stalled` section, and its `--watch` says each one as it crosses.
 Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windows run, as
 `js-harness windows-daily` does, and ends with a `WINDOWS:` line when that run is red and was not
 told before. The time of the last reading is kept in a file, so a heartbeat started again after a
-`STALL` still reads it once an hour.
+`STALL` still reads it once an hour. With nothing else, it ends after `--max` hours (10, exit 1).
 
 Each tick also keeps the throughput snapshot of every settled day of the last
 `throughput-backfill-days` that the gate log holds and that has none, never while a gate holds
@@ -466,7 +490,9 @@ removed hook entry from ~\.claude\settings.json
 ### js-harness status
 
 Inside a project, shows its pinned version, the running version and whether this clone is set
-up. With `--global`, shows the machine's installed version, its manifest and the latest release.
+up. With `--global`, shows the machine's installed version, its manifest and the latest release,
+read as `update` reads it: `--repo <url or folder>` names another repository and `--source <dir>` a
+folder of `npm pack` tarballs.
 
 ```console
 $ js-harness status
@@ -481,8 +507,8 @@ pin and running version: match
 
 Says whether a newer release exists: the newest `vX.Y.Z` tag of the repository, read with
 `git ls-remote` and the git credentials already on the machine (`--repo <url or folder>` names
-another repository). Releases are tagged from v0.9.0; where the repository holds no tag it says
-that and how to get the newest copy. When the tags cannot be listed it says why and exits 1. A value
+another repository; `--source <dir>` reads a folder of `npm pack` tarballs instead). Releases are
+tagged from v0.9.0; where the repository holds no tag it says that and how to get the newest copy. When the tags cannot be listed it says why and exits 1. A value
 flag with no value, or followed by another flag, exits 2 with `<flag> requires a value`.
 
 ```console
@@ -531,6 +557,9 @@ identifier is printed) and whether the remote server of each recorded login laun
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
 `worktrees` row for the worktrees on branches main already holds and a `review-skips` row for the
 skips of both reviews that still owe one (a pull request holding a lens skip does not land). `--json` prints the rows.
+`--hook` is the session-start hook `install` registers: it computes the same report and prints one
+line only when there are gaps and they differ from the last ones it told, and it exits 0 (2, with
+the usage, for an argument it does not know).
 
 Its `codex-trust` row reads the `config.toml` of the Codex home (`CODEX_HOME` when the home is the
 real one and it is set, else `~/.codex`) for a `trusted_hash` of each harness hook of
@@ -565,8 +594,9 @@ records the review; with `--json` it prints the record it wrote. The row also sh
 Claude is quit fully, the tray icon included.
 
 Its `gentle-ai-sync` row does the same for gentle-ai. A gentle-ai sync rewrites the global
-`~/.claude/CLAUDE.md`, which gentle-ai owns: js-harness never writes that file, and only reads it
-to measure the per-turn payload (`bin/lib/payload.mjs`). So a new gentle-ai version stays `stale`
+`~/.claude/CLAUDE.md`, which gentle-ai owns: js-harness writes nothing there but its own recorded
+Rules block (`install`, above), and otherwise only reads the file to measure the per-turn payload
+(`bin/lib/payload.mjs`). So a new gentle-ai version stays `stale`
 until it is reviewed. One review step diffs the global `CLAUDE.md` against the copy gentle-ai saved
 before the first sync since the last review (`~/.gentle-ai/backups/<stamp>/snapshot.tar.gz`), and
 the next checks each change against the project's `AGENTS.md` for conflicts.
@@ -650,7 +680,7 @@ Your steps (never run):
 Shows the roadmap's phases and the features, counted from the checkboxes of `docs/ROADMAP.md`
 and `odd/tasks/*.md`. A feature that keeps its tasks in a table (a header with an `ID` and a
 `Status` cell) is counted by its rows: a row whose ID is a task (`T2`, `T3c`) is done when its
-status starts with `done`.
+status starts with `done`. `--json` gives the data and `--cwd <path>` names another project.
 
 ```console
 $ js-harness progress
@@ -810,7 +840,9 @@ Task contracts: `template` prints the skeleton a feature document opens with, `c
 validates every contract, `run` runs a contract's done-when commands, and `goal` prints the
 `/goal` condition that runs them. Each task names its kind of work, `(kind: design | build |
 verify | docs)`; `modes` prints the effort and sub-agent models each open task calls for, from
-the project's rules, and `goal` prints the same lines on stderr.
+the project's rules (`--task <id>` for one), and `goal` prints the same lines on stderr. `check`
+takes files to validate in place of all, `run` takes `--timeout <minutes>`, and every verb but
+`template` takes `--cwd <dir>`.
 
 ```console
 $ js-harness contract template
@@ -878,7 +910,9 @@ days. `rules change <id>` is the one command that changes a rule of the harness:
 on a `rule/` branch, it takes the change as JSON on standard input and writes the declaration, its
 source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing (it
 fetches nothing either: a turn to refuse counts on the `origin/main` this clone holds, and says so), and
-`--check-source` checks a stored source against its transcript again.
+`--check-source` checks a stored source against its transcript again. In a project that installs
+the harness, the project's own rules in `docs/rules.json` are listed too, and `rules check` holds
+them: each phrase still in its file, each sensor still declared, no rule deleted since HEAD.
 
 ```console
 $ js-harness rules codex-review-floor
@@ -921,6 +955,18 @@ read and cost, with how close that estimate came on the last reviews this machin
 starts nothing; a run records in each part's run line the figures it was planned at, which that
 line reads; `--unavailable <reason>` records a skip.
 
+Codex gets the diff, the repository to read and the project's `AGENTS.md`, and none of your Codex
+configuration; the command fixes the model and its effort. Markdown files and the paths a
+`.gitattributes` marks `-codex-review` are left out, and the plan says how many. A run starts where
+the records end: commits a record covers are not reviewed again, and `--again` takes the range as
+given. A run of more parts than `rule:review-parts-unflagged` is not started without
+`--max-parts <n>`; `--part-lines <n>` sets how many changed lines a part holds at most, in place of
+`rule:review-part-lines`; `--fresh` reviews again the parts an earlier run of the
+range passed; `--keep-home` leaves the run's Codex home in place. `--prompt codex|own` picks the
+prompt (`codex` is the default in a turn of the gate lock, and a run by hand asks with `own`), and
+`--doc <feature document>` judges the change against that document's Goal and Done when, with
+`--prompt own`.
+
 A merge of the default branch is reviewed by what was written in it, not by what it brought in, and
 so is a merge of a stacked base: a branch off the default branch each of whose own code commits has
 a record. At HEAD that is one review. Below HEAD, after code commits that each have a record, the range is cut
@@ -957,14 +1003,17 @@ reset credits left: 1
 
 The Claude half of the two reviews every slice gets; Codex is the other. The session picks one to four
 lenses (risk, resilience, readability, reliability) by the consequence of what `<base>..HEAD` touched
-and says why with `--reason`. Each lens is a fresh `claude -p` run with no tools and none of your
-customizations, on your own CLI login, never on the eval token or an API key, and it reads only the
-range as a block: its two commits, its subject hash, the paths a review reads and each path's patch.
+(`--head <rev>` names another head) and says why with `--reason`. Each lens is a fresh `claude -p`
+run on the `sonnet` alias with no tools and none of your customizations, on your own CLI login,
+never on the eval token or an API key, and it reads only the range as a block: its two commits, its
+subject hash, the paths a review reads and each path's patch. Markdown files and the paths a
+`.gitattributes` marks `-codex-review` are left out, as Codex leaves them out.
 A result counts only when it echoes the hash and inspected every path; otherwise the run is recorded
 as incomplete, exits 1 and covers nothing, and the start of an answer it could not read is kept and
 printed, so why it failed is read before it runs again. Runs are recorded in `<git common dir>/js-harness/lens-reviews.jsonl`.
 `--plan` prints the candidate and starts nothing; `--unavailable <reason>` records a skip, which the
-push lets through and `check`, `doctor` and `merge-queue` list until a review covers the range.
+push lets through and `check`, `doctor` and `merge-queue` list until a review covers the range. The
+two do not go together.
 
 ```console
 $ js-harness lens-review --base 3f2a9c1 --lenses risk,reliability --reason "changes how a record is validated"
@@ -1002,7 +1051,9 @@ the one origin's HEAD names, else the one `gh repo view` names; when neither doe
 and names both commands, so a project whose default is not `main` lands on its own branch.
 Ready means the pull request is open, not a draft, mergeable, based on the default branch and with a
 gentle-ai line in its body, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
-candidate so far with no conflict. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+candidate so far with no conflict; one whose mergeability GitHub has not computed yet is decided by
+its merge into the candidate. Each pull request merged into the candidate passes main's rule rows
+first (`check --door`), and one that fails leaves the batch. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
 this machine under the gate lock and, at the same time, on GitHub Actions (`.github/workflows/gate.yml`) on a
 `queue/*` branch pushed before the suite starts, so the run's checkout is the candidate, main as it would become, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).
 After a land, each open pull request whose base is a branch that land merged is retargeted to the default branch
@@ -1017,7 +1068,11 @@ named, and the rest is landed. The land asks `js-harness gate first` for a ticke
 session, so its gate goes first in the line; with no session id or a refused ticket it waits its turn
 and says so. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped
 before it ended is no red: the land exits 5, with main not pushed and nothing bisected
-(`odd/tasks/land-unattended.md`). The `queue/*` branch is removed as soon as its answer no longer
+(`odd/tasks/land-unattended.md`). A land exits 0 landed or with nothing to land, 4 red, 3 when main
+moved meanwhile, 5 when the suite did not run or GitHub Actions gave no result in 30 minutes (main
+not pushed in those three), and 1 for anything else. A landed pull request whose branch moved during
+the land is named after it: its new commits are not in main, so it needs another run of the queue.
+The `queue/*` branch is removed as soon as its answer no longer
 matters: when the candidate is red or untested on this machine, or once GitHub Actions answered. Starting
 the run with the suite saves the minutes the two took in series; its cost is one GitHub Actions run spent
 on each candidate this machine turns red or does not test, since removing the branch does not
@@ -1132,7 +1187,8 @@ switch into `harness.json` and applies it: `codeMap` takes `auto`, `on-demand`, 
 
 Keeps Claude Code's remote-control server running for this git repository, so the Claude app
 can start sessions here: `start`, `stop` and `status`. `start --at-login` also starts it at
-every Windows login, through a launcher in the Startup folder that opens no window; it replaces the
+every Windows login, through a launcher in the Startup folder that opens no window, and registers
+a scheduled task that starts it again within five minutes whenever it is not running; it replaces the
 `.cmd` launcher of an earlier version, which opened a console, when js-harness still recorded writing
 it. The server pre-creates no session, so a restart adds no row to the app's sidebar; `status`
 reads its `Ready` as connected.
@@ -1184,6 +1240,12 @@ have no answer of his yet, read from the transcripts and joined by number to the
 `notify --kind question` notices. `--json` gives the same data as the board. `--opening "<title>"`
 (or `"<code> <role>"`) prints the opening stored for a session and records which session read it;
 a session keeps the title of its first reading, and `--peek` reads an opening and records nothing.
+`--address` and `--opening` exit 0 for one session, 1 for none and 2 for several or when they cannot
+tell. `--next-number` prints `<code> <n>`, the title number of the next work session, one past the
+highest of the project's code in the channel and the openings (exit 1 when the project declares no
+code). `--watch` also returns at `--timeout <seconds>`, looking every `--interval`. The context
+figures are measured against `--context-window`, with the pause at `--context-pause`
+(`rule:context-pause` by default) and the host's compaction at `--context-compaction`.
 
 `js-harness sessions start --title <title> --brief <file>` starts a work session in the background
 with `claude --bg`, from any turn: the desktop app's `start_session` starts one only on a turn the
@@ -1273,6 +1335,8 @@ nobody wrote since and refuses while another pass holds the lock. `uninstall --g
 folder, except a project's folder that holds snapshots: they are the only copy of what a pass changed,
 so it is kept, with its journal, and its stamps are named; `uninstall --global --full` removes them
 too. Neither removes a project under a pass. The steps of a pass are in the installed `js-harness` skill, "Memory hygiene".
+`memory status --json` gives the same data and `--history` the index bytes of each verified pass;
+`memory verify <stamp> --approved <note>,...` names the notes the pass may delete.
 
 ```console
 $ js-harness memory status
@@ -1289,7 +1353,9 @@ memory hygiene: due
 Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
 and effort, with their tokens and the share of the day's tokens they took, so that what to
 measure next and how many to launch come from a count. It reads the Claude Code records of the
-main checkout and each worktree and keeps no text of any message; Codex is not counted.
+main checkout and each worktree and keeps no text of any message; Codex is not counted. `--day
+YYYY-MM-DD` names the day (today by default), `--days <n>` reads up to 7, `--json` gives the data
+and `--cwd <dir>` names another project.
 
 ```console
 $ js-harness subagents --day 2026-10-14
@@ -1312,7 +1378,8 @@ opening, against the hour the entry was sent (more than a minute apart is wrong)
 of its context a session states of itself, against the share its own reply records (more than 2
 points apart is wrong). The share is of the window the session's own last `get_usage` read
 reports, because sessions run on windows of different sizes. It reads the Claude Code records of
-the main checkout and each worktree and prints no text of any message.
+the main checkout and each worktree and prints no text of any message. It takes the same `--day`,
+`--days` (up to 7), `--json` and `--cwd` as `subagents`.
 
 ```console
 $ js-harness audit
@@ -1351,7 +1418,9 @@ where it runs.
 
 A pull request ready to land is announced with `--kind ready --pr <number>`: the record keeps
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which
-session a pull request belongs to from the record, even when the notice was sent from `main`.
+session a pull request belongs to from the record, even when the notice was sent from `main`. It
+is refused with exit 1, and nothing written, while the land would leave that pull request out: its
+state, its body's gentle-ai line, its reviews.
 
 A session gives its work back with `--kind closed --summary <file>`, the summary it leaves
 (`js-harness summary`, above): the record keeps the file, and the lead reads it before it archives
@@ -1424,7 +1493,8 @@ prints its stored opening and the `js-harness wait` calls the boot killed. With 
 leaves each session whose title names a role a note, which the inbox hook tells it on its next
 tool call: its waits are gone, read the opening, re-arm only its declared waits. The
 orchestrator gets the list of sessions to wake with `send_message`, since no command can put a
-prompt into an idle session. A second run after the same boot records nothing. A channel record or
+prompt into an idle session. A second run after the same boot records nothing. `--boot-time <iso>`
+replaces the boot the clock and the uptime give. A channel record or
 openings folder that is there and cannot be read makes `wake` exit 1: it still lists the sessions, says on
 standard error which one it could not read, and records nothing, since an empty read would write the notes again.
 
@@ -1497,10 +1567,14 @@ work by what it runs, never by an argument that only names a file: a `js-harness
 
 ### js-harness wait
 
-Waits in the background for one condition and ends when it holds: a pull request merged, a
-commit or a file content on `origin/main`, or a notice addressed to a session in the channel
-record. It says at start what it waits for and what ends it, so a session keeps working instead
-of ending its turn to wait.
+Waits in the background for one condition and ends when it holds: a pull request merged
+(`--pr <number>`), a commit on `origin/main` (`--main-has <commit>`), a text in a file of
+`origin/main` (`--main-file <path> --contains <text>`), or a notice addressed to a role or a work
+session's number in the channel record (`--notice-to`). It says at start what it waits for and
+what ends it, so a session keeps working instead of ending its turn to wait. It checks at once,
+then every `--every` seconds (`rule:wait-every`), and gives up after `--for` minutes
+(`rule:wait-for`). Exit 0 the condition holds; 1 the time ran out, or the pull request closed
+without merging; 2 a usage error; 3 a notice to the session's own number, below.
 
 A wait for a notice to the orchestrator, run by the session that holds the permit relay's lease,
 renews that lease on every tick, to the longer of 40 minutes and its interval plus 5, so the
@@ -1552,7 +1626,7 @@ Find there the document of the feature this session was working on, read its "Ne
 
 The hook that checks a tool call before it runs. `install` registers it for Claude Code as a
 `PreToolUse` hook, on the sub-agent launch, on the two ways of sending a message to another
-session, on `Bash`, on `Write` and `Edit`, and on the scheduled-task and cloud tools that open a session
+session, on `Bash`, on `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit` and `Grep`, and on the scheduled-task and cloud tools that open a session
 (`create`, `update` and `run` of a scheduled task, and `RemoteTrigger`), and on the desktop app's
 `run_in_terminal`. `guard --hook` reads the call on
 standard input and refuses these things: a sub-agent launched on a model the project's rules do not give;
@@ -1577,7 +1651,10 @@ another gate holds the machine's lock or an eval batch runs, heavy being several
 the gate log timed alone over a minute (an eval batch marks itself under `~/.js-harness/gate/batches`
 while its trials run, and `uninstall` removes that folder with the lock's); a `js-harness sessions` read of the
 board, `--watch` too, in the same case, because a board read slows that gate (one entry, such as `--opening`, is
-free); and a `Write` or `Edit` that puts a line
+free); a `Read`, `Write`, `Edit`, `MultiEdit` or `NotebookEdit` of a file in a place of secrets
+that the denies `install` holds in the Claude settings name (`.env`, `.ssh/`, `*.pem`, `*.key` and
+the like), or of Claude Code's login file `.credentials.json`, and a `Grep` of such a file or of the
+folder that holds it (`bin/lib/deny-paths.mjs`); and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
 which every session reads on every turn; a `Write` or `Edit` that leaves a note of a project's memory folder whose
@@ -1602,7 +1679,7 @@ while a plain commit waits for its turn by itself. It reads every command the wr
 shell's `-c` included, from the folder the gate's `--cwd` names. A commit with `--no-verify` or `-n`, a merge
 that makes no commit, a commit after the wrapper (`js-harness gate -- npm test && git commit`)
 and a wrapped test run get none: a test run of your own stays wrapped. A denial on the same call
-wins over the hint. A `Write` or `Edit` of any other file loads nothing but the memory index check, and of a
+wins over the hint. A `Write` or `Edit` of any other file loads nothing but the places of secrets and the memory index check, and of a
 Markdown file the hour check besides; of a memory note, the feedback check, which reads the project only for a
 note whose type is `feedback`. An `Edit` is
 judged by the file it leaves, read from disk, so a short clause that makes a line long counts; a
@@ -1880,7 +1957,8 @@ running binary on Windows) fails whole and stays. A package cache is cleaned onl
 (`npm cache clean --force`, `pnpm store prune`, `go clean -modcache`, `uv cache clean`), never by
 hand; `pnpm store prune` removes only the packages no project uses, so its size is "up to". Each
 deletion, failure or refusal is appended to `~/.js-harness/clean-log.jsonl` with when, the kind,
-the path or command and the bytes; `clean --log` prints it. Never deleted: `~/.claude/projects`,
+the path or command and the bytes; `clean --log` prints it. A deletion that failed or was refused
+makes `--apply` exit 1. Never deleted: `~/.claude/projects`,
 engram's store (`~/.engram`), `~/.js-harness`, the current Codex runtime, the running Claude,
 anything inside a git worktree, and anything the scan of the same run did not find.
 
