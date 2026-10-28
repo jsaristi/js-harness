@@ -325,6 +325,11 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     a warning: a write call whose path mixes a string and a variable (`path.resolve('.', f)`, `p + ''`) passed. Both
     taken in the next commit, tests first (two red before it): a glob is read piece by piece, a class keeping its
     negation; a path that is anything but one string is taken for the record the script names.
+  - b98b42a6 closed those: Codex's recheck correct (0.97, 30,684 input tokens); lenses risk and reliability no
+    finding (about 4,770 input each). gentle-ai approved `e7bc4215..b98b42a6` (lineage review-c60494a6b896c7ce) with a
+    warning: a glob in the git dir, `rm -rf .git/*` or `.git/js-harn*`, takes the records' folder and passed. Taken in
+    the next commit, test first (one red before it): a glob in `.git` is refused when it can match `js-harness`, and
+    `.git/refs/*` or `.git/*.lock` still pass.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -345,6 +350,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `e7bc4215..9e167848` (0a832b2a to 9e167848): medium, reviewed and approved (lineage review-5a57a8be933c0ac4, lens reliability), two warnings, both taken in the next commit (L16); Codex's recheck of `d61b5588..9e167848` correct (0.97); lens risk one warning (taken), reliability no finding.
 - gentle-ai on `e7bc4215..d153e61e` (0a832b2a to d153e61e): medium, reviewed and approved (lineage review-b873a62fba67a33c, lens reliability), one warning, taken in the next commit (L16); Codex on `9e167848..d153e61e` incorrect (two P2, taken) but not recorded, the worktree changed under it; lens reliability one warning (taken), risk no finding.
 - gentle-ai on `e7bc4215..4eb7449a` (0a832b2a to 4eb7449a): medium, reviewed and approved (lineage review-40ecc2f791343b66, lens reliability), one warning, taken in the next commit (L16); Codex on `9e167848..4eb7449a` incorrect (one P2, taken); lens reliability the same P2, lens risk one warning left with its reason.
+- gentle-ai on `e7bc4215..b98b42a6` (0a832b2a to b98b42a6): medium, reviewed and approved (lineage review-c60494a6b896c7ce, lens reliability), one warning, taken in the next commit (L16); Codex's recheck of `4eb7449a..b98b42a6` correct (0.97); lenses no finding.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -365,11 +371,11 @@ run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
 T7 (JH 69, 2026-10-28 ~12:50Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`: commits
-e7bc4215, 0a832b2a, 9f4d1f23, e56114a4, b2bc9596, 9c291a1e, d61b5588, 9e167848, d153e61e, 4eb7449a and the
-eleventh (glob classes, mixed path arguments). Left, in order: Codex `js-harness codex-review --base 4eb7449a` (nothing
-is edited while it runs) and lenses with `node bin/js-harness.mjs lens-review --base 4eb7449a --lenses
-risk,reliability --reason ...` (the branch's command, so the record has its run line); gentle-ai when the Stop hook
-offers the eleventh commit; then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
+e7bc4215, 0a832b2a, 9f4d1f23, e56114a4, b2bc9596, 9c291a1e, d61b5588, 9e167848, d153e61e, 4eb7449a, b98b42a6 and
+the twelfth (globs in `.git`). Left, in order: Codex `js-harness codex-review --base b98b42a6` (nothing is edited while
+it runs) and lenses with `node bin/js-harness.mjs lens-review --base b98b42a6 --lenses risk,reliability --reason ...`
+(the branch's command, so the record has its run line); gentle-ai when the Stop hook offers the twelfth commit; then
+push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
 <n>` saying the bad news: nothing works until a release with it is installed, and every in-flight branch reruns
 `lens-review` over its range once it is (older lens records stop counting); then close T7's box.
 

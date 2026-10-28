@@ -480,13 +480,15 @@ const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\
 const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
 // The folder itself, removed or moved whole: named by the git dir above it, so a project folder named `js-harness` is
 // not it; and this checkout's git dir, `.git` from where the command runs (another project's `.git` is not it, and an
-// absolute path to this one is not followed). A glob inside the folder takes what it matches (`globTakesRecord`).
+// absolute path to this one is not followed). A glob in the folder, or in the git dir, takes what it matches
+// (`globTakesRecord`).
 const COMMON_RECORDS_FOLDER = /(?:^|\/)\.git\/js-harness\/?$|^\.git\/?$/i;
-const RECORDS_GLOB = /(?:^|\/)\.git\/js-harness\/([^/]*[*?[][^/]*)$/i;
+const RECORDS_GLOB = /(?:^|\/)\.git\/(?:(js-harness)\/)?([^/]*[*?[][^/]*)$/i;
 
-/** Whether `arg` is a glob in the records' folder that can match a record's name. */
+/** Whether `arg` is a glob in the records' folder that can match a record's name, or one in the git dir that can match
+ * the folder. */
 function globTakesRecord(arg) {
-  const glob = RECORDS_GLOB.exec(slashed(arg))?.[1];
+  const [, inFolder, glob] = RECORDS_GLOB.exec(slashed(arg)) ?? [];
   if (glob === undefined) return false;
   // `*`, `?` and a bracketed class as the shell reads them (`[!…]` or `[^…]` negated), every other character as itself.
   const source = glob.replace(/\[([!^]?)(\]?[^\]]*)\]|\*|\?|[.+^${}()|\\[\]]/g, (part, negated, members) => {
@@ -501,7 +503,7 @@ function globTakesRecord(arg) {
   } catch {
     return true;
   }
-  return REVIEW_RECORD_FILES.some((name) => pattern.test(name));
+  return (inFolder === undefined ? ['js-harness'] : REVIEW_RECORD_FILES).some((name) => pattern.test(name));
 }
 
 /** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */

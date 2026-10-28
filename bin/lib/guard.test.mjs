@@ -564,6 +564,9 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     // A negated class keeps its negation (Codex P2 and the reliability lens on 4eb7449a).
     'rm -f .git/js-harness/[!a]*',
     'rm -f .git/js-harness/[^x]*',
+    // A glob in the git dir that can match the records' folder (gentle-ai R3 on b98b42a6).
+    'rm -rf .git/*',
+    'rm -rf .git/js-harn*',
     'rm -rf .git',
     'rm -rf ./.git/',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
@@ -660,6 +663,8 @@ test('reading a record, the commands that write one, and text that only names on
     'rm -f .git/js-harness/*.tmp',
     'rm -f .git/js-harness/sessions*.jsonl',
     'rm -f .git/js-harness/[!cl]*',
+    'rm -rf .git/refs/*',
+    'rm -f .git/*.lock',
     // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
     'rm -rf vendor/lib/.git',
     'rm -rf /tmp/scratch/.git',
