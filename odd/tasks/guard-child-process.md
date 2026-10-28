@@ -47,11 +47,12 @@ So prevention, the guard, must close the path.
    "no feature document needed").
 
 ## Tasks
-- [ ] T1 (docs) this document — all; inline.
-- [ ] T2 (build) the guard reads a command a script hands a child process, and the interpreter's other words — S1, S2;
-  test first; inline.
-- [ ] T3 (build) `refreshAfterLand`'s roots and wait inside the try — S3; test first; inline.
-- [ ] T4 (docs) the failures register's occurrence — S4; inline.
+- [x] T1 (docs) this document — all; inline; 1189ae02.
+- [x] T2 (build) the guard refuses a script that starts a child process beside a record, and reads the interpreter's
+  other words — S1, S2; test first; inline; 62470339, then the verifier's second pass in db220fe3.
+- [x] T3 (build) `refreshAfterLand`'s roots and wait inside the try — S3; test first; inline; 8fa48077.
+- [x] T4 (docs) the failures register's occurrence — S4; inline; 41fe427f (a new entry, `brief-waived-review-lines`:
+  no existing entry fit).
 - [ ] T5 (verify) the change's own checks, one independent verifier on T2, Codex, the Claude lenses and gentle-ai on each
   code slice; `notify --kind ready --pr <n>`, then `closed`.
 
@@ -62,6 +63,27 @@ appends a run line and then the record naming it (two `echo >>`), and any Codex 
 alone (`isValidCodexReview`). So the guard closes the path (T2).
 
 ## Reviews
+- gentle-ai: 8fa48077 (slice 62470339..8fa48077, refreshAfterLand), lineage review-b2834bc1391b9caf, medium, lenses
+  review-resilience and review-reliability, 0 findings, approved and acknowledged.
+- Codex 6247033..41fe427: correct, 0.98. Claude lenses resilience, reliability 62470339..8fa48077: 0 findings.
+
+## Next step
+The guard's slice (1189ae02..62470339, and db220fe3): the verifier's third pass, then Codex, the Claude lenses and
+gentle-ai (escalated, item 2) on it; then the PR, `notify --kind ready --pr <n>`, the session summary and `closed`.
 
 ## Log
 - L1 The brief, 2026-10-28T18:18Z: `C:\Users\Oficina\.js-harness\background\briefs\2026-10-28T18-18-15-760Z-faacddc0.md`.
+- L2 The independent verifier on the first design (d91e379f, which read the command a child-process call is handed)
+  found over-refusals (a regex's `.exec(var)`, `re.compile(r'…')`, `[].slice.call`) and bypasses (`shell: true` with
+  an array, names in brackets, Perl and Ruby backticks, Deno and Bun, asyncio, Start-Process, cmd's copy and del).
+  Decision: refuse a script that starts a child process beside a record whole, whatever the child runs; a read goes
+  through cat. The branch was rebuilt on 1189ae02 with that design (62470339); the draft stays on local branch
+  `jh74-draft`, never pushed, whose WIP commit skipped the hook. Slice B's first reviews (d91e379..aaa5873, lineage
+  review-f27e6a56751c9879) were superseded by the rebuild and repeated above.
+- L3 The verifier's second pass on 62470339: seven bypasses by import, alias or destructuring and Perl's readpipe, and
+  two reads refused (Ruby's `|f|`, Perl's `|| die`). Fixed in db220fe3: Python's os, Deno and Bun are refused
+  whole beside a record, and a pipe open is read by its mode string. A Perl two-argument `open(F, "<record>")` stays
+  refused by the guard's existing write rule, not by this one.
+- Follow-ups, not done here: a direct write in Perl, Ruby, Deno, Bun or PowerShell code is not followed (only a child
+  process is); a record's name built from parts; a script read from stdin or a file; a cmd copy out of a record is
+  refused as a write; `start` in a PowerShell string refuses a read.
