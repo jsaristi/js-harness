@@ -182,7 +182,8 @@ export function pnpmRunning(spawn, platform) {
 /** Removes pnpm's bin lock when no live install can hold it: only while no other pnpm runs (an empty folder does not
  * show its owner is gone, Codex P2 on 839b194..eae1e83), and then one taken since `since` (this run's own install,
  * which has exited) or one older than STALE_LOCK_MS. A lock with anything inside is left (rmdir refuses it). Says
- * what it removed, or `null`. */
+ * what it removed, and an old lock it keeps with its age and why, since the next install waits on it and times out
+ * (2026-10-28); `null` when there is no lock, or a fresh one another install may hold. */
 function clearPnpmLock(binDir, since, isPnpmRunning) {
   if (!binDir) return null;
   const lock = path.join(binDir, PNPM_BIN_LOCK);
@@ -194,12 +195,15 @@ function clearPnpmLock(binDir, since, isPnpmRunning) {
   }
   // Two seconds of slack: the file system's stamp and this process's clock are read apart.
   const own = since !== undefined && taken >= since - 2000;
-  if (!own && Date.now() - taken <= STALE_LOCK_MS) return null;
-  if (isPnpmRunning() !== false) return null;
+  const old = Date.now() - taken > STALE_LOCK_MS;
+  if (!own && !old) return null;
+  const stays = (why) => (old ? `pnpm's bin lock ${lock} is ${Math.round((Date.now() - taken) / 60_000)} minutes old (taken at ${new Date(taken).toISOString()}) and stays: ${why}; with no pnpm running, rmdir "${lock}" removes it` : null);
+  const running = isPnpmRunning();
+  if (running !== false) return stays(running === null ? 'the process list could not be read' : 'a pnpm runs');
   try {
     fs.rmdirSync(lock);
-  } catch {
-    return null;
+  } catch (err) {
+    return own ? `pnpm's bin lock ${lock}, left by this install, stays: rmdir refused it (${err.code ?? err.message})` : stays(`rmdir refused it (${err.code ?? err.message})`);
   }
   return `removed pnpm's bin lock ${lock}, ${own ? 'left by this install' : `taken at ${new Date(taken).toISOString()}`}`;
 }
