@@ -95,6 +95,13 @@ Reviews:
   cell matching by case would make two rules for one file, and it fails open, never a false gap.
 - f63536e9 (R3-002's test): Codex ac28c99..f63536e passed (35,412 input tokens); lens reliability, 0 findings;
   gentle-ai on `ac28c992..f63536e9`: approved, no finding (lineage review-02e16e1f6bf65507).
+- PR 3, fc2a9a0f (the merge door asks for no gentle-ai line): Codex e0260e5..fc2a9a0, 1 part, passed (131,847
+  input tokens); lenses risk, reliability, readability over e0260e5..fc2a9a0: 0 findings (about 29,840 input
+  tokens each); gentle-ai on `e0260e51..fc2a9a0f`: approved (lineage review-62a0e5a1a2f1a26e), two advisory
+  findings. R3-001 (with both review switches off the door admits a code commit with no review) is question 104's
+  case: L11 keeps it until he answers, and the codex-off landing test changes with that answer. R3-002 (the help
+  test's `doesNotMatch` runs on a `find` that could be undefined) is left: an undefined argument throws, so the
+  test still fails, only with a type error, and a test-only commit would cost three more reviews.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
@@ -104,8 +111,8 @@ Not run yet.
 #627 landed (main 13d8988); the lead lands #628. On branch f8-s11-reviews (stacked on f8-s11-presets, worktree
 D:/js-harness/.claude/worktrees/f8-s11), PR 3's first commit drops the merge door's and notify's gentle-ai line,
 deletes bin/lib/gentle-ai-evidence.mjs, and rewrites the shipped review text (protocols skill section 3, the
-orchestrator skill's gate line, the merge-queue and notify help). Next: its Codex and lens reviews (base: the
-f8-s11-presets head, e0260e51), then the slice of the review starts (bin/lib/review-starts.mjs and the throughput
+orchestrator skill's gate line, the merge-queue and notify help); Codex, the lenses and gentle-ai reviewed it
+(Reviews). PR 3 is open, not announced ready. Next: the slice of the review starts (bin/lib/review-starts.mjs and the throughput
 row, L11), then T6/T7. Open, his: question 104 (L11), the agentsBlock line and its two tests
 (bin/lib/project.test.mjs:1954, bin/lib/template-block.test.mjs:30) stay until he answers; PR 3 is not announced
 ready before.
