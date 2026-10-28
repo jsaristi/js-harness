@@ -154,9 +154,9 @@ itself is not limited to an absence: the skill text names it for any stretch.
 ## Tasks
 - [x] T1 (kind: design) this document, read by two blind readers, one Claude and one Codex (rule:double-review), in 12e954b6 and the revision after them. Route: inline, readers delegated.
 - [x] T2 (kind: build) the measure and the history, pure: lanes, corrections, item spans and lost time (`bin/lib/stretch.mjs`), test first, in 838c9fe1 and the commit after the readers. Spec 1, 4, 5. Route: inline.
-- [ ] T3 (kind: build) the command and its record: `open`, `bind`, `status`, `close`, the dispatcher and index (`bin/stretch.mjs`). Spec 1, 3, 5. Route: inline.
-- [ ] T4 (kind: build) the renders (`bin/lib/stretch-render.mjs`). Spec 2, 3, 4. Route: inline.
-- [ ] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. Route: inline.
+- [x] T3 (kind: build) the command and its record: `open`, `bind`, `status`, `close`, the dispatcher and index (`bin/stretch.mjs`), in b1d9f90a. Spec 1, 3, 5. Route: inline.
+- [x] T4 (kind: build) the renders (`bin/lib/stretch-render.mjs`), in b1d9f90a. Spec 2, 3, 4. Route: inline.
+- [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. Route: inline.
 - [ ] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`. Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
 
@@ -195,3 +195,21 @@ itself is not limited to an absence: the skill text names it for any stretch.
   marked by hand. Not taken: one global correction instead of by kind (the brief and his request name kinds; the
   fallback covers the thin start); measuring tasks by the commits that close them (more machinery than one session
   per item, which is how this project already runs: one feature a session).
+
+## Next step
+State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
+- Done and committed: T1 (12e954b6), T2 (838c9fe1, 765baf9a). T3+T4 staged with docs/SPEC.md "The stretch" entry;
+  its commit (message in the job tmp `msg-t3.txt`) was running the gate; check `git log` for
+  `feat(stretch): the stretch command, its record and its renders`. If absent, `git commit` again after reading why.
+- A real-data dry run: a scratch home with copies of the real records
+  (`C:\Users\Oficina\.claude\jobs\3d51cd18\tmp\home1`) measured JH 69/70/68 from 11:55Z coherently.
+- T5 next: export `boardStretch({ home, root, slug, now, fileSystem, run })` from `bin/stretch.mjs` (null or a compact
+  block: elapsed, goals met with checkedAt, items state/real/corrected, lostHours); `sessions live --out` writes it as
+  `stretch` (null when none, so the merge clears it) into `board-checked.json`; update the two deepEquals in
+  `bin/sessions-live.test.mjs` (lines ~162 and ~173); `docs/live-board.html` gets a hidden `stretch-box` section
+  rendered with `el()`/textContent only.
+- T6: `rules change away-autonomy` takes the change as JSON on stdin (`odd/tasks/rule-hierarchy.md` line ~1501,
+  `bin/lib/rules-change-run.mjs` changeRule); branch `rule/away-autonomy-stretch` stacked on feat/stretch; quote his
+  words of lines 8017, 8139, 8213, 8264 (date 2026-10-28, session 0f71b2c6...). Run `--dry-run` first.
+- T7: reviews (`js-harness codex-review --base 79e34308`, `js-harness lens-review --base 79e34308 --lenses <..> --reason
+  <..>`), push, PR, `js-harness notify --to orchestrator --kind ready --pr <n>`; keep a declared `js-harness wait`.

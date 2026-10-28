@@ -337,6 +337,34 @@ async function statusCommand(ctx, flags, events, closing) {
   return 0;
 }
 
+/** The open stretch as the live board shows it, measured at `now` from the records and with the goals as last
+ * checked (it runs none): `{ id, openedAt, returnAt, hours, elapsedHours, measuredAt, goals, lostHours, items }`;
+ * `null` when none is open; `{ unavailable }` when the record cannot be read. */
+export function boardStretch({ home, root, slug, now, run, fileSystem = fs }) {
+  let events;
+  try {
+    events = readEvents(stretchFile(home, slug), fileSystem);
+  } catch (err) {
+    return { unavailable: err.code ?? err.message };
+  }
+  const stretch = openStretch(events);
+  if (!stretch) return null;
+  const ctx = { root, home, slug, fileSystem, readLands: (folder) => readLandRecord(folder, run, fileSystem), readCodexRuns: (folder) => readCodexReviewRuns(folder, { spawn: run }) };
+  const view = measure(ctx, stretch, now);
+  const { met, total, checkedAt } = view.goals;
+  return {
+    id: view.id,
+    openedAt: view.openedAt,
+    returnAt: view.returnAt,
+    hours: view.hours,
+    elapsedHours: view.elapsedHours,
+    measuredAt: view.at,
+    goals: { met, total, checkedAt },
+    lostHours: view.totals.lostHours,
+    items: view.items.map(({ id, title, session, state, realHours, corrected, waitsFor }) => ({ id, title, session, state, realHours, corrected, waitsFor: waitsFor ?? null })),
+  };
+}
+
 export async function stretchMain(
   argv = [],
   env = process.env,
