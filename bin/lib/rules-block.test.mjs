@@ -9,6 +9,7 @@ import path from 'node:path';
 import { install, readManifest, uninstall } from './manifest.mjs';
 import { RULES_LINES, rulesBody } from './rules-block.mjs';
 import { markedBlock } from './project-template.mjs';
+import { renameOver } from './atomic-write.mjs';
 
 const fakeSchtasks = () => {
   throw new Error('no scheduled task is recorded here');
@@ -247,6 +248,34 @@ test('a record edited by hand cannot take his text: an unknown separator or a cr
     assert.equal(m.remove().rulesBlock.status, 'released');
     // The separator is read as none, so the blank line install put before the block stays: a line end, never his text.
     assert.equal(m.read(), 'keep me\n\n');
+  } finally {
+    m.done();
+  }
+});
+
+// gentle-ai on T7's slice: his file is renamed into place as the manifest is, tried again while Windows holds it open.
+test('the rename that puts his file in place is tried again while Windows holds it, and fails on the third refusal', () => {
+  const held = (times) => {
+    let calls = 0;
+    return { rename: () => { calls += 1; if (calls <= times) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); }, calls: () => calls };
+  };
+  const brief = held(2);
+  renameOver('a', 'b', { rename: brief.rename, pause: () => {}, platform: 'win32' });
+  assert.equal(brief.calls(), 3);
+  const stuck = held(3);
+  assert.throws(() => renameOver('a', 'b', { rename: stuck.rename, pause: () => {}, platform: 'win32' }), { code: 'EBUSY' });
+  const linux = held(1);
+  assert.throws(() => renameOver('a', 'b', { rename: linux.rename, pause: () => {}, platform: 'linux' }), { code: 'EBUSY' });
+});
+
+test('install writes his file through a fresh sibling: a file already at a sibling\'s name is never written through', () => {
+  const m = machine();
+  try {
+    m.write('# mine\n');
+    fs.writeFileSync(`${m.file}.${process.pid}.tmp`, 'a stale file\n');
+    install(m.home, '1.0.0');
+    assert.equal(fs.readFileSync(`${m.file}.${process.pid}.tmp`, 'utf8'), 'a stale file\n');
+    assert.deepEqual(fs.readdirSync(path.dirname(m.file)).filter((name) => name.startsWith('CLAUDE.md.')), [`CLAUDE.md.${process.pid}.tmp`]);
   } finally {
     m.done();
   }

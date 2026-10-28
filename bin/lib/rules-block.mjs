@@ -3,8 +3,10 @@
 // small recorded block that `uninstall` undoes, and touches nothing else of `~/.claude`; so his other projects keep
 // them once gentle-ai's global file is gone. It is the marked block of ./project-template.mjs: rendered again while it
 // is unedited, and his once he edits it. The text around it is his or gentle-ai's and is never changed.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { renameOver } from './atomic-write.mjs';
 import { markedBlock, removeBlock, renderBlock } from './project-template.mjs';
 import { recordWith, sameFile } from './permissions.mjs';
 
@@ -32,15 +34,17 @@ const rulesFile = (home) => path.join(home, '.claude', 'CLAUDE.md');
 const SEPARATORS = new Set(['', '\n', '\r\n', '\n\n', '\r\n\r\n']);
 const separatorOf = (record) => (SEPARATORS.has(record?.separator) ? record.separator : '');
 
-/** Writes `text` to `target` through a sibling renamed over it, so a write that fails partway leaves the file as it was
- * (the verifier, L20); the sibling is removed when the write or the rename fails. */
+/** Writes `text` to `target` through a fresh sibling renamed over it, so a write that fails partway leaves the file as
+ * it was (the verifier, L20). The sibling is created exclusively under a random name, so nothing already there is
+ * written through, and the rename is tried again while Windows holds the file (gentle-ai on T7's slice); the sibling
+ * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours. */
 function writeWhole(target, text, writeFile = fs.writeFileSync) {
-  const tmp = `${target}.${process.pid}.tmp`;
+  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   try {
-    writeFile(tmp, text, 'utf8');
-    fs.renameSync(tmp, target);
+    writeFile(tmp, text, { encoding: 'utf8', flag: 'wx' });
+    renameOver(tmp, target);
   } catch (err) {
-    fs.rmSync(tmp, { force: true });
+    if (err.code !== 'EEXIST') fs.rmSync(tmp, { force: true });
     throw err;
   }
 }

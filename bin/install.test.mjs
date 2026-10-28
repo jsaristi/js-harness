@@ -12,6 +12,7 @@ import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
+import { renderBlock } from './lib/project-template.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
 import { shownWord } from './lib/package-manager.mjs';
 import { hygieneDir, journalPath, memoryLocation, purgeMarker } from './lib/memory-hygiene.mjs';
@@ -219,6 +220,21 @@ test('installMain and uninstallMain say what they did with the Rules block, and 
     const keptEdited = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(keptEdited.code, 0);
     assert.ok(keptEdited.outLines.includes(`kept the Rules block in ${file} (modified by you)`), keptEdited.outLines.join('\n'));
+
+    // gentle-ai on T7's slice: the two lines no test of the command said, `updated` and `kept` with its exit code.
+    fs.writeFileSync(file, '');
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(file, renderBlock(fs.readFileSync(file, 'utf8'), '## Rules\n- An older line.\n', 'rules').text);
+    const updated = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(updated.outLines.includes(`rendered the Rules block in ${file} again with this version's lines`), updated.outLines.join('\n'));
+    const manifestFile = path.join(home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    const elsewhere = path.join(home, 'elsewhere.md');
+    manifest.rulesBlock.path = elsewhere;
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+    const keptOther = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(keptOther.code, 1);
+    assert.ok(keptOther.errLines.includes(`left the Rules block install wrote as it is (the record names another file than the user's CLAUDE.md): it is no longer recorded; remove it by hand from ${elsewhere}, the file the record names`), keptOther.errLines.join('\n'));
 
     fs.rmSync(file);
     fs.mkdirSync(file);

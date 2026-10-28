@@ -121,6 +121,11 @@ Reviews:
 - Codex on `e792eaa..8b046c0`: correct (0.97), 47,536 input tokens; lenses (reliability, readability) 0 findings.
 - gentle-ai on `e792eaab..8b046c0f` (granted run): approved, 1 SUGGESTION (the new test does not check the exit code
   of the `kept` case), taken in T7's first slice.
+- T7's independent verifier (opus, read only) on `30ac3c3d..380b9e77`: 1 BLOCKER, 4 WARNINGs, all fixed test first
+  in `d232c63a` (L20).
+- gentle-ai on `cca493e0..d232c63a` (T7's slice; granted run): approved; its WARNING (the rename of his file is not
+  tried again while Windows holds it) and its 2 SUGGESTIONs (a sibling name that is not exclusive; no command test of
+  `updated` and of `kept` with exit 1) taken test first in the next commit.
 
 ## Next step
 State at 01:55Z, 2026-10-28: PR 2's code is reviewed whole (Reviews above): T5 `f2480611`, T4's lens findings

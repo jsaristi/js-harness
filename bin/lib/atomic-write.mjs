@@ -107,3 +107,8 @@ function renameHeld(from, to, rename, pause, platform) {
 
 /** Blocks for `ms`: the write is synchronous, and a hold lasts milliseconds. */
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** Renames `from` over `to`, tried again while Windows holds `to` open, as the manifest's write is (`renameHeld`);
+ * `deps.rename`, `deps.pause` and `deps.platform` are its seams. The Rules block writes his CLAUDE.md through it
+ * (./rules-block.mjs; gentle-ai on T7 of odd/tasks/f8-s10-port.md). */
+export const renameOver = (from, to, deps = {}) => renameHeld(from, to, deps.rename ?? fs.renameSync, deps.pause ?? sleepSync, deps.platform ?? process.platform);
