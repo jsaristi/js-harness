@@ -6,7 +6,7 @@ import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
 import { allowedModels, denial, hourRefusal, openingRefusal, sessionEffortRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
-import { REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
+import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
 import { codexReviewRunsPath } from './codex-review-runs.mjs';
 import { LENS_REVIEW_RUNS_FILE, LENS_REVIEWS_FILE } from './lens-reviews.mjs';
@@ -507,6 +507,13 @@ test('the record files the guard holds are those the review modules write, by na
   const written = [codexReviewsPath('D:/r', { where }), codexReviewRunsPath('D:/r', { where }), path.join('D:/r/.git/js-harness', LENS_REVIEWS_FILE), path.join('D:/r/.git/js-harness', LENS_REVIEW_RUNS_FILE)];
   assert.deepEqual(written.map((file) => path.basename(file)).sort(), [...REVIEW_RECORD_FILES].sort());
   for (const file of written) assert.equal(reviewRecordOf(file), path.basename(file), file);
+  // The package's handles for them name the same records.
+  assert.deepEqual(RECORD_HANDLES, {
+    LENS_REVIEWS_FILE,
+    LENS_REVIEW_RUNS_FILE,
+    codexReviewsPath: path.basename(codexReviewsPath('D:/r', { where })),
+    codexReviewRunsPath: path.basename(codexReviewRunsPath('D:/r', { where })),
+  });
 });
 
 test('a record path is told by its folder and its name, in any spelling of the path; any other file is not one', () => {
@@ -574,6 +581,8 @@ test('a shell write to a record is refused: a redirection, tee, a copy or move o
     'rm -rf ./.gi?',
     `eval 'echo x >> ${RECORD}'`,
     'eval rm -rf .git/js-harness',
+    // eval's `--` ends its options (Codex P2 on 0e192478).
+    "eval -- 'rm -rf .git/js-harness'",
     'rm -rf .git',
     'rm -rf ./.git/',
     // A redirection is an operator wherever it stands unquoted (Codex P2 and gentle-ai R3 on 0a832b2a).
@@ -608,6 +617,13 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "// it\'s the record\nm.appendLensReview(root, {}) // don\'t"',
     // Two regex literals whose quotes balance blank no code between them (Codex P2 on b2bc9596).
     'node -e "const a = /\'/; fs.appendFileSync(\'.git/js-harness/lens-reviews.jsonl\', \'{}\'); const b = /\'/"',
+    // A write call reached by reference, and a record named by the package's constant or path function
+    // (gentle-ai R3 on 0e192478).
+    `node -e "fs.appendFileSync.call(fs, '${RECORD}', l)"`,
+    `node -e "const w = fs.writeFileSync; w('${RECORD}', l)"`,
+    `node -e "const { appendFileSync: w } = fs; w('${RECORD}', l)"`,
+    'node -e "m.appendJsonLine(\'.\', m.LENS_REVIEWS_FILE, {})"',
+    'node -e "fs.appendFileSync(m.codexReviewsPath(\'.\'), l)"',
     // A string a child process runs is code too (gentle-ai R3 on 9c291a1e).
     'node -e "execFileSync(\'node\', [\'-e\', \'m.appendLensReview(root, {})\'])"',
     'node -e "require(\'child_process\').execSync(\'node -e m.startLensRun(root)\')"',
@@ -674,9 +690,14 @@ test('reading a record, the commands that write one, and text that only names on
     // Another project's git dir holds no record of this one (gentle-ai R3 on d153e61e).
     'rm -rf vendor/lib/.git',
     'rm -rf /tmp/scratch/.git',
+    // A write call held but given no record, and a record's constant only read (gentle-ai R3 on 0e192478).
+    'node -e "const w = fs.writeFileSync; w(\'/tmp/x.json\', l)"',
+    'node -e "console.log(m.LENS_REVIEWS_FILE)"',
     // A shell's `*` leaves out a dot file, so it takes no `.git` (gentle-ai R3 on 1ac52968).
     'rm -rf *',
     'rm -rf ./*',
+    // A trailing slash keeps only folders, and every record is a file (Codex P2 on 0e192478).
+    'rm -rf .git/js-harness/*/',
     // Space before the function (the reliability lens on d153e61e).
     'node -e "setTimeout( () => console.log(\'appendLensReview(\'), 0)"',
     'node -e "setTimeout(\n  function () { console.log(\'appendLensReview(\') }, 0)"',

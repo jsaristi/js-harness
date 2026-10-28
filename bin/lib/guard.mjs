@@ -489,10 +489,13 @@ const RECORDS_GLOB = /(?:^|\/)\.git\/(?:(js-harness)\/)?([^/]*[*?[][^/]*)$/i;
 const GIT_DIR_GLOB = /^(\.[^/]*[*?[][^/]*)$/;
 
 /** Whether `arg` is a glob in the records' folder that can match a record's name, one in the git dir that can match the
- * folder, or one that can match the git dir itself; a trailing slash changes none of these. */
+ * folder, or one that can match the git dir itself. A trailing slash keeps only folders: it changes the last two, and
+ * takes no record, each a file, from the first. */
 function globTakesRecord(arg) {
+  const folderOnly = /.\/+$/.test(slashed(arg));
   const path = slashed(arg).replace(/(.)\/+$/, '$1');
   const inGit = RECORDS_GLOB.exec(path);
+  if (folderOnly && inGit?.[1] !== undefined) return false;
   const top = GIT_DIR_GLOB.exec(path);
   const [names, glob] = inGit !== null
     ? [inGit[1] === undefined ? ['js-harness'] : REVIEW_RECORD_FILES, inGit[2]]
@@ -551,6 +554,16 @@ const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
 const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
+// A write call the code names without calling it: passed on, held or destructured.
+const HELD_WRITE = /\b(?:appendFile|writeFile|createWriteStream|copyFile|appendJsonLine)(?:Sync)?\b(?!\s*\()/;
+// The package's constants and functions that name a record, each with the record it names.
+export const RECORD_HANDLES = Object.freeze({
+  LENS_REVIEWS_FILE: 'lens-reviews.jsonl',
+  LENS_REVIEW_RUNS_FILE: 'lens-review-runs.jsonl',
+  codexReviewsPath: 'codex-reviews.jsonl',
+  codexReviewRunsPath: 'codex-review-runs.jsonl',
+});
+const RECORD_HANDLE = new RegExp(`\\b(${Object.keys(RECORD_HANDLES).join('|')})\\b`);
 // A function of this package that appends a record of a review and nothing else, named in a script's code: called,
 // passed on or held, it is refused; named in a string, it is text.
 const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReviewRun|appendCodexReview)\b/;
@@ -603,7 +616,7 @@ function segmentRecordWrite(words, redirected) {
   if (WRITES_INTO.has(program)) return writes(writtenInto(args));
   if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
   if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
-  if (program === 'eval') return recordWriteOf(args.join(' '));
+  if (program === 'eval') return recordWriteOf((args[0] === '--' ? args.slice(1) : args).join(' '));
   if (SHELLS.has(program)) {
     const flag = args.findIndex((arg) => /^-[A-Za-z]*c$/.test(arg));
     return flag === -1 || args[flag + 1] === undefined ? null : recordWriteOf(args[flag + 1]);
@@ -729,11 +742,15 @@ function literalOf(arg) {
  * when its mode (the second argument, or `mode=`) writes, the others their first. A call is looked for in the code, not
  * inside a string. A path written whole in one string is a record only in the records' folder (`reviewRecordOf`); one
  * assembled from parts, a join, is taken for a record when a part names one. A path given as anything but one string,
- * a variable or a join of one, is taken for the record the script names anywhere, when it names one: reading a record and writing to a
- * variable is refused with it, the safe side. */
+ * a variable or a join of one, is taken for the record the script names anywhere, when it names one: reading a record
+ * and writing to a variable is refused with it, the safe side. So is a write call the code holds without calling it
+ * (`fs.writeFileSync.call`, `const w = fs.writeFileSync`). A record is named by its file name or by the package's
+ * constant or function for it (`RECORD_HANDLES`). */
 function scriptRecordWrite(text) {
-  const anywhere = RECORD_IN_TEXT.exec(text);
-  for (const match of codeOf(text).matchAll(WRITE_CALL)) {
+  const anywhere = recordNamedIn(text);
+  const code = codeOf(text);
+  if (anywhere !== null && HELD_WRITE.test(code)) return anywhere;
+  for (const match of code.matchAll(WRITE_CALL)) {
     const call = match[1].toLowerCase();
     const args = callArguments(text, match.index + match[0].length);
     if (call === 'open') {
@@ -743,14 +760,21 @@ function scriptRecordWrite(text) {
     const written = call === 'rename' ? args : call === 'copyfile' || call === 'appendjsonline' ? args.slice(1, 2) : args.slice(0, 1);
     const recordIn = (arg) => {
       const literal = call === 'appendjsonline' ? null : literalOf(arg);
-      return literal !== null ? reviewRecordOf(literal) : RECORD_IN_TEXT.exec(arg)?.[1].toLowerCase() ?? null;
+      return literal !== null ? reviewRecordOf(literal) : recordNamedIn(arg);
     };
     const named = written.map(recordIn).find((name) => name !== null);
     if (named !== undefined) return named;
-    if (anywhere !== null && written.some((arg) => arg.trim() !== '' && literalOf(arg) === null)) return anywhere[1].toLowerCase();
+    if (anywhere !== null && written.some((arg) => arg.trim() !== '' && literalOf(arg) === null)) return anywhere;
   }
-  const named = CMDLET_WRITE.test(text) ? RECORD_IN_TEXT.exec(text) : null;
-  return named === null ? null : named[1].toLowerCase();
+  return CMDLET_WRITE.test(text) ? anywhere : null;
+}
+
+/** The record `text` names, by its file name or by a handle of `RECORD_HANDLES`, lower-cased; or null. */
+function recordNamedIn(text) {
+  const name = RECORD_IN_TEXT.exec(text)?.[1];
+  if (name !== undefined) return name.toLowerCase();
+  const handle = RECORD_HANDLE.exec(text)?.[1];
+  return handle === undefined ? null : RECORD_HANDLES[handle];
 }
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
