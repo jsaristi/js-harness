@@ -24,12 +24,16 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
-/** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests. */
-const HOMES = Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
-  .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')]));
+/** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests,
+ * and the package's coverage register, whose controls are all owed, so that directive coverage adds no line to them. */
+const HOMES = {
+  ...Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
+    .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')])),
+  'bin/lib/rules-coverage-data.mjs': fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8'),
+};
 
 /** The package's register, whose entries the rules' `failure` keys name. */
 const REGISTER = fs.readFileSync(path.join(PACKAGE, 'docs', 'FAILURES.md'), 'utf8');
@@ -269,7 +273,7 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied \| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
+    assert.match(USAGE, /\| applied \| coverage [^|]*(?:\| [^|]*)*\| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
   });
 });
 

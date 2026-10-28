@@ -33,10 +33,12 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule } from './lib/rules-change-run.mjs';
+import { readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
+import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
+export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -61,6 +63,17 @@ function parseArgs(argv) {
       else parsed.id = token;
     }
     if (parsed.id === undefined) throw new RulesArgError('rules change needs the id of the rule');
+    return parsed;
+  }
+  // `coverage` takes its flags, each once at most; `--refresh` writes the register and goes alone.
+  if (argv[0] === 'coverage') {
+    const parsed = { command: 'coverage', json: false, strict: false, refresh: false };
+    const flags = { '--json': 'json', '--strict': 'strict', '--refresh': 'refresh' };
+    for (const token of argv.slice(1)) {
+      if (!Object.hasOwn(flags, token) || parsed[flags[token]]) throw new RulesArgError(`unknown argument: ${token}`);
+      parsed[flags[token]] = true;
+    }
+    if (parsed.refresh && (parsed.json || parsed.strict)) throw new RulesArgError('rules coverage --refresh goes alone');
     return parsed;
   }
   const words = [];
@@ -393,7 +406,67 @@ function appliedForm({ cwd, env, homedir, now, run }, stdout) {
   return records.exists ? result.exit : 0;
 }
 
-/** `js-harness rules` and its forms: the listing, `<id>`, `check`, `render` and `applied`. It returns the exit code: 0 when
+/** A share as a whole percent. */
+const percent = (part, whole) => `${whole === 0 ? 0 : Math.round((part / whole) * 100)}%`;
+
+/** The lines of the coverage report: a line a source, the message sources, the rules by level, the cases, the owed
+ * share, every context span (so a reason can be read again) and every finding and stale line. */
+function coverageLines(report) {
+  const lines = [`Directive coverage, seeded ${report.baseline} (odd/tasks/f8-s5c-a-coverage.md)`];
+  for (const source of report.sources) {
+    const spans = source.tied.length + source.owed.length + source.edited.length + source.context.length + source.reopened.length + source.gaps.length;
+    lines.push(`  ${source.id} (${source.from}): ${spans} spans: ${source.tied.length} tied to a rule, ${source.owed.length + source.edited.length} owed, ${source.context.length} context, ${source.gaps.length + source.reopened.length} undeclared`);
+  }
+  const owedMessages = report.messages.filter((item) => item.owed).length;
+  lines.push(`  messages: ${report.messages.length} sources of hook messages, ${owedMessages} owed whole`);
+  const { owed, obligations } = report.totals;
+  const byLevel = {};
+  for (const rule of report.rules) for (const level of rule.levels.length === 0 ? ['none'] : rule.levels) byLevel[level] = (byLevel[level] ?? 0) + 1;
+  lines.push(`  rules: ${report.rules.length} live, by the level of each obligation: ${Object.entries(byLevel).map(([level, n]) => `${level} ${n}`).join(', ')}`);
+  const naming = report.cases.filter((item) => item.rules.length > 0).length;
+  lines.push(`  cases: ${report.cases.length}: ${naming} name their rules, ${report.cases.filter((item) => item.owed).length} owed`);
+  const cap = OWED_CAP_FROM === null ? 'not yet held (S8 sets the day)' : `held since ${OWED_CAP_FROM}`;
+  lines.push(`  owed: ${owed} of ${obligations} obligations (${percent(owed, obligations)}); the cap of ${percent(OWED_CAP, 1)} is ${cap}`);
+  const context = report.sources.flatMap((source) => source.context.map(({ span, reason }) => `  ${source.id} ${span.id}: "${span.text.replace(/\s+/g, ' ').trim()}" (${reason})`));
+  if (context.length > 0) lines.push('Context spans:', ...context);
+  return lines;
+}
+
+/** `rules coverage` in the harness's checkout at `root`: the report, or its JSON with `--json`; `--strict` exits 1 on a
+ * finding, a stale line or an owed share over the cap once it is held; `--refresh` writes the register brought up to
+ * the texts, which only shrinks the debt. Plain, it exits 0 whatever it finds: `rules check` is the refusal. */
+function coverageForm(parsed, root, { stdout, stderr }) {
+  let read;
+  try {
+    read = readCoverage(root, RULES);
+  } catch (err) {
+    stderr(err.message);
+    return 1;
+  }
+  if (!read.present) {
+    stderr(`no ${REGISTER_PATH} under ${root}: there is no coverage to report`);
+    return 1;
+  }
+  const { report } = read;
+  if (parsed.refresh) {
+    fs.writeFileSync(path.join(root, ...REGISTER_PATH.split('/')), writeCoverage(refreshRegister(read.register, report)), 'utf8');
+    stdout(`${REGISTER_PATH} written: ${report.stale.length === 0 ? 'it was current' : `${report.stale.length} stale ${report.stale.length === 1 ? 'line' : 'lines'} settled`}`);
+    return 0;
+  }
+  const overCap = OWED_CAP_FROM !== null && report.totals.owed > OWED_CAP * report.totals.obligations;
+  const failing = parsed.strict ? [...report.findings, ...report.stale, ...(overCap ? [`owed is ${percent(report.totals.owed, report.totals.obligations)} of the obligations, over the cap of ${percent(OWED_CAP, 1)}`] : [])] : report.findings;
+  if (parsed.json) stdout(JSON.stringify(report, null, 2));
+  else {
+    for (const line of coverageLines(report)) stdout(line);
+    const word = parsed.strict ? 'strict' : 'coverage';
+    stdout(failing.length === 0 ? `PASS  ${word}  no gap opened since the baseline${parsed.strict ? ', and the register says what the texts hold' : ''}` : `FAIL  ${word}  ${failing.length} ${failing.length === 1 ? 'finding' : 'findings'}`);
+    for (const line of failing) stdout(`      ${line}`);
+    if (!parsed.strict) for (const line of report.stale) stdout(`note: ${line}`);
+  }
+  return parsed.strict && failing.length > 0 ? 1 : 0;
+}
+
+/** `js-harness rules` and its forms: the listing, `<id>`, `check`, `render`, `applied` and `coverage`. It returns the exit code: 0 when
  * the form succeeds, 1 when a rule is not declared, the list has a finding, a file is unreadable or not the sources, or
  * `applied` finds a short name that gives another model than its rule declares, and 2 with the usage on stderr for an
  * argument it does not know. Every form but `applied` reads its files under `root`, which defaults to the package.
@@ -469,6 +542,7 @@ export async function rulesMain(argv, {
 
   // The plain listing needs only the declarations, so a file it does not read cannot stop it.
   if (parsed.command === 'list') return listRules(stdout);
+  if (parsed.command === 'coverage') return coverageForm(parsed, root, { run, stdout, stderr });
 
   // `applied` reads no document of the package, so it runs before the package is read at all.
   if (parsed.command === 'applied') {
@@ -512,6 +586,16 @@ export async function rulesMain(argv, {
     const register = read.readFile('docs/FAILURES.md');
     if (register === null) result.notes.push("no docs/FAILURES.md here: the rules' failures were not checked");
     else result.findings.push(...registerFindings(RULES, parseRegister(register).entries));
+    // Directive coverage refuses a gap opened after its baseline (odd/tasks/f8-s5c-a-coverage.md); the stale lines are
+    // for `rules coverage --strict`, which the gate does not run.
+    let coverage;
+    try {
+      coverage = readCoverage(root, RULES);
+    } catch (err) {
+      result.findings.push(err.message);
+    }
+    if (coverage?.present === false) result.notes.push(`no ${REGISTER_PATH} here: directive coverage was not checked`);
+    else if (coverage?.present) result.findings.push(...coverage.report.findings);
     const inForce = [...read.codeFiles, ...read.textFiles, ...['AGENTS.md', 'README.md'].map((file) => ({ path: file, text: read.readFile(file) })).filter((file) => file.text !== null)];
     return checkList(result, stdout, countFindings(RULES, inForce));
   }
