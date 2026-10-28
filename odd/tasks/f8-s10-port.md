@@ -211,3 +211,9 @@ its body, `ready --pr` once the merge queue's dry run takes it; then T6 on a bra
   a record naming another file is `kept`, dropped and said, its entries to remove by hand. Codex on
   `edcd2bf..8c68453`: correct (0.89); lenses (reliability, readability): 0 findings. Next step: commit this fix,
   review it (Codex, lenses, gentle-ai), push, write gentle-ai lines for PR 2 in Reviews, `ready --pr 617`; then T6.
+- L16 (2026-10-28, state at the context pause): the L15 fix is `c9f3efd9`; Codex on `8c68453..c9f3efd` correct (0.93),
+  lenses (reliability, readability) 0 findings. Next step: gentle-ai on `8c684535..c9f3efd9` (status with
+  `--base-ref 8c684535 --committed-only --next-transition`, run its start, then the granted invocation, then
+  `capture-result --agent=claude-code` with the collect arguments), then push, add gentle-ai lines to Reviews for
+  `c7445caa..e2c38a15` (L14), `edcd2bfd..8c684535` (L15) and this range, and `ready --pr 617` when the merge queue's
+  dry run takes it; then T6. T7 waits on question 99.
