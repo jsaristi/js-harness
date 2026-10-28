@@ -268,6 +268,12 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
     taken in the next commit, tests first (two red before it): a call is looked for in the script with its string
     literals blanked, a template literal's `${…}` kept as code; `appendJsonLine` is a write call whose second argument
     is what it writes; the other dependencies pass through.
+  - e56114a4 closed those. Lens reliability on `9f4d1f23..e56114a4` no finding; lens risk one warning, taken test
+    first in the next commit (one test red before it): blanking strings let a string run as code (`eval`,
+    `new Function`) and a script with a quote left open (in a regex literal or a comment) pass. A comment now opens
+    no string, and a script that leaves a quote open or runs a string is read whole, the safe side. Codex refused a
+    second recheck of the review that ended at 0a832b2a, so the slice is reviewed whole again from e7bc4215
+    (`codex-review --base e7bc4215 --again`); nothing else is open.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -302,10 +308,10 @@ run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
 T7 (JH 69, 2026-10-28 ~12:50Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`: commits
-e7bc4215, 0a832b2a, 9f4d1f23 and the fourth (strings blanked, `appendJsonLine`, deps spread). Left, in order: Codex
-`js-harness codex-review --base 9f4d1f23` and lenses with `node bin/js-harness.mjs lens-review --base 9f4d1f23
+e7bc4215, 0a832b2a, 9f4d1f23, e56114a4 and the fifth (comments, open quotes, `eval`). Left, in order: Codex
+`js-harness codex-review --base e7bc4215 --again` and lenses with `node bin/js-harness.mjs lens-review --base e56114a4
 --lenses risk,reliability --reason ...` (the branch's command, so the record has its run line); gentle-ai when the
-Stop hook offers the fourth commit; then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
+Stop hook offers the fifth commit; then push `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr
 <n>` saying the bad news: nothing works until a release with it is installed, and every in-flight branch reruns
 `lens-review` over its range once it is (older lens records stop counting); then close T7's box.
 

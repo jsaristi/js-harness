@@ -629,14 +629,27 @@ function callArguments(text, from) {
   return args;
 }
 
+// A call that runs a string as code: what that string holds is code too.
+const RUNS_TEXT = /\b(?:eval|Function|exec|compile|runIn\w*Context|runInThisContext)\s*\(/;
+
 /** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
- * at the same indexes; a template literal's `${…}` stays code. */
+ * at the same indexes; a template literal's `${…}` stays code, and a `//` or `/* … *\/` comment opens no string. On the
+ * safe side, `text` comes back whole when a quote is left open (one in a regex literal, say) or the script runs a
+ * string (`RUNS_TEXT`). */
 function codeOf(text) {
   let out = '';
   const open = [];
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
     const top = open[open.length - 1];
+    const comment = top !== "'" && top !== '"' && top !== '`' && c === '/' ? { '/': '\n', '*': '*/' }[text[i + 1]] : undefined;
+    if (comment !== undefined) {
+      const end = text.indexOf(comment, i + 2);
+      const to = end === -1 ? text.length : end;
+      out += text.slice(i, to);
+      i = to - 1;
+      continue;
+    }
     if (top === "'" || top === '"' || top === '`') {
       if (c === top) open.pop();
       else if (top === '`' && c === '$' && text[i + 1] === '{') {
@@ -655,7 +668,7 @@ function codeOf(text) {
     else if (c === '}' && top !== undefined) open.pop();
     out += c;
   }
-  return out;
+  return open.length > 0 || RUNS_TEXT.test(out) ? text : out;
 }
 
 /** The record the script `text` writes by a call given it, or null. What each call writes: `rename` both of its paths,

@@ -569,6 +569,11 @@ test('a script that writes a record, or calls a function that appends one, is re
     'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendJsonLine(\'.\', \'lens-reviews.jsonl\', {}))"',
     // A template literal's interpolation is code, not text.
     'node -e "console.log(`${m.appendLensReview(root, {})}`)"',
+    // A string that is run is code, and a quote left open blanks nothing (the risk lens on e56114a4).
+    'node -e "eval(\'m.appendLensReview(root, {})\')"',
+    'node -e "new Function(\'m\', \'m.appendLensReview(root, {})\')(m)"',
+    'node -e "/\'/.test(x); m.appendLensReview(root, {})"',
+    'node -e "// it\'s the record\nm.appendLensReview(root, {}) // don\'t"',
   ]) assert.match(reviewRecordWriteRefusal(command), /js-harness guard: .*record of a review/s, command);
 });
 
