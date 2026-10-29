@@ -98,6 +98,6 @@ export function staleBoardWarning(payload, state, io, now = Date.now()) {
   }
   return `js-harness reply: ${rows.length} ${STALE_MARKER} ${named}, the oldest since ${hhmm(oldest.time)} UTC, `
     + `longer than one check holds (${CHECK_MINUTES} min): ${saved.url} shows the record as it was then. Send them: `
-    + '`js-harness sessions live --out <dir>`, each `ArtifactData` set it prints, then `js-harness sessions live --sent <file>` '
-    + 'for each file sent. This is said once for these rows.';
+    + '`js-harness sessions live --out <dir>`, each `ArtifactData` set it prints with each row\'s Spanish `sesion` and `texto` '
+    + 'added, then `js-harness sessions live --sent <file>` for each file sent. This is said once for these rows.';
 }

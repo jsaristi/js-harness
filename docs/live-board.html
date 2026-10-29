@@ -352,15 +352,17 @@ function renderStatus(status) {
 // The work running on the machine when the lead last checked the record (`running` from `sessions live --out`):
 // gates, reviews and eval batches, said with the time they were seen, since nothing on the board follows them after.
 const RUN_KIND = { gate: 'gate', 'codex-review': 'revisión de Codex', 'lens-review': 'revisión de lentes', evals: 'lote de evals' };
-function runningText(running) {
+// Past its `until` the reading is old: it says when it was seen and when each began, never a "desde hace" that grows.
+function runningText(running, now) {
   if (typeof running?.at !== 'string') return null;
   const at = hhmm(running.at);
   if (typeof running.unavailable === 'string') return `No se pudo ver qué corría en la máquina a las ${at}`;
+  const old = !(now <= Date.parse(running.until));
   const items = Array.isArray(running.items) ? running.items : [];
-  if (items.length === 0) return `Nada corriendo en la máquina a las ${at}`;
-  return `En curso a las ${at}: ${items.map((item) => {
+  if (items.length === 0) return old ? `Nada corría en la máquina a las ${at} (lectura vieja)` : `Nada corriendo en la máquina a las ${at}`;
+  return `${old ? `Corría a las ${at} (lectura vieja, puede haber terminado)` : `En curso a las ${at}`}: ${items.map((item) => {
     const where = typeof item?.where === 'string' ? ` en ${item.where.split(/[\\/]/).filter(Boolean).pop()}` : '';
-    const since = typeof item?.since === 'string' ? ` (desde ${ago(item.since)})` : '';
+    const since = typeof item?.since !== 'string' ? '' : old ? ` (empezó a las ${hhmm(item.since)})` : ` (desde ${ago(item.since)})`;
     return `${RUN_KIND[item?.kind] ?? item?.kind}${where}${since}`;
   }).join(' · ')}`;
 }
@@ -414,7 +416,7 @@ function renderStretch(stretch) {
 function renderSummary(asking) {
   renderStretch(summary?.stretch);
   renderStatus(summary?.status);
-  const running = runningText(summary?.running);
+  const running = runningText(summary?.running, Date.now());
   $('running').hidden = running === null;
   $('running').textContent = running ?? '';
   const lead = $('lead');

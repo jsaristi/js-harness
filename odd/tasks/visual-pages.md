@@ -210,7 +210,9 @@ heartbeat are left as they are, to keep one home.
   session's title and `sessionId` (else its job id), stamped with the time before it launched claude and with the
   text "started by sessions start: <title>". The board takes a session's latest row by time (`docs/live-board.html`,
   line 260), so a notice the child sends later is the newer one; the child's own `opened` still comes, as its
-  first fact of its own. A start whose notice cannot be appended says so on standard error and keeps the start.
+  first fact of its own. `sessions` reads a session's state in the record's order, so the row is written only while
+  the record holds no notice of that session; its `worktree` is the absolute path, as `placeOf` records one. A start
+  whose notice cannot be appended says so on standard error and keeps the start.
 - `sessions live --out` puts `running` into `board-checked.json`: `{ at, until, items }`, sampled at that check and
   held until the next (`until`), each item `{ kind, pid, since, where }`: the gates as `findGates` reads them from
   the listing (a gate running and one waiting for the lock are not told apart; `where` its worktree where the command
@@ -325,6 +327,15 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   slice B (T5c). The session was compacted by the host at ~01:33Z and resumed from this document. Codex on
   54747bc..2bd3bc7: correct (0.96), no findings (65,799 input tokens). Slice A went up as the stacked chain #643,
   #644, #645 (Slices above); #643 announced ready.
+- L8. 2026-10-29, slice B reviewed over 2bd3bc7..b70ac68. Claude lenses (risk, resilience, reliability): 0 findings,
+  128,262 input tokens. Codex: the first run stopped on "Selected model is at capacity" (82,682 input tokens, no
+  record); run once more, 2 parts, 587,101 input tokens (472,320 cached): two P2 in the start row, taken in: its
+  `worktree` was the name given, not the absolute path readers hand to git; and, since `sessions` reads a session's
+  state in the record's order, a row appended after the session's own notice would replace its newer state (now
+  written only while the record holds no notice of that session). gentle-ai (medium; reliability; lineage
+  review-7c6f3a36e3078389): approved, two warnings and a suggestion, all taken in: the running line past its `until`
+  read as live with a growing "desde hace"; the test did not prove the start row is stamped before claude ran (the
+  fake now records when it ran); the warning's send steps did not name the Spanish fields of a row.
 
 ## Next step
 State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
@@ -333,7 +344,8 @@ State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\vi
   retargets to main as its base lands. Reviews in L5 and L7; gentle-ai lines below.
 - gentle-ai: ee595c7c approved (low, docs); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720);
   54747bc6 approved (medium, lineage review-a3c20007ce0c6f70; its two warnings fixed in 2bd3bc72). 2bd3bc72: Codex
-  and the reliability lens found nothing.
+  and the reliability lens found nothing. 2bd3bc72..b70ac68d (9b36b5b5, b70ac68d) approved (medium, lineage
+  review-7c6f3a36e3078389); its findings and Codex's fixed in the commit after it (L8).
 - Slice B, T4, T5, T5b and T5c built, tests green one file at a time (an eval batch of another worktree refuses
   several at once): `bin/lib/stale-board.mjs` and the Stop hook (`bin/reply.mjs`); `bin/lib/sessions-running.mjs`
   and `running` in `board-checked.json` (`bin/sessions-live.mjs`); the start row (`bin/sessions-background.mjs`);

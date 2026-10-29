@@ -232,13 +232,21 @@ test('the board page says what ran on the machine at the check, and that it coul
   assert.ok(names && source, 'the page defines RUN_KIND and runningText');
   const runningText = new Function('hhmm', 'ago', `${names}\n${source}; return runningText;`)((time) => time.slice(11, 16), () => 'hace 20 min');
   const at = '2026-10-29T01:00:00.000Z';
-  assert.equal(runningText(undefined), null, 'a summary from before has no block');
-  assert.equal(runningText({ at, items: [] }), 'Nada corriendo en la máquina a las 01:00');
-  assert.equal(runningText({ at, unavailable: 'the process listing: timed out' }), 'No se pudo ver qué corría en la máquina a las 01:00');
-  assert.equal(runningText({ at, items: [
+  const until = '2026-10-29T01:45:00.000Z';
+  const within = Date.parse('2026-10-29T01:10:00.000Z');
+  const after = Date.parse('2026-10-29T02:00:00.000Z');
+  assert.equal(runningText(undefined, within), null, 'a summary from before has no block');
+  assert.equal(runningText({ at, until, items: [] }, within), 'Nada corriendo en la máquina a las 01:00');
+  assert.equal(runningText({ at, until, unavailable: 'the process listing: timed out' }, within), 'No se pudo ver qué corría en la máquina a las 01:00');
+  const items = [
     { kind: 'evals', pid: 1, since: '2026-10-29T00:40:00.000Z', where: 'D:\\js-harness\\.claude\\worktrees\\f8-s5c' },
     { kind: 'codex-review', pid: 2, since: null, where: null },
-  ] }), 'En curso a las 01:00: lote de evals en f8-s5c (desde hace 20 min) · revisión de Codex');
+  ];
+  assert.equal(runningText({ at, until, items }, within), 'En curso a las 01:00: lote de evals en f8-s5c (desde hace 20 min) · revisión de Codex');
+  // gentle-ai review-7c6f3a36e3078389: past its until the reading is old, and no "desde hace" keeps growing.
+  assert.equal(runningText({ at, until, items }, after), 'Corría a las 01:00 (lectura vieja, puede haber terminado): lote de evals en f8-s5c (empezó a las 00:40) · revisión de Codex');
+  assert.equal(runningText({ at, until, items: [] }, after), 'Nada corría en la máquina a las 01:00 (lectura vieja)');
+  assert.equal(runningText({ at, items: [] }, within), 'Nada corría en la máquina a las 01:00 (lectura vieja)', 'a reading with no until holds nothing');
 });
 
 // odd/tasks/visual-pages.md, spec 6: the lead's status list, one colored card an item, before what is the user's.

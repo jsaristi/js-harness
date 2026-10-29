@@ -50,6 +50,7 @@ test('the lead whose rows waited longer than one check is told how many, since w
   assert.match(reason, /since 22:00 UTC/);
   assert.match(reason, /\(oldest 2026-10-28T22:00:00\.000Z-work-1\)/);
   assert.ok(reason.includes(BOARD));
+  assert.match(reason, /Spanish `sesion` and `texto`/, 'rows sent from the warning alone reach him in Spanish');
   assert.match(reason, /js-harness sessions live --out <dir>/);
   assert.match(reason, /js-harness sessions live --sent <file>/);
 });

@@ -12,8 +12,8 @@ import { spawnSync } from 'node:child_process';
 import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, undoSession, within, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
-import { appendNotice, newNotice, nextSessionNumber } from './lib/channel.mjs';
-import { mainCheckout, projectCode, projectSlug } from './lib/sessions.mjs';
+import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
+import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
 export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
@@ -223,10 +223,22 @@ export function sessionsStartMain(argv, given = {}) {
   // channel record, from the session itself. It is the board's, not the start's: one that cannot be written is said
   // and the session stays.
   try {
-    appendNotice(home, projectSlug(root), newNotice({
-      at: launchedAt, from: { host: 'claude-code', id: agent?.sessionId ?? id, source: 'sessions start', title: parsed.title },
-      to: 'orchestrator', kind: 'opened', text: `started by sessions start: ${parsed.title}`, cwd, worktree: parsed.worktree ?? null,
-    }));
+    const slug = projectSlug(root);
+    const sender = agent?.sessionId ?? id;
+    const record = readNotices(home, slug);
+    if (record.unavailable !== undefined) throw new Error(`${record.path} cannot be read (${record.unavailable})`);
+    // `sessions` reads a session's state in the record's order, so a row written after the session's own first
+    // notice would take its place: once the session wrote, its own rows show it.
+    if (!record.notices.some((notice) => sameSession(notice.from?.id, sender))) {
+      // The place as a notice records it (`placeOf`): the worktree's absolute path, which readers hand to git.
+      const folder = worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }) ?? cwd;
+      const place = placeOf(run, folder);
+      appendNotice(home, slug, newNotice({
+        at: launchedAt, from: { host: 'claude-code', id: sender, source: 'sessions start', title: parsed.title },
+        to: 'orchestrator', kind: 'opened', text: `started by sessions start: ${parsed.title}`, cwd: folder,
+        worktree: parsed.worktree ? path.resolve(folder) : place.worktree, branch: place.branch,
+      }));
+    }
   } catch (err) {
     stderr(`js-harness sessions start: the board's first row of ${id} could not be written (${err.code ?? err.message}); the session runs and its own notices still reach the board`);
   }
