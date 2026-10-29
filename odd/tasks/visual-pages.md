@@ -368,6 +368,10 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
 - L12. 2026-10-29, Codex over 67e6230..1f61e01 (`--again`, 167,443 input tokens): one P2, taken in: an estimate of
   `[null, null]`, `''` or `false` read as 0 hours through `Number`, a made-up "estimado 0 h"; only two numbers are an
   estimate now, and the stretch's hours or "sin estimado" follow.
+- L13. 2026-10-29, gentle-ai over b70ac68d..ca23a627 (reliability, lineage review-3aafcdd1541ce20e): approved and
+  acknowledged, three warnings and a suggestion: the start-row race (T5e, the lead's follow-up); the blank estimate
+  read as 0 (fixed in c6d97b82); the start row with no worktree and its branch untested, and an estimate named by the
+  code alone ("JH") matching every session, both taken in the commit after c6d97b82.
 
 ## Next step
 State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
@@ -377,7 +381,8 @@ State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\vi
 - gentle-ai: ee595c7c approved (low, docs); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720);
   54747bc6 approved (medium, lineage review-a3c20007ce0c6f70; its two warnings fixed in 2bd3bc72). 2bd3bc72: Codex
   and the reliability lens found nothing. 2bd3bc72..b70ac68d (9b36b5b5, b70ac68d) approved (medium, lineage
-  review-7c6f3a36e3078389); its findings and Codex's fixed in the commit after it (L8).
+  review-7c6f3a36e3078389); its findings and Codex's fixed in the commit after it (L8). b70ac68d..ca23a627
+  (67e6230a, ca23a627) approved (medium, lineage review-3aafcdd1541ce20e; L13).
 - Slice B, T4, T5, T5b and T5c built, tests green one file at a time (an eval batch of another worktree refuses
   several at once): `bin/lib/stale-board.mjs` and the Stop hook (`bin/reply.mjs`); `bin/lib/sessions-running.mjs`
   and `running` in `board-checked.json` (`bin/sessions-live.mjs`); the start row (`bin/sessions-background.mjs`);

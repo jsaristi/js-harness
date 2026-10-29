@@ -195,6 +195,14 @@ test('sessions start writes the session\'s first row to the channel record, stam
   assert.ok(path.isAbsolute(notices[0].worktree));
 }));
 
+// gentle-ai review-3aafcdd1541ce20e: with no --worktree the row's place is the checkout git names, with its branch.
+test('sessions start places the first row of a session with no worktree in the checkout and its branch', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const [notice] = channelNotices(world);
+  assert.equal(fs.realpathSync(notice.worktree), fs.realpathSync(world.project));
+  assert.equal(notice.branch, 'main');
+}));
+
 // Codex, 2bd3bc7..b70ac68: `sessions` reads a session's state in the record's order, so a first row written after the
 // session's own notice would replace its newer state.
 test('sessions start writes no first row once the session wrote its own', withWorld((world) => {

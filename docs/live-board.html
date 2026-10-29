@@ -295,7 +295,8 @@ function taskTimeText(rows, session, summary, now) {
   const first = own.sort((a, b) => Date.parse(a.time) - Date.parse(b.time))[0];
   const start = opened ?? first;
   if (start === undefined) return null;
-  const mine = (named) => typeof named === 'string' && named !== '' && (session === named || session.startsWith(`${named} `));
+  // A session by its whole title, or by its code and number ("JH 79"): the code alone would name every session.
+  const mine = (named) => typeof named === 'string' && (session === named || (/^\S+ \d+$/.test(named) && session.startsWith(`${named} `)));
   const lead = (Array.isArray(summary?.estimates) ? summary.estimates : []).find((one) => mine(one?.session));
   const item = (Array.isArray(summary?.stretch?.items) ? summary.stretch.items : []).find((one) => mine(one?.session));
   const estimate = hoursText(lead?.horas) ?? hoursText(item?.corrected);
