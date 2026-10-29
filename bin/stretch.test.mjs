@@ -529,3 +529,101 @@ test('show and explain with no stretch at all exit 1', async () => {
   assert.equal((await stretch(place, ['show'])).code, 1);
   assert.equal((await stretch(place, ['explain', 'G1', '--source', 'commit:e6c8214c', '--why', 'x'])).code, 1);
 });
+
+// --- the forecast (odd/tasks/stretch-forecast.md) ---
+
+const FORECAST_ROADMAP = (later) => [
+  '# R', '', '## Checklist', '',
+  '### F1 Skeleton', '- [x] a', `- [${later ? 'x' : ' '}] b`, '',
+  '### F2 Context diet', '- [ ] c, the cuts', '- [ ] d', ...(later ? ['- [ ] e, a row added while away'] : []), '',
+  '## F8 plan', '',
+  '### S11 Complements', '- **State:** done', '',
+  '### S13 Rehearsal', `- **State:** ${later ? 'done' : 'to do'}`, '',
+].join('\n');
+
+/** The moments' git with the roadmap of the forecast: main at `c0` until hour 1 and `c1` after, `c1` with row b and
+ * S13 done and one row added. */
+function forecastGit() {
+  const moments = momentsGit();
+  return (command, args) => {
+    const key = args.join(' ');
+    if (key === 'show c0:docs/ROADMAP.md') return { status: 0, stdout: FORECAST_ROADMAP(false), stderr: '' };
+    if (key === 'show c1:docs/ROADMAP.md') return { status: 0, stdout: FORECAST_ROADMAP(true), stderr: '' };
+    return moments(command, args);
+  };
+}
+
+// Five hours, two slots: W1 ends at [2, 3], within them even long; W2 at [4, 6], within them by its middle; W3 waits.
+const FORECAST_PLAN = {
+  hours: 5,
+  slots: 2,
+  goals: [{ id: 'G1', text: 'PR 630 en main', command: 'goal-merged' }],
+  items: [
+    { id: 'W1', title: 'registros', kind: 'build', hours: [2, 3], session: 'JH 69', closes: [{ in: 'F1 Skeleton', step: 'b' }] },
+    { id: 'W2', title: 'documentación', kind: 'docs', hours: [4, 6], closes: [{ in: 'F2 Context diet', step: 'c' }, { in: 'F8 plan', step: 'S13' }] },
+    { id: 'W3', title: 'gasto', kind: 'verify', hours: [1, 1], waitsFor: 'su sí', closes: [{ in: 'F2 Context diet', step: 'd' }] },
+  ],
+};
+
+test('open forecasts the map at the return from what each item closes: the share now, by the middle, and its range', async () => {
+  const place = scratch();
+  const opened = await stretch(place, ['open', '--plan', planFile(place, FORECAST_PLAN), '--json'], { deps: { run: forecastGit() } });
+  assert.equal(opened.code, 0, opened.err);
+  const { forecast } = JSON.parse(opened.out);
+  // Now 1 of 4: W1's row closes even long, W2's by the middle; W3's waits for him.
+  assert.deepEqual(forecast.total, { done: 1, total: 4, forecast: 3, low: 2, high: 3 });
+  assert.deepEqual(forecast.plans.map((one) => [one.name, one.done, one.total, one.forecast, one.low]), [['F8 plan', 1, 2, 2, 1]]);
+  assert.deepEqual(forecast.rows.map((one) => [one.text, one.when]), [['b', 'sure'], ['c, the cuts', 'likely'], ['S13', 'likely'], ['d', 'waits']]);
+});
+
+test('open refuses a plan whose item names a row the map at the opening does not hold open, and records nothing', async () => {
+  const place = scratch();
+  const plan = { ...FORECAST_PLAN, items: [{ ...FORECAST_PLAN.items[0], closes: [{ in: 'F1 Skeleton', step: 'a' }] }] };
+  const refused = await stretch(place, ['open', '--plan', planFile(place, plan)], { deps: { run: forecastGit() } });
+  assert.equal(refused.code, 2);
+  assert.match(refused.err, /W1.*F1 Skeleton has no open step that starts with "a"/);
+  assert.equal(fs.existsSync(stretchFile(place.home, projectSlug(place.project))), false);
+});
+
+test('a plan that names nothing opens as before, and its forecast says no item names a row', async () => {
+  const place = scratch();
+  const opened = JSON.parse((await stretch(place, ['open', '--plan', planFile(place, PLAN), '--json'], { deps: { run: forecastGit() } })).out);
+  assert.equal(opened.forecast.named, 0);
+  assert.deepEqual(opened.forecast.total, { done: 1, total: 4, forecast: 1, low: 1, high: 1 });
+  // Where git cannot read the map, the plan still opens and the forecast says why.
+  const other = scratch();
+  const blind = await stretch(other, ['open', '--plan', planFile(other, FORECAST_PLAN), '--json']);
+  assert.equal(blind.code, 0, blind.err);
+  assert.match(JSON.parse(blind.out).forecast.unavailable, /not a repository/);
+});
+
+test('closes names a row an item of the open stretch closes, and status measures the stretch against the forecast', async () => {
+  const place = scratch();
+  const deps = { run: forecastGit() };
+  const bare = { ...FORECAST_PLAN, items: FORECAST_PLAN.items.map(({ closes, ...item }) => item) };
+  await stretch(place, ['open', '--plan', planFile(place, bare)], { deps });
+  const closes = (args) => stretch(place, ['closes', ...args], { hours: 0.5, deps });
+  assert.equal((await closes(['W1', 'F1 Skeleton', 'b'])).code, 0);
+  assert.equal((await closes(['W2', 'F8 plan', 'S13'])).code, 0);
+  // Refused: a done row, an unknown item, two words too few; the same row twice is said and kept once.
+  const done = await closes(['W1', 'F1 Skeleton', 'a']);
+  assert.equal(done.code, 1);
+  assert.match(done.err, /no open step that starts with "a"/);
+  assert.equal((await closes(['W9', 'F1 Skeleton', 'b'])).code, 1);
+  assert.equal((await closes(['W1'])).code, 2);
+  assert.match((await closes(['W1', 'F1 Skeleton', 'b'])).out, /already/);
+  assert.deepEqual(events(place).filter((one) => one.event === 'closes').map((one) => [one.item, one.in, one.step]), [['W1', 'F1 Skeleton', 'b'], ['W2', 'F8 plan', 'S13']]);
+
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 6, deps })).out);
+  const { forecast } = view.moments;
+  assert.deepEqual(forecast.total, { done: 1, total: 4, forecast: 2, low: 2, high: 2 });
+  // Now: b and S13 done, one row added. The named rows are counted by themselves.
+  assert.deepEqual(forecast.now.total, { done: 2, total: 5 });
+  assert.equal(forecast.now.gained, 1);
+  assert.deepEqual(forecast.now.forecastDone, { done: 2, of: 2 });
+});
+
+test('closes with no stretch open exits 1', async () => {
+  const place = scratch();
+  assert.equal((await stretch(place, ['closes', 'W1', 'F1 Skeleton', 'b'], { deps: { run: forecastGit() } })).code, 1);
+});
