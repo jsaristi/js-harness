@@ -1330,20 +1330,22 @@ const STATUS_KINDS = new Set(['opened', 'waiting', 'closed', 'relieved']);
 // Those after which nothing more comes from the session, by its own word.
 const ENDED_KINDS = new Set(['closed', 'relieved']);
 
-/** What the record says of each row of `rows`, as a `Map` from the row to `{ status, worktree, branch,
- * notices }`, with no entry for a row the record says nothing of. `status` is the last notice of the row
- * that is one of `opened`, `waiting`, `closed` and `relieved`, as `{ kind, at, text }` (the text says on
- * what a session waits, and who has the role of one that was relieved), or `null`. `worktree` and
- * `branch` are those of its last notice written from inside a worktree: where the command ran, which a
- * transcript does not record for a session that reached a worktree by `cd`. `notices` counts them.
+/** What the record says of each row of `rows`, as a `Map` from the row to `{ status, worktree, branch, notices }`, with
+ * no entry for a row the record says nothing of. `status` is the last notice of the row that is one of `opened`,
+ * `waiting`, `closed` and `relieved`, as `{ kind, at, text }` (the text says on what a session waits, and who has the
+ * role of one that was relieved), or `null`. `worktree` and `branch` are those of its last notice written from inside a
+ * worktree: where the command ran, which a transcript does not record for a session that reached a worktree by `cd`.
+ * `notices` counts them. The last is the newest by `at`, then by record order: `sessions start` writes a session's
+ * first row with its launch time, after a notice the session may have written (odd/tasks/visual-pages.md, T5e).
  *
- * A notice is the row's when its sender's session id is the id of one of the row's transcripts, or the
- * start of one (`--self`); otherwise, when the title it carries is the row's. The id comes first because
- * it cannot be mistaken; the title is for a notice whose session the app has since restarted into a new
- * transcript, which carries the same title and another id. That is also why the id cannot tell two
- * sessions under one title apart: a restart and a twin both arrive with a new one. */
+ * A notice is the row's when its sender's session id is the id of one of the row's transcripts, or the start of one
+ * (`--self`); otherwise, when the title it carries is the row's. The id comes first because it cannot be mistaken; the
+ * title is for a notice whose session the app has since restarted into a new transcript, which carries the same title
+ * and another id. That is also why the id cannot tell two sessions under one title apart: a restart and a twin both
+ * arrive with a new one. */
 function recordOfRows(rows, notices) {
   const said = new Map();
+  const notOlder = (notice, at) => !(Date.parse(notice.at) < Date.parse(at));
   for (const notice of notices) {
     const { id, title } = notice.from ?? {};
     const byId = typeof id === 'string' && id !== '' ? rows.find((row) => row.transcripts.some((transcript) => isSelf(transcript.id, id))) : undefined;
@@ -1353,14 +1355,12 @@ function recordOfRows(rows, notices) {
     kept.notices += 1;
     // A closed notice keeps the summary its session left, which the lead reads before it archives it (session-close, T3).
     const summary = notice.kind === 'closed' && typeof notice.summary === 'string' ? { summary: notice.summary } : {};
-    if (STATUS_KINDS.has(notice.kind)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text, ...summary };
-    if (typeof notice.worktree === 'string') {
-      kept.worktree = notice.worktree;
-      kept.branch = typeof notice.branch === 'string' ? notice.branch : null;
-    }
+    if (STATUS_KINDS.has(notice.kind) && notOlder(notice, kept.status?.at)) kept.status = { kind: notice.kind, at: notice.at, text: notice.text, ...summary };
+    const placed = typeof notice.worktree === 'string' && notOlder(notice, kept.placedAt);
+    if (placed) Object.assign(kept, { worktree: notice.worktree, branch: typeof notice.branch === 'string' ? notice.branch : null, placedAt: notice.at });
     said.set(row, kept);
   }
-  return said;
+  return new Map([...said].map(([row, { placedAt, ...kept }]) => [row, kept]));
 }
 
 /** The roster of `sessions`, the sessions of a board: `{ rows, unread, outside }`.

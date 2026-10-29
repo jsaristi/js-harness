@@ -1045,6 +1045,17 @@ away held the lead, and the merges it owed, for seven hours.
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15)
 
+### record-order-over-time
+The board read a session's state and place by the order of the channel record, and `sessions start`
+appends a session's first row with the time of its launch, after a notice the session may have
+appended since the start read the record: that notice lands behind the row, and the board shows the
+session as just opened.
+- Class: unseen-state
+- Seen: 2026-10-29 — odd/tasks/visual-pages.md, L10 — Codex's recheck over `b70ac68..ca23a62`; left
+  open by the lead's decision (L11) and fixed as T5e
+- Control: check — bin/lib/sessions.test.mjs — "states and places by when they were written, and
+  record order only for a tie" — since 2026-10-29
+
 ### record-states-wrong-fact
 A record held a fact that was not true when written or stopped being true, and was read later as it
 stood.
