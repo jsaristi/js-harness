@@ -305,7 +305,7 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
   phase` in the slice C commit "feat(report): the phase page".
-- [ ] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
+- [x] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
   gates of the feature's slice worktrees left out, fixed in d8e0a122; Codex reads C3 again from 95d5231e (`--again`).
   Route: inline.
 - [ ] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
@@ -472,6 +472,18 @@ carrying #644, landed (main 96b917a).
   fix both sets test-first, then Codex recheck `--base 287d76ec`, the lens and gentle-ai, push, PR stacked on #652.
   T7 moved to slice D: the rules check refuses its paragraph unless it names a `rule:<id>`, which D creates (patch in
   the job tmp `t7-init-line.patch`).
+- C3's fixes, ~08:00Z. 91c9f206 fixed the ten; Codex's recheck (89,149 input tokens): 5 of 6 fixed, the slice
+  worktrees' gates still left out, fixed in d8e0a122 (T6a). Codex read C3 again from 95d5231e (`--again`, 3 parts,
+  553,125 input tokens): two P2, unknown reviews and spend shown as zeros and a fence indented under a spec, fixed in
+  8d051cc6; its recheck (42,498): 2 of 2 fixed, correct (0.97). The reliability lens found nothing on each of the three
+  fixes.
+- gentle-ai: 287d76ec..4ccc2584 approved (medium, lineage review-b4f5251b65d0e161): two warnings and a suggestion, all
+  taken in 8d051cc6 (the indented fence, the unknown path tested end to end, the failures section saying which
+  worktrees it counts).
+- gentle-ai: 8d051cc6 approved (medium, lineage review-0d9cf00ce2f01b5f): one suggestion, a test of an HTML comment
+  under `## Specs`, not taken: comment stripping is `tokenize`'s, tested in `bin/lib/progress.test.mjs`.
+- State at ~08:00Z: #651 (C1) landed 06:54Z; #652 (C2) is on main, ready sent 07:23Z. C3 is `feat/visual-pages-c3`,
+  to push and open on #652's branch.
 - State at ~06:40Z: #647 (slice B) landed (06:29Z). Slice C goes as two chained pull requests: C1, #651
   (`feat/visual-pages-c1`: d800cb96 with main merged in, 498 lines, the phase page and the rendered-record seam), and
   C2 (`feat/visual-pages-c`: the status page and its fixes, stacked on C1). Then C3: `report feature` and T7's init
