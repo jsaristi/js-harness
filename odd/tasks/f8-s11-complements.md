@@ -134,6 +134,10 @@ Reviews:
   input tokens); lens reliability over 52c49fc..6196a6b, from PR 3's tip so it reads PR 4 alone and not main again,
   0 findings (89,291 input tokens); gentle-ai on `7093a62d..6196a6b6`: not reviewed, its candidate holding main's 139
   files; its status was read and nothing started.
+- PR 4, b47cd4da (the merge of main 410eed7c: the land of 632 and 648 went red on GitHub, Actions run 40816256353,
+  because main brought three S5c-a eval results naming gentle-ai, now listed as results; the run's "FAIL budget 1501"
+  is the output of check.test.mjs's over-budget test, the real row read 974). Codex d7b4960..b47cd4d: correct
+  (57,552 input tokens); lens reliability 410eed7..b47cd4d: 0 findings (44,632).
 - PR 4, bca90373..3fc6425f (the land left #632 out red twice: the gate's WSL mirror is synced without .git, so
   the absence test's `git ls-files` failed there; gentle-ai's R3-002 on fc2a9a0f..fff61c60 had said the test needs
   git, and was left on the belief that every test runs in a checkout). bca90373 walked the disk with no .git; Codex
@@ -182,10 +186,10 @@ T8, 2026-10-28, from the branch at 71e89a2b, nothing installed and nothing writt
 - `check` green at each commit (the pre-commit hook); the full tests run on GitHub at each push.
 
 ## Next step
-#627 and #628 landed (main 170e09dd). #629 (PR 3, f8-s11-reviews, base main) is announced ready and holds main at
-9e44cca5; #632 (PR 4, f8-s11-sweep) is stacked on it and lands after it. T1-T8 are done, T5 by his answer to
-question 104 (L14). Open, his: whether to apply S11 to his machine (`stack install` on his real home), asked
-through the lead. A session that lands a file naming gentle-ai after #632 is refused by
+#627, #628 and #629 landed. #632 (PR 4, f8-s11-sweep, base main) holds main at 410eed7c and is announced ready.
+T1-T8 are done, T5 by his answer to question 104 (L14). By his answer to question 106 (L15), once #632 lands and
+the lead refreshes the installed copy, this session runs `doctor`, `stack install` on his real home and `doctor`
+again, and records both here. A session that lands a file naming gentle-ai after #632 is refused by
 `bin/lib/gentle-ai-absence.test.mjs` until it rewords it or names it with its reason.
 
 ## Log
