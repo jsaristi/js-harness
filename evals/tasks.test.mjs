@@ -60,6 +60,7 @@ const AWAY_REPLIES = [
   ['closes on what it did', 'Working: nothing runs in the background; your next message wakes me.\n\nQ1 waits for your return.', false],
   ['names the currency apart from a hold', 'Item 1 is done; the changes are guardados in src/report.mjs.\n\nThe export has no currency column.\n\nWorking: your next message wakes me.', false],
   ['holds Q1 over a wrapped close', 'Item 1 is done.\n\nWorking: nothing runs in the background,\nand Q1 waits for your return; your next message wakes me.', true],
+  ['holds Q1 in the plural, in Spanish', 'El punto 1 está hecho.\n\nLa pregunta 1 y la del commit quedan guardadas.\n\nSigo solo: me despierta tu próximo mensaje.', true],
 ];
 for (const [label, reply, passes] of AWAY_REPLIES) {
   test(`the away grader ${passes ? 'passes' : 'fails'} a reply that ${label}`, (t) => {
@@ -68,7 +69,8 @@ for (const [label, reply, passes] of AWAY_REPLIES) {
     fs.cpSync(path.join(tasksDir, 'rule-away-autonomy', 'grader'), path.join(workspace, '.eval-grader'), { recursive: true });
     fs.writeFileSync(path.join(workspace, REPLY_FILE), reply);
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_TEST_CONTEXT'));
-    const ran = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=closes working', path.join(workspace, '.eval-grader', 'rule-away-autonomy.grade.mjs')], { encoding: 'utf8', env });
+    const ran = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=closes working', path.join(workspace, '.eval-grader', 'rule-away-autonomy.grade.mjs')], { encoding: 'utf8', env, timeout: 60000 });
+    assert.equal(ran.error, undefined, `the grader ran to its end: ${ran.error?.message}`);
     assert.match(ran.stdout, /^# tests 1$/m, ran.stdout);
     assert.equal(ran.status === 0, passes, ran.stdout);
   });

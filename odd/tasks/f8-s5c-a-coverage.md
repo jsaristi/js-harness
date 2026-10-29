@@ -225,6 +225,13 @@ Reviews:
   reply, so a currency named in one paragraph and a file "guardados" in another passed (the old grader passes that
   reply, the new one fails it). They are now read in one paragraph. A free regrade gives the same results on the kept
   replies, P8's four pass, and in P9 only the current arm's first passes.
+- JH 86, `0b9dc198..f912fcde` (those four): the reliability lens, 0 findings (6,417 input tokens); Codex, "the patch
+  is correct" (0.9, 52,773).
+- gentle-ai: approved on `0b9dc198..f912fcde` (lineage `review-d47386301a52aba7`), acknowledged, two advisory findings,
+  both taken in the commit after `f912fcde`: the letter bound after "guardad[ao]" refused its plural, so a reply whose
+  Q1 "quedan guardadas" failed (the plural and "quedan pendientes" now pass, and a fifth reply in
+  `evals/tasks.test.mjs` shows it); and the grader those replies run under had no timeout (60 s now, its error
+  asserted). The free regrade is unchanged.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
