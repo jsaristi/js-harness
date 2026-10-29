@@ -28,9 +28,9 @@ proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por que os
   answered question never shown as an escape, `docs/FAILURES.md` holds `hand-made-output`, `harness.json` turns
   templates on, and `report-status` refuses a proposal with a blank why (slice C, T5).
 - PR 660, merged 10:35Z: `rules change rules-live-in-the-harness`, the protocols skill's line that an output he sees
-  again and again is cemented as a template of five parts, asked for in one `Plantilla:` line (T6).
+  again and again is cemented as a template of five parts, asked for in one `Plantilla:` line (slice D, T6).
 - PR 662, merged 11:43Z: `rules change status-report`, item 6 of the status report: each proposed step with its why, the
-  criterion (L8).
+  criterion (slice D, L8).
 - Done when, checked: `js-harness template check` prints "templates: 1 registered, every part present", exit 0;
   `bin/lib/template-check.test.mjs:102-104` proves it fails on a planted missing part; `npm run check` passes (the
   pre-commit hook on every commit); no eval spend.
@@ -69,8 +69,10 @@ proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por que os
 - Time: brief at 03:04Z; this summary at 12:30Z, the closed notice after it. Context at the end: 31% at the
   last notice (11:31Z), after four compactions by the host (04:33Z, ~07:10Z, 08:08Z and 09:52Z, as the
   feature document and the resume hook record them).
-- Reviews: Codex on every code commit (findings: 2 P2 slice A, 6 + 1 + 2 P2 slice B, 0 slice C and D); Claude
-  lenses on every code commit (0 findings throughout); gentle-ai 9 lineages (`odd/tasks/templates.md`, its gentle-ai lines), all approved and acknowledged, every
-  non-blocking finding that held taken with a test. One
-  independent verifier (slice B's installer change); two blind readers on the design.
+- Reviews: Codex on every code commit (findings: 2 P2 slice A, 6 + 1 + 2 P2 slice B, 0 slice C, 0 slice D, the
+  two rule changes of PRs 660 and 662); Claude lenses on every code commit (0 findings throughout); gentle-ai 9
+  lineages before this close (`odd/tasks/templates.md`, its gentle-ai lines), all approved and acknowledged, every
+  non-blocking finding that held taken with a test; and a tenth on this close, review-a66b5e31c9b71485, approved,
+  its two suggestions taken here. One independent verifier (slice B's installer change); two blind readers on the
+  design.
 - No eval spend.
