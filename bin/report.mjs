@@ -12,6 +12,7 @@ import { PACE_REF_ARGS, paceRef } from './lib/progress-pace.mjs';
 import { REPORT_WINDOW_HOURS, cutOf, landedOf, mapOf, mergeCommitsArgs, mergeLogArgs, parseMergeLog, questionsOf, reportLines, sessionsOf, stamp } from './lib/report.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { PHASE_USAGE, reportPhaseMain } from './report-phase.mjs';
 
 export const USAGE = [
   'Usage: js-harness report [--since <time>] [--mark] [--cwd <path>] [--home <path>]',
@@ -22,6 +23,8 @@ export const USAGE = [
   '  --mark  record this report as the last one, with the commit of the default branch it read, in the channel record',
   '          under the home; the next report lists what that branch gained since that commit. Nothing else is written,',
   '          and nothing at all when a section could not be read.',
+  '',
+  PHASE_USAGE,
 ].join('\n');
 
 const GIT_TIMEOUT_MS = 30_000;
@@ -85,7 +88,10 @@ function readMap(run, cwd, ref) {
   return shown.error ? { error: shown.error } : mapOf(shown.stdout);
 }
 
-export async function reportMain(argv, { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir, appendReport = appendReportLine } = {}) {
+export async function reportMain(argv, options = {}) {
+  // A moment's page is its own command, with its own options.
+  if (argv[0] === 'phase') return reportPhaseMain(argv.slice(1), options);
+  const { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir, appendReport = appendReportLine } = options;
   let parsed;
   try {
     parsed = parseArgs(argv);
