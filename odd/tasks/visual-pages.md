@@ -425,11 +425,13 @@ JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`; the latest state
 - gentle-ai: ca23a627..71d626c5 approved (medium, lineage review-8ed9074b0701c90f).
 - gentle-ai: 598174f0..a0d1e5d1 approved (medium, lineage review-720626bd7150e47c); findings fixed after it.
 - gentle-ai: 3279ea8e approved (medium, lineage review-57a8e9c4cb257169); its warning fixed in the commit after it.
-- State at ~04:25Z: #645 LANDED (main 96b917a). #647 (slice B, `feat/visual-pages-board`, head 598174f0) is
-  CONFLICTING with main: merge origin/main into `feat/visual-pages-board`, review the merge (codex-review and
-  lens-review from 598174f0; gentle-ai), push, `notify --kind ready --pr 647` (the lead lands it next run).
-- Slice C on `feat/visual-pages-c` (local, unpushed): C1 = 598174f0..d800cb96 (phase page, rendered-record seam,
-  fixes); Codex and lenses done to 3279ea8e; d800cb96 still needs Codex `--base 3279ea8e`, lens and gentle-ai, run
-  detached at d800cb96. C2 = d800cb96..14907efb (status page), no review yet: run all three detached at 14907efb.
-  Then merge slice B's merged head into C, PRs C1 then C2 stacked on #647. Then C3: `report feature` and T7's init
-  line (names `report feature`, so it lands with it). Then slice D (T8), T9. T10's departure map/timeline still open.
+- d800cb96: Codex correct (0.95); the reliability lens found nothing. gentle-ai: not reviewed (`operation_timeout`
+  on the status twice, ~05:40Z).
+- C2, d800cb96..14907efb (the status page): Codex incorrect (0.96, two P2: an unconfirmed answer said as an answer,
+  and no notes said as nothing waits), fixed in fd734292, Codex's recheck 2 of 2 fixed; the reliability and
+  resilience lenses found nothing on C2, reliability nothing on the fix.
+- State at ~05:50Z: #647 (slice B) pushed at f6c76feb with main merged in, ready sent twice (the queue first saw
+  GitHub's CONFLICTING while it recomputed after #649). Slice C on `feat/visual-pages-c` (local, unpushed): gentle-ai
+  on d800cb96..fd734292 running (lineage review-00598536ad2a9722). Then merge slice B's merged head into C, PRs C1
+  (598174f0..d800cb96) then C2 stacked on #647. Then C3: `report feature` and T7's init line (names `report
+  feature`, so it lands with it). Then slice D (T8), T9. T10's departure map/timeline still open.
