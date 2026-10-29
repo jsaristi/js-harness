@@ -285,6 +285,10 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
 - [x] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline. Slice B.
 - [x] T5c (kind: build) the lead's status list as colored cards at the top of the live board. Spec 6. Route: inline. Slice B.
 - [x] T5d (kind: build) each session card's time on its task and its estimate. Spec 7. Route: inline. Slice B.
+- [ ] T5e (kind: build) follow-up of Codex's open P2 (L10): `recordOfRows` (`bin/lib/sessions.mjs`) keeps a session's
+  status and place by record order, so a session's notice appended between `sessions start`'s read of the record and
+  its append of the start row is behind that row; the fix is to keep the newer by `at` (ties by record order). Outside
+  this brief's surface for `bin/lib/sessions.mjs`: asked of the lead. Spec 4. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
@@ -351,6 +355,12 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   fake now records when it ran); the warning's send steps did not name the Spanish fields of a row.
 - L9. 2026-10-29, spec 7 from the lead (his line 14289, checked): each card's time on its task and its estimate, in
   slice B (T5d), on `feat/visual-pages-board`; the estimate's lead field is `board/summary.estimates`.
+- L10. 2026-10-29, the fixes and T5d reviewed over b70ac68..ca23a62. Claude lenses (reliability, resilience): 0
+  findings, 27,690 input tokens. Codex recheck (67,973 input tokens): the worktree P2 fixed; the order P2 not fixed,
+  since a session's notice appended between the read of the record and the append still lands behind the start row.
+  The window is now the read and the append alone (the place is read before); the session takes seconds to boot and
+  write, so the case is narrow but real. Its fix (T5e) is in `recordOfRows`, outside this brief's surface: asked of
+  the lead, not done here unless the lead says so.
 
 ## Next step
 State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
