@@ -206,6 +206,12 @@ Reviews:
   helper in the same test; the real-timeout test waits 2.5 s, as the runner's other timeout test does.
 - gentle-ai: the Stop hook then offered `d1ca1b90..f3463a2d`, the union of slices it had approved one by one and
   their record commits; only its read-only status ran, and no review was started for it.
+- JH 86, `f3463a2d..3319391e` (P9's results and record): the reliability lens, 0 findings (9,576 input tokens); Codex,
+  "the patch is correct" (0.96, 78,940).
+- gentle-ai: approved on `f3463a2d..3319391e` (lineage `review-25227bc1fb30e8b3`), acknowledged, two advisory findings
+  on what `evals/rule-proof.mjs` writes, outside this brief's surface, so read and passed to the lead, not taken: the
+  record's `costUsd` sums the CLI's cost, which a trial cut by its timeout lacks ($0.94 recorded, $3.86 by the list
+  cost, as L33 found), and the record does not mark that three of its four trials were cut.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
