@@ -338,6 +338,18 @@ test('close keeps the return\'s numbers in the page record, and its page shows t
   assert.match(html, /PR 630 en main/, 'the goals and the bars of the stretch are on the page too');
 });
 
+test('the return says when its page was made: show, a day later, writes that hour beside the close it measures', async () => {
+  const place = scratch();
+  const deps = { run: momentsGit() };
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  await stretch(place, ['close'], { hours: 9, deps });
+  const back = path.join(place.home, 'out', 'vuelta.html');
+  assert.equal((await stretch(place, ['show', '--html', back], { hours: 33, deps })).code, 0);
+  const html = fs.readFileSync(back, 'utf8');
+  assert.match(html, /al 2026-10-28 21:00Z/, 'the stretch is measured to its close');
+  assert.match(html, /Generada el <time datetime="2026-10-29T21:00:00.000Z">2026-10-29 21:00Z<\/time><span data-ago="2026-10-29T21:00:00.000Z">/);
+});
+
 test('the departure shows what exists now: the map at the opening commit', async () => {
   const place = scratch();
   const file = path.join(place.home, 'out', 'salida.html');

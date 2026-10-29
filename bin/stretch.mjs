@@ -326,8 +326,8 @@ async function emit(ctx, flags, view, render, lines, page) {
   if (flags.html) {
     const file = path.resolve(ctx.cwd, flags.html);
     ctx.fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-    ctx.fileSystem.writeFileSync(file, render(view), 'utf8');
     const at = new Date(ctx.now()).toISOString();
+    ctx.fileSystem.writeFileSync(file, render(view, { generatedAt: at }), 'utf8');
     rendered = await recordPageRendered({ home: ctx.home, slug: ctx.slug, template: page.template, subject: view.id, path: file, at, head: page.head ?? null }, ctx.recordLoad ? { load: ctx.recordLoad } : {});
   }
   const said = rendered === null ? null : rendered.recorded ? `the page is in the rendered record ${rendered.file} (sha256 ${rendered.recorded.sha256.slice(0, 12)}): show or publish it unchanged` : `the page is not in the rendered record: ${rendered.unavailable}`;

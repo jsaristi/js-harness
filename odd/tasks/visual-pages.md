@@ -370,6 +370,11 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   a failed land "land exit N: <said>" and a failed Codex run "Codex review failed: <reason>" (`stretchLost`,
   `bin/lib/stretch.mjs`), the bare words when the record holds none. Spec 9. Route: inline, JH 87 on
   `fix/pages-follow-ups`, the commit "fix(stretch): say why a land or a Codex run failed".
+- [x] T14 (kind: build) his words, 0f71b2c6 line 21871, 2026-10-29T14:00Z: "Colocame en ese regreso del tramo de hace
+  cuanto se genero". The return (and the open stretch's status page) says "Generada el <UTC time>" from the time the
+  command wrote it (`emit`, `bin/stretch.mjs`), and a script in the page (`page`'s `generatedAt`, `bin/lib/pages.mjs`)
+  counts "hace N min" where the page is shown and again each minute, so a later look stays true; with no script the
+  time alone. Route: inline, JH 87, the commit "feat(stretch): say when the return page was made".
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 79: his words of lines 12054, 12220 and 12237, the four ideas he approved
