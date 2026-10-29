@@ -18,8 +18,10 @@ import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functi
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
+import { localDay } from './flaky.mjs';
 
 export { FAILURES_TEMPLATE };
+export { staleManifestMessage, invalidHarnessJsonMessage, howToPinClause, cleanupClause } from './project-messages.mjs';
 
 /** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what an
  * older copy cannot undo: format 1 its `settings`, which a copy older than the switches does not know, and
@@ -767,7 +769,7 @@ function codegraphWhereWanted(root, spawn, platform, actions, functions) {
  * but `harness.json` and an existing `AGENTS.md` are committed files, recorded as `kept` and never
  * written, so the manifest's `files` holds only what this clone wrote and `uninstall` there removes
  * only that. `preset` is the `"functions"` an `init --preset` writes into `harness.json` (F8 S11, L9). */
-function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone = false, preset = null } = {}) {
+function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone = false, preset = null, today = null } = {}) {
   const createdPaths = [];
   const createdDirs = [];
   const reportedDirs = [];
@@ -898,6 +900,9 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     };
     if (settingsRecords.length > 0) manifest.settings = settingsRecords;
     if (exclude) manifest.exclude = exclude;
+    // The day the rules' controls are owed from (`coverageRecord`, ./project-rules-read.mjs), which no copy needs a
+    // format to keep or undo. Never in a clone: dated today, a project older than its rules would owe them all at once.
+    if (!clone) manifest.coverage = { baseline: today, release: version };
     if (formatFor(manifest)) manifest.format = formatFor(manifest);
 
     // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: `manifestFilePath` is guaranteed
@@ -1026,6 +1031,8 @@ function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, plat
  * - `{ code: 0, root, actions, manifest, manifestPath }` — a fresh project: `actions` is in report
  *   order (`wrote`/`kept`/`ran`/`skip`/`problem`), `manifest` is exactly what was written to
  *   `manifestPath`.
+ * `deps.today`, a day written YYYY-MM-DD, is the coverage baseline a fresh project's manifest records (today on
+ * this machine's calendar when not given).
  * Throws `InitWriteError` when a write step fails after the first — see `writeProject` and
  * `alreadyInitialized`. */
 export function initProject(cwd, version, deps = {}) {
@@ -1062,7 +1069,7 @@ export function initProject(cwd, version, deps = {}) {
     return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
   }
 
-  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { preset: deps.functions });
+  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { preset: deps.functions, today: deps.today ?? localDay() });
 }
 
 /** Resolves one `files`/`dirs` manifest entry back to its absolute path: repo-relative against
@@ -1462,41 +1469,6 @@ export function uninstallProject(cwd, deps = {}) {
 }
 
 // --- T4: `sync` in a project (see odd/tasks/project-init.md, "T4 design") ---
-
-/** The refusal `init` and `sync` share for a manifest that survives without `harness.json` (T2c item 1):
- * this clone was initialized before, then lost `harness.json`, so neither builds on the stale record. */
-export function staleManifestMessage(manifestPath) {
-  return (
-    `this clone was initialized before (manifest: ${manifestPath}) but harness.json is missing: ` +
-    'restore harness.json, or run js-harness uninstall first'
-  );
-}
-
-/** The refusal `sync` and `status` share for a `harness.json` whose pin cannot be used (T4 design, T5
- * design): the file and the reason `readPin` gave, without a claim about writes — `sync` adds its own. */
-export function invalidHarnessJsonMessage(harnessJsonPath, reason) {
-  return `cannot read the pin from ${harnessJsonPath}: ${reason}`;
-}
-
-/** How a project with no pin gets one, the clause `status` and `sync` share (install-update T6): the
- * pin is one line written by hand, since no command writes into a `harness.json` that already exists.
- * `version` is the running js-harness, never a value read from the project. */
-export function howToPinClause(version) {
-  return `add "version": "${version}" to harness.json and commit it`;
-}
-
-/** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
- * overclaiming "nothing was left behind" when something could not be removed (T2c
- * R3-nothing-left-behind-overclaims). Shared by `init` and `sync`, which both throw `InitWriteError`.
- * `.codegraph/` is part of the same rollback as everything else whenever the failed run is the one that
- * created it (T2e item 2), so a failure to remove it shows up in `notRemoved` like any other path. The
- * one case where `.codegraph/` is deliberately left untouched (a retry whose directory already existed,
- * still truthfully owned by the older, unrewritten manifest) is not a removal failure at all, so it never
- * reaches `notRemoved` and needs no disclosure here. */
-export function cleanupClause(err) {
-  if (err.notRemoved.length === 0) return 'nothing was left behind';
-  return `could not remove: ${err.notRemoved.join(', ')}`;
-}
 
 /** Writes the recorded pre-commit gate again when it is gone (T4 design: "a recorded hook that is
  * gone is written again (when its path is free and still contained)"). The entry is the `files` record
