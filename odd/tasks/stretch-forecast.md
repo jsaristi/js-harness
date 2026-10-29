@@ -45,6 +45,11 @@ page's order.
    aproximadamente llegariamos" (same transcript, line 23526, 2026-10-29T16:14:11Z). The lead's note on it: the page
    leads with the project's total share now and the approximate share at the return, one number each, the range beside
    the second, before the phases.
+3. The share he means is the migration's, not the old project's: "si pero me refiero a que como el proyecto lo vamos a
+   tener que volver amigrar todo y completo es a eso no a lo que ya veniamos haciendo que es el proyecto antiguo que ya
+   cambio de rumbo" (same transcript, line 23561, 2026-10-29T16:16:06Z). The lead's note on it: keep it for good, in
+   `rule:away-autonomy` (the departure shows the migration's share now and the expected share at the return), changed
+   on a `rule/` branch in its own PR after the code PR, and one `docs/FAILURES.md` line for the stretch not opened.
 
 ## Design
 
@@ -88,16 +93,21 @@ item closes, resolved and refused as above; the forecast of `status` reads the p
 is passed: `status --html` then renders the forecast from the plan the record holds.
 
 ### The pages
-The departure leads with two numbers, the total share now and the forecast at the return with its range beside it,
-then the phases (now, forecast, range, the rows the plan closes), then the plan as before. `status --html` and the
+The migration is the roadmap's plan section (`## F8 plan`, the steps that replace gentle-ai; spec 3), so each plan
+section leads, counted by its steps, and the map's total, the old project's checklist, comes second. The departure
+leads with two numbers for each, the share now and the forecast at the return with its range beside it, then the
+phases (now, forecast, range), the rows the plan closes and when, then the plan as before. `status --html` and the
 return put a section of the forecast first: at the opening, the forecast, now, the named rows done now and the rows the
-map gained.
+map gained. A plan's steps are uneven in size, so its share is a count of steps, said as such, never a measure of
+effort.
 
 ## Tasks
-- [ ] T1 (kind: build) the forecast, pure (`bin/lib/stretch-forecast.mjs`): resolving `closes`, the counts from the lanes, the shares and the measure now; and `closes` in `parsePlan`. Spec 1, 2. Route: inline. Commit: pending.
-- [ ] T2 (kind: build) the command: `open` resolves and forecasts, `closes` records a row for the open stretch, `status` and `close` measure against the forecast (`bin/stretch.mjs`). Spec 1, 2. Route: inline. Commit: pending.
-- [ ] T3 (kind: build) the pages: the departure leads with the two numbers, the status and the return with the forecast section (`bin/lib/stretch-render.mjs`). Spec 1, 2. Route: inline. Commit: pending.
+- [x] T1 (kind: build) the forecast, pure (`bin/lib/stretch-forecast.mjs`): resolving `closes`, the counts from the lanes, the shares and the measure now; and `closes` in `parsePlan`. Spec 1, 2. Route: inline. Commit: 3ddcf3f8.
+- [x] T2 (kind: build) the command: `open` resolves and forecasts, `closes` records a row for the open stretch, `status` and `close` measure against the forecast (`bin/stretch.mjs`). Spec 1, 2. Route: inline. Commit: f5d4d70f.
+- [ ] T3 (kind: build) the pages: the departure leads with the migration's plan and the map, two numbers each, the status and the return with the forecast section (`bin/lib/stretch-render.mjs`). Spec 1, 2, 3. Route: inline. Commit: pending.
 - [ ] T4 (kind: verify) the open stretch's forecast rendered from the real record in a scratch home; reviews (Codex and the Claude lenses) on the slice; PR. Route: inline.
+- [ ] T5 (kind: docs) `rule:away-autonomy` names the migration's share now and at the return on the departure, through `js-harness rules change away-autonomy` on a `rule/` branch, his words quoted with their date; its own PR. Spec 3. Route: inline.
+- [ ] T6 (kind: docs) the `docs/FAILURES.md` line: 2026-10-29 he left for an hour with no stretch opened, so the return had no goals; the check is `stretch status` at his departure. Spec 3. Route: inline.
 
 ## Log
 - L1. 2026-10-29, the lead's brief for JH 89: his words of line 23408 (spec 1), the departure of the stretch opened
@@ -109,3 +119,7 @@ map gained.
 - L3. 2026-10-29, the open stretch's plan, read from the record: three items (`s5ca`, JH 86; `lead`, JH 88; `s13`,
   none), no `closes`. S5c-a and S13 are steps of the F8 plan and parts of F8's map row 4, which none of them closes
   alone; so the plan steps count beside the map, or the forecast of tonight would read no movement where steps do move.
+- L4. 2026-10-29, the lead's note of his line 23561 (spec 3, quoted): the share he means is the migration's. Decided
+  here: the plan sections lead the pages, the map total second; no new field, since the roadmap already names the
+  migration's plan. T1 (3ddcf3f8) and T2 (f5d4d70f) already count each plan's steps, so only the pages change. The
+  rule change and the FAILURES line are added as T5 and T6, after the code PR, as the lead asked.

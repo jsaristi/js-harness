@@ -567,9 +567,12 @@ const FORECAST_PLAN = {
 
 test('open forecasts the map at the return from what each item closes: the share now, by the middle, and its range', async () => {
   const place = scratch();
-  const opened = await stretch(place, ['open', '--plan', planFile(place, FORECAST_PLAN), '--json'], { deps: { run: forecastGit() } });
+  const file = path.join(place.home, 'out', 'salida.html');
+  const opened = await stretch(place, ['open', '--plan', planFile(place, FORECAST_PLAN), '--json', '--html', file], { deps: { run: forecastGit() } });
   assert.equal(opened.code, 0, opened.err);
   const { forecast } = JSON.parse(opened.out);
+  // The page leads with it: the F8 plan's steps, 1 of 2 now and about 2 of 2 at the return, then the map.
+  assert.match(fs.readFileSync(file, 'utf8'), /Cuánto avanzaremos[\s\S]*F8 plan[\s\S]*50 %[\s\S]*~100 %[\s\S]*Mapa del proyecto[\s\S]*25 %[\s\S]*~75 %[\s\S]*entre 50 % y 75 %/);
   // Now 1 of 4: W1's row closes even long, W2's by the middle; W3's waits for him.
   assert.deepEqual(forecast.total, { done: 1, total: 4, forecast: 3, low: 2, high: 3 });
   assert.deepEqual(forecast.plans.map((one) => [one.name, one.done, one.total, one.forecast, one.low]), [['F8 plan', 1, 2, 2, 1]]);

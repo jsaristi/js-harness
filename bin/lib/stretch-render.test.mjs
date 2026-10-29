@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderDeparture, renderView, whySection } from './stretch-render.mjs';
+import { renderDeparture, renderReturn, renderView, whySection } from './stretch-render.mjs';
 
 const departure = {
   id: '2026-10-28T12:00:00.000Z',
@@ -98,6 +98,78 @@ test('the why section has a row for each thing left undone: what, why, how it wa
   assert.match(html, /13:30Z[\s\S]*se arregló/);
   assert.equal(html.match(/no registrado/g).length, 2);
   assert.match(whySection([]), /Nada quedó sin hacer/);
+});
+
+// --- the forecast (odd/tasks/stretch-forecast.md) ---
+
+const FORECAST = {
+  named: 3,
+  total: { done: 99, total: 109, forecast: 100, low: 99, high: 100 },
+  phases: [
+    { title: 'F1 Skeleton', done: 3, total: 3, forecast: 3, low: 3, high: 3 },
+    { title: 'Review and release', done: 4, total: 5, forecast: 5, low: 4, high: 5 },
+  ],
+  plans: [{ name: 'F8 plan', done: 6, total: 19, forecast: 8, low: 7, high: 8 }],
+  rows: [
+    { in: 'F8 plan', step: 'S5c-a', plan: true, text: 'S5c-a', items: ['s5ca'], when: 'sure' },
+    { in: 'F8 plan', step: 'S13', plan: true, text: 'S13', items: ['s13'], when: 'likely' },
+    { in: 'Review and release', step: 'The lead', plan: false, text: 'The lead\'s manual steps <are> commands', items: ['lead'], when: 'likely' },
+  ],
+  problems: [],
+};
+const MAP = { done: 99, total: 109, phases: [{ title: 'F1 Skeleton', done: 3, total: 3, open: [] }, { title: 'Review and release', done: 4, total: 5, open: ['x'] }] };
+
+test('the departure leads with the migration\'s plan and then the map: the share now and about where it reaches, its range beside it', () => {
+  const html = renderDeparture({ ...departure, map: MAP, forecast: FORECAST });
+  const lead = html.indexOf('Cuánto avanzaremos');
+  assert.ok(lead > 0 && lead < html.indexOf('El plan'), 'the forecast comes before the plan');
+  // The plan's steps first: 6 of 19 is 32 %, about 8 of 19 (42 %) at the return, from 37 % to 42 %.
+  assert.match(html, /F8 plan[\s\S]*32 %[\s\S]*~42 %[\s\S]*entre 37 % y 42 %/);
+  assert.ok(html.indexOf('F8 plan') < html.indexOf('Mapa del proyecto'), 'the migration leads, the map comes second');
+  assert.match(html, /Mapa del proyecto[\s\S]*91 %[\s\S]*~92 %[\s\S]*entre 91 % y 92 %/);
+  // Each phase now and at the return, and each row with when it closes; the row's text escaped.
+  assert.match(html, /Review and release[\s\S]*4\/5 · 80 %[\s\S]*5\/5 · 100 %/);
+  assert.match(html, /cierra aunque se alargue/);
+  assert.match(html, /cierra si va como se estimó/);
+  assert.match(html, /The lead&#39;s manual steps &lt;are&gt; commands/);
+});
+
+test('a departure whose items name nothing says the forecast is today\'s share; one with no map says why', () => {
+  const none = renderDeparture({ ...departure, map: MAP, forecast: { ...FORECAST, named: 0, rows: [], total: { ...FORECAST.total, forecast: 99, high: 99 } } });
+  assert.match(none, /Ningún trabajo del plan dice qué cierra/);
+  const blind = renderDeparture({ ...departure, map: MAP, forecast: { unavailable: 'git show: fatal' } });
+  assert.match(blind, /no se pudo leer: git show: fatal/);
+});
+
+test('the status measures the stretch against its forecast: at the opening, the forecast, now, the named rows done and the rows added', () => {
+  const now = {
+    total: { done: 100, total: 111 },
+    phases: [],
+    plans: [{ name: 'F8 plan', done: 7, total: 19 }],
+    rows: FORECAST.rows.map((row, index) => ({ ...row, now: ['done', 'open', 'gone'][index] })),
+    forecastDone: { done: 1, of: 3 },
+    gained: 2,
+  };
+  const moments = {
+    head: { open: 'c0', now: 'c1', reconstructed: false },
+    goals: { met: { met: 1, of: 2, unknown: 0 }, inTime: { met: 1, of: 1, unknown: 0 } },
+    work: { met: 1, of: 2, unknown: 0, others: {}, waiting: [] },
+    outside: { sessions: [], untitled: 0 },
+    map: null,
+    plans: [],
+    forecast: { ...FORECAST, now },
+    timeline: [],
+    why: [],
+    unavailable: {},
+  };
+  const html = renderReturn({ ...view, state: 'open', moments });
+  assert.ok(html.indexOf('Cuánto avanzaremos') < html.indexOf('Cuánto se cumplió'), 'the forecast section comes first');
+  // At the opening 32 %, about 42 % forecast from 37 %, and 37 % now.
+  assert.match(html, /F8 plan[\s\S]*32 %[\s\S]*~42 %[\s\S]*37 %[\s\S]*37 %/);
+  assert.match(html, /1 de 3 filas del pronóstico hechas/);
+  assert.match(html, /el mapa ganó 2 filas/);
+  assert.match(html, />hecha</);
+  assert.match(html, /ya no está/);
 });
 
 test('the open stretch reads as in course, goals not checked yet said so', () => {
