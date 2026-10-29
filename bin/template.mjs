@@ -8,10 +8,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { registryOfText, sha256, writeRegistry } from './lib/template.mjs';
+import { SURFACES, registryOfText, sha256, writeRegistry } from './lib/template.mjs';
 import { checkTemplates } from './lib/template-check.mjs';
 import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
-import { decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
+import { askTarget, decideAsk, decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
+import { answeredMoments, render as renderQuestion } from './lib/template-question.mjs';
+import { readNotices, recordedQuestions } from './lib/channel.mjs';
 import { RENDERED_SCHEMA, SHOWN_SCHEMA, readRecord, recordShown, renderedFile, shownFile } from './lib/template-record.mjs';
 import { harnessOfTree } from './lib/project-functions.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
@@ -23,6 +25,7 @@ export const USAGE = [
   '       js-harness template check | list [--json]',
   '       js-harness template gate --hook | --shown   (the PreToolUse and PostToolUse hooks; the payload on stdin)',
   '       js-harness template shown [--days <n>] [--json]',
+  '       js-harness template ask <n>   (the question tool\'s input for question <n> of the channel\'s record)',
 ].join('\n');
 
 const SHOWN_DAYS = 7;
@@ -152,13 +155,24 @@ function runList(root, json, { stdout, stderr }) {
 
 const spawnRun = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' });
 
-/** The records of the project a hook payload or a command runs in: `{ top, rendered, shown }`, the files under the
- * harness home. */
-function placesOf(folder, { root, home, slug }) {
-  const top = root ?? topLevel(folder);
-  const where = home ?? harnessHome({});
-  const project = slug ?? projectSlug(mainCheckout(spawnRun, folder));
-  return { top, rendered: renderedFile(where, project), shown: shownFile(where, project) };
+/** The harness home and the project's slug a hook payload or a command at `folder` reads its records under. */
+function projectOf(folder, { home, slug }) {
+  return { home: home ?? harnessHome({}), slug: slug ?? projectSlug(mainCheckout(spawnRun, folder)) };
+}
+
+/** The records of the project a hook payload or a command runs in: `{ top, home, slug, rendered, shown }`, the files
+ * under the harness home. */
+function placesOf(folder, seams) {
+  const top = seams.root ?? topLevel(folder);
+  const { home, slug } = projectOf(folder, seams);
+  return { top, home, slug, rendered: renderedFile(home, slug), shown: shownFile(home, slug) };
+}
+
+/** The answer to a hook call: the hooks contract's deny with every refusal, or `{}`. */
+function hookAnswer(refusals, stdout) {
+  if (refusals.length === 0) return stdout('{}'), 0;
+  stdout(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refusals.join('\n') } }));
+  return 0;
 }
 
 /** The folder of the `harness.json` nearest `folder`, it or one above it, or `null`: read with no git, since the hook
@@ -188,8 +202,8 @@ function packageTemplates(root = PACKAGE) {
   return registry.list;
 }
 
-/** `template gate --hook`, before a call: decides each page the call shows and records each decision; the hooks
- * contract's deny when one is refused, `{}` otherwise. `--shown`, after a call that succeeded: a `shown` line for each
+/** `template gate --hook`, before a call: decides each page the call shows, or each question it asks, and records
+ * each decision; the hooks contract's deny when one is refused, `{}` otherwise. `--shown`, after a call that succeeded: a `shown` line for each
  * page `--hook` let through in that call. It acts only where `harness.json` holds `"templates": true`, and fails open:
  * a page or a record it cannot read lets the call through, recorded as unchecked and said on standard error. */
 function runGate(mode, seams, { stdout, stderr }) {
@@ -200,7 +214,7 @@ function runGate(mode, seams, { stdout, stderr }) {
     return stdout('{}'), 0;
   }
   const tool = payload?.tool_name;
-  const target = pageTarget(tool, payload?.tool_input);
+  const target = pageTarget(tool, payload?.tool_input) ?? askTarget(tool, payload?.tool_input);
   if (target === null) return stdout('{}'), 0;
   const folder = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : seams.cwd;
   const on = templatesOn(seams.root ?? nearestHarness(folder));
@@ -239,6 +253,23 @@ function runGate(mode, seams, { stdout, stderr }) {
     }
     return stdout('{}'), 0;
   }
+  if (target.asks !== undefined) {
+    const channel = readNotices(places.home, places.slug);
+    if (channel.unavailable !== undefined) {
+      const reason = `cannot read ${channel.path}: ${channel.unavailable}; the call goes through unchecked`;
+      stderr(`js-harness template gate: ${reason}`);
+      record({ decision: 'unchecked', reason });
+      return stdout('{}'), 0;
+    }
+    const questions = recordedQuestions(channel);
+    const refusals = [];
+    for (const asked of target.asks) {
+      const decision = decideAsk({ asked, questions, recordPath: channel.path });
+      record(decision);
+      if (decision.decision === 'refused') refusals.push(decision.reason);
+    }
+    return hookAnswer(refusals, stdout);
+  }
   const templates = seams.templates ?? packageTemplates(seams.registryRoot);
   let rendered;
   try {
@@ -268,8 +299,27 @@ function runGate(mode, seams, { stdout, stderr }) {
     record(decision);
     if (decision.decision === 'refused') refusals.push(decision.reason);
   }
-  if (refusals.length === 0) return stdout('{}'), 0;
-  stdout(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refusals.join('\n') } }));
+  return hookAnswer(refusals, stdout);
+}
+
+/** `template ask <n>`: the question tool's input for question `n` of the channel's record, as `render` makes it.
+ * Exit 1 when the record cannot be read, holds no question `n` or holds it closed, or the tool cannot show it. */
+function runAsk(rest, seams, { stdout, stderr }) {
+  if (rest.length !== 1 || !/^[1-9]\d*$/.test(rest[0])) throw new TemplateArgError('template ask needs the number of a recorded question: template ask <n>');
+  const number = Number(rest[0]);
+  const { home, slug } = projectOf(seams.cwd, seams);
+  const channel = readNotices(home, slug);
+  if (channel.unavailable !== undefined) return stderr(`template ask: cannot read ${channel.path}: ${channel.unavailable}`), 1;
+  const found = recordedQuestions(channel).find((one) => one.number === number);
+  if (found === undefined) return stderr(`template ask: the record holds no question ${number}`), 1;
+  if (found.closed !== null) return stderr(`template ask: question ${number} is ${found.closed.by === 'withdrawn' ? 'withdrawn' : 'answered'}`), 1;
+  let input;
+  try {
+    input = renderQuestion(found);
+  } catch (err) {
+    return stderr(`template ask: ${err.message}`), 1;
+  }
+  stdout(input.trimEnd());
   return 0;
 }
 
@@ -294,8 +344,20 @@ function shownOf(folder, days, seams) {
   const since = seams.now - days * 24 * 3600 * 1000;
   const recent = (line) => Date.parse(line.at) >= since;
   const rendered = readRecord(places.rendered, RENDERED_SCHEMA).filter(recent);
-  const shown = readRecord(places.shown, SHOWN_SCHEMA).filter(recent);
-  return shownReport({ rendered, shown, moments: seams.moments });
+  const lines = readRecord(places.shown, SHOWN_SCHEMA);
+  const shown = lines.filter(recent);
+  return shownReport({ rendered, shown, moments: [...seams.moments, ...questionMoments(places, since, lines)] });
+}
+
+/** The moments of the `ask` surface (`answeredMoments`) since `since` or the first line the gate wrote for a call of
+ * the question tool, whichever is later: none before the gate decided a question, since no question asked then went
+ * through it, though it may have decided pages. A channel record it cannot read throws. */
+function questionMoments(places, since, lines) {
+  const first = lines.find((line) => SURFACES.ask.includes(line.tool));
+  if (first === undefined) return [];
+  const channel = readNotices(places.home, places.slug);
+  if (channel.unavailable !== undefined) throw new Error(`cannot read ${channel.path}: ${channel.unavailable}`);
+  return answeredMoments(recordedQuestions(channel), Math.max(since, Date.parse(first.at)));
 }
 
 /** The templates row of `doctor` for the project at `project` under the harness home `home`: `{ days, escapes,
@@ -337,8 +399,8 @@ function runShown({ days, json }, seams, { stdout, stderr }) {
 /** Exit 0 when the subcommand did its work, 1 when it found a fault or could not, 2 for a bad command line; `shown`
  * also exits 3 when it cannot tell, and `gate` always exits 0. `root`, `hooked`, `readStdin`, `home`, `slug`, `now`,
  * `templates` (the registry, or `registryRoot`, the folder it is read under), `openMoments` and `moments` are seams for
- * the tests: until a page template and its moments' record land (odd/tasks/templates.md, slice C), no moment is open
- * and none is held. */
+ * the tests: until a page template and its moments' record land, no page moment is open and none is held; the
+ * questions' moments are read from the channel's record. */
 export function templateMain(argv, {
   stdout = console.log, stderr = console.error, cwd = process.cwd(), root, hooked, readStdin = () => fs.readFileSync(0, 'utf8'),
   home, slug, now = Date.now(), templates, registryRoot, openMoments = [], moments = [],
@@ -347,7 +409,7 @@ export function templateMain(argv, {
   const seams = { cwd, root, readStdin, home, slug, now, templates, registryRoot, openMoments, moments };
   try {
     const [subcommand, ...rest] = argv;
-    if (subcommand === undefined) throw new TemplateArgError('a subcommand is required: new, check, list, gate or shown');
+    if (subcommand === undefined) throw new TemplateArgError('a subcommand is required: new, check, list, gate, shown or ask');
     if (subcommand === 'gate') {
       if (rest.length !== 1 || !['--hook', '--shown'].includes(rest[0])) throw new TemplateArgError(rest.length === 0 ? 'template gate needs --hook or --shown' : `unknown argument: ${rest.find((token) => !['--hook', '--shown'].includes(token)) ?? rest[1]}`);
       try {
@@ -359,6 +421,7 @@ export function templateMain(argv, {
       }
     }
     if (subcommand === 'shown') return runShown(parseShown(rest), seams, io);
+    if (subcommand === 'ask') return runAsk(rest, seams, io);
     const top = root ?? topLevel(cwd);
     if (subcommand === 'new') return runNewLocked(parseNew(rest), top, cwd, io);
     if (subcommand === 'check') {

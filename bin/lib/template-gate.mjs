@@ -1,9 +1,11 @@
 // The template gate's decisions (odd/tasks/templates.md, "The gates on the path to him"): what a host tool call is
 // about to show the user, and whether a template command made it. This module holds the `page` surface (an `Artifact`
-// publish of a page, an `mcp__visualize__show_widget`); `bin/template.mjs` reads the files and the records and writes
-// the decision. Pure: it is handed the page's text, the rendered lines, the registry and the open moments.
+// publish of a page, an `mcp__visualize__show_widget`) and the `ask` surface (a call of the question tool);
+// `bin/template.mjs` reads the files and the records and writes the decision. Pure: it is handed the page's text, the
+// rendered lines, the registry, the open moments and the channel's questions.
 import path from 'node:path';
 import { normalText, sha256 } from './template.mjs';
+import { admit } from './template-question.mjs';
 
 /** How old a rendered line may be and still admit its page: an old page published again as a new moment's is refused. */
 export const RENDERED_FRESH_HOURS = 6;
@@ -56,6 +58,8 @@ export const GATE_SAYS = Object.freeze({
   none: 'no page template is registered yet',
   widget: 'A moment\'s page goes by Artifact with the file the command wrote, never retyped into a widget.',
   free: 'If no record holds what it shows, mark it free: <mark>.',
+  asked: 'js-harness template gate: this question is not one of the record as its template makes it (<why>; the record is <file>).',
+  ask: 'Record it with js-harness notify --to orchestrator --kind question, then ask it with the input js-harness template ask <n> prints, unchanged.',
 });
 
 /** The sentences of `GATE_SAYS` as one text, a paragraph each, as the coverage cuts it. */
@@ -88,7 +92,7 @@ export function shownReport({ rendered, shown, moments }) {
   const free = shown.filter((line) => line.decision === 'free').map((line) => ({ at: line.at, reason: line.reason }));
   const seen = (template, subject) => shown.some((line) => line.decision === 'shown' && line.template === template && line.subject === subject);
   const escapes = [
-    ...moments.filter((moment) => !seen(moment.template, moment.subject)).map((moment) => `the moment ${moment.subject} of ${moment.template} shows no page`),
+    ...moments.filter((moment) => !seen(moment.template, moment.subject)).map((moment) => `the moment ${moment.subject} of ${moment.template} was never shown`),
     ...shown.filter((line) => line.decision === 'shown' && line.template !== null && (typeof line.subject !== 'string' || line.subject === ''))
       .map((line) => `a page of ${line.template} shown at ${line.at} names no moment`),
   ];
@@ -121,4 +125,23 @@ export function decidePage({ page, rendered, templates, openMoments, now, render
   if (widget) why.push(say('widget'));
   if (!signed && !open) why.push(say('free', { mark: MARK_TEXT }));
   return { decision: 'refused', template: signed?.id ?? open?.template ?? null, subject: open?.subject ?? null, sha256: hash, reason: why.join(' ') };
+}
+
+/** What a call of `tool` with `input` asks the user: `{ asks }`, each question of a call of the question tool, or
+ * `null` when the call asks nothing. */
+export function askTarget(tool, input) {
+  if (tool !== 'AskUserQuestion' || !Array.isArray(input?.questions)) return null;
+  return { asks: input.questions };
+}
+
+/** The decision on one asked question, `{ decision, template, subject, sha256, reason }`: `admitted` when `admit`
+ * holds it to an open question of the record as `render` makes it, `refused` otherwise with the text that says how to
+ * ask it. `questions` the record's (`recordedQuestions`); `recordPath` the channel's record, named in the refusal. */
+export function decideAsk({ asked, questions, recordPath }) {
+  const { admitted, number, why } = admit({ asked, questions });
+  const subject = number === null ? null : String(number);
+  const hash = sha256(JSON.stringify(asked ?? null));
+  if (admitted) return { decision: 'admitted', template: 'question', subject, sha256: hash, reason: null };
+  const reason = [say('asked', { why, file: recordPath }), say('ask', subject === null ? {} : { n: subject })].join(' ');
+  return { decision: 'refused', template: 'question', subject, sha256: hash, reason };
 }

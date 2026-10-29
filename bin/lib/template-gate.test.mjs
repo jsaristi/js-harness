@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, decidePage, freeReason, pageTarget, shownReport } from './template-gate.mjs';
+import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, askTarget, decideAsk, decidePage, freeReason, pageTarget, shownReport } from './template-gate.mjs';
 import { cutSpans } from './rules-coverage.mjs';
 import { RENDERED_SCHEMA, normalText, sha256 } from './template-record.mjs';
 
@@ -107,6 +107,30 @@ test('with no page template registered, the refusal says so in place of a comman
   assert.match(reason, /no page template is registered yet/);
 });
 
+// The `ask` surface: each question of a call of the question tool, against the channel's record.
+const CHANNEL = '/h/.js-harness/channel/p.jsonl';
+const RECORDED = { number: 4, notice: { text: '¿Seguimos con el tramo C?', options: [{ label: 'Sí (Recomendada)', description: 'a' }, { label: 'No', description: 'b' }] }, closed: null };
+const AS_RENDERED = { question: 'Pregunta 4: ¿Seguimos con el tramo C?', header: 'Pregunta 4', multiSelect: false, options: RECORDED.notice.options };
+
+test('askTarget reads each question of a call of the question tool, and nothing else', () => {
+  assert.deepEqual(askTarget('AskUserQuestion', { questions: [AS_RENDERED] }), { asks: [AS_RENDERED] });
+  assert.equal(askTarget('AskUserQuestion', { questions: 'x' }), null);
+  assert.equal(askTarget('Artifact', { questions: [AS_RENDERED] }), null);
+});
+
+test('the ask gate admits a question as its template renders it, and refuses one typed by hand naming notify and template ask', () => {
+  const admitted = decideAsk({ asked: AS_RENDERED, questions: [RECORDED], recordPath: CHANNEL });
+  assert.deepEqual({ ...admitted, sha256: typeof admitted.sha256 }, { decision: 'admitted', template: 'question', subject: '4', sha256: 'string', reason: null });
+  const typed = decideAsk({ asked: { ...AS_RENDERED, question: 'Pregunta 4: ¿Seguimos?' }, questions: [RECORDED], recordPath: CHANNEL });
+  assert.equal(typed.decision, 'refused');
+  assert.equal(typed.subject, '4');
+  assert.match(typed.reason, /its text is not question 4's as recorded; the record is \/h\/\.js-harness\/channel\/p\.jsonl/);
+  assert.match(typed.reason, /js-harness notify --to orchestrator --kind question, then ask it with the input js-harness template ask 4 prints, unchanged\./);
+  const unnumbered = decideAsk({ asked: { question: '¿Seguimos?', options: [] }, questions: [RECORDED], recordPath: CHANNEL });
+  assert.equal(unnumbered.subject, null);
+  assert.match(unnumbered.reason, /template ask <n> prints/);
+});
+
 test('every refusal is sentences of GATE_SAYS with their slots filled, and GATE_MESSAGES cuts into those sentences', () => {
   const pattern = (sentence) => sentence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/<\w+>/g, '.+');
   const whole = new RegExp(`^(?:(?:${Object.values(GATE_SAYS).map(pattern).join('|')}) ?)+$`);
@@ -116,12 +140,14 @@ test('every refusal is sentences of GATE_SAYS with their slots filled, and GATE_
     decide({ text: '<div class="jh-moment">x</div>' }).reason,
     decide({ text: '<p>x</p>' }, { openMoments: [{ template: 'stretch-return', subject: 's-8' }] }).reason,
     decide({ widget: '<p>x</p>' }).reason,
+    decideAsk({ asked: { question: '¿Seguimos?', options: [] }, questions: [], recordPath: CHANNEL }).reason,
+    decideAsk({ asked: { question: 'Pregunta 4: ¿Seguimos?', options: [] }, questions: [], recordPath: CHANNEL }).reason,
   ];
   for (const reason of reasons) assert.match(reason, whole);
   assert.deepEqual(cutSpans(GATE_MESSAGES).map((span) => span.text.trim()), Object.values(GATE_SAYS));
 });
 
-test('shownReport counts each template\'s decisions, lists free pages and names a moment no page was shown for', () => {
+test('shownReport counts each template\'s decisions, lists free pages and names a moment nothing was shown for', () => {
   const line = (decision, extra = {}) => ({ at: hoursAgo(1), decision, template: 'stretch-return', subject: 's-7', reason: null, ...extra });
   const report = shownReport({
     rendered: [rendered(PAGE)],
@@ -130,7 +156,7 @@ test('shownReport counts each template\'s decisions, lists free pages and names 
   });
   assert.deepEqual(report.templates, { 'stretch-return': { rendered: 1, admitted: 1, shown: 1, refused: 1, unchecked: 0 } });
   assert.deepEqual(report.free, [{ at: hoursAgo(1), reason: 'a research page for him' }]);
-  assert.deepEqual(report.escapes, ['the moment s-8 of stretch-return shows no page']);
+  assert.deepEqual(report.escapes, ['the moment s-8 of stretch-return was never shown']);
   assert.equal(report.unchecked, 1);
 });
 

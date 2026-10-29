@@ -15,6 +15,7 @@
     "pushUnasked": "on",
     "lensReview": "on"
   },
+  "templates": true,
   "reply": {
     "states": {
       "working": "Sigo solo",

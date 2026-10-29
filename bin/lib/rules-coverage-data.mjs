@@ -862,6 +862,14 @@ export const COVERAGE = {
       {
         "hash": "30359d634d5d",
         "context": "the template gate's refusal: the PreToolUse hook enforces it on the call itself (bin/template.test.mjs), so no prose rule carries it"
+      },
+      {
+        "hash": "ba6a2130ca30",
+        "context": "the template gate's refusal states what it found; a fact of the call, no obligation"
+      },
+      {
+        "hash": "2d570699d962",
+        "context": "the template gate's refusal: the PreToolUse hook enforces it on the call itself (bin/template.test.mjs), so no prose rule carries it"
       }
     ],
     "work-units-skill": [

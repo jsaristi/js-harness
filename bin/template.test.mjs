@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { registryLock, templateMain, templatesHealth } from './template.mjs';
 import { registryOfText, writeRegistry } from './lib/template.mjs';
 import { SHOWN_SCHEMA, readRecord, recordRendered, renderedFile, shownFile } from './lib/template-record.mjs';
+import { appendNotice, newNotice, recordPath } from './lib/channel.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = 'bin/lib/template-registry.mjs';
@@ -290,6 +291,111 @@ test('a harness.json it cannot read is no opt-out: the gate records the call as 
   assert.equal(after.err, '', '--shown says nothing of its own: --hook said it');
   assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision]), [['u13', 'unchecked'], ['u13', 'shown']], 'one unchecked line a call, then the shown one');
   assert.throws(() => templatesHealth(root, home, { now: GATE_NOW, slug: 'p' }), /harness\.json/);
+});
+
+// The `ask` surface (T5): a call of the question tool, against the questions of the channel's record.
+const ASKER = { host: 'claude-code', id: 'aaaaaaaa-1111-4111-8111-111111111111', source: 'environment', title: 'JH 80', permissionMode: 'auto' };
+const ASK_OPTIONS = [{ label: 'Sí (Recomendada)', description: 'lo que cubre' }, { label: 'No', description: 'lo otro' }];
+const recordQuestion = (home, text, options = ASK_OPTIONS, at = '2026-10-29T05:00:00.000Z') => appendNotice(home, 'p', newNotice({ at, from: ASKER, to: 'orchestrator', kind: 'question', text, id: `id ${text}`, options, waits: 'slice C' }));
+const closeQuestion = (home, question, kind, at) => appendNotice(home, 'p', newNotice(kind === 'answer'
+  ? { at, from: ASKER, to: 'orchestrator', kind, text: 'Sí', question, transcript: 't', line: 1, verified: false, copy: null }
+  : { at, from: ASKER, to: 'orchestrator', kind, text: 'ya no', question }));
+const asking = (call, input) => ({ hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_use_id: call, tool_input: input });
+
+test('gate --hook admits a question asked with the input template ask prints, and --shown records it shown', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  recordQuestion(home, '¿Seguimos con el tramo C?');
+  const printed = call(['ask', '1'], { home, slug: 'p' });
+  assert.equal(printed.code, 0);
+  const input = JSON.parse(printed.out);
+  assert.equal(input.questions[0].question, 'Pregunta 1: ¿Seguimos con el tramo C?');
+  assert.equal(hook('--hook', asking('q1', input)).out, '{}');
+  hook('--shown', { ...asking('q1', input), hook_event_name: 'PostToolUse' });
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision, line.template, line.subject]), [['q1', 'admitted', 'question', '1'], ['q1', 'shown', 'question', '1']]);
+});
+
+test('gate --hook refuses a question typed by hand, or with options not its own, naming notify --kind question and template ask', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  recordQuestion(home, '¿Seguimos con el tramo C?');
+  const typed = JSON.parse(hook('--hook', asking('q2', { questions: [{ question: '¿Seguimos con el tramo C?', header: 'Tramo C', multiSelect: false, options: ASK_OPTIONS }] })).out);
+  assert.equal(typed.hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(typed.hookSpecificOutput.permissionDecisionReason, /does not open with "Pregunta <n>: ".*js-harness notify --to orchestrator --kind question, then ask it with the input js-harness template ask <n> prints/);
+  const other = JSON.parse(hook('--hook', asking('q3', { questions: [{ question: 'Pregunta 1: ¿Seguimos con el tramo C?', header: 'Pregunta 1', multiSelect: false, options: [{ label: 'Sí', description: '' }, { label: 'No', description: '' }] }] })).out);
+  assert.match(other.hookSpecificOutput.permissionDecisionReason, /its options are not question 1's as recorded.*template ask 1 prints/);
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision, line.subject]), [['q2', 'refused', null], ['q3', 'refused', '1']]);
+});
+
+test('gate --hook lets a question through as unchecked when it cannot read the channel\'s record, and says why', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  fs.mkdirSync(recordPath(home, 'p'), { recursive: true });
+  const { out, err } = hook('--hook', asking('q4', { questions: [{ question: 'Pregunta 1: ¿Seguimos?', options: ASK_OPTIONS }] }));
+  assert.equal(out, '{}');
+  assert.match(err, /js-harness template gate: cannot read .*p\.jsonl.*unchecked/);
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision]), [['q4', 'unchecked']]);
+});
+
+test('template ask exits 1 for a question the record does not hold open or the question tool cannot show, and 2 with no number', (t) => {
+  const { home, done } = gateScratch();
+  t.after(done);
+  recordQuestion(home, '¿Primera?');
+  recordQuestion(home, '¿Cinco opciones?', ['a', 'b', 'c', 'd', 'e'].map((label) => ({ label, description: '' })));
+  appendNotice(home, 'p', newNotice({ at: '2026-10-29T05:10:00.000Z', from: ASKER, to: 'orchestrator', kind: 'withdrawn', text: 'ya no', question: 1 }));
+  const ask = (n) => call(['ask', ...n], { home, slug: 'p' });
+  assert.deepEqual([ask(['1']).code, ask(['1']).err], [1, 'template ask: question 1 is withdrawn']);
+  assert.match(ask(['2']).err, /question 2 has 5 options .* ask it in writing/);
+  assert.deepEqual([ask(['3']).code, ask(['3']).err], [1, 'template ask: the record holds no question 3']);
+  assert.equal(ask([]).code, 2);
+  assert.equal(ask(['x']).code, 2);
+});
+
+test('shown names a question answered with no shown line of its number as an escape, from the gate\'s first line on', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  const at = (minutes) => new Date(GATE_NOW + minutes * 60 * 1000).toISOString();
+  const five = ['a', 'b', 'c', 'd', 'e'].map((label) => ({ label, description: '' }));
+  recordQuestion(home, '¿Antes de la puerta?', ASK_OPTIONS, at(-30));
+  closeQuestion(home, 1, 'answer', at(-20));
+  for (const text of ['¿Por la puerta?', '¿A mano?', '¿Retirada?', '¿Abierta?']) recordQuestion(home, text, ASK_OPTIONS, at(10));
+  recordQuestion(home, '¿Cinco opciones?', five, at(10));
+  const input = JSON.parse(call(['ask', '2'], { home, slug: 'p' }).out);
+  hook('--hook', asking('q5', input));
+  hook('--shown', { ...asking('q5', input), hook_event_name: 'PostToolUse' });
+  for (const n of [2, 3, 6]) closeQuestion(home, n, 'answer', at(20));
+  closeQuestion(home, 4, 'withdrawn', at(20));
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW + 60 * 60 * 1000 });
+  assert.equal(report.code, 1, report.err);
+  assert.deepEqual(JSON.parse(report.out).escapes, ['the moment 3 of question was never shown']);
+  assert.deepEqual(templatesHealth(root, home, { now: GATE_NOW + 60 * 60 * 1000, slug: 'p' }).escapes, ['the moment 3 of question was never shown']);
+});
+
+test('the questions\' escapes start at the first call of the question tool, not at a page the gate decided before it', (t) => {
+  const { root, home, done } = gateScratch();
+  t.after(done);
+  const at = (minutes) => new Date(GATE_NOW + minutes * 60 * 1000).toISOString();
+  const hookAt = (minutes, payload) => call(['gate', '--hook'], { root, home, slug: 'p', now: GATE_NOW + minutes * 60 * 1000, templates: PAGE_TEMPLATES, readStdin: () => JSON.stringify({ cwd: root, session_id: 's1', ...payload }) });
+  fs.writeFileSync(path.join(root, 'page.html'), '<p>hecho a mano</p>');
+  hookAt(0, { tool_name: 'Artifact', tool_use_id: 'u20', tool_input: { file_path: 'page.html' } });
+  recordQuestion(home, '¿Antes de la puerta de preguntas?', ASK_OPTIONS, at(10));
+  closeQuestion(home, 1, 'answer', at(20));
+  hookAt(40, asking('q20', { questions: [{ question: '¿Escrita a mano?', options: ASK_OPTIONS }] }));
+  recordQuestion(home, '¿Después?', ASK_OPTIONS, at(50));
+  closeQuestion(home, 2, 'answer', at(55));
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW + 60 * 60 * 1000 });
+  assert.deepEqual(JSON.parse(report.out).escapes, ['the moment 2 of question was never shown']);
+});
+
+test('a gate that decided only pages holds no question\'s moment, and does not read the channel\'s record for them', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'page.html'), '<p>hecho a mano</p>');
+  hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u21', tool_input: { file_path: 'page.html' } });
+  fs.mkdirSync(recordPath(home, 'p'), { recursive: true });
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW + 60 * 60 * 1000 });
+  assert.equal(report.err, '');
+  assert.deepEqual(JSON.parse(report.out).escapes, []);
 });
 
 test('shown reports each template\'s counts and free pages, exit 0, and 3 when a call went unchecked', (t) => {

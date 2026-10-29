@@ -587,6 +587,15 @@ change. The free titles of 2026-10-19 came before the title guard existed; these
 - Control: check — bin/lib/session-title-guard.test.mjs — "behind a project whose list declares
   session-title, a free title is refused as here" — since 2026-10-25
 
+### hand-made-output
+An output he sees again and again reached him made by hand, in a shape other than the one planned,
+where a command should have made it; each escape `template shown` names is one more `- Seen:` line.
+- Class: rule-not-acting
+- Seen: 2026-10-29 — the lead's transcript `0f71b2c6`, lines 14687 and 14721 — the 02:44Z page went
+  by `mcp__visualize__show_widget`, retyped, not the planned one; his words at 14721 (odd/tasks/templates.md, Specs)
+- Control: check — bin/template.test.mjs — "gate --hook refuses a hand-made page by Artifact with the
+  hooks contract" — since 2026-10-29
+
 ### heavy-run-beside-gate
 A test run or a count started while a gate, or a batch that measures durations, was running.
 - Class: rule-not-acting

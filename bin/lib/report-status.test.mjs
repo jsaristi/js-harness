@@ -63,4 +63,12 @@ test('the notes are read whole or refused with what is wrong', () => {
   assert.throws(() => notesOf('{"badNews":"one"}'), /badNews is a list of texts/);
   assert.throws(() => notesOf('{"decisions":[{"text":"a"}]}'), /decisions\[0\] needs text and changed/);
   assert.throws(() => notesOf('{"other":[]}'), /unknown field: other/);
+  // Every next step shown to him carries its reason, the criterion (his words, transcript 0f71b2c6 line 18204).
+  for (const why of ['', '   ']) {
+    assert.throws(() => notesOf(JSON.stringify({ proposals: [{ step: 'Tramo D', why }] })), /proposals\[0\] needs step and why/);
+  }
+  assert.throws(() => notesOf(JSON.stringify({ waits: [{ what: ' ', why: 'otra sesión' }] })), /waits\[0\] needs what and why/);
+  for (const decision of [{ text: '', changed: 'una revisión menos' }, { text: 'Aterrizar 644', changed: '\t' }]) {
+    assert.throws(() => notesOf(JSON.stringify({ decisions: [decision] })), /decisions\[0\] needs text and changed/);
+  }
 });

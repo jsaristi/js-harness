@@ -318,8 +318,8 @@ Codex and the Claude lenses before its pull request.
 ## Tasks
 - [x] T1 (kind: design) this document, the inventory page for him, and two blind readers (rule:double-review). Spec 1-5. Route: inline, readers delegated. 3d6d5dcf, db5f7409 and the revision after them (L5).
 - [x] T2 (kind: docs) the docs-only pull request and its ready notice. Spec 5. Route: inline. PR 648, landed as 410eed7c.
-- [ ] T3 (kind: build) `template new`, the registry, `template check` and `list`, tests first. Spec 5. Route: inline.
-- [ ] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline.
+- [x] T3 (kind: build) `template new`, the registry, `template check` and `list`, tests first. Spec 5. Route: inline. PR 649.
+- [x] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline. PR 653.
 - [ ] T5 (kind: build) the questions to him as the first template, end to end (the `ask` gate), with the escape entry. Spec 1, 4. Route: inline.
 - [ ] T6 (kind: build) the rule change on `rule/templates`. Spec 1, 5. Route: inline.
 - [ ] T7 (kind: docs) the session summary and the ROADMAP line. Route: inline.
@@ -372,6 +372,19 @@ Codex and the Claude lenses before its pull request.
   the coloured status list is JH 79's and lands in PR 647. Done when and T5 now say so; the board rows and summary
   stay inventory rows, their gate a later template. The lead told JH 79 that `recordRendered` takes `subject` and that
   the record is `throughput/<slug>/templates-rendered.jsonl`.
+- L7. 2026-10-29, his approval of the question template's sample. Question 108 asked him to approve the card's shape;
+  the lead asked it, and his answer, read with `js-harness sessions --quote 0f71b2c6 17978` (08:15:26Z, tapped): "Sí,
+  apruebo esta forma (Recomendada)". The card he saw (the call at line 17971) was the render of 108 with one
+  difference: the lead wrote the session's label after the prefix, "Pregunta 108: Plantillas (JH 80). ¿Apruebas…".
+  The sample is that card, byte for byte, and its record holds the label in the question's text: under the gate a
+  label added at asking time is a hand-made question, so whoever records a question writes its label into the text
+  (the lead is told). `sample.source` is `0f71b2c6:17978`.
+- L8. 2026-10-29 08:32Z, the lead's note to JH 80 relaying his words, read with `js-harness sessions --quote 0f71b2c6
+  18204` (08:29:41Z): "Listo muestrame lo proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por
+  que osea cual es el criterio". The lead asks (its page https://claude.ai/artifact/4Ty3JAAJrCyK7DrBw5yFBP): the
+  status report's notes refuse a proposal with no `why` (`notesOf`, `bin/lib/report-status.mjs`, from main), and the
+  rule `status-report` ("propose next, and why") is amended through `rules change` in slice D, quoting that line.
+  The surface grows by `bin/lib/report-status.mjs` and its test.
 
 ## Next step
 State at 2026-10-29 ~04:45Z (JH 80, worktree `D:\js-harness\.claude\worktrees\templates`, branch `feat/templates-a` from
@@ -462,7 +475,7 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   list skipped by the gate; a `files` source read without the publish's `root`; a quote in a regular expression or a
   nested template literal flipping `template check`'s comment reader; `recordRendered` taking a time that does not
   parse. Next: Codex and the lenses over unit 8, then units 7 and 8 to gentle-ai as one candidate.
-- Update ~08:30Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
+- Update ~07:45Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
   fixed in dfc2692d and rechecked (1 fixed). Lenses over unit 8 and its fix: 0 findings.
 - gentle-ai: approved, medium, lineage review-53473f94dc0eb57c, over 4c4509ca..7660b66d (b1d938e3, 34f95b0c),
   acknowledged. Its reliability lens left 3 non-blocking warnings, each holding, fixed with tests in unit 9, f08682ba:
@@ -476,3 +489,36 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   on its line; a shape with the golden call after the regular expression on the same line proves it. Taken in slice
   C's first commit, so slice B takes no further review round. Every code commit of slice B is covered: gentle-ai
   39e69ee5..4c4509ca, 4c4509ca..7660b66d, 7660b66d..f5eb5226; Codex and the lenses each commit.
+- Update 07:57Z: slice B is PR 653, ready notice sent. Slice C on `feat/templates-c`, stacked on `feat/templates-b`
+  (f043f06a). Its first commit takes gentle-ai's last finding (two shapes with the golden call on the regular
+  expression's line; without the reserved-word clause the test fails, checked by removing it) and corrects the
+  hour of the update above, written ~08:30Z by an estimate before the clock read 07:57Z at the notice.
+- Update 08:25Z (after the host's compaction at 08:08Z): unit 2 of slice C, the `ask` gate, test first. `template
+  ask <n>` prints `render` of question n of the channel's record (exit 1 when missing, closed or not showable by the
+  tool, 2 with no number); `template gate --hook` decides each question of an `AskUserQuestion` call with
+  `decideAsk` (an open question of the record, its text and option labels as recorded; descriptions free) and lets
+  it through as unchecked when the record cannot be read. Two `GATE_SAYS` sentences added and their spans declared
+  (one fact, one enforced). The `question` entry registered, not a draft, its sample his approved card (L7);
+  `template check` exits 0. Next: the escapes of the `ask` surface (a question recorded since the first `shown`
+  line, open, 2 to 4 options, with no `shown` line of its number), the FAILURES entry, `"templates": true` in
+  `harness.json`; then Codex, the lenses and gentle-ai over slice C, push, PR, ready notice.
+- Update 08:40Z: unit 2 is e42535c9. Unit 3: `template shown` and `doctor` name as an escape a question recorded
+  since the gate's first line (and in the window), answered, with 2 to 4 options and no `shown` line of its number
+  (`answeredMoments`); the escape text is now "was never shown", for a question as for a page. `docs/FAILURES.md`
+  holds `hand-made-output` (controlled by the page refusal test) and `harness.json` turns templates on. Next: merge
+  main (PR 653 and 654 landed) into the branch, then unit 4, `notesOf` refuses a proposal with no `why` (L8); then
+  the reviews of slice C, push, PR, ready notice; slice D amends `rules-live-in-the-harness` and `status-report`.
+- Update 08:55Z: main merged in as 48ae1ca1 (no conflict, `git merge-tree`); unit 4 is e91cf39d. Codex over
+  f043f06..54ed729 (2 parts, from a detached worktree at 54ed729c so the merge's content stayed out): correct, 0.86
+  and 0.9, 0 findings, 265,106 input tokens; over 48ae1ca..e91cf39: correct, 0.98, 32,710 input tokens. Lenses over
+  f043f06..54ed729 (risk, resilience, readability, reliability) and 48ae1ca..e91cf39 (reliability, readability): 0.
+- gentle-ai: approved, medium, lineage review-39f414838ddd7dcb, over f5eb5226..54ed729c (34162fa1, e42535c9,
+  54ed729c), acknowledged. Its reliability lens left 1 non-blocking warning, holding: the questions' escape window
+  started at the shown record's first line of any surface, so a project whose gate had decided pages before would
+  name questions answered before the `ask` gate as escapes. Fixed in unit 5 with a test that failed first: the
+  window starts at the first line of a call of the question tool.
+- Unit 5 is d3ff2bbe. Codex over e91cf39..d3ff2bb: correct, 0.95, 64,566 input tokens; lenses reliability and
+  resilience: 0. gentle-ai: approved, medium, lineage review-28522967ad0952a1, over 48ae1ca1..d3ff2bbe (e91cf39d,
+  d3ff2bbe), acknowledged; its reliability lens left 2 non-blocking suggestions, both holding, taken in unit 6 (tests
+  only): a blank decision refused, and a gate that decided only pages holds no question's moment and reads no channel
+  record (it fails on the window of unit 4, checked by putting it back).
