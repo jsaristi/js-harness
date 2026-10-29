@@ -183,6 +183,13 @@ test('a required test that is only in a comment is no test', () => {
   assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': quoted })), [], 'a // or /* inside a string is no comment');
 });
 
+test('a test call quoted inside a string, as a fixture, is no declaration: neither its test nor its skip', () => {
+  const fixture = `const skipped = "test.skip('template:question golden', () => {})";\n${TESTS}`;
+  assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': fixture })), [], 'the quoted skip is no skip of the real test');
+  const only = `const fixture = \`test('template:question golden', () => {});\`;\ntest('template:question refuses a hand-made one', () => {});\n`;
+  assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': only }))), ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"']);
+});
+
 test('an entry with no id, or an id that is not a name, is a fault and never stands for another', () => {
   const { id, ...noId } = entry();
   assert.deepEqual(faultsOf(run([noId])), ['(no id): the entry lacks id']);

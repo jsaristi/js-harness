@@ -7,12 +7,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { registryOfText, sha256, writeRegistry } from './lib/template.mjs';
 import { checkTemplates } from './lib/template-check.mjs';
 import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
 import { decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
 import { RENDERED_SCHEMA, SHOWN_SCHEMA, readRecord, recordShown, renderedFile, shownFile } from './lib/template-record.mjs';
-import { TEMPLATES } from './lib/template-registry.mjs';
 import { harnessOfTree } from './lib/project-functions.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -170,8 +170,23 @@ function nearestHarness(folder) {
   }
 }
 
-/** Whether the project at `top` turns the template gate on: its `harness.json` holds `"templates": true`. */
-const templatesOn = (top) => top !== null && harnessOfTree(top).declared?.templates === true;
+/** Whether the project at `top` turns the template gate on: `true` when its `harness.json` holds `"templates": true`,
+ * `false` when it does not or there is none, and the reason when that file cannot be read, which is no opt-out. */
+function templatesOn(top) {
+  if (top === null) return false;
+  const harness = harnessOfTree(top);
+  return harness.error !== undefined ? harness.error : harness.declared?.templates === true;
+}
+
+const PACKAGE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+/** The registry of this package (or of `root`), read when the gate needs it, so a registry that does not load is the
+ * gate's fault to fail open on, not an import that stops the command. */
+function packageTemplates(root = PACKAGE) {
+  const registry = readRegistry(root);
+  if (registry.error !== undefined) throw new Error(registry.error);
+  return registry.list;
+}
 
 /** `template gate --hook`, before a call: decides each page the call shows and records each decision; the hooks
  * contract's deny when one is refused, `{}` otherwise. `--shown`, after a call that succeeded: a `shown` line for each
@@ -188,8 +203,21 @@ function runGate(mode, seams, { stdout, stderr }) {
   const target = pageTarget(tool, payload?.tool_input);
   if (target === null) return stdout('{}'), 0;
   const folder = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : seams.cwd;
-  if (!templatesOn(seams.root ?? nearestHarness(folder))) return stdout('{}'), 0;
+  const on = templatesOn(seams.root ?? nearestHarness(folder));
+  if (on === false) return stdout('{}'), 0;
   const places = placesOf(folder, seams);
+  if (typeof on === 'string') {
+    // A harness.json that cannot be read is no opt-out: the call goes through, and the record says it was unchecked.
+    const reason = `${on}; the call goes through unchecked`;
+    stderr(`js-harness template gate: ${reason}`);
+    try {
+      recordShown(places.shown, { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, tool, call: payload.tool_use_id ?? null, decision: 'unchecked', reason });
+    } catch (err) {
+      stderr(`js-harness template gate: cannot append to ${places.shown}: ${err.message}`);
+    }
+    return stdout('{}'), 0;
+  }
+  const templates = seams.templates ?? packageTemplates(seams.registryRoot);
   const at = new Date(seams.now).toISOString();
   const call = typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null;
   const record = (decision) => {
@@ -226,7 +254,8 @@ function runGate(mode, seams, { stdout, stderr }) {
   }
   const pages = target.widget !== undefined ? [{ page: { widget: target.widget } }] : target.files.map((file) => {
     try {
-      return { page: { text: fs.readFileSync(path.resolve(folder, file), 'utf8') } };
+      const bytes = fs.readFileSync(path.resolve(folder, file));
+      return { page: { bytes, text: bytes.toString('utf8') } };
     } catch (err) {
       return { unreadable: `cannot read ${file} (${err.code ?? err.message}); the call goes through unchecked` };
     }
@@ -238,7 +267,7 @@ function runGate(mode, seams, { stdout, stderr }) {
       record({ decision: 'unchecked', reason: unreadable });
       continue;
     }
-    const decision = decidePage({ page, rendered, templates: seams.templates, openMoments: seams.openMoments, now: seams.now, renderedPath: places.rendered });
+    const decision = decidePage({ page, rendered, templates, openMoments: seams.openMoments, now: seams.now, renderedPath: places.rendered });
     record(decision);
     if (decision.decision === 'refused') refusals.push(decision.reason);
   }
@@ -274,9 +303,11 @@ function shownOf(folder, days, seams) {
 
 /** The templates row of `doctor` for the project at `project` under the harness home `home`: `{ days, escapes,
  * unchecked }` over the last `SHOWN_DAYS` days, or `null` where its `harness.json` does not hold `"templates": true`.
- * A record it cannot read throws, and the row says it cannot tell. */
+ * A record or a `harness.json` it cannot read throws, and the row says it cannot tell. */
 export function templatesHealth(project, home, { now = Date.now(), moments = [], slug } = {}) {
-  if (!templatesOn(project)) return null;
+  const on = templatesOn(project);
+  if (typeof on === 'string') throw new Error(on);
+  if (!on) return null;
   const { escapes, unchecked } = shownOf(project, SHOWN_DAYS, { root: project, home, now, moments, slug });
   return { days: SHOWN_DAYS, escapes, unchecked };
 }
@@ -308,14 +339,15 @@ function runShown({ days, json }, seams, { stdout, stderr }) {
 
 /** Exit 0 when the subcommand did its work, 1 when it found a fault or could not, 2 for a bad command line; `shown`
  * also exits 3 when it cannot tell, and `gate` always exits 0. `root`, `hooked`, `readStdin`, `home`, `slug`, `now`,
- * `templates`, `openMoments` and `moments` are seams for the tests: until a page template and its moments' record land
- * (odd/tasks/templates.md, slice C), no moment is open and none is held. */
+ * `templates` (the registry, or `registryRoot`, the folder it is read under), `openMoments` and `moments` are seams for
+ * the tests: until a page template and its moments' record land (odd/tasks/templates.md, slice C), no moment is open
+ * and none is held. */
 export function templateMain(argv, {
   stdout = console.log, stderr = console.error, cwd = process.cwd(), root, hooked, readStdin = () => fs.readFileSync(0, 'utf8'),
-  home, slug, now = Date.now(), templates = TEMPLATES, openMoments = [], moments = [],
+  home, slug, now = Date.now(), templates, registryRoot, openMoments = [], moments = [],
 } = {}) {
   const io = { stdout, stderr };
-  const seams = { cwd, root, readStdin, home, slug, now, templates, openMoments, moments };
+  const seams = { cwd, root, readStdin, home, slug, now, templates, registryRoot, openMoments, moments };
   try {
     const [subcommand, ...rest] = argv;
     if (subcommand === undefined) throw new TemplateArgError('a subcommand is required: new, check, list, gate or shown');

@@ -59,6 +59,11 @@ test('a page marked free with its reason is admitted as free when no template sh
   assert.equal(decision.reason, 'a research page on the gate, for him');
 });
 
+test('a free mark\'s reason ends at the quote that opened it, so an apostrophe in a double-quoted reason is kept', () => {
+  assert.equal(freeReason('<meta name="js-harness-page" content="free: the lead\'s research page on the gate">'), 'the lead\'s research page on the gate');
+  assert.equal(freeReason('<meta name=\'js-harness-page\' content=\'free: a page quoting "the gate" for him\'>'), 'a page quoting "the gate" for him');
+});
+
 test('a free mark whose reason is under 20 characters is no mark', () => {
   assert.equal(freeReason('<meta name="js-harness-page" content="free: short">'), null);
   assert.equal(decide({ text: '<meta name="js-harness-page" content="free: short"><p>x</p>' }).decision, 'refused');
@@ -117,6 +122,18 @@ test('shownReport counts each template\'s decisions, lists free pages and names 
   assert.deepEqual(report.free, [{ at: hoursAgo(1), reason: 'a research page for him' }]);
   assert.deepEqual(report.escapes, ['the moment s-8 of stretch-return shows no page']);
   assert.equal(report.unchecked, 1);
+});
+
+test('shownReport counts a template whose id is a name objects inherit, such as constructor, from zero', () => {
+  const line = (decision) => ({ at: hoursAgo(1), decision, template: 'constructor', subject: 's-1', reason: null });
+  const report = shownReport({ rendered: [{ ...rendered(PAGE), template: 'constructor' }], shown: [line('admitted'), line('shown')], moments: [] });
+  assert.deepEqual(report.templates, { constructor: { rendered: 1, admitted: 1, shown: 1, refused: 0, unchecked: 0 } });
+});
+
+test('a page decoded from bytes that are not UTF-8 is matched by its bytes, as the record hashed them', () => {
+  const bytes = Buffer.from([0x3c, 0x70, 0x3e, 0xe9, 0x3c, 0x2f, 0x70, 0x3e]);
+  const line = { ...rendered(PAGE), sha256: sha256(bytes) };
+  assert.equal(decide({ bytes, text: bytes.toString('utf8') }, { rendered: [line] }).decision, 'admitted');
 });
 
 test('shownReport names a shown page whose rendered line names no moment, and holds with nothing recorded', () => {

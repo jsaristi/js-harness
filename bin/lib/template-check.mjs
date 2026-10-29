@@ -65,17 +65,22 @@ function faultsOfEntry(entry, readFile, hooked) {
   return faults;
 }
 
-/** `source` with each comment blanked to spaces, its newlines kept: a `//` or `/*` inside a quoted string or a template
- * literal is no comment. A regular expression literal is read as code, which is enough for a test file's titles. */
+/** `{ code, quoted }`: `source` with each comment blanked to spaces, its newlines kept, and which of its positions lie
+ * inside a quoted string or a template literal, where a `//` or `/*` is no comment and a `test(` is no call. A regular
+ * expression literal is read as code, which is enough for a test file's titles. */
 function withoutComments(source) {
   let out = '';
+  const quoted = new Uint8Array(source.length);
   let quote = null;
   for (let i = 0; i < source.length; i += 1) {
     const char = source[i];
     if (quote !== null) {
+      quoted[i] = 1;
       out += char;
-      if (char === '\\') out += source[++i] ?? '';
-      else if (char === quote) quote = null;
+      if (char === '\\') {
+        out += source[++i] ?? '';
+        quoted[i] = 1;
+      } else if (char === quote) quote = null;
     } else if (char === '"' || char === '\'' || char === '`') {
       quote = char;
       out += char;
@@ -86,16 +91,18 @@ function withoutComments(source) {
       i = end - 1;
     } else out += char;
   }
-  return out;
+  return { code: out, quoted };
 }
 
 /** The declarations of the tests titled `title` in `source`: each `test` or `it` call whose first argument is the
  * quoted title, from the call to its body (the first `=>` or `function` after the title), over as many lines as it
- * takes. A `test.skip(` and a `{ skip: … }` are both inside one; the title in a comment or a message is not a call. */
+ * takes. A `test.skip(` and a `{ skip: … }` are both inside one; the title in a comment, a message or a string (a
+ * fixture that quotes a test) is not a call. */
 function declarationsOf(source, title) {
   const quoted = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const code = withoutComments(source);
-  return [...code.matchAll(new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`, 'g'))].map((call) => {
+  const { code, quoted: inString } = withoutComments(source);
+  const calls = [...code.matchAll(new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`, 'g'))];
+  return calls.filter((call) => inString[call.index] === 0).map((call) => {
     const end = call.index + call[0].length;
     const body = code.slice(end).search(/=>|\bfunction\b/);
     return code.slice(call.index, end + (body < 0 ? 0 : body));

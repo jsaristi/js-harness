@@ -252,6 +252,43 @@ test('gate --hook lets a page through as unchecked when it cannot read the page,
   assert.deepEqual(shownLines(home).map((line) => line.decision), ['unchecked']);
 });
 
+test('gate --hook admits a recorded page whose bytes are not UTF-8: it hashes the bytes, as the record does', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  const page = path.join(root, 'latin1.html');
+  fs.writeFileSync(page, Buffer.from([0x3c, 0x70, 0x3e, 0xe9, 0x3c, 0x2f, 0x70, 0x3e]));
+  recordRendered(renderedFile(home, 'p'), { template: 'stretch-return', subject: 's-8', path: page, at: '2026-10-29T05:30:00.000Z', head: 'abc' });
+  assert.equal(hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u10', tool_input: { file_path: page } }).out, '{}');
+  assert.deepEqual(shownLines(home).map((line) => line.decision), ['admitted']);
+});
+
+test('gate --hook reads the registry inside its boundary: one that does not load lets the call through and says so', (t) => {
+  const { root, home, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'page.html'), '<p>hecho a mano</p>');
+  const broken = path.join(root, 'package');
+  fs.mkdirSync(path.join(broken, 'bin', 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(broken, REGISTRY), 'export const TEMPLATES = [{ not json };\n');
+  const { code, out, err } = call(['gate', '--hook'], { root, home, slug: 'p', now: GATE_NOW, registryRoot: broken, readStdin: () => JSON.stringify({ cwd: root, tool_name: 'Artifact', tool_use_id: 'u11', tool_input: { file_path: 'page.html' } }) });
+  assert.equal(code, 0);
+  assert.equal(out, '{}');
+  assert.match(err, /js-harness template gate: the registry does not parse.*unchecked/);
+  const ours = call(['gate', '--hook'], { root, home, slug: 'p', now: GATE_NOW, readStdin: () => JSON.stringify({ cwd: root, tool_name: 'Artifact', tool_use_id: 'u12', tool_input: { file_path: 'page.html' } }) });
+  assert.equal(JSON.parse(ours.out).hookSpecificOutput.permissionDecision, 'deny', 'with no seam it reads this package\'s registry');
+});
+
+test('a harness.json it cannot read is no opt-out: the gate records the call as unchecked and says why, and doctor\'s row cannot tell', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'harness.json'), '{ "templates": tru');
+  fs.writeFileSync(path.join(root, 'page.html'), '<p>hecho a mano</p>');
+  const { out, err } = hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u13', tool_input: { file_path: 'page.html' } });
+  assert.equal(out, '{}');
+  assert.match(err, /js-harness template gate: .*harness\.json.*unchecked/);
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision]), [['u13', 'unchecked']]);
+  assert.throws(() => templatesHealth(root, home, { now: GATE_NOW, slug: 'p' }), /harness\.json/);
+});
+
 test('shown reports each template\'s counts and free pages, exit 0, and 3 when a call went unchecked', (t) => {
   const { root, home, hook, done } = gateScratch();
   t.after(done);

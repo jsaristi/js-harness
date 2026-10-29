@@ -10,12 +10,13 @@ export const RENDERED_FRESH_HOURS = 6;
 /** The shortest reason a free page gives. */
 export const FREE_REASON_CHARS = 20;
 
-const FREE_MARK = /<meta\s+name\s*=\s*["']js-harness-page["']\s+content\s*=\s*["']free:\s*([^"']*)["']\s*\/?>/i;
+// Each attribute ends at the quote that opened it, so an apostrophe inside a double-quoted reason is part of it.
+const FREE_MARK = /<meta\s+name\s*=\s*(["'])js-harness-page\1\s+content\s*=\s*(["'])free:\s*((?:(?!\2).)*)\2\s*\/?>/i;
 const MARK_TEXT = '<meta name="js-harness-page" content="free: <why, 20 characters or more>">';
 
 /** The reason of a page's free mark, or `null` when it has none or its reason is under `FREE_REASON_CHARS`. */
 export function freeReason(text) {
-  const reason = FREE_MARK.exec(text)?.[1]?.trim();
+  const reason = FREE_MARK.exec(text)?.[3]?.trim();
   return reason !== undefined && reason.length >= FREE_REASON_CHARS ? reason : null;
 }
 
@@ -75,7 +76,8 @@ export function shownReport({ rendered, shown, moments }) {
   const templates = {};
   const count = (id, field) => {
     if (id === null || id === undefined) return;
-    templates[id] ??= { rendered: 0, admitted: 0, shown: 0, refused: 0, unchecked: 0 };
+    // An own key: `constructor` is a valid id, and an inherited one would take its count.
+    if (!Object.hasOwn(templates, id)) templates[id] = { rendered: 0, admitted: 0, shown: 0, refused: 0, unchecked: 0 };
     templates[id][field] += 1;
   };
   for (const line of rendered) count(line.template, 'rendered');
@@ -100,7 +102,8 @@ export function shownReport({ rendered, shown, moments }) {
 export function decidePage({ page, rendered, templates, openMoments, now, renderedPath }) {
   const widget = typeof page.widget === 'string';
   const text = widget ? page.widget : page.text;
-  const hash = sha256(text);
+  // A file's hash is of its bytes, as `recordRendered` takes it: text decoded from bytes that are not UTF-8 differs.
+  const hash = sha256(!widget && page.bytes !== undefined ? page.bytes : text);
   const normal = sha256(normalText(text));
   const match = rendered.findLast((line) => fresh(line, now) && (widget ? line.normal === normal : line.sha256 === hash));
   if (match) return { decision: 'admitted', template: match.template, subject: match.subject, sha256: hash, reason: null };
