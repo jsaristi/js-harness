@@ -177,9 +177,9 @@ a rule's skill is loaded); then, on that answer, the reruns and the 13 to 23 cas
 JH 82's state at its context pause (2026-10-29, branch `f8-s5c-a-cases`, worktree
 `D:\js-harness\.claude\worktrees\f8-s5c-a-cases`, HEAD `45ae758e`, nothing pushed, no PR yet): blocker 2 is built
 (`45fb1751`), D12 too (`45ae758e`); blocker 1 is his question 111, and no `away-autonomy` rerun runs until it is
-answered (L23). The lenses (reliability, readability) on `03effcad..45ae758e`: 0 findings each. Reviews still
-owed: Codex on that range (its first try refused an uncommitted document), then a gentle-ai line for `e2be8e8a`,
-`45fb1751` and `45ae758e`. Next, in order: (1) those reviews, their findings fixed;
+answered (L23). On `03effcad..45ae758e`: the lenses (reliability, readability), 0 findings each; Codex, "the patch
+is correct" (0.9, 74,832 input tokens). Still owed: a gentle-ai line for `e2be8e8a`, `45fb1751` and `45ae758e`
+(run `gentle-ai review status ... --next-transition`, then its granted start, capture-result, acknowledge). Next, in order: (1) those reviews, their findings fixed;
 (2) P7, a diagnostic rerun of `rule-reuse-first` on both arms now that the arms keep transcripts (4 trials, about
 $2.3 by P5): read in each trial's transcripts whether `js-harness-protocols` was loaded, record it in the Log and
 the Paid runs table, `rule-proof.mjs` from the clean commit; (3) T10: move `staleManifestMessage`,
