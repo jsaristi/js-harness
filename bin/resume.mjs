@@ -38,7 +38,6 @@ import { featureParts } from './lib/feature-parts.mjs';
 import { findOpenings, openingCommand, openingsDir, placeOf, recordedQuestions, reliefPath, readNotices } from './lib/channel.mjs';
 import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { inboxNotice, mainCheckoutByFiles } from './lib/inbox.mjs';
-import { recordReviewStarts } from './lib/review-starts.mjs';
 import { dueNotice, memoryFolderOf } from './lib/memory-hygiene.mjs';
 import { hostWindow, pauseNotice, toldBetween } from './lib/pause.mjs';
 import { webBlockNotice } from './lib/web-block.mjs';
@@ -1019,16 +1018,6 @@ function pauseLine(input, { defaultCwd, env, homedir, isFile, run, fileSystem = 
   const root = harnessRootOf(cwd, isFile);
   if (root === null) return null;
   const home = harnessHome({ env, homedir });
-  // The start of each gentle-ai review live in the project's store, kept before gentle-ai deletes it at the burn (B6
-  // of odd/tasks/throughput-review.md). Any session's call serves, a sub-agent's too, since the store is the
-  // project's. The common folder is found by files, and a layout they do not tell is skipped, so no call asks git;
-  // whatever fails here leaves the notices below as they are.
-  try {
-    const main = mainCheckoutByFiles(cwd, fileSystem);
-    if (main !== null) recordReviewStarts({ commonDir: path.join(main, '.git'), home, slug: projectSlug(main), now: now(), fileSystem });
-  } catch {
-    // The review's start is lost; the session's notices are not.
-  }
   // The web notice is said to a sub-agent too, since research is mostly theirs; the pause and the inbox are the
   // session's own, and need its transcript.
   const own = !(typeof input.agent_id === 'string' && input.agent_id !== '') && typeof input.transcript_path === 'string' && input.transcript_path !== '';

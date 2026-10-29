@@ -208,8 +208,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] The report as tables: when the user asks what was done, each section of the status report that holds items is a table (`rule:report-table`, the orchestrator skill's "The status report")
 - [x] Background sessions: `js-harness sessions start` runs `claude --bg` on a turn the user did not type, records it, and `sessions stop` and `uninstall machine` undo it; the board lists them (`odd/tasks/background-sessions.md`)
 - [ ] The stretch protocol: `js-harness stretch` plans a stretch with goals that are commands, shows its departure and its return in the chat, measures each item's time and failures from the records, learns the next estimates from the closed ones, and the live board shows the open one (`odd/tasks/stretch-protocol.md`)
-- [ ] Follow-up (Codex, 54c7e39..e7aa7ec, finding 6): the board lists background sessions even when the main checkout has no transcripts folder, which today ends the board with exit 1 before it reads them, as it did before they were listed
-- [ ] Follow-up (Codex, finding 4): a start whose record cannot be appended after claude ran, and whose rollback claude refuses, leaves a durable entry that `sessions stop` and uninstall can act on, not only the commands that remove it
+- [x] Follow-up (Codex, 54c7e39..e7aa7ec, finding 6): the board lists background sessions even when the main checkout has no transcripts folder, which today ends the board with exit 1 before it reads them, as it did before they were listed (`odd/tasks/board-follow-ups-2.md`)
+- [x] Follow-up (Codex, finding 4): a start whose record cannot be appended after claude ran, and whose rollback claude refuses, leaves a durable entry that `sessions stop` and uninstall can act on, not only the commands that remove it (`background/stranded/<id>.json`, `odd/tasks/board-follow-ups-2.md`)
 
 ### F6 Codex parity
 - [x] The eval tasks run on Codex
@@ -443,8 +443,11 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   `f8-s5c-a-coverage` (`odd/tasks/f8-s5c-a-coverage.md`): the sources, spans and register seeded `owed`, `rules
   coverage` with `--strict`, `--prove` (11 checks red) and `--refresh`, the `rules check` refusal, the
   `rule-<id>` arm with its record under `evals/proofs/rules/`, the free check in `tasks.test.mjs`, a project's
-  `control` and `rules coverage`, and 2 new cases. Left: `init`'s baseline line (JH 68, L5), 13 to 23 cases, and
-  the paid runs of its `## Paid runs`, 28 trials, about $15.70 to $18.20, each waiting for his yes.
+  `control` and `rules coverage`, and 2 new cases (PR 638). The paid runs ran 2026-10-28 on his yes, the cap raised
+  to $19 by his answer to question 105: the incident set no worse, `f8-s5c-a-incidents-2` 13 of 20 as S0's
+  baseline; neither new case told its rule apart (both arms scored the same), so both stay owed; $16.23 recorded
+  (L13 to L16). Left: `init`'s baseline line (JH 68, L5), harder premises for the two cases and their reruns, and
+  13 to 23 more cases.
 
 ### S13 The rehearsal on a scratch project
 - **Changes:** nothing new; the whole path of the reverse-engineering document's 11.1 walked on a

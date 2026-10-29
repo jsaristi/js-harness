@@ -2287,7 +2287,7 @@ test('uninstallMain says a task the user edited stays recorded while the remote 
   }
 });
 
-test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai review starts beside them when there are any', async () => {
+test('uninstallMain names the throughput snapshots it keeps, and the review starts an earlier js-harness kept beside them when there are any', async () => {
   const home = makeTmpHome();
   try {
     const folder = path.join(home, '.js-harness', 'throughput');
@@ -2297,11 +2297,11 @@ test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai r
     assert.deepEqual(snapshots.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`]);
     fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
     const starts = await captureConsole(() => uninstallMain(['--global', '--home', home]));
-    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the gentle-ai review starts of 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
+    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the review starts an earlier js-harness recorded for 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
     // A folder that could not be listed is named with what it may hold.
     const listDir = (dir, ...rest) => (path.resolve(dir).startsWith(path.resolve(folder)) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readdirSync(dir, ...rest));
     const unlisted = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { listDir }));
-    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any gentle-ai review starts recorded there; remove the folder by hand to drop them`]);
+    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any review starts an earlier js-harness recorded there; remove the folder by hand to drop them`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
