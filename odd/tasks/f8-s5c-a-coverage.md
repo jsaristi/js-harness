@@ -289,3 +289,13 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   in the register, so `tasks.test.mjs` does not yet hold them. Learning: a case whose grader the model passes or
   fails the same way without the rule's text tests the model's habit, not the directive; T6's two cases need a
   harder premise before another paid run, a later session's work.
+- L15 (2026-10-28, evidence, P4 from `2507ab54`): Claude Code's low-memory reaper stopped the run after 3 of 20 trials
+  (`evals/results/f8-s5c-a-incidents.json`, $1.36; the fourth trial was cut in flight, its partial spend not
+  recorded; no trial process was left after it). The lead said to continue it with the same command; the
+  continuation was refused before it paid, "recorded on another setup ... setup .claude/plugins: sha256 ef252975c64d
+  -> sha256 7a4aa36f5d19" (the real home gained a plugin path, 31 to 32, between the two starts). Only a new run
+  under another name goes on: 20 trials, plan about $10.61, table $11.20 to $13. Spent $5.85; with the table's $13
+  it would be $18.85, over the brief's $18.20 cap, and 31 trials, over the 28 of his yes, so nothing started and the
+  lead was told (a `waiting` notice at 19:13 local). The push asked for reviews of `2507ab54`, since
+  `evals/proofs/**` is not marked `-codex-review`: Codex, "the patch is correct" (0.99, 118,383 input tokens, over
+  the plan's 110,000), and the reliability lens, 0 findings (9,541 input tokens).
