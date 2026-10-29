@@ -54,16 +54,28 @@ function faultsOfEntry(entry, readFile, hooked) {
   const tests = readFile(entry.tests.file);
   if (tests === null) faults.push(`${entry.tests.file}, its tests, is not there`);
   else {
-    const lines = textOf(tests).split(/\r?\n/);
+    const source = textOf(tests);
     for (const title of [entry.tests.golden, entry.tests.refusal]) {
-      const line = lines.find((one) => one.includes(`'${title}'`) || one.includes(`"${title}"`) || one.includes(`\`${title}\``));
-      if (line === undefined) faults.push(`${entry.tests.file} has no test titled "${title}"`);
-      else if (/\.(?:skip|todo)\s*\(|\b(?:skip|todo)\s*:\s*(?!false)/.test(line)) faults.push(`${entry.tests.file} skips its test "${title}"`);
+      const declaration = declarationOf(source, title);
+      if (declaration === null) faults.push(`${entry.tests.file} has no test titled "${title}"`);
+      else if (/^(?:test|it)\s*\.\s*(?:skip|todo)\b|\b(?:skip|todo)\s*:(?!\s*false\b)/.test(declaration)) faults.push(`${entry.tests.file} skips its test "${title}"`);
     }
   }
   const unwatched = surface.tools.filter((tool) => !hooked.has(tool));
   if (unwatched.length > 0) faults.push(`no installed hook watches ${unwatched.join(', ')}, the tool${unwatched.length > 1 ? 's' : ''} of its surface ${surface.name}`);
   return faults;
+}
+
+/** The declaration of the test titled `title` in `source`, from its `test` or `it` call to its body (the first `=>`
+ * or `function` after the title), over as many lines as it takes; `null` when no quoted title is there. A
+ * `test.skip(` before the title and a `{ skip: … }` after it are both inside it. */
+function declarationOf(source, title) {
+  const at = Math.max(...['\'', '"', '`'].map((quote) => source.indexOf(`${quote}${title}${quote}`)));
+  if (at < 0) return null;
+  const opener = [...source.slice(0, at).matchAll(/\b(?:test|it)\s*(?:\.\s*\w+\s*)?\(/g)].at(-1);
+  const rest = source.slice(at + title.length + 2);
+  const body = rest.search(/=>|\bfunction\b/);
+  return source.slice(opener?.index ?? at, at + title.length + 2 + (body < 0 ? 0 : body));
 }
 
 /** The faults of `entries`, each `{ id, fault }`, in the registry's order; none when every template is whole.

@@ -100,8 +100,19 @@ test('a test title missing, or skipped, or a todo, is a fault', () => {
     TESTS.replace("test('template:question golden'", "test.skip('template:question golden'"),
     TESTS.replace("test('template:question golden', ()", "test('template:question golden', { skip: true }, ()"),
     TESTS.replace("test('template:question golden'", "test.todo('template:question golden'"),
+    TESTS.replace("test('template:question golden', ()", "test(\n  'template:question golden',\n  { skip: 'later' },\n  ()"),
+    TESTS.replace("test('template:question golden'", "test.skip(\n  'template:question golden'"),
   ]) {
     assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': skipped }))), ['question: bin/lib/template-question.test.mjs skips its test "template:question golden"']);
+  }
+});
+
+test('a test whose skip or todo option is false runs, so it is no fault', () => {
+  for (const runs of [
+    TESTS.replace("test('template:question golden', ()", "test('template:question golden', { skip: false }, ()"),
+    TESTS.replace("test('template:question golden', ()", "test('template:question golden', { todo:false, timeout: 5 }, ()"),
+  ]) {
+    assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': runs })), []);
   }
 });
 
