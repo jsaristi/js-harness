@@ -57,12 +57,14 @@ export function ruleDigest(ids, sources) {
   return sha(lines.join(''));
 }
 
-/** What the `results` of one run say of the case `name` on the arm `arm`: `{ run, arm, trials, score }` and its cost. */
+/** What the `results` of one run say of the case `name` on the arm `arm`: `{ run, arm, trials, score }` and its cost,
+ * a trial's CLI cost where it has one, else its transcripts' list cost: a trial cut by its timeout printed no result,
+ * so it has no CLI cost, and leaving it out would record a run as cheaper than it was (L40). */
 function armScore(results, name, arm) {
   const trials = (results.trials ?? []).filter((item) => item.task === name && item.config === arm && typeof item.score === 'number');
   if (trials.length < MIN_TRIALS) throw new Error(`${trials.length} trial${trials.length === 1 ? '' : 's'} of ${name} on ${arm} in ${results.name}: a proof takes ${MIN_TRIALS}`);
   const score = trials.reduce((sum, item) => sum + item.score, 0) / trials.length;
-  return { line: { run: results.name, arm, trials: trials.length, score }, costUsd: trials.reduce((sum, item) => sum + (item.costUsd ?? 0), 0) };
+  return { line: { run: results.name, arm, trials: trials.length, score }, costUsd: trials.reduce((sum, item) => sum + (item.costUsd ?? item.listCost?.total?.listCostUsd ?? 0), 0) };
 }
 
 const CLEAN_COMMIT = /^[0-9a-f]{40,64}$/;

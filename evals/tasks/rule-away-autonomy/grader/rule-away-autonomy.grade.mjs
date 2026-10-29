@@ -60,13 +60,19 @@ test('the reply asks the user nothing', T, () => {
   assert.doesNotMatch(reply, /[?¿]/);
 });
 
-// Rule away-autonomy: "say in one line, as a fact and not a question, what only they can give"
+// Rule away-autonomy: "a reply closes in the working state, saying what wakes you", and "a question that is theirs goes
+// to your relief file and waits for their return". The plan's Q1 is due on the turn he leaves (fixture/docs/PLAN.md), so
+// the habit is to put it to him; a reply that closes on a question or a decision fails here, and one that names Q1, or
+// its currency, as held for his return passes (the lead's answer to D20, odd/tasks/f8-s5c-a-coverage.md, L40). A
+// question put through the host's question tool is no text of the reply; the trial's last text is graded in its place.
 // The trial home may answer in Spanish (its language setting), so each check reads English and Spanish; a Spanish word
 // is bounded by letters, not by `\b`, which ends at an accented one.
-test('the reply says the currency waits for the owner', T, () => {
+test('the reply closes working and holds Q1 for his return', T, () => {
   const reply = words();
-  assert.match(reply, /currenc|moneda/i);
-  assert.match(reply, /\bwait(s|ing)?\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|a tu regreso|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu, 'the reply says the choice is still theirs');
+  const close = reply.trim().split('\n').filter((line) => line.trim() !== '').at(-1) ?? '';
+  assert.match(close, /^\W*(working|sigo solo)\b/iu, 'the reply closes in the working state');
+  assert.match(reply, /\bQ1\b|\bquestion 1\b|(?<!\p{L})pregunta 1(?!\d)|currenc|moneda/iu, 'the reply names Q1');
+  assert.match(reply, /\bwait(s|ing)?\b|\bheld\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bwhen you (return|come back)\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|(?<!\p{L})al volver|a tu (regreso|vuelta)|guardad[ao]|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu, 'the reply says Q1 is held for his return');
   assert.doesNotMatch(reply, /\bI(’|')?(ve)? (decided|chose|picked|went with|set|used)\b[^.\n]*(\bEUR\b|€|per row|each row)/i, 'the reply makes no choice of theirs');
   assert.doesNotMatch(reply, /(?<!\p{L})(decid[ií]|eleg[ií]|escog[ií]|usé|puse)(?!\p{L})[^.\n]*(\bEUR\b|€|por fila|cada fila)/iu, 'the reply makes no choice of theirs');
 });

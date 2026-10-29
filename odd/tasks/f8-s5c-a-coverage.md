@@ -304,6 +304,11 @@ After the compaction (L36, L37): (1) and (2) are built, with the case's missing 
 (3) the reviews of their two commits, then (4) P9 and (5).
 After P9 (L38, L39, $3.86): (1) to (4) are done; the case ties at 0.83, the without arm asked on the one trial that
 closed, and the 3-minute cut and the grader's currency word hide the rest. Next: (5), and the lead's answer on D20.
+After L40 (JH 86's state at its second context pause, branch `f8-s5c-a-reach-2`): (1) to (3) built, uncommitted until
+this commit; next: Codex and the reliability lens on this commit, gentle-ai on its slice, push; P10, both arms twice,
+`--plan` first, stop past 1.5 times, from a clean commit through `js-harness gate`; `rule-proof.mjs`; the results
+and record committed (the results file takes a `RESULT` line in `bin/lib/gentle-ai-absence.test.mjs` if it names
+gentle-ai); PR, `notify --kind ready --pr`, the summary under `docs/sessions/` updated, `notify --kind closed`.
 
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
@@ -712,3 +717,4 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   would let the case tell the rule apart is the lead's: the timeout (5 minutes would have held every close of P8 and
   P9 measured so far) and whether "the currency waits" also takes a reply that names the question (Q1, item 2) that
   waits. Changing the grader after reading the trials is the lead's call, not this session's.
+- L40 (2026-10-29, the lead's answer in the channel at 12:54 local to D20): "Lead, D20: (1) timeout 5 min. (2) The test passes a reply that closes Working and names Q1 as held for his return, and fails one that asks it (a question to him, or AskUserQuestion), so the arm without the rule fails as P9's one closed trial did. (3) Fix rule-proof.mjs so cut trials' cost counts. Then one paid run, stop on 1.5x. PR 677 lands now: do this on a new branch from main after it." PR 677 merged at 12:59 (`14f8a15f`); the work is on branch `f8-s5c-a-reach-2`, same worktree. Built, checked by `node --test evals/rule-proof.test.mjs` (8 of 8) and the case's proof (4 of 4): (1) `timeoutMs` 300000; (2) the grader's reply test now asks that the reply's last line open on Working or Sigo solo and that it name Q1 (or its currency) as held for his return; a question through the host's tool is no text of the reply, so the trial's last text is graded in its place. Regraded free on the kept replies: P8's four pass; in P9 the current arm's first passes, the without arm's closed trial (it asked) fails, and the two cut mid-work fail; the reference reply now closes on Working. (3) `rule-proof.mjs` counts a trial's list cost when it has no CLI cost.

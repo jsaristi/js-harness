@@ -74,6 +74,17 @@ test('a record is built from the two runs, the case\'s trials alone, and is curr
   assert.deepEqual(recordFaults(record, { name: 'a-case', rules: ['agents-budget'], digests }), ['the proof of a-case is of questions-one-place, and the case names agents-budget']);
 });
 
+test('a trial cut by its timeout, which has no cost of the CLI, counts at the list cost of its transcripts', () => {
+  // As P9's three cut trials (odd/tasks/f8-s5c-a-coverage.md, L38 and L40): the CLI printed no result, so no costUsd.
+  const cut = (config, score, listCostUsd) => ({ ...trial(config, score, null), error: 'timeout', listCost: { total: { listCostUsd } } });
+  const record = buildRecord({
+    name: 'a-case', rules: [RULE], digests: {}, date: '2026-10-29', commit: COMMIT,
+    current: results('run-current', [cut('current', 1, 1.25), trial('current', 1)]),
+    without: results('run-without', [cut(ARM, 0.5, 0.75), { ...trial(ARM, 0.5, null), listCost: { total: { listCostUsd: null } } }]),
+  });
+  assert.equal(record.costUsd, 2.5, 'the CLI cost where there is one, else the list cost, else nothing');
+});
+
 test('a run short of trials, or a record not in its shape, is refused', () => {
   const short = results('run-current', [trial('current', 1)]);
   assert.throws(() => buildRecord({ name: 'a-case', rules: [RULE], digests: {}, date: '2026-10-29', commit: COMMIT, current: short, without: results('w', [trial(ARM, 0), trial(ARM, 0)]) }), new RegExp(`1 trial of a-case on current in run-current: a proof takes ${MIN_TRIALS}`));
