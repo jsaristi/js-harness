@@ -3231,8 +3231,11 @@ test('the orchestrator skill says what every recap carries and how a block waits
   ]) assert.ok(text.includes(line), line);
   // His additions of 2026-10-28: the stretch shown before he leaves, and checked against its goals when he is back.
   for (const line of [
-    'what only they can give that the stretch will need. Before they leave, open a stretch (`js-harness stretch open --plan <file> --html <file>`) and show its departure in that reply',
+    'what only they can give that the stretch will need. Before they leave, open a stretch (`js-harness stretch open --plan <file> --html <file>`; `js-harness stretch status` exits 1 when none is open) and show its departure in that reply',
     'When they say they are back, before anything else, close it (`js-harness stretch close --html <file>`) and show its return',
+    // His additions of 2026-10-29: the departure leads with how far the stretch moves the migration.
+    'first the migration\'s share now and the share expected at the return, its range beside it',
+    'the shares against the departure\'s forecast',
     'The chat\'s visual tool takes the file\'s HTML whole; where the host has none, publish the file as an Artifact and give the link.',
   ]) assert.ok(text.includes(line), line);
   assert.ok(text.includes('ask before anything it does not name; while the user is away it waits instead, as `rule:away-autonomy` says.'));
