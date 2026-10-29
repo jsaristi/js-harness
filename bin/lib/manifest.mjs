@@ -677,10 +677,10 @@ function isEmptyContainer(value) {
   return value !== null && typeof value === 'object' && Object.keys(value).length === 0;
 }
 
-/** Installs every entry component, carrying forward `createdFile` from a previous manifest record
- * for the same target file (matched by path) rather than recomputing it from "does the file exist
- * right now" — a file js-harness created on the first install still existed for every later
- * install/sync call, but js-harness must still remember it made it, so uninstall can delete it.
+/** Installs every entry component, carrying forward `createdFile` from a previous manifest record for the same target
+ * file (matched by path) rather than recomputing it from "does the file exist right now" — a file js-harness created on
+ * the first install still existed for every later install/sync call, but js-harness must still remember it made it, so
+ * uninstall can delete it. `write` false walks the same way and writes nothing, for the records install writes first.
  *
  * Two components can graft an entry on the same file (the doctor's hook and the resume hook), and who
  * created the file is a fact of the file, not of the entry: the second entry of a first install finds the
@@ -1106,8 +1106,10 @@ export function install(home, version, deps = {}) {
     const record = writeComponent(target, component.content(version), previous?.files?.find((f) => f.path === target), writeFile);
     if (record) files.push(record);
   }
-  // Recorded before written, by the same walk with no write: a run stopped in between leaves them ours to undo (JH 81's verifier).
-  writeManifest(home, { ...previous, version: previous?.version ?? null, files, entries: installEntries(home, previous, missingBefore, deps.codexConfig, false) });
+  // Recorded before written, by the same walk with no write, beside the earlier records, whose entries (an older form) may still be there:
+  // a run stopped in between leaves both ours to undo (JH 81's verifier; Codex on 8c45db8..c70aa5a).
+  const planned = installEntries(home, previous, missingBefore, deps.codexConfig, false);
+  writeManifest(home, { ...previous, version: previous?.version ?? null, files, entries: [...planned, ...(previous?.entries ?? []).filter((e) => !planned.some((p) => p.path === e.path && deepEqual(p.pointer, e.pointer) && deepEqual(p.entry, e.entry)))] });
   const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
@@ -1129,11 +1131,10 @@ export function sync(home, version, deps = {}) {
   const manifest = install(home, version, deps);
 
   if (previous) {
-    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only
-    // when its component is no longer *declared* at all — compared against `components`' own
-    // current targets, not against this run's successful writes — so a component that is still
-    // declared but merely failed to (re)write this run (carried forward above with `skipped: true`)
-    // is never treated as "no longer shipped" and deleted.
+    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only when its component is
+    // no longer *declared* at all — compared against `components`' own current targets, not against this run's
+    // successful writes — so a component that is still declared but merely failed to (re)write this run (carried
+    // forward above with `skipped: true`) is never treated as "no longer shipped" and deleted.
     // A file no longer shipped is removed only while its bytes are the ones recorded, as `uninstall` does: one the
     // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
     // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
@@ -1417,11 +1418,10 @@ function uninstallInstalled(home, deps) {
  * when it ends. A holder that stopped beating a minute ago is no live gate. One that started in the
  * instant between this look and the removal loses its lock, and its own report says so.
  *
- * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
- * `code`. The two are one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a
- * folder that was looked at and then not removed holds no live gate, and of one that could not be looked
- * at nobody knows. So the answer also has `unseen: true` for that second one, the folder itself or the
- * gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
+ * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's `code`. The two are
+ * one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a folder that was looked at and then not
+ * removed holds no live gate, and of one that could not be looked at nobody knows. So the answer also has `unseen: true`
+ * for that second one, the folder itself or the gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
 function removeGateFolder(home, removeFile, statFile) {
   const dir = gateDir(home);
   const unremovable = (err) => ({ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' });

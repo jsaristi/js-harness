@@ -1786,6 +1786,43 @@ test('an install that stops before its manifest is written leaves its entries re
   }
 });
 
+// Codex on 8c45db8..c70aa5a: an update that stops after it records the new form and before it writes it still has the
+// older form in the host file, so the record of that older form is kept beside the new one until the final manifest.
+test('an update that stops after recording its entries and before writing them keeps the record of the older form it would replace', () => {
+  const home = makeTmpHome();
+  const rename = fs.renameSync;
+  try {
+    const target = guardHook.target(home);
+    const theirs = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo their-own-pre-tool-use', timeout: 5 }] };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [theirs] } }, null, 2)}\n`, 'utf8');
+    const olderEntry = { ...guardHook.entry(), matcher: 'Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash' };
+    const older = install(home, '0.1.0');
+    const data = readJson(target);
+    data.hooks.PreToolUse = data.hooks.PreToolUse.map((entry) => (deepEqualJson(entry, guardHook.entry()) ? olderEntry : entry));
+    fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    const olderRecords = older.entries.map((record) => (record.path === target && deepEqualJson(record.entry, guardHook.entry())
+      ? { ...record, entry: olderEntry, sha256: sha256(JSON.stringify(olderEntry)) } : record));
+    fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: olderRecords }, null, 2), 'utf8');
+
+    // The record written before the entries lands, and the run stops there.
+    fs.renameSync = (from, to) => {
+      const first = path.resolve(to) === path.resolve(manifestPath(home)) && JSON.parse(fs.readFileSync(from, 'utf8')).version === '0.1.0';
+      rename(from, to);
+      if (first) throw new Error('stopped');
+    };
+    assert.throws(() => install(home, '0.2.0'), /stopped/);
+    fs.renameSync = rename;
+    assert.ok(readJson(target).hooks.PreToolUse.some((entry) => deepEqualJson(entry, olderEntry)), 'the older form is still there');
+
+    uninstall(home);
+    assert.deepEqual(readJson(target), { hooks: { PreToolUse: [theirs] } }, 'only the user\'s own entry is left');
+  } finally {
+    fs.renameSync = rename;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('sync leaves an entry recorded as the user\'s when the release no longer ships it', () => {
   const home = makeTmpHome();
   try {
