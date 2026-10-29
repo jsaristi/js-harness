@@ -132,7 +132,7 @@ ones planned (L14).
 | P1 current arm of the two new cases | `node evals/suite.mjs --claude C:/Users/Oficina/.local/bin/claude.exe --configs current --efforts high --repeats 2 --tasks rule-reuse-first,rule-away-autonomy --permission-mode bypassPermissions --work-root D:/js-harness-evals-work --name f8-s5c-a-rules-current` | 4 | $2.24 to $2.60 | $2.36 |
 | P2 without reuse-first | the same with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first` | 2 | $1.12 to $1.30 | $0.94 |
 | P3 without away-autonomy | the same with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy` | 2 | $1.12 to $1.30 | $1.19 |
-| P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents`, then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents` | 20 | about $13 | |
+| P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents-2` (L15, L16), then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents-2` | 20 | about $13 | $10.38, and $1.36 for the 3 trials of the stopped first run |
 
 In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
 record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
@@ -142,14 +142,10 @@ record; a case its record does not prove stays owed. Each `--plan` first prints 
 write, on both arms twice, are about $30 to $60 more, when a later session writes them.
 
 ## Next step
-T1-T7 are committed (`9890615e` to `62f4a623`); the lenses' findings are fixed by `f39c41a4` (L6) and Codex's
-seven by `f9c10579` (L7), what their recheck left by `d0954123` (L8), and Codex's last finding by the commit after
-it (`37cdab21`, L9). Codex covers every code commit and left nothing open; the lenses cover all but
-`f9c10579..37cdab21`, a recorded skip (three runs cut short, and the one rerun after PR 639 refused again, L11).
-PR 638 is open. Next (L12): JH 76's fix of `lens-review` (structured output, English) and the lead's note that the
-copy is refreshed, then one lens run over `f9c10579..HEAD`; then
-`js-harness notify --to orchestrator --kind ready --pr 638`, then `closed` with
-`docs/sessions/2026-10-28-jh-73-f8-s5c-a-directive-coverage.md`.
+The mechanism landed with PR 638. The paid runs are done (L13 to L16, JH 78, branch `f8-s5c-a-paid`): $16.23
+recorded of the $19 cap; the incident set is no worse (13 of 20, as S0), and neither new case tells its rule
+apart, so both stay owed. Left for a later session: harder premises for `rule-reuse-first` and
+`rule-away-autonomy` and their reruns, the 13 to 23 cases T6 did not write, and `init`'s baseline line (JH 68, L5).
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -299,3 +295,16 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   lead was told (a `waiting` notice at 19:13 local). The push asked for reviews of `2507ab54`, since
   `evals/proofs/**` is not marked `-codex-review`: Codex, "the patch is correct" (0.99, 118,383 input tokens, over
   the plan's 110,000), and the reliability lens, 0 findings (9,541 input tokens).
+- L16 (2026-10-29, his answer to question 105, verified in the lead's transcript `0f71b2c6`, line 13125, as the
+  channel record keeps it): "cuando me dices ese gasto es dentro de nuestra misma suscripcion cierto? si es asi,
+  aprobado y hazlo", to a fresh P4 with the total cap raised to $19. The condition holds: a trial logs in with
+  `CLAUDE_CODE_OAUTH_TOKEN` from his `claude setup-token` (`evals/suite.mjs:716`), an `ANTHROPIC_*` variable is not
+  used (`evals/suite.mjs:897`), and none is set. The fresh run `f8-s5c-a-incidents-2` started once, was stopped in
+  its first trial at the lead's hold while a land ran its local suite (0 recorded, that trial's partial spend not),
+  and ran whole after the lead's "land done", from `384e4781`: 20 trials, $10.38 against the plan's $10.22 and the
+  table's $11.20 to $13. `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents-2`: "13 of 20; false
+  premise 2 of 4" for both, "L 13, s 0: a step is worse below 10": the incident set is no worse, S5c-a's pass line.
+  Case 03 went 2 to 1 and case 10 went 1 to 2; 01, 02 and 05 fail every trial, as at S0 and S10. Recorded spend of the
+  four runs, $16.23 of $19; two trials cut in flight are not in it. Learning for the estimates: a trial cost $0.46 to
+  $0.69 on the two rule cases ($0.56 on average) and $0.52 on average on the incident cases, at or under the low end
+  of 14.4's $0.56 to $0.65; the plan's estimate from recorded runs ($10.22) was within 2% of the real cost, the table's ($13) 25% high.
