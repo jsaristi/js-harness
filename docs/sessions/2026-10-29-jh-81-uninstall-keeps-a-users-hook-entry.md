@@ -19,9 +19,11 @@ downgrades still undo exactly. Pick the smallest shape and say why." No message 
   skipped, unless the earlier record of the same file, pointer and entry says install wrote it (has no
   `createdEntry: false`). `uninstall` neither removes such an entry nor moves or drops its Codex trust; `sync` never
   prunes one.
-- `bin/lib/manifest.test.mjs`: five tests. The Claude and Codex cases come back byte for byte (the Codex one with its
+- `bin/lib/manifest.test.mjs`: six tests. The Claude and Codex cases come back byte for byte (the Codex one with its
   `config.toml` trust too); a reinstall keeps the flag; an entry install wrote stays ours; an entry a first, skipped
-  install never wrote is the user's once the file reads; `sync` leaves a flagged entry the release no longer ships.
+  install never wrote is the user's once the file reads; `sync` leaves a flagged entry the release no longer ships;
+  the user's entry stays theirs when install takes an older form of ours out beside it (added after the verifier
+  showed that branch untested).
 - `docs/ROADMAP.md`: the S1 records fix is done as PR 630 (merged 2026-10-28), its probe run on main; one line for
   this fix under S10.
 - `docs/FAILURES.md`: entry `uninstall-took-user-entry`.
@@ -47,7 +49,11 @@ downgrades still undo exactly. Pick the smallest shape and say why." No message 
   entry out again. That is the old defect, and omission would not avoid it either. Every entry of ours is still undone
   either way.
 - **A lost manifest:** if the manifest is deleted and install runs again, our own entries read as the user's and
-  uninstall leaves them. Leaving an entry behind is the safer mistake.
+  uninstall leaves them. Leaving an entry behind is the safer mistake. The verifier showed the same for an install
+  that fails after it writes the entries and before it writes the manifest (`install` in `bin/lib/manifest.mjs`):
+  the next install takes our entries for the user's, and uninstall leaves live hooks of a removed tool. On base the
+  same case was not exact either (entries out, empty lists left). Closing it means recording the entries before
+  writing them, a change to the order of `install`; it is a follow-up for the lead.
 
 ## Evidence
 - Before the fix (`bin/lib/manifest.mjs` of `4b1a7b71` put back for one run): the four tests of the user's entry
@@ -55,7 +61,17 @@ downgrades still undo exactly. Pick the smallest shape and say why." No message 
   the record of the lists it made there" passed, as they must. A scratch-home probe seeded with our own Claude and
   Codex SessionStart entries left `"SessionStart": []` in both after install, install and uninstall.
 - After the fix: all six pass, and the same probe prints "same bytes" for both files.
+- Reviews of `4b1a7b71..57990b30`: Codex, correct (0.9; 134,522 input tokens); lenses risk, resilience and
+  reliability, complete with no finding (42,650 input tokens). Independent verifier: no blocker; four findings, the
+  two follow-ups below, the untested branch (test added, which fails with the verifier's mutation M7 and passes with
+  the fix), and install's "already registered" line on the path that also takes older forms out, left as it is: the
+  entry was already registered.
 
 ## Follow-ups
-Nothing. A skipped record does not lose its trust either: `entryPlaces` (`bin/lib/codex-trust.mjs:204`) already
-leaves skipped records out.
+- An install that fails between writing the entries and writing the manifest strands our entries after uninstall
+  (above). Recording them before writing them would close it.
+- A user entry equal to an older form of ours is taken out by the stale-form cleanup (`isOlderOwnEntry`) on an
+  upgrade, even once it is recorded `createdEntry: false`; base did the same. Keeping it would leave the hook running
+  twice beside our new form, so it is a choice, not a plain fix.
+- A skipped record does not lose its Codex trust: `entryPlaces` (`bin/lib/codex-trust.mjs:204`) already leaves
+  skipped records out. Nothing to do.
