@@ -77,6 +77,9 @@ words already decide the feature ("te apruebo las ideas que me diste para que lo
    al tablero al inicio antes de \"lo que te toca\"" (transcript 0f71b2c6, line 13589, 2026-10-29T01:28:44Z, checked
    with `js-harness sessions --quote`; "ese artefacto" is the lead's inline status list of 01:05Z, as the lead's
    message of ~01:31Z describes it).
+7. Each session's card says who works on what and the approximate time of its task: "colocame en el tablero de quien
+   trabaja y en que y el tiempo aproximado de la tarea" (transcript 0f71b2c6, line 14289, 2026-10-29T02:16:52Z,
+   checked with `js-harness sessions --quote`; sent by the lead at 02:17Z).
 
 ## Design
 
@@ -239,6 +242,15 @@ hourglass shapes), the title in bold, the sentence under it; green for done, amb
 (the page's `ok`, `wait` and `run` tokens), and a muted legend "Verde: hecho · Ámbar: en curso · Azul: esperando".
 An item of another state or with no title is left out (`statusItems`); with none, the block hides.
 
+### The time of each session's task (spec 7)
+Each card of a session still at work ("Quién trabaja y en qué") keeps its last notice, which says what it is on, and
+adds one line, "Lleva 1 h 20 min en esto · estimado 1,5–2 h" (`taskTimeText`): how long it has been on its task,
+counted from its newest `opened` row on the board, else from its oldest row the board holds, said as such; and the
+task's estimate, from `board/summary.estimates` (`[{ session: 'JH 79', horas: [low, high] }]`, the lead's, filled
+on each wake), else from the open stretch item whose `session` is the card's (its corrected hours), else "sin
+estimado". A session is named by its code and number, so "JH 7" is not "JH 79". An estimate that is not two numbers
+is none; no number is made up.
+
 ### Shipping to every project (spec 2)
 The commands are the harness's, so every project that installs it has them. `init`'s `CLAUDE.md` block
 (`claudeBlock`, `bin/lib/project.mjs`) gains one line naming the moments and the pages, so a project's sessions
@@ -272,6 +284,7 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
 - [x] T5 (kind: build) the start row and the running work on the board. Spec 4. Route: inline. Slice B.
 - [x] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline. Slice B.
 - [x] T5c (kind: build) the lead's status list as colored cards at the top of the live board. Spec 6. Route: inline. Slice B.
+- [x] T5d (kind: build) each session card's time on its task and its estimate. Spec 7. Route: inline. Slice B.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
@@ -336,6 +349,8 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   review-7c6f3a36e3078389): approved, two warnings and a suggestion, all taken in: the running line past its `until`
   read as live with a growing "desde hace"; the test did not prove the start row is stamped before claude ran (the
   fake now records when it ran); the warning's send steps did not name the Spanish fields of a row.
+- L9. 2026-10-29, spec 7 from the lead (his line 14289, checked): each card's time on its task and its estimate, in
+  slice B (T5d), on `feat/visual-pages-board`; the estimate's lead field is `board/summary.estimates`.
 
 ## Next step
 State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch

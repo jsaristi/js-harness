@@ -249,6 +249,31 @@ test('the board page says what ran on the machine at the check, and that it coul
   assert.equal(runningText({ at, items: [] }, within), 'Nada corría en la máquina a las 01:00 (lectura vieja)', 'a reading with no until holds nothing');
 });
 
+// odd/tasks/visual-pages.md, spec 7: each session's card says how long it has been on its task and about how long the
+// task takes, from the lead's estimate or the stretch's corrected hours, and says so when there is none.
+test('the board page says how long a session has been on its task and its estimate, or that it has none', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const span = page.match(/function span\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  const hours = page.match(/function hoursText\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  const source = page.match(/function taskTimeText\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(span && hours && source, 'the page defines span, hoursText and taskTimeText');
+  const taskTimeText = new Function(`${span}\n${hours}\n${source}; return taskTimeText;`)();
+  const now = Date.parse('2026-10-29T03:00:00.000Z');
+  const row = (time, kind, session = 'JH 79 · Visual pages') => ({ time, kind, session });
+  const rows = [
+    row('2026-10-29T00:30:00.000Z', 'opened'),
+    row('2026-10-29T01:40:00.000Z', 'opened'),
+    row('2026-10-29T02:30:00.000Z', 'note'),
+    row('2026-10-29T02:50:00.000Z', 'opened', 'JH 80 · otra'),
+  ];
+  assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', null, now), 'Lleva 1 h 20 min en esto · sin estimado');
+  const lead = { estimates: [{ session: 'JH 79', horas: [1.5, 2] }], stretch: { items: [{ session: 'JH 79', corrected: [3, 4] }] } };
+  assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', lead, now), 'Lleva 1 h 20 min en esto · estimado 1,5–2 h', 'the lead\'s estimate first');
+  assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { stretch: lead.stretch }, now), 'Lleva 1 h 20 min en esto · estimado 3–4 h', 'else the stretch item\'s corrected hours');
+  assert.equal(taskTimeText([row('2026-10-29T02:35:00.000Z', 'note')], 'JH 79 · Visual pages', { estimates: [{ session: 'JH 7', horas: [1, 1] }] }, now), 'Lleva 25 min en esto (desde su primer aviso visible) · sin estimado', 'JH 7 is not JH 79, and with no opened row the count starts at its first');
+  assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH 79', horas: ['x'] }] }, now), 'Lleva 1 h 20 min en esto · sin estimado', 'an estimate it cannot read is none');
+});
+
 // odd/tasks/visual-pages.md, spec 6: the lead's status list, one colored card an item, before what is the user's.
 test('the board page keeps the status items it can draw and shows them before what is the user\'s', () => {
   const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');

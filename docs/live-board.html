@@ -164,7 +164,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
       <li><b>Cómo va</b>: el resumen que deja el orquestador cada vez que despierta, una tarjeta por cosa: verde lo hecho, ámbar lo que está en curso y azul lo que espera.</li>
       <li><b>Lo último que se hizo</b>: las tres últimas cosas terminadas (una sesión que terminó o un PR listo), con hace cuánto, para ubicarte de un vistazo.</li>
       <li><b>Lo que te toca</b>: lo único que espera por ti. Si está vacío, no tienes nada pendiente.</li>
-      <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
+      <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso, cuánto lleva en su tarea y su estimado. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
       <li><b>Línea de tiempo</b>: los últimos 40 avisos, el más nuevo primero. Sirve para ver qué pasó mientras no mirabas.</li>
       <li><b>Dónde vamos</b>: los pasos del plan y el avance del roadmap. Lo actualiza el orquestador.</li>
     </ul>
@@ -194,8 +194,9 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
     </ul>
   </div>
   <div class="card">
-    <h3>El tiempo estimado y el real <span class="tag">propuesto</span></h3>
-    <p class="small">Al empezar una tarea, la sesión anota cuánto cree que tardará. La tarjeta muestra las dos cifras, por ejemplo “estimado 40 min · lleva 55 min”. Si lo real pasa lo estimado, la tarea queda <b>atrasada</b> y la sesión debe escribir por qué en su siguiente aviso.</p>
+    <h3>El tiempo estimado y el real</h3>
+    <p class="small">Cada tarjeta dice cuánto lleva la sesión en su tarea, contado desde que empezó, y cuánto se estimó, por ejemplo “Lleva 1 h 20 min en esto · estimado 1,5–2 h”. El estimado lo anota el orquestador o sale del plan de la tanda en curso; si no hay ninguno, dice “sin estimado”, nunca una cifra inventada.</p>
+    <p class="small">Que una tarea que pasa su estimado quede <b>atrasada</b> y la sesión escriba por qué en su siguiente aviso sigue siendo una propuesta.<span class="tag">propuesto</span></p>
   </div>
   <div class="card">
     <h3>Qué hacer si ves algo atrasado o quieto</h3>
@@ -270,12 +271,44 @@ const stateOf = (row) => {
   return state === 'working' && Date.now() - Date.parse(row.time) > QUIET_MS ? 'quiet' : state;
 };
 
+/** A length of time in Spanish: "25 min", "1 h 20 min", "3 h". */
+function span(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ''}`;
+}
+/** An estimate `[low, high]` in hours as "1,5–2 h", or `null` when it is not two numbers. */
+function hoursText(range) {
+  const [low, high] = Array.isArray(range) ? range.map(Number) : [];
+  if (!(Number.isFinite(low) && Number.isFinite(high) && low >= 0 && high >= low)) return null;
+  const one = (n) => String(n).replace('.', ',');
+  return low === high ? `${one(low)} h` : `${one(low)}–${one(high)} h`;
+}
+// His words of 2026-10-29: who works on what, and the approximate time of the task. How long the session has been on
+// it counts from its newest `opened` row (else its oldest row the board holds); the estimate is the lead's
+// (`board/summary.estimates`, `[{ session, horas: [low, high] }]`), else its stretch item's corrected hours, else none.
+function taskTimeText(rows, session, summary, now) {
+  const own = rows.filter((row) => row.session === session && Number.isFinite(Date.parse(row.time)));
+  const opened = own.filter((row) => row.kind === 'opened').sort((a, b) => Date.parse(b.time) - Date.parse(a.time))[0];
+  const first = own.sort((a, b) => Date.parse(a.time) - Date.parse(b.time))[0];
+  const start = opened ?? first;
+  if (start === undefined) return null;
+  const mine = (named) => typeof named === 'string' && named !== '' && (session === named || session.startsWith(`${named} `));
+  const lead = (Array.isArray(summary?.estimates) ? summary.estimates : []).find((one) => mine(one?.session));
+  const item = (Array.isArray(summary?.stretch?.items) ? summary.stretch.items : []).find((one) => mine(one?.session));
+  const estimate = hoursText(lead?.horas) ?? hoursText(item?.corrected);
+  return `Lleva ${span(now - Date.parse(start.time))} en esto${opened ? '' : ' (desde su primer aviso visible)'} · ${estimate ? `estimado ${estimate}` : 'sin estimado'}`;
+}
+
 function card(latest, count) {
   const state = stateOf(latest);
   const box = el('div', `card${state === 'working' ? ' now' : state === 'asking' ? ' ask' : state === 'quiet' ? ' quiet' : ''}`);
   const head = el('div', 'head');
   head.append(el('h3', '', label(latest)), el('span', `pill s-${state}`, STATE[state]));
   box.append(head, el('p', 'small', words(latest)), ...original(latest));
+  const time = ['closed', 'relieved', 'ready'].includes(state) ? null : taskTimeText(rows, latest.session, summary, Date.now());
+  if (time) box.append(el('p', 'small muted', time));
   box.append(el('p', 'foot', `${clock(latest.time)} · ${ago(latest.time)} · ${count} ${count === 1 ? 'aviso' : 'avisos'}`));
   return box;
 }
