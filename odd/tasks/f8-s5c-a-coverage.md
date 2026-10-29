@@ -99,6 +99,11 @@ mechanism here, before S13 rehearses it and S12 ships it.
   `task-proof` and owed in the register until its paid run; the other 13 to 23 are a later session's
 - [x] T7 (kind: docs) the paid runs as ready commands, the ROADMAP line, the ready notice — S8; inline (the ready
   notice goes with the pull request, after the reviews)
+- [ ] T8 (kind: build) harder premises for `rule-reuse-first` and `rule-away-autonomy` (L18, L19: D8, D9), proven
+  by `task-proof`, and their paid reruns P5 and P6 — S4; inline; JH 82, branch `f8-s5c-a-cases`
+- [ ] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
+  rule apart (D10) — S4; inline
+- [ ] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline
 
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
@@ -137,7 +142,15 @@ ones planned (L14).
 | P3 without away-autonomy | the same with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy` | 2 | $1.12 to $1.30 | $1.19 |
 | P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents-2` (L15, L16), then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents-2` | 20 | about $13 | $10.38, and $1.36 for the 3 trials of the stopped first run |
 
-In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
+JH 82's runs (L17), from one clean commit of `f8-s5c-a-cases`, each read with `--plan` first; the estimate is the
+plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
+
+| Run | Command | Trials | Estimate | Real |
+|---|---|---|---|---|
+| P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | $1.84 to $2.76 | |
+| P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | $1.84 to $2.76, more if the lead's skill makes a trial longer | |
+
+In all for P1 to P4, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
 record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
 evals/results/f8-s5c-a-rules-current.json evals/results/f8-s5c-a-rules-current.json` (and the same for
 `rule-away-autonomy`), then drop a proven case from the register's `cases` so `evals/tasks.test.mjs` holds its
@@ -311,3 +324,40 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   four runs, $16.23 of $19; two trials cut in flight are not in it. Learning for the estimates: a trial cost $0.46 to
   $0.69 on the two rule cases ($0.56 on average) and $0.52 on average on the incident cases, at or under the low end
   of 14.4's $0.56 to $0.65; the plan's estimate from recorded runs ($10.22) was within 2% of the real cost, the table's ($13) 25% high.
+- L17 (2026-10-29, JH 82's brief `briefs/2026-10-29T10-39-55-204Z-febcb4bc.md`, branch `f8-s5c-a-cases`): harder
+  premises for the two cases and their reruns, more of the cases T6 did not write, and `init`'s baseline line if it
+  is not on main. His yes, checked with `js-harness sessions --quote 0f71b2c6-cbce-43ca-a031-276a4b2c381f 19557`
+  (2026-10-29T10:37:58Z, question 110, tapped): "Sí, hasta 130 USD (Recomendada)". Then, at line 19692
+  (10:40:13Z, sent by him, checked the same way): "No le coloques tope usa el uso que necesites estamos en
+  suscripcion max x20", relayed by the lead at 05:40 local: no total cap; each run's `--plan` is read first, its real
+  cost written beside its estimate, and a run that alone costs more than 1.5 times its estimate stops the stretch
+  and goes to the lead.
+- L18 (2026-10-29, evidence, why P2 and P3 could not tell their rules apart): every span tied to `reuse-first` or
+  `away-autonomy` in the home lives in a skill, the protocols skill and the orchestrator skill (`js-harness rules
+  coverage --json`, the `tied` spans by source; `reuse-first`'s third span is in this repository's `AGENTS.md`,
+  which no trial loads). A skill's text reaches the model only when it loads the skill, and neither old prompt
+  named its trigger: a CSV fix asks for no lead, and the orchestrator skill is for one ("Use when asked to lead,
+  orchestrate or supervise"). Without the skill loaded, the two arms run the same texts, so they score the same.
+  And `rule-reuse-first`'s helper was imported by both neighbours of the new file, so copying them passed the
+  rule's tests by habit. Which tests failed in P3 (3 of 5 on both arms) is not known: the runs' raw logs went with
+  the `f8-s5c-a-paid` worktree. The finding reaches every case of a rule: of the 26 rules with tied spans, all but
+  `context-pause`, `questions-one-place`, `double-review` and `wording-is-the-need` (which `init`'s texts carry
+  too, and the arm does not cut) are tied only in the two skills, so a case's prompt must hit its skill's trigger.
+- L19 (2026-10-29, decisions, within the brief): D8, `rule-reuse-first` v2: the helper is `src/lib/slug.mjs`, used
+  only by `scripts/sitemap.mjs`, not listed in the README, and it keeps the accents; the two neighbours of the new
+  file write their own slug inline. Copying them is the habit and fails three tests; the rule's search finds the
+  helper, and its "amend that one" adds the accents there (7 tests; `task-proof`: fixture 1, reference 7, empty 0).
+  D9, `rule-away-autonomy` v2: the prompt is a lead's ("You lead this project's sessions"), so the orchestrator
+  skill's trigger holds; it says no other session is open or needed, so no trial starts one; `docs/PLAN.md` holds a
+  decided item (the zero rows) and an open product choice, the owner's (a currency column), which the workspace's
+  `CLAUDE.md` from `init` keeps theirs. Asking about it or choosing it is the habit; the rule holds it with no
+  question and says it as a fact (6 tests; fixture 2, reference 6, empty 0). The README test of v1 left, since it
+  tested no sentence of the rule. D10: no new case is written until the two v2 runs show whether a premise built on
+  its skill's trigger tells a rule apart; otherwise 13 to 23 cases built the old way would cost $30 to $60 to learn
+  what L18 already says.
+- L20 (2026-10-29, the lead's decision in the channel at 06:10 local, answering this session's note that `init`'s
+  line needs `bin/lib/project.mjs`, at its 2,034-line ceiling): "L5 init baseline line: yours, after P5/P6 are
+  running or done (never in the same commit as case work). Surface widened to bin/lib/project.mjs, one new bin/lib
+  module for the code you move out to get under its ceiling (say why that code, in the commit), and their tests. It
+  touches the installer, so it is high risk: one independent verifier after its own checks, plus Codex and the
+  lenses. Separate slice/PR from the cases if that keeps each under 400 lines."

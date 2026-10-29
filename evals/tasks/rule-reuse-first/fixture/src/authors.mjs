@@ -1,6 +1,5 @@
-import { slugify } from './text.mjs';
-
-/** The path of an author's page, by the author's name. */
+/** The path of an author's page: the author's name in lower case, every run of other characters one dash. */
 export function authorPath(author) {
-  return `/authors/${slugify(author.name)}`;
+  const name = author.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `/authors/${name}`;
 }

@@ -9,8 +9,8 @@
   },
   "timeoutMs": 900000,
   "proof": {
-    "total": 5,
-    "fixturePassed": 1
+    "total": 6,
+    "fixturePassed": 2
   },
   "rules": [
     "away-autonomy"

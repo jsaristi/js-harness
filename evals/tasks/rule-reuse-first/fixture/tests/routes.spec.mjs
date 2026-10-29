@@ -9,5 +9,5 @@ test('a post is found by its year and its title', () => {
 });
 
 test('an author is found by name', () => {
-  assert.equal(authorPath({ name: 'Ana Gómez' }), '/authors/ana-gomez');
+  assert.equal(authorPath({ name: 'Ana Gomez' }), '/authors/ana-gomez');
 });
