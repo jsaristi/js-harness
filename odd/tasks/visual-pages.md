@@ -296,7 +296,11 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
   head is not past. The first pull request of a stack, landed alone after a review over the stack, passes the queue
   and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
-- [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
+- [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
+  phase` in the slice C commit "feat(report): the phase page".
+- [ ] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
+  seam its tests stub; the departure carries the map and the timeline; the plan's titles as written. Spec 8. Route:
+  inline. The seam and `report phase`'s call in the same commit.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
 - [ ] T9 (kind: verify) the four pages from the real records, published; reviews on each slice. Route: inline.
