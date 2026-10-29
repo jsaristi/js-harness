@@ -3,7 +3,9 @@
 // lead's plan, records it and prints the departure: what will run, its hours as written and as the last stretches
 // correct them, and whether the queued work fills the stretch. `bind` names the session a queued item got. `status`
 // measures the open stretch now, and with --goals runs its goals; `close` runs them, measures and records the stretch
-// closed, which is what the next estimates learn from. The record is one JSON line an event under the throughput
+// closed, which is what the next estimates learn from. `explain` records, with the commit or notice that says it, why
+// a goal or an item was left undone and how it is fixed; `show` gives a closed stretch's return again. The record is
+// one JSON line an event under the throughput
 // folder, which `uninstall` keeps. `--html` writes the view as the fragment the lead shows in the chat.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -15,13 +17,14 @@ import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { appendPage, pagesFile } from './lib/pages-record.mjs';
-import { headBefore, momentAt, pullRequestsOf, readRef } from './lib/report-git.mjs';
+import { gitRead, headBefore, momentAt, pullRequestsOf, readRef } from './lib/report-git.mjs';
 import { compareMaps, comparePlans } from './lib/report-pages.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, scaled, sessionTrail, stretchLost } from './lib/stretch.mjs';
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
 import { renderDeparture, renderReturn } from './lib/stretch-render.mjs';
+import { problemsOf } from './lib/stretch-why.mjs';
 import { codexFacts, landFacts } from './lib/throughput.mjs';
 import { readLandRecord, readRecordLines } from './throughput.mjs';
 
@@ -39,6 +42,9 @@ export const USAGE = [
   '       js-harness stretch bind <item> <session>',
   '       js-harness stretch status [--goals] [--json] [--html <file>]',
   '       js-harness stretch close [--json] [--html <file>]',
+  '       js-harness stretch explain <goal or item> --source <commit:hash|notice:at> [--why <text>] [--fix <text>]',
+  '                                  [--fixed | --open <text>] [--stretch <id>]',
+  '       js-harness stretch show [--stretch <id>] [--json] [--html <file>]',
   '       (each also takes --cwd <path> and --home <path>)',
   '  A stretch is the work run while the user is away, or any stretch the lead plans. Its record is',
   '    <home>/.js-harness/throughput/<project>/stretches.jsonl, one line an event, which uninstall keeps.',
@@ -56,14 +62,36 @@ export const USAGE = [
   '    time in the main checkout, and records the result. Exit 1 with no stretch open.',
   '  close: runs the goals, measures and records the stretch closed, and prints the return. Exit 0 whether or not',
   '    the goals were met; exit 1 with no stretch open.',
+  '  explain: records why a goal or an item of the stretch was left undone, how it was or can be fixed (--fixed when it',
+  '    was), or why it is not (--open), with its source: commit:<hash> git knows, or notice:<at> of the channel. The',
+  '    return shows it beside the goal or item, over what the records say alone. It explains the open stretch, else the',
+  '    last closed one, or the one --stretch <id> names. Exit 1 for an unknown target or a source no record holds.',
+  '  show: the return of the last closed stretch, or of --stretch <id>, measured again at its close from its records.',
+  '    It runs no goal and records nothing. Exit 1 with no closed stretch, or for an open one (use status).',
   '  --json prints the view as JSON; --html <file> writes it as the HTML fragment the lead shows in the chat.',
 ].join('\n');
 
 class StretchArgError extends Error {}
 
-const VERBS = new Set(['open', 'bind', 'status', 'close']);
-const VALUED = { '--plan': 'plan', '--html': 'html', '--cwd': 'cwd', '--home': 'home' };
-const ALLOWED = { open: ['plan', 'json', 'html'], bind: [], status: ['goals', 'json', 'html'], close: ['json', 'html'] };
+const VERBS = new Set(['open', 'bind', 'status', 'close', 'explain', 'show']);
+const VALUED = { '--plan': 'plan', '--html': 'html', '--cwd': 'cwd', '--home': 'home', '--source': 'source', '--why': 'why', '--fix': 'fix', '--open': 'open', '--stretch': 'stretch' };
+const ALLOWED = {
+  open: ['plan', 'json', 'html'],
+  bind: [],
+  status: ['goals', 'json', 'html'],
+  close: ['json', 'html'],
+  explain: ['source', 'why', 'fix', 'fixed', 'open', 'stretch'],
+  show: ['stretch', 'json', 'html'],
+};
+// How many positional arguments each verb takes: bind an item and a session, explain its target.
+const POSITIONAL = { bind: 2, explain: 1 };
+
+/** An explanation's `--source`: `commit:<hash>` or `notice:<at>`, as `{ kind, ref }`. */
+function sourceArg(value) {
+  const match = /^(commit|notice):(.+)$/.exec(value);
+  if (!match) throw new StretchArgError(`--source is commit:<hash> or notice:<at>, not ${value}`);
+  return { kind: match[1], ref: match[2] };
+}
 
 function parseArgs(argv) {
   const [verb, ...rest] = argv;
@@ -72,7 +100,7 @@ function parseArgs(argv) {
   const positional = [];
   for (let i = 0; i < rest.length; i++) {
     const token = rest[i];
-    if (token === '--json' || token === '--goals') {
+    if (token === '--json' || token === '--goals' || token === '--fixed') {
       flags[token.slice(2)] = true;
       continue;
     }
@@ -83,7 +111,7 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
-    if (verb === 'bind' && !token.startsWith('-') && positional.length < 2) {
+    if (!token.startsWith('-') && positional.length < (POSITIONAL[verb] ?? 0)) {
       positional.push(token);
       continue;
     }
@@ -94,6 +122,13 @@ function parseArgs(argv) {
   }
   if (verb === 'open' && flags.plan === undefined) throw new StretchArgError('open requires --plan <file>');
   if (verb === 'bind' && positional.length !== 2) throw new StretchArgError('bind takes an item and a session: bind W3 "JH 74"');
+  if (verb === 'explain') {
+    if (positional.length !== 1) throw new StretchArgError('explain takes the id of a goal or an item: explain G2 --source commit:<hash> --why <text>');
+    if (flags.source === undefined) throw new StretchArgError('explain requires --source commit:<hash> or notice:<at>: an explanation is a record\'s');
+    flags.source = sourceArg(flags.source);
+    if (![flags.why, flags.fix, flags.open, flags.fixed].some(Boolean)) throw new StretchArgError('explain requires --why, --fix, --open or --fixed');
+    if (flags.fixed && flags.open !== undefined) throw new StretchArgError('--fixed and --open cannot go together: it is fixed or it is not');
+  }
   return { verb, flags, positional };
 }
 
@@ -136,9 +171,29 @@ function appendEvent(file, fileSystem, event) {
 function openStretch(events) {
   const open = events.findLast((event) => event.event === 'open');
   if (!open || events.some((event) => event.event === 'close' && event.id === open.id)) return null;
+  return stretchOf(events, open);
+}
+
+/** The stretch `open` opened, from its events: its binds, goal checks and, once closed, its `close` and `closedAt`. */
+function stretchOf(events, open) {
   const mine = events.filter((event) => event.id === open.id);
   const checks = mine.filter((event) => event.event === 'check');
-  return { open, binds: mine.filter((event) => event.event === 'bind'), check: checks.at(-1) ?? null, checks, events: mine };
+  const close = mine.find((event) => event.event === 'close') ?? null;
+  return { open, binds: mine.filter((event) => event.event === 'bind'), check: checks.at(-1) ?? null, checks, events: mine, close, ...(close ? { closedAt: Date.parse(close.at) } : {}) };
+}
+
+/** The stretch an `explain` or a `show` names: the one `id` opened, else the open one when `open` allows it, else the
+ * last closed one; `null` when there is none. */
+function namedStretch(events, id, { open: openAllowed }) {
+  const opens = events.filter((event) => event.event === 'open');
+  if (id !== undefined) {
+    const named = opens.find((event) => event.id === id);
+    return named ? stretchOf(events, named) : null;
+  }
+  const current = openAllowed ? openStretch(events) : null;
+  if (current) return current;
+  const closed = opens.map((open) => stretchOf(events, open)).filter((one) => one.close);
+  return closed.at(-1) ?? null;
 }
 
 /** The items of every closed stretch, oldest first: what the corrections learn from. */
@@ -355,6 +410,54 @@ function bindCommand(ctx, [item, session], events) {
   return 0;
 }
 
+/** The record an explanation's source names, as the `explain` event keeps it: a commit by its full hash, a notice by
+ * its time and sender; `{ error }` when git or the channel holds none. */
+function sourceRecord(ctx, { kind, ref }) {
+  if (kind === 'commit') {
+    const read = gitRead(ctx.run, ctx.root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+    return read.error || !read.stdout.trim() ? { error: `git knows no commit ${ref}` } : { kind, ref: read.stdout.trim() };
+  }
+  const channel = readNotices(ctx.home, ctx.slug, { readFile: (file) => ctx.fileSystem.readFileSync(file, 'utf8') });
+  if (channel.unavailable) return { error: `the channel cannot be read (${channel.unavailable})` };
+  const wanted = Date.parse(ref);
+  const found = Number.isFinite(wanted) ? channel.notices.find((one) => Date.parse(one.at) === wanted) : undefined;
+  return found ? { kind, at: new Date(wanted).toISOString(), from: found.from?.title ?? found.from?.id ?? null } : { error: `the channel holds no notice at ${ref}` };
+}
+
+function explainCommand(ctx, flags, [target], events) {
+  const stretch = namedStretch(events, flags.stretch, { open: true });
+  if (!stretch) {
+    ctx.err(`js-harness stretch: ${flags.stretch === undefined ? 'no stretch was opened' : `no stretch ${flags.stretch}`}`);
+    return 1;
+  }
+  const { plan } = stretch.open;
+  if (![...plan.goals, ...plan.items].some((one) => one.id === target)) {
+    ctx.err(`js-harness stretch: the stretch ${stretch.open.id} has no goal or item ${target}`);
+    return 1;
+  }
+  const source = sourceRecord(ctx, flags.source);
+  if (source.error) {
+    ctx.err(`js-harness stretch: ${source.error}; an explanation is a record's, so it names one that exists`);
+    return 1;
+  }
+  const texts = Object.fromEntries(['why', 'fix', 'open'].filter((name) => flags[name] !== undefined).map((name) => [name, flags[name]]));
+  appendEvent(ctx.file, ctx.fileSystem, { event: 'explain', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), target, ...texts, ...(flags.fixed ? { fixed: true } : {}), source });
+  ctx.out(`${target} of the stretch ${stretch.open.id} explained, its source ${source.kind} ${source.ref ?? source.at}`);
+  return 0;
+}
+
+function showCommand(ctx, flags, events) {
+  const stretch = namedStretch(events, flags.stretch, { open: false });
+  if (!stretch || !stretch.close) {
+    ctx.err(`js-harness stretch: ${stretch ? `the stretch ${stretch.open.id} is open; js-harness stretch status shows it` : flags.stretch === undefined ? 'no stretch was closed' : `no stretch ${flags.stretch}`}`);
+    return 1;
+  }
+  const view = measure(ctx, stretch, stretch.closedAt);
+  const moments = momentsOf(ctx, stretch, view, stretch.closedAt, { closed: true });
+  emit(ctx, flags, { ...view, state: 'closed', moments }, renderReturn, viewLines);
+  return 0;
+}
+
 async function statusCommand(ctx, flags, events, closing) {
   let stretch = openStretch(events);
   if (!stretch) {
@@ -370,7 +473,7 @@ async function statusCommand(ctx, flags, events, closing) {
     appendEvent(ctx.file, ctx.fileSystem, close);
     stretch = { ...stretch, events: [...stretch.events, close] };
   }
-  const moments = momentsOf(ctx, stretch, view, now);
+  const moments = momentsOf(ctx, stretch, view, now, { closed: closing });
   if (closing) recordPage(ctx, view, moments);
   emit(ctx, flags, { ...view, state: closing ? 'closed' : 'open', moments }, renderReturn, viewLines);
   return 0;
@@ -379,7 +482,7 @@ async function statusCommand(ctx, flags, events, closing) {
 /** What the return says of the plan as a whole (odd/tasks/visual-pages.md): the shares of the planned met, the work
  * sessions outside the plan, the map and the plan steps at the opening and now, and the timeline. Read here, not in
  * `measure`, so the live board's check stays cheap. What git cannot give is in `unavailable` with why. */
-function momentsOf(ctx, stretch, view, now) {
+function momentsOf(ctx, stretch, view, now, { closed }) {
   const openedAt = Date.parse(stretch.open.at);
   const unavailable = {};
   const head = { open: null, now: null, reconstructed: false };
@@ -423,6 +526,7 @@ function momentsOf(ctx, stretch, view, now) {
     map,
     plans,
     timeline: timelineOf({ from: openedAt, to: now, prs, notices: channel.notices, failures, events: stretch.events }),
+    why: problemsOf({ ...view, state: closed ? 'closed' : 'open' }, { notices: channel.notices, explains: stretch.events.filter((event) => event.event === 'explain') }),
     unavailable,
   };
 }
@@ -517,6 +621,8 @@ export async function stretchMain(
   try {
     if (parsed.verb === 'open') return openCommand(ctx, parsed.flags, events);
     if (parsed.verb === 'bind') return bindCommand(ctx, parsed.positional, events);
+    if (parsed.verb === 'explain') return explainCommand(ctx, parsed.flags, parsed.positional, events);
+    if (parsed.verb === 'show') return showCommand(ctx, parsed.flags, events);
     return await statusCommand(ctx, parsed.flags, events, parsed.verb === 'close');
   } catch (err) {
     if (!(err instanceof StretchArgError)) throw err;

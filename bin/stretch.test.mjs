@@ -346,3 +346,81 @@ test('the departure shows what exists now: the map at the opening commit', async
   assert.match(html, /Lo que existe ahora[\s\S]*F1 Skeleton[\s\S]*1\/2 · 50 %/);
   assert.match(html, /PR 630 en main/);
 });
+
+const FULL = 'e6c8214c0123456789abcdef0123456789abcdef';
+
+/** The moments' git, which also knows the commit `FULL` by its short hash and nothing else. */
+function explainGit() {
+  const moments = momentsGit();
+  return (command, args) => {
+    const key = args.join(' ');
+    if (key === 'rev-parse --verify --quiet e6c8214c^{commit}') return { status: 0, stdout: `${FULL}\n`, stderr: '' };
+    if (key.startsWith('rev-parse --verify --quiet ')) return { status: 1, stdout: '', stderr: '' };
+    return moments(command, args);
+  };
+}
+
+test('explain records why a goal or an item of the stretch was left undone, with a commit or a notice git or the channel knows as its source', async () => {
+  const place = scratch({ notices: [notice(0.5, 's69', 'JH 69 · registros', 'opened'), notice(2, 's69', 'JH 69 · registros', 'waiting')] });
+  const deps = { run: explainGit() };
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  await stretch(place, ['close'], { hours: 9, deps, goals: { 'goal-reviewed': 1 } });
+  const explain = (args) => stretch(place, ['explain', ...args], { hours: 10, deps });
+  const goal = await explain(['G2', '--source', 'commit:e6c8214c', '--why', 'la cola la rechazó sola', '--fix', 'aterrizó dentro de #645', '--open', 'la raíz es T5f']);
+  assert.equal(goal.code, 0, goal.err);
+  const item = await explain(['W1', '--source', `notice:${at(2)}`, '--fixed', '--fix', 'cerró con su PR']);
+  assert.equal(item.code, 0, item.err);
+  const recorded = events(place).filter((event) => event.event === 'explain');
+  assert.deepEqual(recorded.map((one) => [one.id, one.target, one.source]), [
+    [at(0), 'G2', { kind: 'commit', ref: FULL }],
+    [at(0), 'W1', { kind: 'notice', at: at(2), from: 'JH 69 · registros' }],
+  ]);
+  assert.equal(recorded[1].fixed, true);
+
+  // Refused: a target the stretch has not, a source no record holds, no text, a fix both done and open, no source.
+  assert.equal((await explain(['G9', '--source', 'commit:e6c8214c', '--why', 'x'])).code, 1);
+  assert.equal((await explain(['G2', '--source', 'commit:deadbeef', '--why', 'x'])).code, 1);
+  assert.equal((await explain(['G2', '--source', `notice:${at(3)}`, '--why', 'x'])).code, 1);
+  assert.equal((await explain(['G2', '--source', 'commit:e6c8214c'])).code, 2);
+  assert.equal((await explain(['G2', '--source', 'commit:e6c8214c', '--fixed', '--open', 'x'])).code, 2);
+  assert.equal((await explain(['G2', '--why', 'x'])).code, 2);
+  assert.equal((await explain(['G2', '--source', 'e6c8214c', '--why', 'x'])).code, 2);
+  assert.equal(events(place).filter((event) => event.event === 'explain').length, 2);
+});
+
+test('show gives a closed stretch\'s return again, measured at its close, with each thing undone, why and its fix; it runs no goal and records no page', async () => {
+  const place = scratch({ notices: [notice(0.5, 's69', 'JH 69 · registros', 'opened')] });
+  const deps = { run: explainGit() };
+  const ran = [];
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  await stretch(place, ['close'], { hours: 9, deps, ran, goals: { 'goal-reviewed': 1 } });
+  await stretch(place, ['explain', 'G2', '--source', 'commit:e6c8214c', '--why', 'la cola la rechazó sola'], { hours: 10, deps });
+  const pages = path.join(place.home, '.js-harness', 'throughput', projectSlug(place.project), 'pages.jsonl');
+  const recordedBefore = fs.readFileSync(pages, 'utf8');
+  // A later stretch is open: show still gives the last closed one.
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { hours: 11, deps });
+  const file = path.join(place.home, 'out', 'vuelta.html');
+  const shown = await stretch(place, ['show', '--json', '--html', file], { hours: 30, deps, ran });
+  assert.equal(shown.code, 0, shown.err);
+  const view = JSON.parse(shown.out);
+  assert.deepEqual([view.id, view.state, view.at], [at(0), 'closed', at(9)]);
+  assert.equal(ran.length, 2, 'only the close ran the goals');
+  assert.equal(fs.readFileSync(pages, 'utf8'), recordedBefore);
+  const goal = view.moments.why.find((row) => row.target === 'G2');
+  assert.deepEqual(goal.why.map((one) => [one.text, one.source]), [['la cola la rechazó sola', 'commit e6c8214c']]);
+  assert.deepEqual(goal.fix, []);
+  const html = fs.readFileSync(file, 'utf8');
+  assert.match(html, /Qué faltó, por qué y cómo se arregla/);
+  assert.match(html, /la cola la rechazó sola[\s\S]*commit e6c8214c/);
+  assert.match(html, /no registrado/);
+
+  assert.equal((await stretch(place, ['show', '--stretch', at(0), '--json'], { hours: 30, deps })).code, 0);
+  assert.equal((await stretch(place, ['show', '--stretch', at(11)], { hours: 30, deps })).code, 1, 'an open stretch is shown by status');
+  assert.equal((await stretch(place, ['show', '--stretch', at(5)], { hours: 30, deps })).code, 1);
+});
+
+test('show and explain with no stretch at all exit 1', async () => {
+  const place = scratch();
+  assert.equal((await stretch(place, ['show'])).code, 1);
+  assert.equal((await stretch(place, ['explain', 'G1', '--source', 'commit:e6c8214c', '--why', 'x'])).code, 1);
+});
