@@ -603,6 +603,8 @@ carrying #644, landed (main 96b917a).
   (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
 - 4ba61a5b (the text fix): Codex correct (0.96, 61,391 input tokens); the readability lens found nothing (4,271).
 - gentle-ai: a40d85e7..4ba61a5b approved (medium, lineage review-673b5907691d27bb), no findings.
+- State at ~13:15Z: #666 landed as 27fc4f9 (T12+T11a in main); the state commit 5f8768c, pushed after its ready,
+  was left out: put it in a new docs PR from origin/main (`feat/visual-pages-t9`), then T9 as below.
 - State at ~13:00Z: #664 (T7) landed 12:27Z. T12+T11a is PR #666 (`feat/visual-pages-t12`, on main), ready sent
   12:58Z. Left: T9. Once #666 lands, record the 03:06Z stretch's four failures with the branch or installed
   `stretch explain failure:<HH:MM> --stretch 2026-10-29T03:06:28.748Z --source notice:<at>`, from these notices:
