@@ -104,10 +104,25 @@ test('with no .git, as in the gate\'s WSL mirror, what git tracks cannot be told
   }
 });
 
-const TRACKED = trackedFiles(REPO);
+/** Why the check is skipped in the tree at `repo` with `env`, or `false`: only with no `.git` and outside CI, which the
+ * WSL mirror's `env -i` leaves unset. On a CI machine a tree with no `.git` fails the check, so the gate that holds it
+ * never passes it as a skip (review R3-002 on 57cb302a). */
+const skipWhy = (repo, env) => !fs.existsSync(path.join(repo, '.git')) && !env.CI && 'no .git here, so what git tracks cannot be read: the GitHub gate, a checkout, runs this';
 
-test('no file under bin, evals or scripts names gentle-ai but the named ones, each with why (F8 S11, L12)', { skip: TRACKED === null && 'no .git here, so what git tracks cannot be read: the GitHub gate, a checkout, runs this' }, () => {
-  const checked = TRACKED;
+test('the check skips only with no .git outside CI: on a CI machine the same tree fails it', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'absence-ci-'));
+  try {
+    assert.match(skipWhy(scratch, {}), /^no \.git here/);
+    assert.equal(skipWhy(scratch, { CI: 'true' }), false);
+    assert.equal(skipWhy(REPO, {}), false);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('no file under bin, evals or scripts names gentle-ai but the named ones, each with why (F8 S11, L12)', { skip: skipWhy(REPO, process.env) }, () => {
+  const checked = trackedFiles(REPO);
+  assert.ok(checked !== null, 'no .git on a CI machine: the gate that holds this check must run in a checkout');
   const broken = checked.filter((file) => NAMES.test(fs.readFileSync(path.join(REPO, file), 'utf8')));
   assert.deepEqual(ratchet({ checked, broken, legacy: NAMED }), []);
 });
