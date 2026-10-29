@@ -169,6 +169,18 @@ export function directiveProblem({ code, stdout }) {
   return null;
 }
 
+// ---- the import row ---------------------------------------------------------------------------------------------------
+
+/** The project cell of doctor's claude-import row in `doctorJson`, what `doctor --json` printed, or `absent` when the
+ * row is not there or the text is no report. */
+export function importRowState(doctorJson) {
+  try {
+    return JSON.parse(doctorJson).find((row) => row.id === 'claude-import')?.project ?? 'absent';
+  } catch {
+    return 'absent';
+  }
+}
+
 // ---- cost -------------------------------------------------------------------------------------------------------------
 
 /** The multiple of its estimate at which a paid run stops (his words of 2026-10-29T10:40Z, as JH 90's brief quotes). */

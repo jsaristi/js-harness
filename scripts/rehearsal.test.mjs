@@ -1,6 +1,6 @@
 // The rehearsal's free part (F8 S13; the reverse-engineering document, 14.5): in a scratch home and a scratch project
 // made for the test, this checkout's `install` and `init` run, a directive planted without a control makes `rules
-// check` exit 1, and after `uninstall project` and `uninstall machine` every path either manifest recorded is gone or
+// check` exit 1, doctor's claude-import row turns red with a CLAUDE.md planted above the project, and after `uninstall project` and `uninstall machine` every path either manifest recorded is gone or
 // back to its bytes. It spends nothing and needs no network; the paid walk is scripts/rehearsal.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { rehearsalLayout, rehearsalEnv, snapshotTree } from './rehearsal.mjs';
-import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems } from './rehearsal-lib.mjs';
+import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
 
@@ -44,6 +44,13 @@ test('in a scratch home, a planted directive without a control makes rules check
   const check = harness('rules', 'check');
   assert.equal(directiveProblem({ code: check.status, stdout: check.stdout }), null, `${check.stdout}${check.stderr}`);
   for (const file of Object.keys(planted)) fs.rmSync(path.join(layout.project, file));
+
+  const importRow = () => importRowState(harness('doctor', '--home', layout.home, '--cwd', layout.project, '--offline', '--json').stdout);
+  assert.equal(importRow(), 'ok');
+  const above = path.join(layout.root, 'CLAUDE.md');
+  fs.writeFileSync(above, '# planted above the project\n');
+  assert.equal(importRow(), 'mismatch');
+  fs.rmSync(above);
 
   const machineManifest = fs.readFileSync(path.join(layout.home, '.js-harness', 'manifest.json'), 'utf8');
   const projectManifest = fs.readFileSync(path.join(layout.project, '.git', 'js-harness', 'manifest.json'), 'utf8');

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REHEARSAL, ROWS, ALWAYS, FOREIGN_TOOLS, ENGRAM_CONTEXT_LIMIT, COST_STOP, PLANTED_RULE,
+  REHEARSAL, ROWS, ALWAYS, FOREIGN_TOOLS, ENGRAM_CONTEXT_LIMIT, COST_STOP, PLANTED_RULE, importRowState,
   recordedPaths, restoreProblems, foreignProblems, engramRecoveryProblem, plantedRuleFiles, directiveProblem, costProblem,
 } from './rehearsal-lib.mjs';
 
@@ -92,6 +92,12 @@ test('directiveProblem passes only an exit 1 that names the planted rule\'s miss
   assert.equal(directiveProblem({ code: 1, stdout: finding }), null);
   assert.match(directiveProblem({ code: 0, stdout: 'PASS  rules  1 rule of the project holds\n' }), /exited 0, not 1/);
   assert.match(directiveProblem({ code: 1, stdout: `FAIL  rules  1 finding\n      rule "${PLANTED_RULE.id}": AGENTS.md no longer holds the phrase\n` }), /does not name the missing control/);
+});
+
+test('importRowState reads the project cell of doctor\'s claude-import row, and absent when there is none', () => {
+  assert.equal(importRowState(JSON.stringify([{ id: 'engram', project: 'ok' }, { id: 'claude-import', project: 'mismatch' }])), 'mismatch');
+  assert.equal(importRowState(JSON.stringify([{ id: 'engram', project: 'ok' }])), 'absent');
+  assert.equal(importRowState('not json'), 'absent');
 });
 
 test('costProblem stops a run past 1.5 times its estimate', () => {
