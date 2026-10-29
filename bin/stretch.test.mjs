@@ -48,6 +48,7 @@ async function stretch(place, argv, { hours = 0, goals = {}, ran = [], deps = {}
     run: () => ({ status: 1, stdout: '', stderr: 'not a repository' }),
     readLands: () => [],
     readCodexRuns: () => [],
+    recordLoad: async () => null,
     runGoal: async (command) => {
       ran.push(command);
       return { status: goals[command] ?? 0, stdout: '', stderr: '' };
@@ -443,6 +444,31 @@ test('show measures a closed stretch from the records up to its close: a session
   const pick = (view) => view.items.map((item) => [item.id, item.state, item.realHours, item.lastAt]);
   assert.equal(closed.items[0].state, 'silent');
   assert.deepEqual(pick(shown), pick(closed));
+});
+
+test('each page a stretch command writes goes into the rendered record under its template and the stretch\'s id; with no page, nothing', async () => {
+  const place = scratch();
+  const calls = [];
+  const recordLoad = async () => ({ renderedFile: () => path.join(place.home, 'rendered.jsonl'), recordRendered: (file, entry) => { calls.push(entry); return { sha256: 'f'.repeat(64), bytes: 1 }; } });
+  const deps = { recordLoad };
+  const page = (name) => path.join(place.home, 'out', `${name}.html`);
+  const opened = await stretch(place, ['open', '--plan', planFile(place, PLAN), '--html', page('salida')], { deps });
+  assert.match(opened.out, /rendered record/);
+  await stretch(place, ['status'], { hours: 1, deps });
+  await stretch(place, ['status', '--html', page('curso')], { hours: 2, deps });
+  await stretch(place, ['close', '--html', page('vuelta')], { hours: 9, deps });
+  await stretch(place, ['show', '--html', page('otra'), '--json'], { hours: 10, deps });
+  assert.deepEqual(calls.map((one) => [one.template, one.subject, path.basename(one.path)]), [
+    ['stretch-departure', at(0), 'salida.html'],
+    ['stretch-status', at(0), 'curso.html'],
+    ['stretch-return', at(0), 'vuelta.html'],
+    ['stretch-return', at(0), 'otra.html'],
+  ]);
+  // A record that cannot be written is said, and the page and its exit stay.
+  const broken = { recordLoad: async () => null };
+  const unrecorded = await stretch(place, ['show', '--html', page('sin')], { hours: 11, deps: broken });
+  assert.equal(unrecorded.code, 0);
+  assert.match(unrecorded.out, /not in the rendered record/);
 });
 
 test('show and explain with no stretch at all exit 1', async () => {

@@ -23,6 +23,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, scaled, sessionTrail, stretchLost } from './lib/stretch.mjs';
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
+import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { renderDeparture, renderReturn } from './lib/stretch-render.mjs';
 import { problemsOf } from './lib/stretch-why.mjs';
 import { codexFacts, landFacts } from './lib/throughput.mjs';
@@ -54,6 +55,8 @@ export const USAGE = [
   '    once it has one; waitsFor what of the user it cannot start without, which keeps it out of the lanes. It prints',
   '    the departure: each estimate as written and as the last closed stretches correct it, the items in slots lanes,',
   '    and whether they fill the hours. Exit 1 while another stretch is open (close it first), 2 for a plan it refuses.',
+  '    The titles and goal texts reach the pages as written, never translated: the lead writes them in the user\'s',
+  '    language.',
   '  bind: names the session a queued item got once it started. Exit 1 with no stretch open, an unknown item, or a',
   '    session another item holds.',
   '  status: the open stretch measured now from the records: each item from its session\'s first record (or the',
@@ -68,7 +71,8 @@ export const USAGE = [
   '    last closed one, or the one --stretch <id> names. Exit 1 for an unknown target or a source no record holds.',
   '  show: the return of the last closed stretch, or of --stretch <id>, measured again at its close from its records.',
   '    It runs no goal and records nothing. Exit 1 with no closed stretch, or for an open one (use status).',
-  '  --json prints the view as JSON; --html <file> writes it as the HTML fragment the lead shows in the chat.',
+  '  --json prints the view as JSON; --html <file> writes it as the HTML fragment the lead shows in the chat, and puts',
+  '    it in the rendered record (stretch-departure, stretch-status or stretch-return), so it is shown unchanged.',
 ].join('\n');
 
 class StretchArgError extends Error {}
@@ -310,16 +314,26 @@ async function checkGoals(ctx, stretch) {
   return { ...stretch, check, checks: [...stretch.checks, check], events: [...stretch.events, check] };
 }
 
-function emit(ctx, flags, view, render, lines) {
+/** Prints `view`, and with --html writes its page and puts it in the rendered record under `page.template`, the
+ * stretch's id its subject (odd/tasks/visual-pages.md, T10), so the page shown is the one the command wrote. A record
+ * that cannot be written is said and costs the page nothing. */
+async function emit(ctx, flags, view, render, lines, page) {
+  let rendered = null;
   if (flags.html) {
     const file = path.resolve(ctx.cwd, flags.html);
     ctx.fileSystem.mkdirSync(path.dirname(file), { recursive: true });
     ctx.fileSystem.writeFileSync(file, render(view), 'utf8');
+    const at = new Date(ctx.now()).toISOString();
+    rendered = await recordPageRendered({ home: ctx.home, slug: ctx.slug, template: page.template, subject: view.id, path: file, at, head: page.head ?? null }, ctx.recordLoad ? { load: ctx.recordLoad } : {});
   }
-  // With --json the output is the JSON alone, so a reader can parse it whole.
-  if (flags.json) return ctx.out(JSON.stringify(view, null, 2));
+  const said = rendered === null ? null : rendered.recorded ? `the page is in the rendered record ${rendered.file} (sha256 ${rendered.recorded.sha256.slice(0, 12)}): show or publish it unchanged` : `the page is not in the rendered record: ${rendered.unavailable}`;
+  // With --json the output is the JSON alone, so a reader can parse it whole; what the record says goes to stderr.
+  if (flags.json) {
+    if (said) ctx.err(said);
+    return ctx.out(JSON.stringify(view, null, 2));
+  }
   for (const line of lines(view)) ctx.out(line);
-  if (flags.html) ctx.out(`html: ${path.resolve(ctx.cwd, flags.html)}`);
+  if (flags.html) ctx.out(`html: ${path.resolve(ctx.cwd, flags.html)}; ${said}`);
 }
 
 const range = ([low, high]) => (low === high ? `${low} h` : `${low}-${high} h`);
@@ -357,7 +371,7 @@ function momentLines(moments) {
   ];
 }
 
-function openCommand(ctx, flags, events) {
+async function openCommand(ctx, flags, events) {
   if (openStretch(events)) {
     ctx.err(`js-harness stretch: a stretch is open (${openStretch(events).open.id}); close it first with js-harness stretch close`);
     return 1;
@@ -389,7 +403,7 @@ function openCommand(ctx, flags, events) {
     waits: read.plan.waits,
     map: head === null ? null : momentAt(ctx.run, ctx.root, head).map ?? null,
   };
-  emit(ctx, flags, view, renderDeparture, departureLines);
+  await emit(ctx, flags, view, renderDeparture, departureLines, { template: 'stretch-departure', head });
   return 0;
 }
 
@@ -453,7 +467,7 @@ function explainCommand(ctx, flags, [target], events) {
   return 0;
 }
 
-function showCommand(ctx, flags, events) {
+async function showCommand(ctx, flags, events) {
   const stretch = namedStretch(events, flags.stretch, { open: false });
   if (!stretch || !stretch.close) {
     ctx.err(`js-harness stretch: ${stretch ? `the stretch ${stretch.open.id} is open; js-harness stretch status shows it` : flags.stretch === undefined ? 'no stretch was closed' : `no stretch ${flags.stretch}`}`);
@@ -461,7 +475,7 @@ function showCommand(ctx, flags, events) {
   }
   const view = measure(ctx, stretch, stretch.closedAt);
   const moments = momentsOf(ctx, stretch, view, stretch.closedAt, { closed: true });
-  emit(ctx, flags, { ...view, state: 'closed', moments }, renderReturn, viewLines);
+  await emit(ctx, flags, { ...view, state: 'closed', moments }, renderReturn, viewLines, { template: 'stretch-return', head: moments.head.now });
   return 0;
 }
 
@@ -482,7 +496,7 @@ async function statusCommand(ctx, flags, events, closing) {
   }
   const moments = momentsOf(ctx, stretch, view, now, { closed: closing });
   if (closing) recordPage(ctx, view, moments);
-  emit(ctx, flags, { ...view, state: closing ? 'closed' : 'open', moments }, renderReturn, viewLines);
+  await emit(ctx, flags, { ...view, state: closing ? 'closed' : 'open', moments }, renderReturn, viewLines, { template: closing ? 'stretch-return' : 'stretch-status', head: moments.head.now });
   return 0;
 }
 
@@ -599,6 +613,8 @@ export async function stretchMain(
     // `runSensor` of `check.mjs`, as `contract run` runs a done-when command: it stops the whole tree at the timeout.
     // Imported when a goal runs, since `check.mjs` is large.
     runGoal = async (command, options) => (await import('./check.mjs')).runSensor(command, options),
+    // The rendered record's module, as `recordPageRendered` loads it; the seam the tests stub.
+    recordLoad,
   } = {},
 ) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
@@ -617,7 +633,7 @@ export async function stretchMain(
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, out: stdout, err: stderr };
+  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, recordLoad, out: stdout, err: stderr };
   let events;
   try {
     events = readEvents(ctx.file, fileSystem);
@@ -626,10 +642,10 @@ export async function stretchMain(
     return 1;
   }
   try {
-    if (parsed.verb === 'open') return openCommand(ctx, parsed.flags, events);
+    if (parsed.verb === 'open') return await openCommand(ctx, parsed.flags, events);
     if (parsed.verb === 'bind') return bindCommand(ctx, parsed.positional, events);
     if (parsed.verb === 'explain') return explainCommand(ctx, parsed.flags, parsed.positional, events);
-    if (parsed.verb === 'show') return showCommand(ctx, parsed.flags, events);
+    if (parsed.verb === 'show') return await showCommand(ctx, parsed.flags, events);
     return await statusCommand(ctx, parsed.flags, events, parsed.verb === 'close');
   } catch (err) {
     if (!(err instanceof StretchArgError)) throw err;
