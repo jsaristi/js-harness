@@ -1729,6 +1729,35 @@ test('an entry the user already had is still theirs when install takes an older 
   }
 });
 
+// JH 81's follow-up: the user's entry was recorded as theirs, and a later release ships another form of it. The new
+// form takes its place, so the hook does not run twice, and it stays the user's: uninstall leaves it.
+test('a user\'s entry equal to an older form of ours stays theirs when an update puts the new form in its place', () => {
+  const home = makeTmpHome();
+  try {
+    const target = guardHook.target(home);
+    const olderTimeout = { ...guardHook.entry(), hooks: [{ ...guardHook.entry().hooks[0], timeout: 3 }] };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [guardHook.entry()] } }, null, 2)}\n`, 'utf8');
+    // The older release found the user's copy of its form there, and recorded it as theirs.
+    const older = install(home, '0.1.0');
+    const data = readJson(target);
+    data.hooks.PreToolUse = data.hooks.PreToolUse.map((entry) => (deepEqualJson(entry, guardHook.entry()) ? olderTimeout : entry));
+    fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    const olderRecords = older.entries.map((record) => (record.path === target && deepEqualJson(record.entry, guardHook.entry())
+      ? { ...record, entry: olderTimeout, sha256: sha256(JSON.stringify(olderTimeout)) } : record));
+    assert.equal(olderRecords.find((record) => deepEqualJson(record.entry, olderTimeout)).createdEntry, false);
+    fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: olderRecords }, null, 2), 'utf8');
+
+    const manifest = install(home, '0.2.0');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry()], 'the new form in place of the older one, once');
+    assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, guardHook.entry())).createdEntry, false);
+    uninstall(home);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry()]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('sync leaves an entry recorded as the user\'s when the release no longer ships it', () => {
   const home = makeTmpHome();
   try {

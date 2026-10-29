@@ -516,15 +516,14 @@ function isOlderOwnEntry(item, entry) {
  * `ours` is the set of containers js-harness made (`oursContainers`): every container this creates is added to it, so
  * the next entry of the same run that finds it there records it as made too, and the result says how many of the
  * containers on the way to `pointer` are ours (`createdContainers`).
- * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure
- * reading or writing the target (R3-002: an unreadable file, a directory sitting at the path, an
- * unwritable or missing-as-a-directory host dir, ...) all leave the file completely untouched and
- * report `skipped`, never overwritten and never thrown out of install/sync. R3-001: an intermediate
- * key that already exists but is not a plain object, or a leaf that already exists but is not an
- * array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent:
- * an entry that is already there (by deep equality) is left alone and the file is not rewritten at
- * all, so a repeat install/sync never reformats a file that already has what it needs. It says `present` whenever the
- * entry was there before this run, also when only older forms of it were taken out. */
+ * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure reading or writing the
+ * target (R3-002: an unreadable file, a directory sitting at the path, an unwritable or missing-as-a-directory host dir,
+ * ...) all leave the file completely untouched and report `skipped`, never overwritten and never thrown out of
+ * install/sync. R3-001: an intermediate key that already exists but is not a plain object, or a leaf that already exists
+ * but is not an array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent: an entry
+ * that is already there (by deep equality) is left alone and the file is not rewritten at all, so a repeat install/sync
+ * never reformats a file that already has what it needs. It says `present` whenever the entry was there before this run,
+ * also when only older forms of it were taken out, which it names (`replaced`). */
 function appendEntryToFile(target, pointer, entry, ours) {
   let fileExisted;
   let raw;
@@ -584,7 +583,7 @@ function appendEntryToFile(target, pointer, entry, ours) {
   if (has && stale.length === 0) {
     return { skipped: false, present: true, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
-  for (const i of [...stale].reverse()) arr.splice(i, 1);
+  const replaced = [...stale].reverse().flatMap((i) => arr.splice(i, 1)).reverse();
   if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -592,7 +591,7 @@ function appendEntryToFile(target, pointer, entry, ours) {
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
-  return { skipped: false, ...(has && { present: true }), createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
+  return { skipped: false, ...(has && { present: true }), replaced, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
 
 /** Whether a record says the list at its pointer is not one install made. A record that names no container as made
@@ -723,13 +722,14 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
     // Like `createdFile`, the folders made for the file are a fact of the file, settled by the first install that wrote
     // it, from what was missing before install wrote anything (a skill file makes `~/.claude` first). A record from before the field names none, and its folders stay, since nothing says install made them.
     if (!foldersByTarget.has(target)) foldersByTarget.set(target, previousEntry ? previousEntry.createdFolders ?? [] : (result.createdFile ? missingBefore.get(target) ?? [] : []));
-    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and
-    // pointer still holds. Written as none, the next install would take those containers for the user's, and
-    // `uninstall` would leave them empty behind it.
+    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and pointer
+    // still holds. Written as none, the next install would take those containers for the user's, and `uninstall` would leave them empty behind it.
     const earlier = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer));
     // An entry the file already held, or one a skipped run never looked at, is ours only while the earlier record of it says so: else
     // install did not write it, `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust. A record from before the field is ours.
+    // The new form put in the place of an older one recorded as the user's is theirs as well (`theirs`, JH 81's follow-up).
     const same = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && deepEqual(e.entry, entry));
+    const theirs = previousManifest?.entries?.some((e) => e.createdEntry === false && Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && result.replaced?.some((item) => deepEqual(e.entry, item)));
     const record = {
       path: target,
       pointer,
@@ -740,7 +740,7 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
-      ...((result.present || result.skipped) && (same === undefined || same.createdEntry === false) ? { createdEntry: false } : {}),
+      ...(theirs || ((result.present || result.skipped) && (same === undefined || same.createdEntry === false)) ? { createdEntry: false } : {}),
       // A Codex entry names every config.toml Codex may keep its trust in, as each install resolved it, so the
       // uninstall edits those files whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
       ...(codexConfig && component.id.startsWith('codex-') ? { trustConfigs: withConfig(previousEntry?.trustConfigs ?? [], codexConfig) } : {}),
