@@ -11,7 +11,9 @@ import { stamp } from './report.mjs';
 const NOTE_FIELDS = { badNews: null, decisions: ['text', 'changed'], waits: ['what', 'why'], proposals: ['step', 'why'] };
 
 /** The lead's notes from the text of the notes file: `{ badNews: [text], decisions: [{ text, changed }], waits: [{ what,
- * why }], proposals: [{ step, why }] }`, a field left out read as none. Throws, saying what is wrong, on anything else. */
+ * why }], proposals: [{ step, why }] }`, a field left out read as none, and each field of an item a text that is not
+ * blank: a proposal's `why` is the criterion he asked to see with every next step. Throws, saying what is wrong, on
+ * anything else. */
 export function notesOf(text) {
   let raw;
   try {
@@ -26,7 +28,7 @@ export function notesOf(text) {
     const list = raw[key] ?? [];
     if (!Array.isArray(list)) throw new Error(fields === null ? `${key} is a list of texts` : `${key} is a list`);
     list.forEach((one, i) => {
-      const fine = fields === null ? typeof one === 'string' : one !== null && typeof one === 'object' && fields.every((field) => typeof one[field] === 'string');
+      const fine = fields === null ? typeof one === 'string' : one !== null && typeof one === 'object' && fields.every((field) => typeof one[field] === 'string' && one[field].trim() !== '');
       if (!fine) throw new Error(fields === null ? `${key} is a list of texts` : `${key}[${i}] needs ${fields.join(' and ')}`);
     });
     notes[key] = list;
