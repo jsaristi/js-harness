@@ -105,7 +105,7 @@ When the user asks what was done, the lead's status report shows each section th
 ### reports-spanish-visual
 What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source; at a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records, never drawn by hand: "- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (\`rule:reports-spanish-visual\`): an Artifact with diagrams, bars and cards, never a raw markdown file; the repository's English document stays the source."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-29. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-26, 2026-10-28, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### restart-announce
 Before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"

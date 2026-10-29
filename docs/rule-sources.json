@@ -647,6 +647,12 @@
     "kind": "words",
     "quotes": [
       {
+        "quote": "Siempre damela en español y que sea grafica y didactica osea que pueda entender visualmente",
+        "date": "2026-10-26",
+        "session": "4b935d4a-cbb8-47fe-a059-22a7c5bae931",
+        "line": 2645
+      },
+      {
         "quote": "añadamos esto mas al protocolo, entre todo lo que teniamos que porcentaje se cumplio y ademas quiero que me muestres el mapa y como cronologico o de fases bien completo y detallado y me checkees lo que se avanzo",
         "date": "2026-10-28",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
@@ -665,8 +671,8 @@
         "line": 12237
       }
     ],
-    "reading": "On 2026-10-28 he asked that the harness show almost everything this way, as graphic pages, because it guides the user better and keeps a record, since what is not measured cannot be improved (line 12220); that at a return it say what share of everything planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054); and, seeing the live board left stale when the lead moved to another session, he approved the ideas the lead gave him (line 12237): the pages are made by a command from the records, never by hand, keeping their numbers so the next page compares with them and saying what the records cannot tell; they appear at a stretch's departure and return, a feature's close, a phase's change and a status report, a pull request inside its feature's page, the live board staying the continuous view; and they ship to every project through init. So the rule that already holds his pages names those moments and the commands that make them (js-harness stretch, report feature, report phase, report --html), and says the page is shown or published as the command wrote it.",
-    "accepted": "He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request.",
+    "reading": "On 2026-10-26, right after the lead sent him a 773-line English proposal, he asked that it always reach him in Spanish and graphic and didactic, so he can understand it visually (line 2645 of 4b935d4a): anything he reads to understand or decide reaches him in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file, the repository document staying the English source. On 2026-10-28 he asked that the harness show almost everything this way, as graphic pages, because it guides the user better and keeps a record, since what is not measured cannot be improved (line 12220); that at a return it say what share of everything planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054); and, seeing the live board left stale when the lead moved to another session, he approved the ideas the lead gave him (line 12237): the pages are made by a command from the records, never by hand, keeping their numbers so the next page compares with them and saying what the records cannot tell; they appear at a stretch's departure and return, a feature's close, a phase's change and a status report, a pull request inside its feature's page, the live board staying the continuous view; and they ship to every project through init. So the rule that already holds his pages names those moments and the commands that make them (js-harness stretch, report feature, report phase, report --html), and says the page is shown or published as the command wrote it.",
+    "accepted": "His 2026-10-26 words are a message he typed to the lead, sent as he wrote it. He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request.",
     "checked": {
       "date": "2026-10-29",
       "by": "command"
