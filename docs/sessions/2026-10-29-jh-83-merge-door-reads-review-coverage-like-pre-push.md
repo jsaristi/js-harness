@@ -26,7 +26,8 @@ reason, not only git's first line"; "One `- Seen:` line in docs/FAILURES.md for 
   "Later fix" line.
 - `9343b831` fix(merge-queue): with the Codex review off, the door's lines name only the pull request's commits, never the
   merge it makes (the verifier's finding 1).
-- The pull request: see the ready notice; state ready, not merged.
+- PR 663 (https://github.com/jsaristi/js-harness/pull/663): ready, not merged. `npm run check` on the branch: "PASS check
+  15 rows passed".
 
 ## Decisions
 - **Root cause (this session, reproduced).** The brief's premise, that the record's range never held the commit, is not

@@ -368,8 +368,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **State:** done: the probe 6 of 6, the incident set 13 of 20 (PRs 607, 608, 613, 614).
 - **Later fix:** the merge door reads both reviews of a pull request at its head merged onto main, the tip the
   push of main checks, so a record whose head lies past the pull request's no longer passes the door and fails
-  the push; a refused push of main prints the hook's failing rows (JH 83, branch
-  `fix/door-reads-coverage-like-pre-push`; `docs/FAILURES.md`, `door-covers-past-tip`).
+  the push; a refused push of main prints the hook's failing rows (PR 663, JH 83; `docs/FAILURES.md`,
+  `door-covers-past-tip`; `docs/sessions/2026-10-29-jh-83-merge-door-reads-review-coverage-like-pre-push.md`).
 
 ### The S1 records fix (row 3 of the reverse-engineering document's 13.3)
 - **Changes:** the review records cannot be written by the model. Prevention: `guard` refuses a file
