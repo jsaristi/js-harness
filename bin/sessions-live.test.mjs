@@ -37,10 +37,10 @@ const batchFiles = (out) => fs.readdirSync(out).filter((name) => name.startsWith
 
 const note = (home, slug, at, text, kind = 'note') => appendNotice(home, slug, newNotice({ at, from: FROM, to: 'orchestrator', kind, text }));
 
-async function live(args, { home, project }) {
+async function live(args, { home, project }, { listProcesses = () => [] } = {}) {
   const out = [];
   const err = [];
-  const code = await sessionsLiveMain(args, { cwd: project, stdout: (text) => out.push(text), stderr: (text) => err.push(text), now: () => NOW, run: noGit, env: { JS_HARNESS_HOME: home } });
+  const code = await sessionsLiveMain(args, { cwd: project, stdout: (text) => out.push(text), stderr: (text) => err.push(text), now: () => NOW, run: noGit, env: { JS_HARNESS_HOME: home }, listProcesses });
   return { code, out: out.join('\n'), err: err.join('\n') };
 }
 
@@ -160,7 +160,8 @@ test('--out writes the time it read the record for board/summary, after the batc
   const quiet = await live(['--out', dirs.out, '--url', url], dirs);
   assert.equal(quiet.code, 0, quiet.err);
   const stamp = path.join(dirs.out, 'board-checked.json');
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false, stretch: null }, 'it holds until the heartbeat wakes the lead');
+  const running = { at: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', items: [] };
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false, stretch: null, running }, 'it holds until the heartbeat wakes the lead');
   assert.ok(quiet.out.includes(`ArtifactData update: url ${url}, collection board, doc_id summary, file_path ${stamp}`), quiet.out);
 
   note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
@@ -170,8 +171,21 @@ test('--out writes the time it read the record for board/summary, after the batc
 
   // Codex, 59df62f..bc72c2e: a resting lead waits for a notice up to wait-for, not a half-hour heartbeat.
   assert.equal((await live(['--out', dirs.out, '--resting'], dirs)).code, 0);
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString(), resting: true, stretch: null });
+  const restingUntil = new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString();
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: restingUntil, resting: true, stretch: null, running: { ...running, until: restingUntil } });
   assert.equal((await live(['--resting'], dirs)).code, 2, '--resting stamps, so it takes --out');
+}));
+
+// odd/tasks/visual-pages.md, spec 4: the work running as the record is read rides on board/summary, and a listing
+// that fails says so instead of reading as nothing running.
+test('--out puts the work running on the machine into the stamp, or why it could not be read', withFolders(async (dirs) => {
+  const stamp = () => JSON.parse(fs.readFileSync(path.join(dirs.out, 'board-checked.json'), 'utf8')).running;
+  const node = '"C:\\Program Files\\nodejs\\node.exe"';
+  const listProcesses = () => [{ pid: 41, createdAt: NOW - 1_200_000, commandLine: `${node} D:\\proj\\evals\\suite.mjs --paid` }];
+  assert.equal((await live(['--out', dirs.out], dirs, { listProcesses })).code, 0);
+  assert.deepEqual(stamp().items, [{ kind: 'evals', pid: 41, since: '2026-10-27T05:40:00.000Z', where: null }]);
+  assert.equal((await live(['--out', dirs.out], dirs, { listProcesses: () => { throw new Error('powershell timed out'); } })).code, 0);
+  assert.equal(stamp().unavailable, 'the process listing: powershell timed out');
 }));
 
 // odd/tasks/stretch-protocol.md, T5: the open stretch rides on board/summary, measured and with its goals as last checked.
@@ -188,6 +202,65 @@ test('--out puts the open stretch into the stamp, its items measured, and runs n
   assert.deepEqual(stretch.goals, { met: 0, total: 1, checkedAt: null });
   assert.deepEqual(stretch.items.map((one) => [one.id, one.state, one.realHours, one.corrected]), [['W1', 'running', 0.5, [1, 2]]]);
 }));
+
+// odd/tasks/visual-pages.md, spec 5: the board opens with the last three things done and how long ago.
+test('the board page opens with the three newest rows that say something was done, newest first', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const kinds = page.match(/^const DONE_KINDS = .*;\r?$/m)?.[0];
+  const source = page.match(/function lastDone\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(kinds && source, 'the page defines DONE_KINDS and lastDone');
+  assert.ok(page.indexOf('id="recent"') < page.indexOf('id="yours"'), 'the block comes first, under the header');
+  const lastDone = new Function(`${kinds}\n${source}; return lastDone;`)();
+  const row = (time, kind, session) => ({ time, kind, session });
+  const rows = [
+    row('2026-10-29T00:10:00.000Z', 'closed', 'JH 70'),
+    row('2026-10-29T00:20:00.000Z', 'note', 'JH 71'),
+    row('2026-10-29T00:30:00.000Z', 'ready', 'JH 72'),
+    row('2026-10-29T00:05:00.000Z', 'closed', 'JH 69'),
+    row('2026-10-29T00:40:00.000Z', 'closed', 'JH 73'),
+    row('not a time', 'closed', 'JH 74'),
+  ];
+  assert.deepEqual(lastDone(rows, 3).map((one) => one.session), ['JH 73', 'JH 72', 'JH 70']);
+  assert.deepEqual(lastDone([row('2026-10-29T00:20:00.000Z', 'note', 'JH 71')], 3), [], 'a note is no thing done');
+});
+
+// odd/tasks/visual-pages.md, spec 4: the work running at the lead's check, said with the time it was seen.
+test('the board page says what ran on the machine at the check, and that it could not look when the listing failed', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const names = page.match(/^const RUN_KIND = .*;\r?$/m)?.[0];
+  const source = page.match(/function runningText\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(names && source, 'the page defines RUN_KIND and runningText');
+  const runningText = new Function('hhmm', 'ago', `${names}\n${source}; return runningText;`)((time) => time.slice(11, 16), () => 'hace 20 min');
+  const at = '2026-10-29T01:00:00.000Z';
+  assert.equal(runningText(undefined), null, 'a summary from before has no block');
+  assert.equal(runningText({ at, items: [] }), 'Nada corriendo en la máquina a las 01:00');
+  assert.equal(runningText({ at, unavailable: 'the process listing: timed out' }), 'No se pudo ver qué corría en la máquina a las 01:00');
+  assert.equal(runningText({ at, items: [
+    { kind: 'evals', pid: 1, since: '2026-10-29T00:40:00.000Z', where: 'D:\\js-harness\\.claude\\worktrees\\f8-s5c' },
+    { kind: 'codex-review', pid: 2, since: null, where: null },
+  ] }), 'En curso a las 01:00: lote de evals en f8-s5c (desde hace 20 min) · revisión de Codex');
+});
+
+// odd/tasks/visual-pages.md, spec 6: the lead's status list, one colored card an item, before what is the user's.
+test('the board page keeps the status items it can draw and shows them before what is the user\'s', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const states = page.match(/^const STATUS = .*;\r?$/m)?.[0];
+  const source = page.match(/function statusItems\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(states && source, 'the page defines STATUS and statusItems');
+  assert.ok(page.indexOf('id="status"') < page.indexOf('id="yours"'), 'the cards come before "Lo que te toca"');
+  const statusItems = new Function(`${states}\n${source}; return statusItems;`)();
+  assert.deepEqual(statusItems(undefined), []);
+  assert.deepEqual(statusItems([
+    { state: 'done', titulo: 'Hecho · PR 629 integrado', texto: 'Quedó en main.' },
+    { state: 'late', titulo: 'Otro estado', texto: 'no se dibuja' },
+    { state: 'working', titulo: '', texto: 'sin título' },
+    { state: 'waiting', titulo: 'Esperando · tu respuesta' },
+    null,
+  ]), [
+    { state: 'done', titulo: 'Hecho · PR 629 integrado', texto: 'Quedó en main.' },
+    { state: 'waiting', titulo: 'Esperando · tu respuesta', texto: '' },
+  ]);
+});
 
 test('the board page counts the lead\'s check of the record apart from the newest row', () => {
   const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');

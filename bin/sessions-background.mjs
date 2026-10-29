@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, undoSession, within, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
-import { nextSessionNumber } from './lib/channel.mjs';
+import { appendNotice, newNotice, nextSessionNumber } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
@@ -170,6 +170,8 @@ export function sessionsStartMain(argv, given = {}) {
   } catch {
     // Without it no session is taken by its title; one whose id claude prints is still recorded.
   }
+  // The board's first row of the session is stamped with the time it was launched, before any notice it sends itself.
+  const launchedAt = new Date(now()).toISOString();
   let result;
   try {
     result = claude(startArgs({ ...parsed, briefs, prompt: startPrompt(copy) }), { cwd });
@@ -216,6 +218,17 @@ export function sessionsStartMain(argv, given = {}) {
     const undone = [claude(['stop', id]), claude(['rm', id])].every((step) => !step.error && step.status === 0);
     stderr(`js-harness sessions start: the session ${id} started and could not be recorded (${err.code ?? err.message}), so ${undone ? 'it was stopped and removed' : `it still runs: claude stop ${id} and claude rm ${id} remove it`}`);
     return 1;
+  }
+  // The live board shows the session from its start (odd/tasks/visual-pages.md, spec 4): an `opened` row in the
+  // channel record, from the session itself. It is the board's, not the start's: one that cannot be written is said
+  // and the session stays.
+  try {
+    appendNotice(home, projectSlug(root), newNotice({
+      at: launchedAt, from: { host: 'claude-code', id: agent?.sessionId ?? id, source: 'sessions start', title: parsed.title },
+      to: 'orchestrator', kind: 'opened', text: `started by sessions start: ${parsed.title}`, cwd, worktree: parsed.worktree ?? null,
+    }));
+  } catch (err) {
+    stderr(`js-harness sessions start: the board's first row of ${id} could not be written (${err.code ?? err.message}); the session runs and its own notices still reach the board`);
   }
   stdout(`started ${id} · ${parsed.title}`);
   stdout(`  js-harness sessions stop ${id} removes it; claude attach ${id} opens it here; js-harness sessions lists it`);

@@ -166,6 +166,31 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
   assert.match(copy, /js-harness notify --to orchestrator/);
 }));
 
+// odd/tasks/visual-pages.md, spec 4: the board shows a session from its start, with no notice the session must send.
+test('sessions start writes the session\'s first row to the channel record, stamped before claude ran', withWorld((world) => {
+  const before = Date.now();
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const channel = path.join(world.home, '.js-harness', 'channel');
+  const files = fs.readdirSync(channel).filter((name) => name.endsWith('.jsonl'));
+  assert.equal(files.length, 1, files.join(', '));
+  const notices = fs.readFileSync(path.join(channel, files[0]), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(notices.map((one) => [one.kind, one.text, one.from.id, one.from.title, one.to.role]), [
+    ['opened', 'started by sessions start: Build the thing', '0db8bc5e-0000-4000-8000-000000000000', 'Build the thing', 'orchestrator'],
+  ]);
+  const [record] = recordLines(world);
+  assert.ok(Date.parse(notices[0].at) >= before && notices[0].at <= record.at, `${notices[0].at} is before claude ran, not after the record ${record.at}`);
+}));
+
+test('a start whose first row cannot be written keeps the session and says so', withWorld((world) => {
+  fs.mkdirSync(path.join(world.home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(world.home, '.js-harness', 'channel'), 'a file where the folder goes');
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /^started 0db8bc5e · Build the thing$/m);
+  assert.match(result.stderr, /the board's first row of 0db8bc5e could not be written/);
+  assert.equal(recordLines(world).length, 1);
+}));
+
 test('sessions start --no-remote-control leaves Remote Control off', withWorld((world) => {
   const result = js(world, ['sessions', 'start', '--title', 'Quiet one', '--brief', world.brief, '--no-remote-control']);
   assert.equal(result.code, 0, result.stderr);
