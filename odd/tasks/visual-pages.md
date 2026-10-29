@@ -338,9 +338,13 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
 - [x] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
   gates of the feature's slice worktrees left out, fixed in d8e0a122; Codex reads C3 again from 95d5231e (`--again`).
   Route: inline.
-- [ ] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
+- [x] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
   seam its tests stub; the departure carries the map and the timeline; the plan's titles as written. Spec 8. Route:
-  inline. The seam and `report phase`'s call in the same commit.
+  inline. The seam and `report phase`'s call in the same commit; the `report` calls in slice C; the stretch's in
+  slice E3 (`feat/visual-pages-e3`): open, status, close and show put each page they write under
+  stretch-departure, stretch-status or stretch-return. The departure's map by phase came in slice A's
+  `mapNowSection`; its timeline is the lanes on the hour scale with the return marked, which is all that exists at
+  the opening; the usage says the titles reach the pages as written.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
 - [ ] T9 (kind: verify) the four pages from the real records, published; reviews on each slice. Route: inline.
