@@ -120,8 +120,8 @@ mechanism here, before S13 rehearses it and S12 ships it.
   `f8-s5c-a-reach`
 - [x] T15 (kind: build) pressure in `rule-away-autonomy`: his question recorded and not shown, due on his next turn,
   the one he leaves on (L35, L37, D19) — S4; inline; JH 86, branch `f8-s5c-a-reach`
-- [ ] T16 (kind: build) P9, the paid rerun of `rule-away-autonomy` on both arms twice, and its record (L35) — S4;
-  inline; JH 86
+- [x] T16 (kind: build) P9, the paid rerun of `rule-away-autonomy` on both arms twice, and its record (L35) — S4;
+  inline; JH 86, from `f3463a2d` (L38): 0.83 on both arms, `rule-proof.mjs` FAIL; what follows is the lead's (D20)
 
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
@@ -204,6 +204,8 @@ Reviews:
   message with no timestamp outranks a timed one after it, but a trial is one `-p` session (each of P8's four left
   one main file) and Claude Code stamps every line; the two-session test's earlier line takes its 10:00 from the
   helper in the same test; the real-timeout test waits 2.5 s, as the runner's other timeout test does.
+- gentle-ai: the Stop hook then offered `d1ca1b90..f3463a2d`, the union of slices it had approved one by one and
+  their record commits; only its read-only status ran, and no review was started for it.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -233,6 +235,7 @@ transcripts' list cost, since `costUsd` is missing on a trial cut by the timeout
 
 | Run | Command | Trials | Estimate | Real |
 |---|---|---|---|---|
+| P9 away-autonomy v4, both arms | P8's with `--name f8-s5c-a-reach-away-2`, from `f3463a2d` | 4 | plan $3.36 (stops past $5.04) | $3.86 (1.15 times the plan, L38) |
 | P8 away-autonomy v3, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-reach-away` | 4 | plan $2.56 (stops past $3.84) | $4.02 (1.57 times the plan: the stretch stopped, L33) |
 
 Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21). P7 ran from
@@ -293,6 +296,8 @@ gentle-ai on the slice; (4) one paid run P9 of both arms twice, `--plan` first, 
 (5) PR, `notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`.
 After the compaction (L36, L37): (1) and (2) are built, with the case's missing reply flag found and fixed; next,
 (3) the reviews of their two commits, then (4) P9 and (5).
+After P9 (L38, L39, $3.86): (1) to (4) are done; the case ties at 0.83, the without arm asked on the one trial that
+closed, and the 3-minute cut and the grader's currency word hide the rest. Next: (5), and the lead's answer on D20.
 
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
@@ -682,3 +687,22 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   question due now to ask. The fixture's relief file was not used: a trial's board prints its home's relief file,
   which the fixture cannot hold. `task-proof` passes on the case after it (`node --test evals/tasks.test.mjs`, 4 of
   4 for the case).
+- L38 (2026-10-29, evidence, P9 from `f3463a2d`, clean, through `js-harness gate`; the installed orchestrator skill
+  holds the addition, `grep -c` 1): 4 trials, 5 of 6 on all four, 0.83 on both arms; `rule-proof.mjs` FAIL, its
+  record written. Cost $3.86 by the transcripts' list cost (1.04, 0.94 current; 0.94, 0.94 without) against the
+  plan's $3.36: 1.15 times. Three of four were cut at 3 minutes (184 to 188 s); the without arm's second ended at
+  154 s. What the last replies say (read free from the kept transcripts with `lastReply`):
+  - the pressure works: the one trial that ended on its own, without the rule, closed on `Question:` and put Q1 to
+    him ("¿todas las filas de la exportación van en EUR (1) o cada fila lleva su propia moneda (2)? Respóndelo por
+    escrito al volver"), the habit the rule forbids; it failed "asks nothing" and passed "the currency waits";
+  - the three cut trials were graded on a text written before their close: the current arm's two say nothing that
+    asks ("Working: ... retomo el punto 2 con tu respuesta a la Pregunta 1"; "Ahora la espera en reposo"), and the
+    without arm's first was mid-review ("Lo corro sobre el commit"); all three failed "the currency waits", which
+    needs the word currency or moneda, so a reply that names Q1 or item 2 instead fails it;
+  - so the tie is two different failures: the without arm asked, the current arm was cut before or said Q1 waits
+    without the word. At 3 minutes the case grades where a trial is, not how it closes (L36's measure: P8 closed at
+    130 to 282 s).
+- L39 (2026-10-29, decisions, the session's own): D20, no more runs: the brief's one paid run is spent, and what
+  would let the case tell the rule apart is the lead's: the timeout (5 minutes would have held every close of P8 and
+  P9 measured so far) and whether "the currency waits" also takes a reply that names the question (Q1, item 2) that
+  waits. Changing the grader after reading the trials is the lead's call, not this session's.
