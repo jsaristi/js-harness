@@ -429,3 +429,10 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   read. Unit 5 fixes each with its test: comments are blanked (strings kept) before the titles are read; a missing
   id is a fault; the scaffold keeps each field on one line; `template new` holds an exclusive lock in the system's
   temporary folder while it reads and writes the registry.
+- Update ~07:05Z: the independent verifier on bc3a0520 confirmed all five points (install, sync from a manifest
+  written before the change, downgrade, uninstall byte for byte in six seeded shapes; no Codex entry; the matcher
+  anchored; `gate --hook` exits 0 on every path tried, refusing only by the deny JSON; nothing broken on update).
+  Pre-existing and not this change's: an entry the user already had, identical to one of ours, is recorded as ours
+  and uninstall removes it (`bin/lib/manifest.mjs:584`, `:745`), told to the lead. Its minor point, two git calls
+  before `harness.json` is read on every call of the tools, is unit 6: the gate reads the nearest `harness.json`
+  first, with no git, and computes the project's records only where templates are on.

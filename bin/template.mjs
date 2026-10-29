@@ -161,6 +161,18 @@ function placesOf(folder, { root, home, slug }) {
   return { top, rendered: renderedFile(where, project), shown: shownFile(where, project) };
 }
 
+/** The folder of the `harness.json` nearest `folder`, it or one above it, or `null`: read with no git, since the hook
+ * runs on every call of its tools in every project of the machine. */
+function nearestHarness(folder) {
+  for (let at = path.resolve(folder); ; at = path.dirname(at)) {
+    if (fs.existsSync(path.join(at, 'harness.json'))) return at;
+    if (path.dirname(at) === at) return null;
+  }
+}
+
+/** Whether the project at `top` turns the template gate on: its `harness.json` holds `"templates": true`. */
+const templatesOn = (top) => top !== null && harnessOfTree(top).declared?.templates === true;
+
 /** `template gate --hook`, before a call: decides each page the call shows and records each decision; the hooks
  * contract's deny when one is refused, `{}` otherwise. `--shown`, after a call that succeeded: a `shown` line for each
  * page `--hook` let through in that call. It acts only where `harness.json` holds `"templates": true`, and fails open:
@@ -176,8 +188,8 @@ function runGate(mode, seams, { stdout, stderr }) {
   const target = pageTarget(tool, payload?.tool_input);
   if (target === null) return stdout('{}'), 0;
   const folder = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : seams.cwd;
+  if (!templatesOn(seams.root ?? nearestHarness(folder))) return stdout('{}'), 0;
   const places = placesOf(folder, seams);
-  if (harnessOfTree(places.top).declared?.templates !== true) return stdout('{}'), 0;
   const at = new Date(seams.now).toISOString();
   const call = typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null;
   const record = (decision) => {
@@ -264,7 +276,7 @@ function shownOf(folder, days, seams) {
  * unchecked }` over the last `SHOWN_DAYS` days, or `null` where its `harness.json` does not hold `"templates": true`.
  * A record it cannot read throws, and the row says it cannot tell. */
 export function templatesHealth(project, home, { now = Date.now(), moments = [], slug } = {}) {
-  if (harnessOfTree(project).declared?.templates !== true) return null;
+  if (!templatesOn(project)) return null;
   const { escapes, unchecked } = shownOf(project, SHOWN_DAYS, { root: project, home, now, moments, slug });
   return { days: SHOWN_DAYS, escapes, unchecked };
 }

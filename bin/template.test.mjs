@@ -228,6 +228,21 @@ test('gate --hook does nothing where harness.json does not turn templates on, fo
   assert.equal(fs.existsSync(shownFile(on.home, 'p')), false);
 });
 
+test('gate --hook reads the nearest harness.json at or above the payload\'s folder, and answers {} where it does not turn templates on', (t) => {
+  const { root, home, done } = gateScratch();
+  t.after(done);
+  const nested = path.join(root, 'docs', 'pages');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.writeFileSync(path.join(nested, 'page.html'), '<p>hecho a mano</p>');
+  const hook = (cwd) => call(['gate', '--hook'], { home, slug: 'p', now: GATE_NOW, templates: PAGE_TEMPLATES, readStdin: () => JSON.stringify({ cwd, tool_name: 'Artifact', tool_use_id: 'u9', tool_input: { file_path: 'page.html' } }) });
+  assert.equal(JSON.parse(hook(nested).out).hookSpecificOutput.permissionDecision, 'deny');
+  const off = gateScratch({ on: false });
+  t.after(off.done);
+  fs.writeFileSync(path.join(off.root, 'page.html'), '<p>x</p>');
+  assert.equal(hook(off.root).out, '{}');
+  assert.equal(fs.existsSync(shownFile(home, 'p')), true, 'the nested page was recorded');
+});
+
 test('gate --hook lets a page through as unchecked when it cannot read the page, and says why on stderr', (t) => {
   const { home, hook, done } = gateScratch();
   t.after(done);
