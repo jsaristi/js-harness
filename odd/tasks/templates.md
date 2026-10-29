@@ -522,3 +522,12 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   d3ff2bbe), acknowledged; its reliability lens left 2 non-blocking suggestions, both holding, taken in unit 6 (tests
   only): a blank decision refused, and a gate that decided only pages holds no question's moment and reads no channel
   record (it fails on the window of unit 4, checked by putting it back).
+- Update 09:30Z: unit 6 is 3f09252d (Codex correct, lens reliability 0). Slice C is PR 656, ready notice sent 09:20Z.
+  Slice D is blocked: `rules change rules-live-in-the-harness --dry-run` refuses while `rule/visual-moments` (JH 79:
+  away-autonomy, reports-spanish-visual) is open, one change at a time. Its text is written and kept as a patch,
+  `rule-templates.patch` in the job's tmp: one bullet after "A memory note is never its home." in
+  `bin/lib/protocols-skill.mjs`, the subject gaining "an output he sees again and again, as a template of five
+  parts", the phrases gaining "An output the user sees again and again is cemented the same way, as a template of
+  five parts" and "and asks for a missing field alone.", the source keeping its 9 quotes as excerpts and adding
+  0f71b2c6 lines 14721 and 15262. Then `status-report` (L8) as the next change, its text in
+  `bin/lib/manifest.mjs`'s item 6, "What you propose next, and why". Each after the one before it lands; then T7.
