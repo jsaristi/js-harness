@@ -81,7 +81,7 @@ const CEILINGS = {
   'bin/resume.mjs': 1123,
   'evals/suite.mjs': 1129,
   'bin/sessions.mjs': 1008,
-  'bin/merge-queue.mjs': 1032,
+  'bin/merge-queue.mjs': 1006,
   'evals/codex-isolation-probe.mjs': 1021,
 };
 

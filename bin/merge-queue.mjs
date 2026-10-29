@@ -14,12 +14,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { removableWorktrees } from './lib/worktrees.mjs';
-import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF, lensDoor } from './check.mjs';
+import { allDocuments, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
 import { CI_WORKFLOW } from './lib/ci-gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
-import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
+import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
@@ -28,6 +28,9 @@ import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
 import { harnessHome } from './lib/home.mjs';
+
+// Where `notify --kind ready` has read it from (bin/notify.mjs).
+export { reviewEvidence };
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
@@ -288,40 +291,6 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
   // A red names its failing tests, as the gate log has them, for the session that is told (A(b)).
   const failing = done.ok ? [] : failingTests(harnessHomeOf(env), place, began);
   return { ok: done.ok, notRun: false, said, ...(failing.length > 0 && { failing }) };
-}
-
-/** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
- * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. A merge changes
- * the files it leaves as none of its parents has them (`--diff-merges=combined`), which is where an edit made in it
- * is. `null` when git does not answer. */
-function markdownlessCommits(cwd, main, head) {
-  // The log `reviewCoverage` reads, by the same reader: names as git has them (`-z`), no signature before a commit.
-  const log = gitOut(spawnSync, cwd, ['log', '-z', '--diff-merges=combined', '--root', '--no-show-signature', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${main}..${head}`]);
-  const commits = log === null ? null : loggedCommits(log);
-  return commits === null ? null : commits.filter((commit) => commit.files.some((file) => !/\.md$/i.test(file)));
-}
-
-/** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
- * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused as `lensDoor` refuses
- * (no complete lens record, or a lens skip; asked where the Codex review is off even with the lens review off), and, when it passes, `lines`: one for each code commit, with the Codex record
- * that covers it, so the lead reads the coverage commit by commit and needs no look of their own. No line of the feature
- * document is asked for since F8 S11 (odd/tasks/f8-s11-complements.md, L11). */
-export function reviewEvidence(cwd, main, head) {
-  const codex = checkCodexReviews(cwd, head);
-  const refused = codex.pass ? lensDoor(cwd, head) : codex;
-  if (refused) return refused;
-  const off = codexReviewOffAt(cwd, head);
-  const coverage = off ? null : reviewCoverage(cwd, { from: main, tip: head });
-  const codeCommits = off ? markdownlessCommits(cwd, main, head) : coverage.unknown ? null : coverage.codeCommits;
-  if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read' };
-  const lines = codeCommits.map((commit) => {
-    const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;
-    const codexSaid = off ? 'the Codex review is off'
-      : record ? `Codex ${record.base.slice(0, 7)}..${record.head.slice(0, 7)} ${record.outcome} ${record.reviewedAt.slice(0, 10)}`
-        : 'no Codex record read for it';
-    return `${commit.shortId} ${commit.subject}: ${codexSaid}`;
-  });
-  return { pass: true, detail: codex.detail, lines };
 }
 
 /** Whether every path the candidate at `place` changes against `main` is a document that main's harness.json, in
@@ -669,7 +638,12 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
         stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
         return 3;
       } else {
-        return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+        // The pre-push hook's reason, its check's failing rows, is in what git printed before its own line: on the
+        // push's standard output where Git for Windows hands it the hook's (2.54), else on its error (PR 658, 2026-10-29).
+        const hook = [pushed.out, pushed.err].flatMap((output) => rowsAndLines(output, 'FAIL'));
+        if (hook.length === 0) return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+        const said = hook.flatMap(({ row, lines }) => [`  ${row}`, ...lines.map((line) => `    ${line}`)]);
+        return fail([`could not push main: ${pushed.err.split('\n').at(-1) || 'git gave no reason'}. The pre-push hook said:`, ...said].join('\n'));
       }
     }
     log.record.landed = merged.map((pr) => pr.number);
