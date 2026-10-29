@@ -68,8 +68,9 @@ function faultsOfEntry(entry, readFile, hooked) {
 // The characters after which a `/` starts a regular expression literal, not a division.
 const BEFORE_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
-// The keywords after which a `/` starts a regular expression literal: each ends where an operand begins.
-const KEYWORD_BEFORE_REGEX = /(?:^|[^\w$.])(?:return|typeof|case|do|else|in|of|new|delete|void|throw|instanceof|yield|await)$/;
+// The reserved words after which a `/` starts a regular expression literal: each ends where an operand begins. `of`,
+// `yield` and `await` are left out: each may name a variable, which a `/` divides.
+const KEYWORD_BEFORE_REGEX = /(?:^|[^\w$.])(?:return|typeof|case|do|else|in|new|delete|void|throw|instanceof)$/;
 
 /** Whether a `/` after the code `before` starts a regular expression literal: after one of `BEFORE_REGEX`, one of
  * those keywords or at the start, but not after a postfix `++` or `--`, which ends an operand, so the `/` divides it. */
@@ -100,7 +101,10 @@ function regexEnd(source, start) {
 
 /** `{ code, quoted }`: `source` with each comment blanked to spaces, its newlines kept, and which of its positions lie
  * inside a quoted string, a template literal (its `${}` holes too, however deep) or a regular expression literal,
- * where a `//` or `/*` is no comment, a quote opens no string and a `test(` is no call. */
+ * where a `//` or `/*` is no comment, a quote opens no string and a `test(` is no call. It reads a test file's titles,
+ * not every program: a `/` that opens a regular expression after `)`, `]` or `}` (`if (x) /re/`) is read as a
+ * division, and a quote in it can then hide what follows on its line. That is a test written as no test file writes
+ * one, and the check names it as a missing test, so it is seen. */
 function withoutComments(source) {
   let out = '';
   const quoted = new Uint8Array(source.length);
@@ -114,8 +118,11 @@ function withoutComments(source) {
       quoted[i] = 1;
       out += char;
       if (char === '\\') {
-        out += source[++i] ?? '';
-        quoted[i] = 1;
+        // An escaped line break continues the string, CRLF as one break.
+        const escaped = source[i + 1] === '\r' && source[i + 2] === '\n' ? 2 : 1;
+        out += source.slice(i + 1, i + 1 + escaped);
+        quoted.fill(1, i + 1, i + 1 + escaped);
+        i += escaped;
       } else if (quote === '`' && char === '$' && source[i + 1] === '{') {
         out += source[++i];
         quoted[i] = 1;

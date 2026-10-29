@@ -198,6 +198,8 @@ test('a quote inside a regular expression or a nested template literal does not 
     `const quotes = /['"]/;\n// ${golden}\n${refusal}\n`,
     `const s = /[/']/g.test(x) ? 1 : 2;\n/* ${golden} */\n${refusal}\n`,
     `const t = \`a \${\`it's \${b}\`} c\`;\n// ${golden}\n${refusal}\n`,
+    `const fixture = 'a \\\r\n${golden.replace(/'/g, '"')}';\r\n${refusal}\r\n`,
+    `const fixture = 'a \\\n${golden.replace(/'/g, '"')}';\n${refusal}\n`,
   ];
   for (const text of shapes) assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': text }))), missing, text);
   const declared = [
@@ -206,6 +208,7 @@ test('a quote inside a regular expression or a nested template literal does not 
     `let n = 4; n++ / 2; ${golden} /x/.test('x'); m-- / 2; ${refusal} /y/.test('y');\n`,
     `function quoted(x) { return /['"]/.test(x); }\n${golden}\n${refusal}\n`,
     `const kind = typeof /'/;\n${golden}\n${refusal}\n`,
+    `const of = 4, yield_ = 1; of / 2; ${golden} /x/.test('x');\n${refusal}\n`,
     `const odd = 1 /'/'.length;\n${golden}\n${refusal}\n`,
     `const t = \`a \${{ k: '}' }.k} c\`;\n${golden}\n${refusal}\n`,
   ];
