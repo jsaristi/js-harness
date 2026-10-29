@@ -137,6 +137,39 @@ test('a component the home does not hold is refused before anything is touched',
   assert.deepEqual(snapshot(root), before);
 });
 
+test('rule-<id> takes out the spans tied to that rule in the texts js-harness wrote, keeps the line endings, and touches nothing else', (t) => {
+  const root = claudeHome(tmp(t));
+  put(root, '.claude/CLAUDE.md', '# global\r\n\r\n- Keep this line.\r\n- Ask one at a time (`rule:questions-one-place`).\r\n\r\nFirst sentence stays. Every question of the project reaches the user in one place. Last stays.\r\n');
+  put(root, '.claude/skills/js-harness-protocols/SKILL.md', '# protocols\n\nAsk the user nothing while an orchestrator holds its role.\n\nOther text.\n');
+  put(root, '.claude/skills/review/SKILL.md', 'Every question of the project reaches the user in one place.\n');
+  const before = snapshot(root);
+  applyWithout(root, ['rule-questions-one-place'], 'claude');
+  const after = snapshot(root);
+  assert.equal(after['.claude/CLAUDE.md'], '# global\r\n\r\n- Keep this line.\r\n\r\nFirst sentence stays. Last stays.\r\n');
+  assert.equal(after['.claude/skills/js-harness-protocols/SKILL.md'], '# protocols\n\n\nOther text.\n');
+  for (const rel of ['.claude/CLAUDE.md', '.claude/skills/js-harness-protocols/SKILL.md']) {
+    delete before[rel];
+    delete after[rel];
+  }
+  assert.deepEqual(after, before, 'another tool\'s skill keeps its words');
+});
+
+test('the evidence of rule-<id> is the words it cut, never a line it rewrote or one after it that stays', (t) => {
+  const root = claudeHome(tmp(t));
+  put(root, '.claude/CLAUDE.md', '# global\n\nFirst sentence stays. Every question of the project reaches the user in one place. Last stays.\n\n- A line well after the cut, which the arm keeps whole.\n');
+  const { lines } = withoutEvidence(root, 'rule-questions-one-place', 'claude');
+  assert.deepEqual(lines, ['Every question of the project reaches the user in one place.']);
+});
+
+test('rule-<id> of no live rule, or of a rule the home holds no text of, is refused before anything is touched', (t) => {
+  const root = claudeHome(tmp(t));
+  const before = snapshot(root);
+  assert.throws(() => checkWithout(root, ['rule-no-such-rule'], 'claude'), (err) => err instanceof ArmError && /no-such-rule is not a live rule/.test(err.message));
+  assert.throws(() => checkWithout(root, ['rule-questions-one-place'], 'codex'), (err) => err instanceof ArmError && /current arm under another name/.test(err.message));
+  assert.throws(() => applyWithout(root, ['rule-questions-one-place'], 'claude'), ArmError);
+  assert.deepEqual(snapshot(root), before);
+});
+
 test('a plugin already switched off is not in the home', (t) => {
   const root = claudeHome(tmp(t));
   put(root, '.claude/settings.json', { enabledPlugins: { 'engram@engram': false } });

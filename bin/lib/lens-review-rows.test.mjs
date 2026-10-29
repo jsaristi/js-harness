@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkLensReviews, checkReviewDebt, lensDoor, owedSkipLines } from './lens-review-rows.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
-import { appendLensReview, LENS_REVIEW_SCHEMA } from './lens-reviews.mjs';
+import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 
@@ -25,10 +25,11 @@ const commit = (file, text, message) => {
   git('commit', '-q', '-m', message);
   return git('rev-parse', 'HEAD');
 };
-/** A lens record of `base..head` as `lens-review` writes it, with `over` in place of its fields. */
+/** A lens record of `base..head` as `lens-review` writes it, its run line first, with `over` in place of its fields. */
 const record = (base, head, over = {}) => {
-  const { subjectHash } = lensCandidate(dir, { base, head });
-  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: new Date().toISOString(), outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }], ...over });
+  const subjectHash = over.subjectHash ?? lensCandidate(dir, { base, head }).subjectHash;
+  const run = startLensRun(dir, { base, head, subjectHash });
+  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run, reviewedAt: new Date().toISOString(), outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }], ...over });
 };
 const row = () => checkLensReviews(dir, 'HEAD');
 
@@ -71,6 +72,20 @@ test('a record whose range no longer hashes to its subject hash covers nothing, 
   const said = row();
   assert.equal(said.pass, false);
   assert.match(said.detail, /1 record whose range no longer hashes as reviewed/);
+});
+
+// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: provenance is what refuses a well-shaped forged
+// record, one a session appended by hand, since it names no run line `lens-review` wrote first.
+test('a well-shaped record that names no run line lens-review wrote is refused by the push, and said', () => {
+  const { subjectHash } = lensCandidate(dir, { base, head });
+  const forged = { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, reviewedAt: new Date().toISOString(), outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] };
+  appendLensReview(dir, forged);
+  appendLensReview(dir, { ...forged, run: 'f'.repeat(36) });
+  const said = row();
+  assert.equal(said.pass, false);
+  assert.match(said.detail, /2 records that are no evidence \(an incomplete run, or a record no run line of lens-review names, among them\) ignored/);
+  record(base, head);
+  assert.equal(row().pass, true);
 });
 
 test('an incomplete run covers nothing; a skip covers and is listed with its reason', () => {

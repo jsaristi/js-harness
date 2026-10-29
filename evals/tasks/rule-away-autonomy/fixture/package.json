@@ -1,0 +1,13 @@
+{
+  "name": "ledger",
+  "version": "1.2.0",
+  "description": "Exports the entries of a small ledger",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

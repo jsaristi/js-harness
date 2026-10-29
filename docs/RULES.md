@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `942b6c0a6e23`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
+Hash `50b0e7db019b`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
 
 ## Sebastián's
 
@@ -13,9 +13,9 @@ A session says when it finished and where to return, watches its context, and a 
 - Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
 
 ### away-autonomy
-Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
+Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure with its goals, and when he is back its return checked against them: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-27. Row: reports. Source: his words of 2026-10-27, 2026-10-11, checked by the command on 2026-10-27.
+- Since 2026-10-28. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, checked by the command on 2026-10-28.
 
 ### background-task-declared
 A background task says what it is for and what ends it, and is stopped when its condition resolves: "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step."
@@ -246,12 +246,12 @@ The most estimated tokens the root CLAUDE.md may hold, since Claude pays it with
 
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
-- Read by: `bin/contract.mjs`.
+- Read by: `bin/contract.mjs`, `bin/stretch.mjs`.
 - Since 2026-10-14. Row: reports. Source: design, `odd/tasks/task-contract.md`.
 
 ### control-phrase-min
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
-- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules.mjs`.
+- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules-coverage.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
 
 ### gate-log-command
@@ -328,7 +328,7 @@ How long one sensor of the gate may run before it is stopped and the commit refu
 
 ### session-stall
 How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
-- Read by: `bin/lib/manifest.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
+- Read by: `bin/lib/manifest.mjs`, `bin/lib/stretch.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
 
 ### throughput-backfill-days

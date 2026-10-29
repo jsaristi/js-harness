@@ -23,6 +23,7 @@ Commands:
   progress    Show roadmap and feature progress from their checkboxes; --pace [--days <n>] gives the tasks closed, reopened, added and removed each day from the default branch's history; --json gives the data; --cwd names another project.
   report      The facts a status report is written from, since the last report: the pull requests merged into the default branch with their commits, each session's last notice, the questions answered and still open, and the roadmap phase by phase with what is left. --since <time> sets the cut; --mark records this report as the last one in the channel record, the only thing it writes.
   throughput  Table of a window's UTC days of work, every figure naming its source: pull requests merged and how long each waited, the gate lock's busy time and waits, commit gates here and on GitHub, lands, failing tests, Codex reviews, tasks closed and added, conflicts by file. js-harness throughput [--since <day>] [--until <day>] [--against <since>..<until>] [--json], where --against compares the window with an equal one before it, a row each, and judges nothing under the days of the rule throughput-compare-days a side; throughput snapshot [--day <day>] [--gate-log <file>]... keeps a settled day's gates under the home (.js-harness/throughput/<project>), because the gate log rotates in about two days; throughput status names a day with none and the reviews due; throughput reviewed (--day <day> | --shipped <day>) --found nothing|candidates and throughput shipped <item> [--day <day>] record the review's outcomes, which set when the next is due. The table and status write nothing.
+  stretch     A stretch of work planned and measured from the records (odd/tasks/stretch-protocol.md): js-harness stretch open --plan <file> checks the plan (hours, slots, goals that are commands, items that are one session's work each) and prints the departure, each estimate corrected by what the last stretches took and whether the queued work fills the hours; stretch bind <item> <session> names a queued item's session; stretch status [--goals] measures the open stretch, and runs its goals with --goals; stretch close runs the goals, records the stretch and prints the return. --json prints the view, --html <file> writes it as the fragment the lead shows in the chat. The record is .js-harness/throughput/<project>/stretches.jsonl under the home.
   contract    Task contracts: template, check (validate), run (the done-when commands), goal (the /goal condition), modes (each task's effort and sub-agent models).
   summary     The summary a work session leaves when it finishes: template --title "<title>" prints it, headed by the title and naming its file docs/sessions/<date>-<title-slug>.md; path --title prints only that file. The session fills it with facts and their evidence, commits and pushes it, and closes with notify --kind closed --summary <file>.
   failures    The register of what went wrong, docs/FAILURES.md: the totals, the count by class and one line per failure, the most seen first, with its state. failures <id> prints one entry whole; failures check runs the gate's row alone and exits 1 when the register is refused, and with --settled also while a failure is not settled (repeated with no control, a control owed that is stale, a control lost or seen again, or a measurement lost or seen again). Read-only: only an editor writes the register.
@@ -76,6 +77,7 @@ const COMMANDS = {
   progress: async () => (await import('./progress.mjs')).progressMain,
   report: async () => (await import('./report.mjs')).reportMain,
   throughput: async () => (await import('./throughput.mjs')).throughputMain,
+  stretch: async () => (await import('./stretch.mjs')).stretchMain,
   contract: async () => (await import('./contract.mjs')).contractMain,
   summary: async () => (await import('./summary.mjs')).summaryMain,
   failures: async () => (await import('./failures.mjs')).failuresMain,
@@ -126,6 +128,7 @@ const HELP = {
   progress: ['./progress.mjs', 'USAGE'],
   report: ['./report.mjs', 'USAGE'],
   throughput: ['./throughput.mjs', 'USAGE'],
+  stretch: ['./stretch.mjs', 'USAGE'],
   contract: ['./contract.mjs', 'USAGE'],
   summary: ['./summary.mjs', 'USAGE'],
   failures: ['./failures.mjs', 'USAGE'],

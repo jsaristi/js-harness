@@ -10,7 +10,7 @@
 import { spawnSync } from 'node:child_process';
 import { defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, remoteHoldsNoBranch, reviewCoverage } from './codex-review-coverage.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './project-functions.mjs';
-import { isValidLensReview, readLensReviews } from './lens-reviews.mjs';
+import { admittedLensReviews } from './lens-reviews.mjs';
 
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
@@ -34,7 +34,9 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   if (!tip) return { unknown: `cannot resolve ${head} to a commit` };
   const branch = defaultBranch(spawn, cwd, remote);
   if (!branch) return { unknown: `no default branch of ${remote} to compare against` };
-  const coverage = reviewCoverage(cwd, { from: branch.ref, tip, spawn, read: readLensReviews, isValid: isValidLensReview });
+  // A record counts only where the run line lens-review wrote first names it (lens-reviews.mjs, provenance).
+  const lens = admittedLensReviews(cwd, { spawn });
+  const coverage = reviewCoverage(cwd, { from: branch.ref, tip, spawn, read: () => lens.records, isValid: lens.admitted });
   if (coverage.unknown === MARKS_UNREAD) return { unknown: 'cannot read which files a review leaves out (`git check-attr --source` needs git 2.40 or later)' };
   if (coverage.unknown) return { unknown: `cannot list the commits in ${branch.label}..${head}` };
   const git = gitIn(cwd, spawn);
@@ -44,7 +46,7 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   const uncovered = coverage.uncovered.filter(due);
   const noteParts = [
     coverage.stale ? `${plural(coverage.stale, 'record')} whose range no longer hashes as reviewed` : '',
-    coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run among them)` : '',
+    coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run, or a record no run line of lens-review names, among them)` : '',
   ].filter(Boolean);
   return { tip, baseRef: branch.ref, base: branch.label, codeCommits, uncovered, skips: owedSkips(coverage, codeCommits), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
 }

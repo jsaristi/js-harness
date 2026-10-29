@@ -18,6 +18,7 @@ are worth keeping, but they read only what gentle-ai's provider builds, so S1 bu
 
 ## Done when
 - `node --test bin/lib/lens-candidate.test.mjs bin/lib/lens-result.test.mjs bin/lib/lens-reviews.test.mjs bin/lens-review.test.mjs bin/lib/lens-review-rows.test.mjs` exits 0
+- `node --test bin/lib/guard.test.mjs bin/guard.test.mjs bin/check-codex-reviews.test.mjs` exits 0 (T7)
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s1-reviews.md` exits 0
 - `npm run check` exits 0, and its `review` row names no gentle-ai
 - `grep -ci "gentle-ai.*review\|review.*gentle-ai" AGENTS.md` prints 0
@@ -69,6 +70,7 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - [x] T4 (kind: build) the gate: `check --push` refuses a code commit no complete lens record covers; a record counts only for its head commit and subject hash; Codex's record gains the subject hash; test first — S1, S3; inline; e4375922, fixed in d5c722f6
 - [x] T5 (kind: build) the skip debt: the `review` row of `check` lists both reviews' debt and skips with no gentle-ai, a `doctor` row lists skips, the merge door refuses a pull request that holds one; `AGENTS.md` and `CLAUDE.md` review lines — S3, S4; inline; in two slices (L8): the `review` row and `AGENTS.md` first, then `doctor`, the door and `CLAUDE.md`; 4834997f, 023eceb9, fixed in e35eb7dc (PR 613); `CLAUDE.md` in the commit that checks this box (L12)
 - [x] T6 (kind: verify) the probe in a scratch repo, three real slices, the incident rerun once asked — S7; inline; the probe 6 of 6 (L13), the incident set 13 of 20, no worse (L14)
+- [x] T7 (kind: build) the records only the commands write (reverse-engineering doc, section 13.3, row 3): `guard` refuses a file tool or a shell write to a review record, and a lens record counts only when it names the run line `lens-review` wrote first; test first — S1; inline, branch `f8-s1-records`; L16
 
 ## Log
 - L1 (2026-10-27, the brief from JH ORQ): "You are JH 62 · F8 S1: two reviews on every slice ...
@@ -215,6 +217,155 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
   - A Codex run was wasted: `docs/FAILURES.md` was edited while Codex reviewed, so it recorded nothing
     (`edit-during-review`). Run again on `d6867d8..b71ddb0`: correct (0.87); its first run's P2 (tilde fences) fixed
     in eaa577e6. Lenses risk and reliability on `d6867d8..b71ddb0`: complete, no finding.
+- L16 (2026-10-28, JH 69, the S1 defect task row 3 of section 13.3 of the reverse-engineering document gives, due once
+  S10 merged; the lead's brief): "guard refuses a file tool (Write, Edit, MultiEdit, NotebookEdit) or a shell write to
+  those record paths" and "A lens record is admitted only when it names a run line that the command wrote first, as
+  Codex's records already do". Decisions, the lead's by default:
+  - **The run line has a file of its own**, `lens-review-runs.jsonl` beside the records, as Codex's runs do; it holds
+    the run's id, range and subject hash and is written before any lens runs, and before a skip or a nothing-to-review
+    record. A record is admitted only when it is the first to name a run line of its own range and hash, so a second
+    line naming an incomplete run's id never makes it good.
+  - **No cut-over**: a lens record written before this names no run line and stops counting. A cut-over by date would
+    be read from the record a forger writes; a rerun costs cents a lens. A branch in flight whose lens records are older
+    reruns `lens-review` over its unpushed range once this is installed.
+  - **What the guard reads**: a path ending `js-harness/<one of the four record files>`, any case and separator, for
+    `Write`, `Edit`, `MultiEdit` and `NotebookEdit` (`Read` and `Grep` stay free); in a Bash command, a redirection to
+    one, `tee`, `truncate`, `rm`, `shred` or `mv` of one, `cp`, `install` or `ln` onto one, `sed`/`perl -i`, `dd of=`,
+    and an interpreter's command line that names one beside a call that writes a file, or calls a function of this
+    package that appends a record. A path in a variable or a script on standard input is not followed: prevention stops
+    the accident, provenance refuses the forgery.
+  - **Outside the brief's surface, by need**: `bin/lib/lens-review-rows.mjs` is where `check --push` reads the lens
+    records (the brief's `bin/lib/check*.mjs` names no file that exists); `bin/merge-queue.test.mjs` and
+    `bin/check-codex-reviews.test.mjs` wrote lens records with no run line, one line each.
+  - e7bc4215 built it. Its independent verifier (high-risk item 2, guards; one sub-agent, about 116k tokens) found no
+    blocker and two should-fix: provenance does not refuse a session that writes a run line and a record both, which
+    no file the session can write would fix, so the comments now say what it refuses and that only `guard` stands in
+    the other's way; and nothing works until a release with it is installed, since the pre-push hook runs the branch's
+    own `check` and the sessions the installed `lens-review` (said to the lead with the ready notice). Its nits taken,
+    test first: paths with `/./`, `//` or `..`; `bash -c`; `mv` and `cp -t` into the records' folder; `rm -rf
+    .git/js-harness`; a script's write call is read for what it writes, so reading a record and writing elsewhere
+    passes; a `>` inside quoted text passes. Left: a `cd` into the folder, a path in a variable, a script on stdin.
+  - gentle-ai approved e7bc4215 (lineage review-17f0584aece227d8, lens reliability) with a warning and two
+    suggestions, all taken test first: `appendJsonLine` left the list of appends (it writes any file); a record of
+    another range naming a run no longer claims it; the untested branches (`env`, assignments, `dd`, `install`, `ln`,
+    `shred`, `perl -i`) have cases.
+  - 0a832b2a closed those. Lenses risk, reliability and readability on `d2bc8ab2..0a832b2a`, run with the branch's
+    `node bin/js-harness.mjs lens-review` (the dogfood): complete, no finding, about 26,460 input tokens each; the run
+    line came first and the branch's `lens-review` push row passes on it, with the 28 older records ignored. Codex on
+    the same range, two parts, 256,364 input tokens: part 2 correct (0.89), part 1 incorrect (0.99), two P2: a
+    redirection was read only where it opened a word, so `printf x>>record` passed and quoted `'>record'` was refused;
+    and a script that only named `appendLensReview` was refused. gentle-ai approved 0a832b2a (lineage
+    review-2bb142cdacbcd360, lens reliability) with two warnings and a suggestion: the same glued redirection; a record
+    path held in a script's variable now passed; `admittedLensReviews` with no `where` had no test. All taken in the
+    next commit, tests written first: the shell reader gives an unquoted `>`, `>>` or `>|` as a word of its own
+    wherever it stands; an append counts only as a call; a write call given a variable is taken for the record the
+    script names, so reading a record and writing to a variable is refused too (the safe side).
+  - 9f4d1f23 closed those. Lenses risk and reliability on `0a832b2a..9f4d1f23`: complete, no finding, about 8,000
+    input tokens each. Codex's recheck incorrect (1.0): the redirection fixed, the append only partly: call-like text
+    inside a string (`console.log('appendLensReview(')`) was still refused. gentle-ai approved `e7bc4215..9f4d1f23`
+    (lineage review-a8c1461fb038d6d9) with a warning and a suggestion: `appendJsonLine(root, 'lens-reviews.jsonl', …)`
+    passed once it left the appends; `admittedLensReviews` dropped any dependency other than `spawn` and `where`. All
+    taken in the next commit, tests first (two red before it): a call is looked for in the script with its string
+    literals blanked, a template literal's `${…}` kept as code; `appendJsonLine` is a write call whose second argument
+    is what it writes; the other dependencies pass through.
+  - e56114a4 closed those. Lens reliability on `9f4d1f23..e56114a4` no finding; lens risk one warning, taken test
+    first in the next commit (one test red before it): blanking strings let a string run as code (`eval`,
+    `new Function`) and a script with a quote left open (in a regex literal or a comment) pass. A comment now opens
+    no string, and a script that leaves a quote open or runs a string is read whole, the safe side. Codex refused a
+    second recheck of the review that ended at 0a832b2a, so the slice is reviewed whole again from e7bc4215
+    (`codex-review --base e7bc4215 --again`); nothing else is open.
+  - b2bc9596 closed that; lenses risk and reliability on `e56114a4..b2bc9596` no finding. Codex on
+    `e7bc4215..b2bc9596` (one part, 105,270 input tokens) incorrect (0.98), two P2: two regex literals whose quotes
+    balance blanked the code between them, so a write passed; and a path written whole as `/tmp/lens-reviews.jsonl`
+    was refused for its name alone. gentle-ai approved `e7bc4215..b2bc9596` (lineage review-8be2952b691d6ab9) with
+    a warning (the same name-alone refusal) and two suggestions: `open(record, 'r', encoding='ascii')` read as a
+    write, and `cp -vt <folder>` not read as a target. All taken in the next commit, tests first (three red before
+    it): a script whose code holds any other `/` is read whole; a path in one string is a record only in the records'
+    folder, while a join is still read by its parts; `open`'s mode is its second argument or `mode=`; `-t` counts last
+    among short options.
+  - 9c291a1e closed those: Codex's recheck correct (0.97, both P2 fixed, 36,194 input tokens); lenses risk and
+    reliability no finding (about 6,040 input each). gentle-ai approved `e7bc4215..9c291a1e` (lineage
+    review-cc741a22bd352fda) with two warnings and a suggestion. Taken test first in the next commit (two red before
+    it): a string a child process runs (`execFileSync`, `execSync`, `subprocess.run`, `setTimeout`) is code, so the
+    script is read whole; `mv` of `.git/js-harness` away is refused as its `rm` is. Left as is: a `cp` or `mv` into a
+    folder named `js-harness` with no `.git` above it is refused for a file named like a record; it is the rule
+    `reviewRecordOf` holds for a path (`js-harness/<record>`), a refusal on the safe side, and narrowing the folder
+    alone would set the two apart.
+  - d61b5588 closed those. Lens risk no finding; lens reliability one warning, and Codex on `9c291a1e..d61b5588`
+    (75,486 input tokens) incorrect (0.98), two P2: `mv`'s new folder check took the last argument for the target,
+    so `mv -t /tmp .git/js-harness` passed and `mv -t .git/js-harness /tmp/notes.txt` was refused; and a timer given
+    a function made every string of its script code. gentle-ai approved `e7bc4215..d61b5588` (lineage
+    review-3629efa588f935e9) with two warnings: a write call or an append reached by reference passed (`.call`, a
+    variable holding it, `m['appendLensReview']`, `fs['appendFileSync']`). All taken in the next commit, tests first
+    (three red before it): `mv` reads its sources as `writtenInto` does (`moveParts`); a timer is code only given a
+    string; an append named anywhere in a script's code, not only called, is refused, and a member named in brackets
+    is read as `.name`. A string in a variable used as a member name stays unfollowed, with a path in a shell
+    variable, a script on stdin and a `cd` into the folder.
+  - 9e167848 closed those: Codex's recheck correct (0.97, both P2 fixed, 37,730 input tokens); lens reliability no
+    finding; lens risk one warning: a timer given a string through a variable ran it unread. gentle-ai approved
+    `e7bc4215..9e167848` (lineage review-5a57a8be933c0ac4) with two warnings: a script read whole lost its bracketed
+    members' reading, and `rm` of a glob inside the folder or of `.git` itself passed. All taken in the next commit,
+    tests first (two red before it): a timer is code unless given a function written in place; a script read whole
+    keeps `fs['appendFileSync']` read as a call; `rm` or `mv` of `.git`, or of a glob in `.git/js-harness`, is refused.
+  - d153e61e closed those. Lens risk no finding; lens reliability one warning, and Codex the same P2 with one more:
+    `setTimeout( () => …)` with a space read as running a string (the `\s*` gave way to the lookahead), and a glob in
+    the folder that can match no record (`*.tmp`, `sessions*.jsonl`) was refused. Codex's run wrote no record: this
+    session edited the worktree while it ran, and `codex-review` refuses a range whose files changed under it (about
+    80,000 input tokens spent for findings only; the review is run again from 9e167848). gentle-ai approved
+    `e7bc4215..d153e61e` (lineage review-b873a62fba67a33c) with a warning: `rm -rf vendor/lib/.git`, another
+    project's git dir, was refused. All taken in the next commit: the lookahead also refuses a space; a glob is refused
+    only when it can match a record's name (`globTakesRecord`); only `.git` from where the command runs is this
+    checkout's, and an absolute path to it is not followed, like a `cd`. The space and glob tests were red first; the
+    two other-`.git` tests were written with the change, not before it.
+  - 4eb7449a closed those. Codex on `9e167848..4eb7449a` (recorded, 64,456 input tokens) incorrect (0.99), one P2,
+    and lens reliability the same: `[!` became `[^` before the escape, so `[!a]*`, which takes every record, passed
+    and `[!cl]*`, which takes none, was refused. Lens risk one warning, left as is: `rm -rf` of an absolute path to
+    this `.git` passes; the guard has no repository root without running git in the hook on every command, and
+    gentle-ai asked for the narrowing. gentle-ai approved `e7bc4215..4eb7449a` (lineage review-40ecc2f791343b66) with
+    a warning: a write call whose path mixes a string and a variable (`path.resolve('.', f)`, `p + ''`) passed. Both
+    taken in the next commit, tests first (two red before it): a glob is read piece by piece, a class keeping its
+    negation; a path that is anything but one string is taken for the record the script names.
+  - b98b42a6 closed those: Codex's recheck correct (0.97, 30,684 input tokens); lenses risk and reliability no
+    finding (about 4,770 input each). gentle-ai approved `e7bc4215..b98b42a6` (lineage review-c60494a6b896c7ce) with a
+    warning: a glob in the git dir, `rm -rf .git/*` or `.git/js-harn*`, takes the records' folder and passed. Taken in
+    the next commit, test first (one red before it): a glob in `.git` is refused when it can match `js-harness`, and
+    `.git/refs/*` or `.git/*.lock` still pass.
+  - 1ac52968 closed that: Codex correct (0.94, 97,549 input tokens); lenses risk and reliability no finding (about
+    4,160 input each). gentle-ai approved `e7bc4215..1ac52968` (lineage review-dd4dbff44f862097) with two warnings
+    and a suggestion: a trailing slash (`rm -rf .git/*/`) and a glob naming the git dir (`rm -rf .g*`) passed; `eval
+    'echo x >> <record>'` passed; a test comment sat above the wrong cases. All taken in the next commit, tests first
+    (one red before it): a trailing slash is dropped before a glob is read; a glob opening with a dot that can match
+    `.git` is refused, while `rm -rf *` passes, a shell's `*` leaving out a dot file; `eval` is read as `bash -c` is.
+  - 0e192478 closed those. Lenses risk and reliability no finding (about 5,210 input each). Codex (recorded, 97,342
+    input tokens) incorrect (0.99), two P2: `eval -- '<removal>'` passed, the `--` read as the program; and
+    `rm -rf .git/js-harness/*/`, which takes only folders, was refused. gentle-ai approved `e7bc4215..0e192478`
+    (lineage review-06603c68dfa91912) with two warnings: a write call held instead of called
+    (`fs.appendFileSync.call`, `const w = fs.writeFileSync`, a destructured one) passed; and a record named by the
+    package's constant (`m.LENS_REVIEWS_FILE`) or path function (`codexReviewsPath`) passed. All taken in the next
+    commit, tests first (three red before it): `eval` drops a leading `--`; a trailing slash in the records' folder
+    takes no record; a held write call with a record named anywhere is refused; the constants and path functions name
+    their records (`RECORD_HANDLES`, held to the modules by the name test).
+  - e604ad1f closed those. Codex's recheck correct (0.98, 34,430 input tokens); lens risk no finding; lens reliability
+    one warning: a held `rename`, `truncate` or `unlink` passed (`const r = fs.renameSync; r('x', record)`). gentle-ai
+    approved `e7bc4215..e604ad1f` (lineage review-af2044e046085837) with a warning: the folder and glob patterns
+    matched under any prefix (`vendor/.git/js-harness`), against the narrowing to this checkout's `.git`. Both taken in
+    the next commit, tests first (two red before it): `HELD_WRITE` holds the three; both patterns are anchored at the
+    `.git` where the command runs. `rm` and `open` stay out of `HELD_WRITE`: as bare words they are too common.
+  - d6c504a7: Codex correct (0.96, 94,590 input tokens). Lenses risk and reliability one warning each, the same: the
+    anchoring let `rm -rf D:/r/.git/js-harness/` through, which the base refused. My reading of gentle-ai's warning was
+    wrong: its comment narrowed the bare `.git` to this checkout, not `.git/js-harness`, and I narrowed the code to
+    the unsafe side. gentle-ai approved `e7bc4215..d6c504a7` (lineage review-a6fdd82604eac83d) with two warnings, not
+    regressions: a glob in the git dir's own name with the folder after it (`rm -rf .g*/js-harness`) passed; and a
+    folder of forged records copied into the git dir (`cp -r /tmp/scratch/js-harness .git`) passed. All taken in the
+    next commit, tests first (16 cases, each passing HEAD's guard and refused by the fix): a path is read part by
+    part, each part a glob as the shell reads it (a leading dot matched only by a dot), `.git/js-harness` under any
+    prefix; a copy into a git dir of a folder that can be the records' folder, or of what a folder holds (`dir/.`),
+    is refused, and so is one into the records' folder of what a folder holds or of a glob that can match a record.
+  - d81ca0f2 closed those: Codex correct (0.86); lenses risk and reliability no finding. gentle-ai approved
+    `e7bc4215..d81ca0f2` (lineage review-a6c643931ce990cf) with one warning, left as is: a write call whose path is
+    not one literal (a `path.join` of the temp dir and a file named `lens-reviews.jsonl`) is refused when any part
+    names a record, in any folder. It is the safe side, chosen in e604ad1f (`recordNamedIn`) because a joined path cannot be read
+    without running it; it costs one refused call, and a scratch file named as a record is rare. T7 is done.
 - gentle-ai on `82412009..6bc94451`: medium, not due (under_budget, 436 lines), assessed by the commit's gate.
 - gentle-ai on `6bc94451..eb518c07`: medium, not due (under_budget, 435 lines); on `eb518c07..7ccc7033`: medium, not due (under_budget, 16 lines).
 - gentle-ai on `7ccc7033..2d0d2ef0`: medium, not due (under_budget, 81 lines).
@@ -226,6 +377,21 @@ orchestrator before it runs. A lens review of a slice is work, not an eval (cent
 - gentle-ai on `d6867d86..7b8a0a6e` (7b8a0a6e): medium, reviewed and approved (lineage review-0174f325f0f58bea, lenses risk and reliability), three advisory findings taken in 41c08b96 and 484df031 (L15).
 - gentle-ai on `7b8a0a6e..41c08b96` (41c08b96): medium, reviewed and approved (lineage review-6b678a0a52436631, lens reliability), two advisory findings: the comma tests taken in 484df031; a comma beside the object stays refused, since a refusal costs a run and a false complete breaks S1's rule.
 - gentle-ai on `484df031..eaa577e6` (484df031, eaa577e6): medium, reviewed and approved (lineage review-e23cd3803964664e, lens reliability), two advisory findings left for later work: a `~~~` prose line on one side of a bare object is now refused (the safe side), and no test reads an object inside a tilde fence as complete.
+- gentle-ai on `d2bc8ab2..e7bc4215` (e7bc4215): medium, reviewed and approved (lineage review-17f0584aece227d8, lens reliability), a warning and two suggestions, all taken test first in the next commit (L16).
+- gentle-ai on `e7bc4215..0a832b2a` (0a832b2a): medium, reviewed and approved (lineage review-2bb142cdacbcd360, lens reliability), two warnings and a suggestion, all taken in the next commit (L16); Codex on `d2bc8ab2..0a832b2a` incorrect on part 1 (two P2, taken), correct on part 2; lenses no finding.
+- gentle-ai on `e7bc4215..9f4d1f23` (0a832b2a, 9f4d1f23): medium, reviewed and approved (lineage review-a8c1461fb038d6d9), a warning and a suggestion, both taken in the next commit (L16); Codex's recheck of `0a832b2a..9f4d1f23` incorrect (one P2 left, taken); lenses no finding.
+- gentle-ai on `e7bc4215..b2bc9596` (0a832b2a to b2bc9596): medium, reviewed and approved (lineage review-8be2952b691d6ab9, lens reliability), a warning and two suggestions, all taken in the next commit (L16); Codex on `e7bc4215..b2bc9596` incorrect (two P2, taken); lenses on e56114a4 one warning (taken in b2bc9596), on b2bc9596 no finding.
+- gentle-ai on `e7bc4215..9c291a1e` (0a832b2a to 9c291a1e): medium, reviewed and approved (lineage review-cc741a22bd352fda, lens reliability), two warnings and a suggestion: the child-process warning and the suggestion taken in the next commit, the `js-harness` folder warning left with its reason (L16); Codex's recheck of `b2bc9596..9c291a1e` correct (0.97); lenses no finding.
+- gentle-ai on `e7bc4215..d61b5588` (0a832b2a to d61b5588): medium, reviewed and approved (lineage review-3629efa588f935e9, lens reliability), two warnings, both taken in the next commit (L16); Codex on `9c291a1e..d61b5588` incorrect (two P2, taken); lens reliability one warning (the same `mv -t`, taken).
+- gentle-ai on `e7bc4215..9e167848` (0a832b2a to 9e167848): medium, reviewed and approved (lineage review-5a57a8be933c0ac4, lens reliability), two warnings, both taken in the next commit (L16); Codex's recheck of `d61b5588..9e167848` correct (0.97); lens risk one warning (taken), reliability no finding.
+- gentle-ai on `e7bc4215..d153e61e` (0a832b2a to d153e61e): medium, reviewed and approved (lineage review-b873a62fba67a33c, lens reliability), one warning, taken in the next commit (L16); Codex on `9e167848..d153e61e` incorrect (two P2, taken) but not recorded, the worktree changed under it; lens reliability one warning (taken), risk no finding.
+- gentle-ai on `e7bc4215..4eb7449a` (0a832b2a to 4eb7449a): medium, reviewed and approved (lineage review-40ecc2f791343b66, lens reliability), one warning, taken in the next commit (L16); Codex on `9e167848..4eb7449a` incorrect (one P2, taken); lens reliability the same P2, lens risk one warning left with its reason.
+- gentle-ai on `e7bc4215..b98b42a6` (0a832b2a to b98b42a6): medium, reviewed and approved (lineage review-c60494a6b896c7ce, lens reliability), one warning, taken in the next commit (L16); Codex's recheck of `4eb7449a..b98b42a6` correct (0.97); lenses no finding.
+- gentle-ai on `e7bc4215..1ac52968` (0a832b2a to 1ac52968): medium, reviewed and approved (lineage review-dd4dbff44f862097, lens reliability), two warnings and a suggestion, all taken in the next commit (L16); Codex on `b98b42a6..1ac52968` correct (0.94); lenses no finding.
+- gentle-ai on `e7bc4215..0e192478` (0a832b2a to 0e192478): medium, reviewed and approved (lineage review-06603c68dfa91912, lens reliability), two warnings, both taken in the next commit (L16); Codex on `1ac52968..0e192478` incorrect (two P2, taken); lenses no finding.
+- gentle-ai on `e7bc4215..e604ad1f` (0a832b2a to e604ad1f): medium, reviewed and approved (lineage review-af2044e046085837, lens reliability), one warning, taken in the next commit (L16); Codex's recheck of `0e192478..e604ad1f` correct (0.98); lens reliability one warning (taken), risk no finding.
+- gentle-ai on `e7bc4215..d6c504a7` (0a832b2a to d6c504a7): medium, reviewed and approved (lineage review-a6fdd82604eac83d, lens reliability), two warnings, both taken in the next commit (L16); Codex on `e604ad1f..d6c504a7` correct (0.96); lenses risk and reliability one warning, the same regression (taken).
+- gentle-ai on `e7bc4215..d81ca0f2` (0a832b2a to d81ca0f2): medium, reviewed and approved (lineage review-a6c643931ce990cf, lens reliability), one warning left with its reason (L16); Codex on `d6c504a7..d81ca0f2` correct (0.86); lenses no finding.
 
 ## Probe
 The diet's six behaviours (S7), in a scratch repository with a bare remote and the branch's CLI, 2026-10-27
@@ -245,6 +411,13 @@ L10 (24,950 and 14,060), L11's fix (4,430), L13 (5,040, 3,800; the probe's own, 
 run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
+T7 done (JH 69, 2026-10-28 ~15:00Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`, 17
+commits from e7bc4215 to d81ca0f2 and this record's, each reviewed (the gentle-ai lines above). Left: push
+`f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr <n>` saying the bad news: nothing
+works until a release with it is installed, and every in-flight branch reruns `lens-review` over its range once it is
+(older lens records stop counting); then `closed` with its summary.
+
+Before T7:
 State at 2026-10-27 ~22:25Z. S1 is built: T1 to T6 done, PRs 607, 608 and 613 landed, PR 614 (`f8-s1-close`) ready
 and told. Its pass is met (`## Probe`). Left: PR 614's land by the queue, gentle-ai's review of 96ffb9f9 when the Stop
 hook offers it (approved, the line above), the session summary and the closed notice. Open for later work, not S1's: the

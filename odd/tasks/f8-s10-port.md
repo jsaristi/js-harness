@@ -352,7 +352,10 @@ None: S10 is closed (L26). PRs 615, 617, 619, 620, 621 and 623 are merged.
 - L26 (2026-10-28, 05:40 local): PRs 620, 621 and 623 merged. He answered question 102 "Aplicar ahora" (transcript
   `0f71b2c6`, line 7242, read before the run); the lead installed S10 on his machine at 05:14. The incident rerun ran
   once, `f8-s10-incidents` (results committed), the `current` arm at effort high on `4ccb184f`, 10:17Z to 10:39Z:
-  13 of 20 (false premise 2 of 4), at the baseline's L of 13 and above its worse line of 10, so no worse; cases 01, 02 and 05 still fail every trial, and 10 passed 1 of 2; $10.61. S6's pass line holds: the probe 5 of 5 and the incident set no worse. Not checked: that the
-  trial homes held his post-install files byte for byte (the run started three minutes after the install wrote them;
-  the setup's item hashes differ from his files', and the sandbox may rewrite them). His `outputStyle` stays Neutral
+  13 of 20 (false premise 2 of 4), at the baseline's L of 13 and above its worse line of 10, so no worse; cases 01, 02 and 05 still fail every trial, and 10 passed 1 of 2; $10.61. S6's pass line holds: the probe 5 of 5 and the incident set no worse. The trial homes held his
+  post-install files: the run's setup fingerprint (`fingerprintOf` in `evals/home.mjs`, recomputed over his home with
+  its `settledBytes`) matches his `.claude/settings.json`, `.claude/CLAUDE.md` and `.claude/output-styles`. Its
+  `.claude/skills` item differs only by files the host's skill sync wrote after the run started (two under
+  `skills/synced/`, `find -newermt 05:17`); the `js-harness-*` skills were last written at 05:14. (gentle-ai's R3-001
+  on `1e173dde` asked for this caveat to reach the roadmap; checked, it no longer holds.) His `outputStyle` stays Neutral
   (Q101), so the `js-harness` style is installed but not selected in these trials.

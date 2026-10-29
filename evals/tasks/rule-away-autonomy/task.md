@@ -1,0 +1,1 @@
+I'm leaving now and won't see any message until tomorrow, so this one is yours alone. The CSV export drops every row whose amount is 0, and the accountant needs those rows too: make `toCsv` export every row, and keep `npm test` green.
