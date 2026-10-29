@@ -6,6 +6,7 @@
 
 import { TASK_KINDS } from './contract.mjs';
 import { ruleValue } from './rules.mjs';
+import { closesProblem } from './stretch-forecast.mjs';
 import { busySeconds, median } from './throughput.mjs';
 
 const HOUR_MS = 3_600_000;
@@ -42,7 +43,7 @@ function itemProblem(entry) {
   if (!isRange(entry.hours)) return `item ${entry.id} needs hours as [low, high], both above 0 and low first`;
   if (entry.session !== undefined && entry.session !== null && !isText(entry.session)) return `item ${entry.id} names its session as text, such as "JH 71"`;
   if (entry.waitsFor !== undefined && !isText(entry.waitsFor)) return `item ${entry.id} says what it waitsFor as text: what only the user can give`;
-  return null;
+  return closesProblem(entry.id, entry.closes);
 }
 
 /** An item is one session's work, so a session named by two items is refused: their time could not be told apart. */
@@ -72,7 +73,9 @@ export function parsePlan(value) {
       hours: value.hours,
       slots: value.slots,
       goals: value.goals.map(({ id, text, command }) => ({ id, text, command })),
-      items: value.items.map(({ id, title, kind, hours, session, waitsFor }) => ({ id, title, kind, hours: [...hours], session: session ?? null, ...(waitsFor ? { waitsFor } : {}) })),
+      items: value.items.map(({ id, title, kind, hours, session, waitsFor, closes }) => ({
+        id, title, kind, hours: [...hours], session: session ?? null, ...(waitsFor ? { waitsFor } : {}), ...(closes ? { closes: closes.map((one) => ({ in: one.in, step: one.step })) } : {}),
+      })),
       waits: value.waits ?? [],
     },
   };

@@ -34,6 +34,13 @@ test('a plan with no goal, an unknown kind, a range upside down, a repeated id o
   assert.match(parsePlan('not an object').error, /object/);
 });
 
+test('an item may name the rows it closes, kept as written; a plan without them reads as before', () => {
+  const closes = [{ in: 'F8 plan', step: 'S13' }];
+  assert.deepEqual(parsePlan(plan({ items: [{ ...item('W1', 'build', [2, 3]), closes }] })).plan.items[0].closes, closes);
+  assert.equal('closes' in parsePlan(plan()).plan.items[0], false);
+  assert.match(parsePlan(plan({ items: [{ ...item('W1', 'build', [2, 3]), closes: [{ in: 'F8 plan' }] }] })).error, /W1.*in.*step/);
+});
+
 test('an item is one session\'s work: two items naming the same session are refused', () => {
   assert.match(parsePlan(plan({ items: [item('W1', 'build', [1, 2], 'JH 7'), item('W2', 'docs', [1, 2], 'JH 7')] })).error, /JH 7.*W1.*W2/);
 });
