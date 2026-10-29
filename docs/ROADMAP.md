@@ -403,7 +403,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   ahora").
 - **State:** done (PRs 615, 617, 619, 620, 621, 623; `odd/tasks/f8-s10-port.md`).
 - **Later fix:** a hook entry the user's host file already held, identical to one of ours, is
-  recorded `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust (JH 81, found by
+  recorded `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust (PR 657, JH 81, found by
   JH 80's verifier on PR 653; `docs/sessions/2026-10-29-jh-81-uninstall-keeps-a-users-hook-entry.md`).
 
 ### S11 The complements under js-harness

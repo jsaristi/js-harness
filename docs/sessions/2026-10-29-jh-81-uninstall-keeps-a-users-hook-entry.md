@@ -1,7 +1,7 @@
 # JH 81 · Uninstall keeps a hook entry the user already had
 
 Opening: `js-harness sessions --opening 'JH 81 · Uninstall keeps a hook entry the user already had'`. Branch
-`fix/uninstall-keeps-user-hook-entry`, base main `4b1a7b71`. Small task by the resume test (the outcome, the place and
+`fix/uninstall-keeps-user-hook-entry`, base main `4b1a7b71`, PR 657. Small task by the resume test (the outcome, the place and
 the fix were named in the opening), so no feature document; this summary and the ROADMAP line are the record.
 
 ## Goal
