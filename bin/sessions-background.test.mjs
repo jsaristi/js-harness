@@ -201,7 +201,7 @@ test('sessions start writes the session\'s first row to the channel record, stam
   assert.ok(path.isAbsolute(notices[0].worktree));
 }));
 
-// gentle-ai review-3aafcdd1541ce20e: with no --worktree the row's place is the checkout git names, with its branch.
+// Review 3aafcdd1: with no --worktree the row's place is the checkout git names, with its branch.
 test('sessions start places the first row of a session with no worktree in the checkout and its branch', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
   const [notice] = channelNotices(world);
