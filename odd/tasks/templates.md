@@ -318,8 +318,8 @@ Codex and the Claude lenses before its pull request.
 ## Tasks
 - [x] T1 (kind: design) this document, the inventory page for him, and two blind readers (rule:double-review). Spec 1-5. Route: inline, readers delegated. 3d6d5dcf, db5f7409 and the revision after them (L5).
 - [x] T2 (kind: docs) the docs-only pull request and its ready notice. Spec 5. Route: inline. PR 648, landed as 410eed7c.
-- [ ] T3 (kind: build) `template new`, the registry, `template check` and `list`, tests first. Spec 5. Route: inline.
-- [ ] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline.
+- [x] T3 (kind: build) `template new`, the registry, `template check` and `list`, tests first. Spec 5. Route: inline. PR 649.
+- [x] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline. PR 653.
 - [ ] T5 (kind: build) the questions to him as the first template, end to end (the `ask` gate), with the escape entry. Spec 1, 4. Route: inline.
 - [ ] T6 (kind: build) the rule change on `rule/templates`. Spec 1, 5. Route: inline.
 - [ ] T7 (kind: docs) the session summary and the ROADMAP line. Route: inline.
@@ -372,6 +372,13 @@ Codex and the Claude lenses before its pull request.
   the coloured status list is JH 79's and lands in PR 647. Done when and T5 now say so; the board rows and summary
   stay inventory rows, their gate a later template. The lead told JH 79 that `recordRendered` takes `subject` and that
   the record is `throughput/<slug>/templates-rendered.jsonl`.
+- L7. 2026-10-29, his approval of the question template's sample. Question 108 asked him to approve the card's shape;
+  the lead asked it, and his answer, read with `js-harness sessions --quote 0f71b2c6 17978` (08:15:26Z, tapped): "Sí,
+  apruebo esta forma (Recomendada)". The card he saw (the call at line 17971) was the render of 108 with one
+  difference: the lead wrote the session's label after the prefix, "Pregunta 108: Plantillas (JH 80). ¿Apruebas…".
+  The sample is that card, byte for byte, and its record holds the label in the question's text: under the gate a
+  label added at asking time is a hand-made question, so whoever records a question writes its label into the text
+  (the lead is told). `sample.source` is `0f71b2c6:17978`.
 
 ## Next step
 State at 2026-10-29 ~04:45Z (JH 80, worktree `D:\js-harness\.claude\worktrees\templates`, branch `feat/templates-a` from
@@ -480,3 +487,12 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   (f043f06a). Its first commit takes gentle-ai's last finding (two shapes with the golden call on the regular
   expression's line; without the reserved-word clause the test fails, checked by removing it) and corrects the
   hour of the update above, written ~08:30Z by an estimate before the clock read 07:57Z at the notice.
+- Update 08:25Z (after the host's compaction at 08:08Z): unit 2 of slice C, the `ask` gate, test first. `template
+  ask <n>` prints `render` of question n of the channel's record (exit 1 when missing, closed or not showable by the
+  tool, 2 with no number); `template gate --hook` decides each question of an `AskUserQuestion` call with
+  `decideAsk` (an open question of the record, its text and option labels as recorded; descriptions free) and lets
+  it through as unchecked when the record cannot be read. Two `GATE_SAYS` sentences added and their spans declared
+  (one fact, one enforced). The `question` entry registered, not a draft, its sample his approved card (L7);
+  `template check` exits 0. Next: the escapes of the `ask` surface (a question recorded since the first `shown`
+  line, open, 2 to 4 options, with no `shown` line of its number), the FAILURES entry, `"templates": true` in
+  `harness.json`; then Codex, the lenses and gentle-ai over slice C, push, PR, ready notice.

@@ -1,0 +1,16 @@
+{
+  "number": 108,
+  "notice": {
+    "text": "Plantillas (JH 80). ¿Apruebas esta forma para cada pregunta que te hago? Esta misma tarjeta es la muestra: la arma un comando desde el registro de preguntas, y la puerta del arnés rechazará cualquier pregunta escrita a mano.",
+    "options": [
+      {
+        "label": "Sí, apruebo esta forma (Recomendada)",
+        "description": "Cubre la forma de la tarjeta: «Pregunta N:» al inicio, la opción recomendada primero, y cada opción con lo que cubre. No autoriza nada más."
+      },
+      {
+        "label": "No, la quiero distinta",
+        "description": "Me dices qué cambiar y rehago la muestra antes de activar la puerta de preguntas."
+      }
+    ]
+  }
+}
