@@ -415,15 +415,21 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   and gentle-ai.
 
 ## Next step
-State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
-`feat/visual-pages-board` at 71d626c5, on `feat/visual-pages-b` (9b36b5b5), on `feat/visual-pages`):
-- Slice A: #643 landed (main 837cedd); #644 on main, #645 on #644, landing in order by the queue.
+JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`; the latest state is the last bullet but two.
+- Slice A: #643 landed (main 837cedd); #645 carrying #644 landed (main 96b917a).
 - Slice B reviews: Codex rechecks done (67e6230..1f61e01 one P2 fixed; 1f61e01..71d626c correct 0.99); lenses all 0
   findings; gentle-ai lineage review-8ed9074b0701c90f (ca23a627..71d626c5) approved and acknowledged (L15). Slice B
   is fully reviewed.
 - gentle-ai: 2bd3bc72..b70ac68d approved (medium, lineage review-7c6f3a36e3078389), with 9b36b5b5 in it.
 - gentle-ai: b70ac68d..ca23a627 approved (medium, lineage review-3aafcdd1541ce20e).
 - gentle-ai: ca23a627..71d626c5 approved (medium, lineage review-8ed9074b0701c90f).
-- State at ~03:30Z: #645 (slice A, carrying #644) ready on main, head 7f09d915. Slice B: one PR (L18) on
-  `feat/visual-pages`, then notify ready once #645 lands and this branch merges main.
-- Then slice C (T6, T7, T10 as L17 says), slice D (T8), T9.
+- gentle-ai: 598174f0..a0d1e5d1 approved (medium, lineage review-720626bd7150e47c); findings fixed after it.
+- gentle-ai: 3279ea8e approved (medium, lineage review-57a8e9c4cb257169); its warning fixed in the commit after it.
+- State at ~04:25Z: #645 LANDED (main 96b917a). #647 (slice B, `feat/visual-pages-board`, head 598174f0) is
+  CONFLICTING with main: merge origin/main into `feat/visual-pages-board`, review the merge (codex-review and
+  lens-review from 598174f0; gentle-ai), push, `notify --kind ready --pr 647` (the lead lands it next run).
+- Slice C on `feat/visual-pages-c` (local, unpushed): C1 = 598174f0..d800cb96 (phase page, rendered-record seam,
+  fixes); Codex and lenses done to 3279ea8e; d800cb96 still needs Codex `--base 3279ea8e`, lens and gentle-ai, run
+  detached at d800cb96. C2 = d800cb96..14907efb (status page), no review yet: run all three detached at 14907efb.
+  Then merge slice B's merged head into C, PRs C1 then C2 stacked on #647. Then C3: `report feature` and T7's init
+  line (names `report feature`, so it lands with it). Then slice D (T8), T9. T10's departure map/timeline still open.
