@@ -306,6 +306,7 @@ test('git failing to say the commit at the opening, or now, is said with why, ne
   const now = JSON.parse((await stretch(place, ['status', '--json'], { hours: 9, deps: { run: failing((ms) => ms > T0 + H) } })).out);
   assert.match(now.moments.unavailable.map, /git rev-list: fatal: rev-list timed out/);
   assert.equal(now.moments.map, null);
+  assert.deepEqual(now.moments.plans, [], 'a plan git cannot read now shows no step, never one read as progress');
 });
 
 test('where git cannot read the default branch, the map is unavailable with why and the shares still come', async () => {

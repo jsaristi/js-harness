@@ -745,7 +745,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
   if (result.throughputKept && !everything) {
     const { path: folder, days, reviewStarts } = result.throughputKept;
-    const starts = reviewStarts === null ? ', and any gentle-ai review starts recorded there' : reviewStarts > 0 ? `, and the gentle-ai review starts of ${reviewStarts} project${reviewStarts === 1 ? '' : 's'}, the only record of when those reviews began` : '';
+    const starts = reviewStarts === null ? ', and any review starts an earlier js-harness recorded there' : reviewStarts > 0 ? `, and the review starts an earlier js-harness recorded for ${reviewStarts} project${reviewStarts === 1 ? '' : 's'}, the only record of when those reviews began` : '';
     console.log(`kept ${folder}: ${days === null ? 'the' : days} day snapshot${days === 1 ? '' : 's'} of the throughput review, the only copy of the gates of days the gate log has rotated away${starts}; remove the folder by hand to drop them`);
   }
   if (

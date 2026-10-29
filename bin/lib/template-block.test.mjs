@@ -25,9 +25,9 @@ test('the template holds the harness\'s lines in a block whose mark carries thei
   assert.ok(text.indexOf(END) < text.indexOf('## Constraints'), 'the constraints, the project\'s own, come after it');
 });
 
-test('the block says gentle-ai\'s assessment decides when a change is reviewed, names no risk tier, and holds no copy of the test-first line or the five states', () => {
+test('the block says the lens review stays on where the Codex review is off, names no risk tier, and holds no copy of the test-first line or the five states', () => {
   const body = templateBlock();
-  assert.match(body.replace(/\s+/g, ' '), /gentle-ai's assessment decides when a change is reviewed/);
+  assert.match(body.replace(/\s+/g, ' '), /Where the Codex review is off \(`js-harness functions`\), the Claude lens review stays on: the merge door asks for its record/);
   assert.doesNotMatch(body, /medium or high risk/, 'no tier is named');
   assert.doesNotMatch(body, /A behavior change arrives with the test/, 'the test-first line lives in AGENTS.md');
   assert.doesNotMatch(body, /cut \(a new session/, 'the closing states live in protocol 2');
@@ -69,9 +69,10 @@ test('a file checked out with Windows line ends keeps them, and its unedited blo
 // F8 S3 (odd/tasks/f8-s3-split.md, S3): init ships the split. AGENTS.md keeps what a reviewer needs and CLAUDE.md, which
 // imports it, keeps how Claude works with the owner; the whole block stays what older projects hold, byte for byte, so a
 // project not yet moved keeps every line (sync renders the whole block where the project has no CLAUDE.md block).
+// The bytes moved once on purpose: his answer to question 104 (odd/tasks/f8-s11-complements.md, L14) changed one line.
 test('the whole block is the two halves, and stays the bytes every project holds today', () => {
   assert.equal(templateBlock(), `${agentsBlock()}\n${claudeBlock()}`);
-  assert.equal(sha256(templateBlock()), '125046cd8249023c7240d166a18e01b2d331ef238f217d426dd4c45528c8b429');
+  assert.equal(sha256(templateBlock()), '3d807fe7bc90e275d00c9fd111c7555657afcaf2ed531b878593bb811c84c803');
   assert.ok(agentsBlock().startsWith('## What good looks like\n'));
   assert.ok(claudeBlock().startsWith('## Working with the owner\n'));
   assert.doesNotMatch(agentsBlock(), /Working with the owner/);

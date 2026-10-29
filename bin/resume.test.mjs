@@ -1901,22 +1901,9 @@ test('a feature document that gives no part keeps today\'s line, and one that ca
   assert.equal(await after({ readFile: unreadable }), READ);
 }));
 
-test('every tool call in a harness project records the gentle-ai reviews live in its store, a sub-agent\'s too, and says nothing of it', withMachine(async (machine) => {
-  const v2 = path.join(machine.root, '.git', 'gentle-ai', 'review-transactions', 'v2');
-  fs.mkdirSync(path.join(v2, 'review-aaa'), { recursive: true });
-  fs.writeFileSync(path.join(v2, 'LOCK'), '');
-  const starts = path.join(machine.home, '.js-harness', 'throughput', machine.slug, 'review-starts.jsonl');
+test('a tool call in a harness project records no gentle-ai review start, a sub-agent\'s neither (F8 S11, L11)', withMachine(async (machine) => {
+  fs.mkdirSync(path.join(machine.root, '.git', 'gentle-ai', 'review-transactions', 'v2', 'review-aaa'), { recursive: true });
   const sub = await runPause(machine, JSON.stringify({ session_id: SESSION, agent_id: 'agent-1', cwd: machine.root, hook_event_name: 'PostToolUse' }));
   assert.deepEqual([sub.code, sub.lines], [0, []]);
-  assert.deepEqual(fs.readFileSync(starts, 'utf8').trim().split('\n').map((line) => JSON.parse(line).lineage), ['review-aaa']);
-  // A store that cannot be read leaves the session's own notices as they are.
-  const denied = { ...fs, readdirSync: () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); } };
-  const own = await runPause(machine, pauseInput(machine, PAUSED), { fileSystem: denied });
-  assert.equal(own.code, 0);
-  assert.equal(own.lines.length, 1);
-  // A folder with no harness.json above it is not a harness project: nothing is recorded for it.
-  const outside = path.join(machine.dir, 'other');
-  fs.mkdirSync(path.join(outside, '.git', 'gentle-ai', 'review-transactions', 'v2', 'review-bbb'), { recursive: true });
-  await runPause(machine, JSON.stringify({ session_id: SESSION, agent_id: 'agent-1', cwd: outside, hook_event_name: 'PostToolUse' }));
-  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness', 'throughput', projectSlug(outside))), false);
+  assert.equal(fs.existsSync(path.join(machine.home, '.js-harness', 'throughput', machine.slug, 'review-starts.jsonl')), false);
 }));

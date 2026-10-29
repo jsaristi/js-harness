@@ -65,7 +65,7 @@ test('a folder the app moved to AppData/Local/Claude-Data is read through the ma
 });
 
 // Every path comes from the home, as the account check's do (bin/lib/stack.mjs, DESKTOP_APP_CONFIG): a fixture home is
-// read and nothing else, so a run with a scratch --home never reads this machine's app (gentle-ai review, 2026-10-15).
+// read and nothing else, so a run with a scratch --home never reads this machine's app (a review, 2026-10-15).
 test('the environment is never read: a seeded APPDATA, LOCALAPPDATA or XDG_CONFIG_HOME outside the home is not found', () => {
   const home = tmp();
   const elsewhere = tmp();

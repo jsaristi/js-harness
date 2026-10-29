@@ -116,7 +116,7 @@ test('a new value writes the declaration, the source and the list, and appends t
   const held = declarationOf(read(repo.dir, 'bin/lib/rules-data.mjs'), 'gate-wait', JSON.parse(read(repo.dir, 'docs/rule-sources.json')));
   assert.ok(fs.readFileSync(reliefFile(repo), 'utf8').endsWith(`; declaration and source ${held}\n`));
   assert.match(result.out, /memory: .*60 minutes.*rule:gate-wait/);
-  assert.match(result.out, /cost: one gate, gentle-ai's assessment and a small Codex review/);
+  assert.match(result.out, /cost: one gate, a small Codex review and the Claude lenses/);
 });
 
 test('--dry-run prints the change and writes nothing', async () => {

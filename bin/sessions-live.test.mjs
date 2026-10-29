@@ -243,7 +243,7 @@ test('the board page says what ran on the machine at the check, and that it coul
     { kind: 'codex-review', pid: 2, since: null, where: null },
   ];
   assert.equal(runningText({ at, until, items }, within), 'En curso a las 01:00: lote de evals en f8-s5c (desde hace 20 min) · revisión de Codex');
-  // gentle-ai review-7c6f3a36e3078389: past its until the reading is old, and no "desde hace" keeps growing.
+  // Review 7c6f3a36: past its until the reading is old, and no "desde hace" keeps growing.
   assert.equal(runningText({ at, until, items }, after), 'Corría a las 01:00 (lectura vieja, puede haber terminado): lote de evals en f8-s5c (empezó a las 00:40) · revisión de Codex');
   assert.equal(runningText({ at, until, items: [] }, after), 'Nada corría en la máquina a las 01:00 (lectura vieja)');
   assert.equal(runningText({ at, items: [] }, within), 'Nada corría en la máquina a las 01:00 (lectura vieja)', 'a reading with no until holds nothing');
@@ -272,7 +272,7 @@ test('the board page says how long a session has been on its task and its estima
   assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { stretch: lead.stretch }, now), 'Lleva 1 h 20 min en esto · estimado 3–4 h', 'else the stretch item\'s corrected hours');
   assert.equal(taskTimeText([row('2026-10-29T02:35:00.000Z', 'note')], 'JH 79 · Visual pages', { estimates: [{ session: 'JH 7', horas: [1, 1] }] }, now), 'Lleva 25 min en esto (desde su primer aviso visible) · sin estimado', 'JH 7 is not JH 79, and with no opened row the count starts at its first');
   assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH 79', horas: ['x'] }] }, now), 'Lleva 1 h 20 min en esto · sin estimado', 'an estimate it cannot read is none');
-  // gentle-ai review-3aafcdd1541ce20e: the code alone names no session.
+  // Review 3aafcdd1: the code alone names no session.
   assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH', horas: [1, 2] }] }, now), 'Lleva 1 h 20 min en esto · sin estimado');
   assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH 79 · Visual pages', horas: [1, 2] }] }, now), 'Lleva 1 h 20 min en esto · estimado 1–2 h', 'the whole title names it');
   // Codex, 67e6230..1f61e01: null, '' and false are not 0 hours, and the fallback still applies.

@@ -92,7 +92,7 @@ test('the one line carries the verdict of the review row, which a commit shows s
   const rows = [
     { name: 'budget', pass: true, detail: '10 estimated tokens (budget 1500)' },
     { name: 'payload claude', pass: true, info: true, detail: '27138 estimated tokens per turn' },
-    { name: 'review', pass: true, info: true, detail: 'high risk, 3 paths, 442 lines: review due (high_risk)', lines: ['next: gentle-ai review status'] },
+    { name: 'review', pass: true, info: true, detail: 'high risk, 3 paths, 442 lines: review due (high_risk)', lines: ['next: other-tool review status'] },
   ];
   assert.equal(passLine(rows), 'PASS  check  3 rows passed, 2 of them INFO; --verbose prints each; review: high risk, 3 paths, 442 lines: review due (high_risk)');
   assert.equal(passLine(rows.slice(0, 1)), 'PASS  check  1 row passed; --verbose prints each');

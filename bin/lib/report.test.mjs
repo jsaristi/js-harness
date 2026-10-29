@@ -62,7 +62,7 @@ test('sessionsOf groups the notices after the cut by session, with the last one 
   ]);
 });
 
-// gentle-ai review R2-004: a title is not unique, a session id is.
+// A review R2-004: a title is not unique, a session id is.
 test('two sessions that share a title are two lines, each by its title', () => {
   const notices = [
     notice({ at: '2026-10-20T09:00:00.000Z', from: FROM('JH 9 · reserve', 'aaaaaaaa-1111-4111-8111-111111111111'), text: 'first' }),

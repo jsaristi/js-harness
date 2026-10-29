@@ -43,7 +43,7 @@ export const USAGE = [
   `    ${NOTICE_TEXT_MAX} characters at most.`,
   '  A ready notice says a pull request is ready to land, and names it with --pr <n>, so the land knows whose it',
   '    is from the record and not from a branch; no other kind takes --pr. It is refused, with the land\'s reasons,',
-  '    while the land would leave that pull request out: its state, its body\'s gentle-ai line, its reviews.',
+  '    while the land would leave that pull request out: its state, its base, its reviews.',
   '  A closed notice gives the work back and names the summary the session leaves with --summary <file>, a file of',
   '    docs/sessions/ (js-harness summary template prints it); no other kind takes --summary. It is refused while a',
   '    section of that file is empty or missing, or while neither origin\'s default branch, origin/main nor the session\'s',
@@ -367,7 +367,7 @@ export async function notifyMain(
   }
 
   // A ready notice is held to the checks the land runs before it builds: 360, 365 and 367 were announced ready and
-  // left out of a land for want of gentle-ai evidence, a relay and some 13 minutes each (odd/tasks/ready-checks.md, S1).
+  // left out of a land for want of review evidence, a relay and some 13 minutes each (odd/tasks/ready-checks.md, S1).
   if (draft.kind === 'ready') {
     const problems = await landChecks(draft.pr, cwd, { run });
     if (problems.length) {
