@@ -122,6 +122,21 @@ test('the failed gates are those of the feature\'s worktrees and its slices\' wh
   assert.deepEqual(failures.runs.map((one) => one.failing), [['bin/a.test.mjs'], ['bin/slice.test.mjs']]);
 });
 
+test('a feature whose pull requests are unknown says its gates, reviews and spend are unknown, and records them as null', async (t) => {
+  const place = project();
+  t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(place.repo, 'odd', 'tasks', 'other.md'), '# other\n\nBranch `feat/other`.\n');
+  const html = path.join(place.top, 'other.html');
+  const result = await feature(place, ['odd/tasks/other.md', '--html', html, '--record']);
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.out, /reviews unknown; failed gates unknown/);
+  const page = fs.readFileSync(html, 'utf8');
+  assert.match(page, /No se saben sus revisiones[\s\S]*No se sabe su gasto[\s\S]*No se sabe qué gates fallaron/);
+  assert.doesNotMatch(page, /US\$ 0|Ningún gate falló/);
+  const { numbers } = readPages(pagesFile(place.home, place.slug)).at(-1);
+  assert.deepEqual([numbers.covered, numbers.codexInputTokens, numbers.lensCostUsd, numbers.failures], [null, null, null, null]);
+});
+
 test('a gate log that cannot be read is said, never shown as no failure', async (t) => {
   const place = project();
   t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));

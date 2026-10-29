@@ -6,35 +6,26 @@
 import { escapeHtml, page, table } from './pages.mjs';
 import { mapNowSection, mapSection } from './pages-sections.mjs';
 import { doneWhen, tasksOf } from './contract.mjs';
+import { tokenize } from './progress.mjs';
 import { compareMaps } from './report-pages.mjs';
 import { stamp } from './report.mjs';
 
 const SPEC_ITEM = /^(\d+)\.\s+(.*)$/;
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-
-/** The numbered items under `## Specs`, each `{ n, text }` with its continuation lines joined; fences skipped.
- * A fence closes, as in CommonMark, only on a line of its own character as long or longer with nothing after it, so a
- * shorter fence or one of the other character inside it is code too. */
+/** The numbered items under `## Specs`, each `{ n, text }` with its continuation lines joined; fences and comments
+ * skipped. The lines are the shared fence-aware tokens (`tokenize`), so a fence is measured as the contract and the
+ * roadmap measure it: one indented under a spec, or holding a shorter fence, is code. */
 function specsOf(markdown) {
   const specs = [];
   let inSpecs = false;
-  let fence = null;
-  for (const line of markdown.split(/\r?\n/)) {
-    const mark = FENCE.exec(line);
-    if (fence === null && mark) {
-      fence = mark[1];
-      continue;
-    }
-    if (fence !== null) {
-      if (mark && mark[1][0] === fence[0] && mark[1].length >= fence.length && mark[2].trim() === '') fence = null;
-      continue;
-    }
-    if (/^##\s/.test(line)) {
-      inSpecs = /^##\s+Specs\s*$/.test(line);
+  for (const token of tokenize(markdown, { stripComments: true })) {
+    if (token.fence) continue;
+    if (token.heading) {
+      if (token.heading.level === 2) inSpecs = token.heading.title === 'Specs';
       continue;
     }
     if (!inSpecs) continue;
+    const line = token.line;
     const item = line.match(SPEC_ITEM);
     if (item) specs.push({ n: Number(item[1]), text: item[2].trim() });
     else if (specs.length > 0 && /^\s+\S/.test(line)) specs.at(-1).text += ` ${line.trim()}`;
@@ -143,7 +134,8 @@ export function featureView({ path, facts, prs, codexReviews, codexRuns, lensRev
       realHours: commits.length === 0 ? null : round1((Math.max(...prs.map((pr) => pr.at)) - Math.min(...commits.map((commit) => commit.at))) / 3_600_000),
       estimate,
     },
-    reviews: {
+    // With its pull requests unknown, so are its commits: no review or spend is counted as none.
+    reviews: prs.unknown ? null : {
       commits: mine.size,
       covered: commits.filter((commit) => reviewed.some((review) => review.head === commit.hash)).length,
       skipped: codex.filter((review) => review.outcome === 'unavailable').length,
@@ -151,7 +143,7 @@ export function featureView({ path, facts, prs, codexReviews, codexRuns, lensRev
       lens: countBy(lens, (review) => review.outcome),
       attempts: { runs: runs.length, byVerdict: countBy(runs, (run) => run.verdict ?? 'unknown') },
     },
-    spend: {
+    spend: prs.unknown ? null : {
       codex: { inputTokens: sum(measured, (run) => run.usage.inputTokens), cachedInputTokens: sum(measured, (run) => run.usage.cachedInputTokens), unknownRuns: runs.length - measured.length },
       lens: { inputTokens: sum(lensResults, (one) => one.inputTokens), outputTokens: sum(lensResults, (one) => one.outputTokens), costUsd: round2(sum(lensResults, (one) => one.costUsd)), unknownCost: lensResults.filter((one) => !Number.isFinite(one.costUsd)).length },
     },
@@ -185,7 +177,10 @@ function timeHtml({ realHours, estimate }) {
   return note(`${real}; ${planned}.`);
 }
 
+const UNKNOWN_COMMITS = 'no se sabe qué commits son suyos, porque no se saben sus pull requests';
+
 function reviewsHtml(reviews) {
+  if (reviews === null) return note(`No se saben sus revisiones: ${UNKNOWN_COMMITS}.`);
   return [
     note(`${reviews.covered} de ${reviews.commits} commits son el final de una revisión de Codex (la de un rango cuenta en su último commit)${reviews.skipped ? `; ${reviews.skipped} omitida${reviews.skipped === 1 ? '' : 's'} con --unavailable, que no cubre su commit` : ''}.`),
     table(['Revisión', 'Por resultado'], [
@@ -196,7 +191,9 @@ function reviewsHtml(reviews) {
   ].join('');
 }
 
-function spendHtml({ codex, lens }) {
+function spendHtml(spend) {
+  if (spend === null) return note(`No se sabe su gasto: ${UNKNOWN_COMMITS}.`);
+  const { codex, lens } = spend;
   return [
     note(`Codex: ${thousands(codex.inputTokens)} tokens de entrada, ${thousands(codex.cachedInputTokens)} en caché${codex.unknownRuns ? `; ${codex.unknownRuns} corrida${codex.unknownRuns === 1 ? '' : 's'} sin medir` : ''}.`),
     note(`Lentes: ${thousands(lens.inputTokens)} tokens de entrada, ${thousands(lens.outputTokens)} de salida, US$ ${lens.costUsd}${lens.unknownCost ? `; ${lens.unknownCost} lente${lens.unknownCost === 1 ? '' : 's'} sin costo registrado` : ''}.`),
@@ -206,8 +203,10 @@ function spendHtml({ codex, lens }) {
 
 function failuresHtml({ folder, runs, unavailable }) {
   if (unavailable) return note(`No se sabe qué gates fallaron: ${unavailable}.`);
-  if (runs.length === 0) return note(`Ningún gate falló en ${folder} ni en sus porciones (${folder}-…) mientras duró.`);
-  return note(`En ${folder} y sus porciones (${folder}-…):`) + table(['Dónde', 'Cuándo', 'Resultado', 'Lo que falló'], runs.map((one) => [{ text: one.cwd, mono: true }, { text: stamp(Date.parse(one.startedAt)), mono: true },one.result, one.failing.join(' · ') || '—']));
+  // Which folders are its is a guess, as its slices' pull requests are: the page says so.
+  const where = note(`Solo se miran las worktrees del checkout principal: ${folder} y las de nombre ${folder}-…, que se suponen porciones suyas; un gate que corrió en otra carpeta no se cuenta.`);
+  if (runs.length === 0) return `${note(`Ningún gate falló en ${folder} ni en sus porciones mientras duró.`)}${where}`;
+  return where + table(['Dónde', 'Cuándo', 'Resultado', 'Lo que falló'], runs.map((one) => [{ text: one.cwd, mono: true }, { text: stamp(Date.parse(one.startedAt)), mono: true }, one.result, one.failing.join(' · ') || '—']));
 }
 
 function mapHtml(view) {
@@ -243,10 +242,10 @@ export function featureNumbers(view) {
     prs: view.prs.unknown ? null : view.prs.length,
     realHours: view.time.realHours,
     estimate: view.time.estimate?.hours ?? null,
-    covered: view.reviews.covered,
-    commits: view.reviews.commits,
-    codexInputTokens: view.spend.codex.inputTokens,
-    lensCostUsd: view.spend.lens.costUsd,
+    covered: view.reviews?.covered ?? null,
+    commits: view.reviews?.commits ?? null,
+    codexInputTokens: view.spend?.codex.inputTokens ?? null,
+    lensCostUsd: view.spend?.lens.costUsd ?? null,
     failures: view.failures.unavailable ? null : view.failures.runs.length,
     map: view.map.total.after,
   };

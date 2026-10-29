@@ -55,6 +55,8 @@ test('a document with no head line names no branch and no session, whatever its 
 test('a fence closes only on its own delimiter, as long or longer, so a shorter or other fence inside it stays code', () => {
   const doc = ['# x', '', '## Specs', '1. One.', '````markdown', '2. Not a spec.', '```', '3. Still in the fence.', '````', '4. Four.', '~~~', '```', '5. In the tilde fence.', '~~~', '6. Six.'].join('\n');
   assert.deepEqual(featureFacts(doc).specs.map((spec) => spec.n), [1, 4, 6]);
+  const nested = ['# x', '', '## Specs', '1. Real spec.', '    ```', '    2. An example.', '    ```', '   and its last words.', '3. Three.'].join('\n');
+  assert.deepEqual(featureFacts(nested).specs, [{ n: 1, text: 'Real spec. and its last words.' }, { n: 3, text: 'Three.' }], 'a fence indented under an item is a fence');
 });
 
 test('its pull requests are the merges of its branch, its slices and an owner prefix, grouped by number, oldest first', () => {
@@ -163,6 +165,7 @@ test('the page says promised against delivered, the pull requests, time, reviews
   assert.match(html, /US\$ 0\.25[\s\S]*1 lente sin costo registrado/);
   assert.match(html, /Las evaluaciones y los tokens de la sesión no se miden/);
   assert.match(html, /D:\/w\/visual-pages[\s\S]*a test/);
+  assert.match(html, /que se suponen porciones suyas; un gate que corrió en otra carpeta no se cuenta/);
   assert.match(html, /F1[\s\S]*1\/2[\s\S]*2\/2 · 100 %/);
 });
 
@@ -172,6 +175,12 @@ test('what the records cannot tell is said, never invented: no estimate, unknown
   assert.match(html, /No se sabe qué pull requests son suyos: no merge of the default branch names a pull request/);
   assert.match(html, /Ningún gate falló/);
   assert.match(html, /sin un antes: b0: bad object/);
+  const lost = view({ prs: { unknown: 'none' } });
+  assert.equal(lost.reviews, null, 'no review is counted as none');
+  assert.equal(lost.spend, null, 'no spend is counted as zero');
+  assert.match(renderFeature(lost), /No se saben sus revisiones: no se sabe qué commits son suyos[\s\S]*No se sabe su gasto: no se sabe qué commits son suyos/);
+  assert.doesNotMatch(renderFeature(lost), /US\$ 0/);
+  assert.deepEqual([featureNumbers(lost).covered, featureNumbers(lost).commits, featureNumbers(lost).codexInputTokens, featureNumbers(lost).lensCostUsd], [null, null, null, null]);
   const unread = renderFeature(view({ failures: { folder: 'D:/w/visual-pages', unavailable: 'log.jsonl: EACCES' } }));
   assert.match(unread, /No se sabe qué gates fallaron: log\.jsonl: EACCES/);
   assert.doesNotMatch(unread, /Ningún gate falló/);

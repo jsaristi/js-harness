@@ -217,7 +217,7 @@ export async function reportFeatureMain(argv, { cwd: defaultCwd = process.cwd(),
   if (parsed.json) stdout(JSON.stringify(view, null, 2));
   else {
     stdout(`${subject}: ${view.promised.tasks.done}/${view.promised.tasks.total} tasks; ${prs.unknown ? `pull requests unknown (${prs.unknown})` : prs.map((pr) => `PR ${pr.number}`).join(', ')}.`);
-    stdout(`Time ${view.time.realHours ?? '?'} h real, estimate ${view.time.estimate ? view.time.estimate.hours.join('-') + ' h' : 'none recorded'}; ${view.reviews.covered}/${view.reviews.commits} commits end a Codex review; ${failures.unavailable ? `failed gates unknown (${failures.unavailable})` : `${failures.runs.length} failed gates`}.`);
+    stdout(`Time ${view.time.realHours ?? '?'} h real, estimate ${view.time.estimate ? view.time.estimate.hours.join('-') + ' h' : 'none recorded'}; ${view.reviews ? `${view.reviews.covered}/${view.reviews.commits} commits end a Codex review` : 'reviews unknown'}; ${failures.unavailable ? `failed gates unknown (${failures.unavailable})` : `${failures.runs.length} failed gates`}.`);
   }
   if (!parsed.record) return 0;
   try {
