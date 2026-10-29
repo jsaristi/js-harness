@@ -51,6 +51,25 @@ test("readCopy counts a process started by a wait as the wait's, and a wait with
   assert.deepEqual(unknown.blockers.map((one) => one.pid).sort(), [120, 220]);
 });
 
+// The verifier's cases (T5): the process table and the listing are two reads, so a pid one held may be another's in
+// the next; a process is the refresh's own family or a wait's child only when its creation time agrees too.
+test('readCopy takes a pid reused between the two reads for a blocker, and keeps the refresh\'s own ancestors out', () => {
+  const reused = [...PROCESSES, line(130, T + 900, `node "${ENTRY}" eval --batch 3`), line(310, T + 900, `node "${ENTRY}" lens-review --base abc`)];
+  const seen = readCopy({ snapshot: SNAPSHOT, processes: reused, globalDir: GLOBAL, self: 300 });
+  assert.deepEqual(seen.blockers.map((one) => one.pid), [130, 220, 310]);
+  // The refresh run from a loop of the copy: the loop is its ancestor, and is left out.
+  const looped = [...PROCESSES.filter((one) => one.pid !== 290), line(290, T, `node "${ENTRY}" loop --heartbeat`)];
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: looped, globalDir: GLOBAL, self: 300 }).blockers.map((one) => one.pid), [220]);
+});
+
+test('readCopy takes a wait whose two creation times disagree for a blocker, and a script of pnpm\'s global folder outside the package for none', () => {
+  const late = PROCESSES.map((one) => (one.pid === 120 ? { ...one, createdAt: T + 900 } : one));
+  const seen = readCopy({ snapshot: SNAPSHOT, processes: late, globalDir: GLOBAL, self: 300 });
+  assert.deepEqual([seen.waits, seen.blockers.map((one) => one.pid)], [[], [120, 220]]);
+  const other = [line(220, T + 20, `node "${GLOBAL}\\v11\\h-1\\node_modules\\other-tool\\bin\\cli.mjs" run`)];
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: other, globalDir: GLOBAL, self: 300 }), { waits: [], blockers: [] });
+});
+
 // As this machine's listing gave them on 2026-10-29: pnpm's shim runs the copy through `bin/../global`, and the lead's
 // `quiet --wait` is a wait he stopped by hand with the others.
 test('readCopy reads a copy named through pnpm/bin/.., and takes quiet --wait for a wait and quiet alone for work', () => {
@@ -73,11 +92,20 @@ test("sessionOf finds the one open session whose transcript holds the same wait,
   assert.deepEqual(sessionOf({ commandLine: `node "${ENTRY}" wait --pr 999`, plan }), { session: null, why: 'no open session ran it' });
   assert.deepEqual(sessionOf({ commandLine: `node "${ENTRY}" wait --main-has 1c6b6c2`, plan }), { session: null, why: 'several sessions ran it (JH 84 · y, JH 83 · z)' });
   assert.equal(sessionOf({ commandLine: `node "${ENTRY}" quiet --wait`, plan }).session, null);
+  // A typed wait is read as its shell reads it: single quotes, a quote inside double ones, a redirection after it.
+  const quoted = [
+    { id: 'e', title: 'JH 82 · q', waits: ["js-harness wait --main-file README.md --contains 'ready now'>/dev/null 2>&1"] },
+    { id: 'f', title: 'JH 81 · r', waits: ['js-harness wait --main-file a.md --contains "it\'s here" &'] },
+  ];
+  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file README.md --contains "ready now"`, plan: quoted }).session.title, 'JH 82 · q');
+  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file a.md --contains "it's here"`, plan: quoted }).session.title, 'JH 81 · r');
 });
 
 test('waitAgain gives the wait to run again, as js-harness and its arguments', () => {
   assert.equal(waitAgain(PROCESSES[0].commandLine), 'js-harness wait --pr 674 --every 60');
-  assert.equal(waitAgain(`node "${ENTRY}" wait --notice-to 88 --cwd "D:\\a b"`), 'js-harness wait --notice-to 88 --cwd "D:\\a b"');
+  assert.equal(waitAgain(`node "${ENTRY}" wait --notice-to 88 --cwd "D:\\a b"`), "js-harness wait --notice-to 88 --cwd 'D:\\a b'");
+  // A session runs it again in its shell: a word the shell would read is quoted whole, a quote in it closed and kept.
+  assert.equal(waitAgain(`node "${ENTRY}" wait --main-file README.md --contains "a&b $HOME \`x\` it's" --cwd D:\\repo`), "js-harness wait --main-file README.md --contains 'a&b $HOME `x` it'\\''s' --cwd 'D:\\repo'");
 });
 
 test("reArmNote names the copy's sha, the refresh's end and the waits to run again, within a notice's length", () => {

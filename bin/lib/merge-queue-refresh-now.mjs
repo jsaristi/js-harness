@@ -2,13 +2,13 @@
 // (./merge-queue-refresh.mjs) with this machine's effects. Moved out of bin/merge-queue.mjs, which holds the land and
 // stays under its line ceiling. Main is origin's default branch once fetched in the checkout; the copy is the one
 // pnpm's shim names; its processes are read from one process table and one listing of command lines (Windows); a wait
-// is stopped by pid and creation time; its session is read from the project's transcripts and told by a note in the
+// is stopped by pid and creation time; its session is read from the transcripts and told by a note in its project's
 // channel. No land record is written. Zero dependencies.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendNotice, newNotice } from './channel.mjs';
+import { appendNotice, newNotice, readNotices } from './channel.mjs';
 import { defaultBranchOf } from './default-branch.mjs';
 import { harnessHome } from './home.mjs';
 import { refreshNow } from './merge-queue-refresh.mjs';
@@ -45,34 +45,54 @@ export async function refreshNowRun(args, { run = spawnSync, env, now, stdout, s
   };
   const home = harnessHome({ env, homedir: os.homedir });
   const from = { host: os.hostname(), id: null, source: 'merge-queue', title: 'js-harness merge-queue' };
-  const tell = (number, text) => {
-    const slug = projectSlug(mainCheckout(utf8, args.cwd));
+  const tell = (number, text, slug = projectSlug(mainCheckout(utf8, args.cwd))) => {
     appendNotice(home, slug, newNotice({ at: new Date(now()).toISOString(), from, to: String(number), kind: 'note', text }));
   };
-  // The project's sessions open now, with their background waits not ended, as wake reads them after a boot.
+  const claudeHome = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const sessions = () => {
-    const claudeHome = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-    const transcripts = [];
-    for (const dir of projectDirsOf(utf8, mainCheckout(utf8, args.cwd), claudeHome)) {
-      let names = [];
-      try {
-        names = fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl'));
-      } catch {
-        continue;
-      }
-      for (const name of names) {
-        const file = path.join(dir, name);
-        try {
-          if (fs.statSync(file).mtimeMs >= now() - WAKE_WINDOW_MS) transcripts.push({ id: name.slice(0, -'.jsonl'.length), text: fs.readFileSync(file, 'utf8') });
-        } catch {
-          // A transcript removed while this reads holds no wait to tell.
-        }
-      }
-    }
-    return wakePlan({ bootAt: new Date(now()).toISOString(), transcripts });
+    const root = mainCheckout(utf8, args.cwd);
+    return openSessions({ claudeHome, home, here: { slug: projectSlug(root), dirs: projectDirsOf(utf8, root, claudeHome) }, now });
   };
   return refreshNow({
     main, copySha: binDir ? namedSha(binDir) : null, look, stop: (targets) => killProcesses(targets, { spawnSync: run }), sessions, refresh,
     versionOf, tell, home, cwd: args.cwd, env, sleep, stdout, stderr,
   });
+}
+
+/** The sessions open now (`now()`) with their background waits not ended, as wake reads them after a boot (`wakePlan`),
+ * of every project under `claudeHome`: the installed copy is the machine's, so a wait another project started runs from
+ * it too. Each comes with the `slug` of the channel its note goes to: a folder of this project's (`here.dirs`, its
+ * checkout's and its worktrees') is `here.slug`, any other its own name, the slug of the checkout its sessions ran in.
+ * A session whose transcript holds no title, as one opened from the phone, is named by the opening it read (the
+ * channel's readings). A folder or a transcript that cannot be read holds no session to tell. */
+export function openSessions({ claudeHome, home, here, now }) {
+  const projects = path.join(claudeHome, 'projects');
+  let names = [];
+  try {
+    names = fs.readdirSync(projects, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+  const mine = new Set(here.dirs.map((dir) => path.basename(dir)));
+  const bySlug = new Map();
+  for (const name of names) {
+    const slug = mine.has(name) ? here.slug : name;
+    const dir = path.join(projects, name);
+    let files = [];
+    try {
+      files = fs.readdirSync(dir).filter((file) => file.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      try {
+        if (fs.statSync(path.join(dir, file)).mtimeMs < now() - WAKE_WINDOW_MS) continue;
+        bySlug.set(slug, [...(bySlug.get(slug) ?? []), { id: file.slice(0, -'.jsonl'.length), text: fs.readFileSync(path.join(dir, file), 'utf8') }]);
+      } catch {
+        // A transcript removed while this reads holds no wait to tell.
+      }
+    }
+  }
+  const bootAt = new Date(now()).toISOString();
+  return [...bySlug].flatMap(([slug, transcripts]) => wakePlan({ bootAt, transcripts, readings: readNotices(home, slug).readings }).map((one) => ({ ...one, slug })));
 }

@@ -125,7 +125,16 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   the land test in merge-queue.test.mjs that pinned the old words was updated.
 - [x] T4 (kind: docs) (S8) the orchestrator skill's sentence and its test. Route: inline. RED, then GREEN; the
   sentence ends an existing line, so bin/lib/manifest.mjs stays at its 1793-line ceiling.
-- [ ] T5 (kind: verify) one independent verifier over the range (delivery and installer: high risk). Route: delegated.
+- [x] T5 (kind: verify) one independent verifier over the range (delivery and installer: high risk). Route: delegated
+  (opus, read-only, over 1c6b6c2..b9fa64f): no blocker and no path that stops a process other than a wait; four
+  should-fix and a test gap (L7), fixed with the five Codex P2 (L5) in one commit after b9fa64f.
+- [x] T7 (kind: build) the review fixes (L5, L7). Route: inline. RED, each new test on the code before it: the bin/
+  listing from a subfolder (null, not []), the re-arm quoting, a single-quoted typed wait (no session), the note in
+  another project's channel, `openSessions` (no export), a pid reused between the two reads (no blocker), the sessions
+  read after the last look, the stop that fails partway (no note), the session with no title, an unreadable package.json
+  (installed anyway). Two pinning tests the verifier found missing passed at once: two creation times that disagree, a
+  script of pnpm's global folder outside the package. GREEN: waits 9/9, refresh 19/19, refresh-now 2/2, stale-bin 4/4,
+  refresh-copy 23/23, merge-queue 119/119, guard 43/43.
 - [ ] T6 (kind: docs) README, the roadmap line, the session summary.
 
 ## Log
@@ -148,3 +157,22 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   is now the one whose transcript holds the same wait still open, read by `wakePlan` (bin/lib/wake.mjs) as `wake`
   reads the waits a boot killed; with the same wait open in two sessions, none is told and the wait is printed. The
   look then named the lead's `wait --notice-to orchestrator` as JH ORQ's.
+- L5. 2026-10-29, Codex on 1c6b6c2..b9fa64f (gpt-6.1-sol, medium, 3 parts, 736,968 input tokens): five P2, the patch
+  incorrect in each part (0.97-0.98). (1) A phone's session has no title in its transcript: the channel's readings name
+  it, as `wake` passes them. (2) The copy is the machine's: another project's waits are stopped too, so its sessions
+  are read and told in its own channel. (3) A typed wait in single quotes was split by Windows rules: it is read by
+  `shellWords` (bin/lib/guard.mjs). (4) The re-arm command quoted only spaces: each word is now quoted for sh. (5) `git
+  ls-tree` from a subfolder lists nothing: `--full-tree`. All five fixed. Claude lenses on the three slices: 0
+  findings (10 lens runs).
+- L6. 2026-10-29 12:43 local, the lead (its notice, not the user's word): "yes, export shellWords from
+  bin/lib/guard.mjs, that one word only; no behavior of guard changes. guard is a security file: your independent
+  verifier's range covers that commit too."
+- L7. 2026-10-29, the independent verifier (T5) on 1c6b6c2..b9fa64f: no blocker. Fixed: (1) a stop that fails partway
+  left its waits untold: each is taken for stopped before the stop, and printed as "may have stopped"; (2) the
+  transcripts were read between the last look and the stop: now before the look; (3) a pid reused between the process
+  table and the listing could hide a blocker as the refresh's own or a wait's child: both now need the creation time
+  to agree; (4) an unreadable package.json was "none to back up": only a missing one is, any other error fails before
+  the install. Also: a session with no title is named by its id, the gate lock names this mode, and the help says to
+  run it in the background (it can wait an hour for the lock). Left by design: stopping a wait stops its git and gh
+  children; a loop that is the refresh's own ancestor is its caller, not a blocker; a wait matched to no session is
+  printed, not told; a relative or 8.3 path is not read as the copy's (none seen on this machine).

@@ -276,7 +276,7 @@ export function terminalNoteRefusal(command, projectData) {
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
  * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
  * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
-function shellWords(command, { groups = false, redirections = false } = {}) {
+export function shellWords(command, { groups = false, redirections = false } = {}) {
   const words = [];
   const operators = new Set();
   const redirects = new Set();

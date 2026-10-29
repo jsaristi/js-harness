@@ -130,22 +130,30 @@ const SESSIONS = [
 ];
 const BLOCKER = { pid: 220, createdAt: T0, verb: 'codex-review', commandLine: 'node codex-review' };
 
-function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks = [{ waits: WAITS, blockers: [], snapshot: SNAP }], running = [], code = 0 } = {}) {
+function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks = [{ waits: WAITS, blockers: [], snapshot: SNAP }], running = [], code = 0, sessions = SESSIONS, stopFails = false } = {}) {
   const said = [];
   const told = [];
   const stopped = [];
   const asked = [];
   const sleeps = [];
   let looked = 0;
+  const order = [];
   const deps = {
     main,
     copySha,
-    look: () => looks[Math.min((looked += 1) - 1, looks.length - 1)],
+    look: () => {
+      order.push('look');
+      return looks[Math.min((looked += 1) - 1, looks.length - 1)];
+    },
     stop: (targets) => {
       stopped.push(targets);
+      if (stopFails) throw new Error('powershell timed out');
       return { killed: targets.map((one) => one.pid).filter((pid) => !running.includes(pid)), gone: [], running };
     },
-    sessions: () => SESSIONS,
+    sessions: () => {
+      order.push('sessions');
+      return sessions;
+    },
     refresh: async (opts) => {
       asked.push({ ...opts, stopsBefore: stopped.length });
       const quiet = opts.stillQuiet();
@@ -154,7 +162,7 @@ function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks =
       return 75;
     },
     versionOf: () => '1.0.0',
-    tell: (number, text) => told.push({ number, text }),
+    tell: (number, text, slug) => told.push(slug === undefined ? { number, text } : { number, text, slug }),
     home: '/h',
     cwd: ROOT,
     env: {},
@@ -162,7 +170,7 @@ function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks =
     stdout: (line) => said.push(line),
     stderr: (line) => said.push(line),
   };
-  return refreshNow(deps).then((exit) => ({ exit, said: said.join('\n'), told, stopped, asked, sleeps, looked }));
+  return refreshNow(deps).then((exit) => ({ exit, said: said.join('\n'), told, stopped, asked, sleeps, looked, order }));
 }
 
 test('refreshNow refreshes nothing when the copy already names main, and says so', async () => {
@@ -202,6 +210,12 @@ test('refreshNow tells each work session whose wait it stopped to run it again, 
   assert.match(run.said, /run again the wait of no one session \(no open session ran it\): js-harness wait --main-has 1c6b6c2/);
 });
 
+test('refreshNow tells a session of another project in its own channel, apart from one of the same number here', async () => {
+  const run = await refreshingNow({ sessions: [{ ...SESSIONS[0], slug: 'D--js-harness' }, { id: 'c', title: 'JH 86 · other', slug: 'D--other', waits: ['js-harness wait --main-has 1c6b6c2'] }] });
+  assert.deepEqual(run.told.map(({ number, slug }) => [number, slug]), [[86, 'D--js-harness'], [86, 'D--other']]);
+  assert.match(run.told[1].text, /run it again: js-harness wait --main-has 1c6b6c2$/);
+});
+
 test('refreshNow refuses under the lock when work began meanwhile, or a wait outlives its stop, and tells what it stopped', async () => {
   const began = await refreshingNow({ looks: [{ waits: WAITS, blockers: [], snapshot: SNAP }, { waits: WAITS, blockers: [BLOCKER], snapshot: SNAP }] });
   assert.equal(began.exit, 75);
@@ -210,6 +224,26 @@ test('refreshNow refuses under the lock when work began meanwhile, or a wait out
   assert.equal(outlives.exit, 75);
   assert.match(outlives.said, /why: 1 process of the stopped waits still runs: 140/);
   assert.match(outlives.told[0].text, /^The refresh of the installed copy to 0123456 ended with exit 75/);
+});
+
+// The verifier's cases (T5).
+test('refreshNow reads the sessions before its last look, and names its lock by its own mode', async () => {
+  const run = await refreshingNow();
+  assert.deepEqual(run.order, ['look', 'sessions', 'look']);
+  assert.equal(run.asked[0].command, 'merge-queue --refresh-copy');
+});
+
+test('refreshNow tells the sessions of the waits it meant to stop when the stop fails partway', async () => {
+  const run = await refreshingNow({ stopFails: true });
+  assert.equal(run.exit, 75);
+  assert.match(run.said, /why: the waits could not be stopped \(powershell timed out\)/);
+  assert.match(run.said, /may have stopped the wait 120 of JH 86 · rules and evals: js-harness wait --pr 674/);
+  assert.match(run.told[0].text, /^The refresh of the installed copy to 0123456 ended with exit 75/);
+});
+
+test('refreshNow names a session with no title by its id', async () => {
+  const run = await refreshingNow({ sessions: [{ id: 'z1', title: null, waits: ['js-harness wait --pr 674'] }] });
+  assert.match(run.said, /stopped the wait 120 of the session z1 \(no title\): js-harness wait --pr 674/);
 });
 
 test('refreshNow tells the sessions whose waits it stopped when the refresh after it fails', async () => {

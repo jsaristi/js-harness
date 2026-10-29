@@ -113,18 +113,21 @@ const COPY_LOOK_PAUSE_MS = 10_000;
 const sinceOf = (ms) => (Number.isFinite(ms) ? `, since ${new Date(ms).toISOString()}` : '');
 const blockersWhy = (blockers) => `${blockers.length === 1 ? 'a process other than a wait runs' : `${blockers.length} processes other than a wait run`} from the installed copy: ${blockers.map((one) => `${one.pid} (${one.verb ?? 'no command named'}${sinceOf(one.createdAt)})`).join(', ')}`;
 
-/** Tells each work session whose waits `stopped` holds to run them again, by one note of `reArmNote` through `tell`, and
- * prints every other stopped wait with the command that runs it again. A note that cannot be written is said. */
+/** Tells each work session whose waits `stopped` holds to run them again, by one note of `reArmNote` through `tell`, in
+ * the channel of its project (`session.slug`; this one's when it names none), and prints every other stopped wait with
+ * the command that runs it again. A note that cannot be written is said. */
 function tellStopped({ stopped, sha, code, tell, stdout }) {
-  const byNumber = new Map();
+  const bySession = new Map();
   for (const wait of stopped) {
     const role = roleOfTitle(wait.session?.title);
-    if (role?.role === 'work') byNumber.set(role.number, [...(byNumber.get(role.number) ?? []), wait]);
+    const key = `${wait.session?.slug ?? ''}\0${role?.number}`;
+    if (role?.role === 'work') bySession.set(key, [...(bySession.get(key) ?? []), wait]);
     else stdout(`refresh: run again the wait of ${wait.whose}: ${wait.again}`);
   }
-  for (const [number, waits] of byNumber) {
+  for (const waits of bySession.values()) {
+    const { number } = roleOfTitle(waits[0].session.title);
     try {
-      tell(number, reArmNote({ sha, code, again: waits.map((wait) => wait.again) }));
+      tell(number, reArmNote({ sha, code, again: waits.map((wait) => wait.again) }), waits[0].session.slug);
       stdout(`refresh: told ${waits[0].whose} to run its ${waits.length === 1 ? 'wait' : `${waits.length} waits`} again`);
     } catch (err) {
       stdout(`refresh: could not tell ${waits[0].whose} to run its waits again (${err.message}): ${waits.map((wait) => wait.again).join('; ')}`);
@@ -137,7 +140,7 @@ function tellStopped({ stopped, sha, code, tell, stdout }) {
  * processes (`{ waits, blockers, snapshot }`, readCopy); while a blocker is there after `COPY_LOOKS` looks, nothing is
  * refreshed (GATE_NOT_RUN). Then `refresh` (refreshCopy) runs for main, and under its gate lock `stillQuiet` looks once
  * more, refuses on a blocker, and stops every wait with `stop` (killProcesses), refusing when one outlives it. After
- * the refresh, whatever its exit, the sessions of the stopped waits are told (`tell(number, text)`), each found in
+ * the refresh, whatever its exit, the sessions of the stopped waits are told (`tell(number, text, slug)`), each found in
  * `sessions()` (wakePlan now, read just before the stop). Returns the refresh's exit. */
 export async function refreshNow({ main, copySha, look, stop, sessions, refresh, versionOf, tell, home, cwd, env, sleep, stdout, stderr }) {
   if (!main.sha) {
@@ -172,34 +175,37 @@ export async function refreshNow({ main, copySha, look, stop, sessions, refresh,
   const stopped = [];
   // Under the gate lock, right before the install: no wait is stopped for a refresh that then waits for the lock.
   const stillQuiet = () => {
-    const seen = looked();
-    if (seen.failed) return { quiet: false, why: seen.failed };
-    if (seen.blockers.length > 0) return { quiet: false, why: blockersWhy(seen.blockers) };
-    // Read before the stop: a stopped wait reads as ended in its transcript once its session hears of it.
+    // Read before the stop, since a stopped wait reads as ended in its transcript once its session hears of it, and
+    // before the last look, since reading every transcript takes long enough for work to start meanwhile.
     let plan = [];
     try {
       plan = sessions();
     } catch (err) {
       stdout(`refresh: the sessions' transcripts could not be read (${err.message}): the waits are stopped without their sessions`);
     }
+    const seen = looked();
+    if (seen.failed) return { quiet: false, why: seen.failed };
+    if (seen.blockers.length > 0) return { quiet: false, why: blockersWhy(seen.blockers) };
+    // Each wait is taken for stopped before the stop, which can fail after it stopped some: its session is told either way.
+    for (const wait of seen.waits) {
+      const { session, why } = sessionOf({ commandLine: wait.commandLine, plan });
+      const whose = session ? session.title ?? `the session ${session.id} (no title)` : `no one session (${why})`;
+      stopped.push({ ...wait, session, whose, again: waitAgain(wait.commandLine) });
+    }
     let outcome;
     try {
       outcome = stop(seen.waits.flatMap((wait) => wait.targets));
     } catch (err) {
+      for (const wait of stopped) stdout(`refresh: may have stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);
       return { quiet: false, why: `the waits could not be stopped (${err.message})` };
     }
-    for (const wait of seen.waits) {
-      const { session, why } = sessionOf({ commandLine: wait.commandLine, plan });
-      const whose = session?.title ?? `no one session (${why})`;
-      stopped.push({ ...wait, session, whose, again: waitAgain(wait.commandLine) });
-      stdout(`refresh: stopped the wait ${wait.pid} of ${whose}: ${waitAgain(wait.commandLine)}`);
-    }
+    for (const wait of stopped) stdout(`refresh: stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);
     if (outcome.running.length > 0) return { quiet: false, why: `${outcome.running.length === 1 ? '1 process of the stopped waits still runs' : `${outcome.running.length} processes of the stopped waits still run`}: ${outcome.running.join(', ')}` };
     return { quiet: true };
   };
   let code;
   try {
-    code = await refresh({ landed: true, sha, version: versionOf(sha), home, cwd, env, session: env.CLAUDE_CODE_SESSION_ID || null, stillQuiet, stdout, stderr });
+    code = await refresh({ landed: true, sha, version: versionOf(sha), home, cwd, env, session: env.CLAUDE_CODE_SESSION_ID || null, stillQuiet, command: 'merge-queue --refresh-copy', stdout, stderr });
   } catch (err) {
     stderr(`refresh failed: ${err.message}`);
     code = REFRESH_FAILED;
