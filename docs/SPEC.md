@@ -870,6 +870,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** A description of the pieces as they stand in place of the requirements: it reads as today's architecture, and a rebuild would copy it; the map under "The architecture" is kept apart from the entries and says it is today's. Principles alone: nothing can be rebuilt from a philosophy.
 **Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`
 
+### An output the owner sees again is a template of five parts
+
+**Problem:** On 2026-10-29 the owner saw a page made by hand where a command should have made it, and asked that everything he sees again and again be made by a command and held by a gate, so a model's taste cannot reach him (transcript `0f71b2c6`, lines 14721 and 15262; `odd/tasks/templates.md`, Specs).
+**Requirement:** Each such output is a registered template with five parts: the sample he approved, pinned by its sha256 and the words that approved it; the command that renders it from the records; a golden test; a gate on the path to him; and a test that the gate refuses a hand-made one. `js-harness template new <id>` scaffolds the five parts from his line `Plantilla: qué quiero ver · cuándo aparece · cómo se ve · dónde me llega` and names only the first field missing, so he is asked for that one alone; `template check` fails on a draft, a missing part, a sample whose bytes changed, a scaffold body left, a skipped test, a surface no installed hook watches, or a repeated id; `template list` prints the registry.
+**Reason:** An output held only by prose drifts with the model that writes it; one held by a command, its golden test and a gate cannot reach him by hand without the refusal saying so.
+**Proof:** `node --test bin/template.test.mjs`, `node --test bin/lib/template.test.mjs`, `node --test bin/lib/template-check.test.mjs`, `node --test bin/lib/template-scaffold.test.mjs`
+**Discarded:** A skeleton a session fills, as `contract template` prints: the model still writes what he sees. A checklist in a skill: nothing refuses an output that skips it.
+**Today:** `bin/template.mjs`, `bin/lib/template.mjs`, `bin/lib/template-check.mjs`, `bin/lib/template-scaffold.mjs`, `bin/lib/template-registry.mjs`, `js-harness template`
+
 ## After F8
 
 Where the harness must stand once F8 is done (`docs/ROADMAP.md`, "F8 plan"), so a step can be

@@ -913,6 +913,26 @@ The file is named by the day and by the title's letters and digits, without acce
 session's opening is. The session fills every section, commits and pushes the file, and closes with
 it (`notify --kind closed --summary`, below).
 
+### js-harness template
+
+An output the user sees again and again, held by five parts: the sample they approved, the command
+that renders it from the records, a golden test, a gate on the path to them, and a test that the gate
+refuses a hand-made one (`odd/tasks/templates.md`). It is not a skeleton a session fills, as
+`contract template` prints.
+
+```
+$ js-harness template new question --what "the questions to the user" --when "when a decision is theirs" \
+    --sample approved.html --where "the lead chat" --source 0f71b2c6:15262 --surface ask
+$ js-harness template check
+templates: 1 registered, every part present
+$ js-harness template list --json
+```
+
+`new` writes the sample, its records, the renderer, the golden and refusal tests and a draft entry in
+`bin/lib/template-registry.mjs`, and names only the first field missing, so the user is asked for that
+one alone. `check` exits 1 naming each template and its fault: a draft, a part missing, a sample whose
+bytes are not the approved ones, a scaffold body left, a skipped test, a surface no hook watches.
+
 ### js-harness failures
 
 Reads the register of what went wrong, `docs/FAILURES.md`: the totals, the count by class and

@@ -385,3 +385,8 @@ when, sample, where, then source, each with a Spanish `ask`; `firstMissing`; `sc
 git top level, default hooked from a `templateGateEntry` of `bin/lib/hook-entries.mjs` when it exists, else none), the
 dispatcher line and help line in `bin/js-harness.mjs`, then `node --test` on the four files, `npm run check`, commit,
 Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) with the approved surface (L6).
+- Update ~04:55Z: `bin/lib/template-scaffold.mjs` and `bin/template.mjs` written too (uncommitted). Next: the dispatcher and help line in `bin/js-harness.mjs`, run the four tests, fix, `npm run check`, commit slice A.
+- Update ~05:10Z (after the host's compaction at 04:33Z): the dispatcher, its usage entry, the README section and a
+  `docs/SPEC.md` capability (the `spec` row refuses a command no capability claims; outside the listed surface, a
+  consequence of the approved dispatcher line, told to the lead) written; slice A committed. Next: Codex and lens
+  reviews `--base 410eed7c`, push, PR, ready notice; then slice B.
