@@ -1711,6 +1711,24 @@ test('an entry a first, skipped install never wrote is the user\'s once the file
   }
 });
 
+test('an entry the user already had is still theirs when install takes an older form of ours out beside it', () => {
+  const home = makeTmpHome();
+  try {
+    const target = guardHook.target(home);
+    const olderTimeout = { ...guardHook.entry(), hooks: [{ ...guardHook.entry().hooks[0], timeout: 3 }] };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [olderTimeout, guardHook.entry()] } }, null, 2)}\n`, 'utf8');
+
+    const manifest = install(home, '0.1.0');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry()], 'the older form went, and the file was written');
+    assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, guardHook.entry())).createdEntry, false);
+    uninstall(home);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry()]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('sync leaves an entry recorded as the user\'s when the release no longer ships it', () => {
   const home = makeTmpHome();
   try {
