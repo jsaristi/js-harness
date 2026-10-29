@@ -88,6 +88,8 @@ const NAMED = {
   'bin/lib/lens-reviews.test.mjs': OWNED,
   'bin/lib/rules-coverage.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
   'bin/lib/rules-coverage.test.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
+  'scripts/rehearsal-lib.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,
+  'scripts/rehearsal-lib.test.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,
 };
 
 /** The files git tracks under the roots of the tree at `repo`, as paths from it with forward slashes: what a commit
