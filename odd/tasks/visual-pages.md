@@ -161,7 +161,8 @@ From the feature document and git:
   session is the document's (`Session JH <n>` at its head), else "sin estimado registrado";
 - reviews: coverage, the Codex reviews (`codex-reviews.jsonl`) and lens reviews (`lens-reviews.jsonl`) whose head is
   one of those commits, by outcome; attempts, the Codex runs (`codex-review-runs.jsonl`) by run id; a review of a
-  rebased head is not found and the page says so; the gentle-ai lines of the log counted;
+  rebased head is not found and the page says so. The gentle-ai lines of the log are not counted: main's sweep (F8
+  S11) refuses a file under `bin` that names the tool, and the page counts what the records hold;
 - spend: the Codex runs' `usage.inputTokens` and `cachedInputTokens` apart, a run with no usage counted as unknown;
   the lens results' `costUsd` and tokens; evals and the session's own tokens "sin medir";
 - failures: the failed gates of its worktrees inside its span, as the stretch measures them;

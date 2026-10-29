@@ -16,6 +16,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { notesOf, renderStatus } from './lib/report-status.mjs';
+import { FEATURE_USAGE, reportFeatureMain } from './report-feature.mjs';
 import { PHASE_USAGE, reportPhaseMain } from './report-phase.mjs';
 
 export const USAGE = [
@@ -34,6 +35,8 @@ export const USAGE = [
   '                  waits: [{ what, why }], proposals: [{ step, why }] }, each shown as the lead\'s',
   '',
   PHASE_USAGE,
+  '',
+  FEATURE_USAGE,
 ].join('\n');
 
 const GIT_TIMEOUT_MS = 30_000;
@@ -101,6 +104,7 @@ function readMap(run, cwd, ref) {
 export async function reportMain(argv, options = {}) {
   // A moment's page is its own command, with its own options.
   if (argv[0] === 'phase') return reportPhaseMain(argv.slice(1), options);
+  if (argv[0] === 'feature') return reportFeatureMain(argv.slice(1), options);
   const { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir, appendReport = appendReportLine, fileSystem = fs, recordLoad } = options;
   let parsed;
   try {
