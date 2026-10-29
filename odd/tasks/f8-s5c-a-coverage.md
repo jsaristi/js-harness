@@ -134,6 +134,11 @@ Reviews:
   that adds no column, and any mention of the currency passed a reply that chooses it for the owner. Fixed by the
   commit after `b08cf553`: comments are taken out before the check, and the reply must say the choice waits and
   must not say it chose a currency (checked on six replies by hand, the reference's included).
+- gentle-ai: approved on `03effcad..b4d6fc13` (`e2be8e8a`, `45fb1751`, `45ae758e`; lineage
+  `review-4a07504fe0e0b05e`, reliability lens, three advisory findings, L25).
+- JH 82, `24471296` (the away grader's Spanish words bounded): the reliability lens, 0 findings (9,672 input
+  tokens); Codex, "the patch is correct" (0.97, 41,698 input tokens against the plan's 49,000 to 59,000).
+- gentle-ai: approved on `b4d6fc13..24471296` (lineage `review-c679edf6c2d39dd6`, two advisory findings, L25).
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -156,6 +161,7 @@ plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
 |---|---|---|---|---|
 | P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | plan $2.08 (table $1.84 to $2.76) | $2.31 (1.11 times the plan) |
 | P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | plan $2.41 (table $1.84 to $2.76) | $2.56 (1.06 times the plan) |
+| P7 reuse-first v2 again, transcripts kept (L23) | P5's command with `--name f8-s5c-a-cases-reuse-2` | 4 | plan $2.31 (stops past $3.47) | |
 
 Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21).
 
@@ -178,8 +184,8 @@ JH 82's state at its context pause (2026-10-29, branch `f8-s5c-a-cases`, worktre
 `D:\js-harness\.claude\worktrees\f8-s5c-a-cases`, HEAD `45ae758e`, nothing pushed, no PR yet): blocker 2 is built
 (`45fb1751`), D12 too (`45ae758e`); blocker 1 is his question 111, and no `away-autonomy` rerun runs until it is
 answered (L23). On `03effcad..45ae758e`: the lenses (reliability, readability), 0 findings each; Codex, "the patch
-is correct" (0.9, 74,832 input tokens). Still owed: a gentle-ai line for `e2be8e8a`, `45fb1751` and `45ae758e`
-(run `gentle-ai review status ... --next-transition`, then its granted start, capture-result, acknowledge). Next, in order: (1) those reviews, their findings fixed;
+is correct" (0.9, 74,832 input tokens). After the compaction (L25): gentle-ai approved both ranges, its findings
+fixed by `24471296` or read and not taken, every review of `24471296` done. Next, in order: (1) done;
 (2) P7, a diagnostic rerun of `rule-reuse-first` on both arms now that the arms keep transcripts (4 trials, about
 $2.3 by P5): read in each trial's transcripts whether `js-harness-protocols` was loaded, record it in the Log and
 the Paid runs table, `rule-proof.mjs` from the clean commit; (3) T10: move `staleManifestMessage`,
@@ -434,3 +440,14 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   letters since `\b` stops at an accented one). Checked on the four P6 replies: each now passes the "waits" test and
   still fails the no-question test, so P6 would have scored 5 of 6 on both arms, still no difference; and on eight
   replies written by hand, four of them Spanish (`task-proof` unchanged: 2, 6, 0 of 6).
+- L25 (2026-10-29, evidence and decisions): the host compacted this session at 07:46 local, after its state was
+  written and committed (`b4d6fc13`). gentle-ai approved `03effcad..b4d6fc13` with three advisory findings of its
+  reliability lens: `us[eé]` matched the English "use", and `espera` had no letter before it (both read true,
+  fixed by `24471296`, checked on eleven replies by hand, the four P6 ones among them, the case still proven); and
+  the "keeps no transcript" test's hand list narrowed it, read not true: `BUILDERS` holds only `minimal` and
+  `current`, `minimal` is still in the list, and `current` moved to the test that it keeps them. On `24471296`
+  gentle-ai approved with two more advisory findings, not taken: a reply that drops the accent ("use EUR por
+  fila") or writes "usé" decomposed now passes the no-choice check, but the trials reply in precomposed Spanish
+  with its accents (the four P6 replies), and "use" without one is also the English word the fix stopped; and the
+  grader has no fixture replies of its own, as no grader of this suite has: its proof is `task-proof`'s fixture,
+  reference and empty runs, and the eleven replies were checked by a script in the job's scratch.
