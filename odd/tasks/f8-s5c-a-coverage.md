@@ -238,6 +238,13 @@ Reviews:
   both taken in the commit after `d74291fc`: a reply that must fail was checked only by its exit, so a grader broken
   some other way passed it (each now names the assertion it fails on); and the count of one test read `# tests 1`,
   which a Node that counts filtered tests as skipped would break (the one selected test's own line is counted now).
+- JH 86, `d74291fc..ec45645c` (those two): the reliability lens, 0 findings (10,929 input tokens); Codex, "the patch
+  is correct" (0.95).
+- gentle-ai: approved on `0b9dc198..ec45645c` (lineage `review-a3f543dcfeb05585`), acknowledged, two suggestions, not
+  taken: that no reply shows the "names Q1" check failing alone, and that each "quedan ..." alternative and the left
+  bound of "guardad" have no reply of their own. Each round of these reviews has asked for one more reply per branch of
+  the grader's patterns; the five replies prove the two ways a reply fails (its close, its hold) and the two ways one
+  written as the rule asks passes, which is what L40 asks of the test, and P10 grades real replies next.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -330,7 +337,8 @@ After the compaction (L36, L37): (1) and (2) are built, with the case's missing 
 (3) the reviews of their two commits, then (4) P9 and (5).
 After P9 (L38, L39, $3.86): (1) to (4) are done; the case ties at 0.83, the without arm asked on the one trial that
 closed, and the 3-minute cut and the grader's currency word hide the rest. Next: (5), and the lead's answer on D20.
-After L40 (JH 86's state at its second context pause, branch `f8-s5c-a-reach-2`): (1) to (3) built, uncommitted until
+After the reviews of `0b9dc198..ec45645c` (all approved, recorded above), P10 runs from the commit that records them.
+After L40 (JH 86's state at its second context pause, branch `f8-s5c-a-reach-2`): (1) to (3) built, uncommitted until
 this commit; next: Codex and the reliability lens on this commit, gentle-ai on its slice, push; P10, both arms twice,
 `--plan` first, stop past 1.5 times, from a clean commit through `js-harness gate` (its plan, read after `0b9dc198`:
 4 trials, about 10 min and $3.26 [i], so the stop is at $4.89); `rule-proof.mjs`; the results
