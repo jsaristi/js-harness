@@ -430,7 +430,6 @@ export const COVERAGE = {
       "cd34e37381ea",
       "75f8a8d6d5a2",
       "53a066eaa932",
-      "3120fe1e7071",
       "55e6a65fa3c0",
       "47491826838f",
       "c303034a23f3",

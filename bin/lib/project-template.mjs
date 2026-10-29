@@ -1,7 +1,7 @@
 // The files that hold the harness's lines in a project, AGENTS.md and CLAUDE.md, and their marked block that `sync`
 // renders again while it is unedited (odd/tasks/rule-hierarchy.md, T16f; odd/tasks/f8-s3-split.md, S3). The user's own
 // `~/.claude/CLAUDE.md` holds one too, his Rules lines (./rules-block.mjs). The lines themselves stay with their
-// callers, which pass them in.
+// callers, which pass them in. The empty failures register `init` writes beside them is here too.
 import path from 'node:path';
 import { sha256 } from './manifest.mjs';
 
@@ -94,3 +94,24 @@ export function removeBlock(text, kind = 'block') {
   const tail = text.startsWith('\r\n', end) ? 2 : text.startsWith('\n', end) ? 1 : 0;
   return { text: text.slice(0, found.start) + text.slice(end + tail), state: 'removed', at: found.start };
 }
+
+/** The empty failures register `init` writes as `docs/FAILURES.md` when a project has none: what an entry is and how
+ * one is written, with no class and no entry, since the classes are the project's own. `js-harness failures` and the
+ * gate's `failures` row read it (`bin/lib/failures.mjs`); it parses with no fault. */
+export const FAILURES_TEMPLATE = `<!-- Written by \`js-harness init\`. -->
+# Failures
+
+What went wrong in this project: one entry per failure, with each time it was seen and the control
+that corrects it. A failure is work that went wrong in a way a control could prevent. A test that
+fails and is fixed inside its own task is not one: the gate is that control, working.
+
+A class is declared under "## Classes" as a list item: the id in backticks, then what it means. A
+failure is a "### <id>" entry under "## Entries", in the alphabetical order of the ids, with
+"- Class:" and one "- Seen:" line each time it happens, then the "- Control:" that corrects it. Its
+state is never written: \`js-harness failures\` computes it, and \`js-harness failures check
+--settled\` exits 1 while an entry is not settled.
+
+## Classes
+
+## Entries
+`;

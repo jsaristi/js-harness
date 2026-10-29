@@ -345,7 +345,9 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   stretch-departure, stretch-status or stretch-return. The departure's map by phase came in slice A's
   `mapNowSection`; its timeline is the lanes on the hour scale with the return marked, which is all that exists at
   the opening; the usage says the titles reach the pages as written.
-- [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
+- [x] T7 (kind: build) init's line. Spec 2. Route: inline. The block init writes names the page of each moment and
+  its command, under `rule:reports-spanish-visual`; this repo's CLAUDE.md names the rule in its Reporting sentence,
+  the one line the lead's note of 09:11Z widened the surface to.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
 - [ ] T9 (kind: verify) the four pages from the real records, published; reviews on each slice. Route: inline.
 - [ ] T11 (kind: build) the return's why and fix, `stretch explain` and `stretch show`, then the stretch of
@@ -563,6 +565,15 @@ carrying #644, landed (main 96b917a).
   the `--json` run checks its record message stays off stdout, and that the unrecorded case checks the page file
   exists. Both are assertions on what the code already does and its tests already reach; a new commit would cost a
   third Codex and lens round for no behavior change.
+- T7 is d0a1c365, after two refusals of the gate read before each new try: the long paragraph broke the template's
+  budget (787 of 750 estimated tokens) and `project.mjs`'s ceiling of 2034 lines; moving the block functions out
+  broke `wording-is-the-need`, whose phrases the rules check reads in `project.mjs`, so the failures template moved
+  instead. Codex 7b6d3f39..60e17fb0 correct (0.95, 64,107 input tokens); the lenses reliability and readability
+  found nothing (25,843).
+- gentle-ai: 7b6d3f39..60e17fb0 approved (medium, lineage review-9affe131e336c6a8), no findings.
+- Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
+  the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
+  writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si

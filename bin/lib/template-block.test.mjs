@@ -69,10 +69,12 @@ test('a file checked out with Windows line ends keeps them, and its unedited blo
 // F8 S3 (odd/tasks/f8-s3-split.md, S3): init ships the split. AGENTS.md keeps what a reviewer needs and CLAUDE.md, which
 // imports it, keeps how Claude works with the owner; the whole block stays what older projects hold, byte for byte, so a
 // project not yet moved keeps every line (sync renders the whole block where the project has no CLAUDE.md block).
-// The bytes moved once on purpose: his answer to question 104 (odd/tasks/f8-s11-complements.md, L14) changed one line.
+// The bytes moved on purpose twice: his answer to question 104 (odd/tasks/f8-s11-complements.md, L14) changed one line,
+// and the ideas he approved on 2026-10-28 (odd/tasks/visual-pages.md, spec 3, idea 3: the pages ship to every project
+// through init) added the paragraph that names the page of each moment (T7).
 test('the whole block is the two halves, and stays the bytes every project holds today', () => {
   assert.equal(templateBlock(), `${agentsBlock()}\n${claudeBlock()}`);
-  assert.equal(sha256(templateBlock()), '3d807fe7bc90e275d00c9fd111c7555657afcaf2ed531b878593bb811c84c803');
+  assert.equal(sha256(templateBlock()), '22bfc6469c5f09ff053335630443beba1642d5649510e3f2b0bb062f6ae12b16');
   assert.ok(agentsBlock().startsWith('## What good looks like\n'));
   assert.ok(claudeBlock().startsWith('## Working with the owner\n'));
   assert.doesNotMatch(agentsBlock(), /Working with the owner/);

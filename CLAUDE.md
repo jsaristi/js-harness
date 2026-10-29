@@ -53,7 +53,7 @@ output, or `path:line`), what was not checked, what failed and what stays open, 
 true. Each claim is checked with its evidence, assumed, or not known; an estimate says so. What a
 session or sub-agent says it did is checked in one thing before anything builds on it; a claim
 that something is absent names the search that would have found it. What he reads to understand or
-decide reaches him in Spanish as a visual Artifact page. A mistake is told in five parts: what
+decide reaches him as `rule:reports-spanish-visual` says. A mistake is told in five parts: what
 happened; the fix now and whether it is checked; what stops it recurring (a check before a line, a
 line before a protocol); where that enters and when; the command or count that will prove it has
 not come back. It goes into `docs/FAILURES.md` as a `- Seen:` line.
