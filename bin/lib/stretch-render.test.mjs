@@ -166,7 +166,10 @@ test('the status measures the stretch against its forecast: at the opening, the 
   assert.ok(html.indexOf('Cuánto avanzaremos') < html.indexOf('Cuánto se cumplió'), 'the forecast section comes first');
   // At the opening 32 %, about 42 % forecast from 37 %, and 37 % now.
   assert.match(html, /F8 plan[\s\S]*32 %[\s\S]*~42 %[\s\S]*37 %[\s\S]*37 %/);
-  assert.match(html, /1 de 3 filas del pronóstico hechas/);
+  assert.match(html, /1 de 3 filas y pasos del pronóstico hechos/);
+  // The map's range has no width here: the page says it closes even long, not "between 91 % and 91 %".
+  const even = renderReturn({ ...view, state: 'open', moments: { ...moments, forecast: { ...moments.forecast, total: { ...FORECAST.total, low: 100 } } } });
+  assert.match(even, /al volver, aunque el trabajo se alargue/);
   assert.match(html, /el mapa ganó 2 filas/);
   assert.match(html, />hecha</);
   assert.match(html, /ya no está/);

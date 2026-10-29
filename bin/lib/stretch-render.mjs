@@ -57,7 +57,7 @@ const FORECAST_NOTE = 'Sobre el mapa de la apertura: una fila que se añada mien
 function scopeTiles({ name, unit, counts, now }) {
   const list = [
     { value: share(counts.done, counts.total), share: meter(counts.done, counts.total), caption: `${now ? 'al abrir' : 'ahora'}: ${counts.done} de ${counts.total} ${unit}` },
-    { value: `~${share(counts.forecast, counts.total)}`, share: meter(counts.forecast, counts.total), caption: `al volver, entre ${share(counts.low, counts.total)} y ${share(counts.high, counts.total)}` },
+    { value: `~${share(counts.forecast, counts.total)}`, share: meter(counts.forecast, counts.total), caption: counts.low === counts.high ? 'al volver, aunque el trabajo se alargue' : `al volver, entre ${share(counts.low, counts.total)} y ${share(counts.high, counts.total)}` },
     ...(now ? [{ value: share(now.done, now.total), share: meter(now.done, now.total), caption: `ahora: ${now.done} de ${now.total} ${unit}` }] : []),
   ];
   return `<p><strong>${escapeHtml(name)}</strong></p>${tiles(list)}`;
@@ -87,7 +87,7 @@ export function forecastSection(forecast, titles = new Map()) {
   ]);
   const said = forecast.named === 0 ? '<p class="note">Ningún trabajo del plan dice qué cierra: el pronóstico es lo que ya hay.</p>' : '';
   const gained = measured === null ? '' : measured.gained === 0 ? 'el mapa no ganó filas' : measured.gained > 0 ? `el mapa ganó ${measured.gained} filas` : `el mapa perdió ${-measured.gained} filas`;
-  const against = measured === null ? '' : `<p>${measured.forecastDone.done} de ${measured.forecastDone.of} filas del pronóstico hechas; ${gained} desde la apertura, que el porcentaje de ahora cuenta y el pronóstico no.</p>`;
+  const against = measured === null ? '' : `<p>${measured.forecastDone.done} de ${measured.forecastDone.of} filas y pasos del pronóstico hechos; ${gained} desde la apertura, que el porcentaje de ahora cuenta y el pronóstico no.</p>`;
   const unread = forecast.now?.unavailable ? `<p class="note">El mapa de ahora no se pudo leer: ${escapeHtml(forecast.now.unavailable)}.</p>` : '';
   const problems = (forecast.problems ?? []).map((one) => `<li>${escapeHtml(titles.get(one.item) ?? one.item)}: ${escapeHtml(one.error)}</li>`).join('');
   return `${scopes.map(scopeTiles).join('')}${said}${against}${unread}
