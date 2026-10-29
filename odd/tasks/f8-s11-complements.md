@@ -134,6 +134,20 @@ Reviews:
   input tokens); lens reliability over 52c49fc..6196a6b, from PR 3's tip so it reads PR 4 alone and not main again,
   0 findings (89,291 input tokens); gentle-ai on `7093a62d..6196a6b6`: not reviewed, its candidate holding main's 139
   files; its status was read and nothing started.
+- PR 4, bca90373..3fc6425f (the land left #632 out red twice: the gate's WSL mirror is synced without .git, so
+  the absence test's `git ls-files` failed there; gentle-ai's R3-002 on fc2a9a0f..fff61c60 had said the test needs
+  git, and was left on the belief that every test runs in a checkout). bca90373 walked the disk with no .git; Codex
+  P2: the mirror holds untracked and ignored files, so a stray file would decide it. 57cb302a skips instead with no
+  .git; gentle-ai (lineage review-6e29079456ffbac5) R3-001, the read at module load, and R3-002, a CI step without
+  .git passing as a skip, taken in a4b1b66c, which skips only outside CI. The reliability lens: its own test asserted
+  this checkout does not skip, false in the mirror; fixed in 3fc6425f. A no-.git copy of the tree holding a stray
+  file that names gentle-ai passes 2 and skips 1; the committed test failed in it with "not a git repository".
+  Codex bca9037..a4b1b66 passed (70,910 input tokens, after one run stopped by "model is at capacity") and
+  a4b1b66..3fc6425 passed (38,241); lens reliability 0d2840e..a4b1b66 one finding, taken, and a4b1b66..3fc6425 0
+  findings (3,874); gentle-ai on `57cb302a..3fc6425f`: approved (lineage review-2555e690150d752b), three left:
+  R3-001 (a tree with .git where git fails would now fail) does not hold, since `trackedFiles` returns null only with
+  no .git and asserts on a git that fails, as the base did; R3-002 (`CI=false` counts as CI): GitHub sets `CI=true`;
+  R3-003 (no `os` import) does not hold, `os` is imported.
 - PR 3, 36587437 (the lens record where the Codex review is off, L14): Codex caaccd3..3658743, 1 part, passed
   (118,985 input tokens); lenses risk, reliability, readability over caaccd3..3658743: 0 findings (about 20,350
   input tokens each); gentle-ai on `caaccd3f..36587437`: approved (lineage review-e13532840d6c3432), two suggestions
@@ -287,3 +301,7 @@ through the lead. A session that lands a file naming gentle-ai after #632 is ref
   S9 there lets a push through with the Codex review off, and the door is where the record is asked. The block's
   bytes move, so a project whose block is unedited gets it rendered again on its next sync, which git undoes, and an
   edited one is kept (`syncTemplateBlock`).
+- L15 (2026-10-29 01:31Z, his answer to question 106, tapped on the board, read with `js-harness sessions --quote
+  0f71b2c6-cbce-43ca-a031-276a4b2c381f 13778`): "Aplicarlo al entrar 632 (Recomendada)". After #632 lands and the
+  lead refreshes the installed copy, this session runs `js-harness stack install` on his real home and shows `doctor`
+  before and after; the yes does not cover removing gentle-ai, credentials or evals.
