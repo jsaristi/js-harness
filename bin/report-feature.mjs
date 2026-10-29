@@ -24,8 +24,8 @@ export const FEATURE_USAGE = [
   '  pull requests (the merges of the default branch from the branch its head line names, or a slice of it',
   '  <branch>-…, or --branch, or --pr), the time from its first commit to its last merge against the stretch',
   '  estimate of its session, the Codex and lens reviews and runs on its commits with their spend, the gates that',
-  '  failed in its worktree (.claude/worktrees/<document name> of the main checkout), and the map before its first',
-  '  merge and after its last.',
+  '  failed in its worktree (.claude/worktrees/<document name> of the main checkout, or a slice\'s <name>-…), and the',
+  '  map before its first merge and after its last.',
   '  --html <file>  write the page there and put it in the rendered record of the templates, to show it unchanged',
   '  --json         print the view as JSON alone',
   '  --record       keep the page\'s numbers in the page record, under the document\'s path',
@@ -157,21 +157,29 @@ export async function reportFeatureMain(argv, { cwd: defaultCwd = process.cwd(),
   } catch (err) {
     return fail(`the stretch record could not be read: ${err.code ?? err.message}`);
   }
-  // The gates that failed in the feature's own worktree while it ran: the one the harness makes for it, named as its
-  // document under the project's main checkout. The gate log is the machine's, so a folder of that name in another
-  // project is not the feature's; a log that cannot be read is said, never shown as no failure.
+  // The gates that failed in the feature's worktrees while it ran: the one the harness makes for it, named as its
+  // document under the project's main checkout, and those of its slices (`<name>-…`), as its branches are matched.
+  // The gate log is the machine's, so a folder of that name in another project is not the feature's; a log that
+  // cannot be read is said, never shown as no failure.
   const commits = prs.unknown ? [] : prs.flatMap((pr) => pr.commits);
   const from = commits.length ? Math.min(...commits.map((commit) => commit.at)) : null;
   const to = prs.unknown ? null : Math.max(...prs.map((pr) => pr.at));
-  const folder = path.join(main, '.claude', 'worktrees', path.basename(docFile, '.md'));
-  const samePlace = (a, b) => (process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
+  const trees = path.join(main, '.claude', 'worktrees');
+  const name = path.basename(docFile, '.md');
+  const folder = path.join(trees, name);
+  const fold = (text) => (process.platform === 'win32' ? text.toLowerCase() : text);
+  const ofFeature = (cwd) => {
+    const place = path.resolve(cwd);
+    const base = fold(path.basename(place));
+    return fold(path.dirname(place)) === fold(path.resolve(trees)) && (base === fold(name) || base.startsWith(fold(`${name}-`)));
+  };
   let failures;
   if (from === null) failures = { folder, unavailable: 'its commits are not known, so neither is when it ran' };
   else {
     const log = readGateLog(home, { fileSystem });
     failures = log.unavailable
       ? { folder, unavailable: log.unavailable.join('; ') }
-      : { folder, runs: gateRuns(log.events).filter((gate) => failedGate(gate.result) && Date.parse(gate.startedAt) >= from && Date.parse(gate.startedAt) <= to && typeof gate.cwd === 'string' && samePlace(gate.cwd, folder)) };
+      : { folder, runs: gateRuns(log.events).filter((gate) => failedGate(gate.result) && Date.parse(gate.startedAt) >= from && Date.parse(gate.startedAt) <= to && typeof gate.cwd === 'string' && ofFeature(gate.cwd)) };
   }
 
   const first = firstMergeOf(prs);

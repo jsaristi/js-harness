@@ -206,8 +206,8 @@ function spendHtml({ codex, lens }) {
 
 function failuresHtml({ folder, runs, unavailable }) {
   if (unavailable) return note(`No se sabe qué gates fallaron: ${unavailable}.`);
-  if (runs.length === 0) return note(`Ningún gate falló en ${folder} mientras duró.`);
-  return note(`En ${folder}:`) + table(['Cuándo', 'Resultado', 'Lo que falló'], runs.map((one) => [{ text: stamp(Date.parse(one.startedAt)), mono: true }, one.result, one.failing.join(' · ') || '—']));
+  if (runs.length === 0) return note(`Ningún gate falló en ${folder} ni en sus porciones (${folder}-…) mientras duró.`);
+  return note(`En ${folder} y sus porciones (${folder}-…):`) + table(['Dónde', 'Cuándo', 'Resultado', 'Lo que falló'], runs.map((one) => [{ text: one.cwd, mono: true }, { text: stamp(Date.parse(one.startedAt)), mono: true },one.result, one.failing.join(' · ') || '—']));
 }
 
 function mapHtml(view) {

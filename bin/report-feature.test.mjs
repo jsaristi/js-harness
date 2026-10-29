@@ -100,15 +100,18 @@ const gate = (id, at, cwd, result, failing = []) => [
   { v: 1, event: 'end', id, at, result, sensors: [{ name: 'tests', failing }] },
 ];
 
-test('the failed gates are those of the feature\'s own worktree while it ran, not another project\'s folder of its name', async (t) => {
+test('the failed gates are those of the feature\'s worktrees and its slices\' while it ran, not another project\'s folder of its name', async (t) => {
   const place = project();
   t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));
-  const own = path.join(mainCheckout(run, place.repo), '.claude', 'worktrees', 'feature-x');
+  const trees = path.join(mainCheckout(run, place.repo), '.claude', 'worktrees');
+  const own = path.join(trees, 'feature-x');
   const lines = [
     ...gate('g1', '2026-10-29T02:00:00Z', own, 'fail', ['bin/a.test.mjs']),
     ...gate('g2', '2026-10-29T02:10:00Z', path.join(place.top, 'other-project', 'feature-x'), 'fail', ['bin/theirs.test.mjs']),
     ...gate('g3', '2026-10-29T02:20:00Z', own, 'pass'),
     ...gate('g4', '2026-10-29T05:00:00Z', own, 'fail', ['bin/after.test.mjs']),
+    ...gate('g5', '2026-10-29T02:30:00Z', path.join(trees, 'feature-x-board'), 'fail', ['bin/slice.test.mjs']),
+    ...gate('g6', '2026-10-29T02:40:00Z', path.join(trees, 'feature-xyz'), 'fail', ['bin/other-feature.test.mjs']),
   ];
   fs.mkdirSync(path.join(place.home, '.js-harness', 'gate-log'), { recursive: true });
   fs.writeFileSync(path.join(place.home, '.js-harness', 'gate-log', 'log.jsonl'), lines.map((line) => `${JSON.stringify(line)}\n`).join(''));
@@ -116,7 +119,7 @@ test('the failed gates are those of the feature\'s own worktree while it ran, no
   assert.equal(result.code, 0, result.err);
   const { failures } = JSON.parse(result.out);
   assert.equal(failures.folder, own);
-  assert.deepEqual(failures.runs.map((one) => one.failing), [['bin/a.test.mjs']]);
+  assert.deepEqual(failures.runs.map((one) => one.failing), [['bin/a.test.mjs'], ['bin/slice.test.mjs']]);
 });
 
 test('a gate log that cannot be read is said, never shown as no failure', async (t) => {

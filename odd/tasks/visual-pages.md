@@ -169,7 +169,8 @@ From the feature document and git:
   commit and is counted apart;
   the lens results' `costUsd` and tokens; evals and the session's own tokens "sin medir";
 - failures: the failed gates inside its span whose folder is its worktree, `.claude/worktrees/<document name>` of the
-  main checkout (the gate log is the machine's, so a folder of that name in another project is not its); a gate log
+  main checkout, or a slice's (`<document name>-…`, as its branches are matched); the gate log is the machine's, so a
+  folder of that name in another project is not its; a gate log
   that cannot be read is said, never shown as no failure;
 - the map: at the first parent of the earliest merge of all its pull requests and at the last merge.
 `--record` appends the page record (subject: the document's path).
