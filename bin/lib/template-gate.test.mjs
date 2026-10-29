@@ -1,0 +1,92 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { RENDERED_FRESH_HOURS, decidePage, freeReason, pageTarget } from './template-gate.mjs';
+import { RENDERED_SCHEMA, normalText, sha256 } from './template-record.mjs';
+
+const NOW = Date.parse('2026-10-29T06:00:00.000Z');
+const hoursAgo = (hours) => new Date(NOW - hours * 3600 * 1000).toISOString();
+const PAGE = '<!doctype html>\n<html><body class="jh-moment"><h1>Vuelves</h1></body></html>\n';
+const rendered = (text, at = hoursAgo(1)) => ({
+  schema: RENDERED_SCHEMA, template: 'stretch-return', subject: 's-7', sha256: sha256(text), normal: sha256(normalText(text)),
+  bytes: text.length, at, head: 'abc', path: '/x/return.html',
+});
+const TEMPLATES = [{ id: 'stretch-return', surface: 'page', render: 'js-harness stretch close --html', signature: 'jh-moment' }];
+const FILE = '/h/.js-harness/throughput/p/templates-rendered.jsonl';
+const decide = (page, extra = {}) => decidePage({ page, rendered: [], templates: TEMPLATES, openMoments: [], now: NOW, renderedPath: FILE, ...extra });
+const FREE = '<meta name="js-harness-page" content="free: a research page on the gate, for him">';
+
+test('pageTarget reads an Artifact publish of a page, file by file, and a widget by its code', () => {
+  assert.deepEqual(pageTarget('Artifact', { file_path: 'D:/t/p.html', icon: 'chart' }), { files: ['D:/t/p.html'] });
+  assert.deepEqual(pageTarget('Artifact', { action: 'publish', file_path: 'notes.md', url: 'u' }), { files: ['notes.md'] });
+  assert.deepEqual(pageTarget('Artifact', { file_path: 'p.html', files: { 'a.html': 'src/a.html', 'b.css': 'src/b.css', 'c.html': { from: 'src/c.html' }, 'd.html': null } }), { files: ['p.html', 'src/a.html', 'src/c.html'] });
+  assert.deepEqual(pageTarget('mcp__visualize__show_widget', { title: 't', widget_code: '<p>x</p>' }), { widget: '<p>x</p>' });
+});
+
+test('an Artifact call that shows no page is not the gate\'s', () => {
+  for (const input of [
+    { action: 'read', url: 'u' }, { action: 'open', url: 'u' }, { action: 'list' }, { action: 'quickstart', intent: 'other' },
+    { url: 'u', file_path: 'logo.png', asset: true }, { type_url: 't', title: 'Deck' }, { file_path: 'data.json', url: 'u' },
+  ]) assert.equal(pageTarget('Artifact', input), null, JSON.stringify(input));
+  assert.equal(pageTarget('ArtifactData', { action: 'set' }), null);
+  assert.equal(pageTarget('mcp__visualize__show_widget', {}), null);
+});
+
+test('a page whose bytes a template command recorded within the hours is admitted as that template', () => {
+  const decision = decide({ text: PAGE }, { rendered: [rendered(PAGE)] });
+  assert.equal(decision.decision, 'admitted');
+  assert.equal(decision.template, 'stretch-return');
+  assert.equal(decision.subject, 's-7');
+  assert.equal(decision.sha256, sha256(PAGE));
+});
+
+test('an old page published again as a new moment\'s is refused', () => {
+  const decision = decide({ text: PAGE }, { rendered: [rendered(PAGE, hoursAgo(RENDERED_FRESH_HOURS + 0.5))] });
+  assert.equal(decision.decision, 'refused');
+});
+
+test('a widget is admitted only when its code is the recorded file\'s text; a retyped one is refused naming Artifact', () => {
+  const asCarried = `${PAGE.replace(/\n/g, '  \r\n')}\n\n`;
+  assert.equal(decide({ widget: asCarried }, { rendered: [rendered(PAGE)] }).decision, 'admitted');
+  const retyped = decide({ widget: PAGE.replace('Vuelves', 'Volviste') }, { rendered: [rendered(PAGE)] });
+  assert.equal(retyped.decision, 'refused');
+  assert.match(retyped.reason, /Artifact/);
+});
+
+test('a page marked free with its reason is admitted as free when no template shows in it and no moment is open', () => {
+  const decision = decide({ text: `<html><head>${FREE}</head><body>research</body></html>` });
+  assert.equal(decision.decision, 'free');
+  assert.equal(decision.reason, 'a research page on the gate, for him');
+});
+
+test('a free mark whose reason is under 20 characters is no mark', () => {
+  assert.equal(freeReason('<meta name="js-harness-page" content="free: short">'), null);
+  assert.equal(decide({ text: '<meta name="js-harness-page" content="free: short"><p>x</p>' }).decision, 'refused');
+});
+
+test('the 02:44Z case: a page with a template\'s signature and no recorded hash is refused, by widget and by Artifact, marked free or not', () => {
+  const handMade = '<div class="jh-moment"><h2>Plan de 8 horas</h2></div>';
+  for (const page of [{ text: handMade }, { widget: handMade }, { text: `${FREE}${handMade}` }, { widget: `${FREE}${handMade}` }]) {
+    const decision = decide(page);
+    assert.equal(decision.decision, 'refused', JSON.stringify(page));
+    assert.match(decision.reason, /stretch-return/);
+  }
+});
+
+test('a page marked free while a moment of a page template is open is refused, naming the moment', () => {
+  const decision = decide({ text: `${FREE}<p>todo bien</p>` }, { openMoments: [{ template: 'stretch-return', subject: 's-8' }] });
+  assert.equal(decision.decision, 'refused');
+  assert.match(decision.reason, /s-8/);
+});
+
+test('the refusal says what came from no command, where it looked, the command to run and how to mark a free page', () => {
+  const { reason, decision } = decide({ text: '<p>hecho a mano</p>' });
+  assert.equal(decision, 'refused');
+  assert.equal(reason, `js-harness template gate: this page came from no template command (sha256 ${sha256('<p>hecho a mano</p>').slice(0, 12)} is not in ${FILE}). `
+    + 'Make it with its command and publish that file unchanged: stretch-return: js-harness stretch close --html. '
+    + 'If no record holds what it shows, mark it free: <meta name="js-harness-page" content="free: <why, 20 characters or more>">.');
+});
+
+test('with no page template registered, the refusal says so in place of a command', () => {
+  const { reason } = decide({ text: '<p>x</p>' }, { templates: [] });
+  assert.match(reason, /no page template is registered yet/);
+});
