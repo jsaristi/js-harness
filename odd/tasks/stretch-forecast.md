@@ -106,7 +106,7 @@ effort.
 - [x] T2 (kind: build) the command: `open` resolves and forecasts, `closes` records a row for the open stretch, `status` and `close` measure against the forecast (`bin/stretch.mjs`). Spec 1, 2. Route: inline. Commit: f5d4d70f.
 - [x] T3 (kind: build) the pages: the departure leads with the migration's plan and the map, two numbers each, the status and the return with the forecast section (`bin/lib/stretch-render.mjs`). Spec 1, 2, 3. Route: inline. Commit: d5873f14, 5aed8af1.
 - [ ] T4 (kind: verify) the open stretch's forecast rendered from the real record in a scratch home; reviews (Codex and the Claude lenses) on the slice; PR. Route: inline.
-- [ ] T5 (kind: docs) `rule:away-autonomy` names the migration's share now and at the return on the departure, through `js-harness rules change away-autonomy` on a `rule/` branch, his words quoted with their date; its own PR. Spec 3. Route: inline.
+- [x] T5 (kind: docs) `rule:away-autonomy` names the migration's share now and at the return on the departure, through `js-harness rules change away-autonomy` on a `rule/` branch, his words quoted with their date; its own PR. Spec 3. Route: inline. Commit: eb043c74, on `rule/away-autonomy-forecast`.
 - [x] T6 (kind: docs) the `docs/FAILURES.md` line: 2026-10-29 he left for an hour with no stretch opened, so the return had no goals; the check is `stretch status` at his departure. Spec 3. Route: inline.
 
 ## Log
