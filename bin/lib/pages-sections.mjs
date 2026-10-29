@@ -16,10 +16,12 @@ export function sharesTiles({ goals, work, outside }) {
     if (one.met === null) return `${one.unknown} ${unknownWords}`;
     return `${one.met} de ${one.of} ${words}${one.unknown ? `, ${one.unknown} sin medir` : ''}`;
   };
+  // In time over no goal met: the goals say whether none was met, none was planned or they were not reviewed.
+  const noneInTime = goals.met.of === 0 ? 'nada planeado' : goals.met.met === null ? 'a tiempo sin medir: las metas no se revisaron' : 'ninguna meta cumplida todavía';
   const others = Object.entries(work.others).map(([state, ids]) => `${ids.length} ${state}`).join(', ');
   return tiles([
     { value: shareText(goals.met), share: ratio(goals.met), caption: caption(goals.met, 'metas cumplidas', 'metas sin revisar') },
-    { value: shareText(goals.inTime), share: ratio(goals.inTime), caption: caption(goals.inTime, 'cumplidas a tiempo', 'cumplidas sin revisión antes de tu vuelta', 'ninguna meta cumplida todavía') },
+    { value: shareText(goals.inTime), share: ratio(goals.inTime), caption: caption(goals.inTime, 'cumplidas a tiempo', 'cumplidas sin revisión antes de tu vuelta', noneInTime) },
     { value: shareText(work), share: ratio(work), caption: `${caption(work, 'trabajos terminados', 'trabajos sin medir')}${others ? ` (${others})` : ''}${work.waiting.length ? `; ${work.waiting.length} esperan por ti` : ''}` },
     { value: `+${outside.sessions.length}`, caption: `sesiones fuera del plan${outside.untitled ? `; ${outside.untitled} avisos sin título` : ''}` },
   ]);
