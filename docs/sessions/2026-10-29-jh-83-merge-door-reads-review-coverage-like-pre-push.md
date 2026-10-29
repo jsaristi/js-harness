@@ -84,7 +84,7 @@ reason, not only git's first line"; "One `- Seen:` line in docs/FAILURES.md for 
 - Not run: a real pre-push hook end to end. The test feeds the push's output.
 
 ## Cost
-- Time: the brief at 10:39Z; this summary at about 12:40Z (estimate).
+- Time: the brief at 10:39Z; the ready notice at 12:16Z; context at 48% when it was sent.
 - Reviews: Codex over `7eb2a70..3f3fc07`, 1 part, 87,790 input tokens, "the patch is correct" (0.83). The lenses risk,
   resilience, reliability and readability over the same range, 0 findings, about 88,000 input tokens. Over the fix
   `3f3fc07..9343b83`: the lenses reliability and readability, 0 findings, about 18,000 input tokens; Codex, 58,164 input
