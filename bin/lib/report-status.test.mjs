@@ -47,6 +47,16 @@ test('a section the records could not give says why, and nothing that landed or 
   assert.match(html, /4\. El mapa<\/h2><p class="note">La rama main no tiene docs\/ROADMAP\.md/);
 });
 
+test('an answer no transcript confirmed is said as the sender\'s claim, and with no notes the waits are not said to be none', () => {
+  const questions = { answered: [{ number: 7, at: Date.parse('2026-10-29T01:00:00Z'), notice: { text: '¿Cuál rama?' }, answer: 'main', verified: false }], open: [] };
+  const html = renderStatus({ ...FACTS, questions, notes: null });
+  assert.match(html, /7 \(main; sin verificar: lo dice quien la envió\)/);
+  assert.doesNotMatch(html, /Nada espera/);
+  assert.match(html, /5\. Lo que espera<\/h2><p class="note">Ninguna pregunta abierta\. Lo demás que espera no lo guarda ningún registro: lo escribe el orquestador en sus notas \(--notes\), y esta vez no las dio\./);
+  const withNotes = renderStatus({ ...FACTS, questions: { answered: [], open: [] }, notes: notesOf('{}') });
+  assert.match(withNotes, /5\. Lo que espera<\/h2><p class="note">Nada espera: ninguna pregunta abierta y ninguna espera en las notas\./);
+});
+
 test('the notes are read whole or refused with what is wrong', () => {
   assert.deepEqual(notesOf('{}'), { badNews: [], decisions: [], waits: [], proposals: [] });
   assert.throws(() => notesOf('not json'), /the notes are not JSON/);

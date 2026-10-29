@@ -63,13 +63,21 @@ function mapHtml(map, before, branch) {
   return `${note(`Ahora, sin un antes: ${why}.`)}${mapNowSection(map)}`;
 }
 
+// With no notes, the waits only the lead knows are unknown, never none: said so, as the sections from the notes do.
+const NO_WAITS_RECORD = 'Lo demás que espera no lo guarda ningún registro: lo escribe el orquestador en sus notas (--notes), y esta vez no las dio.';
+
+// An answer no transcript confirmed (`verified` false) is the sender's claim, said so as the text report says it.
+const answerText = (one) => `${one.number} (${one.answer}${one.verified === false ? '; sin verificar: lo dice quien la envió' : ''})`;
+
 function waitsHtml(questions, waits) {
-  const rows = waits.map((one) => [one.what, one.why, LEAD]);
-  if (questions.error) return `${unread(questions)}${rows.length ? table(['Qué espera', 'Por qué', 'De quién'], rows) : ''}`;
+  const rows = (waits ?? []).map((one) => [one.what, one.why, LEAD]);
+  const unknown = waits === null ? note(NO_WAITS_RECORD) : '';
+  if (questions.error) return `${unread(questions)}${rows.length ? table(['Qué espera', 'Por qué', 'De quién'], rows) : ''}${unknown}`;
   const asked = questions.open.map((one) => [`Pregunta ${one.number}: ${one.notice.text}`, `espera desde ${stamp(Date.parse(one.notice.at))}: ${one.notice.waits ?? '—'}`, 'del registro']);
-  const answered = questions.answered.length === 0 ? '' : note(`Respondidas desde el corte: ${questions.answered.map((one) => `${one.number} (${one.answer})`).join('; ')}.`);
+  const answered = questions.answered.length === 0 ? '' : note(`Respondidas desde el corte: ${questions.answered.map(answerText).join('; ')}.`);
   const all = [...asked, ...rows];
-  return `${all.length === 0 ? note('Nada espera: ninguna pregunta abierta y ninguna espera en las notas.') : table(['Qué espera', 'Por qué', 'De quién'], all)}${answered}`;
+  if (waits === null && all.length === 0) return `${note(`Ninguna pregunta abierta. ${NO_WAITS_RECORD}`)}${answered}`;
+  return `${all.length === 0 ? note('Nada espera: ninguna pregunta abierta y ninguna espera en las notas.') : table(['Qué espera', 'Por qué', 'De quién'], all)}${unknown}${answered}`;
 }
 
 const fromNotes = (notes, key, head, row) => (notes === null ? note(NO_RECORD) : notes[key].length === 0 ? note('Nada esta vez, según las notas del orquestador.') : table([...head, 'De quién'], notes[key].map((one) => [...row(one), LEAD])));
@@ -87,7 +95,7 @@ export function renderStatus({ cut, branch, landed, sessions, questions, map, be
       { title: '2. Las sesiones', html: sessionsHtml(sessions) },
       { title: '3. Tus decisiones y qué cambiaron', html: fromNotes(notes, 'decisions', ['Decisión', 'Qué cambió'], (one) => [one.text, one.changed]) },
       { title: '4. El mapa', html: mapHtml(map, before, branch) },
-      { title: '5. Lo que espera', html: waitsHtml(questions, notes?.waits ?? []) },
+      { title: '5. Lo que espera', html: waitsHtml(questions, notes === null ? null : notes.waits) },
       { title: '6. Lo que propongo', html: fromNotes(notes, 'proposals', ['Paso', 'Por qué'], (one) => [one.step, one.why]) },
     ],
   });
