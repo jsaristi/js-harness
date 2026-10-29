@@ -430,5 +430,13 @@ carrying #644, landed (main 96b917a).
 - Slice B: one PR, #647 (`feat/visual-pages-board`, L18), fully reviewed (L15). State at ~04:45Z: origin/main merged
   into it as 02e68ec3. Its reviews: Codex correct (0.99, 59,929 input tokens); the reliability lens found nothing.
   gentle-ai did not review it: its range holds main's 53 files, each reviewed in its own pull request, and the
-  merge's own writing is the 3-line fixture Codex read. Next: push, notify ready.
+  merge's own writing is the 3-line fixture Codex read. Pushed; ready sent.
+- gentle-ai: daa51f84 approved (medium, lineage review-4204ae195c698200), no findings: three test comments reworded,
+  since main's sweep refused a file naming the tool (#647's land red on Actions, run 40825306670). Codex on it alone:
+  correct (0.99). Main merged in again as 78bfe423, covered by main's own records; gentle-ai did not review it, for
+  the reason given above for 02e68ec3.
+- Seen ~06:10Z: a first merge, 279d6e74, came before daa51f84 had a Codex record, so Codex read the whole range with
+  main's code in it (4 parts, 497,298 input tokens) and left 4 findings on JH 80's template code, which pre-push
+  refused as owed. That merge was rebuilt, unpushed, as 78bfe423 after a record of daa51f84 alone. A branch commit
+  gets its record before main is merged over it.
 - Then slice C (T6, T7, T10 as L17 says), slice D (T8), T9.
