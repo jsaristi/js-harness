@@ -4,7 +4,7 @@
 // correct them, and whether the queued work fills the stretch. `bind` names the session a queued item got. `status`
 // measures the open stretch now, and with --goals runs its goals; `close` runs them, measures and records the stretch
 // closed, which is what the next estimates learn from. `explain` records, with the commit or notice that says it, why
-// a goal or an item was left undone and how it is fixed; `show` gives a closed stretch's return again. The record is
+// a goal, an item or a failure went wrong and how it is fixed; `show` gives a closed stretch's return again. The record is
 // one JSON line an event under the throughput
 // folder, which `uninstall` keeps. `--html` writes the view as the fragment the lead shows in the chat.
 import { spawnSync } from 'node:child_process';
@@ -43,8 +43,8 @@ export const USAGE = [
   '       js-harness stretch bind <item> <session>',
   '       js-harness stretch status [--goals] [--json] [--html <file>]',
   '       js-harness stretch close [--json] [--html <file>]',
-  '       js-harness stretch explain <goal or item> --source <commit:hash|notice:at> [--why <text>] [--fix <text>]',
-  '                                  [--fixed | --open <text>] [--stretch <id>]',
+  '       js-harness stretch explain <goal, item or failure:<time>> --source <commit:hash|notice:at> [--why <text>]',
+  '                                  [--fix <text>] [--fixed | --open <text>] [--stretch <id>]',
   '       js-harness stretch show [--stretch <id>] [--json] [--html <file>]',
   '       (each also takes --cwd <path> and --home <path>)',
   '  A stretch is the work run while the user is away, or any stretch the lead plans. Its record is',
@@ -65,10 +65,12 @@ export const USAGE = [
   '    time in the main checkout, and records the result. Exit 1 with no stretch open.',
   '  close: runs the goals, measures and records the stretch closed, and prints the return. Exit 0 whether or not',
   '    the goals were met; exit 1 with no stretch open.',
-  '  explain: records why a goal or an item of the stretch was left undone, how it was or can be fixed (--fixed when it',
-  '    was), or why it is not (--open), with its source: commit:<hash> git knows, or notice:<at> of the channel. The',
-  '    return shows it beside the goal or item, over what the records say alone. It explains the open stretch, else the',
-  '    last closed one, or the one --stretch <id> names. Exit 1 for an unknown target or a source no record holds.',
+  '  explain: records why a goal, an item or a failure of the stretch went wrong, how it was or can be fixed (--fixed',
+  '    when it was), or why it is not (--open), with its source: commit:<hash> git knows, or notice:<at> of the',
+  '    channel. A goal and an item are named by id (goal:<id> or item:<id> when both share it), a failure by its start,',
+  '    failure:<time> in full or failure:<HH:MM> as the return shows it. The return shows it beside its row, over what',
+  '    the records say alone. It explains the open stretch, else the last closed one, or the one --stretch <id> names.',
+  '    Exit 1 for an unknown target, a minute two failures start in, or a source no record holds.',
   '  show: the return of the last closed stretch, or of --stretch <id>, measured again at its close from its records.',
   '    It runs no goal and records nothing. Exit 1 with no closed stretch, or for an open one (use status).',
   '  --json prints the view as JSON; --html <file> writes it as the HTML fragment the lead shows in the chat, and puts',
@@ -127,7 +129,7 @@ function parseArgs(argv) {
   if (verb === 'open' && flags.plan === undefined) throw new StretchArgError('open requires --plan <file>');
   if (verb === 'bind' && positional.length !== 2) throw new StretchArgError('bind takes an item and a session: bind W3 "JH 74"');
   if (verb === 'explain') {
-    if (positional.length !== 1) throw new StretchArgError('explain takes the id of a goal or an item: explain G2 --source commit:<hash> --why <text>');
+    if (positional.length !== 1) throw new StretchArgError('explain takes a goal, an item or failure:<time>: explain G2 --source commit:<hash> --why <text>');
     if (flags.source === undefined) throw new StretchArgError('explain requires --source commit:<hash> or notice:<at>: an explanation is a record\'s');
     flags.source = sourceArg(flags.source);
     if (![flags.why, flags.fix, flags.open, flags.fixed].some(Boolean)) throw new StretchArgError('explain requires --why, --fix, --open or --fixed');
@@ -448,12 +450,9 @@ function explainCommand(ctx, flags, [target], events) {
     ctx.err(`js-harness stretch: ${flags.stretch === undefined ? 'no stretch was opened' : `no stretch ${flags.stretch}`}`);
     return 1;
   }
-  // A goal and an item may share an id: `goal:<id>` or `item:<id>` says which, and a bare id must name only one.
-  const { plan } = stretch.open;
-  const [, kindAsked, id] = /^(?:(goal|item):)?(.+)$/.exec(target);
-  const kinds = [['goal', plan.goals], ['item', plan.items]].filter(([kind, list]) => (kindAsked ?? kind) === kind && list.some((one) => one.id === id)).map(([kind]) => kind);
-  if (kinds.length !== 1) {
-    ctx.err(`js-harness stretch: ${kinds.length === 0 ? `the stretch ${stretch.open.id} has no ${kindAsked ?? 'goal or item'} ${id}` : `the stretch ${stretch.open.id} has both a goal and an item ${id}: name goal:${id} or item:${id}`}`);
+  const named = explainTarget(ctx, stretch, target);
+  if (named.error) {
+    ctx.err(`js-harness stretch: ${named.error}`);
     return 1;
   }
   const source = sourceRecord(ctx, flags.source);
@@ -462,9 +461,30 @@ function explainCommand(ctx, flags, [target], events) {
     return 1;
   }
   const texts = Object.fromEntries(['why', 'fix', 'open'].filter((name) => flags[name] !== undefined).map((name) => [name, flags[name]]));
-  appendEvent(ctx.file, ctx.fileSystem, { event: 'explain', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), kind: kinds[0], target: id, ...texts, ...(flags.fixed ? { fixed: true } : {}), source });
-  ctx.out(`${kinds[0]} ${id} of the stretch ${stretch.open.id} explained, its source ${source.kind} ${source.ref ?? source.at}`);
+  appendEvent(ctx.file, ctx.fileSystem, { event: 'explain', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), kind: named.kind, target: named.target, ...texts, ...(flags.fixed ? { fixed: true } : {}), source });
+  ctx.out(`${named.kind} ${named.target} of the stretch ${stretch.open.id} explained, its source ${source.kind} ${source.ref ?? source.at}`);
   return 0;
+}
+
+/** The goal, item or failure `target` names in `stretch`, as `{ kind, target }`, or `{ error }`. A goal and an item
+ * may share an id: `goal:<id>` or `item:<id>` says which, and a bare id must name only one. A failure is named by its
+ * start, `failure:<time>` in full or `failure:<HH:MM>` as the page shows it, among the failures measured to the close,
+ * or to now while the stretch is open; a minute two of them start in is refused with the full time of each. */
+function explainTarget(ctx, stretch, target) {
+  const { id: stretchId, plan } = stretch.open;
+  const [, kindAsked, id] = /^(?:(goal|item|failure):)?(.+)$/.exec(target);
+  if (kindAsked === 'failure') {
+    const view = measure(ctx, stretch, ctx.now());
+    const minute = /^(\d{2}:\d{2})Z?$/.exec(id)?.[1];
+    const wanted = Date.parse(id);
+    const starts = [...view.items.flatMap((item) => item.failures), ...view.failures].map((one) => one.at)
+      .filter((at) => (minute ? at.slice(11, 16) === minute : Date.parse(at) === wanted));
+    if (starts.length === 1) return { kind: 'failure', target: starts[0] };
+    return { error: starts.length === 0 ? `the stretch ${stretchId} has no failure that starts at ${id}` : `${starts.length} failures of the stretch ${stretchId} start at ${id}: name one, ${starts.map((at) => `failure:${at}`).join(' or ')}` };
+  }
+  const kinds = [['goal', plan.goals], ['item', plan.items]].filter(([kind, list]) => (kindAsked ?? kind) === kind && list.some((one) => one.id === id)).map(([kind]) => kind);
+  if (kinds.length === 1) return { kind: kinds[0], target: id };
+  return { error: kinds.length === 0 ? `the stretch ${stretchId} has no ${kindAsked ?? 'goal or item'} ${id}` : `the stretch ${stretchId} has both a goal and an item ${id}: name goal:${id} or item:${id}` };
 }
 
 async function showCommand(ctx, flags, events) {

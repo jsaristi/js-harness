@@ -356,7 +356,13 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   E2 (`feat/visual-pages-e2`) `stretch explain` and `stretch show`.
 - [ ] T11a (kind: docs) the stretch entries of `README.md` and `js-harness help` (`bin/js-harness.mjs`) name only open,
   bind, status and close; both lie outside this brief's surface, so `explain` and `show` are said in the command's
-  own usage until a session that owns them adds a line. Route: inline.
+  own usage until a session that owns them adds a line. Route: inline. The lead's note of 11:03Z widened the surface to
+  those two entries.
+- [x] T12 (kind: build) a failure is explainable like a goal or an item. Spec 9, from the lead's note of 11:00Z: the
+  four failures of the 03:06Z stretch still read "no registrado" because `explain` took only a goal or an item.
+  `stretch explain failure:<time>` names one by its start, in full or by the minute the return shows, among the
+  failures measured to the close; a minute two start in is refused with the full time of each. A failure's row is
+  named by its start, so an explanation reaches that failure alone. Route: inline, `feat/visual-pages-t12`.
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 79: his words of lines 12054, 12220 and 12237, the four ideas he approved

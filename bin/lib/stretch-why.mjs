@@ -41,13 +41,13 @@ function lastWait(session, notices, { from, to }) {
   return wait ? { text: `su último aviso de espera o pregunta: «${wait.text}»`, source: `aviso de ${wait.from.title} (${timeZ(wait.at)})` } : null;
 }
 
-/** A failure's row: who, when and for how long; why, its record's words; fixed when a later run of its kind passed. */
-function failureRow(one, target, who) {
+/** A failure's row, named by its start: who, when and for how long; why, its record's words; fixed when a later run of
+ * its kind passed. */
+function failureRow(one, who) {
   const source = /^gate /.test(one.what) ? 'el registro de gates' : /^land gate/.test(one.what) ? 'el registro de gates del aterrizaje' : /^land /.test(one.what) ? 'el registro de aterrizajes' : 'el registro de revisiones de Codex';
   return {
     kind: 'failure',
-    target,
-    at: one.at,
+    target: one.at,
     what: `${who} · ${timeZ(one.at)} · ${Math.round(one.seconds / 60)} min`,
     why: [{ text: one.what, source }],
     fix: one.fixedAt ? [{ text: `una corrida posterior pasó a las ${timeZ(one.fixedAt)}`, source }] : [],
@@ -76,8 +76,8 @@ function explained(row, explains) {
 }
 
 /** The rows of `view` (the measured stretch, open or closed), goals first, then items, then failures oldest first.
- * `notices` are the channel's; `explains` the stretch's `explain` events, oldest first. An explanation names a goal
- * or an item, never one of an item's failures. */
+ * `notices` are the channel's; `explains` the stretch's `explain` events, oldest first. An explanation names a goal,
+ * an item or a failure, the last by its start; one of an item never reaches the item's failures. */
 export function problemsOf(view, { notices = [], explains = [] }) {
   const closed = view.state === 'closed';
   const span = { from: ms(view.openedAt), to: ms(view.at) };
@@ -100,8 +100,8 @@ export function problemsOf(view, { notices = [], explains = [] }) {
     fixed: false,
   }));
   const failures = [
-    ...view.items.flatMap((item) => item.failures.map((one) => failureRow(one, item.id, item.session ?? item.title))),
-    ...view.failures.map((one) => failureRow(one, null, 'orquestador')),
-  ].sort((a, b) => ms(a.at) - ms(b.at)).map(({ at, ...row }) => row);
-  return [...goals, ...items].map((row) => explained(row, explains)).concat(failures);
+    ...view.items.flatMap((item) => item.failures.map((one) => failureRow(one, item.session ?? item.title))),
+    ...view.failures.map((one) => failureRow(one, 'orquestador')),
+  ].sort((a, b) => ms(a.target) - ms(b.target));
+  return [...goals, ...items, ...failures].map((row) => explained(row, explains));
 }

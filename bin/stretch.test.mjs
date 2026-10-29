@@ -435,6 +435,29 @@ test('explain records whether it names a goal or an item, and asks which when th
   assert.deepEqual(events(place).filter((event) => event.event === 'explain').map((one) => [one.kind, one.target]), [['goal', 'W2'], ['item', 'W1']]);
 });
 
+test('explain names a failure by its start, in full or by its minute, asks which when two start in that minute, and show gives it', async () => {
+  const place = scratch();
+  const second = new Date(T0 + 5 * H + 20_000).toISOString();
+  const land = (startedAt, exit) => ({ startedAt, endedAt: new Date(Date.parse(startedAt) + 10_000).toISOString(), exit });
+  const lands = [land(at(4), 1), land(at(5), 4), land(second, 1)];
+  const deps = { run: explainGit(), readLands: () => lands };
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  await stretch(place, ['close'], { hours: 9, deps });
+  const explain = (target, more = []) => stretch(place, ['explain', target, '--source', 'commit:e6c8214c', ...more], { hours: 10, deps });
+  const byMinute = await explain('failure:16:00Z', ['--why', 'la cola lo rechazó: sin registro de Codex']);
+  assert.equal(byMinute.code, 0, byMinute.err);
+  assert.equal((await explain(`failure:${at(4)}`, ['--fixed', '--fix', 'se cubrió con codex-review --again'])).code, 0);
+  const two = await explain('failure:17:00', ['--why', 'x']);
+  assert.equal(two.code, 1);
+  assert.ok(two.err.includes(`failure:${at(5)}`) && two.err.includes(`failure:${second}`), two.err);
+  assert.equal((await explain('failure:18:00', ['--why', 'x'])).code, 1, 'no failure starts then');
+  assert.equal((await explain('failure:mañana', ['--why', 'x'])).code, 1);
+  assert.deepEqual(events(place).filter((event) => event.event === 'explain').map((one) => [one.kind, one.target]), [['failure', at(4)], ['failure', at(4)]]);
+  const shown = JSON.parse((await stretch(place, ['show', '--json'], { hours: 11, deps })).out);
+  const row = shown.moments.why.find((one) => one.kind === 'failure' && one.target === at(4));
+  assert.deepEqual([row.why[0].text, row.fix[0].text, row.fixed], ['la cola lo rechazó: sin registro de Codex', 'se cubrió con codex-review --again', true]);
+});
+
 test('show measures a closed stretch from the records up to its close: a session\'s later notice changes nothing', async () => {
   const place = scratch({ notices: [notice(0.5, 's69', 'JH 69 · registros', 'opened')] });
   await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
