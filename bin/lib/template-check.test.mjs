@@ -58,6 +58,31 @@ test('an empty registry has no fault', () => {
   assert.deepEqual(run([]), []);
 });
 
+test('a sample checked out with CRLF is the sample he approved with LF', () => {
+  assert.deepEqual(run([entry()], files({ 'templates/question/sample.txt': Buffer.from(SAMPLE.replace(/\n/g, '\r\n')) })), []);
+});
+
+test('an entry that is not an object is a fault, not a crash', () => {
+  assert.deepEqual(faultsOf(run([null, 7])), ['(no id): the entry is not an object', '(no id): the id is registered twice']);
+});
+
+test('a title that also appears outside its test call does not hide the call\'s skip', () => {
+  const tests = `import { test } from 'node:test';
+// see 'template:question golden' below
+test.skip('template:question golden', () => {});
+test('template:question refuses a hand-made one', () => { assert.ok(true, \`template:question golden\`); });
+`;
+  assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': tests }))), ['question: bin/lib/template-question.test.mjs skips its test "template:question golden"']);
+});
+
+test('a title that appears only as a string, in no test call, is no test', () => {
+  const tests = `import { test } from 'node:test';
+const named = 'template:question golden';
+test('template:question refuses a hand-made one', () => {});
+`;
+  assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': tests }))), ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"']);
+});
+
 test('a part missing from the disk is named: the sample, the records, the module, the test file', () => {
   for (const missing of ['templates/question/sample.txt', 'templates/question/records.json', 'bin/lib/template-question.mjs', 'bin/lib/template-question.test.mjs']) {
     const faults = faultsOf(run([entry()], files({ [missing]: null })));
@@ -117,7 +142,7 @@ test('a test whose skip or todo option is false runs, so it is no fault', () => 
 });
 
 test('a surface no installed hook reaches is a fault; stop and command surfaces need none', () => {
-  assert.deepEqual(faultsOf(run([entry()], files(), [])), ['question: no installed hook watches AskUserQuestion, the tool of its surface ask']);
+  assert.deepEqual(faultsOf(run([entry()], files(), [])), ['question: no hook entry of this harness watches AskUserQuestion, the tool of its surface ask']);
   assert.deepEqual(run([entry({ surface: 'stop' })], files(), []), []);
   assert.deepEqual(run([entry({ surface: 'command:notify' })], files(), []), []);
   assert.deepEqual(faultsOf(run([entry({ surface: 'mail' })])), ['question: its surface "mail" is none of page, board, ask, stop or command:<name>']);

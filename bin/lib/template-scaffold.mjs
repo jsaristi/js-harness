@@ -2,8 +2,7 @@
 // quiero ver · cuándo aparece · cómo se ve (la muestra que apruebo) · dónde me llega`, the five parts as files and a
 // draft entry. The renderer and the gate throw until they are written, and their tests fail until then, so a template
 // lands only whole. Pure: the command reads the sample and writes the files.
-import { createHash } from 'node:crypto';
-import { KINDS, surfaceOf } from './template.mjs';
+import { KINDS, sampleDigest, surfaceOf } from './template.mjs';
 import { SCAFFOLD_BODY } from './template-check.mjs';
 
 /** The fields of `template new`, in the order of the user's line, then the words that approved the sample. `ask` is
@@ -50,14 +49,15 @@ import assert from 'node:assert/strict';
 import fs from '${NODE_FS}';
 import { admit, render } from './template-${id}.mjs';
 
-const SAMPLE = fs.readFileSync(new URL('../../${sample}', import.meta.url), 'utf8');
+// Read as LF, as its digest is, so a checkout with CRLF holds the same sample.
+const SAMPLE = fs.readFileSync(new URL('../../${sample}', import.meta.url), 'utf8').replace(/\\r\\n/g, '\\n');
 
 test('template:${id} golden', () => {
   assert.equal(render(${input}), SAMPLE);
 });
 
 test('template:${id} refuses a hand-made one', () => {
-  assert.equal(admit({ output: SAMPLE.replace(/\\S/, 'X') }).admitted, false);
+  assert.equal(admit({ output: \`\${SAMPLE} hand-made\` }).admitted, false);
 });
 `;
 }
@@ -83,7 +83,7 @@ export function scaffold(given, sampleBytes) {
     kind,
     surface,
     plantilla,
-    sample: { path: sample, sha256: createHash('sha256').update(sampleBytes).digest('hex'), source: given.source.trim() },
+    sample: { path: sample, sha256: sampleDigest(sampleBytes), source: given.source.trim() },
     ...(records ? { records } : {}),
     render: `<the command that renders ${id}>`,
     module,

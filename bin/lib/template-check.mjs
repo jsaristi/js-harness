@@ -2,8 +2,7 @@
 // disk and wired, so none lands half done. It reads the files the command hands it and runs nothing: whether a golden
 // test passes for the right reason is the reviews' to see, and the tests themselves run in every gate. Pure: the
 // files come through `readFile`.
-import { createHash } from 'node:crypto';
-import { KINDS, surfaceOf } from './template.mjs';
+import { KINDS, sampleDigest, surfaceOf } from './template.mjs';
 
 /** The fields an entry must hold, by dotted path, in the order a fault names them. */
 const REQUIRED = ['plantilla.what', 'plantilla.when', 'plantilla.looks', 'plantilla.where', 'sample.path', 'sample.sha256', 'sample.source',
@@ -35,7 +34,7 @@ function faultsOfEntry(entry, readFile, hooked) {
   if (entry.draft !== false) faults.push('a draft (template new wrote it): finish its renderer, its gate and its tests, then set draft to false');
   const sample = readFile(entry.sample.path);
   if (sample === null) faults.push(`${entry.sample.path}, its sample, is not there`);
-  else if (createHash('sha256').update(sample).digest('hex') !== entry.sample.sha256) {
+  else if (sampleDigest(sample) !== entry.sample.sha256) {
     faults.push(`${entry.sample.path} is not the sample he approved: its sha256 differs from sample.sha256; a new sample needs a new digest and his words in sample.source`);
   }
   if (entry.kind === 'rendered') {
@@ -62,20 +61,21 @@ function faultsOfEntry(entry, readFile, hooked) {
     }
   }
   const unwatched = surface.tools.filter((tool) => !hooked.has(tool));
-  if (unwatched.length > 0) faults.push(`no installed hook watches ${unwatched.join(', ')}, the tool${unwatched.length > 1 ? 's' : ''} of its surface ${surface.name}`);
+  if (unwatched.length > 0) faults.push(`no hook entry of this harness watches ${unwatched.join(', ')}, the tool${unwatched.length > 1 ? 's' : ''} of its surface ${surface.name}`);
   return faults;
 }
 
-/** The declaration of the test titled `title` in `source`, from its `test` or `it` call to its body (the first `=>`
- * or `function` after the title), over as many lines as it takes; `null` when no quoted title is there. A
- * `test.skip(` before the title and a `{ skip: … }` after it are both inside it. */
+/** The declaration of the test titled `title` in `source`: a `test` or `it` call whose first argument is the quoted
+ * title, from the call to its body (the first `=>` or `function` after the title), over as many lines as it takes;
+ * `null` when no such call is there. A `test.skip(` and a `{ skip: … }` are both inside it; the title in a comment or
+ * a message is not a call. */
 function declarationOf(source, title) {
-  const at = Math.max(...['\'', '"', '`'].map((quote) => source.indexOf(`${quote}${title}${quote}`)));
-  if (at < 0) return null;
-  const opener = [...source.slice(0, at).matchAll(/\b(?:test|it)\s*(?:\.\s*\w+\s*)?\(/g)].at(-1);
-  const rest = source.slice(at + title.length + 2);
-  const body = rest.search(/=>|\bfunction\b/);
-  return source.slice(opener?.index ?? at, at + title.length + 2 + (body < 0 ? 0 : body));
+  const quoted = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const call = new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`).exec(source);
+  if (call === null) return null;
+  const end = call.index + call[0].length;
+  const body = source.slice(end).search(/=>|\bfunction\b/);
+  return source.slice(call.index, end + (body < 0 ? 0 : body));
 }
 
 /** The faults of `entries`, each `{ id, fault }`, in the registry's order; none when every template is whole.
@@ -92,6 +92,10 @@ export function checkTemplates(entries, { readFile, hooked }) {
       continue;
     }
     ids.add(id);
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      faults.push({ id, fault: 'the entry is not an object' });
+      continue;
+    }
     for (const fault of faultsOfEntry(entry, readFile, hooked)) faults.push({ id, fault });
     if (typeof entry.signature === 'string' && entry.signature !== '') {
       if (signatures.has(entry.signature)) faults.push({ id, fault: `its signature is also template ${signatures.get(entry.signature)}'s` });

@@ -390,3 +390,10 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   `docs/SPEC.md` capability (the `spec` row refuses a command no capability claims; outside the listed surface, a
   consequence of the approved dispatcher line, told to the lead) written; slice A committed. Next: Codex and lens
   reviews `--base 410eed7c`, push, PR, ready notice; then slice B.
+- Update ~06:10Z: slice A is PR 649. Codex found 2 P2 (fixed in 6705dbb9, rechecked); the lenses found none.
+  gentle-ai: approved, medium, lineage review-bdfb8ba9d34d3ada, over 410eed7c..6705dbb9 (3a57e908, 6705dbb9),
+  acknowledged; its reliability lens left 7 findings as non-blocking, all fixed in the next commit (CRLF samples,
+  the test declaration read by its call, a non-object entry, the hook-entry wording, the sample read from `cwd`, a
+  hand-made output that always differs, the write-over-nothing and flag tests). The hook probe (T4), read from the
+  six newest lead transcripts: PreToolUse ran before `Artifact` (34), `ArtifactData` (128), `AskUserQuestion` (105)
+  and `mcp__visualize__show_widget` (7), so [i] holds and no tool needs the `Stop` fallback.

@@ -26,7 +26,9 @@ function topLevel(cwd) {
   return git.status === 0 ? git.stdout.trim() : cwd;
 }
 
-/** The tools the installed template gate watches: none until its hook entry exists (odd/tasks/templates.md, T4). */
+/** The tools the gate's hook entry of this harness watches, as `install` writes it: none until that entry exists
+ * (odd/tasks/templates.md, T4). It reads the entry this code declares, not a host's settings; `doctor` says whether a
+ * host holds it. */
 function installedGateTools() {
   const matcher = hookEntries.templateGateEntry?.().matcher;
   if (typeof matcher !== 'string') return new Set();
@@ -63,13 +65,13 @@ function readRegistry(root) {
   return Array.isArray(list) ? { list } : list;
 }
 
-function runNew(given, root, { stdout, stderr }) {
+function runNew(given, root, cwd, { stdout, stderr }) {
   const registry = readRegistry(root);
   if (registry.error) return stderr(`template new: ${registry.error}`), 1;
   if (registry.list.some((entry) => entry.id === given.id)) return stderr(`template new: ${given.id} is already registered`), 1;
   let sampleBytes;
   try {
-    sampleBytes = fs.readFileSync(path.resolve(given.sample));
+    sampleBytes = fs.readFileSync(path.resolve(cwd, given.sample));
   } catch (err) {
     return stderr(`template new: cannot read the sample ${given.sample}: ${err.message}`), 1;
   }
@@ -123,7 +125,7 @@ export function templateMain(argv, { stdout = console.log, stderr = console.erro
     const [subcommand, ...rest] = argv;
     if (subcommand === undefined) throw new TemplateArgError('a subcommand is required: new, check or list');
     const top = root ?? topLevel(cwd);
-    if (subcommand === 'new') return runNew(parseNew(rest), top, io);
+    if (subcommand === 'new') return runNew(parseNew(rest), top, cwd, io);
     if (subcommand === 'check') {
       if (rest.length > 0) throw new TemplateArgError(`unknown argument: ${rest[0]}`);
       return runCheck(top, hooked ?? installedGateTools(), io);

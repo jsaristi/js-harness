@@ -3,6 +3,7 @@
 // path to the user and a test that the gate refuses a hand-made one. The registry is data, `template-registry.mjs`,
 // whose text is what `writeRegistry` gives, so `template new` and a person change it the same way. Pure: it reads
 // no file; the command hands it texts.
+import { createHash } from 'node:crypto';
 
 /** The surfaces a template's gate sits on, each with the host tools its gate watches. `stop` is the reply's `Stop`
  * hook, which watches no tool; `command:<name>` is a command that refuses its own input. */
@@ -51,3 +52,10 @@ export function registryOfText(text) {
     return { error: `the registry does not parse: ${err.message}` };
   }
 }
+
+/** The sha256 of `bytes` (a string or a buffer), in hex. */
+export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+/** The digest a sample is pinned by: the sha256 of its bytes with each CRLF read as LF, so a checkout that turns line
+ * ends to CRLF (core.autocrlf) holds the sample he approved. */
+export const sampleDigest = (bytes) => sha256(Buffer.from(Buffer.from(bytes).toString('latin1').replace(/\r\n/g, '\n'), 'latin1'));

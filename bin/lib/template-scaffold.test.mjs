@@ -59,6 +59,9 @@ test('scaffold writes the five parts as files and a draft entry pinned to the sa
   const tests = files[3].content;
   assert.match(tests, /test\('template:question golden'/);
   assert.match(tests, /test\('template:question refuses a hand-made one'/);
+  // The golden reads the sample as LF, as its digest does; the hand-made output always differs from the sample.
+  assert.match(tests, /\.replace\(\/\\r\\n\/g, '\\n'\)/);
+  assert.match(tests, /admit\(\{ output: `\$\{SAMPLE\} hand-made` \}\)/);
 });
 
 test('what scaffold writes passes template check but for its draft and its scaffold body, so it cannot land half done', () => {
