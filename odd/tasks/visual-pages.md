@@ -457,6 +457,12 @@ carrying #644, landed (main 96b917a).
   (the map before is the phase page's tested `readMap`; the guarded write is the phase page's shape).
 - gentle-ai: 6fc7f8ae approved (medium, lineage review-c5e4c7139595b966), no findings; Codex correct (0.98); the
   reliability lens found nothing.
+- C3, 95d5231e..287d76ec (`report feature`, on `feat/visual-pages-c3`, local): lenses reliability and resilience
+  found nothing. gentle-ai: 287d76ec approved (medium, lineage review-31273a212f04c03d) with 4 warnings to fix.
+  Codex: incorrect in both parts (0.97, 0.98), 6 findings, its output kept in the job tmp `codex-c3-full.txt`. Next:
+  fix both sets test-first, then Codex recheck `--base 287d76ec`, the lens and gentle-ai, push, PR stacked on #652.
+  T7 moved to slice D: the rules check refuses its paragraph unless it names a `rule:<id>`, which D creates (patch in
+  the job tmp `t7-init-line.patch`).
 - State at ~06:40Z: #647 (slice B) landed (06:29Z). Slice C goes as two chained pull requests: C1, #651
   (`feat/visual-pages-c1`: d800cb96 with main merged in, 498 lines, the phase page and the rendered-record seam), and
   C2 (`feat/visual-pages-c`: the status page and its fixes, stacked on C1). Then C3: `report feature` and T7's init
