@@ -320,8 +320,8 @@ Codex and the Claude lenses before its pull request.
 - [x] T2 (kind: docs) the docs-only pull request and its ready notice. Spec 5. Route: inline. PR 648, landed as 410eed7c.
 - [x] T3 (kind: build) `template new`, the registry, `template check` and `list`, tests first. Spec 5. Route: inline. PR 649.
 - [x] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline. PR 653.
-- [ ] T5 (kind: build) the questions to him as the first template, end to end (the `ask` gate), with the escape entry. Spec 1, 4. Route: inline.
-- [ ] T6 (kind: build) the rule change on `rule/templates`. Spec 1, 5. Route: inline.
+- [x] T5 (kind: build) the questions to him as the first template, end to end (the `ask` gate), with the escape entry. Spec 1, 4. Route: inline. PR 656.
+- [x] T6 (kind: build) the rule change on `rule/templates`. Spec 1, 5. Route: inline. PR 660; `status-report` (L8) on `rule/status-report-why`, 7d770446.
 - [ ] T7 (kind: docs) the session summary and the ROADMAP line. Route: inline.
 
 ## Log
@@ -540,3 +540,13 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
 - gentle-ai: approved, lineage review-55c5cc4b6a8efd4a, over 509b5599..00ead029 (6fd99fd5, e27ed2cf, 00ead029),
   acknowledged; its reliability lens: 0 findings. The host compacted this session at 09:52Z, after 00ead029; the
   review's tokens and result were in the job's tmp and resumed from there.
+- Update 11:20Z: PR 660 landed (10:35Z). `status-report` (L8) is 7d770446 on `rule/status-report-why` from main
+  7eb2a709: item 6 of the status report reads "each step with its why: the criterion that puts it there, never a
+  step alone", its source quotes 0f71b2c6 line 18204. Its control is the protocol line: a check was tried first
+  (report-status refuses a blank why, its planted break turns the test red), but the rules tests' fixtures turn
+  every check into owed, which a rule declared after the baseline cannot be, and eight tests failed. Codex over
+  7eb2a70..7d77044: correct, 0.96, 55,059 input tokens; lenses risk, readability: 0. gentle-ai: approved, lineage
+  review-22db1ab261c445cd, over 7eb2a709..7d770446, acknowledged; its reliability lens left 1 WARNING (evidence
+  insufficient), not holding: it read the reading's "report-status refuses a proposal whose why is blank" as
+  unproved, but the base holds it since PR 656 (`bin/lib/report-status.mjs:11` and its test, lines 67-68). Next:
+  push, PR, ready notice; then T7.
