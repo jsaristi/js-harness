@@ -103,9 +103,13 @@ test('new refuses a flag given twice or with no value, as a usage error', (t) =>
 test('new reads a relative sample from the folder it is given, not the process\'s', (t) => {
   const { root, done } = scratch();
   t.after(done);
-  const made = call(NEW('approved.html'), { root, cwd: root });
+  const folder = path.join(root, 'drafts');
+  fs.mkdirSync(folder);
+  fs.renameSync(path.join(root, 'approved.html'), path.join(folder, 'approved.html'));
+  const made = call(NEW('approved.html'), { root, cwd: folder });
   assert.equal(made.code, 0, made.err);
   assert.ok(fs.existsSync(path.join(root, 'templates', 'question', 'sample.html')));
+  assert.equal(call(NEW('approved.html').map((token) => (token === 'question' ? 'other' : token)), { root, cwd: root }).code, 1);
 });
 
 test('new refuses a sample it cannot read', (t) => {

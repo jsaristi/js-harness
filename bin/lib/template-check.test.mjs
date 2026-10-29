@@ -59,11 +59,18 @@ test('an empty registry has no fault', () => {
 });
 
 test('a sample checked out with CRLF is the sample he approved with LF', () => {
-  assert.deepEqual(run([entry()], files({ 'templates/question/sample.txt': Buffer.from(SAMPLE.replace(/\n/g, '\r\n')) })), []);
+  const crlf = Buffer.from(SAMPLE.replace(/\n/g, '\r\n'));
+  assert.notDeepEqual(crlf, Buffer.from(SAMPLE));
+  assert.deepEqual(run([entry()], files({ 'templates/question/sample.txt': crlf })), []);
 });
 
-test('an entry that is not an object is a fault, not a crash', () => {
-  assert.deepEqual(faultsOf(run([null, 7])), ['(no id): the entry is not an object', '(no id): the id is registered twice']);
+test('each entry that is not an object is a fault of its own, not a crash', () => {
+  assert.deepEqual(faultsOf(run([null, 7])), ['(no id): the entry is not an object', '(no id): the entry is not an object']);
+});
+
+test('a title declared twice is skipped when either of its calls is', () => {
+  const tests = `${TESTS}test.skip('template:question golden', () => {});\n`;
+  assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': tests }))), ['question: bin/lib/template-question.test.mjs skips its test "template:question golden"']);
 });
 
 test('a title that also appears outside its test call does not hide the call\'s skip', () => {

@@ -55,9 +55,9 @@ function faultsOfEntry(entry, readFile, hooked) {
   else {
     const source = textOf(tests);
     for (const title of [entry.tests.golden, entry.tests.refusal]) {
-      const declaration = declarationOf(source, title);
-      if (declaration === null) faults.push(`${entry.tests.file} has no test titled "${title}"`);
-      else if (/^(?:test|it)\s*\.\s*(?:skip|todo)\b|\b(?:skip|todo)\s*:(?!\s*false\b)/.test(declaration)) faults.push(`${entry.tests.file} skips its test "${title}"`);
+      const declarations = declarationsOf(source, title);
+      if (declarations.length === 0) faults.push(`${entry.tests.file} has no test titled "${title}"`);
+      else if (declarations.some((one) => /^(?:test|it)\s*\.\s*(?:skip|todo)\b|\b(?:skip|todo)\s*:(?!\s*false\b)/.test(one))) faults.push(`${entry.tests.file} skips its test "${title}"`);
     }
   }
   const unwatched = surface.tools.filter((tool) => !hooked.has(tool));
@@ -65,17 +65,16 @@ function faultsOfEntry(entry, readFile, hooked) {
   return faults;
 }
 
-/** The declaration of the test titled `title` in `source`: a `test` or `it` call whose first argument is the quoted
- * title, from the call to its body (the first `=>` or `function` after the title), over as many lines as it takes;
- * `null` when no such call is there. A `test.skip(` and a `{ skip: … }` are both inside it; the title in a comment or
- * a message is not a call. */
-function declarationOf(source, title) {
+/** The declarations of the tests titled `title` in `source`: each `test` or `it` call whose first argument is the
+ * quoted title, from the call to its body (the first `=>` or `function` after the title), over as many lines as it
+ * takes. A `test.skip(` and a `{ skip: … }` are both inside one; the title in a comment or a message is not a call. */
+function declarationsOf(source, title) {
   const quoted = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const call = new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`).exec(source);
-  if (call === null) return null;
-  const end = call.index + call[0].length;
-  const body = source.slice(end).search(/=>|\bfunction\b/);
-  return source.slice(call.index, end + (body < 0 ? 0 : body));
+  return [...source.matchAll(new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`, 'g'))].map((call) => {
+    const end = call.index + call[0].length;
+    const body = source.slice(end).search(/=>|\bfunction\b/);
+    return source.slice(call.index, end + (body < 0 ? 0 : body));
+  });
 }
 
 /** The faults of `entries`, each `{ id, fault }`, in the registry's order; none when every template is whole.
@@ -87,15 +86,15 @@ export function checkTemplates(entries, { readFile, hooked }) {
   const signatures = new Map();
   for (const entry of entries) {
     const id = typeof entry?.id === 'string' && entry.id !== '' ? entry.id : '(no id)';
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      faults.push({ id, fault: 'the entry is not an object' });
+      continue;
+    }
     if (ids.has(id)) {
       faults.push({ id, fault: 'the id is registered twice' });
       continue;
     }
     ids.add(id);
-    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
-      faults.push({ id, fault: 'the entry is not an object' });
-      continue;
-    }
     for (const fault of faultsOfEntry(entry, readFile, hooked)) faults.push({ id, fault });
     if (typeof entry.signature === 'string' && entry.signature !== '') {
       if (signatures.has(entry.signature)) faults.push({ id, fault: `its signature is also template ${signatures.get(entry.signature)}'s` });
