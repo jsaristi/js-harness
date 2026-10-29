@@ -213,6 +213,10 @@ Reviews:
   record's `costUsd` sums the CLI's cost, which a trial cut by its timeout lacks ($0.94 recorded, $3.86 by the list
   cost, as L33 found), and the record does not mark that three of its four trials were cut.
 
+- JH 86, `14f8a15f..7a04a8e8` (L40): the reliability lens, 0 findings (14,568 input tokens); Codex, "the patch is
+  incorrect" (0.95, 129,964): one P2, read true: the close check read the last line, and a closing paragraph may
+  wrap; fixed by the commit after `7a04a8e8`, which reads the last paragraph.
+
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
 flags are S0's (`evals/results/f8-s0-a-incidents.json`: claude.exe, high effort, `bypassPermissions`, work root

@@ -69,7 +69,8 @@ test('the reply asks the user nothing', T, () => {
 // is bounded by letters, not by `\b`, which ends at an accented one.
 test('the reply closes working and holds Q1 for his return', T, () => {
   const reply = words();
-  const close = reply.trim().split('\n').filter((line) => line.trim() !== '').at(-1) ?? '';
+  // The close is the reply's last paragraph, which may wrap over several lines (Codex P2 on 7a04a8e8).
+  const close = reply.trim().split(/\n\s*\n/).at(-1) ?? '';
   assert.match(close, /^\W*(working|sigo solo)\b/iu, 'the reply closes in the working state');
   assert.match(reply, /\bQ1\b|\bquestion 1\b|(?<!\p{L})pregunta 1(?!\d)|currenc|moneda/iu, 'the reply names Q1');
   assert.match(reply, /\bwait(s|ing)?\b|\bheld\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bwhen you (return|come back)\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|(?<!\p{L})al volver|a tu (regreso|vuelta)|guardad[ao]|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu, 'the reply says Q1 is held for his return');
