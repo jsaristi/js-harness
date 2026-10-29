@@ -288,7 +288,9 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
 - [ ] T5e (kind: build) follow-up of Codex's open P2 (L10): `recordOfRows` (`bin/lib/sessions.mjs`) keeps a session's
   status and place by record order, so a session's notice appended between `sessions start`'s read of the record and
   its append of the start row is behind that row; the fix is to keep the newer by `at` (ties by record order). Outside
-  this brief's surface for `bin/lib/sessions.mjs`: asked of the lead. Spec 4. Route: inline.
+  this brief's surface for `bin/lib/sessions.mjs`; the lead's decision of 02:33Z: a follow-up after this feature, not
+  in slice B (it changes how shared board code orders status), and named in the slice B PR as the one Codex finding
+  left open. Spec 4. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
@@ -361,6 +363,8 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   The window is now the read and the append alone (the place is read before); the session takes seconds to boot and
   write, so the case is narrow but real. Its fix (T5e) is in `recordOfRows`, outside this brief's surface: asked of
   the lead, not done here unless the lead says so.
+- L11. 2026-10-29 02:33Z, the lead: T5e stays a follow-up, out of slice B; 1c039be0's narrowing is enough for this
+  slice. #643 landed (main 837cedd); #644 retargeted to main. The lens on 1c039be0 found nothing (8,813 input tokens).
 
 ## Next step
 State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
