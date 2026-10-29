@@ -11,8 +11,9 @@ export const RENDERED_FRESH_HOURS = 6;
 /** The shortest reason a free page gives. */
 export const FREE_REASON_CHARS = 20;
 
-// Each attribute ends at the quote that opened it, so an apostrophe inside a double-quoted reason is part of it.
-const FREE_MARK = /<meta\s+name\s*=\s*(["'])js-harness-page\1\s+content\s*=\s*(["'])free:\s*((?:(?!\2).)*)\2\s*\/?>/i;
+// Each attribute ends at the quote that opened it, so an apostrophe inside a double-quoted reason is part of it, and a
+// reason may wrap onto the next line.
+const FREE_MARK = /<meta\s+name\s*=\s*(["'])js-harness-page\1\s+content\s*=\s*(["'])free:\s*((?:(?!\2)[\s\S])*)\2\s*\/?>/i;
 const MARK_TEXT = '<meta name="js-harness-page" content="free: <why, 20 characters or more>">';
 
 /** The reason of a page's free mark, or `null` when it has none or its reason is under `FREE_REASON_CHARS`. */

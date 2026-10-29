@@ -206,18 +206,6 @@ function runGate(mode, seams, { stdout, stderr }) {
   const on = templatesOn(seams.root ?? nearestHarness(folder));
   if (on === false) return stdout('{}'), 0;
   const places = placesOf(folder, seams);
-  if (typeof on === 'string') {
-    // A harness.json that cannot be read is no opt-out: the call goes through, and the record says it was unchecked.
-    const reason = `${on}; the call goes through unchecked`;
-    stderr(`js-harness template gate: ${reason}`);
-    try {
-      recordShown(places.shown, { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, tool, call: payload.tool_use_id ?? null, decision: 'unchecked', reason });
-    } catch (err) {
-      stderr(`js-harness template gate: cannot append to ${places.shown}: ${err.message}`);
-    }
-    return stdout('{}'), 0;
-  }
-  const templates = seams.templates ?? packageTemplates(seams.registryRoot);
   const at = new Date(seams.now).toISOString();
   const call = typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null;
   const record = (decision) => {
@@ -227,6 +215,14 @@ function runGate(mode, seams, { stdout, stderr }) {
       stderr(`js-harness template gate: cannot append to ${places.shown}: ${err.message}; the decision stands`);
     }
   };
+  // A harness.json that cannot be read is no opt-out: `--hook` lets the call through and records it unchecked, once,
+  // and `--shown` then records it shown as it does any call `--hook` let through.
+  if (typeof on === 'string' && mode === '--hook') {
+    const reason = `${on}; the call goes through unchecked`;
+    stderr(`js-harness template gate: ${reason}`);
+    record({ decision: 'unchecked', reason });
+    return stdout('{}'), 0;
+  }
   if (mode === '--shown') {
     if (call === null) return stdout('{}'), 0;
     let lines;
@@ -243,6 +239,7 @@ function runGate(mode, seams, { stdout, stderr }) {
     }
     return stdout('{}'), 0;
   }
+  const templates = seams.templates ?? packageTemplates(seams.registryRoot);
   let rendered;
   try {
     rendered = readRecord(places.rendered, RENDERED_SCHEMA);

@@ -68,12 +68,15 @@ function faultsOfEntry(entry, readFile, hooked) {
 // The characters after which a `/` starts a regular expression literal, not a division.
 const BEFORE_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
-/** Whether a `/` after the code `before` starts a regular expression literal: after one of `BEFORE_REGEX` or at the
- * start, but not after a postfix `++` or `--`, which ends an operand, so the `/` divides it. */
+// The keywords after which a `/` starts a regular expression literal: each ends where an operand begins.
+const KEYWORD_BEFORE_REGEX = /(?:^|[^\w$.])(?:return|typeof|case|do|else|in|of|new|delete|void|throw|instanceof|yield|await)$/;
+
+/** Whether a `/` after the code `before` starts a regular expression literal: after one of `BEFORE_REGEX`, one of
+ * those keywords or at the start, but not after a postfix `++` or `--`, which ends an operand, so the `/` divides it. */
 function regexStarts(before) {
   const code = before.trimEnd();
   if (code.endsWith('++') || code.endsWith('--')) return false;
-  return BEFORE_REGEX.includes(code.at(-1) ?? '(');
+  return BEFORE_REGEX.includes(code.at(-1) ?? '(') || KEYWORD_BEFORE_REGEX.test(code.slice(-12));
 }
 
 /** Where the regular expression literal opening at `start` ends (past its flags), or `start + 1` when the `/` opens
@@ -119,7 +122,9 @@ function withoutComments(source) {
         holes.push(depth);
         depth += 1;
         quote = null;
-      } else if (char === quote) quote = null;
+        // A string in quotes or double quotes ends on its line, so one the reader took for a string by mistake never
+        // runs over the lines after it.
+      } else if (char === quote || (char === '\n' && quote !== '`')) quote = null;
       continue;
     }
     if (holes.length > 0) quoted[i] = 1;

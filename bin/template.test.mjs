@@ -286,6 +286,9 @@ test('a harness.json it cannot read is no opt-out: the gate records the call as 
   assert.equal(out, '{}');
   assert.match(err, /js-harness template gate: .*harness\.json.*unchecked/);
   assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision]), [['u13', 'unchecked']]);
+  const after = hook('--shown', { tool_name: 'Artifact', tool_use_id: 'u13', tool_input: { file_path: 'page.html' } });
+  assert.equal(after.err, '', '--shown says nothing of its own: --hook said it');
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision]), [['u13', 'unchecked'], ['u13', 'shown']], 'one unchecked line a call, then the shown one');
   assert.throws(() => templatesHealth(root, home, { now: GATE_NOW, slug: 'p' }), /harness\.json/);
 });
 

@@ -71,6 +71,7 @@ test('a page marked free with its reason is admitted as free when no template sh
 test('a free mark\'s reason ends at the quote that opened it, so an apostrophe in a double-quoted reason is kept', () => {
   assert.equal(freeReason('<meta name="js-harness-page" content="free: the lead\'s research page on the gate">'), 'the lead\'s research page on the gate');
   assert.equal(freeReason('<meta name=\'js-harness-page\' content=\'free: a page quoting "the gate" for him\'>'), 'a page quoting "the gate" for him');
+  assert.equal(freeReason('<meta name="js-harness-page" content="free: a research page\n  on the gate, for him">'), 'a research page\n  on the gate, for him', 'a reason may wrap onto a second line');
 });
 
 test('a free mark whose reason is under 20 characters is no mark', () => {

@@ -204,6 +204,9 @@ test('a quote inside a regular expression or a nested template literal does not 
     `const quotes = /['"]/;\n${golden}\n${refusal}\n`,
     `const half = total / 2; const rest = 'x' / 1;\n${golden}\n${refusal}\n`,
     `let n = 4; n++ / 2; ${golden} /x/.test('x'); m-- / 2; ${refusal} /y/.test('y');\n`,
+    `function quoted(x) { return /['"]/.test(x); }\n${golden}\n${refusal}\n`,
+    `const kind = typeof /'/;\n${golden}\n${refusal}\n`,
+    `const odd = 1 /'/'.length;\n${golden}\n${refusal}\n`,
     `const t = \`a \${{ k: '}' }.k} c\`;\n${golden}\n${refusal}\n`,
   ];
   for (const text of declared) assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': text })), [], text);
