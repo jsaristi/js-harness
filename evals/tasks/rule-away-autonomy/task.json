@@ -7,7 +7,8 @@
       ".eval-grader/rule-away-autonomy.grade.mjs"
     ]
   },
-  "timeoutMs": 900000,
+  "timeoutMs": 180000,
+  "reply": true,
   "proof": {
     "total": 6,
     "fixturePassed": 2

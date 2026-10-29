@@ -1,0 +1,492 @@
+{
+  "format": 1,
+  "name": "f8-s5c-a-reach-away",
+  "createdAt": "2026-10-29T15:00:57.945Z",
+  "model": "claude-opus-5-5",
+  "permissionMode": "bypassPermissions",
+  "stack": {
+    "claude": "2.1.312 (Claude Code)",
+    "engram": "3.6.0",
+    "engramPlugin": "0.1.19",
+    "codegraph": "1.6.2",
+    "jsHarness": "a0c89d7b6f7d61acefa5a45717b233595b2932e5"
+  },
+  "args": {
+    "claude": "C:/Users/Oficina/.local/bin/claude.exe",
+    "configs": [
+      "current",
+      "current-without-rule-away-autonomy"
+    ],
+    "efforts": [
+      "high"
+    ],
+    "repeats": 2,
+    "tasks": [
+      "rule-away-autonomy"
+    ],
+    "workRoot": "D:/js-harness-evals-work"
+  },
+  "trials": [
+    {
+      "task": "rule-away-autonomy",
+      "config": "current",
+      "effort": "high",
+      "repeat": 1,
+      "score": 0.6666666666666666,
+      "passed": 4,
+      "total": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "turns": null,
+      "usage": null,
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "subagentStats": null,
+      "wallMs": 904604,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": "timeout",
+      "startedAt": "2026-10-29T15:01:06.837Z",
+      "transcripts": {
+        "files": 1,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 15,
+          "inputTokens": 30,
+          "outputTokens": 5289,
+          "cacheReadTokens": 1023081,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 80076,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.9511242,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 15,
+              "inputTokens": 30,
+              "outputTokens": 5289,
+              "cacheReadTokens": 1023081,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 80076,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.9511242
+            }
+          }
+        },
+        "subagents": {
+          "requests": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0,
+          "models": {},
+          "agents": []
+        },
+        "total": {
+          "requests": 15,
+          "inputTokens": 30,
+          "outputTokens": 5289,
+          "cacheReadTokens": 1023081,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 80076,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.9511242,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 15,
+              "inputTokens": 30,
+              "outputTokens": 5289,
+              "cacheReadTokens": 1023081,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 80076,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.9511242
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": null
+      }
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current-without-rule-away-autonomy",
+      "effort": "high",
+      "repeat": 1,
+      "score": 0.6666666666666666,
+      "passed": 4,
+      "total": 6,
+      "inputTokens": 1331021,
+      "outputTokens": 7345,
+      "turns": 20,
+      "usage": {
+        "input_tokens": 34,
+        "cache_creation_input_tokens": 73783,
+        "cache_read_input_tokens": 1257204,
+        "output_tokens": 7345,
+        "output_tokens_details": {
+          "thinking_tokens": 2228
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 73783,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.9887408,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 34,
+          "outputTokens": 7345,
+          "cacheReadInputTokens": 1257204,
+          "cacheCreationInputTokens": 73783,
+          "webSearchRequests": 0,
+          "costUSD": 0.9887408,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 2228,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 73783,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 144593,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-10-29T15:16:34.715Z",
+      "transcripts": {
+        "files": 1,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 17,
+          "inputTokens": 34,
+          "outputTokens": 7345,
+          "cacheReadTokens": 1257204,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 73783,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.9887408,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 17,
+              "inputTokens": 34,
+              "outputTokens": 7345,
+              "cacheReadTokens": 1257204,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 73783,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.9887408
+            }
+          }
+        },
+        "subagents": {
+          "requests": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0,
+          "models": {},
+          "agents": []
+        },
+        "total": {
+          "requests": 17,
+          "inputTokens": 34,
+          "outputTokens": 7345,
+          "cacheReadTokens": 1257204,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 73783,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.9887408,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 17,
+              "inputTokens": 34,
+              "outputTokens": 7345,
+              "cacheReadTokens": 1257204,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 73783,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.9887408
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true
+          }
+        }
+      }
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current",
+      "effort": "high",
+      "repeat": 2,
+      "score": 0.6666666666666666,
+      "passed": 4,
+      "total": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "turns": null,
+      "usage": null,
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "subagentStats": null,
+      "wallMs": 902316,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": "timeout",
+      "startedAt": "2026-10-29T15:19:20.539Z",
+      "transcripts": {
+        "files": 1,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 16,
+          "inputTokens": 32,
+          "outputTokens": 7296,
+          "cacheReadTokens": 1186392,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 73378,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.9703504,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 16,
+              "inputTokens": 32,
+              "outputTokens": 7296,
+              "cacheReadTokens": 1186392,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 73378,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.9703504
+            }
+          }
+        },
+        "subagents": {
+          "requests": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0,
+          "models": {},
+          "agents": []
+        },
+        "total": {
+          "requests": 16,
+          "inputTokens": 32,
+          "outputTokens": 7296,
+          "cacheReadTokens": 1186392,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 73378,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.9703504,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 16,
+              "inputTokens": 32,
+              "outputTokens": 7296,
+              "cacheReadTokens": 1186392,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 73378,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.9703504
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": null
+      }
+    },
+    {
+      "task": "rule-away-autonomy",
+      "config": "current-without-rule-away-autonomy",
+      "effort": "high",
+      "repeat": 2,
+      "score": 0.6666666666666666,
+      "passed": 4,
+      "total": 6,
+      "inputTokens": null,
+      "outputTokens": null,
+      "turns": null,
+      "usage": null,
+      "costUsd": null,
+      "modelUsage": null,
+      "subagents": null,
+      "subagentStats": null,
+      "wallMs": 902458,
+      "cliVersion": "2.1.312 (Claude Code)",
+      "error": "timeout",
+      "startedAt": "2026-10-29T15:34:46.413Z",
+      "transcripts": {
+        "files": 1,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 22,
+          "inputTokens": 44,
+          "outputTokens": 9425,
+          "cacheReadTokens": 1639750,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 73629,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.105658,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 22,
+              "inputTokens": 44,
+              "outputTokens": 9425,
+              "cacheReadTokens": 1639750,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 73629,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.105658
+            }
+          }
+        },
+        "subagents": {
+          "requests": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0,
+          "models": {},
+          "agents": []
+        },
+        "total": {
+          "requests": 22,
+          "inputTokens": 44,
+          "outputTokens": 9425,
+          "cacheReadTokens": 1639750,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 73629,
+          "longPromptRequests": 0,
+          "listCostUsd": 1.105658,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 22,
+              "inputTokens": 44,
+              "outputTokens": 9425,
+              "cacheReadTokens": 1639750,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 73629,
+              "longPromptRequests": 0,
+              "listCostUsd": 1.105658
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": null
+      }
+    }
+  ],
+  "setup": {
+    "sha256": "03d32ada30cb74e3d746709083f2cc0a15f0897df13f1b2703dac0bd2b0754b3",
+    "items": {
+      ".claude/.claude.json": "ab17e8b1264db30048e9112a67efc201dfb68b27eec820a1c59a3e02fd94cd2b",
+      ".claude/CLAUDE.md": "d363ed1c751ccad94ead297ee0ca4a4a83cf67c0e2c2511bbaa17a0b7fb03cd7",
+      ".claude/agents": "ea76b8df518dc41bbe4805d847d1f7a4e8d06d9ac4327f1f59f4be3e3894b4e7",
+      ".claude/hooks": "95f747a9e4ab9a7db37c778dd0874fa921fc733dde8940bba0eac3c394ea2f06",
+      ".claude/output-styles": "c38aa4aaf2af3c4e431c13cf7319b7132ec52b9e935fc2596d00bb9d6d7c5d87",
+      ".claude/plugins": "93c3bc466d96d9bd1f3f58be5ff35a1fe42b7f08fcb1c4df52c2eecbb36ae38c",
+      ".claude/settings.json": "8a8c998d864bd9d85fffd830b8adc64e5601dc5aaba113fdff233a586074b0bf",
+      ".claude/skills": "8c9c35403c97108a169b17d9b9651602c66c0865ad347a8054ab6a0e473e49c2",
+      ".gentle-ai/state.json": "261859941c337cb9dd663599446e61b86137fe0906ff75db48da4abb5103b4a7"
+    }
+  },
+  "arms": {
+    "current-without-rule-away-autonomy": {
+      "base": "current",
+      "components": [
+        "rule-away-autonomy"
+      ],
+      "sha256": "2572d75da9c7283083f0cfdb3353dd6fbcd6438ea57014780c9122621dfae56c"
+    }
+  }
+}

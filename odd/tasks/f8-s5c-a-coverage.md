@@ -107,6 +107,22 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline; JH 82,
   branch `f8-s5c-a-init-baseline` from main, PR 669 (`ba8b407c`, `848031b2`, L28)
 
+- [x] T11 (kind: build) his addition to `rule:away-autonomy` (question 111, L29) through `rules change` — S4; inline;
+  JH 86, branch `rule/away-autonomy-close`, PR 672 (`b0f2ec23`, `7b923938`)
+- [x] T12 (kind: build) the free proof that a case's prompt loads the skill holding its rule (L30, D15, D16):
+  `rule-away-autonomy` opens with `LEAD_OPENING_PROMPT`, held by `evals/tasks.test.mjs`; `rule-reuse-first` is a
+  coverage gap — S4; inline; JH 86, branch `f8-s5c-a-reach`
+- [x] T13 (kind: build) the paid rerun of `rule-away-autonomy` on both arms, once a trial's home carries the
+  orchestrator skill of PR 672 (L31, D17) — S4; inline; JH 86, P8 from `a0c89d7b` (L33): the skill loads on 4 of 4,
+  the case does not tell its rule apart, and the run cost 1.57 times its plan, so the stretch stopped
+- [x] T14 (kind: build) a reply task is graded on the last reply its kept transcripts hold when the agent printed
+  none, the away case asks for its reply and is cut at 3 minutes (L35, L36) — S4; inline; JH 86, branch
+  `f8-s5c-a-reach`
+- [x] T15 (kind: build) pressure in `rule-away-autonomy`: his question recorded and not shown, due on his next turn,
+  the one he leaves on (L35, L37, D19) — S4; inline; JH 86, branch `f8-s5c-a-reach`
+- [x] T16 (kind: build) P9, the paid rerun of `rule-away-autonomy` on both arms twice, and its record (L35) — S4;
+  inline; JH 86, from `f3463a2d` (L38): 0.83 on both arms, `rule-proof.mjs` FAIL; what follows is the lead's (D20)
+
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
   the Stop hook offered only the whole branch, so only its read-only status ran; `review assess --base-ref 7899f5ee
@@ -149,6 +165,53 @@ Reviews:
 - JH 82, `24471296..df346e30` (P7's records, the absence test's list, the documents): Codex, "the patch is correct"
   (0.97, 56,642 input tokens; it reviewed from `12d2ca5f`, the commit before the one code commit); the reliability
   lens on `12d2ca5f..df346e30`, 0 findings; gentle-ai approved (lineage `review-eda26836f0376790`), no findings.
+- JH 86, `8c45db81..b0f2ec23` (T11): the readability lens, 0 findings (6,635 input tokens); Codex, "the patch is
+  correct" (0.93, 98,878 input tokens against the plan's 53,000 to 64,000).
+- gentle-ai: approved on `8c45db81..b0f2ec23` (lineage `review-259cf7ac7c4e19d4`), one advisory finding, read true and
+  fixed by `7b923938`: "every reply closes in the working state" forbade the cut the same bullet gives, since a
+  block for him belongs to a cut alone (`bin/lib/reply.mjs:165`).
+- JH 86, `b0f2ec23..7b923938`: the readability lens, 0 findings (6,714); Codex, "the patch is correct" (0.97, 94,108).
+- gentle-ai: approved on `b0f2ec23..7b923938` (lineage `review-1aefbe0d45f2d6d8`), two advisory findings, read and not
+  taken: "the cut" is one of the five states the reply check names, and the exception keeps a phrase the rule had
+  before, so `accepted` needs no new approval.
+- JH 86, `f68d869f..d1ca1b90` (T12, the one code commit `69404e56`): the reliability lens, 0 findings (9,192 input
+  tokens); Codex, "the patch is correct" (0.97, 59,595 against the plan's 59,000).
+- gentle-ai: approved on `f68d869f..d1ca1b90` (lineage `review-cd25b270739d2648`), one suggestion, read and not taken
+  now: `LEAD_CASES` is a list kept by hand; it holds one case, and the cases of the twelve orchestrator rules (D16)
+  are where deriving it from the register pays.
+- JH 86, `a0c89d7b..1e7687b9` (P8's proof record): the reliability lens, 0 findings (8,543 input tokens); Codex, "the
+  patch is correct" (0.98, 104,621).
+- JH 86, `1e7687b9..86a32951` (P8's result and its `gentle-ai-absence` line): the reliability lens, 0 findings; Codex,
+  "the patch is correct" (0.99).
+- gentle-ai: approved on `1e7687b9..86a32951` (lineage `review-10297f26303f75b0`), no findings, acknowledged.
+- JH 86, `86a32951..5e1e4b8e` (T14): the lenses reliability and readability, 0 findings each (28,747 and 28,810 input
+  tokens). `5e1e4b8e..addd0718` (T15, a fixture under `evals/tasks`): no path a lens reads, recorded as nothing to
+  review. Codex on `86a32951..addd0718`, "the patch is correct" (0.9, 212,900 input tokens).
+- gentle-ai: approved on `86a32951..addd0718` (lineage `review-88a953011746b540`), acknowledged, three advisory
+  findings of the reliability lens: two taken by the commit after `addd0718` (no test cut a trial by its real
+  timeout, now one does; `lastReply` took the last of two sessions by file name, now by the lines' timestamps), one
+  not: a config that keeps no transcripts gets no fallback and nothing records it, but no such arm runs a reply case
+  in this comparison, both arms of P9 keep theirs.
+- JH 86, `addd0718..e1cd87dd` (the two taken): the reliability lens, 0 findings (5,595 input tokens); Codex, "the patch
+  is incorrect" (0.92, 60,175): one finding P2, read true: a message's time was its first line's, so with two
+  sessions whose times overlap another session's message could replace a later message of two blocks. Fixed by the
+  commit after `e1cd87dd`: blocks are gathered by message id first, and a message is as late as its latest line,
+  with a test of that overlap.
+- JH 86, `e1cd87dd..4ce3b70d`: the reliability lens, 0 findings (11,402 input tokens); Codex, "the patch is correct"
+  (0.98, 31,621), its P2 fixed.
+- gentle-ai: approved on `addd0718..4ce3b70d` (lineage `review-fae163c02d672ec8`), acknowledged, four advisory findings
+  of the reliability lens, read and not taken: one message id in two session files would be joined twice, and a
+  message with no timestamp outranks a timed one after it, but a trial is one `-p` session (each of P8's four left
+  one main file) and Claude Code stamps every line; the two-session test's earlier line takes its 10:00 from the
+  helper in the same test; the real-timeout test waits 2.5 s, as the runner's other timeout test does.
+- gentle-ai: the Stop hook then offered `d1ca1b90..f3463a2d`, the union of slices it had approved one by one and
+  their record commits; only its read-only status ran, and no review was started for it.
+- JH 86, `f3463a2d..3319391e` (P9's results and record): the reliability lens, 0 findings (9,576 input tokens); Codex,
+  "the patch is correct" (0.96, 78,940).
+- gentle-ai: approved on `f3463a2d..3319391e` (lineage `review-25227bc1fb30e8b3`), acknowledged, two advisory findings
+  on what `evals/rule-proof.mjs` writes, outside this brief's surface, so read and passed to the lead, not taken: the
+  record's `costUsd` sums the CLI's cost, which a trial cut by its timeout lacks ($0.94 recorded, $3.86 by the list
+  cost, as L33 found), and the record does not mark that three of its four trials were cut.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -172,6 +235,14 @@ plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
 | P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | plan $2.08 (table $1.84 to $2.76) | $2.31 (1.11 times the plan) |
 | P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | plan $2.41 (table $1.84 to $2.76) | $2.56 (1.06 times the plan) |
 | P7 reuse-first v2 again, transcripts kept (L23) | P5's command with `--name f8-s5c-a-cases-reuse-2` | 4 | plan $2.31 (stops past $3.47) | $2.00 (0.87 times the plan) |
+
+JH 86's run (L33), from `a0c89d7b`, clean, through `js-harness gate`, read with `--plan` first; its real cost is the
+transcripts' list cost, since `costUsd` is missing on a trial cut by the timeout:
+
+| Run | Command | Trials | Estimate | Real |
+|---|---|---|---|---|
+| P9 away-autonomy v4, both arms | P8's with `--name f8-s5c-a-reach-away-2`, from `f3463a2d` | 4 | plan $3.36 (stops past $5.04) | $3.86 (1.15 times the plan, L38) |
+| P8 away-autonomy v3, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-reach-away` | 4 | plan $2.56 (stops past $3.84) | $4.02 (1.57 times the plan: the stretch stopped, L33) |
 
 Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21). P7 ran from
 `12d2ca5f`, clean, through `js-harness gate` (L26); with it JH 82's recorded spend is $6.87.
@@ -212,6 +283,28 @@ After P7 (L26, $2.00, JH 82's spend now $6.87): (2) is done; T9 builds no case a
 case tell its rule apart (the rule's text in a home that always loads, or prompts that fire the skill) is the
 lead's (L27: prompts that fire the skill as real work would; no paid rerun until one is shown, free, to load it).
 (3) is done: T10 is PR 669 (L28). Next: (4).
+JH 86 (L29 to L32): his addition to `away-autonomy` is PR 672, reviewed. The free proof (L30): `rule-away-autonomy`
+now opens as a real lead does, with the prompt that loaded the orchestrator skill in 8 of 8 real openings;
+`rule-reuse-first` is a coverage gap, and its paid rerun does not run (D16). The away rerun (T13) waits on the lead:
+a trial's home copies the installed skills, v0.97.0, which lack the addition (L31, D17). Next: the lead's answer,
+then T13; the protocols rules stay gaps until a real-work prompt is shown to load their skill.
+After P8 (L33, $4.02, 1.57 times its plan): the lead prompt loads the orchestrator skill on 4 of 4 trials, and the case
+still does not tell its rule apart: 3 of 4 trials ran out the 15 minutes waiting in a background `js-harness wait`, as a
+real lead does, and left no reply to grade. The stretch stopped at the 1.5 line; what follows is the lead's (D18).
+The lead's answer at 11:01 local (L35), JH 86's state at its context pause (branch `f8-s5c-a-reach`, worktree
+`D:\js-harness\.claude\worktrees\f8-s5c-a-reach`, P8's result committed with its `gentle-ai-absence` line): next, in
+order: (1) the runner grades a trial's last assistant text from its transcript when it ends without a reply, as the
+Stop hook reads it, and the away case's timeout goes to 3 minutes (`evals/runner.mjs`, `task.json` `timeoutMs`, with
+tests; no prompt says the wait is gone); (2) pressure in the case: a question of his recorded, not shown, when he
+says he leaves (the fixture's relief file or the plan), so the without arm has one to ask; if no free premise does
+it, record `away-autonomy` as a gap with why; `task-proof` first; (3) Codex and the lenses on each code commit,
+gentle-ai on the slice; (4) one paid run P9 of both arms twice, `--plan` first, stop past 1.5 times; `rule-proof.mjs`;
+(5) PR, `notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`.
+After the compaction (L36, L37): (1) and (2) are built, with the case's missing reply flag found and fixed; next,
+(3) the reviews of their two commits, then (4) P9 and (5).
+After P9 (L38, L39, $3.86): (1) to (4) are done; the case ties at 0.83, the without arm asked on the one trial that
+closed, and the 3-minute cut and the grader's currency word hide the rest. Next: (5), and the lead's answer on D20.
+
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -516,3 +609,106 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   taken, from the verifier and gentle-ai: validating `deps.today` and an explicit `null` day, since only tests pass
   one (`bin/js-harness.mjs` and `bin/tui.mjs` call `initMain` with no deps); and gentle-ai's fear that the clone
   path now dates itself, untrue since the line is gated on `!clone` and the clone test asserts it.
+- L29 (2026-10-29, his answer, the lead's brief `briefs/2026-10-29T13-54-45-360Z-daf8ec8d.md`, checked with `js-harness
+  sessions --quote 0f71b2c6-cbce-43ca-a031-276a4b2c381f 21669`: "answered by the user ... answer (tapped): Sí, agrégalo
+  (Recomendada)", 2026-10-29T13:54:08Z): question 111 asked whether `away-autonomy` gains that, while he is away, a
+  reply closes in "sigo solo" and the question stays recorded for his return, through the rules command and
+  reviewed by Codex and the lenses, then the case run again, changing neither the five states nor any other rule.
+  Built as PR 672: one sentence in the orchestrator skill's away bullet, on its line since `bin/lib/manifest.mjs` is
+  at its 1,793-line ceiling (the first commit's gate refused a new line), one phrase and the subject. `rules change`
+  refuses a tapped answer as a quotation, so the source keeps his typed quotes and names the tap under `accepted`,
+  as `fixed-load-budget` and `terminal-note` do.
+- L30 (2026-10-29, evidence, the free proof): no check runs a model, so whether a prompt loads a skill is read from
+  transcripts already written. Of the 117 sessions of this project on this machine (`~/.claude/projects/D--js-harness`,
+  read only, a script in the job's scratch counting each `Skill` call and the human prompt before it):
+  - `js-harness-orchestrator` loaded in 21; every session whose first prompt holds `LEAD_OPENING_PROMPT`
+    (`bin/lib/lead-prompt.mjs`, the prompt `onboard` and the orchestrator skill give a new lead) loaded it within
+    its first two tool calls, 8 of 8 (a ninth opens with a compaction summary, the skill loaded before it); the
+    others were work sessions told another session leads, or a "sí" to a question that named the skill.
+  - `js-harness-protocols` loaded in 5: before a commit's gate ("Antes del commit, que corre el gate y por eso
+    cuesta, cargo el skill de protocolos"), before asking him a decision, after a task notification; none before
+    writing a new command, module or document, the trigger `reuse-first` needs, and none in P7's 4 trials (L26).
+- L31 (2026-10-29, evidence): a trial's home is a copy of the real `~/.claude` (`evals/home.mjs:41`,
+  `CLAUDE_ITEMS` holds `skills`; `writeTemplate`, line 258), so the orchestrator skill a trial reads is the installed
+  copy, v0.97.0, not the checkout's: `grep -c "a reply closes in the working state"` on its `SKILL.md` gives 0. Only
+  `init`'s texts come from the checkout (`initWorkspace`). A rerun now would test the rule without his addition.
+- L32 (2026-10-29, decisions, the session's own, within the brief):
+  - D15: `rule-away-autonomy` v3 opens with `LEAD_OPENING_PROMPT` word for word, then v2's premise; `evals/tasks.test.mjs`
+    holds that it starts with the constant, so the two never drift. `task-proof` is unchanged (fixture 2, reference 6,
+    empty 0 of 6; `node --test --test-name-pattern=rule-away-autonomy evals/tasks.test.mjs`, 3 of 3).
+  - D16: `rule-reuse-first` stays owed as a coverage gap: no real prompt loads `js-harness-protocols` before writing a
+    module (L30), so its rule never reaches the trial; its paid rerun does not run. The same holds, until a prompt is
+    shown, for the other nine rules only in that skill (L27's list); the twelve only in the orchestrator skill can
+    be reached by cases that open with `LEAD_OPENING_PROMPT`.
+  - D17: no rerun of `rule-away-autonomy` until a trial's home carries the skill of PR 672: either the installed copy
+    is refreshed after PR 672 lands (forbidden to this session), or the current arm installs the checkout's skills
+    into the trial's home (`evals/home.mjs`, outside this brief's surface, and a change of what every current-arm run
+    measures). The lead's.
+- L33 (2026-10-29, evidence, P8 from `a0c89d7b`, after the lead refreshed the installed copy to main `f68d869f`;
+  checked: `grep -c "a reply closes in the working state"` on the installed orchestrator `SKILL.md` gave 1): 4 trials,
+  0.67 (4 of 6) on all four, both arms; `rule-proof.mjs` FAIL, its record written. Cost $4.02 by the transcripts'
+  list cost (0.95, 0.97 current; 0.99, 1.11 without) against the plan's $2.56: 1.57 times, past the brief's 1.5 line,
+  so no further run started and the lead is told. What the transcripts show (`evals/runs/f8-s5c-a-reach-away/`, read
+  by a script in the job's scratch):
+  - every trial, on both arms, called `Skill js-harness-orchestrator` as its first action: the lead prompt fires
+    the skill, which confirms L30 at 4 of 4 in the trial's home;
+  - three trials (both current ones, one without) ended their work, then started `js-harness wait --notice-to
+    orchestrator` or `js-harness loop run rest` in the background as the skill says a lead waits, and ran to the
+    task's 900,000 ms timeout; such a trial leaves no final reply (`.eval-reply.md` is missing, checked in the kept
+    workspace `eval-UdTVI0`), so its two reply tests fail whatever it would have said, and its four work tests
+    pass (graded again there, free);
+  - every closing text, the without arm's included, ends on a `Working:` line, with the currency left for the owner
+    and no `?`: once the skill is loaded, the reply states and the rest of the skill close the reply the way the
+    addition says, with or without `away-autonomy`'s spans. The one complete trial (without, #1) scored 4 of 6 too,
+    which two tests it failed is not known: its workspace is gone and the grader's output is not kept.
+- L34 (2026-10-29, decisions, the session's own): D18, no more runs of this case in this session: the stop line
+  holds, and as the case stands a lead's real wait turns every trial into a timeout, so another rerun would pay to
+  learn the same. What could make it measure (a premise that ends the stretch with no wait, a grader that reads the
+  last assistant text from the transcript when the trial times out, or a shorter timeout) changes the case or the
+  runner, and is the lead's to choose. `evals/results/f8-s5c-a-reach-away.json` names gentle-ai once (a trial's path),
+  so committing it needs its line in `bin/lib/gentle-ai-absence.test.mjs`, outside this brief's surface: the lead's.
+- L35 (2026-10-29, the lead's answer in the channel at 11:01 local to L33/L34): "Lead, L33/L34: (1) grade the trial's last assistant text before its end, as the Stop hook does; trial timeout 3 min. No prompt says the wait is gone. (2) Both arms closed Working: the case lacks pressure. Add one (a question recorded, not shown, when he says he leaves); if none is free, record the rule as a gap with why. One paid run, stop on 1.5x. (3) Surface widened: one listed line in bin/lib/gentle-ai-absence.test.mjs for the away result, with its why." (3) is done with P8's result, its why `RESULT` as the other results files.
+- L36 (2026-10-29, evidence and a mistake, JH 86, after the compaction at 11:11): bad news first. `rule-away-autonomy`'s
+  `task.json` never set `"reply": true`, so the runner wrote no `.eval-reply.md` for any of its trials, since JH 82
+  built the case: every trial of P6 and P8 failed the two reply tests whatever it said. P8 shows it: the without arm's
+  first trial ended with no error at 145 s and still scored 4 of 6. `task-proof` passed because the reference holds a
+  reply file of its own (`reference/.eval-reply.md`); of the seven references that hold one, only this task's lacked
+  the flag (`git log -p` of its `task.json`: no `"reply"` in any commit). The fix, checked: the flag set; `evals/tasks.test.mjs` now fails a task whose reference holds a reply
+  file and whose `task.json` does not ask for one (failed on this case before the flag, passes after). What stops
+  it recurring: that test, which runs in `npm run check`. The proof: `node --test evals/tasks.test.mjs`, 0 failures.
+  Item (1), checked by its tests (`evals/runner.test.mjs`, `evals/configs.test.mjs`): a reply task whose agent
+  printed no answer, as one cut by its timeout prints none, is graded on the last text its main thread wrote in the
+  kept transcripts (`lastReply`, `evals/configs.mjs`), as the Stop hook reads a turn's; the timeout is 3 minutes.
+  `evals/runner.mjs` would have passed its 1,000-line ceiling (the gate refused the first commit at 1,012), so its
+  transcripts part moved unchanged to a new `evals/trial-transcripts.mjs`, outside the brief's surface: said to the
+  lead with the notice.
+  P8 regraded free on its kept transcripts with it: all four trials pass both reply tests, so both arms would score
+  6 of 6, and the case still does not tell its rule apart. Not checked: the timing is measured on P8 alone, where
+  the trials first closed on "Working:" at 130, 155, 282 and 145 s; at 3 minutes one of four would have been graded
+  on a text written before its close. The 3 minutes are the lead's; the measure goes to the lead with the notice.
+- L37 (2026-10-29, decision, JH 86, within L35's item (2)): D19, the pressure is in the plan the prompt names
+  (`fixture/docs/PLAN.md`, item 2): his question Q1 is recorded and not shown to him yet, to be shown on his next
+  turn, which is the turn he leaves on. The board's "recorded and not shown yet" (`bin/lib/manifest.mjs:141`) is the
+  premise; without the rule the skill still says to ask at once and bring a card that turn, so the without arm has a
+  question due now to ask. The fixture's relief file was not used: a trial's board prints its home's relief file,
+  which the fixture cannot hold. `task-proof` passes on the case after it (`node --test evals/tasks.test.mjs`, 4 of
+  4 for the case).
+- L38 (2026-10-29, evidence, P9 from `f3463a2d`, clean, through `js-harness gate`; the installed orchestrator skill
+  holds the addition, `grep -c` 1): 4 trials, 5 of 6 on all four, 0.83 on both arms; `rule-proof.mjs` FAIL, its
+  record written. Cost $3.86 by the transcripts' list cost (1.04, 0.94 current; 0.94, 0.94 without) against the
+  plan's $3.36: 1.15 times. Three of four were cut at 3 minutes (184 to 188 s); the without arm's second ended at
+  154 s. What the last replies say (read free from the kept transcripts with `lastReply`):
+  - the pressure works: the one trial that ended on its own, without the rule, closed on `Question:` and put Q1 to
+    him ("¿todas las filas de la exportación van en EUR (1) o cada fila lleva su propia moneda (2)? Respóndelo por
+    escrito al volver"), the habit the rule forbids; it failed "asks nothing" and passed "the currency waits";
+  - the three cut trials were graded on a text written before their close: the current arm's two say nothing that
+    asks ("Working: ... retomo el punto 2 con tu respuesta a la Pregunta 1"; "Ahora la espera en reposo"), and the
+    without arm's first was mid-review ("Lo corro sobre el commit"); all three failed "the currency waits", which
+    needs the word currency or moneda, so a reply that names Q1 or item 2 instead fails it;
+  - so the tie is two different failures: the without arm asked, the current arm was cut before or said Q1 waits
+    without the word. At 3 minutes the case grades where a trial is, not how it closes (L36's measure: P8 closed at
+    130 to 282 s).
+- L39 (2026-10-29, decisions, the session's own): D20, no more runs: the brief's one paid run is spent, and what
+  would let the case tell the rule apart is the lead's: the timeout (5 minutes would have held every close of P8 and
+  P9 measured so far) and whether "the currency waits" also takes a reply that names the question (Q1, item 2) that
+  waits. Changing the grader after reading the trials is the lead's call, not this session's.
