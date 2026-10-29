@@ -467,7 +467,11 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   and his question 111 on the reply states; then the reruns and more cases; `init`'s baseline line (L5, L20). JH 86
   (L29 to L32): his answer to question 111 is PR 672; `rule-away-autonomy` opens as a real lead does, the prompt
   that loaded its skill in 8 of 8 real openings; `rule-reuse-first` is a coverage gap; the away rerun waits until a
-  trial's home carries PR 672's skill, since it copies the installed one.
+  trial's home carries PR 672's skill, since it copies the installed one. Then (L33 to L39, $7.88 in two runs): the
+  away case never asked for its reply (fixed, and `evals/tasks.test.mjs` now holds it), a reply task cut by its
+  timeout is graded on the last text its transcripts hold, and his question due on the turn he leaves is the
+  pressure; P9 ties at 0.83, the one trial that closed without the rule asked him, and the 3-minute cut graded the
+  others mid-work. Left, with the lead: the case's timeout and its currency test (D20).
 
 ### S13 The rehearsal on a scratch project
 - **Changes:** nothing new; the whole path of the reverse-engineering document's 11.1 walked on a
