@@ -906,6 +906,31 @@ test('with the Codex review off, a code commit is one that changes a file that i
   assert.ok(!out.some((line) => /gentle-ai/i.test(line)), out.join('\n'));
 });
 
+test('a pull request that turns the Codex review on is read onto the candidate so far: a sibling\'s code with no Codex record leaves it out, as the push of the whole candidate refuses it (JH 83\'s verifier, finding 2)', async () => {
+  // Each alone on main passes: feat/g with the Codex review off and its lens record, feat/h on its own two records.
+  // Merged together the review is on, and feat/g's commit has no Codex record: the push of main refuses the two.
+  const { root, main, code, head } = makeEvidenceRepo({ codex: false });
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
+  git(root, 'checkout', '--quiet', '-b', 'feat/h', main);
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'utf8');
+  git(root, 'add', 'harness.json');
+  git(root, 'commit', '--quiet', '-m', 'feat/h turns the Codex review on');
+  git(root, 'push', '--quiet', 'origin', 'feat/h');
+  const on = git(root, 'rev-parse', 'HEAD');
+  writeRecord(root, { base: main, head: on });
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'merge', '--quiet', '--no-ff', '--no-verify', '-m', 'Merge pull request #1 from feat/g', head);
+  git(root, 'merge', '--quiet', '--no-ff', '--no-verify', '-m', 'Merge pull request #2 from feat/h', on);
+  const pushed = checkCodexReviews(root, git(root, 'rev-parse', 'HEAD'));
+  git(root, 'checkout', '--quiet', '--detach', main);
+  assert.equal(pushed.pass, false, 'the push of main with both merged is refused');
+  assert.deepEqual(pushed.lines?.[0], `${code.slice(0, 7)} feat/g code`);
+  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head), pr(2, 'feat/h', on)]);
+  assert.equal(exit, 0, out.join('\n'));
+  assert.ok(out.some((line) => /^PR 2 is left out: 1 of 2 code commits since origin\/main have no Codex review record/.test(line)), out.join('\n'));
+  assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), out.join('\n'));
+});
+
 test('a pull request of documents alone prints no coverage', async () => {
   const { root, main } = makeQueueRepo();
   git(root, 'checkout', '--quiet', '-b', 'feat/docs', main);

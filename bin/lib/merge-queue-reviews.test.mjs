@@ -88,6 +88,32 @@ test('with the Codex review off, the lines name the pull request\'s commits, nev
   assert.deepEqual(said.lines, [`${c.slice(0, 7)} feat: c: the Codex review is off`]);
 });
 
+test('read onto the candidate so far, the lines name the commits the pull request adds to it, and the tip it makes is handed on', () => {
+  // d's branch is stacked on c: with c already in the candidate, d adds d alone.
+  const { root, main, c, d, record } = makeRepo();
+  record(main, c);
+  record(c, d);
+  const first = reviewEvidence(root, main, c);
+  assert.equal(first.pass, true, first.detail);
+  assert.match(first.tip, /^[0-9a-f]{40,64}$/);
+  const said = reviewEvidence(root, main, d, first.tip);
+  assert.equal(said.pass, true, said.detail);
+  assert.deepEqual(said.lines, [`${d.slice(0, 7)} feat: d: Codex ${c.slice(0, 7)}..${d.slice(0, 7)} reviewed 2026-10-29`]);
+  assert.equal(git(root, 'rev-parse', `${said.tip}^1`), first.tip, 'd is merged onto the candidate so far, not onto main');
+});
+
+test('a pull request that conflicts with the candidate so far names the files, as the candidate does', () => {
+  const { root, main, c, record } = makeRepo();
+  record(main, c);
+  fs.writeFileSync(path.join(root, 'c.txt'), 'a sibling writes c.txt too\n', 'utf8');
+  git(root, 'add', 'c.txt');
+  git(root, 'commit', '--quiet', '-m', 'a sibling');
+  const sibling = git(root, 'rev-parse', 'HEAD');
+  const said = reviewEvidence(root, main, c, sibling);
+  assert.equal(said.pass, false);
+  assert.deepEqual(said.conflicted, ['c.txt']);
+});
+
 test('a pull request that conflicts with main is refused, naming the files, and no review is read', () => {
   const { root, main, c, record } = makeRepo();
   record(main, c);
@@ -97,6 +123,7 @@ test('a pull request that conflicts with main is refused, naming the files, and 
   const moved = git(root, 'rev-parse', 'HEAD');
   assert.deepEqual(reviewEvidence(root, moved, c), {
     pass: false,
+    conflicted: ['c.txt'],
     detail: 'it does not merge onto main without a conflict (in c.txt), so its reviews cannot be read as the push of main reads them',
   });
   assert.notEqual(main, moved);
