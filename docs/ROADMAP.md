@@ -234,7 +234,9 @@ The whole harness reviewed and documented, the lead's manual steps automated, th
 end, and v0.9.0 then v1.0.0 released so the update between them is proven (Sebastián, 2026-10-18: "Listo
 apliquemos todo esto y despues de todo hacemos un test completo de la aplicacion para ver si funciona";
 `odd/tasks/harness-review.md`).
-- [ ] The lead's manual steps are commands with tests (watch and lease, land and copy, archive, openings)
+- [x] The lead's manual steps are commands with tests (watch and lease, land and copy, archive, openings): the copy's
+  refresh while sessions hold waits is `merge-queue --refresh-copy` alone; what else was already a command, and that the
+  archive is the app's, is in `odd/tasks/lead-manual-steps.md`
 - [x] Every command reviewed against its help, README and SPEC, and every finding fixed or written down (`odd/tasks/launch-audit.md`, I-RM-1)
 - [x] The full application test passes on Windows and WSL2
 - [x] v0.9.0 tagged and installed from its tag by real pnpm and npm

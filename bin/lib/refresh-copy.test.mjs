@@ -27,7 +27,11 @@ const tempDir = (prefix) => {
 /** A machine for one refresh: a pnpm home with the shim `js-harness` names its copy by (`prev`, when given), a Claude
  * settings file and a js-harness home. `add -g <spec>` writes the copy of the spec's sha and answers `MAIN_VERSION`
  * when `deliver` is true, else leaves the shim as it was; `answers` replaces what `js-harness --version` says. */
-function machine({ prev = null, deliver = true, answers = null, pathAnswers = null, addStatus = 0 } = {}) {
+// The blob id of an empty file: the copy's one bin/ file, as main lists it unless `mainBin` says otherwise.
+const EMPTY_BLOB = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
+const MAIN_BIN = `100644 blob ${EMPTY_BLOB}\tbin/js-harness.mjs\n100644 blob ${'1'.repeat(40)}\tbin/js-harness.test.mjs\n`;
+
+function machine({ prev = null, deliver = true, answers = null, pathAnswers = null, addStatus = 0, mainBin = MAIN_BIN } = {}) {
   const top = tempDir('js-harness-refresh-');
   const pnpmHome = path.join(top, 'pnpm');
   const binDir = path.join(pnpmHome, 'bin');
@@ -59,6 +63,9 @@ function machine({ prev = null, deliver = true, answers = null, pathAnswers = nu
       return { status: addStatus, stdout: '', stderr: addStatus === 0 ? '' : 'ERR_PNPM_X\n' };
     }
     if (cmd === 'ps') return ok('');
+    // Main's bin/, as the checkout the refresh runs from lists it; `mainBin` null is a listing that fails.
+    if (cmd === 'git' && args[0] === 'ls-tree') return mainBin === null ? { status: 128, stdout: '', stderr: 'fatal: bad object' } : ok(mainBin);
+    if (cmd === 'git' && args[0] === 'show') return { status: 128, stdout: '', stderr: 'fatal: no such path' };
     // The copy the shim names, run by its own path: it answers what was installed (or `answers`).
     if (cmd === process.execPath && /js-harness\.mjs$/.test(args[0] ?? '')) {
       calls.push(['js-harness', ...args.slice(1)].join(' '));
@@ -131,6 +138,41 @@ test('refreshCopy verifies the installed copy by its version and by the sha its 
   assert.match(run.out, new RegExp(`the installed copy answers ${MAIN_VERSION} and names ${SHA}`));
 });
 
+// S6 of odd/tasks/lead-manual-steps.md: the lead backed up pnpm's global package.json and compared the copy's bin/
+// with main's by hand before each refresh he trusted.
+test('refreshCopy backs up the pnpm global package.json its shim names before it installs, and keeps the newest five', async () => {
+  const m = machine({ prev: PREV });
+  const backups = path.join(m.home, '.js-harness', 'refresh-backups');
+  fs.mkdirSync(backups, { recursive: true });
+  for (const stamp of ['20261001T000000Z', '20261002T000000Z', '20261003T000000Z', '20261004T000000Z', '20261005T000000Z']) fs.writeFileSync(path.join(backups, `package.json.${stamp}`), '{}');
+  const run = await refresh(m);
+  assert.equal(run.code, 0, run.err);
+  const copy = path.join(backups, 'package.json.20261018T023500Z');
+  assert.match(fs.readFileSync(copy, 'utf8'), new RegExp(`js-harness#${PREV}`), 'the copy is the package.json before the install');
+  assert.match(run.out, new RegExp(`pnpm global package\\.json before: copy ${copy.replace(/[\\.]/g, '\\$&')}`));
+  const kept = fs.readdirSync(backups).filter((name) => name.startsWith('package.json.')).sort();
+  assert.deepEqual(kept, ['package.json.20261002T000000Z', 'package.json.20261003T000000Z', 'package.json.20261004T000000Z', 'package.json.20261005T000000Z', 'package.json.20261018T023500Z']);
+});
+
+test("refreshCopy checks the verified copy's bin/ against main's, the files the package leaves out aside, and says it matches", async () => {
+  const m = machine({ prev: PREV });
+  const run = await refresh(m);
+  assert.equal(run.code, 0, run.err);
+  assert.ok(m.calls.includes(`git ls-tree -r ${SHA} -- bin`), m.calls.join('\n'));
+  assert.match(run.out, new RegExp(`refresh: the installed copy's bin/ is main's at ${SHA.slice(0, 7)}`));
+});
+
+test("refreshCopy fails when the copy's bin/ differs from main's, or main's cannot be read, and prints the undo", async () => {
+  const missing = machine({ prev: PREV, mainBin: `${MAIN_BIN}100644 blob ${'2'.repeat(40)}\tbin/new.mjs\n` });
+  const differs = await refresh(missing);
+  assert.equal(differs.code, 6, differs.out);
+  assert.match(differs.err, /refresh failed: the installed copy's bin\/ differs from main's at 0123456: bin\/new\.mjs/);
+  assert.match(differs.out, /^undo: /m);
+  const unread = await refresh(machine({ prev: PREV, mainBin: null }));
+  assert.equal(unread.code, 6, unread.out);
+  assert.match(unread.err, /refresh failed: could not compare the installed copy's bin\/ with main's at 0123456/);
+});
+
 test('refreshCopy fails loudly, after three tries, when the installed copy answers another version than main', async () => {
   const m = machine({ prev: PREV, answers: '0.9.0' });
   const run = await refresh(m);
@@ -156,7 +198,7 @@ test('refreshCopy keeps the newest five settings backups and says how many it ke
   for (let day = 1; day <= 6; day += 1) fs.writeFileSync(path.join(dir, `settings-202601${String(day).padStart(2, '0')}T000000Z.json`), '{}');
   const run = await refresh(m);
   assert.equal(run.code, 0, run.err);
-  assert.deepEqual(fs.readdirSync(dir).sort(), [
+  assert.deepEqual(fs.readdirSync(dir).filter((name) => name.startsWith('settings-')).sort(), [
     'settings-20260103T000000Z.json',
     'settings-20260104T000000Z.json',
     'settings-20260105T000000Z.json',
@@ -313,7 +355,7 @@ test('refreshCopy backs up the settings of the harness home it is given', async 
   const run = await refresh(m, { settings: undefined });
   assert.equal(run.code, 0, run.err);
   const dir = path.join(m.home, '.js-harness', 'refresh-backups');
-  const [copy] = fs.readdirSync(dir);
+  const [copy] = fs.readdirSync(dir).filter((name) => name.startsWith('settings-'));
   assert.equal(fs.readFileSync(path.join(dir, copy), 'utf8'), '{"own":true}\n');
 });
 

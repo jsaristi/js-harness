@@ -3054,6 +3054,8 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('`--to orchestrator --kind withdrawn --question <n>'));
   assert.ok(text.includes('The question tool holds the session that calls it until the user answers'));
   assert.ok(text.includes('in the reply to their next message'));
+  // S8 of odd/tasks/lead-manual-steps.md: the board offers "hazme la pregunta N" for each open question (PR 673).
+  assert.ok(text.includes('When the user writes "hazme la pregunta N", they ask for question N now: build its card with `js-harness template ask N` and ask it through the question tool.'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
   // odd/tasks/held-sessions.md, S5: a card the host holds in a session's window reaches him here, not there.

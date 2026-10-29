@@ -1913,14 +1913,22 @@ async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', 
   return { code, out, asked };
 }
 
-test('--refresh-copy is a mode of --land: alone or with --dry-run it is a usage error, and the usage names it', async () => {
+test('--refresh-copy is a mode of --land or a mode alone: with --dry-run or --prune it is a usage error, and the usage names both', async () => {
   const out = [];
   const io = { run: runner([]).run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) };
-  assert.equal(await mergeQueueMain(['--refresh-copy'], io), 2);
   assert.equal(await mergeQueueMain(['--dry-run', '--refresh-copy'], io), 2);
+  assert.equal(await mergeQueueMain(['--prune', '--refresh-copy'], io), 2);
   const usage = [];
   assert.equal(await mergeQueueMain(['--help'], { stdout: (line) => usage.push(line) }), 0);
-  assert.match(usage.join('\n'), /\[--refresh-copy\]/);
+  assert.match(usage.join('\n'), /--land \[--refresh-copy\] \| --refresh-copy \|/);
+});
+
+// S4 of odd/tasks/lead-manual-steps.md: alone, it refreshes the copy now and lands nothing.
+test('--refresh-copy alone runs the refresh of the copy now, in the folder --cwd names, and lands nothing', async () => {
+  const asked = [];
+  const io = { run: () => { throw new Error('no land runs'); }, stdout: () => {}, stderr: () => {}, refreshNow: async (args) => { asked.push(args); return 75; } };
+  assert.equal(await mergeQueueMain(['--refresh-copy', '--cwd', '/repo'], io), 75);
+  assert.deepEqual(asked.map(({ refreshCopy, land, cwd }) => ({ refreshCopy, land, cwd })), [{ refreshCopy: true, land: false, cwd: '/repo' }]);
 });
 
 test('--land --refresh-copy asks for the refresh after a land, with the sha main was pushed to, and the land stands', async () => {
@@ -1968,7 +1976,7 @@ test('--land --refresh-copy waits for the project\'s sessions to be between runs
   assert.ok(busy.out.some((line) => line.startsWith('Landed: main ')), 'the land stands');
   assert.ok(busy.out.some((line) => /still in the middle of a run: JH 7 · a \(busy\): nothing was refreshed/.test(line)), busy.out.join('\n'));
   // A land run from a copy behind main is refused before it lands (`staleBin`), so the copy cannot bring itself up.
-  assert.ok(busy.out.some((line) => /a land run from that copy is refused while main's bin\/ differs from it: the next land that moves main, run from a checkout at origin\/main with --refresh-copy, brings it up$/.test(line)), busy.out.join('\n'));
+  assert.ok(busy.out.some((line) => /a land run from that copy is refused while main's bin\/ differs from it: run js-harness merge-queue --refresh-copy from a checkout at origin\/main once only waits run from the copy$/.test(line)), busy.out.join('\n'));
 });
 
 test('--land --refresh-copy with nothing ready asks the refresh that nothing landed, so it refreshes nothing', async () => {

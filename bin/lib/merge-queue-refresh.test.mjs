@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { QUIET_WAIT_MINUTES, atWorkIn, lookOnce, refreshAfterLand, waitForQuiet } from './merge-queue-refresh.mjs';
+import { QUIET_WAIT_MINUTES, atWorkIn, lookOnce, refreshAfterLand, refreshNow, waitForQuiet } from './merge-queue-refresh.mjs';
 import { REFRESH_FAILED } from './refresh-copy.mjs';
 
 // The wait of `merge-queue --land --refresh-copy` for the work sessions to be between runs, against listings of
@@ -104,4 +104,116 @@ test('refreshAfterLand turns a throw while it finds the folders or waits into a 
     assert.equal(refreshed, 0, what);
     assert.match(errors.join('\n'), /refresh failed: (git is gone|the clock stopped)/, what);
   }
+});
+
+// S7 of odd/tasks/lead-manual-steps.md: after its wait in vain, the land names the refresh that can run now.
+test('refreshAfterLand, after its wait in vain, names merge-queue --refresh-copy as the way to bring the copy up', async () => {
+  const run = (command, args) => (args[0] === 'rev-parse' ? { status: 0, stdout: `${path.join(ROOT, '.git')}\n`, stderr: '' } : { status: 1, stdout: '', stderr: '' });
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const errors = [];
+  const time = clock();
+  const exit = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => [agent({ status: 'busy', cwd: ROOT })], ...time, refresh: async () => 0, stderr: (line) => errors.push(line) });
+  assert.equal(exit, 75);
+  assert.match(errors.join('\n'), /run js-harness merge-queue --refresh-copy from a checkout at origin\/main once only waits run from the copy/);
+});
+
+// S4, S5 of odd/tasks/lead-manual-steps.md: `merge-queue --refresh-copy` run alone. Every effect is a stand-in: the
+// look at the copy's processes, the stop, the listing of sessions, the refresh and the channel.
+const MAIN = '0123456789abcdef0123456789abcdef01234567';
+const T0 = 1_800_000_000_000;
+const waitOf = (pid, ppid, args) => ({ pid, createdAt: T0 + pid, commandLine: `node "C:\\pnpm\\global\\v11\\h\\node_modules\\js-harness\\bin\\js-harness.mjs" wait ${args}`, targets: [{ pid, createdAt: T0 + pid }], ppid });
+const WAITS = [waitOf(120, 100, '--pr 674'), waitOf(140, 130, '--notice-to orchestrator'), waitOf(160, 1, '--main-has 1c6b6c2')];
+const SNAP = [{ pid: 100, ppid: 1, createdAt: T0 }, { pid: 130, ppid: 1, createdAt: T0 }, ...WAITS.map(({ pid, ppid, createdAt }) => ({ pid, ppid, createdAt }))];
+const SESSIONS = [
+  { id: 'a', title: 'JH 86 · rules and evals', waits: ['js-harness wait --pr 674'] },
+  { id: 'b', title: 'JH ORQ · orquestador F8', waits: ['js-harness wait --notice-to orchestrator'] },
+];
+const BLOCKER = { pid: 220, createdAt: T0, verb: 'codex-review', commandLine: 'node codex-review' };
+
+function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks = [{ waits: WAITS, blockers: [], snapshot: SNAP }], running = [], code = 0 } = {}) {
+  const said = [];
+  const told = [];
+  const stopped = [];
+  const asked = [];
+  const sleeps = [];
+  let looked = 0;
+  const deps = {
+    main,
+    copySha,
+    look: () => looks[Math.min((looked += 1) - 1, looks.length - 1)],
+    stop: (targets) => {
+      stopped.push(targets);
+      return { killed: targets.map((one) => one.pid).filter((pid) => !running.includes(pid)), gone: [], running };
+    },
+    sessions: () => SESSIONS,
+    refresh: async (opts) => {
+      asked.push({ ...opts, stopsBefore: stopped.length });
+      const quiet = opts.stillQuiet();
+      if (quiet.quiet) return code;
+      said.push(`why: ${quiet.why}`);
+      return 75;
+    },
+    versionOf: () => '1.0.0',
+    tell: (number, text) => told.push({ number, text }),
+    home: '/h',
+    cwd: ROOT,
+    env: {},
+    sleep: async (ms) => sleeps.push(ms),
+    stdout: (line) => said.push(line),
+    stderr: (line) => said.push(line),
+  };
+  return refreshNow(deps).then((exit) => ({ exit, said: said.join('\n'), told, stopped, asked, sleeps, looked }));
+}
+
+test('refreshNow refreshes nothing when the copy already names main, and says so', async () => {
+  const run = await refreshingNow({ copySha: MAIN });
+  assert.equal(run.exit, 0);
+  assert.match(run.said, /the installed copy already names 0123456, origin's main: nothing to refresh/);
+  assert.deepEqual([run.looked, run.asked.length], [0, 0]);
+});
+
+test('refreshNow refuses, with exit 1, when main cannot be read', async () => {
+  const run = await refreshingNow({ main: { why: 'could not fetch origin' } });
+  assert.equal(run.exit, 1);
+  assert.match(run.said, /could not fetch origin: nothing was refreshed/);
+});
+
+test('refreshNow refuses, stopping nothing, while work other than a wait still runs from the copy after three looks', async () => {
+  const run = await refreshingNow({ looks: [{ waits: WAITS, blockers: [BLOCKER], snapshot: SNAP }] });
+  assert.equal(run.exit, 75);
+  assert.match(run.said, /a process other than a wait runs from the installed copy: 220 \(codex-review, since .*\), after 3 looks 10 seconds apart: nothing was refreshed/);
+  assert.deepEqual([run.looked, run.sleeps, run.stopped.length, run.asked.length], [3, [10_000, 10_000], 0, 0]);
+});
+
+test('refreshNow goes on once the blocker is gone, stops the waits only under the lock, and refreshes main', async () => {
+  const quiet = { waits: WAITS, blockers: [], snapshot: SNAP };
+  const run = await refreshingNow({ looks: [{ ...quiet, blockers: [BLOCKER] }, quiet] });
+  assert.equal(run.exit, 0, run.said);
+  assert.equal(run.asked.length, 1);
+  assert.deepEqual([run.asked[0].landed, run.asked[0].sha, run.asked[0].version, run.asked[0].stopsBefore], [true, MAIN, '1.0.0', 0]);
+  assert.deepEqual(run.stopped, [WAITS.flatMap((wait) => wait.targets)]);
+});
+
+test('refreshNow tells each work session whose wait it stopped to run it again, and prints the rest', async () => {
+  const run = await refreshingNow();
+  assert.deepEqual(run.told, [{ number: 86, text: 'The installed copy was refreshed to 0123456 by merge-queue --refresh-copy, and the wait you ran from it was stopped for it: run it again: js-harness wait --pr 674' }]);
+  assert.match(run.said, /stopped the wait 120 of JH 86 · rules and evals: js-harness wait --pr 674/);
+  assert.match(run.said, /run again the wait of JH ORQ · orquestador F8: js-harness wait --notice-to orchestrator/);
+  assert.match(run.said, /run again the wait of no one session \(no open session ran it\): js-harness wait --main-has 1c6b6c2/);
+});
+
+test('refreshNow refuses under the lock when work began meanwhile, or a wait outlives its stop, and tells what it stopped', async () => {
+  const began = await refreshingNow({ looks: [{ waits: WAITS, blockers: [], snapshot: SNAP }, { waits: WAITS, blockers: [BLOCKER], snapshot: SNAP }] });
+  assert.equal(began.exit, 75);
+  assert.deepEqual([began.stopped.length, began.told.length], [0, 0]);
+  const outlives = await refreshingNow({ running: [140] });
+  assert.equal(outlives.exit, 75);
+  assert.match(outlives.said, /why: 1 process of the stopped waits still runs: 140/);
+  assert.match(outlives.told[0].text, /^The refresh of the installed copy to 0123456 ended with exit 75/);
+});
+
+test('refreshNow tells the sessions whose waits it stopped when the refresh after it fails', async () => {
+  const run = await refreshingNow({ code: REFRESH_FAILED });
+  assert.equal(run.exit, REFRESH_FAILED);
+  assert.match(run.told[0].text, /ended with exit 6/);
 });
