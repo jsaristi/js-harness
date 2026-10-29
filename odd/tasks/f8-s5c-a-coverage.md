@@ -146,6 +146,9 @@ Reviews:
   reliability and readability on the first, 0 findings each, and reliability on the second, 0.
 - gentle-ai: approved on `27fc4f9e..ba8b407c` (lineage `review-b6abd3914d52fc40`) and on `ba8b407c..848031b2`
   (lineage `review-d4494167128b1650`), three advisory findings in all, read and not taken (L28).
+- JH 82, `24471296..df346e30` (P7's records, the absence test's list, the documents): Codex, "the patch is correct"
+  (0.97, 56,642 input tokens; it reviewed from `12d2ca5f`, the commit before the one code commit); the reliability
+  lens on `12d2ca5f..df346e30`, 0 findings; gentle-ai approved (lineage `review-eda26836f0376790`), no findings.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
