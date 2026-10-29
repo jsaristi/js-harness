@@ -1109,7 +1109,7 @@ export function install(home, version, deps = {}) {
   // Recorded before written, by the same walk with no write, beside the earlier records, whose entries (an older form) may still be there:
   // a run stopped in between leaves both ours to undo (JH 81's verifier; Codex on 8c45db8..c70aa5a).
   const planned = installEntries(home, previous, missingBefore, deps.codexConfig, false);
-  writeManifest(home, { ...previous, version: previous?.version ?? null, files, entries: [...planned, ...(previous?.entries ?? []).filter((e) => !planned.some((p) => p.path === e.path && deepEqual(p.pointer, e.pointer) && deepEqual(p.entry, e.entry)))] });
+  writeManifest(home, { ...previous, version: previous?.version ?? null, files: [...files, ...(previous?.files ?? []).filter((f) => !files.some((g) => g.path === f.path))], entries: [...planned, ...(previous?.entries ?? []).filter((e) => !planned.some((p) => p.path === e.path && deepEqual(p.pointer, e.pointer) && deepEqual(p.entry, e.entry)))] });
   const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.

@@ -1786,6 +1786,33 @@ test('an install that stops before its manifest is written leaves its entries re
   }
 });
 
+// JH 84's verifier: a sync that stops after the manifest written first still names the files the release no longer
+// ships, so the next sync prunes them.
+test('a sync that stops after recording its entries keeps the record of a file the release no longer ships', () => {
+  const home = makeTmpHome();
+  const rename = fs.renameSync;
+  try {
+    const manifest = install(home, '0.1.0');
+    const orphanPath = path.join(home, '.claude', 'skills', 'js-harness-old', 'SKILL.md');
+    fs.mkdirSync(path.dirname(orphanPath), { recursive: true });
+    fs.writeFileSync(orphanPath, 'stale content', 'utf8');
+    fs.writeFileSync(manifestPath(home), JSON.stringify({ ...manifest, files: [...manifest.files, { path: orphanPath, sha256: sha256('stale content') }] }, null, 2));
+    fs.renameSync = (from, to) => {
+      const first = path.resolve(to) === path.resolve(manifestPath(home)) && JSON.parse(fs.readFileSync(from, 'utf8')).version === '0.1.0';
+      rename(from, to);
+      if (first) throw new Error('stopped');
+    };
+    assert.throws(() => sync(home, '0.2.0'), /stopped/);
+    fs.renameSync = rename;
+
+    sync(home, '0.2.0');
+    assert.equal(fs.existsSync(orphanPath), false, 'the next sync prunes it');
+  } finally {
+    fs.renameSync = rename;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // Codex on 8c45db8..c70aa5a: an update that stops after it records the new form and before it writes it still has the
 // older form in the host file, so the record of that older form is kept beside the new one until the final manifest.
 test('an update that stops after recording its entries and before writing them keeps the record of the older form it would replace', () => {
