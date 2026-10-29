@@ -462,3 +462,17 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   list skipped by the gate; a `files` source read without the publish's `root`; a quote in a regular expression or a
   nested template literal flipping `template check`'s comment reader; `recordRendered` taking a time that does not
   parse. Next: Codex and the lenses over unit 8, then units 7 and 8 to gentle-ai as one candidate.
+- Update ~08:30Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
+  fixed in dfc2692d and rechecked (1 fixed). Lenses over unit 8 and its fix: 0 findings.
+- gentle-ai: approved, medium, lineage review-53473f94dc0eb57c, over 4c4509ca..7660b66d (b1d938e3, 34f95b0c),
+  acknowledged. Its reliability lens left 3 non-blocking warnings, each holding, fixed with tests in unit 9, f08682ba:
+  a free-mark reason wrapped onto a second line; a regular expression after a keyword read as a division; a second
+  `unchecked` line from `--shown` when `harness.json` cannot be read. Codex over unit 9 found 2 P2 (an escaped CRLF
+  ending a string; `of`, `yield`, `await` taken for keywords), fixed in unit 10, f5eb5226, and rechecked (2 fixed);
+  the reader's comment now states what it does not model. Lenses over units 9 and 10: 0 findings.
+- gentle-ai: approved, medium, lineage review-f5f625f35e185de6, over 7660b66d..f5eb5226 (dfc2692d, f08682ba,
+  f5eb5226), acknowledged. Its reliability lens left 1 non-blocking warning, holding: the two shapes meant to prove
+  the reserved-word branch (`return /['"]/`, `typeof /'/`) still pass without it, because a quoted string now ends
+  on its line; a shape with the golden call after the regular expression on the same line proves it. Taken in slice
+  C's first commit, so slice B takes no further review round. Every code commit of slice B is covered: gentle-ai
+  39e69ee5..4c4509ca, 4c4509ca..7660b66d, 7660b66d..f5eb5226; Codex and the lenses each commit.
