@@ -294,10 +294,11 @@ export function stretchLost({ lands, codex, gates = [] }, { from, to, root }) {
   const project = `${folderKey(root)}/`;
   const ours = (gate) => isText(gate.cwd) && folderKey(gate.cwd).startsWith(project);
   // None is fixed by a later pass: these records name no pull request or range, so the pass may be another's, and
-  // only an explanation (`stretch explain`) says one was fixed.
+  // only an explanation (`stretch explain`) says one was fixed. Why one failed is its record's own words, when it has.
+  const why = (words, said) => (isText(said) ? `${words}: ${said}` : words);
   return [
-    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one, `land exit ${one.exit}`)),
+    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one, why(`land exit ${one.exit}`, one.said))),
     ...clippedTo(gates.filter((one) => inLand(one) && ours(one) && failed(one.result)), from, to).map((one) => failure(one, `land gate ${one.result}`)),
-    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one, 'Codex review failed')),
+    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one, why('Codex review failed', one.reason))),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

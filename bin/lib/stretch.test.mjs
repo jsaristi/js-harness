@@ -245,6 +245,13 @@ test('the stretch carries the failed lands, their failed gates and the failed Co
   assert.deepEqual(stretchLost({ lands: [{ startedAt: at(-0.25), seconds: 1800, exit: 1 }], codex: [] }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' }).map((one) => one.seconds), [900]);
 });
 
+test('a failed land says the last line it printed and a failed Codex run the reason it was logged with, when their records hold one', () => {
+  const lands = [{ startedAt: at(1), seconds: 600, exit: 4, said: 'Actions run 40816256353 is red' }, { startedAt: at(2), seconds: 600, exit: 1, said: null }];
+  const codex = [{ startedAt: at(3), seconds: 120, outcome: 'failed', reason: 'it exited 1' }, { startedAt: at(4), seconds: 120, outcome: 'failed', reason: null }];
+  const lost = stretchLost({ lands, codex }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' });
+  assert.deepEqual(lost.map((one) => one.what), ['land exit 4: Actions run 40816256353 is red', 'land exit 1', 'Codex review failed: it exited 1', 'Codex review failed']);
+});
+
 test('a session\'s failed gate is fixed when a later gate of that session passed before the end; a land or a Codex run never is by the record alone', () => {
   const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0, lastAt: T0 + 5 * H, closes: [], stoppedAt: null };
   const gates = [

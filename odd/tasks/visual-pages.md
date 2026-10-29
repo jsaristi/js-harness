@@ -366,6 +366,10 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   `stretch explain failure:<time>` names one by its start, in full or by the minute the return shows, among the
   failures measured to the close; a minute two start in is refused with the full time of each. A failure's row is
   named by its start, so an explanation reaches that failure alone. Route: inline, `feat/visual-pages-t12`.
+- [x] T13 (kind: build) follow-up of JH 85 (its summary's "Left"): the return's failures say why from their own records,
+  a failed land "land exit N: <said>" and a failed Codex run "Codex review failed: <reason>" (`stretchLost`,
+  `bin/lib/stretch.mjs`), the bare words when the record holds none. Spec 9. Route: inline, JH 87 on
+  `fix/pages-follow-ups`, the commit "fix(stretch): say why a land or a Codex run failed".
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 79: his words of lines 12054, 12220 and 12237, the four ideas he approved
