@@ -27,6 +27,7 @@ import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
 import { templatesHealth } from './template.mjs';
 import { permissionsHealth } from './lib/permissions.mjs';
+import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
 
@@ -221,7 +222,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // The templates' records are read by the interactive report only, as the skips are.
   const withUnseen = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
-  const withPermissions = deps.permissions ? [...withBackup, permissionsRow(deps.permissions, home)] : withBackup;
+  const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project)] : withBackup;
+  const withPermissions = deps.permissions ? [...withImport, permissionsRow(deps.permissions, home)] : withImport;
   const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
@@ -292,6 +294,19 @@ function permissionsRow(permissions, home) {
   }
 }
 
+/** The claude-import row (bin/lib/claude-import.mjs; the reverse-engineering document, 13.3 row 16): the project's root
+ * CLAUDE.md imports AGENTS.md and no CLAUDE.md above the project loads beside it, a gap with each file otherwise. It
+ * reads a few files, so the hook asks it too. Fails open to `unknown`. */
+function importRow(imports, project) {
+  const row = { id: 'claude-import', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  try {
+    const health = imports(project);
+    return { ...row, project: health.state, fix: health.fix.length ? { project: health.fix } : {} };
+  } catch {
+    return { ...row, project: 'unknown' };
+  }
+}
+
 /** The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main holds, clean and idle,
  * that no land removed, a gap with the command that removes them and each one; `unknown` when git cannot say. */
 function worktreesRow(worktrees, project) {
@@ -344,8 +359,8 @@ function templatesRow(templates, project, home) {
   return found.unchecked > 0 ? { ...row, project: 'unknown' } : row;
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, permissions,
- * host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
+ * permissions, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
  * callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
@@ -357,6 +372,7 @@ export function doctorCommand(argv) {
     templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
+    imports: (project) => importHealth(project),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }
