@@ -109,6 +109,23 @@ export function renderView(view) {
 
 const dateTimeZ = (iso) => `${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')}Z`;
 
+const KINDS = { goal: 'Meta', item: 'Trabajo', failure: 'Falla' };
+
+/** One cell of the why section: each entry with its source, or "no registrado" when no record says it. */
+const whyCell = (entries) => ({ html: entries.length ? entries.map((one) => `${escapeHtml(one.text)} <span class="note">(${escapeHtml(one.source)})</span>`).join('<br>') : '<span class="note">no registrado</span>' });
+
+/** The why section (spec 9): one row for each goal not met, item not finished and failure of `rows`
+ * (`problemsOf`), with why, how it was or can be fixed and why it is not, each from a record or "no registrado". */
+export function whySection(rows) {
+  if (rows.length === 0) return '<p class="note">Nada quedó sin hacer ni falló.</p>';
+  return table(['Qué', 'Por qué', 'Cómo se arregló o se puede arreglar', 'Por qué no se ha arreglado'], rows.map((row) => [
+    { html: `<b>${KINDS[row.kind]}</b> ${escapeHtml(row.what)}` },
+    whyCell(row.why),
+    whyCell(row.fix),
+    row.fixed ? { html: '<span class="note">se arregló</span>' } : whyCell(row.open),
+  ]));
+}
+
 // What each record the moments read is called on the page; a name not here is shown as the record names it.
 const READ_NAMES = { git: 'git', map: 'El mapa de ahora', opening: 'El mapa de la apertura', merges: 'Las fusiones a main' };
 
@@ -128,6 +145,7 @@ export function renderReturn(view) {
   const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: dateTimeZ(one.first), mono: true }, { text: dateTimeZ(one.last), mono: true }, { text: String(one.notices), mono: true }]);
   const sections = [
     { title: 'Cuánto se cumplió de lo planeado', html: sharesTiles(moments) },
+    ...(moments.why ? [{ title: 'Qué faltó, por qué y cómo se arregla', html: whySection(moments.why), note: 'Cada texto lleva el registro que lo dice; lo que ninguno dice queda "no registrado".' }] : []),
     { title: 'Metas y tiempos', html: renderView(view) },
     ...(moments.map ? [{ title: 'El mapa, antes y ahora', html: mapSection(moments.map) }] : []),
     ...planSections(moments.plans),

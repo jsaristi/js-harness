@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderDeparture, renderView } from './stretch-render.mjs';
+import { renderDeparture, renderView, whySection } from './stretch-render.mjs';
 
 const departure = {
   id: '2026-10-28T12:00:00.000Z',
@@ -79,6 +79,25 @@ test('the return draws each item\'s estimate against its real time, the lost par
   assert.match(html, /sin empezar/);
   assert.match(html, /No se mide.*lo rehecho tras una revisión/);
   assert.match(html, /lands no se pudo leer: EACCES/);
+});
+
+test('the why section has a row for each thing left undone: what, why, how it was or can be fixed, why not; an empty cell says "no registrado"', () => {
+  const rows = [
+    { kind: 'goal', target: 'G2', what: 'PR <644>', why: [{ text: 'la cola la rechazó', source: 'commit e6c8214c' }], fix: [{ text: 'aterrizó en #645', source: 'commit e6c8214c' }], open: [{ text: 'la raíz es T5f', source: 'commit e6c8214c' }], fixed: false },
+    { kind: 'failure', target: 'W1', what: 'JH 69 · 13:00Z · 10 min', why: [{ text: 'gate fail', source: 'el registro de gates' }], fix: [{ text: 'una corrida posterior pasó a las 13:30Z', source: 'el registro de gates' }], open: [], fixed: true },
+    { kind: 'item', target: 'W3', what: 'plantillas', why: [{ text: 'ninguna sesión la tomó', source: 'el plan del tramo' }], fix: [], open: [], fixed: false },
+  ];
+  const html = whySection(rows);
+  assert.match(html, /Qué[\s\S]*Por qué[\s\S]*Cómo se arregló o se puede arreglar[\s\S]*Por qué no se ha arreglado/);
+  assert.match(html, /PR &lt;644&gt;/);
+  assert.match(html, /la cola la rechazó[\s\S]*commit e6c8214c/);
+  assert.match(html, /Meta/);
+  assert.match(html, /Falla/);
+  assert.match(html, /Trabajo/);
+  // A fixed row has nothing open; one with no fix recorded says so in both cells.
+  assert.match(html, /13:30Z[\s\S]*se arregló/);
+  assert.equal(html.match(/no registrado/g).length, 2);
+  assert.match(whySection([]), /Nada quedó sin hacer/);
 });
 
 test('the open stretch reads as in course, goals not checked yet said so', () => {

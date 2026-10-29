@@ -1,0 +1,93 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { problemsOf } from './stretch-why.mjs';
+
+const H = 3_600_000;
+const T0 = Date.parse('2026-10-28T12:00:00Z');
+const at = (hours) => new Date(T0 + hours * H).toISOString();
+
+const view = {
+  openedAt: at(0),
+  at: at(8),
+  state: 'closed',
+  goals: {
+    checkedAt: at(8),
+    list: [
+      { id: 'G1', text: 'PR 630 en main', met: true, said: 'exit 0' },
+      { id: 'G2', text: 'PR 644 en main', met: false, said: 'exit 1' },
+    ],
+  },
+  items: [
+    { id: 'W1', title: 'registros', session: 'JH 69', state: 'finished', lastAt: at(3), failures: [{ at: at(1), seconds: 600, what: 'gate fail: bin/a.test.mjs', fixedAt: at(1.5) }] },
+    { id: 'W2', title: 'tablero', session: 'JH 70', state: 'running', lastAt: at(7.5), failures: [{ at: at(6), seconds: 300, what: 'gate exit 1', fixedAt: null }] },
+    { id: 'W3', title: 'plantillas', session: null, state: 'queued', lastAt: null, failures: [] },
+    { id: 'W4', title: 'gasto', session: null, state: 'queued', lastAt: null, waitsFor: 'su sí', failures: [] },
+  ],
+  failures: [{ at: at(4), seconds: 120, what: 'land exit 1', fixedAt: null }],
+};
+
+const notice = (hours, title, kind, text) => ({ at: at(hours), from: { id: 'x', title }, kind, text });
+
+const cells = (row) => ({ why: row.why.map((one) => one.text), fix: row.fix.map((one) => one.text), open: row.open.map((one) => one.text), fixed: row.fixed });
+
+test('each goal not met, item not finished and failure is a row; what is met, finished or fixed by itself stays out of the open cell', () => {
+  const rows = problemsOf(view, { notices: [], explains: [] });
+  assert.deepEqual(rows.map((row) => [row.kind, row.target]), [
+    ['goal', 'G2'],
+    ['item', 'W2'],
+    ['item', 'W3'],
+    ['item', 'W4'],
+    ['failure', 'W1'],
+    ['failure', null],
+    ['failure', 'W2'],
+  ]);
+});
+
+test('a cell says only what a record says, with its source, and is empty, "no registrado" on the page, when none does', () => {
+  const rows = problemsOf(view, { notices: [], explains: [] });
+  const goal = rows.find((row) => row.target === 'G2');
+  assert.deepEqual(cells(goal), { why: ['su comando terminó con exit 1'], fix: [], open: [], fixed: false });
+  assert.match(goal.why[0].source, /revisión de las 20:00Z/);
+  const fixed = rows.find((row) => row.kind === 'failure' && row.target === 'W1');
+  assert.deepEqual(cells(fixed), { why: ['gate fail: bin/a.test.mjs'], fix: ['una corrida posterior pasó a las 13:30Z'], open: [], fixed: true });
+  assert.match(fixed.what, /JH 69/);
+  const land = rows.find((row) => row.kind === 'failure' && row.target === null);
+  assert.deepEqual(cells(land), { why: ['land exit 1'], fix: [], open: [], fixed: false });
+  assert.deepEqual(cells(rows.find((row) => row.target === 'W4')).why, ['espera su sí']);
+  assert.deepEqual(cells(rows.find((row) => row.target === 'W3')).why, ['ninguna sesión la tomó']);
+});
+
+test('an item not finished says its state at its last record, and its session\'s last wait or question inside the stretch, quoted', () => {
+  const notices = [
+    notice(2, 'JH 70 · tablero', 'waiting', 'espera el merge de #645'),
+    notice(5, 'JH 70 · tablero', 'question', 'Q12: ¿partimos la PR?'),
+    notice(5.5, 'JH 700 · otra', 'waiting', 'no es suya'),
+    notice(9, 'JH 70 · tablero', 'waiting', 'después del cierre'),
+  ];
+  const row = problemsOf(view, { notices, explains: [] }).find((one) => one.target === 'W2');
+  assert.deepEqual(cells(row).why, ['seguía en curso al cierre; su último registro, 19:30Z', 'su último aviso de espera o pregunta: «Q12: ¿partimos la PR?»']);
+  assert.match(row.why[1].source, /JH 70 · tablero.*17:00Z/);
+});
+
+test('an explanation names its target and source; each of its texts wins over the derived cell, the last one over earlier ones', () => {
+  const explains = [
+    { event: 'explain', at: at(8.1), target: 'G2', why: 'una razón vieja', source: { kind: 'commit', ref: 'aaaaaaaaaaaa' } },
+    { event: 'explain', at: at(8.2), target: 'G2', why: 'la cola rechazó #644 sola', fix: 'aterrizó dentro de #645', open: 'la raíz es T5f, abierta', source: { kind: 'commit', ref: 'e6c8214c0000' } },
+    { event: 'explain', at: at(8.3), target: 'W2', fixed: true, fix: 'aterrizó como #647', source: { kind: 'notice', at: at(8.25), from: 'JH 70 · tablero' } },
+  ];
+  const rows = problemsOf(view, { notices: [], explains });
+  const goal = rows.find((row) => row.target === 'G2');
+  assert.deepEqual(cells(goal), { why: ['la cola rechazó #644 sola'], fix: ['aterrizó dentro de #645'], open: ['la raíz es T5f, abierta'], fixed: false });
+  assert.match(goal.why[0].source, /commit e6c8214c/);
+  const item = rows.find((row) => row.kind === 'item' && row.target === 'W2');
+  assert.deepEqual(cells(item).fix, ['aterrizó como #647']);
+  assert.equal(item.fixed, true);
+  assert.match(item.fix[0].source, /aviso de JH 70 · tablero/);
+  // An explanation of an item is not one of its failures'.
+  assert.equal(rows.find((row) => row.kind === 'failure' && row.target === 'W2').fixed, false);
+});
+
+test('the open stretch says its items are still running, not at the close', () => {
+  const row = problemsOf({ ...view, state: 'open' }, { notices: [], explains: [] }).find((one) => one.target === 'W2');
+  assert.match(row.why[0].text, /^sigue en curso; su último registro, 19:30Z/);
+});
