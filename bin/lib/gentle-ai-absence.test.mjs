@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ratchet } from './ratchet.testkit.mjs';
 
@@ -80,16 +81,42 @@ const NAMED = {
   'bin/lib/rules-coverage.test.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
 };
 
-/** The files git tracks under the roots, as paths from the repository with forward slashes: what a commit holds, so a
- * scratch file, an eval's output or an index left in the worktree decides nothing (review R3-001 on 61829b9f). */
-function trackedFiles() {
-  const listed = spawnSync('git', ['ls-files', '-z', '--', ...ROOTS], { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+/** The files under the roots of the tree at `repo`, as paths from it with forward slashes. In a checkout they are the
+ * files git tracks: what a commit holds, so a scratch file, an eval's output or an index left in the worktree decides
+ * nothing (review R3-001 on 61829b9f). With no `.git`, as in the gate's WSL mirror, which is synced without it
+ * (bin/lib/gate-wsl.mjs), they are the files on disk but `node_modules`: the mirror holds what the checkout tracked. */
+function treeFiles(repo) {
+  if (!fs.existsSync(path.join(repo, '.git'))) return ROOTS.flatMap((root) => filesOnDisk(repo, root)).sort();
+  const listed = spawnSync('git', ['ls-files', '-z', '--', ...ROOTS], { cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   assert.equal(listed.status, 0, `git ls-files failed: ${listed.stderr || listed.error?.message}`);
-  return listed.stdout.split('\0').filter((file) => file !== '' && fs.existsSync(path.join(REPO, file)));
+  return listed.stdout.split('\0').filter((file) => file !== '' && fs.existsSync(path.join(repo, file)));
 }
 
+/** The files under `dir` of `repo`, walked by hand, as `treeFiles` names them; none when `dir` is not there. */
+function filesOnDisk(repo, dir) {
+  const entries = fs.existsSync(path.join(repo, dir)) ? fs.readdirSync(path.join(repo, dir), { withFileTypes: true }) : [];
+  return entries.flatMap((entry) => {
+    const rel = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : filesOnDisk(repo, rel);
+    return entry.isFile() ? [rel] : [];
+  });
+}
+
+test('with no .git, as in the gate\'s WSL mirror, the files on disk are read, node_modules left out', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'absence-mirror-'));
+  try {
+    for (const file of ['bin/a.mjs', 'bin/lib/b.mjs', 'evals/c.json', 'bin/node_modules/d.js', 'docs/e.md']) {
+      fs.mkdirSync(path.dirname(path.join(scratch, file)), { recursive: true });
+      fs.writeFileSync(path.join(scratch, file), '');
+    }
+    assert.deepEqual(treeFiles(scratch), ['bin/a.mjs', 'bin/lib/b.mjs', 'evals/c.json']);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 test('no file under bin, evals or scripts names gentle-ai but the named ones, each with why (F8 S11, L12)', () => {
-  const checked = trackedFiles();
+  const checked = treeFiles(REPO);
   const broken = checked.filter((file) => NAMES.test(fs.readFileSync(path.join(REPO, file), 'utf8')));
   assert.deepEqual(ratchet({ checked, broken, legacy: NAMED }), []);
 });
