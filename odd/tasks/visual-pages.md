@@ -384,19 +384,19 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   2) the departure (`stretch open`) carries the map by phase and the timeline at the opening; 3) the plan's item
   titles go in as written, the help saying the lead writes them in Spanish. Not yet answered to the lead: proposed
   slice C (with T6), as T10.
+- L15. 2026-10-29, gentle-ai over ca23a627..71d626c5 (reliability, lineage review-8ed9074b0701c90f): approved and
+  acknowledged, three suggestions, none taken: a three-number or string estimate now reads as none (the stretch
+  writes `corrected` by arithmetic, so numbers, `bin/lib/stretch.mjs:126`); the place is read on every start
+  (`placeOf` catches every failure and returns null, `bin/lib/channel.mjs:652-663`); the branch 'main' depends on
+  the fixture (it runs `git init -b main`, `bin/sessions-background.test.mjs:90`).
 
 ## Next step
 State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
 `feat/visual-pages-board` at 71d626c5, on `feat/visual-pages-b` (9b36b5b5), on `feat/visual-pages`):
 - Slice A: #643 landed (main 837cedd); #644 on main, #645 on #644, landing in order by the queue.
 - Slice B reviews: Codex rechecks done (67e6230..1f61e01 one P2 fixed; 1f61e01..71d626c correct 0.99); lenses all 0
-  findings; gentle-ai lineage review-8ed9074b0701c90f (ca23a627..71d626c5) started, collecting its reliability lens:
-  context with `gentle-ai review lens-context --cwd <wt> --repository-context
-  rctx2_774712e90fd7c252f2d81addd8aa142eb652e717e530bdb54b42d35193a7e56f --lineage review-8ed9074b0701c90f --target
-  sha256:502f722e730c481f2a0c9dd0edc54907fc96f080e0c3e85804b94af98e45ee6f --expected-revision
-  sha256:8a7c58476e7af941d6a6e1588ca5d5efa3598f36e332daa50eebff2388da58ff --lens review-reliability`, reviewer as a
-  general-purpose agent on opus, capture-result without --agent (subject sha256:0925f7e0...d7, order 0), then
-  acknowledge from `status --next-transition --lineage` (switch to the candidate head if HEAD moved).
+  findings; gentle-ai lineage review-8ed9074b0701c90f (ca23a627..71d626c5) approved and acknowledged (L15). Slice B
+  is fully reviewed.
 - Then: push `feat/visual-pages-b` and `feat/visual-pages-board`; PRs stacked on #645 (bodies name T5e as the one
   Codex finding left open, the lead's decision; `board/summary.status` and `estimates` shapes); notify ready.
 - Then answer the lead on spec 8 (T10 in slice C), slice C (T6, T7, T10), slice D (T8), T9.
