@@ -537,7 +537,12 @@ carrying #644, landed (main 96b917a).
   a goal and an item that share an id, and `show` measured a closed stretch with records written after its close.
   gentle-ai (medium, lineage review-7d6c066c403cf990): correction required, its critical finding the same as Codex's
   second; two warnings, explanations that did not add up and a land or Codex run taken as fixed by any later pass.
-  All four fixed together in the commit after f30d360e, test first.
+  All four fixed together in d572699b, test first.
+- d572699b: Codex's recheck 3 of 3 fixed, correct (0.96, 46,608 input tokens); the reliability lens (10,874) warned
+  that explain events without a kind would be ignored, not taken: no version without the kind ever ran, and the real
+  record holds no explain event (`grep -c '"explain"'` on stretches.jsonl: 0).
+- gentle-ai: a7b6ae42..d572699b approved (medium, lineage review-7d6c066c403cf990), after its refuter, a correction
+  plan of 125 lines and its targeted validation of d572699b.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
