@@ -220,7 +220,8 @@ export function testTimeFacts(byId, ids) {
 }
 
 /** The lands started in `[from, to)` among the merge queue's records (`<git common dir>/js-harness/lands.jsonl`, B2):
- * `{ startedAt, seconds, exit, landed, considered, phases: [{ phase, seconds, ok }] }`. */
+ * `{ startedAt, seconds, exit, landed, considered, phases: [{ phase, seconds, ok }], said }`, `said` the last line the land
+ * printed, which says why one failed, or `null`. */
 export function landFacts(records, { from, to }) {
   return records
     .filter((record) => Date.parse(record?.startedAt) >= from && Date.parse(record.startedAt) < to)
@@ -231,6 +232,7 @@ export function landFacts(records, { from, to }) {
       landed: Array.isArray(record.landed) ? record.landed.length : 0,
       considered: Array.isArray(record.considered) ? record.considered.length : 0,
       phases: (Array.isArray(record.phases) ? record.phases : []).filter((phase) => typeof phase?.phase === 'string' && Number.isFinite(phase.seconds)).map(({ phase, seconds, ok }) => ({ phase, seconds, ok: ok ?? null })),
+      said: typeof record.said === 'string' ? record.said : null,
     }))
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
@@ -261,7 +263,7 @@ export function questionFacts(record, { from, to }) {
 const isObjectLike = (value) => typeof value === 'object' && value !== null;
 
 /** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome, findings,
- * part }`. */
+ * part, reason }`, `reason` the words a run that did not stand was logged with, or `null`. */
 export function codexFacts(runs, { from, to }) {
   return runs
     .filter((run) => Date.parse(run?.startedAt) >= from && Date.parse(run.startedAt) < to)
@@ -272,6 +274,7 @@ export function codexFacts(runs, { from, to }) {
       findings: Number.isFinite(run.findings?.total) ? run.findings.total : null,
       // A part of a range is an attempt of its own (codex-review-runs.mjs, `runPart`).
       part: isObjectLike(run.part),
+      reason: typeof run.reason === 'string' ? run.reason : null,
     }));
 }
 

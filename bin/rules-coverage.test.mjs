@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { rulesMain } from './rules.mjs';
 import { readCoverageText, spanId, writeCoverage } from './lib/rules-coverage.mjs';
 import { plantedBreaks } from './lib/rules-coverage-read.mjs';
+import { RULES } from './lib/rules-data.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLANTED = 'A planted directive that no rule and no register holds.';
@@ -60,13 +61,15 @@ test('the real package holds its baseline: rules coverage --strict exits 0 and s
 test('rules coverage --prove --json prints one JSON document, the proofs in it', async () => {
   await inCopy(async (root) => {
     // Every check owed, so the proof plants no break and the document is all there is to read; a line or a protocol
-    // plants none and stays, since a rule declared after the baseline cannot be owed.
+    // plants none and stays. The baseline moves to the day the last rule was declared, since a rule declared after
+    // the baseline cannot be owed (bin/rules.test.mjs, `owedRegister`).
     edit(root, 'bin/lib/rules-coverage-data.mjs', (text) => {
       const { register } = readCoverageText(text);
-      const owed = { level: 'owed', since: register.baseline };
+      const baseline = RULES.map((rule) => rule.since).reduce((last, since) => (since > last ? since : last), register.baseline);
+      const owed = { level: 'owed', since: baseline };
       const unchecked = (control) => (control.level === 'check' ? owed : control);
       const controls = Object.fromEntries(Object.entries(register.controls).map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...unchecked(item) })) : unchecked(control)]));
-      return writeCoverage({ ...register, controls });
+      return writeCoverage({ ...register, baseline, controls });
     });
     const { code, out, all } = await rules(['coverage', '--prove', '--json'], root);
     assert.equal(code, 0, all);
