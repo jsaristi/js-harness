@@ -397,3 +397,8 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   hand-made output that always differs, the write-over-nothing and flag tests). The hook probe (T4), read from the
   six newest lead transcripts: PreToolUse ran before `Artifact` (34), `ArtifactData` (128), `AskUserQuestion` (105)
   and `mcp__visualize__show_widget` (7), so [i] holds and no tool needs the `Stop` fallback.
+- gentle-ai: approved, medium, lineage review-35989199b6ff665f, over 6705dbb9..ff703e53 (ff703e53), acknowledged;
+  Codex and the lenses (reliability, readability) found nothing in it. Its lens left 5 non-blocking findings (the
+  `cwd` test passes `cwd` equal to `root`; a second non-object entry reads as a repeated id; only the first call of a
+  title is read; the CRLF test's fixture is not asserted to hold a newline; `sampleDigest` has no unit test): they
+  are taken in slice B's first commit, so slice A takes no fourth review round.
