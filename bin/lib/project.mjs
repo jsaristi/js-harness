@@ -17,7 +17,9 @@ import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
-import { TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
+import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
+
+export { FAILURES_TEMPLATE };
 
 /** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what an
  * older copy cannot undo: format 1 its `settings`, which a copy older than the switches does not know, and
@@ -410,30 +412,12 @@ first passes two readers that did not write it: one attacks its claims, one look
 missing. The owner gets the improved version, with what each reader changed and what stays
 unguaranteed.
 
+A moment's page is the one \`js-harness stretch\` or \`js-harness report\` makes from the records,
+never drawn by hand (\`rule:reports-spanish-visual\`).
+
 A reply ends in one of the five states of \`js-harness-protocols\` section 2.
 `;
 }
-
-/** The empty failures register `init` writes as `docs/FAILURES.md` when a project has none: what an entry is and how
- * one is written, with no class and no entry, since the classes are the project's own. `js-harness failures` and the
- * gate's `failures` row read it (`bin/lib/failures.mjs`); it parses with no fault. */
-export const FAILURES_TEMPLATE = `<!-- Written by \`js-harness init\`. -->
-# Failures
-
-What went wrong in this project: one entry per failure, with each time it was seen and the control
-that corrects it. A failure is work that went wrong in a way a control could prevent. A test that
-fails and is fixed inside its own task is not one: the gate is that control, working.
-
-A class is declared under "## Classes" as a list item: the id in backticks, then what it means. A
-failure is a "### <id>" entry under "## Entries", in the alphabetical order of the ids, with
-"- Class:" and one "- Seen:" line each time it happens, then the "- Control:" that corrects it. Its
-state is never written: \`js-harness failures\` computes it, and \`js-harness failures check
---settled\` exits 1 while an entry is not settled.
-
-## Classes
-
-## Entries
-`;
 
 /** The code `init` offers a project named `name`, its folder: the initials of its words, four at most, or the first two
  * letters of a name of one word, in capitals ("js-harness" is JH, "billing" BI); `null` for a name with no letter or

@@ -3808,3 +3808,11 @@ test('syncProject renders each file of the split its own half, and a project not
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// odd/tasks/visual-pages.md, T7: every project init writes is told that the page of a moment is the one a command makes
+// from the records, which commands make them, and the rule it answers to; the template's token budget keeps it short.
+test('the CLAUDE.md block names the commands that make a moment\'s page from the records, and its rule', () => {
+  const text = claudeBlock();
+  for (const command of ['js-harness stretch', 'js-harness report']) assert.ok(text.includes(command), `the block names ${command}`);
+  assert.match(text, /never drawn by hand \(`rule:reports-spanish-visual`\)/);
+});
