@@ -1030,11 +1030,11 @@ export function comparable(somePath) {
 // The dispatcher as one whole argument: `js-harness.mjs`, alone or after a separator, or `js-harness` after
 // one, which is how an install links the file where a shebang runs it (`/usr/local/bin/js-harness`). The
 // folder before it is the first or the second group.
-const DISPATCHER_PATTERN = /^(?:(.*)[\\/])?js-harness\.mjs$|^(.*)[\\/]js-harness$/;
+export const DISPATCHER_PATTERN = /^(?:(.*)[\\/])?js-harness\.mjs$|^(.*)[\\/]js-harness$/;
 
 /** The arguments of a command line, each without its quotes: a stretch between double quotes is part of
  * one argument, spaces and all. A `ps` listing has no quotes, so there every space ends an argument. */
-function argumentsOf(commandLine) {
+export function argumentsOf(commandLine) {
   return (commandLine.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((argument) => argument.replace(/"/g, ''));
 }
 

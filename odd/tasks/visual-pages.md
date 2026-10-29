@@ -73,6 +73,13 @@ words already decide the feature ("te apruebo las ideas que me diste para que lo
 5. The board opens with the last three things done and how long ago, as a mini context: "en el tablero muestrame al
    inicio las ultimas 3 cosas que se han hecho y hace cuanto tiempo para tener un mini contexto" (transcript
    0f71b2c6, line 13105, 2026-10-29T00:59:10Z, checked with `js-harness sessions --quote`; sent by the lead at 01:03Z).
+6. The status list the lead showed him, as colored cards at the board's top: "queria que añadieras ese artefacto asi
+   al tablero al inicio antes de \"lo que te toca\"" (transcript 0f71b2c6, line 13589, 2026-10-29T01:28:44Z, checked
+   with `js-harness sessions --quote`; "ese artefacto" is the lead's inline status list of 01:05Z, as the lead's
+   message of ~01:31Z describes it).
+7. Each session's card says who works on what and the approximate time of its task: "colocame en el tablero de quien
+   trabaja y en que y el tiempo aproximado de la tarea" (transcript 0f71b2c6, line 14289, 2026-10-29T02:16:52Z,
+   checked with `js-harness sessions --quote`; sent by the lead at 02:17Z).
 
 ## Design
 
@@ -206,10 +213,13 @@ heartbeat are left as they are, to keep one home.
   session's title and `sessionId` (else its job id), stamped with the time before it launched claude and with the
   text "started by sessions start: <title>". The board takes a session's latest row by time (`docs/live-board.html`,
   line 260), so a notice the child sends later is the newer one; the child's own `opened` still comes, as its
-  first fact of its own. A start whose notice cannot be appended says so on standard error and keeps the start.
+  first fact of its own. `sessions` reads a session's state in the record's order, so the row is written only while
+  the record holds no notice of that session; its `worktree` is the absolute path, as `placeOf` records one. A start
+  whose notice cannot be appended says so on standard error and keeps the start.
 - `sessions live --out` puts `running` into `board-checked.json`: `{ at, until, items }`, sampled at that check and
-  held until the next (`until`), each item `{ kind, pid, since, where }`: the gates as the board already reads them
-  (`readGates`, running or waiting, `where` its worktree), and among the machine's node processes the Codex and lens
+  held until the next (`until`), each item `{ kind, pid, since, where }`: the gates as `findGates` reads them from
+  the listing (a gate running and one waiting for the lock are not told apart; `where` its worktree where the command
+  line names one), and among the machine's node processes the Codex and lens
   reviews (`bin/codex-review.mjs`, `bin/lens-review.mjs`, or the dispatcher's `codex-review`/`lens-review`) and the
   eval batches (`evals/suite.mjs`), matched by argument as `findGates` matches a gate, so a test file of the same
   name is none (`bin/lib/sessions-running.mjs`). `since` is the process's start, unknown where the listing gives
@@ -219,10 +229,27 @@ heartbeat are left as they are, to keep one home.
 `docs/live-board.html` opens, above everything else, with the three newest rows of its `events` collection whose
 kind says something was done (`closed`, a session's work finished; `ready`, a pull request ready), newest first,
 each with its session, its text cut to one line, and how long ago it was, counted by the page from the row's time
-against the viewer's clock and recounted each minute ("hace 12 min", "hace 3 h"). The rows are the board's own, so
-no command changes; with none, the block says "Nada terminado todavía en el tablero". Merges are not rows of the
+against the viewer's clock and recounted at each repaint, every 30 seconds ("hace 12 min", "hace 3 h"). The rows
+are the board's own, so no command changes; with none, the block says "Nada terminado todavía en el tablero". Merges are not rows of the
 board (they live in git), so a pull request shows here by its `ready`, not by its merge; the stale-board check is
 what keeps these rows current.
+
+### The status list (spec 6)
+Above "Lo último que se hizo", "Cómo va": one card an item of `board/summary.status`, the shape
+`[{ state: 'done' | 'working' | 'waiting', titulo, texto }]` the lead fills on each wake (a title such as
+"Hecho · PR 629 integrado", one plain sentence): an outline icon drawn inline (Tabler's circle-check, loader and
+hourglass shapes), the title in bold, the sentence under it; green for done, amber for working, blue for waiting
+(the page's `ok`, `wait` and `run` tokens), and a muted legend "Verde: hecho · Ámbar: en curso · Azul: esperando".
+An item of another state or with no title is left out (`statusItems`); with none, the block hides.
+
+### The time of each session's task (spec 7)
+Each card of a session still at work ("Quién trabaja y en qué") keeps its last notice, which says what it is on, and
+adds one line, "Lleva 1 h 20 min en esto · estimado 1,5–2 h" (`taskTimeText`): how long it has been on its task,
+counted from its newest `opened` row on the board, else from its oldest row the board holds, said as such; and the
+task's estimate, from `board/summary.estimates` (`[{ session: 'JH 79', horas: [low, high] }]`, the lead's, filled
+on each wake), else from the open stretch item whose `session` is the card's (its corrected hours), else "sin
+estimado". A session is named by its code and number, so "JH 7" is not "JH 79". An estimate that is not two numbers
+is none; no number is made up.
 
 ### Shipping to every project (spec 2)
 The commands are the harness's, so every project that installs it has them. `init`'s `CLAUDE.md` block
@@ -242,14 +269,33 @@ No new rule: the moments amend the two that already hold them (AGENTS.md: amend 
 ### Slices
 Chained pull requests, each with its reviews: A the renderer, the record and the stretch's moments; B the stale
 board, the start row and the running work; C the report's pages and init's line; D the rule change, stacked.
+Slice A came to 1,666 changed lines, so it went up as three stacked pull requests, each on its parent's branch: #643
+the design (`feat/visual-pages-design`), #644 the renderer (`feat/visual-pages-renderer`), #645 the stretch and the
+review fixes (`feat/visual-pages`). None is under 400: the design's second commit rewrites the first, the renderer
+is one commit, and the fixes touch both the renderer and the stretch. Slice B, 721 lines, stacks on #645 as two:
+the stale-board guard, T4 (`feat/visual-pages-b`, 9b36b5b5), and the board's start row, running work, last things
+done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
 
 ## Tasks
 - [x] T1 (kind: design) this document, read by two blind readers (rule:double-review), in ee595c7c and the revision after them. Spec 1-4. Route: inline, readers delegated.
 - [x] T2 (kind: build) `bin/lib/pages.mjs`, `bin/lib/pages-record.mjs`, the map and plan at a commit. Spec 1, 2. Route: inline. 35c8d1fd and the review fixes.
 - [x] T3 (kind: build) `stretch status`/`close`: met, map, timeline; `open` records its head. Spec 1. Route: inline. 8a412b79 and the review fixes.
-- [ ] T4 (kind: build) the stale-board check in the Stop hook. Spec 3. Route: inline.
-- [ ] T5 (kind: build) the start row and the running work on the board. Spec 4. Route: inline.
-- [ ] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline.
+- [x] T4 (kind: build) the stale-board check in the Stop hook. Spec 3. Route: inline. Slice B.
+- [x] T5 (kind: build) the start row and the running work on the board. Spec 4. Route: inline. Slice B.
+- [x] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline. Slice B.
+- [x] T5c (kind: build) the lead's status list as colored cards at the top of the live board. Spec 6. Route: inline. Slice B.
+- [x] T5d (kind: build) each session card's time on its task and its estimate. Spec 7. Route: inline. Slice B.
+- [ ] T5e (kind: build) follow-up of Codex's open P2 (L10): `recordOfRows` (`bin/lib/sessions.mjs`) keeps a session's
+  status and place by record order, so a session's notice appended between `sessions start`'s read of the record and
+  its append of the start row is behind that row; the fix is to keep the newer by `at` (ties by record order). Outside
+  this brief's surface for `bin/lib/sessions.mjs`; the lead's decision of 02:33Z: a follow-up after this feature, not
+  in slice B (it changes how shared board code orders status), and named in the slice B PR as the one Codex finding
+  left open. Spec 4. Route: inline.
+- [ ] T5f (kind: build) follow-up, a defect found landing #644 (L16), outside this brief's surface: the merge queue
+  (`bin/merge-queue.mjs:318`) passes `reviewCoverage` the pull request's head as the tip, so a record whose head lies
+  past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
+  head is not past. The first pull request of a stack, landed alone after a review over the stack, passes the queue
+  and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
@@ -301,10 +347,72 @@ board, the start row and the running work; C the report's pages and init's line;
   page-record write (its append is the stretch record's, tested there). The `review-*` agent types ran no tool here
   (0 tool uses, three times); the lenses ran as general agents on opus.
 - L6. 2026-10-29, spec 5 from the lead (his line 13105): the last three things done at the board's top, in slice B.
+- L7. 2026-10-29, spec 6 from the lead (his line 13589): the status list as colored cards at the board's top, in
+  slice B (T5c). The session was compacted by the host at ~01:33Z and resumed from this document. Codex on
+  54747bc..2bd3bc7: correct (0.96), no findings (65,799 input tokens). Slice A went up as the stacked chain #643,
+  #644, #645 (Slices above); #643 announced ready.
+- L8. 2026-10-29, slice B reviewed over 2bd3bc7..b70ac68. Claude lenses (risk, resilience, reliability): 0 findings,
+  128,262 input tokens. Codex: the first run stopped on "Selected model is at capacity" (82,682 input tokens, no
+  record); run once more, 2 parts, 587,101 input tokens (472,320 cached): two P2 in the start row, taken in: its
+  `worktree` was the name given, not the absolute path readers hand to git; and, since `sessions` reads a session's
+  state in the record's order, a row appended after the session's own notice would replace its newer state (now
+  written only while the record holds no notice of that session). gentle-ai (medium; reliability; lineage
+  review-7c6f3a36e3078389): approved, two warnings and a suggestion, all taken in: the running line past its `until`
+  read as live with a growing "desde hace"; the test did not prove the start row is stamped before claude ran (the
+  fake now records when it ran); the warning's send steps did not name the Spanish fields of a row.
+- L9. 2026-10-29, spec 7 from the lead (his line 14289, checked): each card's time on its task and its estimate, in
+  slice B (T5d), on `feat/visual-pages-board`; the estimate's lead field is `board/summary.estimates`.
+- L10. 2026-10-29, the fixes and T5d reviewed over b70ac68..ca23a62. Claude lenses (reliability, resilience): 0
+  findings, 27,690 input tokens. Codex recheck (67,973 input tokens): the worktree P2 fixed; the order P2 not fixed,
+  since a session's notice appended between the read of the record and the append still lands behind the start row.
+  The window is now the read and the append alone (the place is read before); the session takes seconds to boot and
+  write, so the case is narrow but real. Its fix (T5e) is in `recordOfRows`, outside this brief's surface: asked of
+  the lead, not done here unless the lead says so.
+- L11. 2026-10-29 02:33Z, the lead: T5e stays a follow-up, out of slice B; 1c039be0's narrowing is enough for this
+  slice. #643 landed (main 837cedd); #644 retargeted to main. The lens on 1c039be0 found nothing (8,813 input tokens).
+- L12. 2026-10-29, Codex over 67e6230..1f61e01 (`--again`, 167,443 input tokens): one P2, taken in: an estimate of
+  `[null, null]`, `''` or `false` read as 0 hours through `Number`, a made-up "estimado 0 h"; only two numbers are an
+  estimate now, and the stretch's hours or "sin estimado" follow.
+- L13. 2026-10-29, gentle-ai over b70ac68d..ca23a627 (reliability, lineage review-3aafcdd1541ce20e): approved and
+  acknowledged, three warnings and a suggestion: the start-row race (T5e, the lead's follow-up); the blank estimate
+  read as 0 (fixed in c6d97b82); the start row with no worktree and its branch untested, and an estimate named by the
+  code alone ("JH") matching every session, both taken in the commit after c6d97b82.
+
+- L14. 2026-10-29, spec 8 from him (transcript 0f71b2c6, line 14721, 02:46:58Z, checked with `js-harness sessions
+  --quote`): "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no
+  quedan estandarizados? sera que menos protocolo y siempre generamos un eval o un template para que siempre muestre
+  las cosas como quiero? y que asi se estandarice y no muestre algo diferente cada vez. dime como lo tengo que pedir
+  por que siempre equivocas y siento es que yo no te pido las cosas paras que el arnes funcione como debe". The lead
+  had redrawn the departure by hand, inline, with no map. The lead asks (to place in a slice): 1) each moment's
+  command writes the whole page and records its hash in the page record, and a check (Stop hook `bin/reply.mjs` or
+  the reply-state check) refuses a reply at a moment unless the page shown or published is that file unchanged;
+  2) the departure (`stretch open`) carries the map by phase and the timeline at the opening; 3) the plan's item
+  titles go in as written, the help saying the lead writes them in Spanish. Not yet answered to the lead: proposed
+  slice C (with T6), as T10.
+- L15. 2026-10-29, gentle-ai over ca23a627..71d626c5 (reliability, lineage review-8ed9074b0701c90f): approved and
+  acknowledged, three suggestions, none taken: a three-number or string estimate now reads as none (the stretch
+  writes `corrected` by arithmetic, so numbers, `bin/lib/stretch.mjs:126`); the place is read on every start
+  (`placeOf` catches every failure and returns null, `bin/lib/channel.mjs:652-663`); the branch 'main' depends on
+  the fixture (it runs `git init -b main`, `bin/sessions-background.test.mjs:90`).
+- L16. 2026-10-29 03:00Z, the lead: landing #644 alone was refused at push, 35c8d1fd with no record, though the queue
+  counted it ready. Read in the code: its commit was reviewed inside Codex `c8ee437..8a412b7` and the lenses'
+  `62315e6..8a412b7`, and the two count against different tips (T5f). The lead chose the free path: #645 retargeted
+  to main with head 2bd3bc72, carrying #644's commit; #644 closes as included when #645 lands; T5f an open follow-up.
+- L17. 2026-10-29 ~03:20Z, the lead: T10 builds no hash gate of its own. JH 80 (Templates, `odd/tasks/templates.md`
+  on `origin/feat/templates` at db5f7409, sections "The two records" and "The gates") owns the one gate for every
+  output that reaches him, pages included: `renderedFile(home, slug)`, `recordRendered(file, {template, path, at,
+  head})` hashing the written file, six template ids and the refusal text. T10 shrinks to one `recordRendered` call a
+  page command, behind a seam the tests stub, the tests that prove the call is made, and the departure's map,
+  timeline and titles as written; built against that contract, its code landing with JH 80's build.
+- L18. 2026-10-29 ~03:30Z: slice B goes as one pull request carrying `feat/visual-pages-b` (9b36b5b5, 312 lines) and
+  this branch (625), 933 in all. 9b36b5b5's reviews ran over 2bd3bc7..b70ac68, so `feat/visual-pages-b` landed alone
+  would be refused at push as #644 was (T5f); splitting it would pay its reviews again (Codex about 180k input tokens,
+  estimated). Slice A's PR carries a fix of gentle-ai's warning on 2bd3bc72 (e05a86e2), reviewed by Codex, the lens
+  and gentle-ai.
 
 ## Next step
-State at 2026-10-29 ~01:30Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch `feat/visual-pages`):
-- Slice A committed: 35c8d1fd, 8a412b79, then the review fixes; reviewed by Codex, the lenses and gentle-ai (L5).
+JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`. Slice A: #643 landed (main 837cedd); #645,
+carrying #644, landed (main 96b917a).
 - The design commit, reviewed by gentle-ai (low, docs) as ee595c7c, landed on main through #643.
 - gentle-ai: 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720).
 - gentle-ai: 54747bc6 approved (medium, lineage review-a3c20007ce0c6f70); two warnings, fixed in the commit after it.
@@ -316,10 +424,19 @@ State at 2026-10-29 ~01:30Z (JH 79, worktree `D:\js-harness\.claude\worktrees\vi
 - gentle-ai: e05a86e2 approved (medium, lineage review-1bf6dda7ac7d0c09); one suggestion, not taken.
   The suggestion: a test of goals partly reviewed with none met; that case says "ninguna meta cumplida todavía",
   which holds. Codex on e05a86e2: correct (0.96); the reliability lens found nothing.
-- 2026-10-29 ~03:30Z: this branch lands #644 with it, as the lead chose; why #644 alone was refused at push is T5f on
-  `feat/visual-pages-board`.
-- Next: push, PR for slice A, notify ready; then slice B: T4 (draft in the job tmp `draft/stale-board*.mjs`; move
-  `CHECK_MINUTES`, the cursor schema, `liveCursorPath` and `cursorOf` into `bin/lib/live-rows.mjs`, since a lib cannot
-  import a command; export `lastLineWith` from `bin/lib/stop-wake.mjs`; wire it in `bin/reply.mjs`), T5, T5b; C, D.
-- Real-data scratch: `C:\Users\Oficina\.claude\jobs\b550c1c7\tmp\home1` (copies of the records + a stretch opened
-  12:11Z, 10.7 h); `node bin/js-harness.mjs stretch status --home <that> --cwd <worktree>`.
+- gentle-ai: 2bd3bc72..b70ac68d approved (medium, lineage review-7c6f3a36e3078389), with 9b36b5b5 in it.
+- gentle-ai: b70ac68d..ca23a627 approved (medium, lineage review-3aafcdd1541ce20e).
+- gentle-ai: ca23a627..71d626c5 approved (medium, lineage review-8ed9074b0701c90f).
+- Slice B: one PR, #647 (`feat/visual-pages-board`, L18), fully reviewed (L15). State at ~04:45Z: origin/main merged
+  into it as 02e68ec3. Its reviews: Codex correct (0.99, 59,929 input tokens); the reliability lens found nothing.
+  gentle-ai did not review it: its range holds main's 53 files, each reviewed in its own pull request, and the
+  merge's own writing is the 3-line fixture Codex read. Pushed; ready sent.
+- gentle-ai: daa51f84 approved (medium, lineage review-4204ae195c698200), no findings: three test comments reworded,
+  since main's sweep refused a file naming the tool (#647's land red on Actions, run 40825306670). Codex on it alone:
+  correct (0.99). Main merged in again as 78bfe423, covered by main's own records; gentle-ai did not review it, for
+  the reason given above for 02e68ec3.
+- Seen ~06:10Z: a first merge, 279d6e74, came before daa51f84 had a Codex record, so Codex read the whole range with
+  main's code in it (4 parts, 497,298 input tokens) and left 4 findings on JH 80's template code, which pre-push
+  refused as owed. That merge was rebuilt, unpushed, as 78bfe423 after a record of daa51f84 alone. A branch commit
+  gets its record before main is merged over it.
+- Then slice C (T6, T7, T10 as L17 says), slice D (T8), T9.

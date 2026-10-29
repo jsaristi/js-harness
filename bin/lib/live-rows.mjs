@@ -2,7 +2,30 @@
 // page's `events` collection, cut into batches, and the cursor that says which rows were sent. A batch is one
 // document, so the lead sends it with one `ArtifactData` set from a file. Rows are only ever created: a write to a
 // document that exists needs the version it was read at, which no command can know, so a session's status is the
-// state of its latest row, and the page works it out.
+// state of its latest row, and the page works it out. The cursor's file and its forms live here too, since the reply
+// Stop hook reads them (bin/lib/stale-board.mjs) and a module under bin/lib does not import a command.
+
+import path from 'node:path';
+import { channelDir } from './channel.mjs';
+
+/** The schema of the cursor's file. */
+export const CURSOR_SCHEMA = 'js-harness.live-cursor/v1';
+
+// How long a check of the record holds on the board: the lead wakes on a notice or after the heartbeat's 30 quiet
+// minutes (`loop heartbeat --quiet`), plus 15 to wake and send. A resting lead waits for a notice up to `wait-for`.
+export const CHECK_MINUTES = 45;
+
+/** The file of the live board's cursor for the project `slug` under `home`: in the channel's folder. */
+export function liveCursorPath(home, slug) {
+  return path.join(channelDir(home), 'live', `${slug}.json`);
+}
+
+/** The saved cursor: its position form, `{ upto, sent }`, or the form before it, `{ through, ids }`, which
+ * `positionOf` places in the record once; `null` when there is none. */
+export const cursorOf = (saved) => {
+  if (Number.isSafeInteger(saved.upto) && Array.isArray(saved.sent)) return { upto: saved.upto, sent: saved.sent };
+  return typeof saved.through === 'string' && Array.isArray(saved.ids) ? { through: saved.through, ids: saved.ids } : null;
+};
 
 /** What a notice of each kind says of its sender, as the board shows its status. */
 export const STATES = {
