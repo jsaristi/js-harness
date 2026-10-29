@@ -372,3 +372,16 @@ Codex and the Claude lenses before its pull request.
   the coloured status list is JH 79's and lands in PR 647. Done when and T5 now say so; the board rows and summary
   stay inventory rows, their gate a later template. The lead told JH 79 that `recordRendered` takes `subject` and that
   the record is `throughput/<slug>/templates-rendered.jsonl`.
+
+## Next step
+State at 2026-10-29 ~04:45Z (JH 80, worktree `D:\js-harness\.claude\worktrees\templates`, branch `feat/templates-a` from
+main 410eed7c; design PR 648 landed). Slice A (T3), test first, files written and not yet committed: the tests
+`bin/lib/template.test.mjs`, `bin/lib/template-check.test.mjs`, `bin/lib/template-scaffold.test.mjs`,
+`bin/template.test.mjs`; the code `bin/lib/template.mjs`, `bin/lib/template-registry.mjs` (empty list),
+`bin/lib/template-check.mjs`. Still to write: `bin/lib/template-scaffold.mjs` (`FIELDS` in his line's order what,
+when, sample, where, then source, each with a Spanish `ask`; `firstMissing`; `scaffold(given, sampleBytes)` returning
+`{ files, entry }` or `{ error }`, the entry with `records` for a rendered kind and `draft: true`), `bin/template.mjs`
+(`templateMain(argv, { stdout, stderr, root, hooked })`: new, check, list [--json]; `TemplateArgError`; default root the
+git top level, default hooked from a `templateGateEntry` of `bin/lib/hook-entries.mjs` when it exists, else none), the
+dispatcher line and help line in `bin/js-harness.mjs`, then `node --test` on the four files, `npm run check`, commit,
+Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) with the approved surface (L6).
