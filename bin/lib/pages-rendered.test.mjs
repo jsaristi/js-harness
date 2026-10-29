@@ -44,13 +44,20 @@ test('a record that cannot be written is said with why, and an unknown template 
 });
 
 test('the record module absent is null, but one that is there and cannot load throws', async (t) => {
-  assert.equal(await loadRecordModule(), null, 'this install has no template-record.mjs yet');
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rendered-'));
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
-  const broken = path.join(folder, 'template-record.mjs');
+  assert.equal(await loadRecordModule(undefined, pathToFileURL(path.join(folder, 'missing.mjs'))), null);
+  const broken = path.join(folder, 'broken.mjs');
   fs.writeFileSync(broken, "import './gone.mjs';\nexport const renderedFile = () => '';\n");
   await assert.rejects(loadRecordModule(undefined, pathToFileURL(broken)), (err) => err.code === 'ERR_MODULE_NOT_FOUND', 'a missing import inside it is no absent module');
-  fs.writeFileSync(path.join(folder, 'gone.mjs'), '');
-  assert.equal(typeof (await loadRecordModule(undefined, pathToFileURL(broken))).renderedFile, 'function');
-  assert.equal(await loadRecordModule(undefined, pathToFileURL(path.join(folder, 'missing.mjs'))), null);
+  const healthy = path.join(folder, 'healthy.mjs');
+  fs.writeFileSync(healthy, "export const renderedFile = () => '';\n");
+  assert.equal(typeof (await loadRecordModule(undefined, pathToFileURL(healthy))).renderedFile, 'function');
+});
+
+test('with no url on the error, the module the message says is missing decides, never the module that imported it', async () => {
+  const target = pathToFileURL(path.join(os.tmpdir(), 'template-record.mjs'));
+  const failing = (message) => async () => { throw Object.assign(new Error(message), { code: 'ERR_MODULE_NOT_FOUND' }); };
+  assert.equal(await loadRecordModule(failing(`Cannot find module '${path.join(os.tmpdir(), 'template-record.mjs')}' imported from /x/pages-rendered.mjs`), target), null);
+  await assert.rejects(loadRecordModule(failing(`Cannot find package 'gone' imported from ${path.join(os.tmpdir(), 'template-record.mjs')}`), target), /Cannot find package 'gone'/);
 });

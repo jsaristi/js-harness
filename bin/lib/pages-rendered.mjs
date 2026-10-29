@@ -17,8 +17,10 @@ export async function loadRecordModule(load = (url) => import(url.href), url = R
   try {
     return await load(url);
   } catch (err) {
-    const missing = err.url ? fileURLToPath(err.url) : String(err.message);
-    if (err.code === 'ERR_MODULE_NOT_FOUND' && missing.includes(fileURLToPath(url))) return null;
+    // The module Node could not find: its `url`, else the first name of the message ("Cannot find module '<x>' imported
+    // from <importer>"), never the importer, which is the record module itself when one of its imports is missing.
+    const missing = err.url ? fileURLToPath(err.url) : /^Cannot find (?:module|package) '([^']+)'/.exec(String(err.message))?.[1];
+    if (err.code === 'ERR_MODULE_NOT_FOUND' && missing === fileURLToPath(url)) return null;
     throw err;
   }
 }
