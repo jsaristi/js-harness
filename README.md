@@ -859,6 +859,18 @@ each item's estimate, real and lost time, which the next `open` learns from. `st
 <file>` writes it as the Spanish fragment the lead shows in the chat. The record is
 `.js-harness/throughput/<project>/stretches.jsonl` under the home, which `uninstall` keeps.
 
+The return says, beside each goal not met, item not finished and failure, why, how it was or can be
+fixed and why not, from the records alone, else "no registrado". `stretch explain <target> --source
+<commit:hash|notice:at>` adds what a record says there (`--why`, `--fix`, `--fixed` or `--open`): a
+goal or an item by its id (`goal:<id>` or `item:<id>` when both share it), a failure by its start
+(`failure:<HH:MM>` or `failure:<time>` as the return shows it, or the start its record holds, which
+tells apart two cut to the opening; a start two share is refused with each one's name, and two whose
+records start in the same millisecond share one name and one explanation); the source must be a
+commit git knows or a notice of the channel. `stretch show [--stretch <id>]` gives
+a closed stretch's return again, measured from the records up to its close; it runs no goal. Each
+page `--html` writes goes into the rendered record under its template (`stretch-departure`,
+`stretch-status`, `stretch-return`), so the page shown or published is the one the command made.
+
 ```console
 $ js-harness stretch open --plan plan.json
 stretch 2026-10-28T12:00:00.000Z: 8 h, back at 2026-10-28T20:00:00.000Z

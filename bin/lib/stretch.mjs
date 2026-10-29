@@ -213,19 +213,21 @@ function gateOf(gate, trail) {
 const hoursOf = (ms) => round(ms / HOUR_MS);
 
 /** The runs among `runs` (`{ startedAt, seconds }`) that overlap `[from, to)`, each cut to its part inside, oldest
- * first: a failure that began before the span or ran past it counts only there. A run with no end yet is left out. */
+ * first: a failure that began before the span or ran past it counts only there. `began` keeps the start its record
+ * holds. A run with no end yet is left out. */
 function clippedTo(runs, from, to) {
   return runs.flatMap((run) => {
     const start = Date.parse(run.startedAt);
     if (!Number.isFinite(run.seconds) || !Number.isFinite(start)) return [];
     const inStart = Math.max(start, from);
     const inEnd = Math.min(start + run.seconds * 1000, to);
-    return inEnd > inStart ? [{ ...run, startedAt: new Date(inStart).toISOString(), seconds: (inEnd - inStart) / 1000 }] : [];
+    return inEnd > inStart ? [{ ...run, startedAt: new Date(inStart).toISOString(), began: run.startedAt, seconds: (inEnd - inStart) / 1000 }] : [];
   }).sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
 
-/** One failure as the return lists it; `fixedAt`, when a later run of its kind passed, the end of that run. */
-const failure = (startedAt, seconds, what, fixedAt = null) => ({ at: new Date(Date.parse(startedAt)).toISOString(), seconds, what, fixedAt });
+/** One failure as the return lists it, `at` its start inside the stretch and `began` its record's own, which names it
+ * (`stretch explain`); `fixedAt`, when a later run of its kind passed, the end of that run. */
+const failure = ({ startedAt, began = startedAt, seconds }, what, fixedAt = null) => ({ at: new Date(Date.parse(startedAt)).toISOString(), began: new Date(Date.parse(began)).toISOString(), seconds, what, fixedAt });
 
 /** Each run of `runs` that `isFailed` with `fixedAt`: the end of the first run of `runs` that started after it and
  * passed (`isPassed`), once it ended by `to`; else `null`. What fixed a failure is the record of a run that passed, never
@@ -269,7 +271,7 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
   const end = { finished: close, stopped: stoppedAt, silent: lastAt, running: now }[state];
   const to = Math.max(from, end);
   const failures = clippedTo(withFix(mine, (gate) => failed(gate.result), (gate) => typeof gate.result === 'string' && !failed(gate.result), now), from, to)
-    .map((gate) => failure(gate.startedAt, gate.seconds, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`, gate.fixedAt));
+    .map((gate) => failure(gate, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`, gate.fixedAt));
   return {
     ...entry,
     state,
@@ -294,8 +296,8 @@ export function stretchLost({ lands, codex, gates = [] }, { from, to, root }) {
   // None is fixed by a later pass: these records name no pull request or range, so the pass may be another's, and
   // only an explanation (`stretch explain`) says one was fixed.
   return [
-    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`)),
-    ...clippedTo(gates.filter((one) => inLand(one) && ours(one) && failed(one.result)), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
-    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed')),
+    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one, `land exit ${one.exit}`)),
+    ...clippedTo(gates.filter((one) => inLand(one) && ours(one) && failed(one.result)), from, to).map((one) => failure(one, `land gate ${one.result}`)),
+    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one, 'Codex review failed')),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

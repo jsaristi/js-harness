@@ -41,14 +41,25 @@ function lastWait(session, notices, { from, to }) {
   return wait ? { text: `su último aviso de espera o pregunta: «${wait.text}»`, source: `aviso de ${wait.from.title} (${timeZ(wait.at)})` } : null;
 }
 
-/** A failure's row: who, when and for how long; why, its record's words; fixed when a later run of its kind passed. */
-function failureRow(one, target, who) {
+/** The failures of `view`, its items' and its own, oldest first, each with `who` and `target`, its name: the start its
+ * own record holds (`began`), never where it sits in the list, so a failure measured later takes no other's name and
+ * two cut to the stretch's opening differ. A view measured before failures kept it is named by the start it shows.
+ * `explain` and the page name each one alike. */
+export function failuresOf(view) {
+  return [
+    ...view.items.flatMap((item) => item.failures.map((one) => ({ ...one, who: item.session ?? item.title }))),
+    ...view.failures.map((one) => ({ ...one, who: 'orquestador' })),
+  ].map((one) => ({ ...one, target: one.began ?? one.at })).sort((a, b) => ms(a.at) - ms(b.at) || ms(a.target) - ms(b.target));
+}
+
+/** A failure's row, under its name (`failuresOf`): who, when and for how long; why, its record's words; fixed when a
+ * later run of its kind passed. */
+function failureRow(one) {
   const source = /^gate /.test(one.what) ? 'el registro de gates' : /^land gate/.test(one.what) ? 'el registro de gates del aterrizaje' : /^land /.test(one.what) ? 'el registro de aterrizajes' : 'el registro de revisiones de Codex';
   return {
     kind: 'failure',
-    target,
-    at: one.at,
-    what: `${who} · ${timeZ(one.at)} · ${Math.round(one.seconds / 60)} min`,
+    target: one.target,
+    what: `${one.who} · ${timeZ(one.at)} · ${Math.round(one.seconds / 60)} min`,
     why: [{ text: one.what, source }],
     fix: one.fixedAt ? [{ text: `una corrida posterior pasó a las ${timeZ(one.fixedAt)}`, source }] : [],
     open: [],
@@ -76,8 +87,8 @@ function explained(row, explains) {
 }
 
 /** The rows of `view` (the measured stretch, open or closed), goals first, then items, then failures oldest first.
- * `notices` are the channel's; `explains` the stretch's `explain` events, oldest first. An explanation names a goal
- * or an item, never one of an item's failures. */
+ * `notices` are the channel's; `explains` the stretch's `explain` events, oldest first. An explanation names a goal,
+ * an item or a failure, the last by its name (`failuresOf`); one of an item never reaches the item's failures. */
 export function problemsOf(view, { notices = [], explains = [] }) {
   const closed = view.state === 'closed';
   const span = { from: ms(view.openedAt), to: ms(view.at) };
@@ -99,9 +110,5 @@ export function problemsOf(view, { notices = [], explains = [] }) {
     open: [],
     fixed: false,
   }));
-  const failures = [
-    ...view.items.flatMap((item) => item.failures.map((one) => failureRow(one, item.id, item.session ?? item.title))),
-    ...view.failures.map((one) => failureRow(one, null, 'orquestador')),
-  ].sort((a, b) => ms(a.at) - ms(b.at)).map(({ at, ...row }) => row);
-  return [...goals, ...items].map((row) => explained(row, explains)).concat(failures);
+  return [...goals, ...items, ...failuresOf(view).map(failureRow)].map((row) => explained(row, explains));
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { problemsOf } from './stretch-why.mjs';
+import { failuresOf, problemsOf } from './stretch-why.mjs';
 
 const H = 3_600_000;
 const T0 = Date.parse('2026-10-28T12:00:00Z');
@@ -37,9 +37,9 @@ test('each goal not met, item not finished and failure is a row; what is met, fi
     ['item', 'W2'],
     ['item', 'W3'],
     ['item', 'W4'],
-    ['failure', 'W1'],
-    ['failure', null],
-    ['failure', 'W2'],
+    ['failure', at(1)],
+    ['failure', at(4)],
+    ['failure', at(6)],
   ]);
 });
 
@@ -48,10 +48,10 @@ test('a cell says only what a record says, with its source, and is empty, "no re
   const goal = rows.find((row) => row.target === 'G2');
   assert.deepEqual(cells(goal), { why: ['su comando terminó con exit 1'], fix: [], open: [], fixed: false });
   assert.match(goal.why[0].source, /revisión de las 20:00Z/);
-  const fixed = rows.find((row) => row.kind === 'failure' && row.target === 'W1');
+  const fixed = rows.find((row) => row.kind === 'failure' && row.target === at(1));
   assert.deepEqual(cells(fixed), { why: ['gate fail: bin/a.test.mjs'], fix: ['una corrida posterior pasó a las 13:30Z'], open: [], fixed: true });
   assert.match(fixed.what, /JH 69/);
-  const land = rows.find((row) => row.kind === 'failure' && row.target === null);
+  const land = rows.find((row) => row.kind === 'failure' && row.target === at(4));
   assert.deepEqual(cells(land), { why: ['land exit 1'], fix: [], open: [], fixed: false });
   assert.deepEqual(cells(rows.find((row) => row.target === 'W4')).why, ['espera su sí']);
   assert.deepEqual(cells(rows.find((row) => row.target === 'W3')).why, ['ninguna sesión la tomó']);
@@ -84,7 +84,36 @@ test('an explanation names its target and source; each of its texts wins over th
   assert.equal(item.fixed, true);
   assert.match(item.fix[0].source, /aviso de JH 70 · tablero/);
   // An explanation of an item is not one of its failures'.
-  assert.equal(rows.find((row) => row.kind === 'failure' && row.target === 'W2').fixed, false);
+  assert.equal(rows.find((row) => row.kind === 'failure' && row.target === at(6)).fixed, false);
+});
+
+test('a failure is named by its start: its explanation reaches that failure alone, the item\'s or the orchestrator\'s', () => {
+  const explains = [
+    { event: 'explain', at: at(9), kind: 'failure', target: at(4), why: 'la cola lo rechazó: 4b85503f sin registro de Codex', source: { kind: 'notice', at: at(8.5), from: 'JH ORQ' } },
+    { event: 'explain', at: at(9.1), kind: 'failure', target: at(4), fixed: true, fix: 'se cubrió con codex-review --again', source: { kind: 'commit', ref: 'eb4c20980000' } },
+    { event: 'explain', at: at(9.2), kind: 'failure', target: at(6), open: 'espera la revisión del líder', source: { kind: 'commit', ref: 'eb4c20980000' } },
+  ];
+  const rows = problemsOf(view, { notices: [], explains }).filter((row) => row.kind === 'failure');
+  assert.deepEqual(rows.map((row) => row.target), [at(1), at(4), at(6)]);
+  assert.deepEqual(cells(rows[1]), { why: ['la cola lo rechazó: 4b85503f sin registro de Codex'], fix: ['se cubrió con codex-review --again'], open: [], fixed: true });
+  assert.match(rows[1].why[0].source, /aviso de JH ORQ/);
+  assert.deepEqual(cells(rows[2]), { why: ['gate exit 1'], fix: [], open: ['espera la revisión del líder'], fixed: false });
+  // The one fixed by a later run keeps what its records say.
+  assert.deepEqual(cells(rows[0]).fix, ['una corrida posterior pasó a las 13:30Z']);
+});
+
+test('a failure is named by the start its own record holds, so two cut to the opening differ and a later one takes no name', () => {
+  const land = { at: at(0), began: at(-1), seconds: 60, what: 'land exit 1', fixedAt: null };
+  const codex = { at: at(0), began: at(-0.5), seconds: 90, what: 'Codex review failed', fixedAt: null };
+  const twins = { ...view, items: [], failures: [land, codex] };
+  assert.deepEqual(failuresOf(twins).map((one) => [one.target, one.what]), [[at(-1), 'land exit 1'], [at(-0.5), 'Codex review failed']]);
+  const explains = [{ event: 'explain', at: at(9), kind: 'failure', target: at(-1), fixed: true, fix: 'aterrizó después', source: { kind: 'commit', ref: 'eb4c20980000' } }];
+  // A session's failed gate cut to the same opening, measured later, gets its own name and none of the land's words.
+  const later = { ...twins, items: [{ id: 'W9', title: 'otra', session: 'JH 71', state: 'running', lastAt: at(1), failures: [{ at: at(0), began: at(-2), seconds: 30, what: 'gate fail', fixedAt: null }] }] };
+  const rows = problemsOf(later, { notices: [], explains }).filter((row) => row.kind === 'failure');
+  assert.deepEqual(rows.map((row) => [row.target, row.fixed]), [[at(-2), false], [at(-1), true], [at(-0.5), false]]);
+  // A view measured before failures kept their own start is named by the start it shows.
+  assert.deepEqual(failuresOf({ ...view, items: [], failures: [{ at: at(4), seconds: 60, what: 'land exit 1', fixedAt: null }] }).map((one) => one.target), [at(4)]);
 });
 
 test('explanations add up: a later one that leaves a cell out keeps what an earlier one said there', () => {

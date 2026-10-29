@@ -356,7 +356,13 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   E2 (`feat/visual-pages-e2`) `stretch explain` and `stretch show`.
 - [ ] T11a (kind: docs) the stretch entries of `README.md` and `js-harness help` (`bin/js-harness.mjs`) name only open,
   bind, status and close; both lie outside this brief's surface, so `explain` and `show` are said in the command's
-  own usage until a session that owns them adds a line. Route: inline.
+  own usage until a session that owns them adds a line. Route: inline. The lead's note of 11:03Z widened the surface to
+  those two entries.
+- [x] T12 (kind: build) a failure is explainable like a goal or an item. Spec 9, from the lead's note of 11:00Z: the
+  four failures of the 03:06Z stretch still read "no registrado" because `explain` took only a goal or an item.
+  `stretch explain failure:<time>` names one by its start, in full or by the minute the return shows, among the
+  failures measured to the close; a minute two start in is refused with the full time of each. A failure's row is
+  named by its start, so an explanation reaches that failure alone. Route: inline, `feat/visual-pages-t12`.
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 79: his words of lines 12054, 12220 and 12237, the four ideas he approved
@@ -571,6 +577,32 @@ carrying #644, landed (main 96b917a).
   instead. Codex 7b6d3f39..60e17fb0 correct (0.95, 64,107 input tokens); the lenses reliability and readability
   found nothing (25,843).
 - gentle-ai: 7b6d3f39..60e17fb0 approved (medium, lineage review-9affe131e336c6a8), no findings.
+- T12 is f45da73f and T11a 7e9ae874, on `feat/visual-pages-t12` stacked on T7. The lenses reliability and resilience
+  over 8b0e339f..7e9ae874 (40,441 input tokens): reliability nothing; resilience one warning, not taken: that
+  `explainTarget` matches a closed stretch's failures up to now. `measure` ends at `stretch.closedAt ?? now`
+  (`bin/stretch.mjs:262`) and the stretch `explain` names carries its `closedAt` (`:188`), so it matches to the close.
+- Codex on 8b0e339f..7e9ae874 (116,907 input tokens): incorrect (0.97), one P2: two failures cut to the same start,
+  as two that began before the opening are, share a name and neither can be explained. Taken, test-first: a second and
+  later failure that starts at the same instant is named `<start>#2`, `#3` (`failuresOf`, shared by the page and
+  `explain`), and a shared start is refused with each one's name and what it was. No record was written: this
+  document was edited while Codex read, after the rule of not doing so was already in this log. Prevention: nothing
+  is edited from a review's start to its end; the next review starts only after this commit.
+- Codex on 8b0e339f..fc5cb241 (159,124 input tokens): incorrect (0.98), one P2: the `#2` names came from the list's
+  order, so while a stretch is open a failure measured later at the same start took another's name and its
+  explanation. The lenses on fc5cb241 found nothing (26,492). Taken, test-first: a failure is named by the start its
+  own record holds (`began`, which `clippedTo` keeps), never by its place, so two cut to the opening differ and a later
+  one takes no name; `#n` is gone.
+- 3504d75e: Codex recheck fixed and correct (0.94, 41,570 input tokens). The lenses (32,146): three warnings, not taken.
+  Two say explanations recorded under the old names are orphaned: those names and failure explanations never reached
+  main, and the real `stretches.jsonl` holds 0 failure explanations among its 5 `explain` events (`grep -c`). The
+  third says two failures whose records start in the same millisecond share one name: the refusal lists each, and
+  one explanation then reaches both, a case no record has shown.
+- gentle-ai: 8b0e339f..a40d85e7 approved (medium, lineage review-99b44b35659578df), one warning, taken in the next
+  commit: the usage and the README promised a shared start is always refused, while two failures whose records start
+  in the same millisecond are accepted together; the text now says so. Its first result was refused at admission
+  (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
+- 4ba61a5b (the text fix): Codex correct (0.96, 61,391 input tokens); the readability lens found nothing (4,271).
+- gentle-ai: a40d85e7..4ba61a5b approved (medium, lineage review-673b5907691d27bb), no findings.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
