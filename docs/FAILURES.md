@@ -539,6 +539,17 @@ read as an exit code or an outcome alone.
 - Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
   the reason it was logged with" — since 2026-10-29
 
+### fixture-refuses-late-check
+The rules tests' fixture owed every check since the coverage register's baseline, which a rule
+declared after the baseline cannot be, so a check control on such a rule turned eight tests red and
+a weaker control was chosen to keep them green.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-80-templates-everything-he-sees-made-by-a-command-and-hel.md,
+  line 56 — a check-level control broke 8 tests of `bin/rules.test.mjs` and
+  `bin/rules-coverage.test.mjs`; PR 662 used a protocol control instead
+- Control: check — bin/rules.test.mjs — "the fixture owes the check of a rule declared after the
+  baseline" — since 2026-10-29
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
