@@ -2420,6 +2420,47 @@ test('keep and summarize may be asynchronous: both are waited for', async () => 
   assert.deepEqual([record.transcripts, record.listCost], [{ files: 4, errors: [] }, { source: 'later' }]);
 });
 
+// A reply task whose agent printed no answer, as one cut by its timeout prints none: what its session last wrote is the
+// reply, as the Stop hook reads a turn's (`odd/tasks/f8-s5c-a-coverage.md`, L35).
+const replyGrader = (expected) => `import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\ntest('reply', () => assert.equal(fs.readFileSync(new URL('../.eval-reply.md', import.meta.url), 'utf8'), ${JSON.stringify(expected)}));\n`;
+
+test('a reply task whose agent printed no answer is graded on the last reply its kept transcripts hold', async () => {
+  const asked = [];
+  const stub = stubTranscripts();
+  stub.transcripts.reply = (context) => (asked.push(context), 'Working: the currency waits for his return.');
+  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader('Working: the currency waits for his return.') }));
+  const { options, runsDir } = keepingTrial('garbage', stub, { task });
+  const { record } = await runTrial(options);
+  assert.equal(record.score, 1, JSON.stringify(record));
+  assert.deepEqual(asked, [{ dir: path.join(runsDir, `${task.id}__fake__medium__1.transcripts`) }], 'read from the kept copy, once');
+});
+
+test('the answer the agent printed is its reply, and its transcripts are not read for one', async () => {
+  const stub = stubTranscripts();
+  stub.transcripts.reply = () => assert.fail('an answer was printed');
+  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader('did nothing') }));
+  const { record } = await runTrial(keepingTrial('noop', stub, { task }).options);
+  assert.equal(record.score, 1, JSON.stringify(record));
+});
+
+test('a reply that cannot be read from the transcripts is logged and recorded, and the reply file is empty', async () => {
+  const logs = [];
+  const stub = stubTranscripts();
+  stub.transcripts.reply = () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); };
+  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader('') }));
+  const { record } = await runTrial(keepingTrial('garbage', stub, { task, log: (message) => logs.push(message) }).options);
+  assert.equal(record.score, 1, JSON.stringify(record));
+  assert.deepEqual(record.transcripts.errors, ['reply: EACCES']);
+  assert.ok(logs.some((message) => new RegExp(`could not read the last reply in the transcripts of ${task.id}, fake, medium, repeat 1: EACCES`).test(message)), logs.join('\n'));
+});
+
+test('a config whose transcripts reply is not a function is refused before anything is made or run', async () => {
+  const transcripts = { keep: () => ({ files: 0, errors: [] }), summarize: () => null, reply: 'last' };
+  const { options, countFile } = trialEnv('noop', { configExtra: { transcripts } });
+  await assert.rejects(runTrial(options), /config fake: "transcripts" reply, when given, must be a function/);
+  assert.equal(fs.existsSync(countFile), false, 'no agent ran');
+});
+
 test('a config whose transcripts is not a keep and a summarize is refused before anything is made or run', async () => {
   for (const transcripts of [true, 'claude', {}, { keep: () => ({ files: 0, errors: [] }) }, { keep: 'copy', summarize: () => null }]) {
     const { options, workRoot, countFile } = trialEnv('noop', { configExtra: { transcripts } });

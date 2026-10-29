@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   DELEGATION_MODES, HONESTY_CONFIGS, HONESTY_SENTENCES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig,
-  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, minimalConfig, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
+  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalConfig, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
   subagentConfig, subagentPin,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
@@ -679,6 +679,36 @@ for (const name of ['current', 'current-without-rule-reuse-first']) {
   });
 }
 
+test('the last reply of a kept session is the last text its main thread wrote, never a subagent\'s or a made-up one', () => {
+  assert.equal(lastReply(PROBE_TRANSCRIPTS), 'placeholder', 'the probe session\'s last text, after its subagent ran');
+  const dir = tmp('last-reply');
+  const line = (id, content, extra = {}) => JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T10:00:00.000Z', message: { id, model: 'claude-opus-5-5', content }, ...extra });
+  const text = (value) => [{ type: 'text', text: value }];
+  fs.writeFileSync(path.join(dir, 'session.jsonl'), [
+    line('m1', text('first')),
+    // Claude Code writes a line per content block of one message.
+    line('m2', text('Working: the currency waits')),
+    line('m2', text('for his return.')),
+    line('m3', [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }]),
+    'not json',
+    line('m4', text('a subagent\'s line in the main file'), { isSidechain: true }),
+    JSON.stringify({ type: 'assistant', message: { id: 'm5', model: '<synthetic>', content: text('API Error: made up') } }),
+    JSON.stringify({ type: 'user', message: { content: text('a user line') } }),
+    '',
+  ].join('\n'));
+  fs.mkdirSync(path.join(dir, 'session', 'subagents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'session', 'subagents', 'agent-x.jsonl'), `${line('s1', text('the subagent\'s own file'))}\n`);
+  assert.equal(lastReply(dir), 'Working: the currency waits\n\nfor his return.');
+  assert.equal(lastReply(path.join(scratch, 'no-such-dir')), null);
+  const none = tmp('last-reply-none');
+  fs.writeFileSync(path.join(none, 'session.jsonl'), `${line('m1', [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }])}\n`);
+  assert.equal(lastReply(none), null, 'a session that wrote no text has no reply');
+});
+
+test('the current arm and the arms without a rule read their trial\'s last reply from its kept transcripts', () => {
+  for (const name of ['current', 'current-without-rule-away-autonomy']) assert.equal(currentConfig({ ...OPTIONS, name }).transcripts.reply({ dir: PROBE_TRANSCRIPTS }), 'placeholder', name);
+});
+
 const KEEPS_NONE = [['minimal', minimalConfig], ['current-without-engram', (options) => currentConfig({ ...options, name: 'current-without-engram' })]];
 
 for (const [name, build] of KEEPS_NONE) {
@@ -942,6 +972,6 @@ for (const name of ['honesty-base', 'honesty-line']) {
 
 test('an honesty config keeps the transcripts of its trials, as the subagent configs do', () => {
   for (const name of Object.keys(HONESTY_CONFIGS)) {
-    assert.deepEqual(Object.keys(honestyConfig(name, OPTIONS).transcripts), ['keep', 'summarize'], name);
+    assert.deepEqual(Object.keys(honestyConfig(name, OPTIONS).transcripts), ['keep', 'summarize', 'reply'], name);
   }
 });

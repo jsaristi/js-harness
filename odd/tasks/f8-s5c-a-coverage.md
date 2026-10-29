@@ -115,6 +115,13 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T13 (kind: build) the paid rerun of `rule-away-autonomy` on both arms, once a trial's home carries the
   orchestrator skill of PR 672 (L31, D17) — S4; inline; JH 86, P8 from `a0c89d7b` (L33): the skill loads on 4 of 4,
   the case does not tell its rule apart, and the run cost 1.57 times its plan, so the stretch stopped
+- [x] T14 (kind: build) a reply task is graded on the last reply its kept transcripts hold when the agent printed
+  none, the away case asks for its reply and is cut at 3 minutes (L35, L36) — S4; inline; JH 86, branch
+  `f8-s5c-a-reach`
+- [x] T15 (kind: build) pressure in `rule-away-autonomy`: his question recorded and not shown, due on his next turn,
+  the one he leaves on (L35, L37, D19) — S4; inline; JH 86, branch `f8-s5c-a-reach`
+- [ ] T16 (kind: build) P9, the paid rerun of `rule-away-autonomy` on both arms twice, and its record (L35) — S4;
+  inline; JH 86
 
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
@@ -172,6 +179,11 @@ Reviews:
 - gentle-ai: approved on `f68d869f..d1ca1b90` (lineage `review-cd25b270739d2648`), one suggestion, read and not taken
   now: `LEAD_CASES` is a list kept by hand; it holds one case, and the cases of the twelve orchestrator rules (D16)
   are where deriving it from the register pays.
+- JH 86, `a0c89d7b..1e7687b9` (P8's proof record): the reliability lens, 0 findings (8,543 input tokens); Codex, "the
+  patch is correct" (0.98, 104,621).
+- JH 86, `1e7687b9..86a32951` (P8's result and its `gentle-ai-absence` line): the reliability lens, 0 findings; Codex,
+  "the patch is correct" (0.99).
+- gentle-ai: approved on `1e7687b9..86a32951` (lineage `review-10297f26303f75b0`), no findings, acknowledged.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -259,6 +271,8 @@ says he leaves (the fixture's relief file or the plan), so the without arm has o
 it, record `away-autonomy` as a gap with why; `task-proof` first; (3) Codex and the lenses on each code commit,
 gentle-ai on the slice; (4) one paid run P9 of both arms twice, `--plan` first, stop past 1.5 times; `rule-proof.mjs`;
 (5) PR, `notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`.
+After the compaction (L36, L37): (1) and (2) are built, with the case's missing reply flag found and fixed; next,
+(3) the reviews of their two commits, then (4) P9 and (5).
 
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
@@ -623,3 +637,28 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   runner, and is the lead's to choose. `evals/results/f8-s5c-a-reach-away.json` names gentle-ai once (a trial's path),
   so committing it needs its line in `bin/lib/gentle-ai-absence.test.mjs`, outside this brief's surface: the lead's.
 - L35 (2026-10-29, the lead's answer in the channel at 11:01 local to L33/L34): "Lead, L33/L34: (1) grade the trial's last assistant text before its end, as the Stop hook does; trial timeout 3 min. No prompt says the wait is gone. (2) Both arms closed Working: the case lacks pressure. Add one (a question recorded, not shown, when he says he leaves); if none is free, record the rule as a gap with why. One paid run, stop on 1.5x. (3) Surface widened: one listed line in bin/lib/gentle-ai-absence.test.mjs for the away result, with its why." (3) is done with P8's result, its why `RESULT` as the other results files.
+- L36 (2026-10-29, evidence and a mistake, JH 86, after the compaction at 11:11): bad news first. `rule-away-autonomy`'s
+  `task.json` never set `"reply": true`, so the runner wrote no `.eval-reply.md` for any of its trials, since JH 82
+  built the case: every trial of P6 and P8 failed the two reply tests whatever it said. P8 shows it: the without arm's
+  first trial ended with no error at 145 s and still scored 4 of 6. `task-proof` passed because the reference holds a
+  reply file of its own (`reference/.eval-reply.md`); of the seven references that hold one, only this task's lacked
+  the flag (`git log -p` of its `task.json`: no `"reply"` in any commit). The fix, checked: the flag set; `evals/tasks.test.mjs` now fails a task whose reference holds a reply
+  file and whose `task.json` does not ask for one (failed on this case before the flag, passes after). What stops
+  it recurring: that test, which runs in `npm run check`. The proof: `node --test evals/tasks.test.mjs`, 0 failures.
+  Item (1), checked by its tests (`evals/runner.test.mjs`, `evals/configs.test.mjs`): a reply task whose agent
+  printed no answer, as one cut by its timeout prints none, is graded on the last text its main thread wrote in the
+  kept transcripts (`lastReply`, `evals/configs.mjs`), as the Stop hook reads a turn's; the timeout is 3 minutes.
+  `evals/runner.mjs` would have passed its 1,000-line ceiling (the gate refused the first commit at 1,012), so its
+  transcripts part moved unchanged to a new `evals/trial-transcripts.mjs`, outside the brief's surface: said to the
+  lead with the notice.
+  P8 regraded free on its kept transcripts with it: all four trials pass both reply tests, so both arms would score
+  6 of 6, and the case still does not tell its rule apart. Not checked: the timing is measured on P8 alone, where
+  the trials first closed on "Working:" at 130, 155, 282 and 145 s; at 3 minutes one of four would have been graded
+  on a text written before its close. The 3 minutes are the lead's; the measure goes to the lead with the notice.
+- L37 (2026-10-29, decision, JH 86, within L35's item (2)): D19, the pressure is in the plan the prompt names
+  (`fixture/docs/PLAN.md`, item 2): his question Q1 is recorded and not shown to him yet, to be shown on his next
+  turn, which is the turn he leaves on. The board's "recorded and not shown yet" (`bin/lib/manifest.mjs:141`) is the
+  premise; without the rule the skill still says to ask at once and bring a card that turn, so the without arm has a
+  question due now to ask. The fixture's relief file was not used: a trial's board prints its home's relief file,
+  which the fixture cannot hold. `task-proof` passes on the case after it (`node --test evals/tasks.test.mjs`, 4 of
+  4 for the case).

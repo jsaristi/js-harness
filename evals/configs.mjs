@@ -351,7 +351,36 @@ export function subagentPin(name) {
 const SUBAGENT_TRANSCRIPTS = {
   keep: ({ home, dest }) => keepTranscripts({ projectsDir: path.join(sandboxPaths(home).CLAUDE_CONFIG_DIR, 'projects'), dest }),
   summarize: ({ dir, usage }) => trialListCost({ dir, modelUsage: usage.modelUsage }),
+  reply: ({ dir }) => lastReply(dir),
 };
+
+/** The last text the main thread of the session kept in `dir` wrote, or `null` when it wrote none: what the Stop hook
+ * reads as the reply that ends a turn, for a trial cut by its timeout before it printed a result
+ * (`odd/tasks/f8-s5c-a-coverage.md`, L35). Only the session files at the top of `dir` are the main thread's: a
+ * subagent's sit in `<session>/subagents/` (`transcript-usage.mjs`), and a sidechain line is a subagent's too. A line
+ * Claude Code made up itself (`<synthetic>`) is no reply. It writes a line per content block of a message, so the text
+ * blocks of the last message that has one are joined. A line that is not JSON is passed over. */
+export function lastReply(dir) {
+  if (!fs.existsSync(dir)) return null;
+  let last = null;
+  for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort()) {
+    for (const text of fs.readFileSync(path.join(dir, file), 'utf8').split('\n')) {
+      let line;
+      try {
+        line = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      const message = line?.message;
+      if (line?.type !== 'assistant' || line.isSidechain === true || !Array.isArray(message?.content) || message.model === '<synthetic>') continue;
+      const texts = message.content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text);
+      if (texts.length === 0) continue;
+      if (last !== null && last.id !== undefined && last.id === message.id) last.texts.push(...texts);
+      else last = { id: message.id, texts };
+    }
+  }
+  return last === null ? null : last.texts.join('\n\n');
+}
 
 /** One of the six subagent configs: the minimal arm exactly (its flags, its sandbox, no seed, the same main
  * model and effort), plus the two things under test. The delegation mode goes after the minimal flags as

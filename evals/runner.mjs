@@ -12,6 +12,7 @@ import {
 import { isWithin } from './paths.mjs';
 import { readClaudeOutput } from './agent-output.mjs';
 import { REPLY_FILE, runTaskScript } from './task-script.mjs';
+import { keepTranscripts, keptReply, transcriptsOf } from './trial-transcripts.mjs';
 
 // What an agent printed is read by the reader its config carries (see `readerOf`); this file knows no CLI's
 // output format, only which reader a config without one gets. These three are Claude Code's, kept under the
@@ -491,66 +492,6 @@ function readerOf(config) {
   return reader;
 }
 
-/** What a config that keeps its agent's session transcripts carries as `transcripts`, or `null` for a config that
- * keeps none, which is every config that does not ask. The transcripts are in the trial home, which is removed when
- * the trial ends, and they hold what the agent's printed result does not (which request a subagent made, on which
- * model); so a config whose measurement needs them says how to keep them and what to record of them:
- *
- *   keep({ home, workspace, prepared, dest })   copies the session's files into `dest`, a directory of the trial's raw
- *                                               logs, and returns `{ files, errors }`: how many it copied, and a line
- *                                               for each it could not.
- *   summarize({ dir, usage })                   what the record holds of the kept copy in `dir`, as its `listCost`:
- *                                               raw logs are not committed, so a report reads the record alone.
- *                                               `usage` is the reading's. `dir` is `null` when no directory holds
- *                                               this trial's own copy (`keepTranscripts`): there is nothing to read.
- *
- * Both may be asynchronous. The runner knows neither where a CLI keeps its transcripts nor what they mean: that is
- * the config's, as the reading of the output is its reader's. A `transcripts` of another shape throws, before
- * anything is made: found after the agent ran, it would have cost a session whose transcripts are gone. */
-function transcriptsOf(config) {
-  const keeper = config.transcripts ?? null;
-  if (keeper !== null && (!isObject(keeper) || typeof keeper.keep !== 'function' || typeof keeper.summarize !== 'function')) {
-    throw new Error(`config ${config.name}: "transcripts" must be an object with a keep and a summarize function, got ${JSON.stringify(keeper)}`);
-  }
-  return keeper;
-}
-
-/** Has `keeper` copy the trial's transcripts into `context.dest` and returns `{ kept, dir }`: `kept`, the
- * `{ files, errors }` of the record, and `dir`, the directory a summary may read as this trial's, `context.dest` or
- * `null`. It never throws: whatever went wrong is logged and is a line of `errors`, because a trial that was paid for
- * is worth more than its transcripts. A failure of the file system is recorded by its code alone (the message holds a
- * path of this machine, and the record is committed); the log has it whole.
- *
- * What an earlier attempt at the same trial kept is removed first, as its raw output is overwritten: a trial that
- * stopped and is run again is another session, and two sessions in one directory would be summed as one. When it
- * cannot be removed (Windows answers EBUSY or EPERM while something holds a file there, and the removal is retried
- * for a second or so first) the directory is still the earlier session's, whole or in part. So nothing is copied
- * into it and `dir` is `null`: the summary then has no transcript to read and says what it can without one, where
- * reading that directory would record another session's cost as this trial's. The transcripts of this attempt are
- * lost with its home, which is the price of never recording a cost that is not the trial's own. */
-async function keepTranscripts(keeper, context, { trial, log }) {
-  const kept = { files: 0, errors: [] };
-  const failed = (detail, recorded = detail) => {
-    log(`could not keep the transcripts of ${trial}: ${detail}`);
-    kept.errors.push(recorded);
-  };
-  try {
-    fs.rmSync(context.dest, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch (err) {
-    failed(`what an earlier attempt kept could not be removed (${err.message})`, `earlier attempt not removed: ${err.code ?? err.message}`);
-    return { kept, dir: null };
-  }
-  try {
-    const result = await keeper.keep(context);
-    if (!isObject(result) || !Number.isInteger(result.files) || !Array.isArray(result.errors)) throw new Error('its keep returned no { files, errors }');
-    kept.files = result.files;
-    for (const error of result.errors) failed(String(error));
-  } catch (err) {
-    failed(err.message, err.code ?? err.message);
-  }
-  return { kept, dir: context.dest };
-}
-
 /** The counts every reading's `usage` carries (`agent-output.mjs`), and whether each is a number: the other two
  * are the agent's own objects, kept as given. */
 const USAGE_KEYS = { inputTokens: true, outputTokens: true, turns: true, usage: false, costUsd: true, modelUsage: false, subagents: true };
@@ -756,9 +697,13 @@ export async function runTrial({
     // trial, and what the agent printed is still there to be read again once the reader is fixed.
     const reading = assertReading(read(run), config.name);
     if (reading.stop) return { status: 'stopped', reason: reading.stop.kind, message: reading.stop.message };
-    // Written over whatever the agent left under that name, so the grader reads this trial's answer and no other;
-    // empty when the agent printed none.
-    if (task.reply) fs.writeFileSync(path.join(workspace, REPLY_FILE), typeof reading.reply === 'string' ? reading.reply : '');
+    // Written over whatever the agent left under that name, so the grader reads this trial's answer and no other.
+    // An agent that printed none, as one cut by its timeout prints none, is graded on the last reply its kept
+    // transcripts hold, as the Stop hook reads a turn's (`transcripts.reply`); empty when there is none either.
+    if (task.reply) {
+      const reply = typeof reading.reply === 'string' ? reading.reply : await keptReply(keeper, transcriptsDir, { trial, log, kept });
+      fs.writeFileSync(path.join(workspace, REPLY_FILE), typeof reply === 'string' ? reply : '');
+    }
 
     const { error: graderError, spawnError: graderSpawnError, aborted: graderAborted, ...scored } = await gradeWorkspace(task, workspace, { timeoutMs: graderTimeoutMs, signal, runProcess: start });
     if (graderAborted) return { status: 'interrupted' };

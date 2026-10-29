@@ -13,6 +13,7 @@ import { LEAD_OPENING_PROMPT } from '../bin/lib/lead-prompt.mjs';
 import { RULES } from '../bin/lib/rules-data.mjs';
 import { PROOFS, digestsOf, recordFaults } from './rule-proof.mjs';
 import { proveTask } from './task-proof.mjs';
+import { REPLY_FILE } from './task-script.mjs';
 
 const tasksDir = fileURLToPath(new URL('./tasks/', import.meta.url));
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -38,6 +39,13 @@ for (const { name } of candidates) {
     assert.ok(fs.existsSync(file), `${name} names ${rules.join(', ')} and has no record at ${PROOFS}/${name}.json: run its proof (evals/rule-proof.mjs)`);
     const record = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.deepEqual(recordFaults(record, { name, rules, digests: digestsOf(root, name, rules) }), []);
+  });
+
+  // The proof grades the reference's own reply file, and a trial's comes from the runner only for a task that asks:
+  // without the flag every trial is graded on no reply and the proof still passes (odd/tasks/f8-s5c-a-coverage.md, L36).
+  test(`task ${name} asks the runner for the agent's reply when its reference holds one`, () => {
+    if (!fs.existsSync(path.join(tasksDir, name, 'reference', REPLY_FILE))) return;
+    assert.equal(JSON.parse(fs.readFileSync(path.join(tasksDir, name, 'task.json'), 'utf8')).reply, true, `${name}/task.json sets "reply": true`);
   });
 }
 
