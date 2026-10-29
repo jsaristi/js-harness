@@ -39,8 +39,11 @@ minutes after a land (JH 84, Decisions, unit 4), and a copy already behind canno
 ## Next step
 Done in code (2026-10-29, JH 88). The chain: `feat/lead-manual-steps` (fd41d373, S6), `-2` (183b473b, S4 S5 S7), `-3`
 (b9fa64fd, S8 and the roadmap line), `-4` (the review fixes to 1a429763 and the summary). Each code commit has a Codex
-record and a complete Claude lens record. Left: the push, one pull request a branch based on the one before, the ready
-notice, the closed notice with the summary.
+record and a complete Claude lens record. Pushed; PRs 678 to 681, stacked to main as PR 642 was. Ready recorded for
+680 and 681; 678 and 679 refused: the land reads each PR merged onto main, and the Codex record of slices 1 to 3 ends
+at b9fa64f, past their heads. 680 and 681 carry their commits, so landing them lands the chain; a record of slices 1
+and 2 alone (about 350,000 to 530,000 Codex tokens, code already reviewed) is the lead's to ask for. Left: the closed
+notice with the summary.
 
 ## Specs
 - S1. The brief (the lead, 2026-10-29 16:03Z): "Read what of "watch and lease, land and copy, archive, openings" is
