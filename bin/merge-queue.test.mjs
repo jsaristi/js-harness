@@ -7,6 +7,7 @@ import test, { after, before } from 'node:test';
 import * as queue from './merge-queue.mjs';
 import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
 import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
+import { checkCodexReviews } from './lib/codex-review-rows.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
@@ -507,6 +508,30 @@ test('--land: a push of main that reports a failure, while origin\'s main is the
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
 });
 
+test('--land: a push of main the pre-push hook refuses says the hook\'s failing rows, not only git\'s line (PR 658, 2026-10-29)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  // Git for Windows hands the hook's standard output to the push's (seen on 2.54): the rows are there, git's line on stderr.
+  const said = [
+    'PASS  tests        ok',
+    'FAIL  codex-review  1 of 2 code commits since origin/main have no Codex review record',
+    '      4b85503 feat(stretch): the return says why',
+    'FAIL  lens-review  1 of 2 code commits since origin/main have no complete Claude lens record',
+    '',
+    'not a row: a sensor\'s output after the block',
+  ].join('\n');
+  const wrap = failingGit((args) => args[0] === 'push' && args.includes('origin') && args.at(-1).endsWith(':refs/heads/main'), () => ({ status: 1, stdout: said, stderr: "error: failed to push some refs to 'origin'\n" }));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.deepEqual(out.at(-1).split('\n'), [
+    "merge-queue: could not push main: error: failed to push some refs to 'origin'. The pre-push hook said:",
+    '  FAIL  codex-review  1 of 2 code commits since origin/main have no Codex review record',
+    '    4b85503 feat(stretch): the return says why',
+    '  FAIL  lens-review  1 of 2 code commits since origin/main have no complete Claude lens record',
+  ], out.join('\n'));
+  assert.ok(!out.some((line) => line.includes('not a row')), out.join('\n'));
+});
+
 test('--land: a bisection whose reset fails stops, tests nothing more and pushes nothing (verifier, 2026-10-14)', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   const seen = [];
@@ -788,9 +813,9 @@ function writeLensRecord(root, { base, head, outcome }) {
   appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run: startLensRun(root, { base, head, subjectHash }), reviewedAt: REVIEWED_AT, outcome, ...said });
 }
 
-/** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, a note. With `codex` on, main's harness.json turns the Codex review on and a record covers
- * main..feat/g, and a lens record whose outcome is `lens` (`writeRecord`). `{ root, origin, main, code, head }`. */
-function makeEvidenceRepo({ codex = true, lens = 'reviewed' } = {}) {
+/** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, a note. With `codex` on, main's harness.json turns the Codex review on and, with
+ * `record` too, a record covers main..feat/g, and a lens record whose outcome is `lens` (`writeRecord`). `{ root, origin, main, code, head }`. */
+function makeEvidenceRepo({ codex = true, lens = 'reviewed', record = true } = {}) {
   const made = makeQueueRepo();
   const { root } = made;
   const commit = (file, text, message) => {
@@ -810,7 +835,7 @@ function makeEvidenceRepo({ codex = true, lens = 'reviewed' } = {}) {
   const head = commit('odd/tasks/g.md', '# G\n- notes\n', 'feat/g evidence');
   git(root, 'push', '--quiet', 'origin', 'feat/g');
   git(root, 'checkout', '--quiet', '--detach', main);
-  if (codex) writeRecord(root, { base: main, head, lens });
+  if (codex && record) writeRecord(root, { base: main, head, lens });
   return { ...made, main, code, head };
 }
 
@@ -831,6 +856,28 @@ test('a code commit its Codex and lens records cover is ready, and the coverage 
     `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}`,
     `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`,
   ]);
+});
+
+test('a record whose head lies past the pull request covers it at its head and not merged: the door refuses it before a candidate, as the push does', async () => {
+  // PR 658 (2026-10-29): feat/g was reviewed as main..D, then reset to its parent C. At C as the tip the record
+  // covers C, since D lies past it; merged into main, the tip the push of main checks, nothing lies past it.
+  const { root, main, code, head } = makeEvidenceRepo({ record: false });
+  git(root, 'checkout', '--quiet', '--detach', head);
+  fs.writeFileSync(path.join(root, 'g2.txt'), 'g2\n', 'utf8');
+  git(root, 'add', 'g2.txt');
+  git(root, 'commit', '--quiet', '-m', 'feat/g more code, reset away');
+  const past = git(root, 'rev-parse', 'HEAD');
+  writeRecord(root, { base: main, head: past });
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'merge', '--quiet', '--no-ff', '--no-verify', '-m', 'Merge pull request #1 from feat/g', head);
+  const pushed = checkCodexReviews(root, git(root, 'rev-parse', 'HEAD'));
+  git(root, 'checkout', '--quiet', '--detach', main);
+  assert.equal(pushed.pass, false, 'the push of main with the pull request merged is refused');
+  assert.deepEqual(pushed.lines?.[0], `${code.slice(0, 7)} feat/g code`);
+  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.equal(exit, 0, out.join('\n'));
+  assert.match(out[0], /^PR 1 is left out: 1 of 1 code commit since origin\/main have no Codex review record/, out.join('\n'));
+  assert.ok(!out.some((line) => line.startsWith('Candidate:')), out.join('\n'));
 });
 
 test('a code commit no complete lens record covers leaves the pull request out (odd/tasks/f8-s1-reviews.md, T5)', async () => {
