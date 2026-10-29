@@ -17,11 +17,13 @@ import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { appendPage, pagesFile } from './lib/pages-record.mjs';
+import { parseRoadmap } from './lib/progress.mjs';
 import { gitRead, headBefore, momentAt, pullRequestsOf, readRef } from './lib/report-git.mjs';
-import { compareMaps, comparePlans } from './lib/report-pages.mjs';
+import { compareMaps, comparePlans, planOf } from './lib/report-pages.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, scaled, sessionTrail, stretchLost } from './lib/stretch.mjs';
+import { forecastNow, forecastOf, resolveClose } from './lib/stretch-forecast.mjs';
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { renderDeparture, renderReturn } from './lib/stretch-render.mjs';
@@ -41,6 +43,7 @@ const GOAL_TIMEOUT_MINUTES = ruleValue('contract-run-timeout', 'minutes');
 export const USAGE = [
   'Usage: js-harness stretch open --plan <file> [--json] [--html <file>]',
   '       js-harness stretch bind <item> <session>',
+  '       js-harness stretch closes <item> <phase or plan> <step>',
   '       js-harness stretch status [--goals] [--json] [--html <file>]',
   '       js-harness stretch close [--json] [--html <file>]',
   '       js-harness stretch explain <goal, item or failure:<time>> --source <commit:hash|notice:at> [--why <text>]',
@@ -50,15 +53,21 @@ export const USAGE = [
   '  A stretch is the work run while the user is away, or any stretch the lead plans. Its record is',
   '    <home>/.js-harness/throughput/<project>/stretches.jsonl, one line an event, which uninstall keeps.',
   '  open: reads the plan, a JSON object { hours, slots, goals: [{ id, text, command }], items: [{ id, title, kind,',
-  '    hours: [low, high], session?, waitsFor? }], waits?: [text] }. A goal is met when its command exits 0. An item is',
-  '    one session\'s work: kind is design, build, verify or docs; hours the work left now; session its label (JH 71)',
-  '    once it has one; waitsFor what of the user it cannot start without, which keeps it out of the lanes. It prints',
-  '    the departure: each estimate as written and as the last closed stretches correct it, the items in slots lanes,',
-  '    and whether they fill the hours. Exit 1 while another stretch is open (close it first), 2 for a plan it refuses.',
+  '    hours: [low, high], session?, waitsFor?, closes?: [{ in, step }] }], waits?: [text] }. A goal is met when its',
+  '    command exits 0. An item is one session\'s work: kind is design, build, verify or docs; hours the work left now;',
+  '    session its label (JH 71) once it has one; waitsFor what of the user it cannot start without, which keeps it out',
+  '    of the lanes; closes the rows of the roadmap it closes, each a phase of its checklist and the start of one open',
+  '    step\'s text, or a plan section (F8 plan) and a step id not done (S13). It prints the departure: each estimate as',
+  '    written and as the last closed stretches correct it, the items in slots lanes, whether they fill the hours, and',
+  '    the forecast: the map\'s share now and at the return if the items close, by the middle of their estimates, with',
+  '    the range of their two ends. Exit 1 while another stretch is open (close it first), 2 for a plan it refuses.',
   '    The titles and goal texts reach the pages as written, never translated: the lead writes them in the user\'s',
   '    language.',
   '  bind: names the session a queued item got once it started. Exit 1 with no stretch open, an unknown item, or a',
   '    session another item holds.',
+  '  closes: names one more row an item of the open stretch closes, as an item\'s closes does, checked against the map',
+  '    at its opening; the forecast of status and close reads it. Exit 1 with no stretch open, an unknown item, or a row',
+  '    the map at the opening does not hold open.',
   '  status: the open stretch measured now from the records: each item from its session\'s first record (or the',
   '    opening) to its first closed notice, its removal, its last record once silent past the rule session-stall, or',
   '    now; its lost time the failed gates of its session inside that span. --goals also runs each goal, one at a',
@@ -81,18 +90,20 @@ export const USAGE = [
 
 class StretchArgError extends Error {}
 
-const VERBS = new Set(['open', 'bind', 'status', 'close', 'explain', 'show']);
+const VERBS = new Set(['open', 'bind', 'closes', 'status', 'close', 'explain', 'show']);
 const VALUED = { '--plan': 'plan', '--html': 'html', '--cwd': 'cwd', '--home': 'home', '--source': 'source', '--why': 'why', '--fix': 'fix', '--open': 'open', '--stretch': 'stretch' };
 const ALLOWED = {
   open: ['plan', 'json', 'html'],
   bind: [],
+  closes: [],
   status: ['goals', 'json', 'html'],
   close: ['json', 'html'],
   explain: ['source', 'why', 'fix', 'fixed', 'open', 'stretch'],
   show: ['stretch', 'json', 'html'],
 };
-// How many positional arguments each verb takes: bind an item and a session, explain its target.
-const POSITIONAL = { bind: 2, explain: 1 };
+// How many positional arguments each verb takes: bind an item and a session, closes an item and its row, explain its
+// target.
+const POSITIONAL = { bind: 2, closes: 3, explain: 1 };
 
 /** An explanation's `--source`: `commit:<hash>` or `notice:<at>`, as `{ kind, ref }`. */
 function sourceArg(value) {
@@ -130,6 +141,7 @@ function parseArgs(argv) {
   }
   if (verb === 'open' && flags.plan === undefined) throw new StretchArgError('open requires --plan <file>');
   if (verb === 'bind' && positional.length !== 2) throw new StretchArgError('bind takes an item and a session: bind W3 "JH 74"');
+  if (verb === 'closes' && positional.length !== 3) throw new StretchArgError('closes takes an item, a phase or a plan, and a step: closes W3 "Review and release" "The lead\'s manual steps"');
   if (verb === 'explain') {
     if (positional.length !== 1) throw new StretchArgError('explain takes a goal, an item or failure:<time>: explain G2 --source commit:<hash> --why <text>');
     if (flags.source === undefined) throw new StretchArgError('explain requires --source commit:<hash> or notice:<at>: an explanation is a record\'s');
@@ -187,7 +199,16 @@ function stretchOf(events, open) {
   const mine = events.filter((event) => event.id === open.id);
   const checks = mine.filter((event) => event.event === 'check');
   const close = mine.find((event) => event.event === 'close') ?? null;
-  return { open, binds: mine.filter((event) => event.event === 'bind'), check: checks.at(-1) ?? null, checks, events: mine, close, ...(close ? { closedAt: Date.parse(close.at) } : {}) };
+  return {
+    open,
+    binds: mine.filter((event) => event.event === 'bind'),
+    closes: mine.filter((event) => event.event === 'closes'),
+    check: checks.at(-1) ?? null,
+    checks,
+    events: mine,
+    close,
+    ...(close ? { closedAt: Date.parse(close.at) } : {}),
+  };
 }
 
 /** The stretch an `explain` or a `show` names: the one `id` opened, else the open one when `open` allows it, else the
@@ -207,13 +228,46 @@ function namedStretch(events, id, { open: openAllowed }) {
 /** The items of every closed stretch, oldest first: what the corrections learn from. */
 const historyOf = (events) => events.filter((event) => event.event === 'close').flatMap((event) => event.items ?? []);
 
-/** The items of the open stretch with each bind applied and its corrected estimate. */
-function itemsOf({ open, binds }) {
+/** The items of the open stretch with each bind applied, the rows each `closes` event added to its own, and its
+ * corrected estimate. */
+function itemsOf({ open, binds, closes = [] }) {
   return open.plan.items.map((item) => {
     const bound = binds.findLast((bind) => bind.item === item.id);
+    const added = closes.filter((one) => one.item === item.id).map((one) => ({ in: one.in, step: one.step }));
     const correction = open.corrections[item.kind];
-    return { ...item, session: bound?.session ?? item.session, correction, corrected: scaled(item.hours, correction.factor) };
+    return { ...item, ...(added.length ? { closes: [...(item.closes ?? []), ...added] } : {}), session: bound?.session ?? item.session, correction, corrected: scaled(item.hours, correction.factor) };
   });
+}
+
+/** The roadmap at `commit` as the forecast reads it: the checklist's phases with their steps, counted as `progress`
+ * counts them (`parseRoadmap`), and the plan sections (`planOf`); `{ unavailable }` with why when git cannot show it. */
+function roadmapAt(ctx, commit) {
+  const shown = gitRead(ctx.run, ctx.root, ['show', `${commit}:docs/ROADMAP.md`]);
+  if (shown.error) return { unavailable: shown.error };
+  const { phases, done, total } = parseRoadmap(shown.stdout);
+  return { phases, done, total, plans: planOf(shown.stdout) };
+}
+
+/** The roadmap at the opening of `stretch`: at the commit its `open` recorded, else the default branch's at its time. */
+function openingRoadmap(ctx, stretch) {
+  if (stretch.open.head) return roadmapAt(ctx, stretch.open.head);
+  const named = readRef(ctx.run, ctx.root);
+  if (named.error) return { unavailable: named.error };
+  const opening = headBefore(ctx.run, ctx.root, named.ref, Date.parse(stretch.open.at));
+  if (opening.error) return { unavailable: opening.error };
+  return opening.commit ? roadmapAt(ctx, opening.commit) : { unavailable: 'the default branch had no commit at the opening' };
+}
+
+/** The forecast of `stretch` from the roadmap at its opening, as its departure made it, with `now`, the stretch
+ * measured against it at the commit `head.now`; `{ unavailable }` when the roadmap at the opening cannot be read. */
+function forecastMoment(ctx, stretch, head, unavailable) {
+  if (head.open === null) return { unavailable: unavailable.opening ?? unavailable.git ?? 'the default branch had no commit at the opening' };
+  const opening = roadmapAt(ctx, head.open);
+  if (opening.unavailable) return { unavailable: opening.unavailable };
+  const items = itemsOf(stretch);
+  const forecast = forecastOf({ items, lanes: laneOut(items, stretch.open.plan).lanes, hours: stretch.open.plan.hours, roadmap: opening });
+  const current = head.now === null ? { unavailable: unavailable.map ?? 'the default branch has no commit now' } : roadmapAt(ctx, head.now);
+  return { ...forecast, now: current.unavailable ? { unavailable: current.unavailable } : forecastNow(forecast, current) };
 }
 
 /** The records a measure reads, each `{ unavailable }` with why when it cannot be read. */
@@ -342,10 +396,26 @@ async function emit(ctx, flags, view, render, lines, page) {
 
 const range = ([low, high]) => (low === high ? `${low} h` : `${low}-${high} h`);
 
+// A share as `progress` prints it: a whole percent, or a dash over nothing.
+const percent = (done, total) => (total === 0 ? '—' : `${Math.round((done / total) * 100)}%`);
+
+/** The forecast in one line: the map's share at the opening, at the return by the middle and its range, and, once
+ * measured, the share now and the named rows done. */
+function forecastLines(forecast) {
+  if (!forecast) return [];
+  if (forecast.unavailable) return [`forecast: the map could not be read (${forecast.unavailable})`];
+  const { total, now } = forecast;
+  const lines = [`map ${percent(total.done, total.total)} at the opening; at the return ~${percent(total.forecast, total.total)} (${percent(total.low, total.total)} to ${percent(total.high, total.total)}); ${forecast.named} items name what they close`];
+  if (now?.unavailable) lines.push(`  the map now could not be read (${now.unavailable})`);
+  else if (now) lines.push(`  now ${percent(now.total.done, now.total.total)}; ${now.forecastDone.done} of ${now.forecastDone.of} forecast rows done; the map gained ${now.gained} rows`);
+  return lines;
+}
+
 function departureLines(view) {
   return [
     `stretch ${view.id}: ${view.hours} h, back at ${view.returnAt}`,
     `queued ${range(view.queued)} in ${view.lanes.length} lanes; ${view.fills ? 'it fills the stretch' : `${view.idle.hours} session-hours idle from hour ${view.idle.from}`}`,
+    ...forecastLines(view.forecast),
     ...view.items.map((item) => `  ${item.id} ${item.title} (${item.kind}${item.session ? `, ${item.session}` : ''}): ${range(item.hours)}, corrected ${range(item.corrected)}${item.waitsFor ? `, waits for ${item.waitsFor}` : ''}`),
     ...view.goals.list.map((goal) => `  goal ${goal.id} ${goal.text}: ${goal.command}`),
   ];
@@ -370,6 +440,7 @@ function momentLines(moments) {
   return [
     `goals met ${shareLine(goals.met)}; in time ${shareLine(goals.inTime)}; work done ${shareLine(work)}; ${outside.sessions.length} sessions outside the plan`,
     map ? `map ${map.total.before ? `${map.total.before.done}/${map.total.before.total}` : 'no before'} -> ${map.total.after.done}/${map.total.after.total}${moments.head.reconstructed ? ' (the opening commit reconstructed)' : ''}` : 'map not read',
+    ...forecastLines(moments.forecast),
     `timeline: ${moments.timeline.length} events`,
     ...Object.entries(moments.unavailable).map(([name, why]) => `  ${name} could not be read: ${why}`),
   ];
@@ -391,10 +462,22 @@ async function openCommand(ctx, flags, events) {
   const at = new Date(ctx.now()).toISOString();
   // The default branch's commit at the opening, so the return compares the map with what existed then.
   const named = readRef(ctx.run, ctx.root);
-  const head = named.error ? null : headBefore(ctx.run, ctx.root, named.ref, ctx.now()).commit ?? null;
+  const opening = named.error ? { error: named.error } : headBefore(ctx.run, ctx.root, named.ref, ctx.now());
+  const head = opening.commit ?? null;
+  // Each row an item closes is one the map at the opening holds open; a map git cannot read is said in the forecast.
+  const roadmap = head === null ? { unavailable: opening.error ?? 'the default branch has no commit at the opening' } : roadmapAt(ctx, head);
+  if (!roadmap.unavailable) {
+    for (const item of read.plan.items) {
+      for (const entry of item.closes ?? []) {
+        const resolved = resolveClose(entry, roadmap);
+        if (resolved.error) throw new StretchArgError(`the plan is refused: item ${item.id} closes ${entry.in} / ${entry.step}: ${resolved.error}`);
+      }
+    }
+  }
   const open = { event: 'open', id: at, at, head, plan: read.plan, corrections: corrections(historyOf(events)) };
   appendEvent(ctx.file, ctx.fileSystem, open);
   const items = itemsOf({ open, binds: [] });
+  const lanes = laneOut(items, read.plan);
   const view = {
     id: open.id,
     openedAt: at,
@@ -402,10 +485,11 @@ async function openCommand(ctx, flags, events) {
     hours: read.plan.hours,
     slots: read.plan.slots,
     items,
-    ...laneOut(items, read.plan),
+    ...lanes,
     goals: goalsOf({ open, check: null }),
     waits: read.plan.waits,
     map: head === null ? null : momentAt(ctx.run, ctx.root, head).map ?? null,
+    forecast: roadmap.unavailable ? { unavailable: roadmap.unavailable } : forecastOf({ items, lanes: lanes.lanes, hours: read.plan.hours, roadmap }),
   };
   await emit(ctx, flags, view, renderDeparture, departureLines, { template: 'stretch-departure', head });
   return 0;
@@ -429,6 +513,39 @@ function bindCommand(ctx, [item, session], events) {
   }
   appendEvent(ctx.file, ctx.fileSystem, { event: 'bind', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), item, session });
   ctx.out(`item ${item} is session ${session}`);
+  return 0;
+}
+
+/** Records one more row `item` of the open stretch closes, `where` a phase or a plan and `step` the start of one open
+ * step's text or a plan step's id, once the map at the opening holds it open. The same row named again is said and not
+ * recorded twice. */
+function closesCommand(ctx, [item, where, step], events) {
+  const stretch = openStretch(events);
+  if (!stretch) {
+    ctx.err('js-harness stretch: no stretch is open');
+    return 1;
+  }
+  const found = itemsOf(stretch).find((one) => one.id === item);
+  if (!found) {
+    ctx.err(`js-harness stretch: the open stretch has no item ${item}`);
+    return 1;
+  }
+  if ((found.closes ?? []).some((one) => one.in === where && one.step === step)) {
+    ctx.out(`item ${item} already closes ${where} / ${step}`);
+    return 0;
+  }
+  const roadmap = openingRoadmap(ctx, stretch);
+  if (roadmap.unavailable) {
+    ctx.err(`js-harness stretch: the map at the opening cannot be read (${roadmap.unavailable}), so no row can be checked`);
+    return 1;
+  }
+  const resolved = resolveClose({ in: where, step }, roadmap);
+  if (resolved.error) {
+    ctx.err(`js-harness stretch: ${resolved.error}`);
+    return 1;
+  }
+  appendEvent(ctx.file, ctx.fileSystem, { event: 'closes', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), item, in: where, step });
+  ctx.out(`item ${item} closes ${where}: ${resolved.row.text}`);
   return 0;
 }
 
@@ -533,8 +650,12 @@ function momentsOf(ctx, stretch, view, now, { closed }) {
   let map = null;
   let plans = [];
   let prs = [];
+  let forecast;
   const named = readRef(ctx.run, ctx.root);
-  if (named.error) unavailable.git = named.error;
+  if (named.error) {
+    unavailable.git = named.error;
+    forecast = { unavailable: named.error };
+  }
   else {
     const opening = stretch.open.head ? { commit: stretch.open.head } : headBefore(ctx.run, ctx.root, named.ref, openedAt);
     const current = headBefore(ctx.run, ctx.root, named.ref, now);
@@ -553,6 +674,7 @@ function momentsOf(ctx, stretch, view, now, { closed }) {
       map = compareMaps(usable?.map ?? null, after.map);
       plans = comparePlans(usable?.plans ?? null, after.plans, { before: usable?.tasks ?? {}, after: after.tasks });
     }
+    forecast = forecastMoment(ctx, stretch, head, unavailable);
     const listed = pullRequestsOf(ctx.run, ctx.root, named.ref, { from: openedAt, to: now });
     if (listed.error) unavailable.merges = listed.error;
     else prs = listed;
@@ -569,6 +691,7 @@ function momentsOf(ctx, stretch, view, now, { closed }) {
     outside: outsidePlan(channel.notices, view.items, { from: openedAt, to: now }),
     map,
     plans,
+    forecast,
     timeline: timelineOf({ from: openedAt, to: now, prs, notices: channel.notices, failures, events: stretch.events }),
     why: problemsOf({ ...view, state: closed ? 'closed' : 'open' }, { notices: channel.notices, explains: stretch.events.filter((event) => event.event === 'explain') }),
     unavailable,
@@ -667,6 +790,7 @@ export async function stretchMain(
   try {
     if (parsed.verb === 'open') return await openCommand(ctx, parsed.flags, events);
     if (parsed.verb === 'bind') return bindCommand(ctx, parsed.positional, events);
+    if (parsed.verb === 'closes') return closesCommand(ctx, parsed.positional, events);
     if (parsed.verb === 'explain') return explainCommand(ctx, parsed.flags, parsed.positional, events);
     if (parsed.verb === 'show') return await showCommand(ctx, parsed.flags, events);
     return await statusCommand(ctx, parsed.flags, events, parsed.verb === 'close');

@@ -460,6 +460,8 @@ not the committed range, wrote no record and had to be run again.
   on a run that recorded nothing, and the review ran again
 - Seen: 2026-10-28 — `odd/tasks/f8-s5c-a-coverage.md` L6 (JH 73) — a test file written to fix a lens finding
   during the Codex review of `947ac91..62f4a62`; 353,663 input tokens spent on two parts of 8, nothing recorded
+- Seen: 2026-10-29 — `odd/tasks/stretch-forecast.md` L5 (JH 89) — `docs/FAILURES.md` edited for T6 during the
+  Codex review of `b60053a..5aed8af`; 181,101 input tokens spent on part 1 of 2, nothing recorded, run again
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -1412,6 +1414,15 @@ an untracked path makes the review assessment answer "unassessable".
   PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
 - Control: check — bin/check.test.mjs — "checkSensor on Windows points the module analysis cache of
   PowerShell into the throwaway home" — since 2026-10-12
+
+### stretch-not-opened
+He left with no stretch opened, though `rule:away-autonomy` asks for the departure, with its goals, in
+the reply before he leaves; so the return had no goals to check and no forecast to measure against.
+- Class: rule-not-acting
+- Seen: 2026-10-29 — the lead's note to JH 89 at 16:33Z (claimed; the lead's own) — he was away about
+  an hour with no stretch open; the stretch record holds none between the close at 08:11:36Z and the
+  open at 16:07:51Z (`stretches.jsonl` under the throughput folder, read by JH 89)
+- Control: owed — odd/tasks/stretch-forecast.md — "T5 (kind: docs) `rule:away-autonomy`"
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
