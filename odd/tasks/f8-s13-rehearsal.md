@@ -75,7 +75,23 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 Not run yet.
 
 ## Next step
-T2, then T3, then T8 (D1 answered (a), L4), then T4.
+State at the context pause (2026-10-29, branch `f8-s13-rehearsal`, worktree
+`D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD `6e5cd3e8`, nothing pushed, no PR): T1, T2, T3 and T8 built
+(`ef23c03e`, `d1cea611`, `57584e5d`, `604253a6`, `2c4e534e`). Reviews: lenses on `f2110239..57584e5d` (risk,
+reliability, readability) and `57584e5d..2c4e534e` (reliability, readability, resilience), 0 findings each; Codex on
+`541464c..6e5cd3e`, four P2 to fix next, each test first: (1) `importsAgents` must match a fence's character and
+length; (2) `importHealth` must treat a root CLAUDE.md that `claudeMdExcludes` drops as not loaded (reuse
+`excludingGlob`/`claudeMdSource` of `bin/lib/payload.mjs`); (3) `rehearsalEnv` must drop git's repository variables
+as `childEnv` of `scripts/practice-lib.mjs` does; (4) `snapshotTree` must record folders, so a recorded folder left
+after uninstall fails `restoreProblems`. Also `rehearsalEnv` must stop setting `CLAUDE_CONFIG_DIR` (Claude then keeps
+`.claude.json` inside it, where stack does not read it back). Then T4: the walk is drafted in
+`C:\Users\Oficina\.claude\jobs\bb7fa0ca\tmp\walk-part.mjs`, to append to `scripts/rehearsal.mjs` (its imports:
+practice-lib `readHostStream`, `hostCost`, `redacted`, `realHomeFiles`, `compareSnapshots`, `walkJourney`;
+stack-scratch `realFilesOf`, `claudeJsonMcpPart`, `registrationsLeftIn`, `shimContent`; evals `SANDBOX_SWITCHES`,
+`allocatePort`, `killByPort`; the free test's `HIS_SETTINGS`/`HIS_CLAUDE_MD` move into it). Then T5, one walk
+(`node scripts/rehearsal.mjs`), estimate $5, stop past $7.50; T6; reviews of the fixes and the walk; gentle-ai lines;
+the verifier; chained PRs (slice 1 `f2110239..57584e5d`, slice 2 to the fixes, slice 3 the walk); ready notice;
+summary.
 
 ## Log
 - L1 (2026-10-29, the lead's brief `briefs/2026-10-29T19-21-42-028Z-0339f9b7.md`): "JH 90 · F8 S13: the rehearsal
