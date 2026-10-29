@@ -443,4 +443,20 @@ carrying #644, landed (main 96b917a).
   main's code in it (4 parts, 497,298 input tokens) and left 4 findings on JH 80's template code, which pre-push
   refused as owed. That merge was rebuilt, unpushed, as 78bfe423 after a record of daa51f84 alone. A branch commit
   gets its record before main is merged over it.
-- Then slice C (T6, T7, T10 as L17 says), slice D (T8), T9.
+- gentle-ai: 598174f0..a0d1e5d1 approved (medium, lineage review-720626bd7150e47c); findings fixed after it.
+- gentle-ai: 3279ea8e approved (medium, lineage review-57a8e9c4cb257169); its warning fixed in the commit after it.
+- d800cb96: Codex correct (0.95); the reliability lens found nothing. gentle-ai: not reviewed (`operation_timeout`
+  on the status twice, ~05:40Z).
+- C2, d800cb96..14907efb (the status page): Codex incorrect (0.96, two P2: an unconfirmed answer said as an answer,
+  and no notes said as nothing waits), fixed in fd734292, Codex's recheck 2 of 2 fixed; the reliability and
+  resilience lenses found nothing on C2, reliability nothing on the fix.
+- gentle-ai: d800cb96..fd734292 approved (medium, lineage review-00598536ad2a9722), the status page with the fix of
+  Codex's two findings: one warning, a relative --notes read from the process folder while --html is written under
+  --cwd, fixed in 6fc7f8ae; one suggestion, the map-before and unwritable-page paths of report.mjs untested, not taken
+  (the map before is the phase page's tested `readMap`; the guarded write is the phase page's shape).
+- gentle-ai: 6fc7f8ae approved (medium, lineage review-c5e4c7139595b966), no findings; Codex correct (0.98); the
+  reliability lens found nothing.
+- State at ~06:40Z: #647 (slice B) landed (06:29Z). Slice C goes as two chained pull requests: C1, #651
+  (`feat/visual-pages-c1`: d800cb96 with main merged in, 498 lines, the phase page and the rendered-record seam), and
+  C2 (`feat/visual-pages-c`: the status page and its fixes, stacked on C1). Then C3: `report feature` and T7's init
+  line (names `report feature`, so it lands with it). Then slice D (T8), T9. T10's departure map/timeline still open.

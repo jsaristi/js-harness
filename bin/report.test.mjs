@@ -196,3 +196,56 @@ test('an unknown argument, a --since that is no time and a --since with no value
     assert.ok(err.join('\n').includes(USAGE), argv.join(' '));
   }
 });
+
+// odd/tasks/visual-pages.md, "The status report": --html writes the six sections as a page, with the map at the head
+// the last --mark read as its before, the lead's notes labelled his, and the page put in the rendered record.
+test('--html writes the status page with the map since the last mark and the notes, and records it as rendered', withProject(async (project) => {
+  await report(['--mark'], project);
+  fs.writeFileSync(path.join(project.repo, 'docs', 'ROADMAP.md'), '# Roadmap\n\n## Checklist\n\n### One\n- [x] a\n- [x] b still open\n\n### Two\n- [x] c\n');
+  git(project.repo, ['commit', '-q', '-am', 'docs: b is done'], '2026-10-20T13:00:00Z');
+  const notes = path.join(project.home, 'notes.json');
+  fs.mkdirSync(project.home, { recursive: true });
+  fs.writeFileSync(notes, JSON.stringify({ decisions: [{ text: 'Cerrar One', changed: 'nada queda' }] }));
+  const html = path.join(project.home, 'out', 'status.html');
+  const calls = [];
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: (file, entry) => { calls.push(entry); return { sha256: 'e'.repeat(64), bytes: 1 }; } });
+  const out = [];
+  const err = [];
+  const later = Date.parse('2026-10-20T14:00:00Z');
+  const code = await reportMain(['--html', html, '--notes', notes, '--cwd', project.repo, '--home', project.home], { stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => later, env: {}, recordLoad });
+  assert.equal(code, 0, err.join('\n'));
+  const page = fs.readFileSync(html, 'utf8');
+  assert.match(page, /^<title>Cómo vamos<\/title>/);
+  assert.match(page, /One[\s\S]*1\/2[\s\S]*2\/2 · 100 %[\s\S]*cerrada/);
+  assert.match(page, /Cerrar One[\s\S]*nada queda[\s\S]*del orquestador/);
+  assert.match(page, /6\. Lo que propongo/);
+  const head = git(project.repo, ['rev-parse', 'main']).trim();
+  assert.deepEqual(calls, [{ template: 'status-report', subject: 'status', path: html, at: '2026-10-20T14:00:00.000Z', head }]);
+  assert.match(out.join('\n'), /in the rendered record/);
+}));
+
+// Review 00598536's warning on C2: a relative --notes is read where a relative --html is written, under --cwd, as stretch's
+// --html is; run from elsewhere, the notes are not read from one folder and the page written in another.
+test('a relative --notes and --html both resolve under --cwd, wherever the command runs from', withProject(async (project) => {
+  fs.mkdirSync(project.home, { recursive: true });
+  fs.writeFileSync(path.join(project.repo, 'notes.json'), JSON.stringify({ proposals: [{ step: 'Tramo C', why: 'faltan páginas' }] }));
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const err = [];
+  const code = await reportMain(['--html', path.join('out', 'status.html'), '--notes', 'notes.json', '--cwd', project.repo, '--home', project.home], { cwd: project.home, stdout: () => {}, stderr: (line) => err.push(line), env: {}, recordLoad });
+  assert.equal(code, 0, err.join('\n'));
+  assert.match(fs.readFileSync(path.join(project.repo, 'out', 'status.html'), 'utf8'), /Tramo C[\s\S]*faltan páginas/);
+}));
+
+test('--notes that do not parse are refused before anything is written, and --notes needs --html', withProject(async (project) => {
+  const notes = path.join(project.home, 'notes.json');
+  fs.mkdirSync(project.home, { recursive: true });
+  fs.writeFileSync(notes, '{"badNews":"one"}');
+  const html = path.join(project.home, 'status.html');
+  const bad = await report(['--html', html, '--notes', notes], project);
+  assert.equal(bad.code, 2);
+  assert.match(bad.err, /--notes .*notes\.json: badNews is a list of texts/);
+  assert.equal(fs.existsSync(html), false);
+  const alone = await report(['--notes', notes], project);
+  assert.equal(alone.code, 2);
+  assert.match(alone.err, /--notes goes with --html/);
+}));

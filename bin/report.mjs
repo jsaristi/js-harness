@@ -3,8 +3,10 @@
 // reads the merges of the default branch's first-parent line, the project's channel record (the notices, the
 // questions and the times reports were given) and the roadmap as the default branch holds it, and prints them
 // in four sections. Read-only but for `--mark`, which appends one report line to the channel record, so that
-// "since the last report" is a time read from a file and not a guess. Zero dependencies.
+// "since the last report" is a time read from a file and not a guess, and `--html`, which writes the same facts as the
+// six sections of a status page (odd/tasks/visual-pages.md) with the lead's `--notes`. Zero dependencies.
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import { homedir as osHomedir } from 'node:os';
 import path from 'node:path';
 import { appendReport as appendReportLine, newReport, readNotices } from './lib/channel.mjs';
@@ -12,10 +14,12 @@ import { PACE_REF_ARGS, paceRef } from './lib/progress-pace.mjs';
 import { REPORT_WINDOW_HOURS, cutOf, landedOf, mapOf, mergeCommitsArgs, mergeLogArgs, parseMergeLog, questionsOf, reportLines, sessionsOf, stamp } from './lib/report.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { recordPageRendered } from './lib/pages-rendered.mjs';
+import { notesOf, renderStatus } from './lib/report-status.mjs';
 import { PHASE_USAGE, reportPhaseMain } from './report-phase.mjs';
 
 export const USAGE = [
-  'Usage: js-harness report [--since <time>] [--mark] [--cwd <path>] [--home <path>]',
+  'Usage: js-harness report [--since <time>] [--mark] [--html <file> [--notes <file>]] [--cwd <path>] [--home <path>]',
   '  Prints what a status report is written from, since a cut: the pull requests merged into the default branch',
   "  (origin/HEAD, else main, else HEAD) with their commits, each session's last notice, the questions answered",
   '  and still open, and the roadmap phase by phase with what is left.',
@@ -23,6 +27,11 @@ export const USAGE = [
   '  --mark  record this report as the last one, with the commit of the default branch it read, in the channel record',
   '          under the home; the next report lists what that branch gained since that commit. Nothing else is written,',
   '          and nothing at all when a section could not be read.',
+  '  --html <file>   also write the status report as a page in Spanish, its six sections: what landed, the sessions,',
+  '                  his decisions, the map (against the map at the head the last --mark read), what waits and what',
+  '                  the lead proposes; the page goes into the rendered record of the templates, to show it unchanged',
+  '  --notes <file>  the lead\'s notes for what no record holds, JSON: { badNews: [text], decisions: [{ text, changed }],',
+  '                  waits: [{ what, why }], proposals: [{ step, why }] }, each shown as the lead\'s',
   '',
   PHASE_USAGE,
 ].join('\n');
@@ -39,7 +48,7 @@ function parseArgs(argv) {
       parsed.mark = true;
       continue;
     }
-    const key = { '--since': 'since', '--cwd': 'cwd', '--home': 'home' }[token];
+    const key = { '--since': 'since', '--html': 'html', '--notes': 'notes', '--cwd': 'cwd', '--home': 'home' }[token];
     if (key === undefined) throw new ReportArgError(`unknown argument: ${token}`);
     const value = argv[i + 1];
     if (value === undefined || value.startsWith('--') || value === '') throw new ReportArgError(`${token} requires a value`);
@@ -49,6 +58,7 @@ function parseArgs(argv) {
   if (parsed.since !== undefined && !(/^\d{4}-\d{2}-\d{2}/.test(parsed.since) && Number.isFinite(Date.parse(parsed.since)))) {
     throw new ReportArgError(`--since takes an ISO 8601 time, such as 2026-10-20T08:00:00Z, not ${parsed.since}`);
   }
+  if (parsed.notes !== undefined && parsed.html === undefined) throw new ReportArgError('--notes goes with --html: the notes are sections of the page');
   return parsed;
 }
 
@@ -91,7 +101,7 @@ function readMap(run, cwd, ref) {
 export async function reportMain(argv, options = {}) {
   // A moment's page is its own command, with its own options.
   if (argv[0] === 'phase') return reportPhaseMain(argv.slice(1), options);
-  const { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir, appendReport = appendReportLine } = options;
+  const { cwd: defaultCwd = process.cwd(), stdout = console.log, stderr = console.error, now = () => Date.now(), env = process.env, run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), homedir = osHomedir, appendReport = appendReportLine, fileSystem = fs, recordLoad } = options;
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -100,10 +110,22 @@ export async function reportMain(argv, options = {}) {
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
+  // A relative --notes is read under --cwd, where a relative --html is written, as stretch's --html is.
+  const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
+  // The notes are read whole before anything is read or written: a page with half the lead's notes would pass for whole.
+  let notes = null;
+  if (parsed.notes !== undefined) {
+    const file = path.resolve(cwd, parsed.notes);
+    try {
+      notes = notesOf(fileSystem.readFileSync(file, 'utf8'));
+    } catch (err) {
+      stderr(`js-harness report: --notes ${file}: ${err.code ?? err.message}`);
+      return 2;
+    }
+  }
 
   // The project is the main checkout, from any worktree, as for `notify` and the board: its record is one per
   // project. The harness home is --home, else JS_HARNESS_HOME, else the user's home.
-  const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
   const slug = projectSlug(mainCheckout(run, cwd));
   const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const at = now();
@@ -123,6 +145,24 @@ export async function reportMain(argv, options = {}) {
 
   for (const line of reportLines({ cut, branch: name, landed, sessions, questions, map })) stdout(line);
   const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined);
+  if (parsed.html !== undefined) {
+    // The map before is the one at the commit the last recorded report read; a section that could not be read is said
+    // on the page as it is in the lines above.
+    const was = cut.head === null ? null : readMap(run, cwd, cut.head);
+    const before = was === null ? null : was.error ? { unavailable: `${cut.head.slice(0, 8)}: ${was.error}` } : was.absent ? { unavailable: `${cut.head.slice(0, 8)} holds no docs/ROADMAP.md` } : { map: was };
+    const file = path.resolve(cwd, parsed.html);
+    try {
+      fileSystem.mkdirSync(path.dirname(file), { recursive: true });
+      fileSystem.writeFileSync(file, renderStatus({ cut, branch: name, landed, sessions, questions, map, before, notes }), 'utf8');
+    } catch (err) {
+      stderr(`js-harness report: the page ${file} could not be written: ${err.code ?? err.message}`);
+      return 1;
+    }
+    const head = seen?.stdout?.trim() || null;
+    const rendered = await recordPageRendered({ home, slug, template: 'status-report', subject: 'status', path: file, at: new Date(at).toISOString(), head }, recordLoad ? { load: recordLoad } : {});
+    stdout('');
+    stdout(rendered.recorded ? `Wrote ${file}, in the rendered record ${rendered.file} (sha256 ${rendered.recorded.sha256.slice(0, 12)}): show or publish it unchanged.` : `Wrote ${file}; it is not in the rendered record: ${rendered.unavailable}.`);
+  }
   if (!parsed.mark) return failed ? 1 : 0;
 
   // A report a section of which could not be read is not recorded: the next one would start after facts this one
