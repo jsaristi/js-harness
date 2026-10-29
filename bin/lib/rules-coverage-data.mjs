@@ -258,8 +258,9 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "status-report": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "protocol",
+      "path": "bin/lib/manifest.mjs",
+      "phrase": "6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."
     },
     "subagent-effort": {
       "level": "owed",
@@ -643,7 +644,6 @@ export const COVERAGE = {
       "28919060afb9",
       "e39f062b6c34",
       "8a91ad938108",
-      "6254fa11abee",
       "f985a2610939",
       "14975a5b7093",
       "3e0c52a6e75b",

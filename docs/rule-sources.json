@@ -1068,12 +1068,18 @@
         "date": "2026-10-20",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 8945
+      },
+      {
+        "quote": "Listo muestrame lo proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por que osea cual es el criterio",
+        "date": "2026-10-29",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 18204
       }
     ],
-    "reading": "When he asks how it goes or how much is done, the lead answers with everything since the last report, in detail: what landed in plain words, each session's state, his decisions, the map per phase with what is left, what waits on him and what it proposes; never only that all goes well. The orchestrator skill's \"The status report\" carries it, with its tables (rule:report-table).",
-    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "reading": "When he asks how it goes or how much is done, the lead answers with everything since the last report, in detail: what landed in plain words, each session's state, his decisions, the map per phase with what is left, what waits on him and what it proposes; never only that all goes well. Every step it proposes next carries its why, the criterion that puts it there; a step with no reason is not a proposal. The orchestrator skill's \"The status report\" carries it, with its tables (rule:report-table), and `report-status` refuses a proposal whose why is blank.",
+    "accepted": "His words of 2026-10-29 (0f71b2c6, line 18204) ask for the criterion with every next step, ALWAYS; the reading carries them as written, relayed by the lead and checked against the transcript.",
     "checked": {
-      "date": "2026-10-22",
+      "date": "2026-10-29",
       "by": "command"
     }
   },

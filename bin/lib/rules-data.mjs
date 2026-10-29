@@ -606,13 +606,14 @@ export const RULES = [
   },
   {
     "id": "status-report",
-    "subject": "asked how the work goes, the lead reports everything since the last report, in detail",
+    "subject": "asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why",
     "owner": "sebastian",
-    "since": "2026-10-22",
+    "since": "2026-10-29",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "When the user asks how the work is going, how much is done, or what you have done",
-      "the answer is a report of everything since the last report, in detail: never a line that all goes well."
+      "the answer is a report of everything since the last report, in detail: never a line that all goes well.",
+      "6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."
     ]
   },
   {

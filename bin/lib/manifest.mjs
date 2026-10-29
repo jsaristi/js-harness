@@ -187,7 +187,7 @@ When the user asks how the work is going, how much is done, or what you have don
 3. The user's decisions since the last report, and what each changed.
 4. The map: each roadmap phase with its share done and what is left in it, then the total.
 5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.
-6. What you propose next, and why.
+6. What you propose next, each step with its why: the criterion that puts it there, never a step alone.
 
 - Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user). A list or a paragraph in its place is not the report.
 

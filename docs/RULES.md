@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `603815f9a95a`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
+Hash `2f267f69d731`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
 
 ## Sebastián's
 
@@ -173,9 +173,9 @@ The way a session opens another in this repository, so that the user can see eve
 - Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
 
 ### status-report
-Asked how the work goes, the lead reports everything since the last report, in detail: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
+Asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-22.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-20, 2026-10-29, checked by the command on 2026-10-29.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.
