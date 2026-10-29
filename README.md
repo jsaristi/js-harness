@@ -863,9 +863,9 @@ The return says, beside each goal not met, item not finished and failure, why, h
 fixed and why not, from the records alone, else "no registrado". `stretch explain <target> --source
 <commit:hash|notice:at>` adds what a record says there (`--why`, `--fix`, `--fixed` or `--open`): a
 goal or an item by its id (`goal:<id>` or `item:<id>` when both share it), a failure by its start
-(`failure:<time>` in full or `failure:<HH:MM>` as the return shows it, `failure:<time>#2` for a
-second one that starts at the same instant; a start two share is refused with each one's name); the
-source must be a commit git knows or a notice of the channel. `stretch show [--stretch <id>]` gives
+(`failure:<HH:MM>` or `failure:<time>` as the return shows it, or the start its record holds, which
+tells apart two cut to the opening; a start two share is refused with each one's name); the source
+must be a commit git knows or a notice of the channel. `stretch show [--stretch <id>]` gives
 a closed stretch's return again, measured from the records up to its close; it runs no goal. Each
 page `--html` writes goes into the rendered record under its template (`stretch-departure`,
 `stretch-status`, `stretch-return`), so the page shown or published is the one the command made.

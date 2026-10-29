@@ -41,19 +41,15 @@ function lastWait(session, notices, { from, to }) {
   return wait ? { text: `su último aviso de espera o pregunta: «${wait.text}»`, source: `aviso de ${wait.from.title} (${timeZ(wait.at)})` } : null;
 }
 
-/** The failures of `view`, its items' and its own, oldest first, each with `who` and `target`, its name: its start,
- * then `#2`, `#3` for a second and later failure that starts at the same instant (two cut to the stretch's opening
- * do), in the order the records give, so `explain` and the page name each one alike. */
+/** The failures of `view`, its items' and its own, oldest first, each with `who` and `target`, its name: the start its
+ * own record holds (`began`), never where it sits in the list, so a failure measured later takes no other's name and
+ * two cut to the stretch's opening differ. A view measured before failures kept it is named by the start it shows.
+ * `explain` and the page name each one alike. */
 export function failuresOf(view) {
-  const seen = new Map();
   return [
     ...view.items.flatMap((item) => item.failures.map((one) => ({ ...one, who: item.session ?? item.title }))),
     ...view.failures.map((one) => ({ ...one, who: 'orquestador' })),
-  ].sort((a, b) => ms(a.at) - ms(b.at)).map((one) => {
-    const nth = (seen.get(one.at) ?? 0) + 1;
-    seen.set(one.at, nth);
-    return { ...one, target: nth === 1 ? one.at : `${one.at}#${nth}` };
-  });
+  ].map((one) => ({ ...one, target: one.began ?? one.at })).sort((a, b) => ms(a.at) - ms(b.at) || ms(a.target) - ms(b.target));
 }
 
 /** A failure's row, under its name (`failuresOf`): who, when and for how long; why, its record's words; fixed when a

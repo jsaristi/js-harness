@@ -587,6 +587,11 @@ carrying #644, landed (main 96b917a).
   `explain`), and a shared start is refused with each one's name and what it was. No record was written: this
   document was edited while Codex read, after the rule of not doing so was already in this log. Prevention: nothing
   is edited from a review's start to its end; the next review starts only after this commit.
+- Codex on 8b0e339f..fc5cb241 (159,124 input tokens): incorrect (0.98), one P2: the `#2` names came from the list's
+  order, so while a stretch is open a failure measured later at the same start took another's name and its
+  explanation. The lenses on fc5cb241 found nothing (26,492). Taken, test-first: a failure is named by the start its
+  own record holds (`began`, which `clippedTo` keeps), never by its place, so two cut to the opening differ and a later
+  one takes no name; `#n` is gone.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.

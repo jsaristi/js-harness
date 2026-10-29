@@ -68,10 +68,10 @@ export const USAGE = [
   '  explain: records why a goal, an item or a failure of the stretch went wrong, how it was or can be fixed (--fixed',
   '    when it was), or why it is not (--open), with its source: commit:<hash> git knows, or notice:<at> of the',
   '    channel. A goal and an item are named by id (goal:<id> or item:<id> when both share it), a failure by its start,',
-  '    failure:<time> in full or failure:<HH:MM> as the return shows it, and a second failure that starts at the same',
-  '    instant as failure:<time>#2. The return shows it beside its row, over what the records say alone. It explains',
-  '    the open stretch, else the last closed one, or the one --stretch <id> names. Exit 1 for an unknown target, a',
-  '    start two failures share (the message names each), or a source no record holds.',
+  '    failure:<HH:MM> or failure:<time> as the return shows it, or failure:<time> its record holds, which tells apart',
+  '    two cut to the opening. The return shows it beside its row, over what the records say alone. It explains the',
+  '    open stretch, else the last closed one, or the one --stretch <id> names. Exit 1 for an unknown target, a start',
+  '    two failures share (the message names each by its record\'s start), or a source no record holds.',
   '  show: the return of the last closed stretch, or of --stretch <id>, measured again at its close from its records.',
   '    It runs no goal and records nothing. Exit 1 with no closed stretch, or for an open one (use status).',
   '  --json prints the view as JSON; --html <file> writes it as the HTML fragment the lead shows in the chat, and puts',
@@ -478,10 +478,11 @@ function explainTarget(ctx, stretch, target) {
     const failures = failuresOf(measure(ctx, stretch, ctx.now()));
     const minute = /^(\d{2}:\d{2})Z?$/.exec(id)?.[1];
     const wanted = Date.parse(id);
-    const exact = failures.filter((one) => one.target === id);
-    const found = exact.length > 0 ? exact : failures.filter((one) => (minute ? one.at.slice(11, 16) === minute : Date.parse(one.at) === wanted));
-    if (found.length === 1) return { kind: 'failure', target: found[0].target };
-    return { error: found.length === 0 ? `the stretch ${stretchId} has no failure that starts at ${id}` : `${found.length} failures of the stretch ${stretchId} start at ${id}: name one, ${found.map((one) => `failure:${one.target} (${one.what})`).join(' or ')}` };
+    const named = failures.filter((one) => Date.parse(one.target) === wanted);
+    const found = named.length > 0 ? named : failures.filter((one) => (minute ? one.at.slice(11, 16) === minute : Date.parse(one.at) === wanted));
+    const targets = [...new Set(found.map((one) => one.target))];
+    if (targets.length === 1) return { kind: 'failure', target: targets[0] };
+    return { error: targets.length === 0 ? `the stretch ${stretchId} has no failure that starts at ${id}` : `${found.length} failures of the stretch ${stretchId} start at ${id}: name one by the start its record holds, ${found.map((one) => `failure:${one.target} (${one.what}, ${one.who})`).join(' or ')}` };
   }
   const kinds = [['goal', plan.goals], ['item', plan.items]].filter(([kind, list]) => (kindAsked ?? kind) === kind && list.some((one) => one.id === id)).map(([kind]) => kind);
   if (kinds.length === 1) return { kind: kinds[0], target: id };
