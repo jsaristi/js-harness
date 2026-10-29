@@ -107,6 +107,14 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline; JH 82,
   branch `f8-s5c-a-init-baseline` from main, PR 669 (`ba8b407c`, `848031b2`, L28)
 
+- [x] T11 (kind: build) his addition to `rule:away-autonomy` (question 111, L29) through `rules change` — S4; inline;
+  JH 86, branch `rule/away-autonomy-close`, PR 672 (`b0f2ec23`, `7b923938`)
+- [x] T12 (kind: build) the free proof that a case's prompt loads the skill holding its rule (L30, D15, D16):
+  `rule-away-autonomy` opens with `LEAD_OPENING_PROMPT`, held by `evals/tasks.test.mjs`; `rule-reuse-first` is a
+  coverage gap — S4; inline; JH 86, branch `f8-s5c-a-reach`
+- [ ] T13 (kind: build) the paid rerun of `rule-away-autonomy` on both arms, once a trial's home carries the
+  orchestrator skill of PR 672 (L31, D17) — S4; inline
+
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
   the Stop hook offered only the whole branch, so only its read-only status ran; `review assess --base-ref 7899f5ee
@@ -149,6 +157,15 @@ Reviews:
 - JH 82, `24471296..df346e30` (P7's records, the absence test's list, the documents): Codex, "the patch is correct"
   (0.97, 56,642 input tokens; it reviewed from `12d2ca5f`, the commit before the one code commit); the reliability
   lens on `12d2ca5f..df346e30`, 0 findings; gentle-ai approved (lineage `review-eda26836f0376790`), no findings.
+- JH 86, `8c45db81..b0f2ec23` (T11): the readability lens, 0 findings (6,635 input tokens); Codex, "the patch is
+  correct" (0.93, 98,878 input tokens against the plan's 53,000 to 64,000).
+- gentle-ai: approved on `8c45db81..b0f2ec23` (lineage `review-259cf7ac7c4e19d4`), one advisory finding, read true and
+  fixed by `7b923938`: "every reply closes in the working state" forbade the cut the same bullet gives, since a
+  block for him belongs to a cut alone (`bin/lib/reply.mjs:165`).
+- JH 86, `b0f2ec23..7b923938`: the readability lens, 0 findings (6,714); Codex, "the patch is correct" (0.97, 94,108).
+- gentle-ai: approved on `b0f2ec23..7b923938` (lineage `review-1aefbe0d45f2d6d8`), two advisory findings, read and not
+  taken: "the cut" is one of the five states the reply check names, and the exception keeps a phrase the rule had
+  before, so `accepted` needs no new approval.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -212,6 +229,12 @@ After P7 (L26, $2.00, JH 82's spend now $6.87): (2) is done; T9 builds no case a
 case tell its rule apart (the rule's text in a home that always loads, or prompts that fire the skill) is the
 lead's (L27: prompts that fire the skill as real work would; no paid rerun until one is shown, free, to load it).
 (3) is done: T10 is PR 669 (L28). Next: (4).
+JH 86 (L29 to L32): his addition to `away-autonomy` is PR 672, reviewed. The free proof (L30): `rule-away-autonomy`
+now opens as a real lead does, with the prompt that loaded the orchestrator skill in 8 of 8 real openings;
+`rule-reuse-first` is a coverage gap, and its paid rerun does not run (D16). The away rerun (T13) waits on the lead:
+a trial's home copies the installed skills, v0.97.0, which lack the addition (L31, D17). Next: the lead's answer,
+then T13; the protocols rules stay gaps until a real-work prompt is shown to load their skill.
+
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -516,3 +539,38 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   taken, from the verifier and gentle-ai: validating `deps.today` and an explicit `null` day, since only tests pass
   one (`bin/js-harness.mjs` and `bin/tui.mjs` call `initMain` with no deps); and gentle-ai's fear that the clone
   path now dates itself, untrue since the line is gated on `!clone` and the clone test asserts it.
+- L29 (2026-10-29, his answer, the lead's brief `briefs/2026-10-29T13-54-45-360Z-daf8ec8d.md`, checked with `js-harness
+  sessions --quote 0f71b2c6-cbce-43ca-a031-276a4b2c381f 21669`: "answered by the user ... answer (tapped): Sí, agrégalo
+  (Recomendada)", 2026-10-29T13:54:08Z): question 111 asked whether `away-autonomy` gains that, while he is away, a
+  reply closes in "sigo solo" and the question stays recorded for his return, through the rules command and
+  reviewed by Codex and the lenses, then the case run again, changing neither the five states nor any other rule.
+  Built as PR 672: one sentence in the orchestrator skill's away bullet, on its line since `bin/lib/manifest.mjs` is
+  at its 1,793-line ceiling (the first commit's gate refused a new line), one phrase and the subject. `rules change`
+  refuses a tapped answer as a quotation, so the source keeps his typed quotes and names the tap under `accepted`,
+  as `fixed-load-budget` and `terminal-note` do.
+- L30 (2026-10-29, evidence, the free proof): no check runs a model, so whether a prompt loads a skill is read from
+  transcripts already written. Of the 117 sessions of this project on this machine (`~/.claude/projects/D--js-harness`,
+  read only, a script in the job's scratch counting each `Skill` call and the human prompt before it):
+  - `js-harness-orchestrator` loaded in 21; every session whose first prompt holds `LEAD_OPENING_PROMPT`
+    (`bin/lib/lead-prompt.mjs`, the prompt `onboard` and the orchestrator skill give a new lead) loaded it within
+    its first two tool calls, 8 of 8 (a ninth opens with a compaction summary, the skill loaded before it); the
+    others were work sessions told another session leads, or a "sí" to a question that named the skill.
+  - `js-harness-protocols` loaded in 5: before a commit's gate ("Antes del commit, que corre el gate y por eso
+    cuesta, cargo el skill de protocolos"), before asking him a decision, after a task notification; none before
+    writing a new command, module or document, the trigger `reuse-first` needs, and none in P7's 4 trials (L26).
+- L31 (2026-10-29, evidence): a trial's home is a copy of the real `~/.claude` (`evals/home.mjs:41`,
+  `CLAUDE_ITEMS` holds `skills`; `writeTemplate`, line 258), so the orchestrator skill a trial reads is the installed
+  copy, v0.97.0, not the checkout's: `grep -c "a reply closes in the working state"` on its `SKILL.md` gives 0. Only
+  `init`'s texts come from the checkout (`initWorkspace`). A rerun now would test the rule without his addition.
+- L32 (2026-10-29, decisions, the session's own, within the brief):
+  - D15: `rule-away-autonomy` v3 opens with `LEAD_OPENING_PROMPT` word for word, then v2's premise; `evals/tasks.test.mjs`
+    holds that it starts with the constant, so the two never drift. `task-proof` is unchanged (fixture 2, reference 6,
+    empty 0 of 6; `node --test --test-name-pattern=rule-away-autonomy evals/tasks.test.mjs`, 3 of 3).
+  - D16: `rule-reuse-first` stays owed as a coverage gap: no real prompt loads `js-harness-protocols` before writing a
+    module (L30), so its rule never reaches the trial; its paid rerun does not run. The same holds, until a prompt is
+    shown, for the other nine rules only in that skill (L27's list); the twelve only in the orchestrator skill can
+    be reached by cases that open with `LEAD_OPENING_PROMPT`.
+  - D17: no rerun of `rule-away-autonomy` until a trial's home carries the skill of PR 672: either the installed copy
+    is refreshed after PR 672 lands (forbidden to this session), or the current arm installs the checkout's skills
+    into the trial's home (`evals/home.mjs`, outside this brief's surface, and a change of what every current-arm run
+    measures). The lead's.
