@@ -376,12 +376,15 @@ export const RULES = [
   },
   {
     "id": "reports-spanish-visual",
-    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source",
+    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source; at a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records, never drawn by hand",
     "owner": "sebastian",
-    "since": "2026-10-26",
+    "since": "2026-10-29",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
-      "reaches them in their language as a visual, didactic page"
+      "reaches them in their language as a visual, didactic page",
+      "the page is the one a command makes from the records",
+      "never drawn by hand, shown or published as the command wrote it",
+      "the live board stays the continuous view, and a pull request appears inside its feature's page"
     ]
   },
   {

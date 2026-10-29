@@ -99,7 +99,7 @@ Incident (2026-10-10): a figure that was arithmetic and never measured, that thr
 - A claim that something is absent names the search that proves it, and why that search could have found it.
 - A sub-agent runs on the model and effort that the rules in force give its kind of work (\`rule:subagent-reader-model\`, \`rule:subagent-writer-model\`, \`rule:subagent-effort\`; \`js-harness rules <id>\` prints one); the guard refuses another model where those rules are in force.
 - A plan or a design handed on has passed its double review first (\`rule:double-review\`, section 1).
-- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (\`rule:reports-spanish-visual\`): an Artifact with diagrams, bars and cards, never a raw markdown file; the repository's English document stays the source.
+- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (\`rule:reports-spanish-visual\`): an Artifact with diagrams, bars and cards, never a raw markdown file; the repository's English document stays the source. At a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records (\`js-harness stretch\`, \`js-harness report feature\`, \`js-harness report phase\`, \`js-harness report --html\`), never drawn by hand, shown or published as the command wrote it; the live board stays the continuous view, and a pull request appears inside its feature's page.
 
 ## 7. ${PROTOCOLS[6]}
 

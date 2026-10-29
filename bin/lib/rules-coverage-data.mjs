@@ -165,8 +165,9 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "reports-spanish-visual": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "protocol",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "the page is the one a command makes from the records"
     },
     "restart-announce": {
       "level": "owed",

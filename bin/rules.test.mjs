@@ -28,13 +28,15 @@ const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(
 const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
-/** The package's coverage register with every control owed, since a project of these tests holds none of the files a
- * check names, so that directive coverage adds no line to them. */
+/** The package's coverage register with every check owed, since a project of these tests holds none of the files a
+ * check names, so that directive coverage adds no line to them. A line or a protocol stays: its file is a rule's home,
+ * which these projects hold, and a rule declared after the baseline cannot be owed. */
 function owedRegister() {
   const { register } = readCoverageText(fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8'));
   const owed = { level: 'owed', since: register.baseline };
+  const unchecked = (control) => (control.level === 'check' ? owed : control);
   const controls = Object.fromEntries(Object.entries(register.controls)
-    .map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...owed })) : owed]));
+    .map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...unchecked(item) })) : unchecked(control)]));
   return writeCoverage({ ...register, controls });
 }
 
