@@ -245,6 +245,9 @@ Reviews:
   bound of "guardad" have no reply of their own. Each round of these reviews has asked for one more reply per branch of
   the grader's patterns; the five replies prove the two ways a reply fails (its close, its hold) and the two ways one
   written as the rule asks passes, which is what L40 asks of the test, and P10 grades real replies next.
+- JH 86, `e4480f36..1227485c` (P10's results and record): the reliability lens, 0 findings (9,559 input tokens);
+  Codex, "the patch is correct" (0.94); gentle-ai approved (lineage `review-eab409e4b887e374`), acknowledged, no
+  finding.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -339,8 +342,8 @@ After the compaction (L36, L37): (1) and (2) are built, with the case's missing 
 After P9 (L38, L39, $3.86): (1) to (4) are done; the case ties at 0.83, the without arm asked on the one trial that
 closed, and the 3-minute cut and the grader's currency word hide the rest. Next: (5), and the lead's answer on D20.
 After the reviews of `0b9dc198..ec45645c` (all approved, recorded above), P10 runs from the commit that records them.
-After P10 (L41, $4.43): the case ties again, 0.92 on both arms; its record is FAIL and the case stays owed. Next: the
-lead's answer on D21; the PR of this branch is open meanwhile.
+After P10 (L41, $4.43): the case ties again, 0.92 on both arms; its record is FAIL and the case stays owed. The lead
+chose D21 (a) (L42): no more runs of this case; S5c-a closes with this branch's PR, and S13 opens after it lands.
 After L40 (JH 86's state at its second context pause, branch `f8-s5c-a-reach-2`): (1) to (3) built, uncommitted until
 this commit; next: Codex and the reliability lens on this commit, gentle-ai on its slice, push; P10, both arms twice,
 `--plan` first, stop past 1.5 times, from a clean commit through `js-harness gate` (its plan, read after `0b9dc198`:
@@ -772,3 +775,8 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   about $6.50 [i] by this plan's rate, which a 2-of-4 against 1-of-4 difference would need to show anything.
   Recommended: (a), since the without arm's habit showed in 2 of its 4 closed trials over three runs, and a gap that
   small needs many more trials than the case's cost justifies.
+- L42 (2026-10-29, the lead's answer in the channel at 14:11 local to D21): "Lead, D21: (a). Stop paying;
+  rule-away-autonomy stays owed with P10's evidence (0.92/0.92, the without arm's Decision close named) in L41 and the
+  coverage register. Close S5c-a: PR, summary, ready notice. S13 opens after it lands." The register's `cases` list
+  holds names only and `rules coverage --refresh` writes it, so the case stays there as owed, as it is, and its
+  evidence is L41.
