@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RENDERED_FRESH_HOURS, decidePage, freeReason, pageTarget } from './template-gate.mjs';
+import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, decidePage, freeReason, pageTarget, shownReport } from './template-gate.mjs';
+import { cutSpans } from './rules-coverage.mjs';
 import { RENDERED_SCHEMA, normalText, sha256 } from './template-record.mjs';
 
 const NOW = Date.parse('2026-10-29T06:00:00.000Z');
@@ -89,4 +90,37 @@ test('the refusal says what came from no command, where it looked, the command t
 test('with no page template registered, the refusal says so in place of a command', () => {
   const { reason } = decide({ text: '<p>x</p>' }, { templates: [] });
   assert.match(reason, /no page template is registered yet/);
+});
+
+test('every refusal is sentences of GATE_SAYS with their slots filled, and GATE_MESSAGES cuts into those sentences', () => {
+  const pattern = (sentence) => sentence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/<\w+>/g, '.+');
+  const whole = new RegExp(`^(?:(?:${Object.values(GATE_SAYS).map(pattern).join('|')}) ?)+$`);
+  const reasons = [
+    decide({ text: '<p>x</p>' }).reason,
+    decide({ text: '<p>x</p>' }, { templates: [] }).reason,
+    decide({ text: '<div class="jh-moment">x</div>' }).reason,
+    decide({ text: '<p>x</p>' }, { openMoments: [{ template: 'stretch-return', subject: 's-8' }] }).reason,
+    decide({ widget: '<p>x</p>' }).reason,
+  ];
+  for (const reason of reasons) assert.match(reason, whole);
+  assert.deepEqual(cutSpans(GATE_MESSAGES).map((span) => span.text.trim()), Object.values(GATE_SAYS));
+});
+
+test('shownReport counts each template\'s decisions, lists free pages and names a moment no page was shown for', () => {
+  const line = (decision, extra = {}) => ({ at: hoursAgo(1), decision, template: 'stretch-return', subject: 's-7', reason: null, ...extra });
+  const report = shownReport({
+    rendered: [rendered(PAGE)],
+    shown: [line('refused'), line('admitted'), line('shown'), line('free', { template: null, subject: null, reason: 'a research page for him' }), line('unchecked', { template: null, subject: null })],
+    moments: [{ template: 'stretch-return', subject: 's-7' }, { template: 'stretch-return', subject: 's-8' }],
+  });
+  assert.deepEqual(report.templates, { 'stretch-return': { rendered: 1, admitted: 1, shown: 1, refused: 1, unchecked: 0 } });
+  assert.deepEqual(report.free, [{ at: hoursAgo(1), reason: 'a research page for him' }]);
+  assert.deepEqual(report.escapes, ['the moment s-8 of stretch-return shows no page']);
+  assert.equal(report.unchecked, 1);
+});
+
+test('shownReport names a shown page whose rendered line names no moment, and holds with nothing recorded', () => {
+  const orphan = { at: hoursAgo(2), decision: 'shown', template: 'stretch-return', subject: null, reason: null };
+  assert.deepEqual(shownReport({ rendered: [], shown: [orphan], moments: [] }).escapes, [`a page of stretch-return shown at ${hoursAgo(2)} names no moment`]);
+  assert.deepEqual(shownReport({ rendered: [], shown: [], moments: [] }), { templates: {}, free: [], escapes: [], unchecked: 0 });
 });

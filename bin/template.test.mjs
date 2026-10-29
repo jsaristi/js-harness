@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { templateMain } from './template.mjs';
 import { registryOfText, writeRegistry } from './lib/template.mjs';
+import { SHOWN_SCHEMA, readRecord, recordRendered, renderedFile, shownFile } from './lib/template-record.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = 'bin/lib/template-registry.mjs';
@@ -137,4 +138,99 @@ test('a bad command line is a usage error: exit 2, the unknown token named', () 
     assert.equal(code, 2, JSON.stringify(argv));
     assert.match(err, said, JSON.stringify(argv));
   }
+});
+
+// `template gate --hook` and `--shown` (T4): the page surface through the command, with the seams a hook needs.
+const PAGE_TEMPLATES = [{ id: 'stretch-return', surface: 'page', render: 'js-harness stretch close --html', signature: 'jh-moment' }];
+const GATE_NOW = Date.parse('2026-10-29T06:00:00.000Z');
+
+/** A scratch project whose harness.json turns the gate on (or not), a home, and a hook call into it. */
+function gateScratch({ on = true } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-gate-'));
+  const home = path.join(root, 'home');
+  fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify(on ? { templates: true } : {}));
+  const hook = (mode, payload) => call(['gate', mode], {
+    root, home, slug: 'p', now: GATE_NOW, templates: PAGE_TEMPLATES,
+    readStdin: () => (typeof payload === 'string' ? payload : JSON.stringify({ cwd: root, session_id: 's1', ...payload })),
+  });
+  return { root, home, hook, done: () => fs.rmSync(root, { recursive: true, force: true }) };
+}
+
+const shownLines = (home) => readRecord(shownFile(home, 'p'), SHOWN_SCHEMA);
+
+test('gate --hook refuses a hand-made page by Artifact with the hooks contract\'s deny, and records the refusal', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'page.html'), '<div class="jh-moment">Plan de 8 horas</div>');
+  const { code, out } = hook('--hook', { hook_event_name: 'PreToolUse', tool_name: 'Artifact', tool_use_id: 'u1', tool_input: { file_path: 'page.html' } });
+  assert.equal(code, 0);
+  const answer = JSON.parse(out);
+  assert.equal(answer.hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(answer.hookSpecificOutput.permissionDecisionReason, /^js-harness template gate: this page came from no template command/);
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision, line.template]), [['u1', 'refused', 'stretch-return']]);
+});
+
+test('gate --hook admits a page a template command recorded, and --shown then records that it was shown', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  const page = path.join(root, 'return.html');
+  fs.writeFileSync(page, '<p class="jh-moment">Vuelves</p>\n');
+  recordRendered(renderedFile(home, 'p'), { template: 'stretch-return', subject: 's-7', path: page, at: '2026-10-29T05:30:00.000Z', head: 'abc' });
+  const pre = hook('--hook', { hook_event_name: 'PreToolUse', tool_name: 'Artifact', tool_use_id: 'u2', tool_input: { file_path: page } });
+  assert.equal(pre.out, '{}');
+  const post = hook('--shown', { hook_event_name: 'PostToolUse', tool_name: 'Artifact', tool_use_id: 'u2', tool_input: { file_path: page } });
+  assert.equal(post.out, '{}');
+  assert.deepEqual(shownLines(home).map((line) => [line.call, line.decision, line.template, line.subject]), [['u2', 'admitted', 'stretch-return', 's-7'], ['u2', 'shown', 'stretch-return', 's-7']]);
+});
+
+test('gate --hook refuses the retyped widget, and --shown writes nothing for a refused call', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  const widget = { hook_event_name: 'PreToolUse', tool_name: 'mcp__visualize__show_widget', tool_use_id: 'u3', tool_input: { title: 't', widget_code: '<div class="jh-moment">x</div>' } };
+  assert.equal(JSON.parse(hook('--hook', widget).out).hookSpecificOutput.permissionDecision, 'deny');
+  hook('--shown', { ...widget, hook_event_name: 'PostToolUse' });
+  assert.deepEqual(shownLines(home).map((line) => line.decision), ['refused']);
+});
+
+test('gate --hook does nothing where harness.json does not turn templates on, for a call that shows no page, or for input that is no payload', (t) => {
+  const off = gateScratch({ on: false });
+  t.after(off.done);
+  fs.writeFileSync(path.join(off.root, 'page.html'), '<p>hecho a mano</p>');
+  assert.equal(off.hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u4', tool_input: { file_path: 'page.html' } }).out, '{}');
+  assert.equal(fs.existsSync(shownFile(off.home, 'p')), false);
+  const on = gateScratch();
+  t.after(on.done);
+  for (const payload of [{ tool_name: 'Artifact', tool_input: { action: 'read', url: 'u' } }, { tool_name: 'ArtifactData', tool_input: { action: 'set' } }, 'not json']) {
+    const { code, out } = on.hook('--hook', payload);
+    assert.equal(code, 0);
+    assert.equal(out, '{}');
+  }
+  assert.equal(fs.existsSync(shownFile(on.home, 'p')), false);
+});
+
+test('gate --hook lets a page through as unchecked when it cannot read the page, and says why on stderr', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  const { out, err } = hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u5', tool_input: { file_path: 'missing.html' } });
+  assert.equal(out, '{}');
+  assert.match(err, /js-harness template gate: .*missing\.html.*unchecked/);
+  assert.deepEqual(shownLines(home).map((line) => line.decision), ['unchecked']);
+});
+
+test('shown reports each template\'s counts and free pages, exit 0, and 3 when a call went unchecked', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'free.html'), '<meta name="js-harness-page" content="free: a research page on the gate, for him"><p>x</p>');
+  hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u6', tool_input: { file_path: 'free.html' } });
+  hook('--shown', { tool_name: 'Artifact', tool_use_id: 'u6', tool_input: { file_path: 'free.html' } });
+  const report = (argv) => call(argv, { root, home, slug: 'p', now: GATE_NOW });
+  const clean = report(['shown', '--days', '7']);
+  assert.equal(clean.code, 0, clean.err);
+  assert.match(clean.out, /^templates: no escapes in 7 days$/m);
+  assert.match(clean.out, /free: a research page on the gate, for him/);
+  hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u7', tool_input: { file_path: 'gone.html' } });
+  const unknown = report(['shown']);
+  assert.equal(unknown.code, 3);
+  assert.match(unknown.out, /1 call unchecked/);
+  assert.equal(JSON.parse(report(['shown', '--json']).out).unchecked, 1);
 });

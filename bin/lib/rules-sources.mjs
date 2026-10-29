@@ -3,12 +3,14 @@
 // source, read from the manifest's components so a new one is a source the day it is added; so are the Rules block
 // it writes into the user's `~/.claude/CLAUDE.md`, the files `init` writes into a project, the lead's opening prompt
 // and this repository's own `CLAUDE.md` and `AGENTS.md`, which every session here loads. A producer of a hook's
-// messages builds them at run time, so it is listed by its path and owed whole until its messages are cut (S5c-b);
-// bin/lib/rules-sources.test.mjs finds every producer in the code and holds this list to it.
+// messages builds them at run time, so it is listed by its path and owed whole until its messages are cut (S5c-b),
+// or, added after the baseline, cut from the start into a text source of its own (`CUT_MESSAGE_SOURCES`);
+// bin/lib/rules-sources.test.mjs finds every producer in the code and holds the two lists to it.
 import { components } from './manifest.mjs';
 import { rulesBody } from './rules-block.mjs';
 import { FAILURES_TEMPLATE, agentsTemplate, claudeTemplate } from './project.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
+import { GATE_MESSAGES } from './template-gate.mjs';
 
 /** The files of this repository that are sources, read where `rules coverage` runs. */
 export const REPOSITORY_FILES = ['AGENTS.md', 'CLAUDE.md'];
@@ -32,6 +34,13 @@ export const MESSAGE_SOURCES = [
   'bin/reply.mjs',
   'bin/resume.mjs',
 ];
+
+/** The producers whose messages are cut: each one sends only the sentences of a text source, named here, whose spans
+ * the register declares like any other source's, so none is owed whole. A producer added after the baseline goes
+ * here, never into `MESSAGE_SOURCES`. */
+export const CUT_MESSAGE_SOURCES = Object.freeze({
+  'bin/template.mjs': 'template-gate',
+});
 
 // The folder name a project's AGENTS.md is titled with; its title is a heading, and no span.
 const PROJECT = 'project';
@@ -58,6 +67,7 @@ export function textSources(version, readFile) {
     { id: 'init-claude', from: 'init', text: claudeTemplate() },
     { id: 'init-failures', from: 'init', text: FAILURES_TEMPLATE },
     { id: 'lead-prompt', from: 'sessions', text: LEAD_OPENING_PROMPT },
+    { id: 'template-gate', from: 'hook', text: GATE_MESSAGES },
   );
   for (const file of REPOSITORY_FILES) {
     const text = readFile(file);

@@ -402,3 +402,20 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   `cwd` test passes `cwd` equal to `root`; a second non-object entry reads as a repeated id; only the first call of a
   title is read; the CRLF test's fixture is not asserted to hold a newline; `sampleDigest` has no unit test): they
   are taken in slice B's first commit, so slice A takes no fourth review round.
+- Update ~06:05Z: slice B (`feat/templates-b`) holds bbd5c73d (slice A's second-round findings) and d57c075c (the
+  records and the page decisions). Unit 3, `template gate --hook` and `--shown` and `template shown`, is written and
+  green (`bin/template.test.mjs` 16 of 16, `bin/lib/template-gate.test.mjs` 13 of 13) and is not committed: the
+  open moments and the moments a record holds are injected, empty until a page template registers (slice C), and
+  the signature proof covers the 02:44Z widget. It is blocked: the gate answers a hook with a reason, so
+  `bin/lib/rules-sources.test.mjs` needs `bin/template.mjs` in `MESSAGE_SOURCES`, and then `rules check` refuses
+  it (S5c-a's D3, `odd/tasks/f8-s5c-a-coverage.md`: a message source after the baseline is refused until S5c-b
+  cuts it), so the real package fails `rules check` (8 tests of `bin/rules.test.mjs`, all this one finding). The
+  register `bin/lib/rules-coverage-data.mjs` is outside this brief's surface: the lead's call, asked 06:03Z.
+- Update ~06:20Z: the lead's answer (01:05 local, 06:05Z): "not (a). An owed seed for a source added after the
+  baseline is what D3 refuses ... Route (b): cut and declare bin/template.mjs's messages now ... Keep the reason
+  short. Then unit 4." Done in unit 3's commit: every sentence the gate sends is `GATE_SAYS` in
+  `bin/lib/template-gate.mjs` (a test holds each refusal to those sentences, filled); they are the text source
+  `template-gate` (`bin/lib/rules-sources.mjs`), and `bin/template.mjs` is listed in `CUT_MESSAGE_SOURCES`, not
+  owed whole; the register declares its 7 spans as context (4 state a fact of the call; 3 are directives the
+  `PreToolUse` hook enforces on the call itself). `rules check` passes. Slice D may tie the 3 directive spans to
+  the amended rule instead.

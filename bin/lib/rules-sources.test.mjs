@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { components } from './manifest.mjs';
 import { initProject } from './project.mjs';
-import { MESSAGE_SOURCES, REPOSITORY_FILES, textSources } from './rules-sources.mjs';
+import { CUT_MESSAGE_SOURCES, MESSAGE_SOURCES, REPOSITORY_FILES, textSources } from './rules-sources.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '..', '..');
 const readRepo = (file) => {
@@ -52,7 +52,15 @@ test("every file install writes whole is a source, one for both hosts, and so ar
 test('every module that answers a hook with a message or builds a prompt is a source of messages', () => {
   const builds = (text) => HOOK_OUTPUT.test(text) || PROMPT_BUILDER.test(text);
   const found = modulesUnder('bin').filter((rel) => !NOT_PRODUCERS.has(rel) && builds(fs.readFileSync(path.join(REPO, rel), 'utf8'))).sort();
-  assert.deepEqual([...MESSAGE_SOURCES].sort(), found, 'add a new producer of hook messages or prompts to MESSAGE_SOURCES, and remove one that no longer is');
+  assert.deepEqual([...MESSAGE_SOURCES, ...Object.keys(CUT_MESSAGE_SOURCES)].sort(), found, 'add a new producer of hook messages or prompts to CUT_MESSAGE_SOURCES with the text source of its sentences, and remove one that no longer is');
+});
+
+test('a producer whose messages are cut is in no other list, and names a text source that holds its sentences', () => {
+  const ids = textSources('0.0.0', readRepo).map((source) => source.id);
+  for (const [file, id] of Object.entries(CUT_MESSAGE_SOURCES)) {
+    assert.equal(MESSAGE_SOURCES.includes(file), false, `${file} is cut, so it is not owed whole`);
+    assert.ok(ids.includes(id), `${file}'s sentences are the text source ${id}`);
+  }
 });
 
 test('every Markdown file init writes into a new project is the text of a source', () => {
