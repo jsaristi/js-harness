@@ -245,6 +245,27 @@ test('the stretch carries the failed lands, their failed gates and the failed Co
   assert.deepEqual(stretchLost({ lands: [{ startedAt: at(-0.25), seconds: 1800, exit: 1 }], codex: [] }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' }).map((one) => one.seconds), [900]);
 });
 
+test('a failure is fixed when a later run of its kind passed before the end: the same session\'s gate, a land, a Codex run', () => {
+  const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0, lastAt: T0 + 5 * H, closes: [], stoppedAt: null };
+  const gates = [
+    gate(0.5, 300, 'pass', { session: 's1' }),
+    gate(1, 600, 'fail', { session: 's1', failing: ['bin/x.test.mjs'] }),
+    gate(1.5, 600, 'pass', { session: 'other' }),
+    gate(2, 900, 'pass', { session: 's1' }),
+    gate(3, 600, 'fail', { session: 's1' }),
+    gate(7, 300, 'pass', { session: 's1' }),
+  ];
+  const measured = measure(trail, T0 + 6 * H, gates);
+  // The pass before it and another session's pass fix nothing; a pass after the end is not seen yet.
+  assert.deepEqual(measured.failures.map((one) => [one.at, one.fixedAt]), [[at(1), at(2.25)], [at(3), null]]);
+
+  const lands = [{ startedAt: at(1), seconds: 600, exit: 1 }, { startedAt: at(2), seconds: 360, exit: 0 }];
+  const codex = [{ startedAt: at(3), seconds: 120, outcome: 'failed' }, { startedAt: at(3.5), seconds: 360, outcome: 'reviewed' }];
+  const landGates = [gate(4, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-1-2' }), gate(4.5, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-3-4' })];
+  const lost = stretchLost({ lands, codex, gates: landGates }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' });
+  assert.deepEqual(lost.map((one) => [one.what, one.fixedAt]), [['land exit 1', at(2.1)], ['Codex review failed', at(3.6)], ['land gate fail', null], ['land gate fail', null]]);
+});
+
 test('a failed land gate of another project is not this stretch\'s: the gate log is the machine\'s', () => {
   const gates = [gate(1, 300, 'fail', { cwd: 'E:\\q\\.git\\js-harness\\merge-queue-1-2' }), gate(2, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-3-4' })];
   assert.deepEqual(stretchLost({ lands: [], codex: [], gates }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' }).map((one) => one.at), [at(2)]);

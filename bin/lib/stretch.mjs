@@ -224,8 +224,20 @@ function clippedTo(runs, from, to) {
   }).sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
 
-/** One failure as the return lists it. */
-const failure = (startedAt, seconds, what) => ({ at: new Date(Date.parse(startedAt)).toISOString(), seconds, what });
+/** One failure as the return lists it; `fixedAt`, when a later run of its kind passed, the end of that run. */
+const failure = (startedAt, seconds, what, fixedAt = null) => ({ at: new Date(Date.parse(startedAt)).toISOString(), seconds, what, fixedAt });
+
+/** Each run of `runs` that `isFailed` with `fixedAt`: the end of the first run of `runs` that started after it and
+ * passed (`isPassed`), once it ended by `to`; else `null`. What fixed a failure is the record of a run that passed, never
+ * a guess. */
+function withFix(runs, isFailed, isPassed, to) {
+  const endOf = (run) => Date.parse(run.startedAt) + run.seconds * 1000;
+  const passes = runs.filter((run) => isPassed(run) && Number.isFinite(run.seconds) && endOf(run) <= to);
+  return runs.filter(isFailed).map((run) => {
+    const fix = passes.filter((pass) => Date.parse(pass.startedAt) > Date.parse(run.startedAt)).sort((a, b) => endOf(a) - endOf(b))[0];
+    return { ...run, fixedAt: fix ? new Date(endOf(fix)).toISOString() : null };
+  });
+}
 
 /** The hours `failures` cover, two at once counted once. */
 export const lostHoursOf = (failures) => round(busySeconds(failures.map((one) => [Date.parse(one.at), Date.parse(one.at) + one.seconds * 1000])) / 3600);
@@ -256,8 +268,8 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
   const state = close !== undefined ? 'finished' : stopped ? 'stopped' : silent ? 'silent' : 'running';
   const end = { finished: close, stopped: stoppedAt, silent: lastAt, running: now }[state];
   const to = Math.max(from, end);
-  const failures = clippedTo(mine.filter((gate) => failed(gate.result)), from, to)
-    .map((gate) => failure(gate.startedAt, gate.seconds, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`));
+  const failures = clippedTo(withFix(mine, (gate) => failed(gate.result), (gate) => typeof gate.result === 'string' && !failed(gate.result), now), from, to)
+    .map((gate) => failure(gate.startedAt, gate.seconds, `gate ${gate.result}${gate.failing.length ? `: ${gate.failing.join(', ')}` : ''}`, gate.fixedAt));
   return {
     ...entry,
     state,
@@ -279,9 +291,11 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
 export function stretchLost({ lands, codex, gates = [] }, { from, to, root }) {
   const project = `${folderKey(root)}/`;
   const ours = (gate) => isText(gate.cwd) && folderKey(gate.cwd).startsWith(project);
+  const landGates = gates.filter((one) => inLand(one) && ours(one) && typeof one.result === 'string');
+  const exited = lands.filter((one) => Number.isInteger(one.exit));
   return [
-    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`)),
-    ...clippedTo(gates.filter((one) => inLand(one) && ours(one) && failed(one.result)), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
-    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed')),
+    ...clippedTo(withFix(exited, (one) => one.exit !== 0, (one) => one.exit === 0, to), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`, one.fixedAt)),
+    ...clippedTo(withFix(landGates, (one) => failed(one.result), (one) => !failed(one.result), to), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`, one.fixedAt)),
+    ...clippedTo(withFix(codex, (one) => one.outcome === 'failed', (one) => one.outcome === 'reviewed', to), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed', one.fixedAt)),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
