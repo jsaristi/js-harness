@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { appendNotice, newNotice } from './lib/channel.mjs';
+import { appendNotice, newNotice, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { liveCursorPath, sessionsLiveMain } from './sessions-live.mjs';
 import { sessionsMain } from './sessions.mjs';
@@ -161,7 +161,7 @@ test('--out writes the time it read the record for board/summary, after the batc
   assert.equal(quiet.code, 0, quiet.err);
   const stamp = path.join(dirs.out, 'board-checked.json');
   const running = { at: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', items: [] };
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false, stretch: null, running }, 'it holds until the heartbeat wakes the lead');
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: '2026-10-27T06:45:00.000Z', resting: false, stretch: null, running, questions: [] }, 'it holds until the heartbeat wakes the lead');
   assert.ok(quiet.out.includes(`ArtifactData update: url ${url}, collection board, doc_id summary, file_path ${stamp}`), quiet.out);
 
   note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
@@ -172,7 +172,7 @@ test('--out writes the time it read the record for board/summary, after the batc
   // Codex, 59df62f..bc72c2e: a resting lead waits for a notice up to wait-for, not a half-hour heartbeat.
   assert.equal((await live(['--out', dirs.out, '--resting'], dirs)).code, 0);
   const restingUntil = new Date(NOW + WAIT_FOR_MINUTES * 60_000).toISOString();
-  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: restingUntil, resting: true, stretch: null, running: { ...running, until: restingUntil } });
+  assert.deepEqual(JSON.parse(fs.readFileSync(stamp, 'utf8')), { checked: '2026-10-27T06:00:00.000Z', until: restingUntil, resting: true, stretch: null, running: { ...running, until: restingUntil }, questions: [] });
   assert.equal((await live(['--resting'], dirs)).code, 2, '--resting stamps, so it takes --out');
 }));
 
@@ -186,6 +186,30 @@ test('--out puts the work running on the machine into the stamp, or why it could
   assert.deepEqual(stamp().items, [{ kind: 'evals', pid: 41, since: '2026-10-27T05:40:00.000Z', where: null }]);
   assert.equal((await live(['--out', dirs.out], dirs, { listProcesses: () => { throw new Error('powershell timed out'); } })).code, 0);
   assert.equal(stamp().unavailable, 'the process listing: powershell timed out');
+}));
+
+// His words, 0f71b2c6 line 21816, 2026-10-29T13:57Z: "cuando hayan preguntas viejas que no he respondido, colocamelas
+// en el tablero como todo o tareas para yo podertelas pedir". The open questions come from the record, so the lead
+// writes none of them by hand.
+test('--out puts every open question of the record into the stamp, oldest first, with the line he sends to get it asked', withFolders(async (dirs) => {
+  const ask = (at, text) => appendNotice(dirs.home, dirs.slug, newNotice({ at, from: FROM, to: 'orchestrator', kind: 'question', text, id: `q-${at}`, options: [{ label: 'Sí' }, { label: 'No' }], waits: 'the next step' }));
+  const close = (at, kind, question) => appendNotice(dirs.home, dirs.slug, newNotice({ at, from: FROM, to: 'orchestrator', kind, text: 'closed', question, ...(kind === 'answer' ? { transcript: 's', line: 1, verified: false, copy: null } : {}) }));
+  ask('2026-10-23T20:41:00.000Z', '¿Arrancamos con las filas del audit?');
+  ask('2026-10-25T10:00:00.000Z', '¿Se renombra la regla?');
+  ask('2026-10-26T09:00:00.000Z', '¿Se borra la nota vieja?');
+  ask('2026-10-27T05:00:00.000Z', '¿Abrimos el PR?');
+  // Written before the check that refuses a hand-numbered question: the board leaves its own number out.
+  fs.appendFileSync(recordPath(dirs.home, dirs.slug),`${JSON.stringify({ ...newNotice({ at: '2026-10-27T05:10:00.000Z', from: FROM, to: 'orchestrator', kind: 'question', text: 'x', id: 'q-old', options: [], waits: 'x' }), text: 'Pregunta 5 (fila N1): ¿Una sola lista?' })}\n`);
+  close('2026-10-25T11:00:00.000Z', 'withdrawn', 2);
+  close('2026-10-27T05:20:00.000Z', 'answer', 4);
+  assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
+  const { questions } = JSON.parse(fs.readFileSync(path.join(dirs.out, 'board-checked.json'), 'utf8'));
+  const who = FROM.title;
+  assert.deepEqual(questions, [
+    { number: 1, from: who, at: '2026-10-23T20:41:00.000Z', text: '¿Arrancamos con las filas del audit?', ask: 'hazme la pregunta 1' },
+    { number: 3, from: who, at: '2026-10-26T09:00:00.000Z', text: '¿Se borra la nota vieja?', ask: 'hazme la pregunta 3' },
+    { number: 5, from: who, at: '2026-10-27T05:10:00.000Z', text: '(fila N1): ¿Una sola lista?', ask: 'hazme la pregunta 5' },
+  ]);
 }));
 
 // odd/tasks/stretch-protocol.md, T5: the open stretch rides on board/summary, measured and with its goals as last checked.
@@ -322,4 +346,29 @@ test('the board page counts the lead\'s check of the record apart from the newes
   assert.equal(freshness(at(48), { checked: at(10) }, now), 'stale', 'a check with no until holds nothing');
   assert.equal(freshness(null, null, now), 'none');
   assert.equal(freshness(null, { checked: 'not a time', until: 'no' }, now), 'none');
+});
+
+// His words, 0f71b2c6 line 21816: the old questions he has not answered are on the board, each with the line he sends.
+test('the board lists what is his, then every open question with the line to ask for it, a session asking it said once', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const source = page.match(/function yoursItems\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(source, 'the page defines yoursItems');
+  assert.match(page, /const items = yoursItems\(summary, asking\);/, 'renderSummary lists them');
+  const yoursItems = new Function('label', 'words', 'ago', `${source}; return yoursItems;`)((row) => row.session, (row) => row.text, () => 'hace 6 días');
+  const questions = [
+    { number: 56, from: 'JH ORQ', at: '2026-10-23T20:41:00.000Z', text: '¿Arrancamos con el audit?', ask: 'hazme la pregunta 56' },
+    { number: 97, from: 'JH 60', at: '2026-10-27T13:59:00.000Z', text: '¿Cuál de los tres?', ask: 'hazme la pregunta 97' },
+  ];
+  const asking = [
+    { latest: { session: 'JH 60', time: '2026-10-27T13:59:00.000Z', text: '¿Cuál de los tres?' } },
+    { latest: { session: 'JH 88', time: '2026-10-29T15:00:00.000Z', text: '¿Sigo?' } },
+  ];
+  assert.deepEqual(yoursItems({ yours: ['Aprobar el gasto', 3], questions }, asking), [
+    'Aprobar el gasto',
+    'JH 88 te pregunta: ¿Sigo?',
+    'Pregunta 56 · JH ORQ · hace 6 días: ¿Arrancamos con el audit? Para que te la haga, escribe «hazme la pregunta 56».',
+    'Pregunta 97 · JH 60 · hace 6 días: ¿Cuál de los tres? Para que te la haga, escribe «hazme la pregunta 97».',
+  ]);
+  assert.deepEqual(yoursItems(null, []), [], 'a summary from before has nothing of his');
+  assert.deepEqual(yoursItems({ questions: [{ number: 'x' }, null] }, []), [], 'a question it cannot read is left out');
 });

@@ -163,7 +163,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
     <ul class="plain">
       <li><b>Cómo va</b>: el resumen que deja el orquestador cada vez que despierta, una tarjeta por cosa: verde lo hecho, ámbar lo que está en curso y azul lo que espera.</li>
       <li><b>Lo último que se hizo</b>: las tres últimas cosas terminadas (una sesión que terminó o un PR listo), con hace cuánto, para ubicarte de un vistazo.</li>
-      <li><b>Lo que te toca</b>: lo único que espera por ti. Si está vacío, no tienes nada pendiente.</li>
+      <li><b>Lo que te toca</b>: lo único que espera por ti. Si está vacío, no tienes nada pendiente. Al final van todas las preguntas que nadie ha respondido ni retirado, aunque sean viejas, cada una con su número: escribe «hazme la pregunta 56» y el orquestador te la hace. Salen del registro cada vez que el orquestador revisa, así que una que respondes desaparece en la revisión siguiente.</li>
       <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso, cuánto lleva en su tarea y su estimado. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
       <li><b>Línea de tiempo</b>: los últimos 40 avisos, el más nuevo primero. Sirve para ver qué pasó mientras no mirabas.</li>
       <li><b>Dónde vamos</b>: los pasos del plan y el avance del roadmap. Lo actualiza el orquestador.</li>
@@ -448,6 +448,20 @@ function renderStretch(stretch) {
   }));
 }
 
+// His words of 2026-10-29: the old questions he has not answered go on the board, so he can ask for them. They come
+// from the record (`board/summary.questions`, `sessions live --out`), never written by hand; a session asking one now
+// says it once, in the record's words with the line to ask for it.
+/** What is his: the lead's `yours` list, the sessions asking now, then every open question with the line to ask it. */
+function yoursItems(summary, asking) {
+  const questions = (Array.isArray(summary?.questions) ? summary.questions : []).filter((one) => Number.isSafeInteger(one?.number) && typeof one?.text === 'string' && typeof one?.ask === 'string');
+  const listed = new Set(questions.map((one) => one.at));
+  return [
+    ...(Array.isArray(summary?.yours) ? summary.yours.filter((item) => typeof item === 'string') : []),
+    ...asking.filter((one) => !listed.has(one.latest.time)).map((one) => `${label(one.latest)} te pregunta: ${words(one.latest)}`),
+    ...questions.map((one) => `Pregunta ${one.number}${one.from ? ` · ${one.from}` : ''} · ${ago(one.at)}: ${one.text} Para que te la haga, escribe «${one.ask}».`),
+  ];
+}
+
 function renderSummary(asking) {
   renderStretch(summary?.stretch);
   renderStatus(summary?.status);
@@ -457,7 +471,7 @@ function renderSummary(asking) {
   const lead = $('lead');
   lead.hidden = !summary?.now;
   lead.textContent = summary?.now ?? '';
-  const items = [...(Array.isArray(summary?.yours) ? summary.yours.filter((item) => typeof item === 'string') : []), ...asking.map((one) => `${label(one.latest)} te pregunta: ${words(one.latest)}`)];
+  const items = yoursItems(summary, asking);
   $('yours').hidden = items.length === 0;
   $('yours-list').replaceChildren(...items.map((item) => el('li', '', item)));
   const route = Array.isArray(summary?.route) ? summary.route : [];

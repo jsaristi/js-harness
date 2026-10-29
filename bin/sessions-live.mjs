@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { readNotices } from './lib/channel.mjs';
+import { readNotices, recordedQuestions } from './lib/channel.mjs';
 import { batchesOf, CHECK_MINUTES, CURSOR_SCHEMA, cursorAfter, cursorFrom, cursorOf, liveCursorPath, pendingRows, positionOf } from './lib/live-rows.mjs';
 import { listCommandLines } from './lib/process-list.mjs';
 import { mainCheckout, parseWorktreeList, projectSlug } from './lib/sessions.mjs';
@@ -87,6 +87,22 @@ function writeCursor(file, saved) {
 
 /** `saved` with `cursor` in place of the cursor it held, in either form. */
 const withCursor = ({ through, ids, upto, sent, ...rest }, cursor) => ({ ...rest, ...cursor });
+
+/** The questions of `record` (`readNotices`) nothing has closed (`recordedQuestions`), oldest first: `{ number, from,
+ * at, text, ask }`, `ask` the line the user sends to have the lead ask it (`template ask <n>`). A question written
+ * before the record refused hand-numbered text keeps its words without its own "Pregunta <n>". */
+export function openQuestions(record) {
+  return recordedQuestions(record)
+    .filter((one) => one.closed === null)
+    .map(({ number, notice }) => ({
+      number,
+      from: notice.from?.title ?? null,
+      at: notice.at,
+      text: notice.text.replace(new RegExp(`^Pregunta ${number}\\b:?\\s*`), ''),
+      ask: `hazme la pregunta ${number}`,
+    }))
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.number - b.number);
+}
 
 /** A batch's file name: its document id with what Windows refuses in a name (the colons of a time) made dashes. */
 const fileNameOf = (docId) => `live-${docId.replace(/[^A-Za-z0-9.-]/g, '-')}.json`;
@@ -195,7 +211,9 @@ export async function sessionsLiveMain(argv, {
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
   const worktrees = listed?.status === 0 ? parseWorktreeList(listed.stdout).map((tree) => tree.path) : [];
   const running = readRunning(listProcesses, worktrees, now(), now() + holds);
-  const stamp = { checked: new Date(now()).toISOString(), until: new Date(now() + holds).toISOString(), resting: parsed.resting === true, stretch, running };
+  // Every question still open rides on it too, so the board lists the old ones he has not answered; an empty list
+  // clears those answered since.
+  const stamp = { checked: new Date(now()).toISOString(), until: new Date(now() + holds).toISOString(), resting: parsed.resting === true, stretch, running, questions: openQuestions(record) };
   fs.writeFileSync(checked, `${JSON.stringify(stamp)}\n`, 'utf8');
   stdout(`ArtifactData update: url ${url ?? '<board>'}, collection board, doc_id summary, file_path ${checked}`);
   stdout('  once every batch above was sent: the board reads it as the time you checked the record');
