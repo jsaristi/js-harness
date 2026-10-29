@@ -454,10 +454,11 @@ function renderStretch(stretch) {
 /** What is his: the lead's `yours` list, the sessions asking now, then every open question with the line to ask it. */
 function yoursItems(summary, asking) {
   const questions = (Array.isArray(summary?.questions) ? summary.questions : []).filter((one) => Number.isSafeInteger(one?.number) && typeof one?.text === 'string' && typeof one?.ask === 'string');
-  const listed = new Set(questions.map((one) => one.at));
+  // By the row's id, its time and sender: two sessions may ask in one millisecond.
+  const listed = new Set(questions.map((one) => one.row));
   return [
     ...(Array.isArray(summary?.yours) ? summary.yours.filter((item) => typeof item === 'string') : []),
-    ...asking.filter((one) => !listed.has(one.latest.time)).map((one) => `${label(one.latest)} te pregunta: ${words(one.latest)}`),
+    ...asking.filter((one) => !listed.has(one.latest.id)).map((one) => `${label(one.latest)} te pregunta: ${words(one.latest)}`),
     ...questions.map((one) => `Pregunta ${one.number}${one.from ? ` · ${one.from}` : ''} · ${ago(one.at)}: ${one.text} Para que te la haga, escribe «${one.ask}».`),
   ];
 }

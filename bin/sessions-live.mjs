@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readNotices, recordedQuestions } from './lib/channel.mjs';
-import { batchesOf, CHECK_MINUTES, CURSOR_SCHEMA, cursorAfter, cursorFrom, cursorOf, liveCursorPath, pendingRows, positionOf } from './lib/live-rows.mjs';
+import { batchesOf, CHECK_MINUTES, CURSOR_SCHEMA, cursorAfter, cursorFrom, cursorOf, liveCursorPath, pendingRows, positionOf, rowOf } from './lib/live-rows.mjs';
 import { listCommandLines } from './lib/process-list.mjs';
 import { mainCheckout, parseWorktreeList, projectSlug } from './lib/sessions.mjs';
 import { readRunning, RUNNING_PROCESSES } from './lib/sessions-running.mjs';
@@ -89,8 +89,9 @@ function writeCursor(file, saved) {
 const withCursor = ({ through, ids, upto, sent, ...rest }, cursor) => ({ ...rest, ...cursor });
 
 /** The questions of `record` (`readNotices`) nothing has closed (`recordedQuestions`), oldest first: `{ number, from,
- * at, text, ask }`, `ask` the line the user sends to have the lead ask it (`template ask <n>`). A question written
- * before the record refused hand-numbered text keeps its words without its own "Pregunta <n>". */
+ * at, row, text, ask }`, `row` the id of its row on the board (`rowOf`), which a time alone is not, and `ask` the line
+ * the user sends to have the lead ask it (`template ask <n>`). A question written before the record refused
+ * hand-numbered text keeps its words without its own "Pregunta <n>". */
 export function openQuestions(record) {
   return recordedQuestions(record)
     .filter((one) => one.closed === null)
@@ -98,6 +99,7 @@ export function openQuestions(record) {
       number,
       from: notice.from?.title ?? null,
       at: notice.at,
+      row: rowOf(notice).id,
       text: notice.text.replace(new RegExp(`^Pregunta ${number}\\b:?\\s*`), ''),
       ask: `hazme la pregunta ${number}`,
     }))

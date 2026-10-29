@@ -205,10 +205,11 @@ test('--out puts every open question of the record into the stamp, oldest first,
   assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
   const { questions } = JSON.parse(fs.readFileSync(path.join(dirs.out, 'board-checked.json'), 'utf8'));
   const who = FROM.title;
+  // `row` is the id of the question's row on the board (`rowOf`), by which a session asking it now is said once.
   assert.deepEqual(questions, [
-    { number: 1, from: who, at: '2026-10-23T20:41:00.000Z', text: '¿Arrancamos con las filas del audit?', ask: 'hazme la pregunta 1' },
-    { number: 3, from: who, at: '2026-10-26T09:00:00.000Z', text: '¿Se borra la nota vieja?', ask: 'hazme la pregunta 3' },
-    { number: 5, from: who, at: '2026-10-27T05:10:00.000Z', text: '(fila N1): ¿Una sola lista?', ask: 'hazme la pregunta 5' },
+    { number: 1, from: who, at: '2026-10-23T20:41:00.000Z', row: '2026-10-23T20:41:00.000Z-aaaaaaaa', text: '¿Arrancamos con las filas del audit?', ask: 'hazme la pregunta 1' },
+    { number: 3, from: who, at: '2026-10-26T09:00:00.000Z', row: '2026-10-26T09:00:00.000Z-aaaaaaaa', text: '¿Se borra la nota vieja?', ask: 'hazme la pregunta 3' },
+    { number: 5, from: who, at: '2026-10-27T05:10:00.000Z', row: '2026-10-27T05:10:00.000Z-aaaaaaaa', text: '(fila N1): ¿Una sola lista?', ask: 'hazme la pregunta 5' },
   ]);
 }));
 
@@ -356,15 +357,18 @@ test('the board lists what is his, then every open question with the line to ask
   assert.match(page, /const items = yoursItems\(summary, asking\);/, 'renderSummary lists them');
   const yoursItems = new Function('label', 'words', 'ago', `${source}; return yoursItems;`)((row) => row.session, (row) => row.text, () => 'hace 6 días');
   const questions = [
-    { number: 56, from: 'JH ORQ', at: '2026-10-23T20:41:00.000Z', text: '¿Arrancamos con el audit?', ask: 'hazme la pregunta 56' },
-    { number: 97, from: 'JH 60', at: '2026-10-27T13:59:00.000Z', text: '¿Cuál de los tres?', ask: 'hazme la pregunta 97' },
+    { number: 56, from: 'JH ORQ', at: '2026-10-23T20:41:00.000Z', row: '2026-10-23T20:41:00.000Z-11111111', text: '¿Arrancamos con el audit?', ask: 'hazme la pregunta 56' },
+    { number: 97, from: 'JH 60', at: '2026-10-27T13:59:00.000Z', row: '2026-10-27T13:59:00.000Z-60606060', text: '¿Cuál de los tres?', ask: 'hazme la pregunta 97' },
   ];
   const asking = [
-    { latest: { session: 'JH 60', time: '2026-10-27T13:59:00.000Z', text: '¿Cuál de los tres?' } },
-    { latest: { session: 'JH 88', time: '2026-10-29T15:00:00.000Z', text: '¿Sigo?' } },
+    { latest: { id: '2026-10-27T13:59:00.000Z-60606060', session: 'JH 60', time: '2026-10-27T13:59:00.000Z', text: '¿Cuál de los tres?' } },
+    // Codex, f68d869..89d0aa5: another session asking in the same millisecond, before the summary lists it, is not hidden.
+    { latest: { id: '2026-10-27T13:59:00.000Z-89898989', session: 'JH 89', time: '2026-10-27T13:59:00.000Z', text: '¿Y yo?' } },
+    { latest: { id: '2026-10-29T15:00:00.000Z-88888888', session: 'JH 88', time: '2026-10-29T15:00:00.000Z', text: '¿Sigo?' } },
   ];
   assert.deepEqual(yoursItems({ yours: ['Aprobar el gasto', 3], questions }, asking), [
     'Aprobar el gasto',
+    'JH 89 te pregunta: ¿Y yo?',
     'JH 88 te pregunta: ¿Sigo?',
     'Pregunta 56 · JH ORQ · hace 6 días: ¿Arrancamos con el audit? Para que te la haga, escribe «hazme la pregunta 56».',
     'Pregunta 97 · JH 60 · hace 6 días: ¿Cuál de los tres? Para que te la haga, escribe «hazme la pregunta 97».',
