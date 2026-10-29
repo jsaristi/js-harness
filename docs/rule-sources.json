@@ -859,12 +859,24 @@
         "date": "2026-10-26",
         "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
         "line": 1733
+      },
+      {
+        "quote": "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no quedan estandarizados? sera que menos protocolo y siempre generamos un eval o un template para que siempre muestre las cosas como quiero? y que asi se estandarice y no muestre algo diferente cada vez. dime como lo tengo que pedir por que siempre equivocas y siento es que yo no te pido las cosas paras que el arnes funcione como debe",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 14721
+      },
+      {
+        "quote": "ok listo entonces hagamos una plantilla de esto para que cuando vayamos a hacer este proceso siempre lo tengamos a la mano y podamos generar las demas plantillas de todo.",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 15262
       }
     ],
-    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness. Since the models are Anthropic's and Codex is only an outside reviewer of what is done and of a project's code, Claude works from a root CLAUDE.md that imports AGENTS.md, and AGENTS.md keeps what a reviewer needs (diet D3, F8's S3): a rule's prose home is a line of either file, no longer AGENTS.md alone. The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor.",
-    "accepted": "He accepted the split in his own typed words at line 1733 of e41d1e8d (\"Excelente me parece excelente eso asi\"), after asking at line 1665 whether only CLAUDE.md would be used and saying at line 1697 that Codex is only an outside reviewer.",
+    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness. Since the models are Anthropic's and Codex is only an outside reviewer of what is done and of a project's code, Claude works from a root CLAUDE.md that imports AGENTS.md, and AGENTS.md keeps what a reviewer needs (diet D3, F8's S3): a rule's prose home is a line of either file, no longer AGENTS.md alone. The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor. An output he sees again and again is cemented the same way, so a model's taste cannot reach him: a template of five parts (the sample he approved, the command that renders it from the records, a golden test, a gate on the path to him, and a test that the gate refuses a hand-made one), asked for in one line, \"Plantilla: qué quiero ver · cuándo aparece · cómo se ve (la muestra que apruebo) · dónde me llega\", a missing field asked alone, and every escape a FAILURES sighting and a new refusal test (odd/tasks/templates.md).",
+    "accepted": "He accepted the split in his own typed words at line 1733 of e41d1e8d (\"Excelente me parece excelente eso asi\"), after asking at line 1665 whether only CLAUDE.md would be used and saying at line 1697 that Codex is only an outside reviewer. The templates: after the recipe the lead gave him at line 15080 of 0f71b2c6, he asked for it in his own typed words at line 15262 (\"ok listo entonces hagamos una plantilla de esto ...\"), and approved the first template's sample, question 108, at line 17978.",
     "checked": {
-      "date": "2026-10-27",
+      "date": "2026-10-29",
       "by": "command"
     }
   },

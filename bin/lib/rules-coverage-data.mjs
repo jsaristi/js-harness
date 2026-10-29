@@ -207,8 +207,9 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "rules-live-in-the-harness": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "protocol",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "An output the user sees again and again is cemented the same way, as a template of five parts"
     },
     "sensor-silence": {
       "level": "check",

@@ -495,13 +495,15 @@ export const RULES = [
   },
   {
     "id": "rules-live-in-the-harness",
-    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory",
+    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts",
     "owner": "sebastian",
-    "since": "2026-10-27",
+    "since": "2026-10-29",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A rule is recorded only where something acts on it",
-      "A memory note is never its home."
+      "A memory note is never its home.",
+      "An output the user sees again and again is cemented the same way, as a template of five parts",
+      "and asks for a missing field alone."
     ]
   },
   {

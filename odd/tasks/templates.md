@@ -531,3 +531,12 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   five parts" and "and asks for a missing field alone.", the source keeping its 9 quotes as excerpts and adding
   0f71b2c6 lines 14721 and 15262. Then `status-report` (L8) as the next change, its text in
   `bin/lib/manifest.mjs`'s item 6, "What you propose next, and why". Each after the one before it lands; then T7.
+- Update 09:47Z: slice C landed (PR 656, main 509b5599); rule/visual-moments landed (PR 655). Slice D on
+  `rule/templates` from 509b5599: 6fd99fd5 is `rules change rules-live-in-the-harness` (the patch above, plus
+  its coverage control: declared after the baseline, it names the protocol line, `bin/lib/rules-coverage-data.mjs`);
+  e27ed2cf carries 70cf8bee, which the land left out. Codex over 509b559..e27ed2c: correct, 0.91; lenses risk,
+  readability: 0. Next: gentle-ai (status at base 509b5599 offers lineage review-407b62dd32e929c7), push, PR, ready
+  notice; then `status-report` on its own rule/ branch once this lands; then T7.
+- gentle-ai: approved, lineage review-55c5cc4b6a8efd4a, over 509b5599..00ead029 (6fd99fd5, e27ed2cf, 00ead029),
+  acknowledged; its reliability lens: 0 findings. The host compacted this session at 09:52Z, after 00ead029; the
+  review's tokens and result were in the job's tmp and resumed from there.
