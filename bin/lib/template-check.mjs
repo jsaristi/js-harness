@@ -68,6 +68,14 @@ function faultsOfEntry(entry, readFile, hooked) {
 // The characters after which a `/` starts a regular expression literal, not a division.
 const BEFORE_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
+/** Whether a `/` after the code `before` starts a regular expression literal: after one of `BEFORE_REGEX` or at the
+ * start, but not after a postfix `++` or `--`, which ends an operand, so the `/` divides it. */
+function regexStarts(before) {
+  const code = before.trimEnd();
+  if (code.endsWith('++') || code.endsWith('--')) return false;
+  return BEFORE_REGEX.includes(code.at(-1) ?? '(');
+}
+
 /** Where the regular expression literal opening at `start` ends (past its flags), or `start + 1` when the `/` opens
  * none on its line. A `/` inside a class `[...]` does not close it. */
 function regexEnd(source, start) {
@@ -133,7 +141,7 @@ function withoutComments(source) {
       const end = close < 0 ? source.length : source[i + 1] === '/' ? close : close + 2;
       out += source.slice(i, end).replace(/[^\n]/g, ' ');
       i = end - 1;
-    } else if (char === '/' && BEFORE_REGEX.includes(out.trimEnd().at(-1) ?? '(')) {
+    } else if (char === '/' && regexStarts(out)) {
       const end = regexEnd(source, i);
       out += source.slice(i, end);
       quoted.fill(1, i, end);
