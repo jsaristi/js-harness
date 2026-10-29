@@ -5,22 +5,22 @@
     "away-autonomy"
   ],
   "digests": {
-    "case": "5fa0372a1c2dc49d1b08bfa63bf780c41bd180c7c824beadc03f6861260a5c1a",
-    "rules": "4fc86871b151dbb0b52f859b02d7697d3acfc7712777da88114968f1492f73ee"
+    "case": "76c1b4fac1a603787e0c4a24c8edda4f8feffcbf1f5993a25563eaa5d72d2cf1",
+    "rules": "6e9354987d24ebbb39715565f49470204c2eaeb20289a84d249afc035a7ad0ae"
   },
   "date": "2026-10-29",
-  "commit": "f3463a2d7ca817d521b941b8869c19c5a929ebac",
+  "commit": "e4480f365ee00a2e893490c33b3ccca9b850c8fc",
   "current": {
-    "run": "f8-s5c-a-reach-away-2",
+    "run": "f8-s5c-a-reach-away-3",
     "arm": "current",
     "trials": 2,
-    "score": 0.8333333333333334
+    "score": 0.9166666666666667
   },
   "without": {
-    "run": "f8-s5c-a-reach-away-2",
+    "run": "f8-s5c-a-reach-away-3",
     "arm": "current-without-rule-away-autonomy",
     "trials": 2,
-    "score": 0.8333333333333334
+    "score": 0.9166666666666667
   },
-  "costUsd": 0.9377068000000001
+  "costUsd": 4.4258592
 }
