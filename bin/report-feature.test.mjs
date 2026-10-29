@@ -46,7 +46,7 @@ function project() {
   const records = path.join(repo, '.git', 'js-harness');
   fs.mkdirSync(records, { recursive: true });
   fs.writeFileSync(path.join(records, 'codex-reviews.jsonl'), `${JSON.stringify({ schema: 'js-harness.codex-review/v1', base: 'x', head: work, reviewedAt: '2026-10-29T02:00:00Z', outcome: 'reviewed', run: 'r1' })}\n`);
-  fs.writeFileSync(path.join(records, 'codex-review-runs.jsonl'), `${JSON.stringify({ id: 'r1', head: work, usage: { inputTokens: 1200, cachedInputTokens: 200 }, verdict: 'correct' })}\n`);
+  fs.writeFileSync(path.join(records, 'codex-review-runs.jsonl'), `${JSON.stringify({ id: 'r1', head: work, usage: { inputTokens: 1200, cachedInputTokens: 200 }, usageSource: 'rollout', verdict: 'correct' })}\n`);
   const slug = projectSlug(mainCheckout(run, repo));
   return { top, repo, home, work, merge, slug };
 }
@@ -92,6 +92,60 @@ test('a feature no merge names says its pull requests are unknown, and --pr name
   assert.match(JSON.parse(unknown.out).prs.unknown, /none of them is of feat\/other/);
   const named = await feature(place, ['odd/tasks/other.md', '--pr', '7', '--json']);
   assert.deepEqual(JSON.parse(named.out).prs.map((pr) => pr.number), [7]);
+});
+
+// A gate line as the gate writes it: its start, with the folder it ran in, and its end.
+const gate = (id, at, cwd, result, failing = []) => [
+  { v: 1, event: 'start', id, at, cwd, lock: 'own', command: 'check' },
+  { v: 1, event: 'end', id, at, result, sensors: [{ name: 'tests', failing }] },
+];
+
+test('the failed gates are those of the feature\'s own worktree while it ran, not another project\'s folder of its name', async (t) => {
+  const place = project();
+  t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));
+  const own = path.join(mainCheckout(run, place.repo), '.claude', 'worktrees', 'feature-x');
+  const lines = [
+    ...gate('g1', '2026-10-29T02:00:00Z', own, 'fail', ['bin/a.test.mjs']),
+    ...gate('g2', '2026-10-29T02:10:00Z', path.join(place.top, 'other-project', 'feature-x'), 'fail', ['bin/theirs.test.mjs']),
+    ...gate('g3', '2026-10-29T02:20:00Z', own, 'pass'),
+    ...gate('g4', '2026-10-29T05:00:00Z', own, 'fail', ['bin/after.test.mjs']),
+  ];
+  fs.mkdirSync(path.join(place.home, '.js-harness', 'gate-log'), { recursive: true });
+  fs.writeFileSync(path.join(place.home, '.js-harness', 'gate-log', 'log.jsonl'), lines.map((line) => `${JSON.stringify(line)}\n`).join(''));
+  const result = await feature(place, ['odd/tasks/feature-x.md', '--json']);
+  assert.equal(result.code, 0, result.err);
+  const { failures } = JSON.parse(result.out);
+  assert.equal(failures.folder, own);
+  assert.deepEqual(failures.runs.map((one) => one.failing), [['bin/a.test.mjs']]);
+});
+
+test('a gate log that cannot be read is said, never shown as no failure', async (t) => {
+  const place = project();
+  t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));
+  const dir = path.join(place.home, '.js-harness', 'gate-log');
+  fs.mkdirSync(path.join(dir, 'log.jsonl'), { recursive: true });
+  const html = path.join(place.top, 'feature.html');
+  const result = await feature(place, ['odd/tasks/feature-x.md', '--html', html]);
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.out, /failed gates unknown/);
+  const page = fs.readFileSync(html, 'utf8');
+  assert.match(page, /No se sabe qué gates fallaron: log\.jsonl: EISDIR/);
+  assert.doesNotMatch(page, /Ningún gate falló/);
+});
+
+test('the estimate is read from the project\'s stretch record, the plan items of the document\'s session', async (t) => {
+  const place = project();
+  t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));
+  const dir = path.join(place.home, '.js-harness', 'throughput', place.slug);
+  fs.mkdirSync(dir, { recursive: true });
+  const events = [
+    { event: 'open', id: 's1', plan: { items: [{ id: 'W1', hours: [1, 2], session: 'JH 9' }, { id: 'W2', hours: [4, 5], session: 'JH 10' }] } },
+    'not json',
+  ];
+  fs.writeFileSync(path.join(dir, 'stretches.jsonl'), events.map((one) => (typeof one === 'string' ? one : JSON.stringify(one))).join('\n'));
+  const result = await feature(place, ['odd/tasks/feature-x.md', '--json']);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(JSON.parse(result.out).time.estimate, { hours: [1, 2], items: ['W1'] });
 });
 
 test('report feature needs a readable document, and refuses a bad --pr', async (t) => {

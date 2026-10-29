@@ -11,14 +11,25 @@ import { stamp } from './report.mjs';
 
 const SPEC_ITEM = /^(\d+)\.\s+(.*)$/;
 
-/** The numbered items under `## Specs`, each `{ n, text }` with its continuation lines joined; fences skipped. */
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+/** The numbered items under `## Specs`, each `{ n, text }` with its continuation lines joined; fences skipped.
+ * A fence closes, as in CommonMark, only on a line of its own character as long or longer with nothing after it, so a
+ * shorter fence or one of the other character inside it is code too. */
 function specsOf(markdown) {
   const specs = [];
   let inSpecs = false;
-  let fence = false;
+  let fence = null;
   for (const line of markdown.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-    if (fence) continue;
+    const mark = FENCE.exec(line);
+    if (fence === null && mark) {
+      fence = mark[1];
+      continue;
+    }
+    if (fence !== null) {
+      if (mark && mark[1][0] === fence[0] && mark[1].length >= fence.length && mark[2].trim() === '') fence = null;
+      continue;
+    }
     if (/^##\s/.test(line)) {
       inSpecs = /^##\s+Specs\s*$/.test(line);
       continue;
@@ -32,17 +43,19 @@ function specsOf(markdown) {
 }
 
 /** What the feature document says of itself: `{ title, specs, commands, tasks: { done, total }, branches, session }`.
- * The branch and the session are read from its head line (`Branch \`x\``, `Session JH <n>`). */
+ * The branch and the session are read from its head, the lines before its first section (`Branch \`x\``, `Session JH <n>`). */
 export function featureFacts(markdown) {
   const tasks = tasksOf(markdown);
-  const branch = markdown.match(/^Branch `([^`]+)`/m);
+  // A log that quotes another session or branch is not the document's.
+  const head = markdown.split(/^##\s/m)[0];
+  const branch = head.match(/^Branch `([^`]+)`/m);
   return {
     title: markdown.match(/^#\s+(.+)$/m)?.[1].trim() ?? null,
     specs: specsOf(markdown),
     commands: doneWhen(markdown).commands,
     tasks: { done: tasks.filter((task) => task.done).length, total: tasks.length },
     branches: branch ? [branch[1]] : [],
-    session: markdown.match(/\bSession (JH \d+)\b/)?.[1] ?? null,
+    session: head.match(/\bSession (JH \d+)\b/)?.[1] ?? null,
   };
 }
 
@@ -51,28 +64,37 @@ const PULL_REQUEST = /^Merge pull request #(\d+) from (\S+)/;
 /** The pull requests of a feature from the merges of the default branch's first-parent line (`[{ hash, at, subject,
  * commits: [{ hash, at }] }]`, as `bin/report-feature.mjs` reads them): those whose source branch is one of
  * `branches`, or one of its slices (`<branch>-…`), an owner prefix removed, and those `numbers` names. Grouped by
- * number, oldest first: `[{ number, branch, at, merges, commits }]`, `at` its latest merge, `merges` their hashes
- * oldest first, `commits` those of every merge (none when the merges were given without them).
+ * number, oldest first: `[{ number, branch, how, at, firstAt, merges, commits }]`, `how` it is the feature's
+ * (`branch`, `slice` or `number`: a slice is a guess the page says), `at` its latest merge and `firstAt` its earliest,
+ * `merges` their hashes oldest first, `commits` those of every merge (none when the merges were given without them).
  * `{ unknown }` with why when no merge names a pull request, or none is the feature's. */
 export function prsOf(merges, { branches, numbers }) {
   const named = merges.map((merge) => ({ merge, pr: PULL_REQUEST.exec(merge.subject) })).filter(({ pr }) => pr);
   if (named.length === 0) return { unknown: 'no merge of the default branch names a pull request' };
   if (branches.length === 0 && numbers.length === 0) return { unknown: 'the document names no branch, and no --branch or --pr was given' };
-  const ofFeature = (source) => [source, source.split('/').slice(1).join('/')].find((name) => branches.some((branch) => name === branch || name.startsWith(`${branch}-`)));
+  const names = (source) => [source, source.split('/').slice(1).join('/')];
+  const exact = (source) => names(source).find((name) => branches.includes(name));
+  const slice = (source) => names(source).find((name) => branches.some((branch) => name.startsWith(`${branch}-`)));
   const byNumber = new Map();
   for (const { merge, pr } of [...named].sort((a, b) => a.merge.at - b.merge.at)) {
     const number = Number(pr[1]);
-    const branch = ofFeature(pr[2]);
-    if (branch === undefined && !numbers.includes(number)) continue;
-    const known = byNumber.get(number) ?? { number, branch: branch ?? pr[2], at: merge.at, merges: [], commits: [] };
+    const how = exact(pr[2]) ? 'branch' : slice(pr[2]) ? 'slice' : numbers.includes(number) ? 'number' : null;
+    if (how === null) continue;
+    const known = byNumber.get(number) ?? { number, branch: exact(pr[2]) ?? slice(pr[2]) ?? pr[2], how, at: merge.at, firstAt: merge.at, merges: [], commits: [] };
     known.at = merge.at;
-    known.branch = branch ?? known.branch;
     known.merges.push(merge.hash);
     known.commits.push(...(merge.commits ?? []));
     byNumber.set(number, known);
   }
   if (byNumber.size === 0) return { unknown: `${named.length} merges name a pull request, and none of them is of ${[...branches, ...numbers.map((n) => `#${n}`)].join(', ')}` };
   return [...byNumber.values()].sort((a, b) => a.at - b.at);
+}
+
+/** The hash of the earliest merge of all of `prs` (`prsOf`): the feature's first, though another pull request merged
+ * between two of one's merges; `null` when they are unknown. */
+export function firstMergeOf(prs) {
+  if (prs.unknown) return null;
+  return prs.reduce((first, pr) => (pr.firstAt < first.firstAt ? pr : first)).merges[0];
 }
 
 /** The estimate of a session's work from the stretch record's events: the plan items declared for `session`, or
@@ -95,7 +117,8 @@ const round1 = (n) => Math.round(n * 10) / 10;
 const countBy = (list, key) => list.reduce((counts, one) => ({ ...counts, [key(one)]: (counts[key(one)] ?? 0) + 1 }), {});
 
 /** The view of a feature's close from its facts, its pull requests (`prsOf`), the review and run records, the
- * estimate (`estimateOf`), its failed gates and the map moments `before` and `after` (`momentAt`). Every review, run
+ * estimate (`estimateOf`), its failed gates (`{ folder, runs }`, or `{ folder, unavailable }` when the gate log could not
+ * be read) and the map moments `before` and `after` (`momentAt`). Every review, run
  * and cost counted is one whose head is a commit of its pull requests. */
 export function featureView({ path, facts, prs, codexReviews, codexRuns, lensReviews, estimate, failures, before, after }) {
   const commits = prs.unknown ? [] : prs.flatMap((pr) => pr.commits);
@@ -105,7 +128,10 @@ export function featureView({ path, facts, prs, codexReviews, codexRuns, lensRev
   const runs = ofMine(codexRuns);
   const lens = ofMine(lensReviews);
   const lensResults = lens.flatMap((review) => review.results ?? []);
-  const measured = runs.filter((run) => Number.isFinite(run.usage?.inputTokens));
+  // Only tokens read from the session's own rollout files are a measure; a line without `usageSource` holds the zeros
+  // of Codex's events (`measuredParts` of ./codex-review-plan.mjs reads them the same way).
+  const measured = runs.filter((run) => run.usageSource === 'rollout' && Number.isInteger(run.usage?.inputTokens));
+  const reviewed = codex.filter((review) => review.outcome === 'reviewed');
   const sum = (list, value) => list.reduce((total, one) => total + (Number.isFinite(value(one)) ? value(one) : 0), 0);
   const usable = before && !before.unavailable ? before : null;
   return {
@@ -119,7 +145,8 @@ export function featureView({ path, facts, prs, codexReviews, codexRuns, lensRev
     },
     reviews: {
       commits: mine.size,
-      covered: commits.filter((commit) => codex.some((review) => review.head === commit.hash)).length,
+      covered: commits.filter((commit) => reviewed.some((review) => review.head === commit.hash)).length,
+      skipped: codex.filter((review) => review.outcome === 'unavailable').length,
       codex: countBy(codex, (review) => review.outcome),
       lens: countBy(lens, (review) => review.outcome),
       attempts: { runs: runs.length, byVerdict: countBy(runs, (run) => run.verdict ?? 'unknown') },
@@ -148,7 +175,8 @@ function promisedHtml({ specs, commands, tasks }) {
 
 function prsHtml(prs) {
   if (prs.unknown) return note(`No se sabe qué pull requests son suyos: ${prs.unknown}.`);
-  return table(['Pull request', 'Último merge', 'Commits'], prs.map((pr) => [`PR ${pr.number} · ${pr.branch}`, { text: stamp(pr.at), mono: true }, { text: `${pr.commits.length}: ${pr.commits.map((commit) => commit.hash.slice(0, 8)).join(' ')}`, mono: true }]));
+  const how = { branch: 'su rama', slice: 'porción de su rama: si no es suya, dé --pr con las suyas', number: 'dada con --pr' };
+  return table(['Pull request', 'Por qué es suyo', 'Último merge', 'Commits'], prs.map((pr) => [`PR ${pr.number} · ${pr.branch}`, how[pr.how], { text: stamp(pr.at), mono: true }, { text: `${pr.commits.length}: ${pr.commits.map((commit) => commit.hash.slice(0, 8)).join(' ')}`, mono: true }]));
 }
 
 function timeHtml({ realHours, estimate }) {
@@ -159,7 +187,7 @@ function timeHtml({ realHours, estimate }) {
 
 function reviewsHtml(reviews) {
   return [
-    note(`${reviews.covered} de ${reviews.commits} commits son el final de una revisión de Codex (la de un rango cuenta en su último commit).`),
+    note(`${reviews.covered} de ${reviews.commits} commits son el final de una revisión de Codex (la de un rango cuenta en su último commit)${reviews.skipped ? `; ${reviews.skipped} omitida${reviews.skipped === 1 ? '' : 's'} con --unavailable, que no cubre su commit` : ''}.`),
     table(['Revisión', 'Por resultado'], [
       ['Codex', counts(reviews.codex)],
       ['Lentes de Claude', counts(reviews.lens)],
@@ -176,9 +204,10 @@ function spendHtml({ codex, lens }) {
   ].join('');
 }
 
-function failuresHtml(failures) {
-  if (failures.length === 0) return note('Ningún gate falló en su carpeta mientras duró.');
-  return table(['Cuándo', 'Resultado', 'Lo que falló'], failures.map((one) => [{ text: stamp(Date.parse(one.startedAt)), mono: true }, one.result, one.failing.join(' · ') || '—']));
+function failuresHtml({ folder, runs, unavailable }) {
+  if (unavailable) return note(`No se sabe qué gates fallaron: ${unavailable}.`);
+  if (runs.length === 0) return note(`Ningún gate falló en ${folder} mientras duró.`);
+  return note(`En ${folder}:`) + table(['Cuándo', 'Resultado', 'Lo que falló'], runs.map((one) => [{ text: stamp(Date.parse(one.startedAt)), mono: true }, one.result, one.failing.join(' · ') || '—']));
 }
 
 function mapHtml(view) {
@@ -218,7 +247,7 @@ export function featureNumbers(view) {
     commits: view.reviews.commits,
     codexInputTokens: view.spend.codex.inputTokens,
     lensCostUsd: view.spend.lens.costUsd,
-    failures: view.failures.length,
+    failures: view.failures.unavailable ? null : view.failures.runs.length,
     map: view.map.total.after,
   };
 }

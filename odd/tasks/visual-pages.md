@@ -154,19 +154,24 @@ From the feature document and git:
   `bin/lib/contract.mjs`), read by section; its tasks done/total (`tasksOf`); the done-when commands listed as not
   run by the page (one may be the gate, which takes the lock: `contract run` is the lead's);
 - its pull requests: the merges of the default branch's first-parent line whose source branch, with an owner prefix
-  removed, is one the document names (`Branch \`x\`` at its head) or `--branch`, or named by `--pr <n>`, both
-  repeatable; grouped by number; each one's commits the union of `M^1..M^2` over its merges, as hashes. A history
-  whose merges name no pull request gives `{ unknown }` with why;
+  removed, is one the document names (`Branch \`x\`` at its head, the lines before its first section) or `--branch`,
+  or a slice of one (`<branch>-…`, a guess the page names as such), or named by `--pr <n>`, both repeatable; grouped
+  by number; each one's commits the union of `M^1..M^2` over its merges, as hashes. A history whose merges name no
+  pull request gives `{ unknown }` with why;
 - time: real from the oldest of those commits to the last merge; estimated from a closed or open stretch item whose
   session is the document's (`Session JH <n>` at its head), else "sin estimado registrado";
 - reviews: coverage, the Codex reviews (`codex-reviews.jsonl`) and lens reviews (`lens-reviews.jsonl`) whose head is
   one of those commits, by outcome; attempts, the Codex runs (`codex-review-runs.jsonl`) by run id; a review of a
   rebased head is not found and the page says so. The gentle-ai lines of the log are not counted: main's sweep (F8
   S11) refuses a file under `bin` that names the tool, and the page counts what the records hold;
-- spend: the Codex runs' `usage.inputTokens` and `cachedInputTokens` apart, a run with no usage counted as unknown;
+- spend: the Codex runs' `usage.inputTokens` and `cachedInputTokens` apart, only from runs whose tokens were read from
+  the rollout files (`usageSource: rollout`), any other run counted as unmeasured; a skip (`--unavailable`) covers no
+  commit and is counted apart;
   the lens results' `costUsd` and tokens; evals and the session's own tokens "sin medir";
-- failures: the failed gates of its worktrees inside its span, as the stretch measures them;
-- the map: at the first merge's first parent and at the last merge.
+- failures: the failed gates inside its span whose folder is its worktree, `.claude/worktrees/<document name>` of the
+  main checkout (the gate log is the machine's, so a folder of that name in another project is not its); a gate log
+  that cannot be read is said, never shown as no failure;
+- the map: at the first parent of the earliest merge of all its pull requests and at the last merge.
 `--record` appends the page record (subject: the document's path).
 
 ### The phase's change (`report phase`)

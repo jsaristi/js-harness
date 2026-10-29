@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { estimateOf, featureFacts, featureNumbers, featureView, prsOf, renderFeature } from './report-feature.mjs';
+import { estimateOf, featureFacts, featureNumbers, featureView, firstMergeOf, prsOf, renderFeature } from './report-feature.mjs';
 
 const DOC = [
   '# visual-pages',
@@ -25,7 +25,7 @@ const DOC = [
   '- [ ] T2 (kind: build) the page.',
   '',
   '## Log',
-  '- L1. His request.',
+  '- L1. His request, from Session JH 80 and `Branch `feat/other``.',
 ].join('\n');
 
 const at = (iso) => Date.parse(iso);
@@ -46,10 +46,15 @@ test('the facts of a feature document: its specs by number, its done-when comman
   assert.equal(facts.session, 'JH 79');
 });
 
-test('a document with no head line names no branch and no session', () => {
-  const facts = featureFacts('# x\n\n## Specs\n1. One.\n');
+test('a document with no head line names no branch and no session, whatever its later sections say', () => {
+  const facts = featureFacts('# x\n\n## Specs\n1. One.\n\n## Log\n- Session JH 80 merged it.\nBranch `feat/other` too.\n');
   assert.deepEqual(facts.branches, []);
   assert.equal(facts.session, null);
+});
+
+test('a fence closes only on its own delimiter, as long or longer, so a shorter or other fence inside it stays code', () => {
+  const doc = ['# x', '', '## Specs', '1. One.', '````markdown', '2. Not a spec.', '```', '3. Still in the fence.', '````', '4. Four.', '~~~', '```', '5. In the tilde fence.', '~~~', '6. Six.'].join('\n');
+  assert.deepEqual(featureFacts(doc).specs.map((spec) => spec.n), [1, 4, 6]);
 });
 
 test('its pull requests are the merges of its branch, its slices and an owner prefix, grouped by number, oldest first', () => {
@@ -61,7 +66,20 @@ test('its pull requests are the merges of its branch, its slices and an owner pr
   ]);
   assert.equal(prs[1].at, at('2026-10-29T03:00:00Z'));
   assert.deepEqual(prs[1].merges, ['m4', 'm2']);
-  assert.deepEqual(prsOf(MERGES, { branches: [], numbers: [649] }).map((pr) => pr.number), [649]);
+  assert.deepEqual(prs.map((pr) => pr.how), ['branch', 'branch', 'slice']);
+  assert.deepEqual(prsOf(MERGES, { branches: [], numbers: [649] }).map((pr) => [pr.number, pr.how]), [[649, 'number']]);
+});
+
+test('the first merge of a feature is the earliest of all its pull requests, though another merged in between', () => {
+  const merges = [
+    { hash: 'a1', at: 1, subject: 'Merge pull request #1 from feat/x' },
+    { hash: 'b1', at: 2, subject: 'Merge pull request #2 from feat/x-b' },
+    { hash: 'a2', at: 3, subject: 'Merge pull request #1 from feat/x' },
+  ];
+  const prs = prsOf(merges, { branches: ['feat/x'], numbers: [] });
+  assert.deepEqual(prs.map((pr) => pr.number), [2, 1]);
+  assert.equal(firstMergeOf(prs), 'a1');
+  assert.equal(firstMergeOf({ unknown: 'none' }), null);
 });
 
 test('a history whose merges name no pull request, or none of the feature, is unknown with why', () => {
@@ -84,10 +102,11 @@ const RECORDS = {
     { head: 'c3', outcome: 'reviewed' },
     { head: 'c1', outcome: 'reviewed' },
     { head: 'x1', outcome: 'reviewed' },
+    { head: 'c2', outcome: 'unavailable', reason: 'Codex was down' },
   ],
   codexRuns: [
-    { id: 'r1', head: 'c3', usage: { inputTokens: 1000, cachedInputTokens: 400 }, verdict: 'incorrect' },
-    { id: 'r2', head: 'c3', usage: { inputTokens: 500, cachedInputTokens: 100 }, verdict: 'correct' },
+    { id: 'r1', head: 'c3', usage: { inputTokens: 1000, cachedInputTokens: 400 }, usageSource: 'rollout', verdict: 'incorrect' },
+    { id: 'r2', head: 'c3', usage: { inputTokens: 0, cachedInputTokens: 0 }, verdict: 'correct' },
     { id: 'r3', head: 'c1' },
     { id: 'r4', head: 'x1', usage: { inputTokens: 9, cachedInputTokens: 0 } },
   ],
@@ -105,7 +124,7 @@ function view(over = {}) {
     prs: prsOf(MERGES, { branches: facts.branches, numbers: [] }),
     ...RECORDS,
     estimate: { hours: [3, 6], items: ['W1', 'W2'] },
-    failures: [{ startedAt: '2026-10-29T02:00:00Z', result: 'fail', cwd: 'D:/w/visual-pages', failing: ['a test'] }],
+    failures: { folder: 'D:/w/visual-pages', runs: [{ startedAt: '2026-10-29T02:00:00Z', result: 'fail', cwd: 'D:/w/visual-pages', failing: ['a test'] }] },
     before: { commit: 'b0', map: MAP_BEFORE },
     after: { commit: 'm3', map: MAP_AFTER },
     ...over,
@@ -116,14 +135,15 @@ test('the view counts time, reviews and spend over the feature\'s own commits, n
   const v = view();
   assert.equal(v.time.realHours, 8.5);
   assert.deepEqual(v.time.estimate, { hours: [3, 6], items: ['W1', 'W2'] });
-  assert.deepEqual(v.reviews.codex, { reviewed: 2 });
+  assert.deepEqual(v.reviews.codex, { reviewed: 2, unavailable: 1 });
+  assert.equal(v.reviews.skipped, 1);
   assert.deepEqual(v.reviews.lens, { reviewed: 1 });
   assert.deepEqual(v.reviews.attempts, { runs: 3, byVerdict: { incorrect: 1, correct: 1, unknown: 1 } });
-  assert.equal(v.reviews.covered, 2);
+  assert.equal(v.reviews.covered, 2, 'a skip covers no commit');
   assert.equal(v.reviews.commits, 4);
-  assert.deepEqual(v.spend.codex, { inputTokens: 1500, cachedInputTokens: 500, unknownRuns: 1 });
+  assert.deepEqual(v.spend.codex, { inputTokens: 1000, cachedInputTokens: 400, unknownRuns: 2 }, 'zeros not read from the rollout files are no measure');
   assert.deepEqual(v.spend.lens, { inputTokens: 400, outputTokens: 30, costUsd: 0.25, unknownCost: 1 });
-  assert.equal(v.failures.length, 1);
+  assert.equal(v.failures.runs.length, 1);
   assert.deepEqual(v.map.total, { before: { done: 1, total: 4 }, after: { done: 3, total: 4 } });
 });
 
@@ -135,24 +155,30 @@ test('the page says promised against delivered, the pull requests, time, reviews
   assert.match(html, /1 de 2 tareas/);
   assert.match(html, /npm run check[\s\S]*no los corre esta página/);
   assert.match(html, /PR 643[\s\S]*PR 645[\s\S]*PR 647/);
+  assert.match(html, /PR 647 · feat\/visual-pages-board[\s\S]*porción de su rama: si no es suya/);
   assert.match(html, /8\.5 h[\s\S]*3–6 h estimadas \(W1, W2\)/);
   assert.match(html, /2 de 4 commits/);
-  assert.match(html, /1\.500 tokens de entrada[\s\S]*500 en caché[\s\S]*1 corrida sin medir/);
+  assert.match(html, /1 omitida con --unavailable, que no cubre su commit/);
+  assert.match(html, /1\.000 tokens de entrada[\s\S]*400 en caché[\s\S]*2 corridas sin medir/);
   assert.match(html, /US\$ 0\.25[\s\S]*1 lente sin costo registrado/);
   assert.match(html, /Las evaluaciones y los tokens de la sesión no se miden/);
-  assert.match(html, /a test/);
+  assert.match(html, /D:\/w\/visual-pages[\s\S]*a test/);
   assert.match(html, /F1[\s\S]*1\/2[\s\S]*2\/2 · 100 %/);
 });
 
 test('what the records cannot tell is said, never invented: no estimate, unknown pull requests, no map before', () => {
-  const html = renderFeature(view({ estimate: null, prs: { unknown: 'no merge of the default branch names a pull request' }, before: { commit: 'b0', unavailable: 'bad object' }, failures: [] }));
+  const html = renderFeature(view({ estimate: null, prs: { unknown: 'no merge of the default branch names a pull request' }, before: { commit: 'b0', unavailable: 'bad object' }, failures: { folder: 'D:/w/visual-pages', runs: [] } }));
   assert.match(html, /sin estimado registrado/);
   assert.match(html, /No se sabe qué pull requests son suyos: no merge of the default branch names a pull request/);
   assert.match(html, /Ningún gate falló/);
   assert.match(html, /sin un antes: b0: bad object/);
+  const unread = renderFeature(view({ failures: { folder: 'D:/w/visual-pages', unavailable: 'log.jsonl: EACCES' } }));
+  assert.match(unread, /No se sabe qué gates fallaron: log\.jsonl: EACCES/);
+  assert.doesNotMatch(unread, /Ningún gate falló/);
+  assert.equal(featureNumbers(view({ failures: { unavailable: 'x' } })).failures, null);
 });
 
 test('the numbers a feature page keeps: delivered, time, reviews, spend and the map now', () => {
   const numbers = featureNumbers(view());
-  assert.deepEqual(numbers, { tasks: { done: 1, total: 2 }, prs: 3, realHours: 8.5, estimate: [3, 6], covered: 2, commits: 4, codexInputTokens: 1500, lensCostUsd: 0.25, failures: 1, map: { done: 3, total: 4 } });
+  assert.deepEqual(numbers, { tasks: { done: 1, total: 2 }, prs: 3, realHours: 8.5, estimate: [3, 6], covered: 2, commits: 4, codexInputTokens: 1000, lensCostUsd: 0.25, failures: 1, map: { done: 3, total: 4 } });
 });

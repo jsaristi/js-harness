@@ -13,7 +13,7 @@ import { harnessHome } from './lib/home.mjs';
 import { readLensReviews } from './lib/lens-reviews.mjs';
 import { appendPage, pagesFile } from './lib/pages-record.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
-import { estimateOf, featureFacts, featureNumbers, featureView, prsOf, renderFeature } from './lib/report-feature.mjs';
+import { estimateOf, featureFacts, featureNumbers, featureView, firstMergeOf, prsOf, renderFeature } from './lib/report-feature.mjs';
 import { gitRead, momentAt, readRef } from './lib/report-git.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { gateRuns } from './lib/stretch.mjs';
@@ -24,7 +24,8 @@ export const FEATURE_USAGE = [
   '  pull requests (the merges of the default branch from the branch its head line names, or a slice of it',
   '  <branch>-…, or --branch, or --pr), the time from its first commit to its last merge against the stretch',
   '  estimate of its session, the Codex and lens reviews and runs on its commits with their spend, the gates that',
-  '  failed in its worktree folder (named as the document), and the map before its first merge and after its last.',
+  '  failed in its worktree (.claude/worktrees/<document name> of the main checkout), and the map before its first',
+  '  merge and after its last.',
   '  --html <file>  write the page there and put it in the rendered record of the templates, to show it unchanged',
   '  --json         print the view as JSON alone',
   '  --record       keep the page\'s numbers in the page record, under the document\'s path',
@@ -113,7 +114,8 @@ export async function reportFeatureMain(argv, { cwd: defaultCwd = process.cwd(),
     return 2;
   }
   const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
-  const slug = projectSlug(mainCheckout(run, cwd));
+  const main = mainCheckout(run, cwd);
+  const slug = projectSlug(main);
   const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const at = new Date(now()).toISOString();
   const docFile = path.resolve(cwd, parsed.doc);
@@ -155,15 +157,24 @@ export async function reportFeatureMain(argv, { cwd: defaultCwd = process.cwd(),
   } catch (err) {
     return fail(`the stretch record could not be read: ${err.code ?? err.message}`);
   }
-  // The gates that failed in the feature's own folder while it ran: a worktree is named as its feature document.
+  // The gates that failed in the feature's own worktree while it ran: the one the harness makes for it, named as its
+  // document under the project's main checkout. The gate log is the machine's, so a folder of that name in another
+  // project is not the feature's; a log that cannot be read is said, never shown as no failure.
   const commits = prs.unknown ? [] : prs.flatMap((pr) => pr.commits);
   const from = commits.length ? Math.min(...commits.map((commit) => commit.at)) : null;
   const to = prs.unknown ? null : Math.max(...prs.map((pr) => pr.at));
-  const folder = path.basename(docFile, '.md');
-  const failures = from === null ? [] : gateRuns(readGateLog(home, { fileSystem }).events ?? [])
-    .filter((gate) => failedGate(gate.result) && Date.parse(gate.startedAt) >= from && Date.parse(gate.startedAt) <= to && typeof gate.cwd === 'string' && path.basename(gate.cwd) === folder);
+  const folder = path.join(main, '.claude', 'worktrees', path.basename(docFile, '.md'));
+  const samePlace = (a, b) => (process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
+  let failures;
+  if (from === null) failures = { folder, unavailable: 'its commits are not known, so neither is when it ran' };
+  else {
+    const log = readGateLog(home, { fileSystem });
+    failures = log.unavailable
+      ? { folder, unavailable: log.unavailable.join('; ') }
+      : { folder, runs: gateRuns(log.events).filter((gate) => failedGate(gate.result) && Date.parse(gate.startedAt) >= from && Date.parse(gate.startedAt) <= to && typeof gate.cwd === 'string' && samePlace(gate.cwd, folder)) };
+  }
 
-  const first = prs.unknown ? null : prs[0].merges[0];
+  const first = firstMergeOf(prs);
   const last = prs.unknown ? null : prs.at(-1).merges.at(-1);
   const head = last ?? gitRead(run, cwd, ['rev-parse', '--verify', `${named.ref}^{commit}`]).stdout?.trim();
   if (!head) return fail(`${named.ref} could not be read`);
@@ -198,7 +209,7 @@ export async function reportFeatureMain(argv, { cwd: defaultCwd = process.cwd(),
   if (parsed.json) stdout(JSON.stringify(view, null, 2));
   else {
     stdout(`${subject}: ${view.promised.tasks.done}/${view.promised.tasks.total} tasks; ${prs.unknown ? `pull requests unknown (${prs.unknown})` : prs.map((pr) => `PR ${pr.number}`).join(', ')}.`);
-    stdout(`Time ${view.time.realHours ?? '?'} h real, estimate ${view.time.estimate ? view.time.estimate.hours.join('-') + ' h' : 'none recorded'}; ${view.reviews.covered}/${view.reviews.commits} commits end a Codex review; ${failures.length} failed gates.`);
+    stdout(`Time ${view.time.realHours ?? '?'} h real, estimate ${view.time.estimate ? view.time.estimate.hours.join('-') + ' h' : 'none recorded'}; ${view.reviews.covered}/${view.reviews.commits} commits end a Codex review; ${failures.unavailable ? `failed gates unknown (${failures.unavailable})` : `${failures.runs.length} failed gates`}.`);
   }
   if (!parsed.record) return 0;
   try {
