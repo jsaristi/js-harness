@@ -2684,6 +2684,22 @@ test('rosterOf says of each row what the record says of its session: the last of
   assert.deepEqual(lib.rosterOf(sessions, { record: recordOf([]) }).rows.map((item) => item.record), [null, null, null, null]);
 });
 
+// odd/tasks/visual-pages.md, T5e (Codex's open P2 of L10): `sessions start` appends a session's first row with the time
+// of its launch, after the record was read, so a notice the session appended in between is behind that row.
+test('rosterOf keeps the newer of a session\'s states and places by when they were written, and record order only for a tie', () => {
+  const sessions = [member(B, 'JH 2 · the board', 120)];
+  const said = noticeOf(300, { id: B }, 'orchestrator', 'waiting', 'on the gate', { worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board' });
+  const started = noticeOf(600, { id: B, source: 'sessions start' }, 'orchestrator', 'opened', 'started by sessions start: JH 2 · the board', { worktree: 'D:\\proj-worktrees\\start', branch: 'feat/start' });
+  const recordOfRow = (notices) => lib.rosterOf(sessions, { record: recordOf(notices) }).rows[0].record;
+  const waiting = { status: { kind: 'waiting', at: before(300), text: 'on the gate' }, worktree: 'D:\\proj-worktrees\\board', branch: 'feat/board', notices: 2 };
+  assert.deepEqual(recordOfRow([said, started]), waiting);
+  assert.deepEqual(recordOfRow([started, said]), waiting);
+  // Two written at the same time, or one whose time cannot be read, go by the record's order.
+  const tied = { ...started, at: said.at };
+  assert.deepEqual([recordOfRow([said, tied]).status.kind, recordOfRow([tied, said]).status.kind], ['opened', 'waiting']);
+  assert.deepEqual(recordOfRow([said, { ...started, at: 'not a time' }]).worktree, 'D:\\proj-worktrees\\start');
+});
+
 const SENT = (seconds, to, id, more = {}) => ({ at: before(seconds), to, toKind: 'name', id, failed: false, summary: null, ...more });
 const RECEIVED = (seconds, name, id, more = {}) => ({ at: before(seconds), from: 'session', name, session: 'local_made-up', mode: 'bypass', id, ...more });
 /** An orchestrator and a work session that wrote to each other, a message to a title nobody of the window

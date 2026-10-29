@@ -540,6 +540,27 @@ it, in a change that touched nothing of the evals.
 - Control: check — evals/configs.test.mjs — "the fixture commit starts no git maintenance: nothing of
   it writes in the workspace once prepare has returned" — since 2026-10-15
 
+### failure-cause-dropped
+The facts the pages read of a stretch left out the words that say why a land or a Codex review
+failed: `landFacts` dropped a land record's `said`, and `codexFacts` a run's `reason`, so a failure
+read as an exit code or an outcome alone.
+- Class: unseen-state
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
+  "Left" — found closing visual pages; `stretch explain` was the only way to say why
+- Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
+  the reason it was logged with" — since 2026-10-29
+
+### fixture-refuses-late-check
+The rules tests' fixture owed every check since the coverage register's baseline, which a rule
+declared after the baseline cannot be, so a check control on such a rule turned eight tests red and
+a weaker control was chosen to keep them green.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-80-templates-everything-he-sees-made-by-a-command-and-hel.md,
+  line 56 — a check-level control broke 8 tests of `bin/rules.test.mjs` and
+  `bin/rules-coverage.test.mjs`; PR 662 used a protocol control instead
+- Control: check — bin/rules.test.mjs — "the fixture owes the check of a rule declared after the
+  baseline" — since 2026-10-29
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
@@ -1067,6 +1088,17 @@ away held the lead, and the merges it owed, for seven hours.
 - Was: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool and
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15)
+
+### record-order-over-time
+The board read a session's state and place by the order of the channel record, and `sessions start`
+appends a session's first row with the time of its launch, after a notice the session may have
+appended since the start read the record: that notice lands behind the row, and the board shows the
+session as just opened.
+- Class: unseen-state
+- Seen: 2026-10-29 — odd/tasks/visual-pages.md, L10 — Codex's recheck over `b70ac68..ca23a62`; left
+  open by the lead's decision (L11) and fixed as T5e
+- Control: check — bin/lib/sessions.test.mjs — "states and places by when they were written, and
+  record order only for a tie" — since 2026-10-29
 
 ### record-states-wrong-fact
 A record held a fact that was not true when written or stopped being true, and was read later as it

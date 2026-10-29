@@ -322,12 +322,13 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
 - [x] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline. Slice B.
 - [x] T5c (kind: build) the lead's status list as colored cards at the top of the live board. Spec 6. Route: inline. Slice B.
 - [x] T5d (kind: build) each session card's time on its task and its estimate. Spec 7. Route: inline. Slice B.
-- [ ] T5e (kind: build) follow-up of Codex's open P2 (L10): `recordOfRows` (`bin/lib/sessions.mjs`) keeps a session's
+- [x] T5e (kind: build) follow-up of Codex's open P2 (L10): `recordOfRows` (`bin/lib/sessions.mjs`) keeps a session's
   status and place by record order, so a session's notice appended between `sessions start`'s read of the record and
   its append of the start row is behind that row; the fix is to keep the newer by `at` (ties by record order). Outside
   this brief's surface for `bin/lib/sessions.mjs`; the lead's decision of 02:33Z: a follow-up after this feature, not
   in slice B (it changes how shared board code orders status), and named in the slice B PR as the one Codex finding
-  left open. Spec 4. Route: inline.
+  left open. Spec 4. Route: inline. Done by JH 85 on `fix/records-follow-ups`, in the commit "fix(sessions): keep a
+  session's newer state by its time".
 - [x] T5f (kind: build) follow-up, a defect found landing #644 (L16), outside this brief's surface: the merge queue
   (`bin/merge-queue.mjs:318`) passes `reviewCoverage` the pull request's head as the tip, so a record whose head lies
   past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
