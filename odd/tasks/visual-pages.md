@@ -482,6 +482,20 @@ carrying #644, landed (main 96b917a).
   worktrees it counts).
 - gentle-ai: 8d051cc6 approved (medium, lineage review-0d9cf00ce2f01b5f): one suggestion, a test of an HTML comment
   under `## Specs`, not taken: comment stripping is `tokenize`'s, tested in `bin/lib/progress.test.mjs`.
+- State at ~08:55Z: #654 (C3) landed. Slice D on `rule/visual-moments` (local, unpushed, main merged in):
+  69f6216d reports-spanish-visual (Codex correct 0.9, reliability lens nothing, gentle-ai approved, lineage
+  review-3296cd4e14584f34, its warning, the 2026-10-26 quotation dropped from the source, fixed in the next docs
+  commit); then away-autonomy's commit (return shows share met, map, timeline; goals run before the return), not yet
+  reviewed. Next: Codex and the lens on away-autonomy's commit (`--base` the docs commit before it), gentle-ai from
+  69f6216d, push, PR against main. Then T7 (the init line can name `rule:reports-spanish-visual` only if this repo's
+  CLAUDE.md names it too: template-block.test.mjs; CLAUDE.md is outside the brief's surface, so ask the lead), then
+  spec 9 below as slice E, then T10's departure.
+- Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
+  o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
+  fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
+  es el caso"). The stretch return page, beside each goal not met, failure and item not finished: why, how it was or
+  can be fixed, and why not if not; from the records only (a notice or commit that says it), else "no registrado";
+  then regenerate the closed stretch of 2026-10-29T03:06:28.748Z from the command. Estimate sent: 2.5-3.5 h.
 - State at ~08:00Z: #651 (C1) landed 06:54Z; #652 (C2) is on main, ready sent 07:23Z. C3 is `feat/visual-pages-c3`,
   to push and open on #652's branch.
 - State at ~06:40Z: #647 (slice B) landed (06:29Z). Slice C goes as two chained pull requests: C1, #651
