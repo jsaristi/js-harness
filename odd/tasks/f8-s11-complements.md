@@ -118,7 +118,7 @@ Reviews:
 - Lens reruns (2026-10-28, the lead: PR 630 makes older lens records stop counting; installed copy main 19f2d80):
   PR 629 over e0260e5..caaccd3, risk, reliability, readability: 0 findings (about 53,190 input tokens each); PR 632
   over caaccd3..83fcb8a, reliability, readability: 0 findings (about 39,320 input tokens each).
-- gentle-ai on `fc2a9a0f..fff61c60` (the range its Stop hook offered; new to it: 71e89a2b and the records): approved
+- gentle-ai on `fc2a9a0f..0cca03ed` (the range its Stop hook offered, whose tree fff61c60 was once written here as a commit; new to it: 71e89a2b and the records): approved
   (lineage review-f349eeab4a9cc763), two findings left. R3-001 (the test matches the dashed name only, not
   `gentleAi` or `GENTLE_AI_TELEMETRY`): the dashed name is the diet's pass line, `grep -rl gentle-ai`; the other
   spellings are old stack records a run still reads and a guard of his machine until S2 (L12). R3-002 (the test
@@ -138,7 +138,7 @@ Reviews:
   the absence test's `git ls-files` failed there; gentle-ai's R3-002 on fc2a9a0f..fff61c60 had said the test needs
   git, and was left on the belief that every test runs in a checkout). bca90373 walked the disk with no .git; Codex
   P2: the mirror holds untracked and ignored files, so a stray file would decide it. 57cb302a skips instead with no
-  .git; gentle-ai (lineage review-6e29079456ffbac5) R3-001, the read at module load, and R3-002, a CI step without
+  .git; gentle-ai on `0d2840ea..57cb302a`, bca90373 with it: approved (lineage review-6e29079456ffbac5), R3-001, the read at module load, and R3-002, a CI step without
   .git passing as a skip, taken in a4b1b66c, which skips only outside CI. The reliability lens: its own test asserted
   this checkout does not skip, false in the mirror; fixed in 3fc6425f. A no-.git copy of the tree holding a stray
   file that names gentle-ai passes 2 and skips 1; the committed test failed in it with "not a git repository".
