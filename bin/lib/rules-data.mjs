@@ -41,7 +41,7 @@ export const RULES = [
     "id": "away-autonomy",
     "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure with its goals, and when he is back its return checked against them",
     "owner": "sebastian",
-    "since": "2026-10-28",
+    "since": "2026-10-29",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "When the user says they leave you alone or will be away, ask nothing and seek no permission",
@@ -50,6 +50,8 @@ export const RULES = [
       "While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written",
       "Before they leave, open a stretch",
       "When they say they are back, before anything else, close it",
+      "the share of the planned that was met, the map by phase before and after, the timeline",
+      "before they are due back, so the time they take is known before the return",
       "Both are shown as a visual page in the chat, never drawn by hand"
     ]
   },
@@ -376,12 +378,15 @@ export const RULES = [
   },
   {
     "id": "reports-spanish-visual",
-    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source",
+    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source; at a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records, never drawn by hand",
     "owner": "sebastian",
-    "since": "2026-10-26",
+    "since": "2026-10-29",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
-      "reaches them in their language as a visual, didactic page"
+      "reaches them in their language as a visual, didactic page",
+      "the page is the one a command makes from the records",
+      "never drawn by hand, shown or published as the command wrote it",
+      "the live board stays the continuous view, and a pull request appears inside its feature's page"
     ]
   },
   {

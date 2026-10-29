@@ -25,9 +25,13 @@ async function rules(argv, root = PACKAGE) {
 // the cases and the repository's own sources (the shipped texts are rendered by the code that runs).
 const CHECKED = ['bin', 'docs', 'evals/tasks', 'odd/tasks', 'package.json', 'AGENTS.md', 'CLAUDE.md', 'README.md'];
 // The list marks the harness's own checkout, which `rules` tells from a project by it; the files the register's checks
-// name are there, since a check whose test or break is gone is refused.
-const NAMED = plantedBreaks(readCoverageText(fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8')).register)
-  .flatMap((item) => [item.test, item.break.path]);
+// name are there, since a check whose test or break is gone is refused, and so are those a line, a protocol or a
+// measurement is written in, since one whose path is gone is refused too.
+const REGISTER = readCoverageText(fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8')).register;
+const NAMED = [
+  ...plantedBreaks(REGISTER).flatMap((item) => [item.test, item.break.path]),
+  ...Object.values(REGISTER.controls).flat().filter((control) => typeof control?.path === 'string').map((control) => control.path),
+];
 const COVERED = [...new Set(['bin/lib/rules-data.mjs', 'bin/lib/rules-coverage-data.mjs', 'package.json', 'evals/tasks', 'AGENTS.md', 'CLAUDE.md', ...NAMED])];
 
 /** A copy of the `parts` of the package, in a temp folder outside the repository, for `body(root)`. */
@@ -55,11 +59,13 @@ test('the real package holds its baseline: rules coverage --strict exits 0 and s
 
 test('rules coverage --prove --json prints one JSON document, the proofs in it', async () => {
   await inCopy(async (root) => {
-    // Every control owed, so the proof plants no break and the document is all there is to read.
+    // Every check owed, so the proof plants no break and the document is all there is to read; a line or a protocol
+    // plants none and stays, since a rule declared after the baseline cannot be owed.
     edit(root, 'bin/lib/rules-coverage-data.mjs', (text) => {
       const { register } = readCoverageText(text);
       const owed = { level: 'owed', since: register.baseline };
-      const controls = Object.fromEntries(Object.entries(register.controls).map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...owed })) : owed]));
+      const unchecked = (control) => (control.level === 'check' ? owed : control);
+      const controls = Object.fromEntries(Object.entries(register.controls).map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...unchecked(item) })) : unchecked(control)]));
       return writeCoverage({ ...register, controls });
     });
     const { code, out, all } = await rules(['coverage', '--prove', '--json'], root);
