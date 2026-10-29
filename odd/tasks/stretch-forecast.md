@@ -104,7 +104,7 @@ effort.
 ## Tasks
 - [x] T1 (kind: build) the forecast, pure (`bin/lib/stretch-forecast.mjs`): resolving `closes`, the counts from the lanes, the shares and the measure now; and `closes` in `parsePlan`. Spec 1, 2. Route: inline. Commit: 3ddcf3f8.
 - [x] T2 (kind: build) the command: `open` resolves and forecasts, `closes` records a row for the open stretch, `status` and `close` measure against the forecast (`bin/stretch.mjs`). Spec 1, 2. Route: inline. Commit: f5d4d70f.
-- [ ] T3 (kind: build) the pages: the departure leads with the migration's plan and the map, two numbers each, the status and the return with the forecast section (`bin/lib/stretch-render.mjs`). Spec 1, 2, 3. Route: inline. Commit: pending.
+- [x] T3 (kind: build) the pages: the departure leads with the migration's plan and the map, two numbers each, the status and the return with the forecast section (`bin/lib/stretch-render.mjs`). Spec 1, 2, 3. Route: inline. Commit: d5873f14, 5aed8af1.
 - [ ] T4 (kind: verify) the open stretch's forecast rendered from the real record in a scratch home; reviews (Codex and the Claude lenses) on the slice; PR. Route: inline.
 - [ ] T5 (kind: docs) `rule:away-autonomy` names the migration's share now and at the return on the departure, through `js-harness rules change away-autonomy` on a `rule/` branch, his words quoted with their date; its own PR. Spec 3. Route: inline.
 - [x] T6 (kind: docs) the `docs/FAILURES.md` line: 2026-10-29 he left for an hour with no stretch opened, so the return had no goals; the check is `stretch status` at his departure. Spec 3. Route: inline.
@@ -129,3 +129,13 @@ effort.
   discarded, because this session wrote the T6 entry in `docs/FAILURES.md` in the worktree while it ran
   (`edit-during-review`, seen again; its Seen line added). Fix: the T6 commit first, then the review run again with
   nothing edited while it runs, under a declared `js-harness wait`.
+- L6. 2026-10-29, Codex run again over b60053a..a8461e9 (2 parts): correct in both (0.88), no findings, 275,221 input
+  tokens (185,728 cached). gentle-ai: the Stop hook offered the whole branch (`review status`: applicability
+  unrelated), so nothing was started, as `CLAUDE.md` says. Code commits approved by Codex and the lenses: 3ddcf3f8,
+  f5d4d70f, d5873f14, 5aed8af1. gentle-ai: not reviewed (whole-branch candidate only).
+- L7. 2026-10-29, checked: each new test fails on main 1c6b6c22 (the branch's four test files run in a detached
+  worktree of origin/main: 10 failing entries, the forecast module's file failing whole on import, 62 old tests
+  passing) and passes on the branch (77 of 77). The open stretch's real record, copied to a scratch home: `stretch
+  closes` for its three items, then `stretch status --html`, renders F8 plan 32 % now, ~42 % at the return, and the map
+  91 % now, ~92 %; every item ends within the 10 hours even by its high end, so neither range has width. The lanes do
+  not hold that S13 comes after S5c-a (the plan says so in its title); that is `laneOut`'s, not this feature's.
