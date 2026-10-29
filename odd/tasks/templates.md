@@ -402,3 +402,77 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   `cwd` test passes `cwd` equal to `root`; a second non-object entry reads as a repeated id; only the first call of a
   title is read; the CRLF test's fixture is not asserted to hold a newline; `sampleDigest` has no unit test): they
   are taken in slice B's first commit, so slice A takes no fourth review round.
+- Update ~06:05Z: slice B (`feat/templates-b`) holds bbd5c73d (slice A's second-round findings) and d57c075c (the
+  records and the page decisions). Unit 3, `template gate --hook` and `--shown` and `template shown`, is written and
+  green (`bin/template.test.mjs` 16 of 16, `bin/lib/template-gate.test.mjs` 13 of 13) and is not committed: the
+  open moments and the moments a record holds are injected, empty until a page template registers (slice C), and
+  the signature proof covers the 02:44Z widget. It is blocked: the gate answers a hook with a reason, so
+  `bin/lib/rules-sources.test.mjs` needs `bin/template.mjs` in `MESSAGE_SOURCES`, and then `rules check` refuses
+  it (S5c-a's D3, `odd/tasks/f8-s5c-a-coverage.md`: a message source after the baseline is refused until S5c-b
+  cuts it), so the real package fails `rules check` (8 tests of `bin/rules.test.mjs`, all this one finding). The
+  register `bin/lib/rules-coverage-data.mjs` is outside this brief's surface: the lead's call, asked 06:03Z.
+- Update ~06:20Z: the lead's answer (01:05 local, 06:05Z): "not (a). An owed seed for a source added after the
+  baseline is what D3 refuses ... Route (b): cut and declare bin/template.mjs's messages now ... Keep the reason
+  short. Then unit 4." Done in unit 3's commit: every sentence the gate sends is `GATE_SAYS` in
+  `bin/lib/template-gate.mjs` (a test holds each refusal to those sentences, filled); they are the text source
+  `template-gate` (`bin/lib/rules-sources.mjs`), and `bin/template.mjs` is listed in `CUT_MESSAGE_SOURCES`, not
+  owed whole; the register declares its 7 spans as context (4 state a fact of the call; 3 are directives the
+  `PreToolUse` hook enforces on the call itself). `rules check` passes. Slice D may tie the 3 directive spans to
+  the amended rule instead.
+- Update ~06:50Z: unit 3 is 0fa67aaa and unit 4 bc3a0520 (high risk, installer: install grafts
+  `claude-template-gate-hook` under PreToolUse and `claude-template-shown-hook` under PostToolUse; a scratch home
+  seeded with the user's own entries of both events: install exit 0, ours after theirs, both recorded; uninstall
+  exit 0 and settings.json equal to the seed byte for byte). One independent verifier runs on bc3a0520. The lead
+  relayed (01:23 local, unverified, JH 79's Codex run on main's slice A code) four points; each was read in the code
+  and holds: a required test only in a comment counted; an entry with no id passed as `(no id)`; a field given over
+  several lines ended the scaffold module's `//` comment; two `template new` at once could each write the list it
+  read. Unit 5 fixes each with its test: comments are blanked (strings kept) before the titles are read; a missing
+  id is a fault; the scaffold keeps each field on one line; `template new` holds an exclusive lock in the system's
+  temporary folder while it reads and writes the registry.
+- Update ~07:05Z: the independent verifier on bc3a0520 confirmed all five points (install, sync from a manifest
+  written before the change, downgrade, uninstall byte for byte in six seeded shapes; no Codex entry; the matcher
+  anchored; `gate --hook` exits 0 on every path tried, refusing only by the deny JSON; nothing broken on update).
+  Pre-existing and not this change's: an entry the user already had, identical to one of ours, is recorded as ours
+  and uninstall removes it (`bin/lib/manifest.mjs:584`, `:745`), told to the lead. Its minor point, two git calls
+  before `harness.json` is read on every call of the tools, is unit 6: the gate reads the nearest `harness.json`
+  first, with no git, and computes the project's records only where templates are on.
+- State ~07:10Z (context pause): slice B on `feat/templates-b`, worktree `D:\js-harness\.claude\worktrees\templates`,
+  base 39e69ee5, head 4c4509ca (units bbd5c73d, d57c075c, 0fa67aaa, bc3a0520, d7912f64, 4c4509ca). Running:
+  `js-harness codex-review --base 39e69ee5c44a306a7447f88906404c083ac33681` (log in the job tmp `codex-b.log`) and
+  `js-harness lens-review` with risk, resilience, readability, reliability (`lens-b.log`); gentle-ai lineage
+  review-7ce7253a9018aa39 started with consent relay, its envelope's `granted` invocation is next, then
+  lens-context, a general-purpose reader, capture-result (no `--agent`), acknowledge. Then: take the findings, add
+  a gentle-ai line here, push `feat/templates-b`, open the PR against main naming the high-risk installer change,
+  `js-harness notify --to orchestrator --kind ready --pr <n>` telling the lead the surface touched beyond the brief
+  (rules-sources, rules-coverage-data, js-harness.test, SPEC's hook table) and the verifier's pre-existing finding
+  (an identical user entry is removed by uninstall, `bin/lib/manifest.mjs:584`, `:745`). Then slice C (T5).
+- Update ~07:35Z (after the host's compaction at ~07:10Z): the lenses over 39e69ee..4c4509c found none (risk,
+  resilience, readability, reliability). Codex's run over 39e69ee..83d2f1b found 6 P2, each read and holding: the free
+  mark cut its reason at an apostrophe; `shownReport` counted a `constructor` id from an inherited key; the gate
+  hashed a page's decoded text, not its bytes; the registry was imported outside the gate's fail-open boundary; an
+  unreadable `harness.json` turned the gate off in silence; `template check` read a test call quoted in a string
+  fixture as a declaration. Unit 7, b1d938e3, fixes each with a test that failed on the code before it (7 failing,
+  then 155 of 155 over the five touched test files). Codex's recheck of 83d2f1b..b1d938e: 6 fixed, 0 not fixed,
+  correct at 0.95 (79,502 input tokens). Lenses risk, resilience, reliability over 83d2f1b..b1d938e: 0 findings.
+  gentle-ai lineage review-7ce7253a9018aa39 covers 39e69ee5..4c4509ca (medium, lens reliability); its reader runs.
+  Unit 7 then goes to gentle-ai as its own candidate.
+- gentle-ai: approved, medium, lineage review-7ce7253a9018aa39, over 39e69ee5..4c4509ca (0fa67aaa, bc3a0520,
+  d7912f64, 4c4509ca, and bbd5c73d, d57c075c before them), acknowledged. Its reliability lens left 4 non-blocking
+  findings, each read and holding, all fixed with a test that failed first in unit 8, 34f95b0c: an Artifact `files`
+  list skipped by the gate; a `files` source read without the publish's `root`; a quote in a regular expression or a
+  nested template literal flipping `template check`'s comment reader; `recordRendered` taking a time that does not
+  parse. Next: Codex and the lenses over unit 8, then units 7 and 8 to gentle-ai as one candidate.
+- Update ~08:30Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
+  fixed in dfc2692d and rechecked (1 fixed). Lenses over unit 8 and its fix: 0 findings.
+- gentle-ai: approved, medium, lineage review-53473f94dc0eb57c, over 4c4509ca..7660b66d (b1d938e3, 34f95b0c),
+  acknowledged. Its reliability lens left 3 non-blocking warnings, each holding, fixed with tests in unit 9, f08682ba:
+  a free-mark reason wrapped onto a second line; a regular expression after a keyword read as a division; a second
+  `unchecked` line from `--shown` when `harness.json` cannot be read. Codex over unit 9 found 2 P2 (an escaped CRLF
+  ending a string; `of`, `yield`, `await` taken for keywords), fixed in unit 10, f5eb5226, and rechecked (2 fixed);
+  the reader's comment now states what it does not model. Lenses over units 9 and 10: 0 findings.
+- gentle-ai: approved, medium, lineage review-f5f625f35e185de6, over 7660b66d..f5eb5226 (dfc2692d, f08682ba,
+  f5eb5226), acknowledged. Its reliability lens left 1 non-blocking warning, holding: the two shapes meant to prove
+  the reserved-word branch (`return /['"]/`, `typeof /'/`) still pass without it, because a quoted string now ends
+  on its line; a shape with the golden call after the regular expression on the same line proves it. Taken in slice
+  C's first commit, so slice B takes no further review round. Every code commit of slice B is covered: gentle-ai
+  39e69ee5..4c4509ca, 4c4509ca..7660b66d, 7660b66d..f5eb5226; Codex and the lenses each commit.

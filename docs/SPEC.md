@@ -137,8 +137,10 @@ entry, so `uninstall` removes exactly it (`bin/lib/manifest.mjs`, `entryComponen
 | UserPromptSubmit | `claude-rules-turn-hook` | — | `js-harness rules --hook` | as at start, at each turn |
 | SubagentStart | `claude-rules-subagent-hook` | — | `js-harness rules --hook` | as at start, for a sub-agent |
 | PreToolUse | `claude-guard-hook` | — | `js-harness guard --hook` | refuses a tool call that breaks a held rule |
+| PreToolUse | `claude-template-gate-hook` | — | `js-harness template gate --hook` | refuses an output to the owner no template command made |
 | PermissionRequest | `claude-permit-hook` | — | `js-harness permit --hook` | relays another session's permission card to the orchestrator |
 | PostToolUse | `claude-pause-hook` | — | `js-harness resume --pause` | the context pause and the inbox |
+| PostToolUse | `claude-template-shown-hook` | — | `js-harness template gate --shown` | records what the template gate let through as shown |
 | PostToolUseFailure | `claude-web-failure-hook` | — | `js-harness resume --pause` | the next rung after a failed web fetch |
 | Stop | `claude-share-hook` | — | `js-harness guard --stop` | turns back a reply whose stated context share is off its transcript's |
 | Stop | `claude-reply-hook` | `codex-reply-hook` | `js-harness reply --hook` | turns back a reply that closes with no state |
@@ -873,11 +875,11 @@ check or an eval case ("After F8", directive coverage).
 ### An output the owner sees again is a template of five parts
 
 **Problem:** On 2026-10-29 the owner saw a page made by hand where a command should have made it, and asked that everything he sees again and again be made by a command and held by a gate, so a model's taste cannot reach him (transcript `0f71b2c6`, lines 14721 and 15262; `odd/tasks/templates.md`, Specs).
-**Requirement:** Each such output is a registered template with five parts: the sample he approved, pinned by its sha256 and the words that approved it; the command that renders it from the records; a golden test; a gate on the path to him; and a test that the gate refuses a hand-made one. `js-harness template new <id>` scaffolds the five parts from his line `Plantilla: qué quiero ver · cuándo aparece · cómo se ve · dónde me llega` and names only the first field missing, so he is asked for that one alone; `template check` fails on a draft, a missing part, a sample whose bytes changed, a scaffold body left, a skipped test, a surface no hook entry of the harness watches, or a repeated id; `template list` prints the registry.
+**Requirement:** Each such output is a registered template with five parts: the sample he approved, pinned by its sha256 and the words that approved it; the command that renders it from the records; a golden test; a gate on the path to him; and a test that the gate refuses a hand-made one. `js-harness template new <id>` scaffolds the five parts from his line `Plantilla: qué quiero ver · cuándo aparece · cómo se ve · dónde me llega` and names only the first field missing, so he is asked for that one alone; `template check` fails on a draft, a missing part, a sample whose bytes changed, a scaffold body left, a skipped test, a surface no hook entry of the harness watches, or a repeated id; `template list` prints the registry. Where a project's `harness.json` holds `"templates": true`, `template gate --hook` refuses before the call a page no template command recorded, naming the command to run, and `--shown` records after it what was shown; `template shown` and `doctor`'s `templates` row list the escapes.
 **Reason:** An output held only by prose drifts with the model that writes it; one held by a command, its golden test and a gate cannot reach him by hand without the refusal saying so.
-**Proof:** `node --test bin/template.test.mjs`, `node --test bin/lib/template.test.mjs`, `node --test bin/lib/template-check.test.mjs`, `node --test bin/lib/template-scaffold.test.mjs`
+**Proof:** `node --test bin/template.test.mjs`, `node --test bin/lib/template.test.mjs`, `node --test bin/lib/template-check.test.mjs`, `node --test bin/lib/template-scaffold.test.mjs`, `node --test bin/lib/template-gate.test.mjs`, `node --test bin/lib/template-record.test.mjs`
 **Discarded:** A skeleton a session fills, as `contract template` prints: the model still writes what he sees. A checklist in a skill: nothing refuses an output that skips it.
-**Today:** `bin/template.mjs`, `bin/lib/template.mjs`, `bin/lib/template-check.mjs`, `bin/lib/template-scaffold.mjs`, `bin/lib/template-registry.mjs`, `js-harness template`
+**Today:** `bin/template.mjs`, `bin/lib/template.mjs`, `bin/lib/template-check.mjs`, `bin/lib/template-scaffold.mjs`, `bin/lib/template-registry.mjs`, `bin/lib/template-gate.mjs`, `bin/lib/template-record.mjs`, `js-harness template`, `claude-template-gate-hook`, `claude-template-shown-hook`
 
 ## After F8
 

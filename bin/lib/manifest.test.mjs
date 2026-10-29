@@ -1404,6 +1404,7 @@ test('entryComponents declare the permit relay for Claude Code only: a Permissio
 // --- The guard: a `PreToolUse` entry on the three tools it checks, in Claude Code's settings and nowhere else ---
 
 const guardHook = hookById('claude-guard-hook');
+const templateGateHook = hookById('claude-template-gate-hook');
 
 test('entryComponents declare the guard hook for Claude Code only: a PreToolUse entry on Agent and the two message tools, guarded to exit 0', () => {
   assert.ok(guardHook, 'the claude-guard-hook component is declared');
@@ -1471,6 +1472,24 @@ test('entryComponents declare the memory backup hook for both hosts: a Stop entr
   for (const hook of [claudeBackupHook, codexBackupHook]) {
     assert.deepEqual(hook.entry(), { hooks: [{ type: 'command', command: 'js-harness backup --hook || exit 0', timeout: 5 }] });
   }
+});
+
+// --- The template gate: a `PreToolUse` and a `PostToolUse` entry on the tools that show the user an output, in Claude Code's settings only ---
+
+test('entryComponents declare the template gate for Claude Code only: an anchored PreToolUse entry and a PostToolUse one on the same tools, guarded to exit 0', () => {
+  const gate = hookById('claude-template-gate-hook');
+  const shown = hookById('claude-template-shown-hook');
+  assert.ok(gate, 'the claude-template-gate-hook component is declared');
+  assert.ok(shown, 'the claude-template-shown-hook component is declared');
+  assert.deepEqual([gate.pointer, shown.pointer], [['hooks', 'PreToolUse'], ['hooks', 'PostToolUse']]);
+  for (const hook of [gate, shown]) assert.deepEqual(hook.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  const matcher = '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$';
+  assert.deepEqual(gate.entry(), { matcher, hooks: [{ type: 'command', command: 'js-harness template gate --hook || exit 0', timeout: 5 }] });
+  assert.deepEqual(shown.entry(), { matcher, hooks: [{ type: 'command', command: 'js-harness template gate --shown || exit 0', timeout: 5 }] });
+  const tools = new RegExp(matcher);
+  for (const tool of ['Artifact', 'ArtifactData', 'AskUserQuestion', 'mcp__visualize__show_widget']) assert.ok(tools.test(tool), tool);
+  for (const tool of ['ArtifactComments', 'Artifacts', 'mcp__visualize__show_widget2', 'Bash']) assert.equal(tools.test(tool), false, tool);
+  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && /template gate/.test(component.entry().hooks[0].command)), false, 'no Codex entry: the tools are Claude Code\'s');
 });
 
 test('entryComponents declare the memory fallback notice for both hosts: a SessionStart entry for every start, last', () => {
@@ -1547,8 +1566,8 @@ test('sync replaces a guard entry recorded with the older matcher by the new one
       fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: olderRecords }, null, 2), 'utf8');
 
       const manifest = sync(home, '0.2.0');
-      assert.deepEqual(readJson(target).hooks.PreToolUse, created ? [guardHook.entry()] : [theirs, guardHook.entry()], 'one guard entry, the new one');
-      assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), [guardHook.entry()]);
+      assert.deepEqual(readJson(target).hooks.PreToolUse, created ? ourPreToolUse() : [theirs, ...ourPreToolUse()], 'one guard entry, the new one');
+      assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), ourPreToolUse());
 
       uninstall(home);
       if (created) assert.equal(fs.existsSync(target), false, 'a file the install created goes with its last entry');
@@ -1578,8 +1597,8 @@ test('install replaces its own entry left with an older matcher, in place, keeps
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [theirs, older, sameMatcherTheirs, sharedWithTheirs] } }, null, 2)}\n`, 'utf8');
 
     const manifest = install(home, '0.2.0');
-    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), sameMatcherTheirs, sharedWithTheirs]);
-    assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), [guardHook.entry()]);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), sameMatcherTheirs, sharedWithTheirs, templateGateHook.entry()]);
+    assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), ourPreToolUse());
 
     const bytes = fs.readFileSync(target, 'utf8');
     install(home, '0.2.0');
@@ -1601,7 +1620,7 @@ test('install takes out every older form of its own entry when the new one is al
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [olderBash, theirs, guardHook.entry(), olderTimeout] } }, null, 2)}\n`, 'utf8');
 
     install(home, '0.2.0');
-    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry()]);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), templateGateHook.entry()]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1701,8 +1720,8 @@ test('install writes the pause hook under hooks.PostToolUse of the Claude settin
     const before = fs.readFileSync(settings, 'utf8');
     const again = install(home, '0.1.0');
     assert.equal(fs.readFileSync(settings, 'utf8'), before, 'a repeat install does not rewrite the file');
-    assert.equal(readJson(settings).hooks.PostToolUse.length, 1, 'and adds no second copy');
-    assert.equal(again.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PostToolUse').length, 1);
+    assert.equal(readJson(settings).hooks.PostToolUse.length, ourPostToolUse().length, 'and adds no second copy');
+    assert.equal(again.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PostToolUse').length, ourPostToolUse().length);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1722,8 +1741,8 @@ test('install writes the guard hook under hooks.PreToolUse of the Claude setting
     const before = fs.readFileSync(settings, 'utf8');
     const again = install(home, '0.1.0');
     assert.equal(fs.readFileSync(settings, 'utf8'), before, 'a repeat install does not rewrite the file');
-    assert.equal(readJson(settings).hooks.PreToolUse.length, 1, 'and adds no second copy');
-    assert.equal(again.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PreToolUse').length, 1);
+    assert.equal(readJson(settings).hooks.PreToolUse.length, ourPreToolUse().length, 'and adds no second copy');
+    assert.equal(again.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PreToolUse').length, ourPreToolUse().length);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1738,7 +1757,7 @@ test('a PostToolUse entry of another tool in the same settings file stays throug
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { PostToolUse: [theirs] } }, null, 2)}\n`, 'utf8');
 
     install(home, '0.1.0');
-    assert.deepEqual(readJson(target).hooks.PostToolUse, [theirs, pauseHook.entry()], 'ours is added after theirs');
+    assert.deepEqual(readJson(target).hooks.PostToolUse, [theirs, ...ourPostToolUse()], 'ours are added after theirs');
 
     const result = uninstall(home);
     assert.ok(result.entriesRemoved.includes(target));
@@ -2468,9 +2487,9 @@ test('a skipped entry that owns no list does not let uninstall delete the file: 
     const target = claudeHook.target(home);
     const manifest = install(home, '0.1.0');
     const isPause = (record) => record.path === target && record.pointer.at(-1) === 'PostToolUse';
-    assert.equal(manifest.entries.filter(isPause).length, 1);
-    // The machine of an install whose pause entry could not be written: the record says skipped and owns nothing, and
-    // the file holds a PostToolUse list the user wrote, with no entry of ours in it.
+    assert.equal(manifest.entries.filter(isPause).length, ourPostToolUse().length);
+    // The machine of an install whose PostToolUse entries could not be written: each record says skipped and owns
+    // nothing, and the file holds a PostToolUse list the user wrote, with no entry of ours in it.
     const failed = { ...manifest, entries: manifest.entries.map((record) => (isPause(record) ? { ...record, skipped: true, reason: 'made up', createdContainers: 0 } : record)) };
     fs.writeFileSync(manifestPath(home), JSON.stringify(failed, null, 2), 'utf8');
     const settings = readJson(target);
@@ -2493,15 +2512,15 @@ test('an entry written into a list the user made does not let uninstall delete t
     const target = claudeHook.target(home);
     const first = install(home, '0.1.0');
     const isPause = (record) => record.path === target && record.pointer.at(-1) === 'PostToolUse';
-    // The machine of an install from before the pause entry: the file it created holds no PostToolUse and its
+    // The machine of an install from before the PostToolUse entries: the file it created holds no PostToolUse and its
     // record names none. The user then writes an empty PostToolUse list of their own.
     fs.writeFileSync(manifestPath(home), JSON.stringify({ ...first, entries: first.entries.filter((record) => !isPause(record)) }, null, 2), 'utf8');
     const settings = readJson(target);
     fs.writeFileSync(target, `${JSON.stringify({ ...settings, hooks: { ...settings.hooks, PostToolUse: [] } }, null, 2)}\n`, 'utf8');
 
     const second = install(home, '0.1.0');
-    assert.deepEqual(second.entries.filter(isPause).map((record) => [record.skipped, record.createdFile, record.createdContainers]), [[false, true, 0]], 'the entry went into the user\'s list');
-    assert.equal(readJson(target).hooks.PostToolUse.length, 1);
+    assert.deepEqual(second.entries.filter(isPause).map((record) => [record.skipped, record.createdFile, record.createdContainers]), ourPostToolUse().map(() => [false, true, 0]), 'the entries went into the user\'s list');
+    assert.equal(readJson(target).hooks.PostToolUse.length, ourPostToolUse().length);
 
     uninstall(home);
     assert.equal(fs.existsSync(target), true, 'the file is kept: the list in it is the user\'s');

@@ -77,7 +77,9 @@ export function scaffold(given, sampleBytes) {
   const records = kind === 'rendered' ? `templates/${id}/records.json` : undefined;
   const module = `bin/lib/template-${id}.mjs`;
   const testFile = `bin/lib/template-${id}.test.mjs`;
-  const plantilla = { what: given.what.trim(), when: given.when.trim(), looks: sample, where: given.where.trim() };
+  // One line each: the module names them in a `//` comment, which a newline would end.
+  const line = (text) => text.replace(/\s+/g, ' ').trim();
+  const plantilla = { what: line(given.what), when: line(given.when), looks: sample, where: line(given.where) };
   const entry = {
     id,
     kind,

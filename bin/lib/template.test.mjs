@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SURFACES, registryOfText, surfaceOf, writeRegistry } from './template.mjs';
+import { createHash } from 'node:crypto';
+import { SURFACES, registryOfText, sampleDigest, surfaceOf, writeRegistry } from './template.mjs';
 import { TEMPLATES } from './template-registry.mjs';
 
 const ENTRY = { id: 'question', kind: 'rendered', surface: 'ask' };
@@ -34,4 +35,15 @@ test('each surface names the tools its gate watches; command takes a name and st
   assert.deepEqual(surfaceOf('command:notify'), { name: 'command', command: 'notify', tools: [] });
   assert.equal(surfaceOf('command:'), null);
   assert.equal(surfaceOf('mail'), null);
+});
+
+test('sampleDigest reads each CRLF as LF, and keeps a lone CR and every other byte', () => {
+  const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  const text = 'Pregunta 7: ¿Qué rama?\n<p>ñ</p>\n';
+  assert.equal(sampleDigest(text), sha(Buffer.from(text)));
+  assert.equal(sampleDigest(Buffer.from(text)), sampleDigest(text));
+  assert.equal(sampleDigest(Buffer.from(text.replace(/\n/g, '\r\n'))), sha(Buffer.from(text)));
+  assert.equal(sampleDigest('a\rb'), sha('a\rb'));
+  const binary = Buffer.from([0x89, 0x50, 0x0d, 0x0a, 0xff, 0x0d]);
+  assert.equal(sampleDigest(binary), sha(Buffer.from([0x89, 0x50, 0x0a, 0xff, 0x0d])));
 });

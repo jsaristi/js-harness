@@ -59,11 +59,18 @@ test('an empty registry has no fault', () => {
 });
 
 test('a sample checked out with CRLF is the sample he approved with LF', () => {
-  assert.deepEqual(run([entry()], files({ 'templates/question/sample.txt': Buffer.from(SAMPLE.replace(/\n/g, '\r\n')) })), []);
+  const crlf = Buffer.from(SAMPLE.replace(/\n/g, '\r\n'));
+  assert.notDeepEqual(crlf, Buffer.from(SAMPLE));
+  assert.deepEqual(run([entry()], files({ 'templates/question/sample.txt': crlf })), []);
 });
 
-test('an entry that is not an object is a fault, not a crash', () => {
-  assert.deepEqual(faultsOf(run([null, 7])), ['(no id): the entry is not an object', '(no id): the id is registered twice']);
+test('each entry that is not an object is a fault of its own, not a crash', () => {
+  assert.deepEqual(faultsOf(run([null, 7])), ['(no id): the entry is not an object', '(no id): the entry is not an object']);
+});
+
+test('a title declared twice is skipped when either of its calls is', () => {
+  const tests = `${TESTS}test.skip('template:question golden', () => {});\n`;
+  assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': tests }))), ['question: bin/lib/template-question.test.mjs skips its test "template:question golden"']);
 });
 
 test('a title that also appears outside its test call does not hide the call\'s skip', () => {
@@ -161,4 +168,55 @@ test('two entries with one id, or one signature, are a fault', () => {
   const result = faultsOf(run([page('a'), page('b')], files({ 'bin/lib/template-question.test.mjs': both }), ['Artifact', 'mcp__visualize__show_widget']));
   assert.deepEqual(result, ['b: its signature is also template a\'s']);
   assert.deepEqual(faultsOf(run([entry(), entry()])), ['question: the id is registered twice']);
+});
+
+test('a required test that is only in a comment is no test', () => {
+  const commented = [
+    `// test('template:question golden', () => {});\ntest('template:question refuses a hand-made one', () => {});\n`,
+    `/* test('template:question golden', () => {}); */\ntest('template:question refuses a hand-made one', () => {});\n`,
+    `/*\n * test('template:question golden', () => {});\n */\ntest('template:question refuses a hand-made one', () => {});\n`,
+  ];
+  for (const text of commented) {
+    assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': text }))), ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"'], text);
+  }
+  const quoted = `const url = 'https://example.test/a'; test('template:question golden', () => {});\ntest('template:question refuses a hand-made one', () => { const glob = '/*'; });\n`;
+  assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': quoted })), [], 'a // or /* inside a string is no comment');
+});
+
+test('a test call quoted inside a string, as a fixture, is no declaration: neither its test nor its skip', () => {
+  const fixture = `const skipped = "test.skip('template:question golden', () => {})";\n${TESTS}`;
+  assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': fixture })), [], 'the quoted skip is no skip of the real test');
+  const only = `const fixture = \`test('template:question golden', () => {});\`;\ntest('template:question refuses a hand-made one', () => {});\n`;
+  assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': only }))), ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"']);
+});
+
+test('a quote inside a regular expression or a nested template literal does not turn a commented test into a declared one', () => {
+  const golden = `test('template:question golden', () => {});`;
+  const refusal = `test('template:question refuses a hand-made one', () => {});`;
+  const missing = ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"'];
+  const shapes = [
+    `const quotes = /['"]/;\n// ${golden}\n${refusal}\n`,
+    `const s = /[/']/g.test(x) ? 1 : 2;\n/* ${golden} */\n${refusal}\n`,
+    `const t = \`a \${\`it's \${b}\`} c\`;\n// ${golden}\n${refusal}\n`,
+    `const fixture = 'a \\\r\n${golden.replace(/'/g, '"')}';\r\n${refusal}\r\n`,
+    `const fixture = 'a \\\n${golden.replace(/'/g, '"')}';\n${refusal}\n`,
+  ];
+  for (const text of shapes) assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': text }))), missing, text);
+  const declared = [
+    `const quotes = /['"]/;\n${golden}\n${refusal}\n`,
+    `const half = total / 2; const rest = 'x' / 1;\n${golden}\n${refusal}\n`,
+    `let n = 4; n++ / 2; ${golden} /x/.test('x'); m-- / 2; ${refusal} /y/.test('y');\n`,
+    `function quoted(x) { return /['"]/.test(x); }\n${golden}\n${refusal}\n`,
+    `const kind = typeof /'/;\n${golden}\n${refusal}\n`,
+    `const of = 4, yield_ = 1; of / 2; ${golden} /x/.test('x');\n${refusal}\n`,
+    `const odd = 1 /'/'.length;\n${golden}\n${refusal}\n`,
+    `const t = \`a \${{ k: '}' }.k} c\`;\n${golden}\n${refusal}\n`,
+  ];
+  for (const text of declared) assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': text })), [], text);
+});
+
+test('an entry with no id, or an id that is not a name, is a fault and never stands for another', () => {
+  const { id, ...noId } = entry();
+  assert.deepEqual(faultsOf(run([noId])), ['(no id): the entry lacks id']);
+  assert.deepEqual(faultsOf(run([entry({ id: '' }), entry({ id: 7 })])), ['(no id): the entry lacks id', '(no id): the entry lacks id']);
 });

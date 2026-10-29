@@ -1,6 +1,7 @@
 // The hook entries `install` grafts onto the hosts' settings, one function each, and the commands they run (the
 // `entryComponents` of ./manifest.mjs, which re-exports the commands). Moved out of the engine whole when F8 S10 added
 // its components, so the engine keeps to data and walking under its size ceiling (odd/tasks/f8-s10-port.md).
+import path from 'node:path';
 
 /** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
  * with nothing new to report (see odd/tasks/stack-doctor.md, "Registration"). */
@@ -173,4 +174,46 @@ export function rulesHookEntry(matcher) {
     ...(matcher === undefined ? {} : { matcher }),
     hooks: [{ type: 'command', command: RULES_HOOK_COMMAND, timeout: 5 }],
   };
+}
+
+/** The command of the template gate before a call, guarded to exit 0 like the guard's: a refusal travels as the hooks
+ * contract's JSON on standard output, so an older js-harness that answers 2 to `template gate` never blocks a call. */
+export const TEMPLATE_GATE_HOOK_COMMAND = 'js-harness template gate --hook || exit 0';
+
+/** The command of the template gate after a call that succeeded, guarded the same way. */
+export const TEMPLATE_SHOWN_HOOK_COMMAND = 'js-harness template gate --shown || exit 0';
+
+/** The tools by which an output reaches the user, each surface's of bin/lib/template.mjs (`SURFACES`) but `stop`, which
+ * the reply check holds. Anchored, as the guard's matcher is, so `ArtifactComments` is not `Artifact`. */
+export const TEMPLATE_GATE_MATCHER = '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$';
+
+/** `template gate --hook` (bin/template.mjs) registered as a `PreToolUse` hook on the tools of the template surfaces: a
+ * page no template command recorded is refused with the command to run (odd/tasks/templates.md, "The gates on the path
+ * to him"). PreToolUse ran before each of these tools in the six newest lead transcripts (the hook probe, T4). It acts
+ * only where the nearest `harness.json` holds `"templates": true` and prints `{}` everywhere else. Claude Code only:
+ * the tools are its own. Five seconds, as the guard's: it reads the page and two small records. */
+export function templateGateEntry() {
+  return {
+    matcher: TEMPLATE_GATE_MATCHER,
+    hooks: [{ type: 'command', command: TEMPLATE_GATE_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** `template gate --shown` registered as a `PostToolUse` hook on the same tools: after a call that succeeded it records
+ * that what `--hook` let through was shown, the line `template shown` counts. Five seconds: it reads one record. */
+export function templateShownEntry() {
+  return {
+    matcher: TEMPLATE_GATE_MATCHER,
+    hooks: [{ type: 'command', command: TEMPLATE_SHOWN_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The template gate's two entry components of `entryComponents` (./manifest.mjs), both in Claude Code's settings:
+ * kept here, beside their entries, so the engine stays under its size ceiling. */
+export function templateGateComponents() {
+  const target = (home) => path.join(home, '.claude', 'settings.json');
+  return [
+    { id: 'claude-template-gate-hook', target, pointer: ['hooks', 'PreToolUse'], entry: () => templateGateEntry() },
+    { id: 'claude-template-shown-hook', target, pointer: ['hooks', 'PostToolUse'], entry: () => templateShownEntry() },
+  ];
 }
