@@ -65,13 +65,16 @@ export async function reportPhaseMain(argv, { cwd: defaultCwd = process.cwd(), s
     stderr(`js-harness report phase: the roadmap at the default branch could not be read: ${after.unavailable}`);
     return 1;
   }
+  // The record is the before only when --since does not name one.
   const record = pagesFile(home, slug);
-  let last;
-  try {
-    last = lastPage(readPages(record, fileSystem), 'phase', 'map');
-  } catch (err) {
-    stderr(`js-harness report phase: the page record ${record} could not be read: ${err.code ?? err.message}`);
-    return 1;
+  let last = null;
+  if (parsed.since === undefined) {
+    try {
+      last = lastPage(readPages(record, fileSystem), 'phase', 'map');
+    } catch (err) {
+      stderr(`js-harness report phase: the page record ${record} could not be read: ${err.code ?? err.message}`);
+      return 1;
+    }
   }
   const beforeCommit = parsed.since ?? last?.head ?? null;
   const before = beforeCommit === null ? null : momentAt(run, cwd, beforeCommit);
@@ -81,8 +84,13 @@ export async function reportPhaseMain(argv, { cwd: defaultCwd = process.cwd(), s
   const say = parsed.json ? stderr : stdout;
   if (parsed.html) {
     const file = path.resolve(cwd, parsed.html);
-    fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-    fileSystem.writeFileSync(file, renderPhase(view), 'utf8');
+    try {
+      fileSystem.mkdirSync(path.dirname(file), { recursive: true });
+      fileSystem.writeFileSync(file, renderPhase(view), 'utf8');
+    } catch (err) {
+      stderr(`js-harness report phase: the page ${file} could not be written: ${err.code ?? err.message}`);
+      return 1;
+    }
     const rendered = await recordPageRendered({ home, slug, template: 'phase-change', subject: 'map', path: file, at, head: after.commit }, recordLoad ? { load: recordLoad } : {});
     say(rendered.recorded ? `Wrote ${file}, in the rendered record ${rendered.file} (sha256 ${rendered.recorded.sha256.slice(0, 12)}): show or publish it unchanged.` : `Wrote ${file}; it is not in the rendered record: ${rendered.unavailable}.`);
   }

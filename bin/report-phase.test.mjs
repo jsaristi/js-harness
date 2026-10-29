@@ -81,6 +81,12 @@ test('the next phase page compares with the commit the last one read, and --sinc
   const fromRecord = JSON.parse((await phase(place, ['--json'])).out);
   assert.deepEqual(fromRecord.head, { before: place.first, now: place.second, since: 'record' });
   assert.deepEqual(fromRecord.closed, ['F1 Skeleton']);
+
+  // --since needs no record: one that cannot be read does not stop it.
+  fs.rmSync(pagesFile(place.home, place.slug));
+  fs.mkdirSync(pagesFile(place.home, place.slug));
+  assert.equal((await phase(place, ['--json'])).code, 1, 'with no --since the record is the before, and it cannot be read');
+  assert.equal((await phase(place, ['--since', place.first, '--json'])).code, 0);
 });
 
 test('a page written is recorded once in the rendered record, and a before git cannot read is said, never compared', async (t) => {
@@ -93,11 +99,25 @@ test('a page written is recorded once in the rendered record, and a before git c
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(calls, [{ template: 'phase-change', subject: 'map', path: html, at: '2026-10-29T04:00:00.000Z', head: place.second }]);
   assert.match(fs.readFileSync(html, 'utf8'), /git no pudo leer deadbeef/);
-  assert.match(result.out, /rendered record/);
+  assert.match(result.out, /^Wrote .*p\.html, in the rendered record .*rendered\.jsonl \(sha256 ffffffffffff\): show or publish it unchanged\.$/m);
   assert.deepEqual(calls.length, 1);
   const none = await phase(place, ['--json'], { recordLoad });
   assert.equal(none.code, 0);
   assert.equal(calls.length, 1, 'no page written, nothing recorded');
+});
+
+test('a page that cannot be written is said with why, exit 1, and neither record takes it', async (t) => {
+  const place = project();
+  t.after(() => fs.rmSync(place.top, { recursive: true, force: true }));
+  const calls = [];
+  const recordLoad = async () => ({ renderedFile: () => path.join(place.top, 'rendered.jsonl'), recordRendered: (file, entry) => { calls.push(entry); return { sha256: 'f'.repeat(64), bytes: 1 }; } });
+  const blocker = path.join(place.top, 'a-file');
+  fs.writeFileSync(blocker, 'not a folder');
+  const result = await phase(place, ['--html', path.join(blocker, 'p.html'), '--record'], { recordLoad });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /js-harness report phase: the page .*p\.html could not be written: E/);
+  assert.equal(calls.length, 0);
+  assert.equal(fs.existsSync(pagesFile(place.home, place.slug)), false);
 });
 
 test('report phase refuses an unknown flag with the usage, and a default branch with no roadmap with why', async (t) => {
