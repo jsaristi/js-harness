@@ -523,7 +523,8 @@ function isOlderOwnEntry(item, entry) {
  * key that already exists but is not a plain object, or a leaf that already exists but is not an
  * array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent:
  * an entry that is already there (by deep equality) is left alone and the file is not rewritten at
- * all, so a repeat install/sync never reformats a file that already has what it needs. */
+ * all, so a repeat install/sync never reformats a file that already has what it needs. It says `present` whenever the
+ * entry was there before this run, also when only older forms of it were taken out. */
 function appendEntryToFile(target, pointer, entry, ours) {
   let fileExisted;
   let raw;
@@ -591,7 +592,7 @@ function appendEntryToFile(target, pointer, entry, ours) {
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
-  return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
+  return { skipped: false, ...(has && { present: true }), createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
 
 /** Whether a record says the list at its pointer is not one install made. A record that names no container as made
@@ -726,6 +727,9 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
     // pointer still holds. Written as none, the next install would take those containers for the user's, and
     // `uninstall` would leave them empty behind it.
     const earlier = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer));
+    // An entry the file already held, or one a skipped run never looked at, is ours only while the earlier record of it says so: else
+    // install did not write it, `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust. A record from before the field is ours.
+    const same = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && deepEqual(e.entry, entry));
     const record = {
       path: target,
       pointer,
@@ -736,6 +740,7 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
+      ...((result.present || result.skipped) && (same === undefined || same.createdEntry === false) ? { createdEntry: false } : {}),
       // A Codex entry names every config.toml Codex may keep its trust in, as each install resolved it, so the
       // uninstall edits those files whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
       ...(codexConfig && component.id.startsWith('codex-') ? { trustConfigs: withConfig(previousEntry?.trustConfigs ?? [], codexConfig) } : {}),
@@ -1079,21 +1084,19 @@ export function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   }
 }
 
-/** Writes every component for `version`, grafts every entry component, and records the resulting
- * manifest. Reads any previous manifest first (still on disk, since `writeManifest` below is the
- * last thing this does) so entry `createdFile` flags survive a repeat install — see
- * `installEntries`. `deps.writeFile` (default `fs.writeFileSync`) is an injectable seam so tests can
- * force a component write to fail without depending on real file permissions (chmod is unreliable
- * on Windows). R3-002 (accepted T4 review follow-up): a component whose host directory cannot be
- * reached (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run
- * rather than throwing out of install/sync — the manifest still records whatever else was actually
- * written, and a later, healthy run picks the missing component back up. R3-001 (accepted final
- * review follow-up, lineage review-cef5637e2884c12a): when the previous manifest already had a
- * record for that same target, that record is carried forward instead of dropped — marked
- * `skipped: true` with the failure's `reason` — so a file js-harness already wrote is never
- * orphaned: uninstall can still find and remove it (see `uninstall` below, unchanged: it already
- * compares the real file's sha256 against whatever record it is handed), and `sync`'s pruning
- * (below) never mistakes a merely-failed rewrite for a component that is no longer shipped. */
+/** Writes every component for `version`, grafts every entry component, and records the resulting manifest. Reads any
+ * previous manifest first (still on disk, since `writeManifest` below is the last thing this does) so entry
+ * `createdFile` flags survive a repeat install — see `installEntries`. `deps.writeFile` (default `fs.writeFileSync`) is
+ * an injectable seam so tests can force a component write to fail without depending on real file permissions (chmod is
+ * unreliable on Windows). R3-002 (accepted T4 review follow-up): a component whose host directory cannot be reached
+ * (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run rather than throwing out of
+ * install/sync — the manifest still records whatever else was actually written, and a later, healthy run picks the
+ * missing component back up. R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): when the
+ * previous manifest already had a record for that same target, that record is carried forward instead of dropped —
+ * marked `skipped: true` with the failure's `reason` — so a file js-harness already wrote is never orphaned: uninstall
+ * can still find and remove it (see `uninstall` below, unchanged: it already compares the real file's sha256 against
+ * whatever record it is handed), and `sync`'s pruning (below) never mistakes a merely-failed rewrite for a component
+ * that is no longer shipped. */
 export function install(home, version, deps = {}) {
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const previous = readManifest(home);
@@ -1117,11 +1120,10 @@ export function install(home, version, deps = {}) {
   return manifest;
 }
 
-/** Re-writes components for `version`, drops files and entries the current release no longer
- * ships, and updates the manifest. An old manifest with no `entries` field (written before T4)
- * still loads: pruning simply has nothing to prune. `deps` is forwarded to `install` (see its
- * `deps.writeFile` seam above), and `deps.listDir` is the seam that lists the folder a pruned file
- * leaves behind (see `uninstall`). */
+/** Re-writes components for `version`, drops files and entries the current release no longer ships, and updates the
+ * manifest. An old manifest with no `entries` field (written before T4) still loads: pruning simply has nothing to
+ * prune. `deps` is forwarded to `install` (see its `deps.writeFile` seam above), and `deps.listDir` is the seam that
+ * lists the folder a pruned file leaves behind (see `uninstall`). */
 export function sync(home, version, deps = {}) {
   const previous = readManifest(home);
   const manifest = install(home, version, deps);
@@ -1156,7 +1158,7 @@ export function sync(home, version, deps = {}) {
     Object.defineProperty(manifest, 'pruneKept', { value: pruneKept, enumerable: false });
 
     const keptEntries = manifest.entries ?? [];
-    const pruned = (previous.entries ?? []).filter((entry) => !entry.skipped && !keptEntries.some(
+    const pruned = (previous.entries ?? []).filter((entry) => !entry.skipped && entry.createdEntry !== false && !keptEntries.some(
       (e) => e.path === entry.path && deepEqual(e.pointer, entry.pointer) && deepEqual(e.entry, entry.entry),
     ));
     // An entry no longer shipped moves the Codex hooks after it as an uninstall does, so its trust goes the same way.
@@ -1173,12 +1175,10 @@ export function sync(home, version, deps = {}) {
   return manifest;
 }
 
-/** Deletes manifest files whose content is untouched; keeps and reports edited ones, optional files
- * included (reported in the same two lists). Removes each
- * recorded entry the same way (deep-equal match only, file left alone otherwise — see
- * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
- * `files`/`entries` since it is not "installed content"), the folder of the machine's gate lock, and
- * finally the manifest itself.
+/** Deletes manifest files whose content is untouched; keeps and reports edited ones, optional files included (reported
+ * in the same two lists). Removes each recorded entry the same way (deep-equal match only, file left alone otherwise —
+ * see `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of `files`/`entries`
+ * since it is not "installed content"), the folder of the machine's gate lock, and finally the manifest itself.
  *
  * The gate lock's folder is written by `check` and `gate`, not by `install`, so it is looked for under a
  * home with no manifest as well, which is otherwise left as it is. Its path is in `removed` when it was
@@ -1336,11 +1336,11 @@ function uninstallInstalled(home, deps) {
 
   // Codex keys a hook's trust by its place, so where each group of a Codex hooks.json goes is read before any entry
   // of it is taken out, and the trust follows the entries once they are out.
-  const trustPlans = planTrustMoves(manifest.entries ?? []);
+  const trustPlans = planTrustMoves((manifest.entries ?? []).filter((entry) => entry.createdEntry !== false));
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
-    if (entry.skipped) continue;
+    if (entry.skipped || entry.createdEntry === false) continue;
     const result = removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile, entry.createdContainers, pointersIn(manifest.entries, entry.path));
     if (result.status === 'removed') entriesRemoved.push(entry.path);
     else if (result.status === 'kept') entriesKept.push(entry.path);
