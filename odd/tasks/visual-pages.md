@@ -291,6 +291,11 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   this brief's surface for `bin/lib/sessions.mjs`; the lead's decision of 02:33Z: a follow-up after this feature, not
   in slice B (it changes how shared board code orders status), and named in the slice B PR as the one Codex finding
   left open. Spec 4. Route: inline.
+- [ ] T5f (kind: build) follow-up, a defect found landing #644 (L16), outside this brief's surface: the merge queue
+  (`bin/merge-queue.mjs:318`) passes `reviewCoverage` the pull request's head as the tip, so a record whose head lies
+  past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
+  head is not past. The first pull request of a stack, landed alone after a review over the stack, passes the queue
+  and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
@@ -389,6 +394,10 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   writes `corrected` by arithmetic, so numbers, `bin/lib/stretch.mjs:126`); the place is read on every start
   (`placeOf` catches every failure and returns null, `bin/lib/channel.mjs:652-663`); the branch 'main' depends on
   the fixture (it runs `git init -b main`, `bin/sessions-background.test.mjs:90`).
+- L16. 2026-10-29 03:00Z, the lead: landing #644 alone was refused at push, 35c8d1fd with no record, though the queue
+  counted it ready. Read in the code: its commit was reviewed inside Codex `c8ee437..8a412b7` and the lenses'
+  `62315e6..8a412b7`, and the two count against different tips (T5f). The lead chose the free path: #645 retargeted
+  to main with head 2bd3bc72, carrying #644's commit; #644 closes as included when #645 lands; T5f an open follow-up.
 
 ## Next step
 State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
