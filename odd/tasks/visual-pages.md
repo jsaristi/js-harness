@@ -398,6 +398,17 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   counted it ready. Read in the code: its commit was reviewed inside Codex `c8ee437..8a412b7` and the lenses'
   `62315e6..8a412b7`, and the two count against different tips (T5f). The lead chose the free path: #645 retargeted
   to main with head 2bd3bc72, carrying #644's commit; #644 closes as included when #645 lands; T5f an open follow-up.
+- L17. 2026-10-29 ~03:20Z, the lead: T10 builds no hash gate of its own. JH 80 (Templates, `odd/tasks/templates.md`
+  on `origin/feat/templates` at db5f7409, sections "The two records" and "The gates") owns the one gate for every
+  output that reaches him, pages included: `renderedFile(home, slug)`, `recordRendered(file, {template, path, at,
+  head})` hashing the written file, six template ids and the refusal text. T10 shrinks to one `recordRendered` call a
+  page command, behind a seam the tests stub, the tests that prove the call is made, and the departure's map,
+  timeline and titles as written; built against that contract, its code landing with JH 80's build.
+- L18. 2026-10-29 ~03:30Z: slice B goes as one pull request carrying `feat/visual-pages-b` (9b36b5b5, 312 lines) and
+  this branch (625), 933 in all. 9b36b5b5's reviews ran over 2bd3bc7..b70ac68, so `feat/visual-pages-b` landed alone
+  would be refused at push as #644 was (T5f); splitting it would pay its reviews again (Codex about 180k input tokens,
+  estimated). Slice A's PR carries a fix of gentle-ai's warning on 2bd3bc72 (e05a86e2), reviewed by Codex, the lens
+  and gentle-ai.
 
 ## Next step
 State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
@@ -406,6 +417,9 @@ State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\vi
 - Slice B reviews: Codex rechecks done (67e6230..1f61e01 one P2 fixed; 1f61e01..71d626c correct 0.99); lenses all 0
   findings; gentle-ai lineage review-8ed9074b0701c90f (ca23a627..71d626c5) approved and acknowledged (L15). Slice B
   is fully reviewed.
-- Then: push `feat/visual-pages-b` and `feat/visual-pages-board`; PRs stacked on #645 (bodies name T5e as the one
-  Codex finding left open, the lead's decision; `board/summary.status` and `estimates` shapes); notify ready.
-- Then answer the lead on spec 8 (T10 in slice C), slice C (T6, T7, T10), slice D (T8), T9.
+- gentle-ai: 2bd3bc72..b70ac68d approved (medium, lineage review-7c6f3a36e3078389), with 9b36b5b5 in it.
+- gentle-ai: b70ac68d..ca23a627 approved (medium, lineage review-3aafcdd1541ce20e).
+- gentle-ai: ca23a627..71d626c5 approved (medium, lineage review-8ed9074b0701c90f).
+- State at ~03:30Z: #645 (slice A, carrying #644) ready on main, head 7f09d915. Slice B: one PR (L18) on
+  `feat/visual-pages`, then notify ready once #645 lands and this branch merges main.
+- Then slice C (T6, T7, T10 as L17 says), slice D (T8), T9.
