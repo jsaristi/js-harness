@@ -292,6 +292,16 @@ A session ran a command it did not know, to read its help, and the command acted
 - Control: check — bin/writing-flags.test.mjs — "exits 2, names the flag and writes nothing" — since
   2026-10-14
 
+### commit-attribution-from-host
+A session wrote the host's attribution lines into a commit message, which this repo's own rule
+forbids: the host's reminder asks for them, and its own text says the user's instructions come first.
+- Class: rule-not-acting
+- Seen: 2026-10-29 — JH 88, its first commit of feat/lead-manual-steps — the message carried
+  `Co-Authored-By` and `Claude-Session`; the commit was stopped while its pre-commit gate waited for
+  the gate lock, so none was made, and it was made again without them
+- Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
+  commits only" — since 2026-10-29
+
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
 the cost of more gates.

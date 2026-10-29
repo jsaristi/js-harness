@@ -38,8 +38,8 @@ minutes after a land (JH 84, Decisions, unit 4), and a copy already behind canno
 
 ## Next step
 State at the context pause (2026-10-29, JH 88). The change is a chain of three PRs (over 400 lines):
-- Slice 1, branch feat/lead-manual-steps: commit fd41d373 (S6), its gate passed. Slice 2 was rebuilt on
-  feat/lead-manual-steps-2 and its commit started; check `git log -1` there. Not yet in either:
+- Slice 1, branch feat/lead-manual-steps: commit fd41d373 (S6), its gate passed. Slice 2, feat/lead-manual-steps-2:
+  183b473b, gate passed. Slice 3, feat/lead-manual-steps-3: its commit started; check `git log -1` there. In slice 3:
   docs/FAILURES.md (commit-attribution-from-host), which is still uncommitted: commit it with slice 3.
 - Slice 2, branch feat/lead-manual-steps-2 from slice 1 (S4, S5, S7): the untracked bin/lib/merge-queue-waits.mjs and
   its test, bin/lib/merge-queue-refresh-now.mjs, and the full versions saved in
