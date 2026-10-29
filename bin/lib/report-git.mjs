@@ -23,10 +23,11 @@ export function readRef(run, cwd) {
   return named.error ? { error: named.error } : paceRef(named.stdout);
 }
 
-/** The commit `ref` pointed at, on its first-parent line, at the time `ms`; `null` when git has none. */
+/** The commit `ref` pointed at, on its first-parent line, at the time `ms`: `{ commit }`, `commit` null when it had
+ * none yet, or `{ error }` when git could not say. */
 export function headBefore(run, cwd, ref, ms) {
   const read = gitRead(run, cwd, ['rev-list', '--first-parent', '-1', `--before=${new Date(ms).toISOString()}`, ref, '--']);
-  return read.error ? null : read.stdout.trim() || null;
+  return read.error ? { error: read.error } : { commit: read.stdout.trim() || null };
 }
 
 /** `{ done, total }` of a feature document's tasks. */
@@ -38,12 +39,14 @@ function countsOf(markdown) {
 /** The moment at `commit`: `{ commit, map, plans, tasks }`, `map` the roadmap's phases (`mapOf`), `plans` its plan
  * steps (`planOf`) with each name the step quotes that is a feature document at that commit (`odd/tasks/<name>.md`)
  * added to its documents, and `tasks` the counts of every document a step names, by path. `{ commit, unavailable }`
- * when the commit holds no roadmap git can show. */
+ * when the commit holds no roadmap git can show, or git fails to list or show a feature document: a count it could
+ * not read would pass for a document that was not there. */
 export function momentAt(run, cwd, commit) {
   const roadmap = gitRead(run, cwd, ['show', `${commit}:docs/ROADMAP.md`]);
   if (roadmap.error) return { commit, unavailable: roadmap.error };
   const listed = gitRead(run, cwd, ['ls-tree', '--name-only', commit, '--', 'odd/tasks/']);
-  const present = new Set(listed.error ? [] : listed.stdout.split('\n').map((line) => line.trim()).filter(Boolean));
+  if (listed.error) return { commit, unavailable: listed.error };
+  const present = new Set(listed.stdout.split('\n').map((line) => line.trim()).filter(Boolean));
   const plans = planOf(roadmap.stdout).map((plan) => ({
     ...plan,
     steps: plan.steps.map((step) => {
@@ -55,7 +58,8 @@ export function momentAt(run, cwd, commit) {
   for (const path of new Set(plans.flatMap((plan) => plan.steps.flatMap((step) => step.documents)))) {
     if (!present.has(path)) continue;
     const shown = gitRead(run, cwd, ['show', `${commit}:${path}`]);
-    if (!shown.error) tasks[path] = countsOf(shown.stdout);
+    if (shown.error) return { commit, unavailable: `${path}: ${shown.error}` };
+    tasks[path] = countsOf(shown.stdout);
   }
   return { commit, map: mapOf(roadmap.stdout), plans, tasks };
 }

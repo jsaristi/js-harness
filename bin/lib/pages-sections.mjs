@@ -11,7 +11,7 @@ const ratio = (one) => (one && one.of > 0 && one.met !== null ? one.met / one.of
 /** The shares of a stretch as tiles: goals met, goals met in time, work done, and the sessions outside the plan. */
 export function sharesTiles({ goals, work, outside }) {
   const caption = (one, words, unknownWords) => {
-    if (one.of === 0) return `sin ${words}`;
+    if (one.of === 0) return 'nada planeado';
     if (one.met === null) return `${one.unknown} ${unknownWords}`;
     return `${one.met} de ${one.of} ${words}${one.unknown ? `, ${one.unknown} sin medir` : ''}`;
   };
@@ -24,7 +24,7 @@ export function sharesTiles({ goals, work, outside }) {
   ]);
 }
 
-const PHASE_CHANGE = { same: ['igual', 'mut'], changed: ['cambió', 'part'], closed: ['cerrada', 'ok'], new: ['nueva', 'part'], gone: ['ya no está', 'no'] };
+const PHASE_CHANGE = { same: ['igual', 'mut'], changed: ['cambió', 'part'], closed: ['cerrada', 'ok'], new: ['nueva', 'part'], gone: ['ya no está', 'no'], unmeasured: ['sin medir', 'mut'] };
 
 /** The map as it is now (`mapOf` of `bin/lib/report.mjs`), with no before: each phase's share and what is left. */
 export function mapNowSection(map) {
@@ -40,12 +40,15 @@ export function mapSection(map) {
     return [phase.title, { text: fraction(phase.before), mono: true }, { text: withPercent(phase.after), mono: true }, { pill: pill(word, tone) }, phase.open.join(' · ') || '—'];
   });
   rows.push([{ html: '<strong>Total</strong>' }, { text: withPercent(map.total.before), mono: true }, { text: withPercent(map.total.after), mono: true }, '', '']);
-  const before = map.total.before === null ? '<p class="note">Sin antes: ningún registro guarda el mapa de antes de este momento.</p>' : '';
+  const before = map.total.before === null ? '<p class="note">Sin antes: el mapa de antes de este momento no se guardó o no se pudo leer; nada se compara.</p>' : '';
   return `${before}${table(['Fase', 'Antes', 'Ahora', 'Cambio', 'Lo que falta'], rows)}`;
 }
 
 const STEP_STATE = { done: 'done', built: 'done', applied: 'done', 'in progress': 'moving', designed: 'moving', started: 'moving', 'to do': 'todo', 'not started': 'todo' };
-const STEP_CHANGE = { same: ['igual', 'mut'], advanced: ['avanzó', 'ok'], 'text changed': ['texto cambiado', 'part'], new: ['nuevo', 'part'], gone: ['ya no está', 'no'] };
+const STEP_CHANGE = {
+  same: ['igual', 'mut'], advanced: ['avanzó', 'ok'], back: ['retrocedió', 'no'], 'state changed': ['estado cambiado', 'part'],
+  'text changed': ['texto cambiado', 'part'], new: ['nuevo', 'part'], gone: ['ya no está', 'no'], unmeasured: ['sin medir', 'mut'],
+};
 
 /** Each plan (`comparePlans`) as a section: its steps as a chain by the state the roadmap reports, the ones that
  * advanced outlined, and a table of what the roadmap says now and the tasks of the documents each step names. */
@@ -60,7 +63,7 @@ export function planSections(plans) {
     return {
       title: `${plan.name}, paso por paso`,
       html: `${chain(steps)}${table(['Paso', 'Lo que dice ahora', 'Tareas de sus documentos (antes → ahora)', 'Cambio'], rows)}`,
-      note: 'El color de cada paso es lo que dice la hoja de ruta, no una prueba; un paso avanzó cuando sus documentos ganaron tareas hechas o su estado cambió.',
+      note: 'El color de cada paso es lo que dice la hoja de ruta, no una prueba; un paso avanzó cuando sus documentos ganaron tareas hechas o su estado fue hacia adelante.',
     };
   });
 }
@@ -88,7 +91,7 @@ function wordsOf(row) {
   }
 }
 
-/** The timeline (`timelineOf`) in words, a note that the notices' texts are the record's own. */
+/** The timeline (`timelineOf`) in words, or a line that says the records hold nothing in its time. */
 export function timelineSection(rows) {
   if (rows.length === 0) return '<p class="note">Nada en los registros dentro de este tiempo.</p>';
   return timeline(rows.map((row) => {

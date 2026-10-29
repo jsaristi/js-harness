@@ -314,7 +314,7 @@ function openCommand(ctx, flags, events) {
   const at = new Date(ctx.now()).toISOString();
   // The default branch's commit at the opening, so the return compares the map with what existed then.
   const named = readRef(ctx.run, ctx.root);
-  const head = named.error ? null : headBefore(ctx.run, ctx.root, named.ref, ctx.now());
+  const head = named.error ? null : headBefore(ctx.run, ctx.root, named.ref, ctx.now()).commit ?? null;
   const open = { event: 'open', id: at, at, head, plan: read.plan, corrections: corrections(historyOf(events)) };
   appendEvent(ctx.file, ctx.fileSystem, open);
   const items = itemsOf({ open, binds: [] });
@@ -389,16 +389,22 @@ function momentsOf(ctx, stretch, view, now) {
   const named = readRef(ctx.run, ctx.root);
   if (named.error) unavailable.git = named.error;
   else {
-    head.open = stretch.open.head ?? headBefore(ctx.run, ctx.root, named.ref, openedAt);
+    const opening = stretch.open.head ? { commit: stretch.open.head } : headBefore(ctx.run, ctx.root, named.ref, openedAt);
+    const current = headBefore(ctx.run, ctx.root, named.ref, now);
+    head.open = opening.commit ?? null;
     head.reconstructed = !stretch.open.head && head.open !== null;
-    head.now = headBefore(ctx.run, ctx.root, named.ref, now);
+    head.now = current.commit ?? null;
     const before = head.open === null ? null : momentAt(ctx.run, ctx.root, head.open);
     const after = head.now === null ? null : momentAt(ctx.run, ctx.root, head.now);
-    if (after === null || after.unavailable) unavailable.map = after?.unavailable ?? 'the default branch has no commit at this time';
+    // A before that cannot be read is said with why and left unmeasured: read as empty, every step would be new.
+    if (opening.error) unavailable.opening = opening.error;
+    else if (before?.unavailable) unavailable.opening = before.unavailable;
+    if (current.error) unavailable.map = current.error;
+    else if (after === null || after.unavailable) unavailable.map = after?.unavailable ?? 'the default branch has no commit at this time';
     else {
       const usable = before !== null && !before.unavailable ? before : null;
       map = compareMaps(usable?.map ?? null, after.map);
-      plans = comparePlans(usable?.plans ?? [], after.plans, { before: usable?.tasks ?? {}, after: after.tasks });
+      plans = comparePlans(usable?.plans ?? null, after.plans, { before: usable?.tasks ?? {}, after: after.tasks });
     }
     const listed = pullRequestsOf(ctx.run, ctx.root, named.ref, { from: openedAt, to: now });
     if (listed.error) unavailable.merges = listed.error;
@@ -407,7 +413,7 @@ function momentsOf(ctx, stretch, view, now) {
   const channel = readNotices(ctx.home, ctx.slug, { readFile: (file) => ctx.fileSystem.readFileSync(file, 'utf8') });
   const failures = [
     ...view.items.flatMap((item) => item.failures.map((one) => ({ ...one, who: item.session ?? item.title }))),
-    ...view.failures.map((one) => ({ ...one, who: 'orchestrator' })),
+    ...view.failures.map((one) => ({ ...one, who: 'orquestador' })),
   ];
   return {
     head,

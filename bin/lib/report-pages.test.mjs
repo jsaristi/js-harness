@@ -96,4 +96,22 @@ test('two maps compare phase by phase by title, with the total, the phases that 
   assert.deepEqual(map.phases.map((phase) => [phase.title, phase.change]), [['A', 'same'], ['B', 'changed'], ['C', 'closed'], ['D', 'new']]);
   assert.deepEqual(map.phases[1].open, ['x', 'y', 'w']);
   assert.equal(compareMaps(null, after).total.before, null);
+  assert.deepEqual(compareMaps(null, after).phases.map((phase) => phase.change), ['unmeasured', 'unmeasured', 'unmeasured', 'unmeasured'], 'no before is no "same"');
+});
+
+test('a step whose reported state went back is back, never advanced; a state with no place is state changed', () => {
+  const step = (reported) => [{ name: 'P plan', steps: [{ id: 'S1', title: 'S1', said: reported, reported, documents: [] }] }];
+  assert.equal(comparePlans(step('done'), step('in progress'))[0].steps[0].change, 'back');
+  assert.equal(comparePlans(step('designed'), step('built'))[0].steps[0].change, 'advanced');
+  assert.equal(comparePlans(step('done'), step('other'))[0].steps[0].change, 'state changed');
+});
+
+test('with no plan before (the moment could not be read), every step is unmeasured, never new', () => {
+  const after = [{ name: 'P plan', steps: [{ id: 'S1', title: 'S1', said: 'done', reported: 'done', documents: [] }] }];
+  assert.deepEqual(comparePlans(null, after)[0].steps.map((one) => one.change), ['unmeasured']);
+});
+
+test('a longer fence holding a shorter marker stays one fence: its headings and State bullets are no steps', () => {
+  const fenced = '## X plan\n\n````md\n```\n### S7 example\n- **State:** done\n```\n````\n\n### S1 Real\n- **State:** to do\n';
+  assert.deepEqual(planOf(fenced)[0].steps.map((one) => one.id), ['S1']);
 });

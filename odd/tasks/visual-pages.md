@@ -70,6 +70,9 @@ words already decide the feature ("te apruebo las ideas que me diste para que lo
    paid evals (his words are in the lead's transcript; the brief carries them, not their line): `sessions start`
    writes the start row itself, and running work (an eval batch, a gate, a review) shows on the board without a
    notice.
+5. The board opens with the last three things done and how long ago, as a mini context: "en el tablero muestrame al
+   inicio las ultimas 3 cosas que se han hecho y hace cuanto tiempo para tener un mini contexto" (transcript
+   0f71b2c6, line 13105, 2026-10-29T00:59:10Z, checked with `js-harness sessions --quote`; sent by the lead at 01:03Z).
 
 ## Design
 
@@ -87,9 +90,10 @@ wraps a fragment in a document at publish time and the desktop's visual tool tak
 both. Its colour tokens are scoped to the page's wrapper class (a fragment shown inside a host page must not change
 the host's `:root`), with a dark set under `prefers-color-scheme`. It holds only the parts the pages below use, each
 added with the first page that needs it: `badNews`, `tiles` (a big number, a meter, a caption; an unknown share is
-"sin medir", never 0 %), `table`, `bars` (moved from the stretch render), `timeline` and `chain`. Every text from a
-record is escaped. Times are shown in UTC with their `Z`, as the records keep them. `stretch-render.mjs` keeps its
-two renders and takes the shared parts it repeats (the escape, the tiles, the bars).
+"sin medir", never 0 %), `table`, `timeline`, `chain` and `pill`, and `pages-sections.mjs` builds the sections the
+pages share from them (the shares, the map, a plan, the timeline). Every text from a record is escaped. Times are
+shown in UTC with their `Z`, as the records keep them. `stretch-render.mjs` keeps its two renders and its own bars,
+and puts them inside a page.
 
 `pages-record.mjs` keeps a page's numbers: `<home>/.js-harness/throughput/<project>/pages.jsonl`, one line a page
 made at a moment, `{ schema: 'js-harness.page/v1', kind, subject, at, head, numbers }`: `subject` the stretch id,
@@ -99,17 +103,19 @@ appended again. Append only; a cut last line is ended first, as the stretch reco
 "before" (a stretch's opening head, a feature's first merge, a status report's `--mark` head), the page reads git;
 the record is the "before" only of the phase page, which has no other.
 
-### The map and the plan steps, at a commit (`bin/lib/report-pages.mjs`)
-`mapAt(commit)`: the roadmap that commit holds, through `parseRoadmap`, as phases `{ title, done, total }` and the
-total. `planAt(commit)`: each `## <name> plan` section of the same roadmap, its `### ` headings in order as steps,
-each with:
+### The map and the plan steps, at a commit (`bin/lib/report-git.mjs`, `bin/lib/report-pages.mjs`)
+`momentAt(commit)` (report-git) reads the roadmap that commit holds: its map through `mapOf` (phases `{ title, done,
+total, open }` and the total) and its plans through `planOf` (report-pages, pure): each `## <name> plan` section,
+its `### ` headings in order as steps, each with:
 - `said`: its `- **State:**` text as written, with `reported`, a word read from its first words (`done`, `built`,
   `in progress`, `designed`, `to do`, else `other`), shown as "dice la hoja de ruta", never as proof;
 - `documents`: the feature documents the step's text names (`odd/tasks/<x>.md`), each with its task checkboxes
   done/total at that commit, which is the state the roadmap itself says to read ("a step's state is read in its
   feature document"); a step that names none shows only `said`.
-Before and after are two commits: a step whose document counts changed advanced; one whose prose alone changed is
-"texto cambiado"; the map's phases compare by title. A roadmap with no plan section gives no chain, said in one line.
+Before and after are two commits: a step whose document gained done tasks, or whose reported state went forward,
+advanced; one whose state went back went back ("retrocedió"); one whose prose alone changed is "texto cambiado"; the
+map's phases compare by title. A before git cannot read (the commit, its listing or a document) is said with why and
+every step and phase is "sin medir", never "nuevo". A roadmap with no plan section gives no chain.
 
 ### Stretch: the shares, the map and the timeline
 `stretch status` and `close` (not the live board's `boardStretch`, which must stay cheap) add three blocks, computed
@@ -118,7 +124,7 @@ default branch's commit at the opening; a stretch opened before this records non
 with `git rev-list --first-parent -1 --before=<openedAt> <ref>` (the ref `report` uses, `paceRef`), labelled as
 reconstructed.
 
-- `met`, each share `{ met, of, unknown, percent }`, its denominator said on the page:
+- `goals` and `work`, each share `{ met, of, unknown }` (the page computes the percent), its denominator said:
   - goals met: of all goals, those met at the last check; a goal never checked is `unknown`, not unmet;
   - goals met in time: of the goals met, those whose first check that found them met is at or before `returnAt`;
     a met goal with no check before `returnAt` is `unknown`, so a stretch whose goals ran only at `close` after the
@@ -128,7 +134,7 @@ reconstructed.
     falls inside the stretch and that are no item's session, each with its first and last notice; notices with no
     title counted apart; the lead's own notices are not work.
   A share over nothing is `null`, shown as "nada que medir".
-- `map`: `mapAt` and `planAt` at the opening head and at the default branch now.
+- `map` and `plans`: `momentAt` at the opening head and at the default branch now, compared.
 - `timeline`: oldest first, cut to the stretch: each pull request merged on the default branch's first-parent line
   (grouped by number, at its last merge), the notices `opened`, `ready`, `closed`, `waiting`, `question` and
   `answer`, the failures the measure already holds, and the stretch's events (open, each goal check, close).
@@ -209,6 +215,15 @@ heartbeat are left as they are, to keep one home.
   name is none (`bin/lib/sessions-running.mjs`). `since` is the process's start, unknown where the listing gives
   none. A listing that fails gives `{ unavailable }`. `docs/live-board.html` shows it as "en curso a las HH:MM".
 
+### The last three things done (spec 5)
+`docs/live-board.html` opens, above everything else, with the three newest rows of its `events` collection whose
+kind says something was done (`closed`, a session's work finished; `ready`, a pull request ready), newest first,
+each with its session, its text cut to one line, and how long ago it was, counted by the page from the row's time
+against the viewer's clock and recounted each minute ("hace 12 min", "hace 3 h"). The rows are the board's own, so
+no command changes; with none, the block says "Nada terminado todavía en el tablero". Merges are not rows of the
+board (they live in git), so a pull request shows here by its `ready`, not by its merge; the stale-board check is
+what keeps these rows current.
+
 ### Shipping to every project (spec 2)
 The commands are the harness's, so every project that installs it has them. `init`'s `CLAUDE.md` block
 (`claudeBlock`, `bin/lib/project.mjs`) gains one line naming the moments and the pages, so a project's sessions
@@ -230,10 +245,11 @@ board, the start row and the running work; C the report's pages and init's line;
 
 ## Tasks
 - [x] T1 (kind: design) this document, read by two blind readers (rule:double-review), in ee595c7c and the revision after them. Spec 1-4. Route: inline, readers delegated.
-- [ ] T2 (kind: build) `bin/lib/pages.mjs`, `bin/lib/pages-record.mjs`, the map and plan at a commit. Spec 1, 2. Route: inline.
-- [ ] T3 (kind: build) `stretch status`/`close`: met, map, timeline; `open` records its head. Spec 1. Route: inline.
+- [x] T2 (kind: build) `bin/lib/pages.mjs`, `bin/lib/pages-record.mjs`, the map and plan at a commit. Spec 1, 2. Route: inline. 35c8d1fd and the review fixes.
+- [x] T3 (kind: build) `stretch status`/`close`: met, map, timeline; `open` records its head. Spec 1. Route: inline. 8a412b79 and the review fixes.
 - [ ] T4 (kind: build) the stale-board check in the Stop hook. Spec 3. Route: inline.
 - [ ] T5 (kind: build) the start row and the running work on the board. Spec 4. Route: inline.
+- [ ] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline.
 - [ ] T7 (kind: build) init's line. Spec 2. Route: inline.
 - [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
@@ -274,18 +290,24 @@ board, the start row and the running work; C the report's pages and init's line;
   cursor names the brief's board). Not taken: reading a step's state only from merges of a named branch (steps name
   documents more reliably than branches; the document counts are the roadmap's own rule).
 
+- L5. 2026-10-29, slice A reviewed over 62315e61..8a412b79. Codex (4 parts, 688,206 input tokens): four P2, taken
+  in: the bad-news box shared the class of a failure dot; a fence holding a shorter marker broke the plan reader (now
+  `tokenize`); a feature document git failed to read passed for one not there; an unreadable opening read as an
+  empty plan, every step new. Claude lenses (3, about 266k input tokens): one warning, taken in: a step whose state
+  went back read as advanced. gentle-ai (medium; resilience, readability, reliability; lineage
+  review-e0f80354d78ba720): approved with warnings, all taken in or the same as above, plus `headBefore` telling a
+  git failure from no commit, the design names that drifted (`mapAt`, `planAt`, `percent`, `bars`), the Spanish of
+  the empty share and of the lead's failures, and a test of the return page's bad news. Not taken: a test of a failed
+  page-record write (its append is the stretch record's, tested there). The `review-*` agent types ran no tool here
+  (0 tool uses, three times); the lenses ran as general agents on opus.
+- L6. 2026-10-29, spec 5 from the lead (his line 13105): the last three things done at the board's top, in slice B.
+
 ## Next step
-State at 2026-10-29 ~01:00Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch `feat/visual-pages`):
-- Committed: ee595c7c (design), c8ee437c (readers taken in); gentle-ai approved ee595c7c (low, docs).
-- Slice A written, uncommitted, all green (`node --test bin/lib/pages.test.mjs bin/lib/pages-sections.test.mjs
-  bin/lib/pages-record.test.mjs bin/lib/report-pages.test.mjs bin/lib/report-git.test.mjs bin/lib/stretch-moments.test.mjs
-  bin/stretch.test.mjs bin/lib/stretch-render.test.mjs`): new `bin/lib/pages.mjs`, `pages-sections.mjs`,
-  `pages-record.mjs`, `report-pages.mjs`, `report-git.mjs`, `stretch-moments.mjs`; `bin/stretch.mjs` (open records
-  `head`, `momentsOf`, `recordPage`, `momentLines`), `bin/lib/stretch-render.mjs` (`renderReturn`, departure map).
-- Just fixed: `report-git.mjs` keeps the merge's branch whole (test expects `feat-x`); rerun its test.
-- To do before commit: cut a failure's `what` in the timeline words to ~160 chars (`pages-sections.mjs` wordsOf
-  'failure'); run the tests above; commit "feat(pages): ..." through the gate (message in a job tmp file, `git commit
-  -F`; heredocs naming git are refused by the guard: write scripts to the job tmp and run them).
+State at 2026-10-29 ~01:30Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch `feat/visual-pages`):
+- Slice A committed: 35c8d1fd, 8a412b79, then the review fixes; reviewed by Codex, the lenses and gentle-ai (L5).
+- gentle-ai: ee595c7c approved (low, docs); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720).
+- Next: push, PR for slice A, notify ready; then slice B: T4 (draft in the job tmp `draft/stale-board*.mjs`; move
+  `CHECK_MINUTES`, the cursor schema, `liveCursorPath` and `cursorOf` into `bin/lib/live-rows.mjs`, since a lib cannot
+  import a command; export `lastLineWith` from `bin/lib/stop-wake.mjs`; wire it in `bin/reply.mjs`), T5, T5b; C, D.
 - Real-data scratch: `C:\Users\Oficina\.claude\jobs\b550c1c7\tmp\home1` (copies of the records + a stretch opened
-  12:11Z, 10.7 h); `node bin/js-harness.mjs stretch status --home <that> --cwd <worktree>` works: map 95/106 -> 97/107.
-- Then: Slice A reviews (codex-review and lens-review --base 62315e61), push, PR; Slice B (T4, T5), C (T6, T7), D (T8).
+  12:11Z, 10.7 h); `node bin/js-harness.mjs stretch status --home <that> --cwd <worktree>`.

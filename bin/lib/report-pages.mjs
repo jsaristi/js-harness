@@ -5,7 +5,8 @@
 // counts are what tells a step advanced, and prose that changed alone is only text changed. Pure: markdown and counts
 // in, data out; the commands read git.
 
-const FENCE = /^\s*(```|~~~)/;
+import { tokenize } from './progress.mjs';
+
 const PLAN_HEADING = /^##\s+(.+\bplan)\s*$/i;
 const SECTION_HEADING = /^#{1,2}\s/;
 const STEP_HEADING = /^###\s+(.+?)\s*$/;
@@ -29,20 +30,19 @@ export function reportedOf(said) {
  * is a `### ` heading inside the section, its `id` the first word when it is a step number (`S5c-a`), else its whole
  * title; `said` its `State` bullet's text with its continued lines; `documents` the feature documents that text names,
  * once each; `names` the other names it quotes (a branch, a worktree), which the command may find as a feature document
- * (`odd/tasks/<name>.md`) at a commit. A heading with no `State` bullet is no step. A fence's lines are content. */
+ * (`odd/tasks/<name>.md`) at a commit. A heading with no `State` bullet is no step. A fence's lines are content, read
+ * as the progress view reads them (`tokenize`), so a longer fence holding a shorter marker stays one fence. */
 export function planOf(markdown) {
   const plans = [];
   let plan = null;
   let step = null;
   let stateOpen = false;
-  let fenced = false;
-  for (const line of String(markdown).split(/\r?\n/)) {
-    if (FENCE.test(line)) {
-      fenced = !fenced;
+  for (const token of tokenize(String(markdown))) {
+    if (token.fence) {
       stateOpen = false;
       continue;
     }
-    if (fenced) continue;
+    const { line } = token;
     const planHeading = PLAN_HEADING.exec(line);
     if (planHeading) {
       plan = { name: planHeading[1].trim(), steps: [] };
@@ -89,21 +89,31 @@ export function planOf(markdown) {
 
 const counts = (value) => (value ? { done: value.done, total: value.total } : null);
 
-/** How one step moved between `before` and `after` (either `null`): `new`, `gone`, `advanced` (a document gained done
- * tasks, or appeared, or the reported state changed), `text changed` (the prose alone), or `same`. */
+// How far each reported state is along, to tell a step that went back from one that advanced; `other` has no place.
+const RANK = { 'not started': 0, 'to do': 0, designed: 1, started: 1, 'in progress': 2, built: 3, applied: 3, done: 4 };
+
+/** How one step moved between `before` and `after` (either `null`): `new`, `gone`, `back` (its reported state went
+ * back), `advanced` (a document gained done tasks or appeared, or the reported state went forward), `state changed`
+ * (to or from a state with no place), `text changed` (the prose alone), or `same`. */
 function changeOf(before, after, documents) {
   if (before === null) return 'new';
   if (after === null) return 'gone';
+  const from = RANK[before.reported];
+  const to = RANK[after.reported];
+  if (from !== undefined && to !== undefined && to < from) return 'back';
   const gained = documents.some((one) => one.after !== null && (one.before === null || one.after.done > one.before.done));
-  if (gained || before.reported !== after.reported) return 'advanced';
+  if (gained || (from !== undefined && to !== undefined && to > from)) return 'advanced';
+  if (before.reported !== after.reported) return 'state changed';
   return before.said === after.said ? 'same' : 'text changed';
 }
 
-/** The plans `before` and `after` (from `planOf`) step by step, with the task counts of the documents they name at each
+/** The plans `before` (or `null`, when the moment before could not be read) and `after` (from `planOf`) step by step, with the task counts of the documents they name at each
  * moment (`tasks.before` and `tasks.after`, keyed by path; a path a moment lacks is unknown there, never zero):
  * `[{ name, steps: [{ id, title, before, after, change, documents: [{ path, before, after }] }] }]`, in the order of
- * `after`, then the steps only `before` held. */
-export function comparePlans(before, after, tasks = { before: {}, after: {} }) {
+ * `after`, then the steps only `before` held. With no `before`, every step's change is `unmeasured`, never `new`. */
+export function comparePlans(maybeBefore, after, tasks = { before: {}, after: {} }) {
+  const known = maybeBefore !== null;
+  const before = maybeBefore ?? [];
   const names = [...new Set([...after.map((plan) => plan.name), ...before.map((plan) => plan.name)])];
   return names.map((name) => {
     const old = before.find((plan) => plan.name === name)?.steps ?? [];
@@ -116,7 +126,7 @@ export function comparePlans(before, after, tasks = { before: {}, after: {} }) {
         const is = now.find((step) => step.id === id) ?? null;
         const paths = [...new Set([...(is?.documents ?? []), ...(was?.documents ?? [])])];
         const documents = paths.map((path) => ({ path, before: counts(tasks.before?.[path]), after: counts(tasks.after?.[path]) }));
-        return { id, title: (is ?? was).title, before: was, after: is, change: changeOf(was, is, documents), documents };
+        return { id, title: (is ?? was).title, before: was, after: is, change: known ? changeOf(was, is, documents) : 'unmeasured', documents };
       }),
     };
   });
@@ -124,7 +134,7 @@ export function comparePlans(before, after, tasks = { before: {}, after: {} }) {
 
 /** The maps `before` (or `null`, when no before is known) and `after` (`mapOf` of `bin/lib/report.mjs`) phase by phase
  * by title: `{ total: { before, after }, phases: [{ title, before, after, open, change }] }`, `change` one of `same`,
- * `changed`, `closed` (complete after and not before), `new` or `gone`. */
+ * `changed`, `closed` (complete after and not before), `new` or `gone`, and `unmeasured` for every phase with no before. */
 export function compareMaps(before, after) {
   const old = before?.phases ?? [];
   const titles = [...new Set([...after.phases.map((phase) => phase.title), ...old.map((phase) => phase.title)])];
@@ -134,7 +144,7 @@ export function compareMaps(before, after) {
       const was = old.find((phase) => phase.title === title) ?? null;
       const is = after.phases.find((phase) => phase.title === title) ?? null;
       let change = 'same';
-      if (before === null) change = 'same';
+      if (before === null) change = 'unmeasured';
       else if (was === null) change = 'new';
       else if (is === null) change = 'gone';
       else if (is.done === is.total && was.done < was.total) change = 'closed';

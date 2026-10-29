@@ -13,7 +13,13 @@ test('a page is one fragment that opens with its title, its tokens scoped to its
 });
 
 test('a page with no bad news has no box for it', () => {
-  assert.doesNotMatch(page({ title: 't', heading: 'h', sections: [] }), /class="bad"/);
+  assert.doesNotMatch(page({ title: 't', heading: 'h', sections: [] }), /class="badnews"/);
+});
+
+test('the bad-news box has a class of its own: a timeline\'s failure dot is no box', () => {
+  const html = page({ title: 't', heading: 'h', badNews: ['x'], sections: [] });
+  assert.match(html, /<div class="badnews">/);
+  assert.doesNotMatch(html, /\.js-page \.bad\{/, 'no rule for .bad alone, which the dot also carries');
 });
 
 test('every text from a record is escaped, so a page shows it and never runs it', () => {

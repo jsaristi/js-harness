@@ -270,6 +270,25 @@ test('a stretch opened with no commit recorded has its opening commit reconstruc
   assert.deepEqual(view.moments.head, { open: 'c0', now: 'c1', reconstructed: true });
 });
 
+test('an opening commit git cannot read leaves the map and the steps unmeasured, never new, and the page says why first', async () => {
+  const place = scratch();
+  const moments = momentsGit();
+  const run = (command, args) => (args.join(' ') === 'show c0:docs/ROADMAP.md' ? { status: 128, stdout: '', stderr: 'fatal: bad object c0' } : moments(command, args));
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps: { run } });
+  const back = path.join(place.home, 'out', 'vuelta.html');
+  const closed = await stretch(place, ['close', '--html', back, '--json'], { hours: 9, deps: { run } });
+  const view = JSON.parse(closed.out);
+  assert.match(view.moments.unavailable.opening, /bad object c0/);
+  assert.deepEqual(view.moments.plans[0].steps.map((step) => step.change), ['unmeasured']);
+  assert.deepEqual(view.moments.map.phases.map((phase) => phase.change), ['unmeasured']);
+  const html = fs.readFileSync(back, 'utf8');
+  const bad = html.indexOf('Primero lo malo.');
+  assert.ok(bad > 0 && bad < html.indexOf('Cuánto se cumplió'), 'the bad news comes before the sections');
+  assert.match(html, /El mapa de la apertura no se pudo leer: git show: fatal: bad object c0\./);
+  assert.match(html, /<span class="pill mut">sin medir<\/span>/);
+  assert.doesNotMatch(html, /pill part">nuevo/);
+});
+
 test('where git cannot read the default branch, the map is unavailable with why and the shares still come', async () => {
   const place = scratch();
   await stretch(place, ['open', '--plan', planFile(place, PLAN)]);

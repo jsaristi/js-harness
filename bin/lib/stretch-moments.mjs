@@ -91,7 +91,7 @@ export function timelineOf({ from, to, prs = [], notices = [], failures = [], ev
   const inside = (iso) => ms(iso) >= from && ms(iso) <= to;
   const rows = [
     ...prs.filter((one) => inside(one.at)).map((one) => ({ at: one.at, type: 'merge', pr: one.number, branch: one.branch, subject: one.subject ?? null })),
-    ...notices.filter((one) => TIMELINE_NOTICES.has(one.kind) && inside(one.at)).map((one) => ({ at: one.at, type: one.kind, who: one.from?.title ?? one.from?.id ?? null, text: one.text, ...(one.pr ? { pr: one.pr } : {}) })),
+    ...notices.filter((one) => TIMELINE_NOTICES.has(one.kind) && inside(one.at)).map((one) => ({ at: one.at, type: one.kind, who: one.from?.title ?? one.from?.id ?? 'sin nombre', text: one.text, ...(one.pr ? { pr: one.pr } : {}) })),
     ...failures.filter((one) => inside(one.at)).map((one) => ({ at: one.at, type: 'failure', who: one.who ?? null, what: one.what, seconds: one.seconds })),
     ...events.filter((one) => ['open', 'check', 'close'].includes(one.event) && inside(one.at)).map((one) => (one.event === 'check' ? { at: one.at, type: 'check', met: one.goals.filter((goal) => goal.met).length, of: one.goals.length } : { at: one.at, type: one.event })),
   ];

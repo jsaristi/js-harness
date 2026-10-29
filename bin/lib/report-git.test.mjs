@@ -34,8 +34,10 @@ test('the default branch is origin/HEAD\'s, else main, as report and progress re
 
 test('the commit of the default branch at a time is read on its first-parent line', () => {
   const run = fakeGit({ 'rev-list --first-parent -1 --before=2026-10-28T12:11:00.000Z refs/heads/main --': 'abc\n' });
-  assert.equal(headBefore(run, '.', 'refs/heads/main', Date.parse('2026-10-28T12:11:00Z')), 'abc');
-  assert.equal(headBefore(fakeGit({}), '.', 'refs/heads/main', 0), null);
+  assert.deepEqual(headBefore(run, '.', 'refs/heads/main', Date.parse('2026-10-28T12:11:00Z')), { commit: 'abc' });
+  const none = fakeGit({ 'rev-list --first-parent -1 --before=1970-01-01T00:00:00.000Z refs/heads/main --': '' });
+  assert.deepEqual(headBefore(none, '.', 'refs/heads/main', 0), { commit: null }, 'no commit yet is said as none');
+  assert.match(headBefore(fakeGit({}), '.', 'refs/heads/main', 0).error, /git rev-list: fatal/, 'a git failure is no "none"');
 });
 
 test('a moment is the map, the plans and the task counts of the documents its steps name, quoted names found as documents', () => {
@@ -54,6 +56,14 @@ test('a moment is the map, the plans and the task counts of the documents its st
 test('a commit that holds no roadmap is a moment with no map, said with why', () => {
   const moment = momentAt(fakeGit({}), '.', 'c1');
   assert.ok(moment.unavailable);
+});
+
+test('a listing or a feature document git fails to read makes the moment unavailable, never a document that was not there', () => {
+  const unlisted = momentAt(fakeGit({ 'show c1:docs/ROADMAP.md': ROADMAP }), '.', 'c1');
+  assert.match(unlisted.unavailable, /git ls-tree/);
+  const unread = momentAt(fakeGit({ 'show c1:docs/ROADMAP.md': ROADMAP, 'ls-tree --name-only c1 -- odd/tasks/': 'odd/tasks/s0.md\n' }), '.', 'c1');
+  assert.match(unread.unavailable, /^odd\/tasks\/s0\.md: git show/);
+  assert.equal(unread.map, undefined);
 });
 
 test('the pull requests merged in a window are grouped by number, at their last merge, with every merge\'s commits', () => {

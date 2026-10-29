@@ -15,7 +15,7 @@ const STYLE = `<style>
 @media (prefers-color-scheme:dark){.js-page{${DARK}}}
 .js-page h1{font-size:1.8rem;line-height:1.15;margin:0}.js-page h2{font-size:1.25rem;margin:0 0 10px}.js-page p{margin:0;max-width:70ch}
 .js-page .lead,.js-page .note{color:var(--muted)}.js-page .note{font-size:.9rem;margin-top:8px}
-.js-page .bad{border-left:4px solid var(--bad);background:var(--surface);padding:12px 14px;border-radius:4px}.js-page .bad strong{color:var(--bad)}
+.js-page .badnews{border-left:4px solid var(--bad);background:var(--surface);padding:12px 14px;border-radius:4px}.js-page .badnews strong{color:var(--bad)}
 .js-page .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 .js-page .tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:6px}
 .js-page .tile .big{font-size:2rem;line-height:1;font-weight:600}.js-page .tile .cap{font-size:.88rem;color:var(--muted)}
@@ -70,12 +70,12 @@ export function table(head, rows) {
   return `<div class="tbl"><table><tr>${head.map((name) => `<th>${escapeHtml(name)}</th>`).join('')}</tr>${rows.map((row) => `<tr>${row.map(cell).join('')}</tr>`).join('')}</table></div>`;
 }
 
-const clockZ = (iso) => `${new Date(iso).toISOString().slice(11, 16)}Z`;
+const timeZ = (iso) => `${new Date(iso).toISOString().slice(11, 16)}Z`;
 
 /** A timeline: each `{ at, kind, text }` in the order given, at its UTC time, its dot by kind (`ok`, `part`, `bad`,
  * `mark`, `mut`). */
 export function timeline(rows) {
-  return `<ol class="tl">${rows.map(({ at, kind, text }) => `<li><span class="t">${clockZ(at)}</span><span class="dot ${escapeHtml(kind)}"></span><span>${escapeHtml(text)}</span></li>`).join('')}</ol>`;
+  return `<ol class="tl">${rows.map(({ at, kind, text }) => `<li><span class="t">${timeZ(at)}</span><span class="dot ${escapeHtml(kind)}"></span><span>${escapeHtml(text)}</span></li>`).join('')}</ol>`;
 }
 
 /** A plan's steps in order, each `{ id, state, moved }`: `state` one of `done`, `moving`, `todo`, `other`; `moved`
@@ -87,7 +87,7 @@ export function chain(steps) {
 /** The page: `<title>`, the style, then in its wrapper the heading and its lead, the bad news first, and each section
  * `{ title, html, note? }`, `html` built from the parts above. */
 export function page({ title, heading, lead = '', badNews = [], sections = [] }) {
-  const bad = badNews.length === 0 ? '' : `<div class="bad"><strong>Primero lo malo.</strong> ${badNews.map(escapeHtml).join(' ')}</div>`;
+  const bad = badNews.length === 0 ? '' : `<div class="badnews"><strong>Primero lo malo.</strong> ${badNews.map(escapeHtml).join(' ')}</div>`;
   const body = sections.map((one) => `<section><h2>${escapeHtml(one.title)}</h2>${one.html}${one.note ? `<p class="note">${escapeHtml(one.note)}</p>` : ''}</section>`).join('\n');
   return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}</header>${bad}\n${body}</div>`;
 }

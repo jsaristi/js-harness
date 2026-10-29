@@ -107,7 +107,10 @@ export function renderView(view) {
 <p class="soft">No se mide (ningún registro lo guarda): ${view.unmeasured.map((key) => escapeHtml(UNMEASURED[key] ?? key)).join('; ')}.</p>${unavailable ? `<ul class="no">${unavailable}</ul>` : ''}</div>`;
 }
 
-const clockZ = (iso) => `${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')}Z`;
+const dateTimeZ = (iso) => `${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')}Z`;
+
+// What each record the moments read is called on the page; a name not here is shown as the record names it.
+const READ_NAMES = { git: 'git', map: 'El mapa de ahora', opening: 'El mapa de la apertura', merges: 'Las fusiones a main' };
 
 /** The return as a page (odd/tasks/visual-pages.md), or the open stretch's once `status` measured its moments: what
  * went wrong first, the shares of the planned met, the goals and the time bars of `renderView`, the map before and
@@ -120,9 +123,9 @@ export function renderReturn(view) {
     ...view.goals.list.filter((goal) => goal.met === false).map((goal) => `Meta no cumplida: ${goal.text} (${goal.said}).`),
     ...(moments.goals.met.met === null ? ['Ninguna meta se revisó durante el tramo.'] : []),
     ...(moments.head.reconstructed ? ['El tramo no guardó el commit de su apertura: el mapa de antes se reconstruyó por la hora.'] : []),
-    ...Object.entries({ ...view.unavailable, ...moments.unavailable }).map(([name, why]) => `${name} no se pudo leer: ${why}.`),
+    ...Object.entries({ ...view.unavailable, ...moments.unavailable }).map(([name, why]) => `${READ_NAMES[name] ?? name} no se pudo leer: ${why}.`),
   ];
-  const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: clockZ(one.first), mono: true }, { text: clockZ(one.last), mono: true }, { text: String(one.notices), mono: true }]);
+  const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: dateTimeZ(one.first), mono: true }, { text: dateTimeZ(one.last), mono: true }, { text: String(one.notices), mono: true }]);
   const sections = [
     { title: 'Cuánto se cumplió de lo planeado', html: sharesTiles(moments) },
     { title: 'Metas y tiempos', html: renderView(view) },
@@ -134,7 +137,7 @@ export function renderReturn(view) {
   return page({
     title: closed ? 'Regreso del tramo' : 'Tramo en curso',
     heading: closed ? 'Lo que pasó mientras no estabas' : `Tramo en curso: ${view.elapsedHours} de ${view.hours} h`,
-    lead: `Del ${clockZ(view.openedAt)} al ${clockZ(view.at)}. Todo sale de los registros: el tramo, los avisos, git y la hoja de ruta.`,
+    lead: `Del ${dateTimeZ(view.openedAt)} al ${dateTimeZ(view.at)}. Todo sale de los registros: el tramo, los avisos, git y la hoja de ruta.`,
     badNews,
     sections,
   });
