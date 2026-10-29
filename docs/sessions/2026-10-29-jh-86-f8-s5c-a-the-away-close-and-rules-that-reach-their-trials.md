@@ -42,7 +42,17 @@ that holds its rule, and rerun the cases that pass. Opening: the lead's brief
   P8's absence-test line (L35); `evals/trial-transcripts.mjs` accepted into the surface (12:21); D20, a 5-minute cut, the close test and the
   cost fix, then one run (L40); D21 (a), the case stays owed and S5c-a closes (L42).
 
-## Open
+## Failures and lessons
+- The case never set `"reply": true`, so P6 and P8 were graded on no reply; `evals/tasks.test.mjs` now holds it
+  (L36).
+- A commit of this branch (`7a04a8e8`) turned the feature document into CRLF, a whole-file diff; gentle-ai found it
+  and `f912fcde` put it back on LF. A committed diff's size against main is worth reading before each push.
+- Comments that named the review tool by name broke `bin/lib/gentle-ai-absence.test.mjs`; a finding is cited by its
+  id and the feature document instead.
+- A trial that starts a background `js-harness wait` holds its CLI until the cut, so a timeout does not mean it was
+  cut mid-work: its close is read from its transcripts (L41).
+
+## Left
 - `rule-away-autonomy` stays owed: four trials an arm cannot tell its rule apart (L41).
 - A record still does not mark which of its trials were cut by the timeout (gentle-ai, on `f3463a2d..3319391e`).
 - The feature document was committed with CRLF line endings on this branch (`7a04a8e8`, fixed in `f912fcde`); a
@@ -50,7 +60,7 @@ that holds its rule, and rerun the cases that pass. Opening: the lead's brief
 - Main changed `away-autonomy` after P9 (a phrase on the migration's share); P9's record holds the earlier text, and
   the case stays owed in the coverage register.
 
-## Spent
+## Cost
 P8 $4.02, P9 $3.86 and P10 $4.43 of list cost on his Max plan, $12.31; Codex reviews of 740,838 input tokens over the eight runs whose
 count is written in the feature document, and one more (`1e7687b9..86a32951`) whose count was not; the lenses' and
 gentle-ai's on top.
