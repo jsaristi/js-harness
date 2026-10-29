@@ -135,6 +135,9 @@ Reviews:
   harness.json is that case, since `codexReview` falls back to `auto` (`bin/lib/functions.mjs:9`), and it is now
   refused with no lens record. R3-002 (the "2 of 2" count rests on state of earlier tests): `beforeEach` makes a new
   repository for each test, so the two commits are its own and the one this test makes.
+- PR 3, 315a15d5 (the door on a branch that turns the Codex review off midway, gentle-ai's R3-001 on the merge
+  into f8-s11-sweep): Codex 0b53640..315a15d passed (32,403 input tokens); lens reliability, 0 findings (8,584 input
+  tokens); gentle-ai on `0b53640d..315a15d5`: approved, no finding (lineage review-3b3d8d277f78d3b0).
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
