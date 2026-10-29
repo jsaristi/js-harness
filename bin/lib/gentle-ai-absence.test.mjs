@@ -114,7 +114,9 @@ test('the check skips only with no .git outside CI: on a CI machine the same tre
   try {
     assert.match(skipWhy(scratch, {}), /^no \.git here/);
     assert.equal(skipWhy(scratch, { CI: 'true' }), false);
-    assert.equal(skipWhy(REPO, {}), false);
+    // A `.git` folder alone, so the test holds in the WSL mirror too, where this checkout's `.git` is not.
+    fs.mkdirSync(path.join(scratch, '.git'));
+    assert.equal(skipWhy(scratch, {}), false);
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
