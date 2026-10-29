@@ -28,7 +28,9 @@ function markdownlessCommits(cwd, main, head) {
  * the commits under it (`reviewCoverage`). At the pull request's own head, a review of main..D covers C, its parent; in
  * the candidate nothing lies past the tip, and the push refuses C. PR 658 was the door's "covered" twice, then a push
  * refused at the end of a whole land (2026-10-29, docs/FAILURES.md). Asked of this commit, the door's question is the
- * push's, by the same rows, so the two cannot disagree on what a tip decides. Unreferenced, the object is git's to prune. */
+ * push's, by the same rows, so for one pull request on main the two cannot disagree on what a tip decides. A candidate of
+ * several is not read whole: a sibling that turns the Codex review on, or takes a mark off, still decides only at the push
+ * (JH 83's verifier, 2026-10-29). Unreferenced, the object is git's to prune. */
 function asMerged(cwd, main, head) {
   const merged = spawnSync('git', ['merge-tree', '--write-tree', '--no-messages', '--name-only', main, head], { cwd, encoding: 'utf8', windowsHide: true });
   const [tree = '', ...conflicted] = String(merged.stdout ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
@@ -54,7 +56,8 @@ export function reviewEvidence(cwd, main, head) {
   if (refused) return refused;
   const off = codexReviewOffAt(cwd, tip);
   const coverage = off ? null : reviewCoverage(cwd, { from: main, tip });
-  const codeCommits = off ? markdownlessCommits(cwd, main, tip) : coverage.unknown ? null : coverage.codeCommits;
+  // The commits the lines name are the pull request's: the merge made here holds nothing anybody wrote, and is never pushed.
+  const codeCommits = off ? markdownlessCommits(cwd, main, head) : coverage.unknown ? null : coverage.codeCommits;
   if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read' };
   const lines = codeCommits.map((commit) => {
     const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;

@@ -19,9 +19,10 @@ const git = (cwd, ...args) => {
   return done.stdout.trim();
 };
 
-/** A clone whose main turns both reviews on, with a branch of the code commit `c` and, past it, the code commit `d`.
+/** A clone whose main holds f.txt, seven lines, and turns the lens review on and the Codex review as `codexReview` says,
+ * with a branch of the code commit `c` (c.txt, and the first line of f.txt) and, past it, the code commit `d`.
  * `{ root, main, c, d, record }`: `record(base, head)` writes a Codex and a lens review of `base..head`. */
-function makeRepo() {
+function makeRepo({ codexReview = 'on' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq-reviews-'));
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const origin = path.join(dir, 'origin.git');
@@ -35,9 +36,12 @@ function makeRepo() {
     git(root, 'commit', '--quiet', '-m', message);
     return git(root, 'rev-parse', 'HEAD');
   };
-  const main = commit('harness.json', `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'main turns both reviews on');
+  commit('f.txt', '1\n2\n3\n4\n5\n6\n7\n', 'main holds f.txt');
+  const main = commit('harness.json', `${JSON.stringify({ functions: { codexReview, lensReview: 'on' } })}\n`, 'main sets the reviews');
   git(root, 'push', '--quiet', 'origin', 'HEAD:main');
   git(root, 'remote', 'set-head', 'origin', 'main');
+  fs.writeFileSync(path.join(root, 'f.txt'), 'one\n2\n3\n4\n5\n6\n7\n', 'utf8');
+  git(root, 'add', 'f.txt');
   const c = commit('c.txt', 'c\n', 'feat: c');
   const d = commit('d.txt', 'd\n', 'feat: d');
   git(root, 'checkout', '--quiet', '--detach', main);
@@ -68,6 +72,20 @@ test('a record of the pull request\'s own range passes the door, with the record
   const said = reviewEvidence(root, main, c);
   assert.equal(said.pass, true, said.detail);
   assert.deepEqual(said.lines, [`${c.slice(0, 7)} feat: c: Codex ${main.slice(0, 7)}..${c.slice(0, 7)} reviewed 2026-10-29`]);
+});
+
+test('with the Codex review off, the lines name the pull request\'s commits, never the merge the door makes (JH 83\'s verifier)', () => {
+  const { root, main, c, record } = makeRepo({ codexReview: 'off' });
+  // main moves on the last line of f.txt, which c changed the first line of: a clean merge that changes f.txt on both sides.
+  fs.writeFileSync(path.join(root, 'f.txt'), '1\n2\n3\n4\n5\n6\nseven\n', 'utf8');
+  git(root, 'add', 'f.txt');
+  git(root, 'commit', '--quiet', '-m', 'main edits line 7');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const moved = git(root, 'rev-parse', 'HEAD');
+  record(main, c);
+  const said = reviewEvidence(root, moved, c);
+  assert.equal(said.pass, true, said.detail);
+  assert.deepEqual(said.lines, [`${c.slice(0, 7)} feat: c: the Codex review is off`]);
 });
 
 test('a pull request that conflicts with main is refused, naming the files, and no review is read', () => {
