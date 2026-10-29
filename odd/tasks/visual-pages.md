@@ -154,18 +154,25 @@ From the feature document and git:
   `bin/lib/contract.mjs`), read by section; its tasks done/total (`tasksOf`); the done-when commands listed as not
   run by the page (one may be the gate, which takes the lock: `contract run` is the lead's);
 - its pull requests: the merges of the default branch's first-parent line whose source branch, with an owner prefix
-  removed, is one the document names (`Branch \`x\`` at its head) or `--branch`, or named by `--pr <n>`, both
-  repeatable; grouped by number; each one's commits the union of `M^1..M^2` over its merges, as hashes. A history
-  whose merges name no pull request gives `{ unknown }` with why;
+  removed, is one the document names (`Branch \`x\`` at its head, the lines before its first section) or `--branch`,
+  or a slice of one (`<branch>-…`, a guess the page names as such), or named by `--pr <n>`, both repeatable; grouped
+  by number; each one's commits the union of `M^1..M^2` over its merges, as hashes. A history whose merges name no
+  pull request gives `{ unknown }` with why;
 - time: real from the oldest of those commits to the last merge; estimated from a closed or open stretch item whose
   session is the document's (`Session JH <n>` at its head), else "sin estimado registrado";
 - reviews: coverage, the Codex reviews (`codex-reviews.jsonl`) and lens reviews (`lens-reviews.jsonl`) whose head is
   one of those commits, by outcome; attempts, the Codex runs (`codex-review-runs.jsonl`) by run id; a review of a
-  rebased head is not found and the page says so; the gentle-ai lines of the log counted;
-- spend: the Codex runs' `usage.inputTokens` and `cachedInputTokens` apart, a run with no usage counted as unknown;
+  rebased head is not found and the page says so. The gentle-ai lines of the log are not counted: main's sweep (F8
+  S11) refuses a file under `bin` that names the tool, and the page counts what the records hold;
+- spend: the Codex runs' `usage.inputTokens` and `cachedInputTokens` apart, only from runs whose tokens were read from
+  the rollout files (`usageSource: rollout`), any other run counted as unmeasured; a skip (`--unavailable`) covers no
+  commit and is counted apart;
   the lens results' `costUsd` and tokens; evals and the session's own tokens "sin medir";
-- failures: the failed gates of its worktrees inside its span, as the stretch measures them;
-- the map: at the first merge's first parent and at the last merge.
+- failures: the failed gates inside its span whose folder is its worktree, `.claude/worktrees/<document name>` of the
+  main checkout, or a slice's (`<document name>-…`, as its branches are matched); the gate log is the machine's, so a
+  folder of that name in another project is not its; a gate log
+  that cannot be read is said, never shown as no failure;
+- the map: at the first parent of the earliest merge of all its pull requests and at the last merge.
 `--record` appends the page record (subject: the document's path).
 
 ### The phase's change (`report phase`)
@@ -298,6 +305,9 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
   phase` in the slice C commit "feat(report): the phase page".
+- [x] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
+  gates of the feature's slice worktrees left out, fixed in d8e0a122; Codex reads C3 again from 95d5231e (`--again`).
+  Route: inline.
 - [ ] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
   seam its tests stub; the departure carries the map and the timeline; the plan's titles as written. Spec 8. Route:
   inline. The seam and `report phase`'s call in the same commit.
@@ -456,6 +466,24 @@ carrying #644, landed (main 96b917a).
   (the map before is the phase page's tested `readMap`; the guarded write is the phase page's shape).
 - gentle-ai: 6fc7f8ae approved (medium, lineage review-c5e4c7139595b966), no findings; Codex correct (0.98); the
   reliability lens found nothing.
+- C3, 95d5231e..287d76ec (`report feature`, on `feat/visual-pages-c3`, local): lenses reliability and resilience
+  found nothing. gentle-ai: 287d76ec approved (medium, lineage review-31273a212f04c03d) with 4 warnings to fix.
+  Codex: incorrect in both parts (0.97, 0.98), 6 findings, its output kept in the job tmp `codex-c3-full.txt`. Next:
+  fix both sets test-first, then Codex recheck `--base 287d76ec`, the lens and gentle-ai, push, PR stacked on #652.
+  T7 moved to slice D: the rules check refuses its paragraph unless it names a `rule:<id>`, which D creates (patch in
+  the job tmp `t7-init-line.patch`).
+- C3's fixes, ~08:00Z. 91c9f206 fixed the ten; Codex's recheck (89,149 input tokens): 5 of 6 fixed, the slice
+  worktrees' gates still left out, fixed in d8e0a122 (T6a). Codex read C3 again from 95d5231e (`--again`, 3 parts,
+  553,125 input tokens): two P2, unknown reviews and spend shown as zeros and a fence indented under a spec, fixed in
+  8d051cc6; its recheck (42,498): 2 of 2 fixed, correct (0.97). The reliability lens found nothing on each of the three
+  fixes.
+- gentle-ai: 287d76ec..4ccc2584 approved (medium, lineage review-b4f5251b65d0e161): two warnings and a suggestion, all
+  taken in 8d051cc6 (the indented fence, the unknown path tested end to end, the failures section saying which
+  worktrees it counts).
+- gentle-ai: 8d051cc6 approved (medium, lineage review-0d9cf00ce2f01b5f): one suggestion, a test of an HTML comment
+  under `## Specs`, not taken: comment stripping is `tokenize`'s, tested in `bin/lib/progress.test.mjs`.
+- State at ~08:00Z: #651 (C1) landed 06:54Z; #652 (C2) is on main, ready sent 07:23Z. C3 is `feat/visual-pages-c3`,
+  to push and open on #652's branch.
 - State at ~06:40Z: #647 (slice B) landed (06:29Z). Slice C goes as two chained pull requests: C1, #651
   (`feat/visual-pages-c1`: d800cb96 with main merged in, 498 lines, the phase page and the rendered-record seam), and
   C2 (`feat/visual-pages-c`: the status page and its fixes, stacked on C1). Then C3: `report feature` and T7's init
