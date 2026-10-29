@@ -597,6 +597,10 @@ carrying #644, landed (main 96b917a).
   main, and the real `stretches.jsonl` holds 0 failure explanations among its 5 `explain` events (`grep -c`). The
   third says two failures whose records start in the same millisecond share one name: the refusal lists each, and
   one explanation then reaches both, a case no record has shown.
+- gentle-ai: 8b0e339f..a40d85e7 approved (medium, lineage review-99b44b35659578df), one warning, taken in the next
+  commit: the usage and the README promised a shared start is always refused, while two failures whose records start
+  in the same millisecond are accepted together; the text now says so. Its first result was refused at admission
+  (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
