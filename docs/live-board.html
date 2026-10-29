@@ -280,7 +280,8 @@ function span(ms) {
 }
 /** An estimate `[low, high]` in hours as "1,5–2 h", or `null` when it is not two numbers. */
 function hoursText(range) {
-  const [low, high] = Array.isArray(range) ? range.map(Number) : [];
+  // Only two numbers are an estimate: `Number` would read null, '' or false as 0 and make one up.
+  const [low, high] = Array.isArray(range) && range.length === 2 && range.every((n) => typeof n === 'number') ? range : [];
   if (!(Number.isFinite(low) && Number.isFinite(high) && low >= 0 && high >= low)) return null;
   const one = (n) => String(n).replace('.', ',');
   return low === high ? `${one(low)} h` : `${one(low)}–${one(high)} h`;

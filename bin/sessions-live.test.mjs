@@ -272,6 +272,11 @@ test('the board page says how long a session has been on its task and its estima
   assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { stretch: lead.stretch }, now), 'Lleva 1 h 20 min en esto · estimado 3–4 h', 'else the stretch item\'s corrected hours');
   assert.equal(taskTimeText([row('2026-10-29T02:35:00.000Z', 'note')], 'JH 79 · Visual pages', { estimates: [{ session: 'JH 7', horas: [1, 1] }] }, now), 'Lleva 25 min en esto (desde su primer aviso visible) · sin estimado', 'JH 7 is not JH 79, and with no opened row the count starts at its first');
   assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH 79', horas: ['x'] }] }, now), 'Lleva 1 h 20 min en esto · sin estimado', 'an estimate it cannot read is none');
+  // Codex, 67e6230..1f61e01: null, '' and false are not 0 hours, and the fallback still applies.
+  for (const horas of [[null, null], ['', ''], [false, false], ['1', '2']]) {
+    assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH 79', horas }] }, now), 'Lleva 1 h 20 min en esto · sin estimado', JSON.stringify(horas));
+    assert.equal(taskTimeText(rows, 'JH 79 · Visual pages', { estimates: [{ session: 'JH 79', horas }], stretch: lead.stretch }, now), 'Lleva 1 h 20 min en esto · estimado 3–4 h', JSON.stringify(horas));
+  }
 });
 
 // odd/tasks/visual-pages.md, spec 6: the lead's status list, one colored card an item, before what is the user's.

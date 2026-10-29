@@ -365,6 +365,9 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   the lead, not done here unless the lead says so.
 - L11. 2026-10-29 02:33Z, the lead: T5e stays a follow-up, out of slice B; 1c039be0's narrowing is enough for this
   slice. #643 landed (main 837cedd); #644 retargeted to main. The lens on 1c039be0 found nothing (8,813 input tokens).
+- L12. 2026-10-29, Codex over 67e6230..1f61e01 (`--again`, 167,443 input tokens): one P2, taken in: an estimate of
+  `[null, null]`, `''` or `false` read as 0 hours through `Number`, a made-up "estimado 0 h"; only two numbers are an
+  estimate now, and the stretch's hours or "sin estimado" follow.
 
 ## Next step
 State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
