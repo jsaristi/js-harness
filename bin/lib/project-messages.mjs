@@ -1,7 +1,7 @@
 // The words the project commands share when they refuse or report a rollback: `init`, `sync`, `status` and
 // `functions` say the same thing about a stale manifest, an unreadable pin, a missing pin and what a failed write
 // left behind. They read nothing and write nothing, so they moved out of `project.mjs`, which re-exports them, to
-// give that module room under its size ceiling for the coverage baseline `init` records (F8 S5c-a, L20 of
+// give that module room under its size ceiling for the coverage baseline `init` records (F8 S5c-a,
 // odd/tasks/f8-s5c-a-coverage.md). Zero deps.
 
 /** The refusal `init` and `sync` share for a manifest that survives without `harness.json` (T2c item 1):

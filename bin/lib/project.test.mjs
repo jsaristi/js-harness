@@ -241,7 +241,7 @@ test('initProject records the day it ran and the release that ran it as the cove
   }
 });
 
-test('initProject dates the coverage baseline today, on this machine\'s calendar, when no day is given', () => {
+test('initProject dates the coverage baseline the day it runs (`localDay`) when no day is given', () => {
   const root = makeTmpRepo();
   try {
     const before = localDay();
@@ -2992,7 +2992,7 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     assert.deepEqual(onDisk.codegraph, { createdDir: true, status: 'ok' });
     assert.deepEqual(onDisk.dirs, []);
     // No coverage baseline: a clone of a project older than its rules would date them all today and owe a control of
-    // each at once (odd/tasks/f8-s5c-a-coverage.md, D13), so only `init` dates a project.
+    // each at once (F8 S5c-a, odd/tasks/f8-s5c-a-coverage.md), so only `init` dates a project.
     assert.equal(onDisk.coverage, undefined);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

@@ -769,7 +769,7 @@ function codegraphWhereWanted(root, spawn, platform, actions, functions) {
  * but `harness.json` and an existing `AGENTS.md` are committed files, recorded as `kept` and never
  * written, so the manifest's `files` holds only what this clone wrote and `uninstall` there removes
  * only that. `preset` is the `"functions"` an `init --preset` writes into `harness.json` (F8 S11, L9). */
-function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone = false, preset = null, today = null } = {}) {
+function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone = false, preset = null, today = localDay() } = {}) {
   const createdPaths = [];
   const createdDirs = [];
   const reportedDirs = [];
@@ -1069,7 +1069,7 @@ export function initProject(cwd, version, deps = {}) {
     return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
   }
 
-  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { preset: deps.functions, today: deps.today ?? localDay() });
+  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { preset: deps.functions, today: deps.today });
 }
 
 /** Resolves one `files`/`dirs` manifest entry back to its absolute path: repo-relative against
