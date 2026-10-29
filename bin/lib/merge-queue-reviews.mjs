@@ -52,6 +52,10 @@ function asMerged(cwd, onto, head, where) {
  * back, for the next pull request to be read onto; the lines name the commits of `onto..head`, the ones this pull request
  * adds; a conflict gives its files, `conflicted`. */
 export function reviewEvidence(cwd, main, head, onto = main) {
+  // The door or a bisection may still leave a sibling out of the candidate: one that turned the Codex review off, or
+  // put a mark on, must not carry this pull request in, so it is asked onto main alone too (JH 84's verifier).
+  const alone = onto === main ? null : reviewEvidence(cwd, main, head);
+  if (alone && !alone.pass) return alone;
   const merged = asMerged(cwd, onto, head, onto === main ? 'main' : 'the candidate so far');
   if (merged.error) return { pass: false, detail: merged.error, ...(merged.conflicted && { conflicted: merged.conflicted }) };
   const { tip } = merged;

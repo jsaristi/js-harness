@@ -102,6 +102,23 @@ test('read onto the candidate so far, the lines name the commits the pull reques
   assert.equal(git(root, 'rev-parse', `${said.tip}^1`), first.tip, 'd is merged onto the candidate so far, not onto main');
 });
 
+test('read onto a sibling that turns the Codex review off, a pull request is still asked onto main alone, since the sibling may yet leave the candidate (JH 84\'s verifier)', () => {
+  const { root, main, c, record } = makeRepo();
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'off', lensReview: 'on' } })}\n`, 'utf8');
+  git(root, 'add', 'harness.json');
+  git(root, 'commit', '--quiet', '-m', 'a sibling turns the Codex review off');
+  const off = git(root, 'rev-parse', 'HEAD');
+  // c's lens record alone: with the Codex review off it would pass, and on main it has no Codex record.
+  const { subjectHash } = lensCandidate(root, { base: main, head: c });
+  appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base: main, head: c, subjectHash, run: startLensRun(root, { base: main, head: c, subjectHash }), reviewedAt: '2026-10-29T12:00:00.000Z', outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
+  record(main, off);
+  const sibling = reviewEvidence(root, main, off);
+  assert.equal(sibling.pass, true, sibling.detail);
+  const said = reviewEvidence(root, main, c, sibling.tip);
+  assert.equal(said.pass, false);
+  assert.match(said.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+});
+
 test('a pull request that conflicts with the candidate so far names the files, as the candidate does', () => {
   const { root, main, c, record } = makeRepo();
   record(main, c);
