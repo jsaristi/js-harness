@@ -601,6 +601,8 @@ carrying #644, landed (main 96b917a).
   commit: the usage and the README promised a shared start is always refused, while two failures whose records start
   in the same millisecond are accepted together; the text now says so. Its first result was refused at admission
   (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
+- 4ba61a5b (the text fix): Codex correct (0.96, 61,391 input tokens); the readability lens found nothing (4,271).
+- gentle-ai: a40d85e7..4ba61a5b approved (medium, lineage review-673b5907691d27bb), no findings.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
