@@ -446,3 +446,19 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   `js-harness notify --to orchestrator --kind ready --pr <n>` telling the lead the surface touched beyond the brief
   (rules-sources, rules-coverage-data, js-harness.test, SPEC's hook table) and the verifier's pre-existing finding
   (an identical user entry is removed by uninstall, `bin/lib/manifest.mjs:584`, `:745`). Then slice C (T5).
+- Update ~07:35Z (after the host's compaction at ~07:10Z): the lenses over 39e69ee..4c4509c found none (risk,
+  resilience, readability, reliability). Codex's run over 39e69ee..83d2f1b found 6 P2, each read and holding: the free
+  mark cut its reason at an apostrophe; `shownReport` counted a `constructor` id from an inherited key; the gate
+  hashed a page's decoded text, not its bytes; the registry was imported outside the gate's fail-open boundary; an
+  unreadable `harness.json` turned the gate off in silence; `template check` read a test call quoted in a string
+  fixture as a declaration. Unit 7, b1d938e3, fixes each with a test that failed on the code before it (7 failing,
+  then 155 of 155 over the five touched test files). Codex's recheck of 83d2f1b..b1d938e: 6 fixed, 0 not fixed,
+  correct at 0.95 (79,502 input tokens). Lenses risk, resilience, reliability over 83d2f1b..b1d938e: 0 findings.
+  gentle-ai lineage review-7ce7253a9018aa39 covers 39e69ee5..4c4509ca (medium, lens reliability); its reader runs.
+  Unit 7 then goes to gentle-ai as its own candidate.
+- gentle-ai: approved, medium, lineage review-7ce7253a9018aa39, over 39e69ee5..4c4509ca (0fa67aaa, bc3a0520,
+  d7912f64, 4c4509ca, and bbd5c73d, d57c075c before them), acknowledged. Its reliability lens left 4 non-blocking
+  findings, each read and holding, all fixed with a test that failed first in unit 8, 34f95b0c: an Artifact `files`
+  list skipped by the gate; a `files` source read without the publish's `root`; a quote in a regular expression or a
+  nested template literal flipping `template check`'s comment reader; `recordRendered` taking a time that does not
+  parse. Next: Codex and the lenses over unit 8, then units 7 and 8 to gentle-ai as one candidate.
