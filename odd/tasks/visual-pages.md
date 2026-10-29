@@ -373,21 +373,30 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   read as 0 (fixed in c6d97b82); the start row with no worktree and its branch untested, and an estimate named by the
   code alone ("JH") matching every session, both taken in the commit after c6d97b82.
 
+- L14. 2026-10-29, spec 8 from him (transcript 0f71b2c6, line 14721, 02:46:58Z, checked with `js-harness sessions
+  --quote`): "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no
+  quedan estandarizados? sera que menos protocolo y siempre generamos un eval o un template para que siempre muestre
+  las cosas como quiero? y que asi se estandarice y no muestre algo diferente cada vez. dime como lo tengo que pedir
+  por que siempre equivocas y siento es que yo no te pido las cosas paras que el arnes funcione como debe". The lead
+  had redrawn the departure by hand, inline, with no map. The lead asks (to place in a slice): 1) each moment's
+  command writes the whole page and records its hash in the page record, and a check (Stop hook `bin/reply.mjs` or
+  the reply-state check) refuses a reply at a moment unless the page shown or published is that file unchanged;
+  2) the departure (`stretch open`) carries the map by phase and the timeline at the opening; 3) the plan's item
+  titles go in as written, the help saying the lead writes them in Spanish. Not yet answered to the lead: proposed
+  slice C (with T6), as T10.
+
 ## Next step
-State at 2026-10-29 ~02:10Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
-`feat/visual-pages-board`, on `feat/visual-pages-b`, on `feat/visual-pages`):
-- Slice A: pushed and opened as #643 (design, ready), #644 (renderer, base #643), #645 (stretch, base #644); each
-  retargets to main as its base lands. Reviews in L5 and L7; gentle-ai lines below.
-- gentle-ai: ee595c7c approved (low, docs); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720);
-  54747bc6 approved (medium, lineage review-a3c20007ce0c6f70; its two warnings fixed in 2bd3bc72). 2bd3bc72: Codex
-  and the reliability lens found nothing. 2bd3bc72..b70ac68d (9b36b5b5, b70ac68d) approved (medium, lineage
-  review-7c6f3a36e3078389); its findings and Codex's fixed in the commit after it (L8). b70ac68d..ca23a627
-  (67e6230a, ca23a627) approved (medium, lineage review-3aafcdd1541ce20e; L13).
-- Slice B, T4, T5, T5b and T5c built, tests green one file at a time (an eval batch of another worktree refuses
-  several at once): `bin/lib/stale-board.mjs` and the Stop hook (`bin/reply.mjs`); `bin/lib/sessions-running.mjs`
-  and `running` in `board-checked.json` (`bin/sessions-live.mjs`); the start row (`bin/sessions-background.mjs`);
-  the board's "Cómo va", "Lo último que se hizo" and running line (`docs/live-board.html`). Next: commit, then its
-  Codex, lens and gentle-ai reviews, its PR stacked on #645, and a notice naming `board/summary.status`'s shape.
-- Then slice C (T6, T7), slice D (T8) on `rule/visual-moments`, T9.
-- Real-data scratch: `C:\Users\Oficina\.claude\jobs\b550c1c7\tmp\home1` (copies of the records + a stretch opened
-  12:11Z, 10.7 h); `node bin/js-harness.mjs stretch status --home <that> --cwd <worktree>`.
+State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
+`feat/visual-pages-board` at 71d626c5, on `feat/visual-pages-b` (9b36b5b5), on `feat/visual-pages`):
+- Slice A: #643 landed (main 837cedd); #644 on main, #645 on #644, landing in order by the queue.
+- Slice B reviews: Codex rechecks done (67e6230..1f61e01 one P2 fixed; 1f61e01..71d626c correct 0.99); lenses all 0
+  findings; gentle-ai lineage review-8ed9074b0701c90f (ca23a627..71d626c5) started, collecting its reliability lens:
+  context with `gentle-ai review lens-context --cwd <wt> --repository-context
+  rctx2_774712e90fd7c252f2d81addd8aa142eb652e717e530bdb54b42d35193a7e56f --lineage review-8ed9074b0701c90f --target
+  sha256:502f722e730c481f2a0c9dd0edc54907fc96f080e0c3e85804b94af98e45ee6f --expected-revision
+  sha256:8a7c58476e7af941d6a6e1588ca5d5efa3598f36e332daa50eebff2388da58ff --lens review-reliability`, reviewer as a
+  general-purpose agent on opus, capture-result without --agent (subject sha256:0925f7e0...d7, order 0), then
+  acknowledge from `status --next-transition --lineage` (switch to the candidate head if HEAD moved).
+- Then: push `feat/visual-pages-b` and `feat/visual-pages-board`; PRs stacked on #645 (bodies name T5e as the one
+  Codex finding left open, the lead's decision; `board/summary.status` and `estimates` shapes); notify ready.
+- Then answer the lead on spec 8 (T10 in slice C), slice C (T6, T7, T10), slice D (T8), T9.
