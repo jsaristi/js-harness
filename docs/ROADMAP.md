@@ -372,6 +372,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   push of main checks, so a record whose head lies past the pull request's no longer passes the door and fails
   the push; a refused push of main prints the hook's failing rows (PR 663, JH 83; `docs/FAILURES.md`,
   `door-covers-past-tip`; `docs/sessions/2026-10-29-jh-83-merge-door-reads-review-coverage-like-pre-push.md`).
+- **Later fix:** the door reads each pull request onto the candidate so far; install records its hook entries before it writes them; an update keeps the user's entry theirs in its new form; the refresh's wait names a way out that works (JH 84; `docs/sessions/2026-10-29-jh-84-delivery-follow-ups.md`).
 
 ### The S1 records fix (row 3 of the reverse-engineering document's 13.3)
 - **Changes:** the review records cannot be written by the model. Prevention: `guard` refuses a file

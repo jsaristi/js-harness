@@ -452,11 +452,10 @@ function isOnlyOurPointerPaths(value, pointers) {
   });
 }
 
-/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a
- * rewrite matches it instead of always reformatting to 2 spaces. `null` means compact single-line
- * JSON (no newlines besides, at most, one trailing one) and must stay compact; a tab or space run
- * right after the first real newline becomes the indent unit; anything else (a multi-line document
- * with no indented line, which should not normally happen) falls back to the historical default. */
+/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a rewrite matches it instead
+ * of always reformatting to 2 spaces. `null` means compact single-line JSON (no newlines besides, at most, one trailing
+ * one) and must stay compact; a tab or space run right after the first real newline becomes the indent unit; anything
+ * else (a multi-line document with no indented line, which should not normally happen) falls back to the default. */
 export function detectIndent(raw) {
   const body = raw.replace(/\r?\n$/, '');
   if (!body.includes('\n')) return null;
@@ -516,16 +515,15 @@ function isOlderOwnEntry(item, entry) {
  * `ours` is the set of containers js-harness made (`oursContainers`): every container this creates is added to it, so
  * the next entry of the same run that finds it there records it as made too, and the result says how many of the
  * containers on the way to `pointer` are ours (`createdContainers`).
- * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure
- * reading or writing the target (R3-002: an unreadable file, a directory sitting at the path, an
- * unwritable or missing-as-a-directory host dir, ...) all leave the file completely untouched and
- * report `skipped`, never overwritten and never thrown out of install/sync. R3-001: an intermediate
- * key that already exists but is not a plain object, or a leaf that already exists but is not an
- * array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent:
- * an entry that is already there (by deep equality) is left alone and the file is not rewritten at
- * all, so a repeat install/sync never reformats a file that already has what it needs. It says `present` whenever the
- * entry was there before this run, also when only older forms of it were taken out. */
-function appendEntryToFile(target, pointer, entry, ours) {
+ * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure reading or writing the
+ * target (R3-002: an unreadable file, a directory sitting at the path, an unwritable or missing-as-a-directory host dir,
+ * ...) all leave the file completely untouched and report `skipped`, never overwritten and never thrown out of
+ * install/sync. R3-001: an intermediate key that already exists but is not a plain object, or a leaf that already exists
+ * but is not an array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent: an entry
+ * that is already there (by deep equality) is left alone and the file is not rewritten at all, so a repeat install/sync
+ * never reformats a file that already has what it needs. It says `present` whenever the entry was there before this run,
+ * also when only older forms of it were taken out, which it names (`replaced`). With `write` false it writes nothing. */
+function appendEntryToFile(target, pointer, entry, ours, write = true) {
   let fileExisted;
   let raw;
   try {
@@ -584,15 +582,15 @@ function appendEntryToFile(target, pointer, entry, ours) {
   if (has && stale.length === 0) {
     return { skipped: false, present: true, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
-  for (const i of [...stale].reverse()) arr.splice(i, 1);
+  const replaced = [...stale].reverse().flatMap((i) => arr.splice(i, 1)).reverse();
   if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
+    if (write) fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (write) fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
-  return { skipped: false, ...(has && { present: true }), createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
+  return { skipped: false, ...(has && { present: true }), replaced, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
 
 /** Whether a record says the list at its pointer is not one install made. A record that names no container as made
@@ -608,12 +606,11 @@ const pointersIn = (records, target) => (records ?? [])
   .filter((record) => record.path === target && !ownsNoList(record))
   .map((record) => record.pointer);
 
-/** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a
- * pointer shape that does not match, or an entry that is not there (the user changed or removed
- * it) all leave the file completely untouched — reported `kept` (or nothing, for a missing file,
- * mirroring how `uninstall` already treats a missing file component). Deletes the whole file only
- * when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but empty
- * containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
+/** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a pointer shape that does
+ * not match, or an entry that is not there (the user changed or removed it) all leave the file completely untouched —
+ * reported `kept` (or nothing, for a missing file, mirroring how `uninstall` already treats a missing file component).
+ * Deletes the whole file only when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but
+ * empty containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
  * them that is empty once the entry is out goes too (`removeEmptyCreatedContainers`). `pointers` is every pointer
  * js-harness recorded in this file, which is what "ours" means for the last check (see `isOnlyOurPointerPaths`). */
 function removeEntryFromFile(target, pointer, entry, createdFile, createdContainers = 0, pointers = [pointer]) {
@@ -680,10 +677,10 @@ function isEmptyContainer(value) {
   return value !== null && typeof value === 'object' && Object.keys(value).length === 0;
 }
 
-/** Installs every entry component, carrying forward `createdFile` from a previous manifest record
- * for the same target file (matched by path) rather than recomputing it from "does the file exist
- * right now" — a file js-harness created on the first install still existed for every later
- * install/sync call, but js-harness must still remember it made it, so uninstall can delete it.
+/** Installs every entry component, carrying forward `createdFile` from a previous manifest record for the same target
+ * file (matched by path) rather than recomputing it from "does the file exist right now" — a file js-harness created on
+ * the first install still existed for every later install/sync call, but js-harness must still remember it made it, so
+ * uninstall can delete it. `write` false walks the same way and writes nothing, for the records install writes first.
  *
  * Two components can graft an entry on the same file (the doctor's hook and the resume hook), and who
  * created the file is a fact of the file, not of the entry: the second entry of a first install finds the
@@ -709,7 +706,7 @@ function isBelow(inner, outer) {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined) {
+function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined, write = true) {
   const createdByTarget = new Map();
   const foldersByTarget = new Map();
   const ours = oursContainers(previousManifest?.entries);
@@ -718,18 +715,19 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
     const pointer = component.pointer;
     const entry = component.entry();
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
-    const result = appendEntryToFile(target, pointer, entry, ours);
+    const result = appendEntryToFile(target, pointer, entry, ours, write);
     if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
     // Like `createdFile`, the folders made for the file are a fact of the file, settled by the first install that wrote
     // it, from what was missing before install wrote anything (a skill file makes `~/.claude` first). A record from before the field names none, and its folders stay, since nothing says install made them.
     if (!foldersByTarget.has(target)) foldersByTarget.set(target, previousEntry ? previousEntry.createdFolders ?? [] : (result.createdFile ? missingBefore.get(target) ?? [] : []));
-    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and
-    // pointer still holds. Written as none, the next install would take those containers for the user's, and
-    // `uninstall` would leave them empty behind it.
+    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and pointer
+    // still holds. Written as none, the next install would take those containers for the user's, and `uninstall` would leave them empty behind it.
     const earlier = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer));
     // An entry the file already held, or one a skipped run never looked at, is ours only while the earlier record of it says so: else
     // install did not write it, `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust. A record from before the field is ours.
+    // The new form put in the place of an older one recorded as the user's is theirs as well (`theirs`, JH 81's follow-up).
     const same = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && deepEqual(e.entry, entry));
+    const theirs = previousManifest?.entries?.some((e) => e.createdEntry === false && Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && result.replaced?.some((item) => deepEqual(e.entry, item)));
     const record = {
       path: target,
       pointer,
@@ -740,7 +738,7 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
-      ...((result.present || result.skipped) && (same === undefined || same.createdEntry === false) ? { createdEntry: false } : {}),
+      ...(theirs || ((result.present || result.skipped) && (same === undefined || same.createdEntry === false)) ? { createdEntry: false } : {}),
       // A Codex entry names every config.toml Codex may keep its trust in, as each install resolved it, so the
       // uninstall edits those files whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
       ...(codexConfig && component.id.startsWith('codex-') ? { trustConfigs: withConfig(previousEntry?.trustConfigs ?? [], codexConfig) } : {}),
@@ -1108,6 +1106,10 @@ export function install(home, version, deps = {}) {
     const record = writeComponent(target, component.content(version), previous?.files?.find((f) => f.path === target), writeFile);
     if (record) files.push(record);
   }
+  // Recorded before written, by the same walk with no write, beside the earlier records, whose entries (an older form) may still be there:
+  // a run stopped in between leaves both ours to undo (JH 81's verifier; Codex on 8c45db8..c70aa5a).
+  const planned = installEntries(home, previous, missingBefore, deps.codexConfig, false);
+  writeManifest(home, { ...previous, version: previous?.version ?? null, files: [...files, ...(previous?.files ?? []).filter((f) => !files.some((g) => g.path === f.path))], entries: [...planned, ...(previous?.entries ?? []).filter((e) => !planned.some((p) => p.path === e.path && deepEqual(p.pointer, e.pointer) && deepEqual(p.entry, e.entry)))] });
   const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
@@ -1129,11 +1131,10 @@ export function sync(home, version, deps = {}) {
   const manifest = install(home, version, deps);
 
   if (previous) {
-    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only
-    // when its component is no longer *declared* at all — compared against `components`' own
-    // current targets, not against this run's successful writes — so a component that is still
-    // declared but merely failed to (re)write this run (carried forward above with `skipped: true`)
-    // is never treated as "no longer shipped" and deleted.
+    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only when its component is
+    // no longer *declared* at all — compared against `components`' own current targets, not against this run's
+    // successful writes — so a component that is still declared but merely failed to (re)write this run (carried
+    // forward above with `skipped: true`) is never treated as "no longer shipped" and deleted.
     // A file no longer shipped is removed only while its bytes are the ones recorded, as `uninstall` does: one the
     // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
     // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
@@ -1417,11 +1418,10 @@ function uninstallInstalled(home, deps) {
  * when it ends. A holder that stopped beating a minute ago is no live gate. One that started in the
  * instant between this look and the removal loses its lock, and its own report says so.
  *
- * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
- * `code`. The two are one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a
- * folder that was looked at and then not removed holds no live gate, and of one that could not be looked
- * at nobody knows. So the answer also has `unseen: true` for that second one, the folder itself or the
- * gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
+ * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's `code`. The two are
+ * one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a folder that was looked at and then not
+ * removed holds no live gate, and of one that could not be looked at nobody knows. So the answer also has `unseen: true`
+ * for that second one, the folder itself or the gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
 function removeGateFolder(home, removeFile, statFile) {
   const dir = gateDir(home);
   const unremovable = (err) => ({ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' });

@@ -906,7 +906,7 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
       return fail(`${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/${defaultBranch}.`);
     }
   }
-  const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head));
+  const isCovered = covered ?? ((head, onto) => reviewEvidence(cwd, main, head, onto));
   let listed;
   try {
     listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', defaultBranch, '--limit', '100', '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName'], cwd).out);
@@ -915,8 +915,10 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
   }
   if (!Array.isArray(listed)) return fail('could not list the open pull requests.');
 
-  // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later.
+  // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later. Each
+  // one's reviews are read onto the candidate so far (`onto`), since the push of main reads the candidate whole.
   const candidates = [];
+  let onto = main;
   const ordered = [...listed].sort((a, b) => a.number - b.number);
   log.record.considered = ordered.map((pr) => pr.number);
   for (const pr of ordered) {
@@ -927,16 +929,14 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
       leaveOut(log, stdout, pr, 'not-ready', problems.join(' '));
       continue;
     }
-    const coverage = isCovered(pr.headRefOid);
-    if (!coverage?.pass) {
-      leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
-      continue;
-    }
-    if (coverage.lines?.length) {
-      stdout(`PR ${pr.number}, commit by commit:`);
-      for (const line of coverage.lines) stdout(`  ${line}`);
-    }
+    const coverage = isCovered(pr.headRefOid, onto);
+    const files = onto !== main && coverage?.conflicted?.length ? coverage.conflicted : null;
+    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files });
+    else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
+    if (files || !coverage?.pass) continue;
+    for (const line of coverage.lines?.length ? [`PR ${pr.number}, commit by commit:`, ...coverage.lines.map((said) => `  ${said}`)] : []) stdout(line);
     candidates.push(pr);
+    onto = coverage.tip ?? onto;
   }
   if (candidates.length === 0) {
     stdout('No pull request is ready to merge: nothing was built.');

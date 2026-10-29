@@ -329,11 +329,13 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   in slice B (it changes how shared board code orders status), and named in the slice B PR as the one Codex finding
   left open. Spec 4. Route: inline. Done by JH 85 on `fix/records-follow-ups`, in the commit "fix(sessions): keep a
   session's newer state by its time".
-- [ ] T5f (kind: build) follow-up, a defect found landing #644 (L16), outside this brief's surface: the merge queue
+- [x] T5f (kind: build) follow-up, a defect found landing #644 (L16), outside this brief's surface: the merge queue
   (`bin/merge-queue.mjs:318`) passes `reviewCoverage` the pull request's head as the tip, so a record whose head lies
   past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
   head is not past. The first pull request of a stack, landed alone after a review over the stack, passes the queue
-  and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
+  and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline. Done by
+  PR 663 (JH 83, merged as acc2c6ff): the door asks the push's rows of the head merged onto main; its test "a record
+  whose head lies past the pull request covers it at its head and not merged" is this case (JH 84 checked, 2026-10-29).
 - [x] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
   phase` in the slice C commit "feat(report): the phase page". Landed as #651, #652 and #654.
 - [x] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed

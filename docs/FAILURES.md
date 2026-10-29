@@ -438,6 +438,17 @@ printed only git's "failed to push some refs".
   it at its head and not merged: the door refuses it before a candidate, as the push does" — since
   2026-10-29
 
+### door-reads-pr-alone
+The merge queue's door read each pull request merged onto main alone, while the push of main reads
+the whole candidate: a sibling that turned the Codex review on, or took a `-codex-review` mark off,
+let another's code pass the door and then fail the push.
+- Class: tool
+- Seen: 2026-10-29 — PR 663's body, "Finding 2", and
+  docs/sessions/2026-10-29-jh-83-merge-door-reads-review-coverage-like-pre-push.md, "Left" — found by
+  JH 83's independent verifier reading `reviewEvidence`; no land had hit it yet
+- Control: check — bin/merge-queue.test.mjs — "a pull request that turns the Codex review on is read
+  onto the candidate so far" — since 2026-10-29
+
 ### edit-during-review
 A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
 not the committed range, wrote no record and had to be run again.
@@ -740,6 +751,18 @@ exactly.
   docs/todo.md
 - Control: check — bin/lib/project.test.mjs — "runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it
   writes nothing under the home, on every platform" — since 2026-10-14
+
+### install-stop-strands-entries
+An install that stopped after it wrote its hook entries and before it wrote its manifest left them
+named by no record; the next install took them for the user's, and `uninstall` left live hooks of
+a removed tool in the host files.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-81-uninstall-keeps-a-users-hook-entry.md, "A lost
+  manifest" and "Follow-ups" — found by JH 81's independent verifier on PR 657; reproduced by JH 84
+  on main `8c45db81`, the Claude settings left with every hook of ours after install, install and
+  uninstall
+- Control: check — bin/lib/manifest.test.mjs — "an install that stops before its manifest is
+  written leaves its entries recorded as its own, and uninstall takes them out" — since 2026-10-29
 
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
@@ -1099,6 +1122,18 @@ stood.
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
   document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
   the check in the row citations (odd/tasks/commands-and-doctor.md, L10)
+
+### refresh-wait-false-way-out
+`merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
+next land with `--refresh-copy` brings the installed copy up; a land run from that copy is refused
+before it lands while main's `bin/` differs from it, so it refreshes nothing.
+- Class: wrong-information
+- Seen: 2026-10-29 — bin/lib/merge-queue-refresh.mjs:88 on main `8c45db81` — read by JH 84 against
+  `staleBin` (bin/merge-queue.mjs:902-908) and the "Nothing landed" path of `refreshCopy`
+  (bin/lib/refresh-copy.mjs:222-225); the same day three lands from the installed copy were refused
+  as behind main (the land record, 05:44Z, 11:04Z and 13:37Z), none of them after a refresh
+- Control: check — bin/merge-queue.test.mjs — "a land run from that copy is refused while main" —
+  since 2026-10-29
 
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
@@ -1520,6 +1555,17 @@ A hook entry the user's host file already held, identical to one of ours, was re
   back with `"SessionStart": []` after install, install and uninstall
 - Control: check — bin/lib/manifest.test.mjs — "an entry the Codex hooks.json already held,
   identical to ours, keeps its place and its trust through install and uninstall" — since 2026-10-29
+
+### update-took-user-entry
+A hook entry recorded as the user's, equal to an older form of ours, was taken out by an update's
+cleanup of older forms, and the new form in its place was recorded as ours, so `uninstall` took
+the user's hook out.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-81-uninstall-keeps-a-users-hook-entry.md,
+  "Follow-ups" — named by JH 81 at `isOlderOwnEntry`; reproduced by JH 84 on main `8c45db81`, the
+  record of the new form without `createdEntry: false`
+- Control: check — bin/lib/manifest.test.mjs — "equal to an older form of ours stays theirs when an
+  update puts the new form in its place" — since 2026-10-29
 
 ### upgrade-cannot-work
 `js-harness upgrade` cannot bring a copy up to date, and the hint it gives on a version mismatch
