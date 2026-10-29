@@ -430,6 +430,12 @@ JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`; the latest state
 - C2, d800cb96..14907efb (the status page): Codex incorrect (0.96, two P2: an unconfirmed answer said as an answer,
   and no notes said as nothing waits), fixed in fd734292, Codex's recheck 2 of 2 fixed; the reliability and
   resilience lenses found nothing on C2, reliability nothing on the fix.
+- gentle-ai: d800cb96..fd734292 approved (medium, lineage review-00598536ad2a9722), the status page with the fix of
+  Codex's two findings: one warning, a relative --notes read from the process folder while --html is written under
+  --cwd, fixed in 6fc7f8ae; one suggestion, the map-before and unwritable-page paths of report.mjs untested, not taken
+  (the map before is the phase page's tested `readMap`; the guarded write is the phase page's shape).
+- gentle-ai: 6fc7f8ae approved (medium, lineage review-c5e4c7139595b966), no findings; Codex correct (0.98); the
+  reliability lens found nothing.
 - State at ~05:50Z: #647 (slice B) pushed at f6c76feb with main merged in, ready sent twice (the queue first saw
   GitHub's CONFLICTING while it recomputed after #649). Slice C on `feat/visual-pages-c` (local, unpushed): gentle-ai
   on d800cb96..fd734292 running (lineage review-00598536ad2a9722). Then merge slice B's merged head into C, PRs C1
