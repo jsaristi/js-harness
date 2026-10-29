@@ -224,6 +224,18 @@ test('--html writes the status page with the map since the last mark and the not
   assert.match(out.join('\n'), /in the rendered record/);
 }));
 
+// Review 00598536's warning on C2: a relative --notes is read where a relative --html is written, under --cwd, as stretch's
+// --html is; run from elsewhere, the notes are not read from one folder and the page written in another.
+test('a relative --notes and --html both resolve under --cwd, wherever the command runs from', withProject(async (project) => {
+  fs.mkdirSync(project.home, { recursive: true });
+  fs.writeFileSync(path.join(project.repo, 'notes.json'), JSON.stringify({ proposals: [{ step: 'Tramo C', why: 'faltan páginas' }] }));
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const err = [];
+  const code = await reportMain(['--html', path.join('out', 'status.html'), '--notes', 'notes.json', '--cwd', project.repo, '--home', project.home], { cwd: project.home, stdout: () => {}, stderr: (line) => err.push(line), env: {}, recordLoad });
+  assert.equal(code, 0, err.join('\n'));
+  assert.match(fs.readFileSync(path.join(project.repo, 'out', 'status.html'), 'utf8'), /Tramo C[\s\S]*faltan páginas/);
+}));
+
 test('--notes that do not parse are refused before anything is written, and --notes needs --html', withProject(async (project) => {
   const notes = path.join(project.home, 'notes.json');
   fs.mkdirSync(project.home, { recursive: true });

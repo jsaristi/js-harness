@@ -110,10 +110,12 @@ export async function reportMain(argv, options = {}) {
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
+  // A relative --notes is read under --cwd, where a relative --html is written, as stretch's --html is.
+  const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
   // The notes are read whole before anything is read or written: a page with half the lead's notes would pass for whole.
   let notes = null;
   if (parsed.notes !== undefined) {
-    const file = path.resolve(defaultCwd, parsed.notes);
+    const file = path.resolve(cwd, parsed.notes);
     try {
       notes = notesOf(fileSystem.readFileSync(file, 'utf8'));
     } catch (err) {
@@ -124,7 +126,6 @@ export async function reportMain(argv, options = {}) {
 
   // The project is the main checkout, from any worktree, as for `notify` and the board: its record is one per
   // project. The harness home is --home, else JS_HARNESS_HOME, else the user's home.
-  const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
   const slug = projectSlug(mainCheckout(run, cwd));
   const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const at = now();
