@@ -1968,7 +1968,7 @@ test('--land --refresh-copy waits for the project\'s sessions to be between runs
   assert.ok(busy.out.some((line) => line.startsWith('Landed: main ')), 'the land stands');
   assert.ok(busy.out.some((line) => /still in the middle of a run: JH 7 · a \(busy\): nothing was refreshed/.test(line)), busy.out.join('\n'));
   // A land run from a copy behind main is refused before it lands (`staleBin`), so the copy cannot bring itself up.
-  assert.ok(busy.out.some((line) => /a land run from that copy is refused while main's bin\/ differs from it: land from a checkout at origin\/main with --refresh-copy to bring it up$/.test(line)), busy.out.join('\n'));
+  assert.ok(busy.out.some((line) => /a land run from that copy is refused while main's bin\/ differs from it: the next land that moves main, run from a checkout at origin\/main with --refresh-copy, brings it up$/.test(line)), busy.out.join('\n'));
 });
 
 test('--land --refresh-copy with nothing ready asks the refresh that nothing landed, so it refreshes nothing', async () => {
