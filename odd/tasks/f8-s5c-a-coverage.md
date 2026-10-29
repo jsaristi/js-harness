@@ -103,7 +103,7 @@ mechanism here, before S13 rehearses it and S12 ships it.
   by `task-proof`, and their paid reruns P5 and P6 — S4; inline; JH 82, branch `f8-s5c-a-cases` (`b08cf553`,
   `03effcad`, the records' commit after them): neither tells its rule apart (L21); both stay owed
 - [ ] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
-  rule apart (D10) — S4; inline
+  rule apart (D10) — S4; inline. P7 says it does not (L26, D14): none built as T8's; how a case could is the lead's
 - [ ] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline
 
 Reviews:
@@ -161,9 +161,10 @@ plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
 |---|---|---|---|---|
 | P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | plan $2.08 (table $1.84 to $2.76) | $2.31 (1.11 times the plan) |
 | P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | plan $2.41 (table $1.84 to $2.76) | $2.56 (1.06 times the plan) |
-| P7 reuse-first v2 again, transcripts kept (L23) | P5's command with `--name f8-s5c-a-cases-reuse-2` | 4 | plan $2.31 (stops past $3.47) | |
+| P7 reuse-first v2 again, transcripts kept (L23) | P5's command with `--name f8-s5c-a-cases-reuse-2` | 4 | plan $2.31 (stops past $3.47) | $2.00 (0.87 times the plan) |
 
-Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21).
+Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21). P7 ran from
+`12d2ca5f`, clean, through `js-harness gate` (L26); with it JH 82's recorded spend is $6.87.
 
 In all for P1 to P4, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
 record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
@@ -197,6 +198,10 @@ once), the day injected through `initProject`'s deps (`localDay`, `bin/lib/flaky
 one independent verifier, then Codex and the lenses; its own PR if the branch passes 400 lines; (4) push, PR,
 `notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`. JH 82's recorded spend:
 $4.87.
+After P7 (L26, $2.00, JH 82's spend now $6.87): (2) is done; T9 builds no case as T8's (D14), and what would let a
+case tell its rule apart (the rule's text in a home that always loads, or prompts that fire the skill) is the
+lead's. Next: (3) T10, on its own branch from `origin/main` and its own PR, since main's `project.mjs` moved
+(2,018 lines, its ceiling 2,018) and still writes no coverage record; then (4).
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -451,3 +456,18 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   with its accents (the four P6 replies), and "use" without one is also the English word the fix stopped; and the
   grader has no fixture replies of its own, as no grader of this suite has: its proof is `task-proof`'s fixture,
   reference and empty runs, and the eleven replies were checked by a script in the job's scratch.
+- L26 (2026-10-29, evidence, P7 from `12d2ca5f`): `rule-reuse-first` on both arms again, now with each trial's
+  transcript kept: 4 trials, all 5 of 7 (0.71) on both arms, $2.00 against the plan's $2.31. The record
+  (`evals/proofs/rules/rule-reuse-first.json`, written by `rule-proof.mjs` from the clean commit) is FAIL again. The
+  transcripts say why (one per trial, `evals/runs/f8-s5c-a-cases-reuse-2/*.transcripts`): no trial invoked any
+  skill, on either arm, though the list of skills each was given names `js-harness-protocols`, so the rule's text
+  never reached the model on the current arm either, and taking it out of the home can change nothing. What the
+  trials did: each read `src/lib/slug.mjs` (with `cat`, through Bash), imported `slug` from it into `src/tags.mjs`
+  and took the accents out in `tags.mjs`, never in the helper: the search for something that already exists is
+  the model's habit, the amending of it is what the rule adds, and it is not there. This confirms L18 by
+  observation: a case tells a rule apart only when the rule's text reaches the trial, and a rule that lives only
+  in a skill reaches it only when the prompt makes the model load that skill. So D10's question is answered: more
+  cases built as T8's, on prompts that do not fire their skill, cannot tell their rule apart (D14: T9 builds none
+  of them). What would let them is a choice that is not this session's: put the rules a case ties into a text that
+  always loads (the home's `CLAUDE.md` or `AGENTS.md`, the harness's product), or write prompts that name the
+  skill's trigger, which tests the trigger and not the rule. It goes to the lead.
