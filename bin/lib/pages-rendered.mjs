@@ -16,15 +16,16 @@ const loadRecord = async () => {
   }
 };
 
-/** Records the page at `path`, as written, under `template`: `{ recorded, file }`, or `{ unavailable }` saying why
+/** Records the page at `path`, as written, under `template` and `subject` (the moment's id as the page record names it:
+ * the stretch's id, the feature document's path, `map`): `{ recorded, file }`, or `{ unavailable }` saying why
  * not. An id outside `PAGE_TEMPLATES` is a caller's error and throws. */
-export async function recordPageRendered({ home, slug, template, path, at, head }, { load = loadRecord } = {}) {
+export async function recordPageRendered({ home, slug, template, subject, path, at, head }, { load = loadRecord } = {}) {
   if (!PAGE_TEMPLATES.includes(template)) throw new Error(`unknown page template: ${template}`);
   const record = await load();
   if (record === null) return { unavailable: 'bin/lib/template-record.mjs is not in this install yet, so the page is not in the rendered record' };
   const file = record.renderedFile(home, slug);
   try {
-    return { recorded: record.recordRendered(file, { template, path, at, head }), file };
+    return { recorded: record.recordRendered(file, { template, subject, path, at, head }), file };
   } catch (err) {
     return { unavailable: `the rendered record ${file} could not be written: ${err.code ?? err.message}` };
   }

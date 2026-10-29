@@ -91,7 +91,7 @@ test('a page written is recorded once in the rendered record, and a before git c
   const html = path.join(place.top, 'p.html');
   const result = await phase(place, ['--since', 'deadbeef', '--html', html], { recordLoad });
   assert.equal(result.code, 0, result.err);
-  assert.deepEqual(calls, [{ template: 'phase-change', path: html, at: '2026-10-29T04:00:00.000Z', head: place.second }]);
+  assert.deepEqual(calls, [{ template: 'phase-change', subject: 'map', path: html, at: '2026-10-29T04:00:00.000Z', head: place.second }]);
   assert.match(fs.readFileSync(html, 'utf8'), /git no pudo leer deadbeef/);
   assert.match(result.out, /rendered record/);
   assert.deepEqual(calls.length, 1);

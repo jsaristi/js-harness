@@ -6,18 +6,18 @@ test('the page templates are the six ids of the rendered record\'s contract', ()
   assert.deepEqual(PAGE_TEMPLATES, ['stretch-departure', 'stretch-status', 'stretch-return', 'feature-close', 'phase-change', 'status-report']);
 });
 
-test('a page is recorded once, with its template, its path, its time and its head, in the project\'s rendered file', async () => {
+test('a page is recorded once, with its template, its subject, its path, its time and its head, in the project\'s rendered file', async () => {
   const calls = [];
   const load = async () => ({
-    renderedFile: (home, slug) => `${home}/.js-harness/templates/${slug}/rendered.jsonl`,
+    renderedFile: (home, slug) => `${home}/.js-harness/throughput/${slug}/templates-rendered.jsonl`,
     recordRendered: (file, entry) => {
       calls.push({ file, entry });
       return { sha256: 'ab'.repeat(32), bytes: 10 };
     },
   });
-  const said = await recordPageRendered({ home: '/h', slug: 'D--p', template: 'phase-change', path: '/w/page.html', at: '2026-10-29T04:00:00.000Z', head: 'c1' }, { load });
-  assert.deepEqual(calls, [{ file: '/h/.js-harness/templates/D--p/rendered.jsonl', entry: { template: 'phase-change', path: '/w/page.html', at: '2026-10-29T04:00:00.000Z', head: 'c1' } }]);
-  assert.deepEqual(said, { recorded: { sha256: 'ab'.repeat(32), bytes: 10 }, file: '/h/.js-harness/templates/D--p/rendered.jsonl' });
+  const said = await recordPageRendered({ home: '/h', slug: 'D--p', template: 'phase-change', subject: 'map', path: '/w/page.html', at: '2026-10-29T04:00:00.000Z', head: 'c1' }, { load });
+  assert.deepEqual(calls, [{ file: '/h/.js-harness/throughput/D--p/templates-rendered.jsonl', entry: { template: 'phase-change', subject: 'map', path: '/w/page.html', at: '2026-10-29T04:00:00.000Z', head: 'c1' } }]);
+  assert.deepEqual(said, { recorded: { sha256: 'ab'.repeat(32), bytes: 10 }, file: '/h/.js-harness/throughput/D--p/templates-rendered.jsonl' });
 });
 
 test('with no rendered record built yet the page is said unrecorded, never recorded in its place', async () => {

@@ -83,7 +83,7 @@ export async function reportPhaseMain(argv, { cwd: defaultCwd = process.cwd(), s
     const file = path.resolve(cwd, parsed.html);
     fileSystem.mkdirSync(path.dirname(file), { recursive: true });
     fileSystem.writeFileSync(file, renderPhase(view), 'utf8');
-    const rendered = await recordPageRendered({ home, slug, template: 'phase-change', path: file, at, head: after.commit }, recordLoad ? { load: recordLoad } : {});
+    const rendered = await recordPageRendered({ home, slug, template: 'phase-change', subject: 'map', path: file, at, head: after.commit }, recordLoad ? { load: recordLoad } : {});
     say(rendered.recorded ? `Wrote ${file}, in the rendered record ${rendered.file} (sha256 ${rendered.recorded.sha256.slice(0, 12)}): show or publish it unchanged.` : `Wrote ${file}; it is not in the rendered record: ${rendered.unavailable}.`);
   }
   if (parsed.json) stdout(JSON.stringify(view, null, 2));
