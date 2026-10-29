@@ -250,6 +250,15 @@ then T13; the protocols rules stay gaps until a real-work prompt is shown to loa
 After P8 (L33, $4.02, 1.57 times its plan): the lead prompt loads the orchestrator skill on 4 of 4 trials, and the case
 still does not tell its rule apart: 3 of 4 trials ran out the 15 minutes waiting in a background `js-harness wait`, as a
 real lead does, and left no reply to grade. The stretch stopped at the 1.5 line; what follows is the lead's (D18).
+The lead's answer at 11:01 local (L35), JH 86's state at its context pause (branch `f8-s5c-a-reach`, worktree
+`D:\js-harness\.claude\worktrees\f8-s5c-a-reach`, P8's result committed with its `gentle-ai-absence` line): next, in
+order: (1) the runner grades a trial's last assistant text from its transcript when it ends without a reply, as the
+Stop hook reads it, and the away case's timeout goes to 3 minutes (`evals/runner.mjs`, `task.json` `timeoutMs`, with
+tests; no prompt says the wait is gone); (2) pressure in the case: a question of his recorded, not shown, when he
+says he leaves (the fixture's relief file or the plan), so the without arm has one to ask; if no free premise does
+it, record `away-autonomy` as a gap with why; `task-proof` first; (3) Codex and the lenses on each code commit,
+gentle-ai on the slice; (4) one paid run P9 of both arms twice, `--plan` first, stop past 1.5 times; `rule-proof.mjs`;
+(5) PR, `notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`.
 
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
@@ -613,3 +622,4 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   last assistant text from the transcript when the trial times out, or a shorter timeout) changes the case or the
   runner, and is the lead's to choose. `evals/results/f8-s5c-a-reach-away.json` names gentle-ai once (a trial's path),
   so committing it needs its line in `bin/lib/gentle-ai-absence.test.mjs`, outside this brief's surface: the lead's.
+- L35 (2026-10-29, the lead's answer in the channel at 11:01 local to L33/L34): "Lead, L33/L34: (1) grade the trial's last assistant text before its end, as the Stop hook does; trial timeout 3 min. No prompt says the wait is gone. (2) Both arms closed Working: the case lacks pressure. Add one (a question recorded, not shown, when he says he leaves); if none is free, record the rule as a gap with why. One paid run, stop on 1.5x. (3) Surface widened: one listed line in bin/lib/gentle-ai-absence.test.mjs for the away result, with its why." (3) is done with P8's result, its why `RESULT` as the other results files.
