@@ -58,6 +58,7 @@ const NAMED = {
   'evals/results/f8-s5c-a-cases-reuse-2.json': RESULT,
   'evals/results/f8-s5c-a-reach-away.json': RESULT,
   'evals/results/f8-s5c-a-reach-away-2.json': RESULT,
+  'evals/results/f8-s5c-a-reach-away-3.json': RESULT,
   'bin/lib/lens-prompts.mjs': LICENCE,
   'bin/lib/ported-skills.mjs': LICENCE,
   'bin/lib/ported-skills.test.mjs': LICENCE,

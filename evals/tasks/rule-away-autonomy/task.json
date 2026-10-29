@@ -7,7 +7,7 @@
       ".eval-grader/rule-away-autonomy.grade.mjs"
     ]
   },
-  "timeoutMs": 180000,
+  "timeoutMs": 300000,
   "reply": true,
   "proof": {
     "total": 6,

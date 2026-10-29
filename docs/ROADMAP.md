@@ -474,7 +474,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   away case never asked for its reply (fixed, and `evals/tasks.test.mjs` now holds it), a reply task cut by its
   timeout is graded on the last text its transcripts hold, and his question due on the turn he leaves is the
   pressure; P9 ties at 0.83, the one trial that closed without the rule asked him, and the 3-minute cut graded the
-  others mid-work. Left, with the lead: the case's timeout and its currency test (D20).
+  others mid-work. Then (L40 to L42, on branch `f8-s5c-a-reach-2`, $4.43): the case cut at 5 minutes, its grader
+  passing a reply that closes on Working and holds his question for his return and failing one that asks it, proven
+  on five replies of its own, and `rule-proof.mjs` counting cut trials at their list cost; P10 ties at 0.92, and
+  the lead closed the case owed with that evidence (D21). S13 opens after this branch lands.
 
 ### S13 The rehearsal on a scratch project
 - **Changes:** nothing new; the whole path of the reverse-engineering document's 11.1 walked on a

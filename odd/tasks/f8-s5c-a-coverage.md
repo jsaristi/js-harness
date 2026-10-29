@@ -213,6 +213,42 @@ Reviews:
   record's `costUsd` sums the CLI's cost, which a trial cut by its timeout lacks ($0.94 recorded, $3.86 by the list
   cost, as L33 found), and the record does not mark that three of its four trials were cut.
 
+- JH 86, `14f8a15f..7a04a8e8` (L40): the reliability lens, 0 findings (14,568 input tokens); Codex, "the patch is
+  incorrect" (0.95, 129,964): one P2, read true: the close check read the last line, and a closing paragraph may
+  wrap; fixed by the commit after `7a04a8e8`, which reads the last paragraph.
+- JH 86, `7a04a8e8..0b9dc198` (the P2's fix): the reliability lens, 0 findings (9,153 input tokens); Codex, "the patch
+  is correct" (0.99, 33,917), the P2 fixed.
+- gentle-ai: approved on `14f8a15f..0b9dc198` (lineage `review-a5f35e32f5735614`), acknowledged, four advisory
+  findings, all taken in the commit after `0b9dc198`: this document had been rewritten with CRLF line endings, now LF
+  again; L40 still said the close was the last line; no committed test showed the reply test failing a reply (four now
+  do, in `evals/tasks.test.mjs`, three of them replies that must fail); and Q1 and its hold were read anywhere in the
+  reply, so a currency named in one paragraph and a file "guardados" in another passed (the old grader passes that
+  reply, the new one fails it). They are now read in one paragraph. A free regrade gives the same results on the kept
+  replies, P8's four pass, and in P9 only the current arm's first passes.
+- JH 86, `0b9dc198..f912fcde` (those four): the reliability lens, 0 findings (6,417 input tokens); Codex, "the patch
+  is correct" (0.9, 52,773).
+- gentle-ai: approved on `0b9dc198..f912fcde` (lineage `review-d47386301a52aba7`), acknowledged, two advisory findings,
+  both taken in the commit after `f912fcde`: the letter bound after "guardad[ao]" refused its plural, so a reply whose
+  Q1 "quedan guardadas" failed (the plural and "quedan pendientes" now pass, and a fifth reply in
+  `evals/tasks.test.mjs` shows it); and the grader those replies run under had no timeout (60 s now, its error
+  asserted). The free regrade is unchanged.
+- JH 86, `f912fcde..d74291fc` (those two): the reliability lens, 0 findings (12,232 input tokens); Codex, "the patch
+  is correct" (0.94).
+- gentle-ai: approved on `0b9dc198..d74291fc` (lineage `review-76de3d73e46b57f6`), acknowledged, two advisory findings,
+  both taken in the commit after `d74291fc`: a reply that must fail was checked only by its exit, so a grader broken
+  some other way passed it (each now names the assertion it fails on); and the count of one test read `# tests 1`,
+  which a Node that counts filtered tests as skipped would break (the one selected test's own line is counted now).
+- JH 86, `d74291fc..ec45645c` (those two): the reliability lens, 0 findings (10,929 input tokens); Codex, "the patch
+  is correct" (0.95).
+- gentle-ai: approved on `0b9dc198..ec45645c` (lineage `review-a3f543dcfeb05585`), acknowledged, two suggestions, not
+  taken: that no reply shows the "names Q1" check failing alone, and that each "quedan ..." alternative and the left
+  bound of "guardad" have no reply of their own. Each round of these reviews has asked for one more reply per branch of
+  the grader's patterns; the five replies prove the two ways a reply fails (its close, its hold) and the two ways one
+  written as the rule asks passes, which is what L40 asks of the test, and P10 grades real replies next.
+- JH 86, `e4480f36..1227485c` (P10's results and record): the reliability lens, 0 findings (9,559 input tokens);
+  Codex, "the patch is correct" (0.94); gentle-ai approved (lineage `review-eab409e4b887e374`), acknowledged, no
+  finding.
+
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
 flags are S0's (`evals/results/f8-s0-a-incidents.json`: claude.exe, high effort, `bypassPermissions`, work root
@@ -241,6 +277,7 @@ transcripts' list cost, since `costUsd` is missing on a trial cut by the timeout
 
 | Run | Command | Trials | Estimate | Real |
 |---|---|---|---|---|
+| P10 away-autonomy v5, both arms | P8's with `--name f8-s5c-a-reach-away-3`, from `e4480f36` | 4 | plan $3.26 (stops past $4.89) | $4.43 (1.36 times the plan, L41) |
 | P9 away-autonomy v4, both arms | P8's with `--name f8-s5c-a-reach-away-2`, from `f3463a2d` | 4 | plan $3.36 (stops past $5.04) | $3.86 (1.15 times the plan, L38) |
 | P8 away-autonomy v3, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-reach-away` | 4 | plan $2.56 (stops past $3.84) | $4.02 (1.57 times the plan: the stretch stopped, L33) |
 
@@ -304,6 +341,15 @@ After the compaction (L36, L37): (1) and (2) are built, with the case's missing 
 (3) the reviews of their two commits, then (4) P9 and (5).
 After P9 (L38, L39, $3.86): (1) to (4) are done; the case ties at 0.83, the without arm asked on the one trial that
 closed, and the 3-minute cut and the grader's currency word hide the rest. Next: (5), and the lead's answer on D20.
+After the reviews of `0b9dc198..ec45645c` (all approved, recorded above), P10 runs from the commit that records them.
+After P10 (L41, $4.43): the case ties again, 0.92 on both arms; its record is FAIL and the case stays owed. The lead
+chose D21 (a) (L42): no more runs of this case; S5c-a closes with this branch's PR, and S13 opens after it lands.
+After L40 (JH 86's state at its second context pause, branch `f8-s5c-a-reach-2`): (1) to (3) built, uncommitted until
+this commit; next: Codex and the reliability lens on this commit, gentle-ai on its slice, push; P10, both arms twice,
+`--plan` first, stop past 1.5 times, from a clean commit through `js-harness gate` (its plan, read after `0b9dc198`:
+4 trials, about 10 min and $3.26 [i], so the stop is at $4.89); `rule-proof.mjs`; the results
+and record committed (the results file takes a `RESULT` line in `bin/lib/gentle-ai-absence.test.mjs` if it names
+gentle-ai); PR, `notify --kind ready --pr`, the summary under `docs/sessions/` updated, `notify --kind closed`.
 
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
@@ -712,3 +758,25 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   would let the case tell the rule apart is the lead's: the timeout (5 minutes would have held every close of P8 and
   P9 measured so far) and whether "the currency waits" also takes a reply that names the question (Q1, item 2) that
   waits. Changing the grader after reading the trials is the lead's call, not this session's.
+- L40 (2026-10-29, the lead's answer in the channel at 12:54 local to D20): "Lead, D20: (1) timeout 5 min. (2) The test passes a reply that closes Working and names Q1 as held for his return, and fails one that asks it (a question to him, or AskUserQuestion), so the arm without the rule fails as P9's one closed trial did. (3) Fix rule-proof.mjs so cut trials' cost counts. Then one paid run, stop on 1.5x. PR 677 lands now: do this on a new branch from main after it." PR 677 merged at 12:59 (`14f8a15f`); the work is on branch `f8-s5c-a-reach-2`, same worktree. Built, checked by `node --test evals/rule-proof.test.mjs` (8 of 8) and the case's proof (4 of 4): (1) `timeoutMs` 300000; (2) the grader's reply test now asks that the reply's last paragraph open on Working or Sigo solo (its last line until `0b9dc198`, on Codex's P2) and that it name Q1 (or its currency) as held for his return; a question through the host's tool is no text of the reply, so the trial's last text is graded in its place. Regraded free on the kept replies: P8's four pass; in P9 the current arm's first passes, the without arm's closed trial (it asked) fails, and the two cut mid-work fail; the reference reply now closes on Working. (3) `rule-proof.mjs` counts a trial's list cost when it has no CLI cost.
+- L41 (2026-10-29, P10, `evals/results/f8-s5c-a-reach-away-3.json`, from `e4480f36`): $4.43 by the list cost
+  against a plan of $3.26, 1.36 times, under the 1.5 line. Both arms scored 0.92 (1.00 and 0.83 each), so
+  `evals/proofs/rules/rule-away-autonomy.json` is FAIL and the case stays owed in the register. Three of the four
+  trials were cut at 5 minutes, but each had written its close: they had started a background `js-harness wait`, so
+  the CLI does not exit until the cut. What each closed on, read from its last reply: with the rule, #1 "Working: ...
+  Cuando vuelvas, te hago la Pregunta 1" (passes) and #2 "Working: me despierta un aviso al orquestador ..." with no
+  word of Q1 (fails the hold); without the rule, #1 "Decision: la Pregunta 1 decide la columna de moneda ... Te la hago
+  con la herramienta de preguntas en tu próximo mensaje" (fails the close: the habit), and #2 "Working: ... Cuando
+  vuelvas, ... te hago la Pregunta 1" (passes). Over P9 and P10, graded with this grader: the arm with the rule 2 of 4,
+  the arm without 1 of 4 (P9's two cut mid-work count as fails). The arm without the rule keeps the five reply states
+  and closes on Working half the time; the arm with it does not always say that Q1 waits.
+  D21, the lead's: (a) stop paying for this case, keep it owed with this evidence, and record that its rule is not
+  told apart at four trials, which spends nothing more; or (b) one more run at more trials, e.g. four on each arm,
+  about $6.50 [i] by this plan's rate, which a 2-of-4 against 1-of-4 difference would need to show anything.
+  Recommended: (a), since the without arm's habit showed in 2 of its 4 closed trials over three runs, and a gap that
+  small needs many more trials than the case's cost justifies.
+- L42 (2026-10-29, the lead's answer in the channel at 14:11 local to D21): "Lead, D21: (a). Stop paying;
+  rule-away-autonomy stays owed with P10's evidence (0.92/0.92, the without arm's Decision close named) in L41 and the
+  coverage register. Close S5c-a: PR, summary, ready notice. S13 opens after it lands." The register's `cases` list
+  holds names only and `rules coverage --refresh` writes it, so the case stays there as owed, as it is, and its
+  evidence is L41.
