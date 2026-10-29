@@ -543,6 +543,12 @@ carrying #644, landed (main 96b917a).
   record holds no explain event (`grep -c '"explain"'` on stretches.jsonl: 0).
 - gentle-ai: a7b6ae42..d572699b approved (medium, lineage review-7d6c066c403cf990), after its refuter, a correction
   plan of 125 lines and its targeted validation of d572699b.
+- Seen ~10:30Z: #658 (E1 alone) was refused at the land's push, 4b85503f with no record of its own: E1 and E2 were
+  reviewed as one range ending at f30d360e, and a stacked slice lands at its own tip. Covered exactly: Codex
+  a7b6ae42..4b85503f (`--again`) correct (0.84, 124,484 input tokens); the reliability and readability lenses
+  (44,683), one warning not taken, the why section filled by nothing in E1, which is E2's wiring by design. gentle-ai
+  not run again on E1 alone: its code is inside the approved range above. Prevention: each slice of a stack gets
+  reviews whose range ends at its own tip, never one range over the stack.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
