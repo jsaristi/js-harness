@@ -102,8 +102,11 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T8 (kind: build) harder premises for `rule-reuse-first` and `rule-away-autonomy` (L18, L19: D8, D9), proven
   by `task-proof`, and their paid reruns P5 and P6 — S4; inline; JH 82, branch `f8-s5c-a-cases` (`b08cf553`,
   `03effcad`, the records' commit after them): neither tells its rule apart (L21); both stay owed
-- [ ] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
-  rule apart (D10) — S4; inline. P7 says it does not (L26, D14): none built as T8's; how a case could is the lead's
+- [x] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
+  rule apart (D10) — S4; inline. P7 says it does not (L26, D14): none built as T8's; how a case could is the lead's.
+  Closed with no case built, by the lead's decision in JH 90's brief (2026-10-29T19:21Z): "no more cases are built
+  in S5c-a. P5 to P10 showed a case built on its skill's trigger does not tell its rule apart at this sample size;
+  each such rule stays `owed` with its evidence, and how a case could tell one apart moves to S5c-b."
 - [x] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline; JH 82,
   branch `f8-s5c-a-init-baseline` from main, PR 669 (`ba8b407c`, `848031b2`, L28)
 
