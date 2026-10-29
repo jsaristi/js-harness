@@ -305,6 +305,9 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
 - [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
   phase` in the slice C commit "feat(report): the phase page".
+- [ ] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
+  gates of the feature's slice worktrees left out, fixed in d8e0a122; Codex reads C3 again from 95d5231e (`--again`).
+  Route: inline.
 - [ ] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
   seam its tests stub; the departure carries the map and the timeline; the plan's titles as written. Spec 8. Route:
   inline. The seam and `report phase`'s call in the same commit.
