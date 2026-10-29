@@ -212,3 +212,98 @@ test('--html writes the departure and the return as the fragment the lead shows 
   // With --json the output is the JSON alone, the file named by nothing else.
   assert.equal(JSON.parse(closed.out).state, 'closed');
 });
+
+const ROADMAP_AT = (done) => `# R\n\n## Checklist\n\n### F1 Skeleton\n- [x] a\n- [${done ? 'x' : ' '}] b\n\n## F8 plan\n\n### S11 Complements\n- **State:** in progress (\`odd/tasks/s11.md\`).\n`;
+
+/** A git that answers the reads of the moments: main at `c0` until hour 1 and `c1` after, the roadmap and the S11
+ * document at each, and one pull request merged at hour 2; anything else (the main checkout's lookup) fails. */
+function momentsGit() {
+  const sep = '\u001f';
+  return (command, args) => {
+    const key = args.join(' ');
+    const answer = (stdout) => ({ status: 0, stdout, stderr: '' });
+    if (key.startsWith('for-each-ref')) return answer('refs/heads/main\0\n');
+    const before = /^rev-list --first-parent -1 --before=(\S+) refs\/heads\/main --$/.exec(key);
+    if (before) return answer(Date.parse(before[1]) <= T0 + H ? 'c0\n' : 'c1\n');
+    if (key === 'show c0:docs/ROADMAP.md') return answer(ROADMAP_AT(false));
+    if (key === 'show c1:docs/ROADMAP.md') return answer(ROADMAP_AT(true));
+    if (/^ls-tree --name-only c[01] -- odd\/tasks\/$/.test(key)) return answer('odd/tasks/s11.md\n');
+    if (key === 'show c0:odd/tasks/s11.md') return answer('- [x] T1 (kind: build) a\n- [ ] T2 (kind: build) b\n');
+    if (key === 'show c1:odd/tasks/s11.md') return answer('- [x] T1 (kind: build) a\n- [x] T2 (kind: build) b\n');
+    if (key.startsWith('log --first-parent --merges')) return answer(`m1${sep}${at(2)}${sep}Merge pull request #627 from f8-s11-a\n`);
+    if (key === 'log --no-merges --format=%H m1^1..m1^2 --') return answer('k1\n');
+    return { status: 1, stdout: '', stderr: 'not a repository' };
+  };
+}
+
+test('open records the default branch\'s commit, and status adds the shares, the map before and now, the plan and the timeline', async () => {
+  const place = scratch({
+    notices: [
+      notice(0.5, 's69', 'JH 69 · registros', 'opened'),
+      notice(3, 's69', 'JH 69 · registros', 'closed'),
+      notice(1, 's72', 'JH 72 · tablero', 'opened'),
+      notice(1.2, 's72', 'JH 72 · tablero', 'note'),
+      notice(1.5, 'lead', 'JH ORQ · orquestador', 'note'),
+    ],
+  });
+  const deps = { run: momentsGit() };
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  assert.equal(events(place)[0].head, 'c0');
+  await stretch(place, ['status', '--goals'], { hours: 4, deps, goals: { 'goal-reviewed': 1 } });
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 9, deps })).out);
+  const { moments } = view;
+  assert.deepEqual(moments.head, { open: 'c0', now: 'c1', reconstructed: false });
+  assert.deepEqual(moments.goals.met, { met: 1, of: 2, unknown: 0 });
+  assert.deepEqual(moments.goals.inTime, { met: 1, of: 1, unknown: 0 });
+  assert.deepEqual([moments.work.met, moments.work.of], [1, 2]);
+  assert.deepEqual(moments.outside.sessions.map((one) => one.label), ['JH 72']);
+  assert.deepEqual(moments.map.total, { before: { done: 1, total: 2 }, after: { done: 2, total: 2 } });
+  assert.equal(moments.map.phases[0].change, 'closed');
+  assert.equal(moments.plans[0].steps[0].change, 'advanced');
+  assert.deepEqual(moments.timeline.map((row) => row.type), ['open', 'opened', 'opened', 'merge', 'closed', 'check']);
+});
+
+test('a stretch opened with no commit recorded has its opening commit reconstructed, and says so', async () => {
+  const place = scratch();
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 2, deps: { run: momentsGit() } })).out);
+  assert.deepEqual(view.moments.head, { open: 'c0', now: 'c1', reconstructed: true });
+});
+
+test('where git cannot read the default branch, the map is unavailable with why and the shares still come', async () => {
+  const place = scratch();
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 2 })).out);
+  assert.equal(view.moments.map, null);
+  assert.match(view.moments.unavailable.git, /not a repository/);
+  assert.deepEqual(view.moments.goals.met, { met: null, of: 2, unknown: 2 });
+});
+
+test('close keeps the return\'s numbers in the page record, and its page shows the shares, the map, the plan and the timeline', async () => {
+  const place = scratch({ notices: [notice(1, 's72', 'JH 72 · tablero', 'opened')] });
+  const deps = { run: momentsGit() };
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  const back = path.join(place.home, 'out', 'vuelta.html');
+  assert.equal((await stretch(place, ['close', '--html', back], { hours: 9, deps })).code, 0);
+  const pages = fs.readFileSync(path.join(place.home, '.js-harness', 'throughput', projectSlug(place.project), 'pages.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(pages.length, 1);
+  assert.deepEqual([pages[0].kind, pages[0].head], ['stretch', 'c1']);
+  assert.deepEqual(pages[0].numbers.map, { before: { done: 1, total: 2 }, after: { done: 2, total: 2 } });
+  const html = fs.readFileSync(back, 'utf8');
+  assert.match(html, /^<title>/);
+  assert.match(html, /metas cumplidas/);
+  assert.match(html, /F8 plan, paso por paso/);
+  assert.match(html, /PR 627 entra en main/);
+  assert.match(html, /JH 72/);
+  assert.match(html, /PR 630 en main/, 'the goals and the bars of the stretch are on the page too');
+});
+
+test('the departure shows what exists now: the map at the opening commit', async () => {
+  const place = scratch();
+  const file = path.join(place.home, 'out', 'salida.html');
+  const opened = JSON.parse((await stretch(place, ['open', '--plan', planFile(place, PLAN), '--json', '--html', file], { deps: { run: momentsGit() } })).out);
+  assert.deepEqual([opened.map.done, opened.map.total], [1, 2]);
+  const html = fs.readFileSync(file, 'utf8');
+  assert.match(html, /Lo que existe ahora[\s\S]*F1 Skeleton[\s\S]*1\/2 · 50 %/);
+  assert.match(html, /PR 630 en main/);
+});

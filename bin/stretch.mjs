@@ -14,10 +14,14 @@ import { readNotices } from './lib/channel.mjs';
 import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { appendPage, pagesFile } from './lib/pages-record.mjs';
+import { headBefore, momentAt, pullRequestsOf, readRef } from './lib/report-git.mjs';
+import { compareMaps, comparePlans } from './lib/report-pages.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, scaled, sessionTrail, stretchLost } from './lib/stretch.mjs';
-import { renderDeparture, renderView } from './lib/stretch-render.mjs';
+import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
+import { renderDeparture, renderReturn } from './lib/stretch-render.mjs';
 import { codexFacts, landFacts } from './lib/throughput.mjs';
 import { readLandRecord, readRecordLines } from './throughput.mjs';
 
@@ -133,7 +137,8 @@ function openStretch(events) {
   const open = events.findLast((event) => event.event === 'open');
   if (!open || events.some((event) => event.event === 'close' && event.id === open.id)) return null;
   const mine = events.filter((event) => event.id === open.id);
-  return { open, binds: mine.filter((event) => event.event === 'bind'), check: mine.findLast((event) => event.event === 'check') ?? null };
+  const checks = mine.filter((event) => event.event === 'check');
+  return { open, binds: mine.filter((event) => event.event === 'bind'), check: checks.at(-1) ?? null, checks, events: mine };
 }
 
 /** The items of every closed stretch, oldest first: what the corrections learn from. */
@@ -243,7 +248,7 @@ async function checkGoals(ctx, stretch) {
   }
   const check = { event: 'check', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), goals };
   appendEvent(ctx.file, ctx.fileSystem, check);
-  return { ...stretch, check };
+  return { ...stretch, check, checks: [...stretch.checks, check], events: [...stretch.events, check] };
 }
 
 function emit(ctx, flags, view, render, lines) {
@@ -276,6 +281,20 @@ function viewLines(view) {
     ...view.items.map((item) => `  ${item.id} ${item.title}: ${item.state}, ${item.realHours} h of ${range(item.corrected)}, lost ${item.lostHours} h`),
     ...view.goals.list.map((goal) => `  goal ${goal.id} ${goal.met === null ? 'not checked' : goal.met ? 'met' : `not met (${goal.said})`}: ${goal.text}`),
     ...Object.entries(view.unavailable).map(([name, why]) => `  ${name} could not be read: ${why}`),
+    ...momentLines(view.moments),
+  ];
+}
+
+const shareLine = (one) => (one.met === null ? `not measured (${one.unknown} unknown)` : `${one.met} of ${one.of}${one.unknown ? `, ${one.unknown} unknown` : ''}`);
+
+function momentLines(moments) {
+  if (!moments) return [];
+  const { goals, work, outside, map } = moments;
+  return [
+    `goals met ${shareLine(goals.met)}; in time ${shareLine(goals.inTime)}; work done ${shareLine(work)}; ${outside.sessions.length} sessions outside the plan`,
+    map ? `map ${map.total.before ? `${map.total.before.done}/${map.total.before.total}` : 'no before'} -> ${map.total.after.done}/${map.total.after.total}${moments.head.reconstructed ? ' (the opening commit reconstructed)' : ''}` : 'map not read',
+    `timeline: ${moments.timeline.length} events`,
+    ...Object.entries(moments.unavailable).map(([name, why]) => `  ${name} could not be read: ${why}`),
   ];
 }
 
@@ -293,7 +312,10 @@ function openCommand(ctx, flags, events) {
   const read = parsePlan(value);
   if (read.error) throw new StretchArgError(`the plan is refused: ${read.error}`);
   const at = new Date(ctx.now()).toISOString();
-  const open = { event: 'open', id: at, at, plan: read.plan, corrections: corrections(historyOf(events)) };
+  // The default branch's commit at the opening, so the return compares the map with what existed then.
+  const named = readRef(ctx.run, ctx.root);
+  const head = named.error ? null : headBefore(ctx.run, ctx.root, named.ref, ctx.now());
+  const open = { event: 'open', id: at, at, head, plan: read.plan, corrections: corrections(historyOf(events)) };
   appendEvent(ctx.file, ctx.fileSystem, open);
   const items = itemsOf({ open, binds: [] });
   const view = {
@@ -306,6 +328,7 @@ function openCommand(ctx, flags, events) {
     ...laneOut(items, read.plan),
     goals: goalsOf({ open, check: null }),
     waits: read.plan.waits,
+    map: head === null ? null : momentAt(ctx.run, ctx.root, head).map ?? null,
   };
   emit(ctx, flags, view, renderDeparture, departureLines);
   return 0;
@@ -343,10 +366,76 @@ async function statusCommand(ctx, flags, events, closing) {
   const view = measure(ctx, stretch, now);
   if (closing) {
     const items = view.items.map(({ id, kind, hours, corrected, realHours, lostHours, state, clipped }) => ({ id, kind, estimate: hours, corrected, realHours, lostHours, state, finished: state === 'finished', clipped }));
-    appendEvent(ctx.file, ctx.fileSystem, { event: 'close', id: stretch.open.id, at: view.at, items, goals: view.goals, totals: view.totals });
+    const close = { event: 'close', id: stretch.open.id, at: view.at, items, goals: view.goals, totals: view.totals };
+    appendEvent(ctx.file, ctx.fileSystem, close);
+    stretch = { ...stretch, events: [...stretch.events, close] };
   }
-  emit(ctx, flags, { ...view, state: closing ? 'closed' : 'open' }, renderView, viewLines);
+  const moments = momentsOf(ctx, stretch, view, now);
+  if (closing) recordPage(ctx, view, moments);
+  emit(ctx, flags, { ...view, state: closing ? 'closed' : 'open', moments }, renderReturn, viewLines);
   return 0;
+}
+
+/** What the return says of the plan as a whole (odd/tasks/visual-pages.md): the shares of the planned met, the work
+ * sessions outside the plan, the map and the plan steps at the opening and now, and the timeline. Read here, not in
+ * `measure`, so the live board's check stays cheap. What git cannot give is in `unavailable` with why. */
+function momentsOf(ctx, stretch, view, now) {
+  const openedAt = Date.parse(stretch.open.at);
+  const unavailable = {};
+  const head = { open: null, now: null, reconstructed: false };
+  let map = null;
+  let plans = [];
+  let prs = [];
+  const named = readRef(ctx.run, ctx.root);
+  if (named.error) unavailable.git = named.error;
+  else {
+    head.open = stretch.open.head ?? headBefore(ctx.run, ctx.root, named.ref, openedAt);
+    head.reconstructed = !stretch.open.head && head.open !== null;
+    head.now = headBefore(ctx.run, ctx.root, named.ref, now);
+    const before = head.open === null ? null : momentAt(ctx.run, ctx.root, head.open);
+    const after = head.now === null ? null : momentAt(ctx.run, ctx.root, head.now);
+    if (after === null || after.unavailable) unavailable.map = after?.unavailable ?? 'the default branch has no commit at this time';
+    else {
+      const usable = before !== null && !before.unavailable ? before : null;
+      map = compareMaps(usable?.map ?? null, after.map);
+      plans = comparePlans(usable?.plans ?? [], after.plans, { before: usable?.tasks ?? {}, after: after.tasks });
+    }
+    const listed = pullRequestsOf(ctx.run, ctx.root, named.ref, { from: openedAt, to: now });
+    if (listed.error) unavailable.merges = listed.error;
+    else prs = listed;
+  }
+  const channel = readNotices(ctx.home, ctx.slug, { readFile: (file) => ctx.fileSystem.readFileSync(file, 'utf8') });
+  const failures = [
+    ...view.items.flatMap((item) => item.failures.map((one) => ({ ...one, who: item.session ?? item.title }))),
+    ...view.failures.map((one) => ({ ...one, who: 'orchestrator' })),
+  ];
+  return {
+    head,
+    goals: goalShares(stretch.open.plan.goals, stretch.checks, Date.parse(view.returnAt)),
+    work: workShare(view.items),
+    outside: outsidePlan(channel.notices, view.items, { from: openedAt, to: now }),
+    map,
+    plans,
+    timeline: timelineOf({ from: openedAt, to: now, prs, notices: channel.notices, failures, events: stretch.events }),
+    unavailable,
+  };
+}
+
+/** Keeps the return's numbers in the page record, so the next page compares with them. A record that cannot be
+ * written is said and costs the return nothing. */
+function recordPage(ctx, view, moments) {
+  const numbers = {
+    goals: moments.goals,
+    work: { met: moments.work.met, of: moments.work.of },
+    outside: moments.outside.sessions.length,
+    map: moments.map?.total ?? null,
+    steps: moments.plans.flatMap((plan) => plan.steps.map((step) => ({ plan: plan.name, id: step.id, reported: step.after?.reported ?? null, change: step.change }))),
+  };
+  try {
+    appendPage(pagesFile(ctx.home, ctx.slug), { kind: 'stretch', subject: view.id, at: view.at, head: moments.head.now, numbers }, ctx.fileSystem);
+  } catch (err) {
+    ctx.err(`js-harness stretch: the page record could not be written (${err.code ?? err.message})`);
+  }
 }
 
 /** The open stretch as the live board shows it, measured at `now` from the records and with the goals as last
@@ -411,7 +500,7 @@ export async function stretchMain(
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, fileSystem, readCodexRuns, readLands, runGoal, out: stdout, err: stderr };
+  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, out: stdout, err: stderr };
   let events;
   try {
     events = readEvents(ctx.file, fileSystem);

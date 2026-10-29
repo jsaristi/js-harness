@@ -273,3 +273,19 @@ board, the start row and the running work; C the report's pages and init's line;
   changed is not progress. Taken in, all, as the design above now says; the board was checked not replaced (the
   cursor names the brief's board). Not taken: reading a step's state only from merges of a named branch (steps name
   documents more reliably than branches; the document counts are the roadmap's own rule).
+
+## Next step
+State at 2026-10-29 ~01:00Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch `feat/visual-pages`):
+- Committed: ee595c7c (design), c8ee437c (readers taken in); gentle-ai approved ee595c7c (low, docs).
+- Slice A written, uncommitted, all green (`node --test bin/lib/pages.test.mjs bin/lib/pages-sections.test.mjs
+  bin/lib/pages-record.test.mjs bin/lib/report-pages.test.mjs bin/lib/report-git.test.mjs bin/lib/stretch-moments.test.mjs
+  bin/stretch.test.mjs bin/lib/stretch-render.test.mjs`): new `bin/lib/pages.mjs`, `pages-sections.mjs`,
+  `pages-record.mjs`, `report-pages.mjs`, `report-git.mjs`, `stretch-moments.mjs`; `bin/stretch.mjs` (open records
+  `head`, `momentsOf`, `recordPage`, `momentLines`), `bin/lib/stretch-render.mjs` (`renderReturn`, departure map).
+- Just fixed: `report-git.mjs` keeps the merge's branch whole (test expects `feat-x`); rerun its test.
+- To do before commit: cut a failure's `what` in the timeline words to ~160 chars (`pages-sections.mjs` wordsOf
+  'failure'); run the tests above; commit "feat(pages): ..." through the gate (message in a job tmp file, `git commit
+  -F`; heredocs naming git are refused by the guard: write scripts to the job tmp and run them).
+- Real-data scratch: `C:\Users\Oficina\.claude\jobs\b550c1c7\tmp\home1` (copies of the records + a stretch opened
+  12:11Z, 10.7 h); `node bin/js-harness.mjs stretch status --home <that> --cwd <worktree>` works: map 95/106 -> 97/107.
+- Then: Slice A reviews (codex-review and lens-review --base 62315e61), push, PR; Slice B (T4, T5), C (T6, T7), D (T8).

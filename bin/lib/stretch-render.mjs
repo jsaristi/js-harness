@@ -2,9 +2,10 @@
 // departure, before the stretch, and the view of the open or closed stretch, which is the return once it is closed.
 // The lead shows a fragment in the chat as it is (the in-chat visual tool, else an Artifact), so every number it
 // shows is the command's, never drawn by hand. Pure: the view's JSON in, the text out. Every text from the plan is
-// escaped, so a title is shown and never run.
-
-const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// escaped, so a title is shown and never run. The return, once its moments are measured, is a page of the moments
+// (odd/tasks/visual-pages.md) built from the shared parts of `pages.mjs`.
+import { escapeHtml, page, table } from './pages.mjs';
+import { mapNowSection, mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
 
 const STYLE = `<style>
 .js-stretch{--ink:#1f2328;--soft:#59636e;--line:#d1d9e0;--est:#c8d1da;--real:#2f6feb;--lost:#d1242f;--ok:#1a7f37;--bg:#ffffff;
@@ -43,6 +44,16 @@ function goalList(goals, checked) {
 /** The departure: the hours, whether the queued work fills them, each lane on an hour scale with the return marked,
  * the items as written and as corrected, the goals and what waits for the user. */
 export function renderDeparture(view) {
+  if (!view.map) return departureFragment(view);
+  return page({
+    title: 'Antes de irte',
+    heading: `Antes de irte: ${view.hours} h`,
+    lead: 'El plan del tramo y lo que existe ahora, de la hoja de ruta en main.',
+    sections: [{ title: 'El plan', html: departureFragment(view) }, { title: 'Lo que existe ahora', html: mapNowSection(view.map) }],
+  });
+}
+
+function departureFragment(view) {
   const scale = Math.max(view.hours, ...view.lanes.map((lane) => lane.end[1]));
   const byId = new Map(view.items.map((item) => [item.id, item]));
   const lanes = view.lanes.map((lane, index) => {
@@ -94,4 +105,37 @@ export function renderView(view) {
 <h3>Tiempo: arriba lo estimado, abajo lo real (rojo, lo perdido en fallas; la línea, ${view.hours} h)</h3>${rows}
 <h3>Qué falló</h3>${failures.length ? `<ul>${failures.map((one) => `<li>${escapeHtml(one.who)} · ${Math.round(one.seconds / 60)} min · ${escapeHtml(one.what)}</li>`).join('')}</ul>` : '<p class="soft">nada en los registros</p>'}
 <p class="soft">No se mide (ningún registro lo guarda): ${view.unmeasured.map((key) => escapeHtml(UNMEASURED[key] ?? key)).join('; ')}.</p>${unavailable ? `<ul class="no">${unavailable}</ul>` : ''}</div>`;
+}
+
+const clockZ = (iso) => `${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')}Z`;
+
+/** The return as a page (odd/tasks/visual-pages.md), or the open stretch's once `status` measured its moments: what
+ * went wrong first, the shares of the planned met, the goals and the time bars of `renderView`, the map before and
+ * now, each plan step by step, the sessions outside the plan and the timeline. */
+export function renderReturn(view) {
+  const { moments } = view;
+  if (!moments) return renderView(view);
+  const closed = view.state === 'closed';
+  const badNews = [
+    ...view.goals.list.filter((goal) => goal.met === false).map((goal) => `Meta no cumplida: ${goal.text} (${goal.said}).`),
+    ...(moments.goals.met.met === null ? ['Ninguna meta se revisó durante el tramo.'] : []),
+    ...(moments.head.reconstructed ? ['El tramo no guardó el commit de su apertura: el mapa de antes se reconstruyó por la hora.'] : []),
+    ...Object.entries({ ...view.unavailable, ...moments.unavailable }).map(([name, why]) => `${name} no se pudo leer: ${why}.`),
+  ];
+  const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: clockZ(one.first), mono: true }, { text: clockZ(one.last), mono: true }, { text: String(one.notices), mono: true }]);
+  const sections = [
+    { title: 'Cuánto se cumplió de lo planeado', html: sharesTiles(moments) },
+    { title: 'Metas y tiempos', html: renderView(view) },
+    ...(moments.map ? [{ title: 'El mapa, antes y ahora', html: mapSection(moments.map) }] : []),
+    ...planSections(moments.plans),
+    { title: 'Sesiones fuera del plan', html: outsideRows.length ? table(['Sesión', 'Primer aviso', 'Último aviso', 'Avisos'], outsideRows) : '<p class="note">Ninguna.</p>' },
+    { title: 'Línea de tiempo', html: timelineSection(moments.timeline), note: 'Los textos de los avisos van como el registro los guarda.' },
+  ];
+  return page({
+    title: closed ? 'Regreso del tramo' : 'Tramo en curso',
+    heading: closed ? 'Lo que pasó mientras no estabas' : `Tramo en curso: ${view.elapsedHours} de ${view.hours} h`,
+    lead: `Del ${clockZ(view.openedAt)} al ${clockZ(view.at)}. Todo sale de los registros: el tramo, los avisos, git y la hoja de ruta.`,
+    badNews,
+    sections,
+  });
 }
