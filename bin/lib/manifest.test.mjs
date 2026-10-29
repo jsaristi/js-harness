@@ -1626,6 +1626,128 @@ test('install takes out every older form of its own entry when the new one is al
   }
 });
 
+// --- An entry the user already had, identical to one of ours: install finds it there, and it stays the user's ---
+
+const theirStart = { matcher: 'startup', hooks: [{ type: 'command', command: 'echo their-start', timeout: 5 }] };
+
+test('an entry the Claude settings already held, identical to ours, is recorded as the user\'s, and install, reinstall and uninstall leave the file as it was, byte for byte', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [theirStart, claudeHook.entry()] } }, null, 2)}\n`, 'utf8');
+    const seeded = fs.readFileSync(target, 'utf8');
+
+    const first = install(home, '0.1.0');
+    const recordOf = (manifest) => manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, claudeHook.entry()));
+    assert.equal(recordOf(first).createdEntry, false, 'the entry was there before install');
+    assert.equal(readManifest(home).entries.find((record) => deepEqualJson(record.entry, claudeHook.entry())).createdEntry, false, 'the manifest on disk keeps it');
+    assert.ok(first.entries.filter((record) => record.path === target && !deepEqualJson(record.entry, claudeHook.entry())).every((record) => record.createdEntry === undefined), 'an entry install wrote is ours');
+    assert.equal(recordOf(install(home, '0.1.0')).createdEntry, false, 'a reinstall still knows the entry is the user\'s');
+
+    uninstall(home);
+    assert.equal(fs.readFileSync(target, 'utf8'), seeded);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an entry install wrote is still its own on a reinstall, and uninstall takes it out', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [theirStart] } }, null, 2)}\n`, 'utf8');
+    const seeded = fs.readFileSync(target, 'utf8');
+    install(home, '0.1.0');
+    const again = install(home, '0.1.0');
+    assert.ok(again.entries.every((record) => record.createdEntry === undefined), 'every entry was written by the first install');
+    uninstall(home);
+    assert.equal(fs.readFileSync(target, 'utf8'), seeded);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an entry the Codex hooks.json already held, identical to ours, keeps its place and its trust through install and uninstall', () => {
+  const home = makeTmpHome();
+  try {
+    const target = codexHook.target(home);
+    const config = path.join(path.dirname(target), 'config.toml');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [theirStart, codexHook.entry()] } }, null, 2)}\n`, 'utf8');
+    const trust = (group) => `[hooks.state.'${target}:session_start:${group}:0']\ntrusted_hash = "sha256:group${group}"\n`;
+    fs.writeFileSync(config, `${trust(0)}\n${trust(1)}`, 'utf8');
+    const seeded = { hooks: fs.readFileSync(target, 'utf8'), config: fs.readFileSync(config, 'utf8') };
+
+    const manifest = install(home, '0.1.0', { codexConfig: config });
+    assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, codexHook.entry())).createdEntry, false);
+    uninstall(home);
+    assert.deepEqual({ hooks: fs.readFileSync(target, 'utf8'), config: fs.readFileSync(config, 'utf8') }, seeded);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A skipped run looked at no entry, so it writes none of its records as ours: the entry the file holds once it reads
+// again is the user's. The other way round, a skipped run between two that wrote is held by
+// "an install that cannot read a host file keeps the record of the lists it made there".
+test('an entry a first, skipped install never wrote is the user\'s once the file reads, and uninstall leaves it', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(target, { recursive: true });
+    const skipped = install(home, '0.1.0');
+    assert.ok(skipped.entries.filter((record) => record.path === target).every((record) => record.skipped && record.createdEntry === false));
+    fs.rmdirSync(target);
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [claudeHook.entry()] } }, null, 2)}\n`, 'utf8');
+    const seeded = fs.readFileSync(target, 'utf8');
+
+    install(home, '0.1.0');
+    uninstall(home);
+    assert.equal(fs.readFileSync(target, 'utf8'), seeded);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an entry the user already had is still theirs when install takes an older form of ours out beside it', () => {
+  const home = makeTmpHome();
+  try {
+    const target = guardHook.target(home);
+    const olderTimeout = { ...guardHook.entry(), hooks: [{ ...guardHook.entry().hooks[0], timeout: 3 }] };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [olderTimeout, guardHook.entry()] } }, null, 2)}\n`, 'utf8');
+
+    const manifest = install(home, '0.1.0');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry()], 'the older form went, and the file was written');
+    assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, guardHook.entry())).createdEntry, false);
+    uninstall(home);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry()]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('sync leaves an entry recorded as the user\'s when the release no longer ships it', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeHook.target(home);
+    const retired = { hooks: [{ type: 'command', command: 'js-harness retired --hook', timeout: 5 }] };
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { Notification: [retired] } }, null, 2)}\n`, 'utf8');
+    install(home, '0.1.0');
+    const manifest = readManifest(home);
+    manifest.entries.push({ path: target, pointer: ['hooks', 'Notification'], entry: retired, sha256: sha256(JSON.stringify(retired)), createdFile: false, createdFolders: [], createdContainers: 0, skipped: false, createdEntry: false });
+    writeManifestAtomic(manifestPath(home), manifest);
+
+    sync(home, '0.2.0');
+    assert.deepEqual(readJson(target).hooks.Notification, [retired]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('an update from an install made before the resume hook adds its entry, and uninstall still leaves the host file as it found it', () => {
   for (const created of [true, false]) {
     const home = makeTmpHome();
