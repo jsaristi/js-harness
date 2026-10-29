@@ -21,10 +21,15 @@ const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
  * switch's `auto` does not read them. */
 const lensOnAt = (git, id) => functionsOf(harnessOfCommit(git, id), { paths: [] }).resolved.lensReview.value === 'on';
 
+/** Whether the Codex review is off at the commit `id`, read from that commit's own files as the Codex rows read it
+ * (`codexReviewOffAt`): its `auto` reads the commit's files, so they are listed. */
+const codexOffAt = (git, id) => functionsOf(harnessOfCommit(git, id), commitTree(git, id)).resolved.codexReview.value === 'off';
+
 /** What the lens records say of the code commits between the default branch of `remote` and `head`: `{ unknown }`
  * when it cannot be told, else `{ base, codeCommits, uncovered, skips, note }`, the code commits being those whose own
- * tree turns the lens review on (`lensOnAt`). */
-export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin' } = {}) {
+ * tree turns the lens review on (`lensOnAt`), and with `whereCodexOff` also those whose own tree turns the Codex review
+ * off (`codexOffAt`), where the lenses are the one review. */
+export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', whereCodexOff = false } = {}) {
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
   if (!tip) return { unknown: `cannot resolve ${head} to a commit` };
   const branch = defaultBranch(spawn, cwd, remote);
@@ -33,7 +38,7 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin' }
   if (coverage.unknown === MARKS_UNREAD) return { unknown: 'cannot read which files a review leaves out (`git check-attr --source` needs git 2.40 or later)' };
   if (coverage.unknown) return { unknown: `cannot list the commits in ${branch.label}..${head}` };
   const git = gitIn(cwd, spawn);
-  const asked = new Map(coverage.codeCommits.map((commit) => [commit.id, lensOnAt(git, commit.id)]));
+  const asked = new Map(coverage.codeCommits.map((commit) => [commit.id, lensOnAt(git, commit.id) || (whereCodexOff && codexOffAt(git, commit.id))]));
   const due = (commit) => asked.get(commit.id) === true;
   const codeCommits = coverage.codeCommits.filter(due);
   const uncovered = coverage.uncovered.filter(due);
@@ -64,7 +69,7 @@ export function codexSkipsOwed(cwd, { from, tip, spawn = spawnSync }) {
 function reviewOffAt(cwd, head, spawn) {
   const git = gitIn(cwd, spawn);
   const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
-  return tip ? functionsOf(harnessOfCommit(git, tip), commitTree(git, tip)).resolved.codexReview.value === 'off' : false;
+  return tip ? codexOffAt(git, tip) : false;
 }
 
 /** The line a skip is listed with. */
@@ -88,9 +93,10 @@ export function owedSkipLines(cwd, { spawn = spawnSync, remote = 'origin' } = {}
  * no complete lens record covers, or for a lens skip that still owes a review. A Codex skip stays the door's to take, as
  * it was: the Codex review's own rules let a skip through when Codex cannot run. It reads the lens records itself, not
  * through the push row: that row passes where the Codex review is off and on a first push, and neither lets a pull
- * request land with its lens debt (L11). */
+ * request land with its lens debt (L11). Where the Codex review is off it asks for the lenses even with their own switch
+ * off, so a code commit never lands unreviewed (his answer to question 104, odd/tasks/f8-s11-complements.md, L14). */
 export function lensDoor(cwd, head, { spawn = spawnSync, remote = 'origin' } = {}) {
-  const state = lensCoverage(cwd, head, { spawn, remote });
+  const state = lensCoverage(cwd, head, { spawn, remote, whereCodexOff: true });
   if (state.unknown) return { pass: false, detail: `lens review: ${state.unknown}` };
   if (state.uncovered.length) return { pass: false, detail: `lens review: ${uncoveredDetail(state)}` };
   return state.skips.length ? { pass: false, detail: `it holds a lens review skip, which owes a review before it lands: ${skipLine(state.skips[0])}` } : null;

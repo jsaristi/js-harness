@@ -300,7 +300,7 @@ function markdownlessCommits(cwd, main, head) {
 
 /** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
  * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused as `lensDoor` refuses
- * (no complete lens record, or a lens skip), and, when it passes, `lines`: one for each code commit, with the Codex record
+ * (no complete lens record, or a lens skip; asked where the Codex review is off even with the lens review off), and, when it passes, `lines`: one for each code commit, with the Codex record
  * that covers it, so the lead reads the coverage commit by commit and needs no look of their own. No line of the feature
  * document is asked for since F8 S11 (odd/tasks/f8-s11-complements.md, L11). */
 export function reviewEvidence(cwd, main, head) {

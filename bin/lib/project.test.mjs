@@ -1947,11 +1947,11 @@ test('agentsTemplate serves a project with code and one without', () => {
   assert.doesNotMatch(template, /A behavior change arrives with the test/, 'AGENTS.md keeps the test-first line; the block does not');
 });
 
-// His answer to question 4 (odd/tasks/on-demand-functions.md, S9): with the Codex review off, gentle-ai's assessment
-// decides when a change is reviewed, naming no tier (N6, his answer of 2026-10-24).
+// His answer to question 104 (odd/tasks/f8-s11-complements.md, L14, 2026-10-28), in place of his answer to question 4
+// of odd/tasks/on-demand-functions.md: with the Codex review off, the Claude lens review stays on, naming no tier.
 test('agentsTemplate writes the rule of a project whose Codex review is off', () => {
   const template = agentsTemplate('project');
-  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai's assessment decides when a change\nis reviewed\.$/m);
+  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), the Claude lens review stays on: the merge\ndoor asks for its record before a change lands\.$/m);
 });
 
 // --- runCodegraphInit spawn shape ---
@@ -3668,7 +3668,7 @@ test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md
     assert.equal(third.upToDate, true);
     assert.equal(fs.readFileSync(agents, 'utf8'), edited);
 
-    // A block sync cannot write again is a failed sync, not an up-to-date one (gentle-ai R3 and R4 on cf820d2).
+    // A block sync cannot write again is a failed sync, not an up-to-date one (review findings R3 and R4 on cf820d2).
     fs.writeFileSync(agents, block(old), 'utf8');
     const refused = (file, ...rest) => {
       if (file === agents) throw new Error('EACCES');

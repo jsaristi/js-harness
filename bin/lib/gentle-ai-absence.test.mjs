@@ -23,7 +23,6 @@ const RESULT = 'a result a past run recorded, with the machine it ran on';
 const LICENCE = 'the licence of what was adapted from gentle-ai requires its notice';
 const GUARD = 'guards a machine where gentle-ai is still installed, until S2 removes it';
 const JH69 = 'the guard\'s refusal of a gentle-ai review base, which stays while gentle-ai reviews here and leaves with it at S2 (the lead, 2026-10-28)';
-const Q104 = 'init\'s AGENTS.md line on a project with the Codex review off, until question 104 is answered (L11)';
 
 const NAMED = {
   'bin/lib/gentle-ai-absence.test.mjs': 'this list',
@@ -74,9 +73,6 @@ const NAMED = {
   'bin/lib/guard.test.mjs': JH69,
   'bin/lib/codex-reviews.mjs': JH69,
   'bin/js-harness.mjs': `${JH69}: the guard's help line`,
-  'bin/lib/project.mjs': Q104,
-  'bin/lib/project.test.mjs': Q104,
-  'bin/lib/template-block.test.mjs': Q104,
 };
 
 /** The files git tracks under the roots, as paths from the repository with forward slashes: what a commit holds, so a
