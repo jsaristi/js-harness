@@ -92,7 +92,7 @@ export function shownReport({ rendered, shown, moments }) {
   const free = shown.filter((line) => line.decision === 'free').map((line) => ({ at: line.at, reason: line.reason }));
   const seen = (template, subject) => shown.some((line) => line.decision === 'shown' && line.template === template && line.subject === subject);
   const escapes = [
-    ...moments.filter((moment) => !seen(moment.template, moment.subject)).map((moment) => `the moment ${moment.subject} of ${moment.template} shows no page`),
+    ...moments.filter((moment) => !seen(moment.template, moment.subject)).map((moment) => `the moment ${moment.subject} of ${moment.template} was never shown`),
     ...shown.filter((line) => line.decision === 'shown' && line.template !== null && (typeof line.subject !== 'string' || line.subject === ''))
       .map((line) => `a page of ${line.template} shown at ${line.at} names no moment`),
   ];

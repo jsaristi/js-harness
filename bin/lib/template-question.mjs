@@ -50,3 +50,14 @@ export function admit({ asked, questions }) {
   }
   return { admitted: true, number, why: null };
 }
+
+/** The moments of the `ask` surface since `since` (milliseconds): `[{ template: 'question', subject }]`, a question
+ * of the record recorded since then, answered, with options the tool shows. Each was asked, so a `shown` line of its
+ * number should hold; one asked in writing (too few or too many options) or withdrawn has none to hold, and one still
+ * open may not have been asked yet. */
+export function answeredMoments(questions, since) {
+  const showable = (count) => count >= TOOL_OPTIONS.min && count <= TOOL_OPTIONS.max;
+  return questions
+    .filter((one) => one.closed?.by === 'answer' && Date.parse(one.notice.at) >= since && showable(one.notice.options.length))
+    .map((one) => ({ template: 'question', subject: String(one.number) }));
+}

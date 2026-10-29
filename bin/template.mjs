@@ -12,7 +12,7 @@ import { registryOfText, sha256, writeRegistry } from './lib/template.mjs';
 import { checkTemplates } from './lib/template-check.mjs';
 import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
 import { askTarget, decideAsk, decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
-import { render as renderQuestion } from './lib/template-question.mjs';
+import { answeredMoments, render as renderQuestion } from './lib/template-question.mjs';
 import { readNotices, recordedQuestions } from './lib/channel.mjs';
 import { RENDERED_SCHEMA, SHOWN_SCHEMA, readRecord, recordShown, renderedFile, shownFile } from './lib/template-record.mjs';
 import { harnessOfTree } from './lib/project-functions.mjs';
@@ -344,8 +344,19 @@ function shownOf(folder, days, seams) {
   const since = seams.now - days * 24 * 3600 * 1000;
   const recent = (line) => Date.parse(line.at) >= since;
   const rendered = readRecord(places.rendered, RENDERED_SCHEMA).filter(recent);
-  const shown = readRecord(places.shown, SHOWN_SCHEMA).filter(recent);
-  return shownReport({ rendered, shown, moments: seams.moments });
+  const lines = readRecord(places.shown, SHOWN_SCHEMA);
+  const shown = lines.filter(recent);
+  return shownReport({ rendered, shown, moments: [...seams.moments, ...questionMoments(places, since, lines)] });
+}
+
+/** The moments of the `ask` surface (`answeredMoments`) since `since` or the gate's first line, whichever is later:
+ * none before the gate ever ran, since no question asked then went through it. A channel record it cannot read
+ * throws. */
+function questionMoments(places, since, lines) {
+  if (lines.length === 0) return [];
+  const channel = readNotices(places.home, places.slug);
+  if (channel.unavailable !== undefined) throw new Error(`cannot read ${channel.path}: ${channel.unavailable}`);
+  return answeredMoments(recordedQuestions(channel), Math.max(since, Date.parse(lines[0].at)));
 }
 
 /** The templates row of `doctor` for the project at `project` under the harness home `home`: `{ days, escapes,
@@ -387,8 +398,8 @@ function runShown({ days, json }, seams, { stdout, stderr }) {
 /** Exit 0 when the subcommand did its work, 1 when it found a fault or could not, 2 for a bad command line; `shown`
  * also exits 3 when it cannot tell, and `gate` always exits 0. `root`, `hooked`, `readStdin`, `home`, `slug`, `now`,
  * `templates` (the registry, or `registryRoot`, the folder it is read under), `openMoments` and `moments` are seams for
- * the tests: until a page template and its moments' record land (odd/tasks/templates.md, slice C), no moment is open
- * and none is held. */
+ * the tests: until a page template and its moments' record land, no page moment is open and none is held; the
+ * questions' moments are read from the channel's record. */
 export function templateMain(argv, {
   stdout = console.log, stderr = console.error, cwd = process.cwd(), root, hooked, readStdin = () => fs.readFileSync(0, 'utf8'),
   home, slug, now = Date.now(), templates, registryRoot, openMoments = [], moments = [],

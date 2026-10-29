@@ -296,7 +296,10 @@ test('a harness.json it cannot read is no opt-out: the gate records the call as 
 // The `ask` surface (T5): a call of the question tool, against the questions of the channel's record.
 const ASKER = { host: 'claude-code', id: 'aaaaaaaa-1111-4111-8111-111111111111', source: 'environment', title: 'JH 80', permissionMode: 'auto' };
 const ASK_OPTIONS = [{ label: 'Sí (Recomendada)', description: 'lo que cubre' }, { label: 'No', description: 'lo otro' }];
-const recordQuestion = (home, text, options = ASK_OPTIONS) => appendNotice(home, 'p', newNotice({ at: '2026-10-29T05:00:00.000Z', from: ASKER, to: 'orchestrator', kind: 'question', text, id: `id ${text}`, options, waits: 'slice C' }));
+const recordQuestion = (home, text, options = ASK_OPTIONS, at = '2026-10-29T05:00:00.000Z') => appendNotice(home, 'p', newNotice({ at, from: ASKER, to: 'orchestrator', kind: 'question', text, id: `id ${text}`, options, waits: 'slice C' }));
+const closeQuestion = (home, question, kind, at) => appendNotice(home, 'p', newNotice(kind === 'answer'
+  ? { at, from: ASKER, to: 'orchestrator', kind, text: 'Sí', question, transcript: 't', line: 1, verified: false, copy: null }
+  : { at, from: ASKER, to: 'orchestrator', kind, text: 'ya no', question }));
 const asking = (call, input) => ({ hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_use_id: call, tool_input: input });
 
 test('gate --hook admits a question asked with the input template ask prints, and --shown records it shown', (t) => {
@@ -346,6 +349,26 @@ test('template ask exits 1 for a question the record does not hold open or the q
   assert.deepEqual([ask(['3']).code, ask(['3']).err], [1, 'template ask: the record holds no question 3']);
   assert.equal(ask([]).code, 2);
   assert.equal(ask(['x']).code, 2);
+});
+
+test('shown names a question answered with no shown line of its number as an escape, from the gate\'s first line on', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  const at = (minutes) => new Date(GATE_NOW + minutes * 60 * 1000).toISOString();
+  const five = ['a', 'b', 'c', 'd', 'e'].map((label) => ({ label, description: '' }));
+  recordQuestion(home, '¿Antes de la puerta?', ASK_OPTIONS, at(-30));
+  closeQuestion(home, 1, 'answer', at(-20));
+  for (const text of ['¿Por la puerta?', '¿A mano?', '¿Retirada?', '¿Abierta?']) recordQuestion(home, text, ASK_OPTIONS, at(10));
+  recordQuestion(home, '¿Cinco opciones?', five, at(10));
+  const input = JSON.parse(call(['ask', '2'], { home, slug: 'p' }).out);
+  hook('--hook', asking('q5', input));
+  hook('--shown', { ...asking('q5', input), hook_event_name: 'PostToolUse' });
+  for (const n of [2, 3, 6]) closeQuestion(home, n, 'answer', at(20));
+  closeQuestion(home, 4, 'withdrawn', at(20));
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW + 60 * 60 * 1000 });
+  assert.equal(report.code, 1, report.err);
+  assert.deepEqual(JSON.parse(report.out).escapes, ['the moment 3 of question was never shown']);
+  assert.deepEqual(templatesHealth(root, home, { now: GATE_NOW + 60 * 60 * 1000, slug: 'p' }).escapes, ['the moment 3 of question was never shown']);
 });
 
 test('shown reports each template\'s counts and free pages, exit 0, and 3 when a call went unchecked', (t) => {

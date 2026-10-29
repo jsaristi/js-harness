@@ -147,7 +147,7 @@ test('every refusal is sentences of GATE_SAYS with their slots filled, and GATE_
   assert.deepEqual(cutSpans(GATE_MESSAGES).map((span) => span.text.trim()), Object.values(GATE_SAYS));
 });
 
-test('shownReport counts each template\'s decisions, lists free pages and names a moment no page was shown for', () => {
+test('shownReport counts each template\'s decisions, lists free pages and names a moment nothing was shown for', () => {
   const line = (decision, extra = {}) => ({ at: hoursAgo(1), decision, template: 'stretch-return', subject: 's-7', reason: null, ...extra });
   const report = shownReport({
     rendered: [rendered(PAGE)],
@@ -156,7 +156,7 @@ test('shownReport counts each template\'s decisions, lists free pages and names 
   });
   assert.deepEqual(report.templates, { 'stretch-return': { rendered: 1, admitted: 1, shown: 1, refused: 1, unchecked: 0 } });
   assert.deepEqual(report.free, [{ at: hoursAgo(1), reason: 'a research page for him' }]);
-  assert.deepEqual(report.escapes, ['the moment s-8 of stretch-return shows no page']);
+  assert.deepEqual(report.escapes, ['the moment s-8 of stretch-return was never shown']);
   assert.equal(report.unchecked, 1);
 });
 

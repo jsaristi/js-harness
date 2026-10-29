@@ -379,6 +379,12 @@ Codex and the Claude lenses before its pull request.
   The sample is that card, byte for byte, and its record holds the label in the question's text: under the gate a
   label added at asking time is a hand-made question, so whoever records a question writes its label into the text
   (the lead is told). `sample.source` is `0f71b2c6:17978`.
+- L8. 2026-10-29 08:32Z, the lead's note to JH 80 relaying his words, read with `js-harness sessions --quote 0f71b2c6
+  18204` (08:29:41Z): "Listo muestrame lo proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por
+  que osea cual es el criterio". The lead asks (its page https://claude.ai/artifact/4Ty3JAAJrCyK7DrBw5yFBP): the
+  status report's notes refuse a proposal with no `why` (`notesOf`, `bin/lib/report-status.mjs`, from main), and the
+  rule `status-report` ("propose next, and why") is amended through `rules change` in slice D, quoting that line.
+  The surface grows by `bin/lib/report-status.mjs` and its test.
 
 ## Next step
 State at 2026-10-29 ~04:45Z (JH 80, worktree `D:\js-harness\.claude\worktrees\templates`, branch `feat/templates-a` from
@@ -496,3 +502,9 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   `template check` exits 0. Next: the escapes of the `ask` surface (a question recorded since the first `shown`
   line, open, 2 to 4 options, with no `shown` line of its number), the FAILURES entry, `"templates": true` in
   `harness.json`; then Codex, the lenses and gentle-ai over slice C, push, PR, ready notice.
+- Update 08:40Z: unit 2 is e42535c9. Unit 3: `template shown` and `doctor` name as an escape a question recorded
+  since the gate's first line (and in the window), answered, with 2 to 4 options and no `shown` line of its number
+  (`answeredMoments`); the escape text is now "was never shown", for a question as for a page. `docs/FAILURES.md`
+  holds `hand-made-output` (controlled by the page refusal test) and `harness.json` turns templates on. Next: merge
+  main (PR 653 and 654 landed) into the branch, then unit 4, `notesOf` refuses a proposal with no `why` (L8); then
+  the reviews of slice C, push, PR, ready notice; slice D amends `rules-live-in-the-harness` and `status-report`.

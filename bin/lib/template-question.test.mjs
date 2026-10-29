@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { TOOL_OPTIONS, admit, render } from './template-question.mjs';
+import { TOOL_OPTIONS, admit, answeredMoments, render } from './template-question.mjs';
 
 // Read as LF, as its digest is, so a checkout with CRLF holds the same sample.
 const SAMPLE = fs.readFileSync(new URL('../../templates/question/sample.json', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -37,6 +37,19 @@ test('a question whose options differ from the record\'s, by label, order or num
     assert.equal(admit({ asked: { ...asked, options }, questions: open() }).why, why);
   }
   assert.equal(admit({ asked: { ...asked, options: asked.options.map((one) => ({ ...one, description: 'otra' })) }, questions: open() }).admitted, true, 'a description is the asker\'s words');
+});
+
+test('answeredMoments are the questions answered that the tool could show, recorded since a time', () => {
+  const options = (n) => Array.from({ length: n }, (_, i) => ({ label: `Opción ${i + 1}`, description: '' }));
+  const question = (number, at, closed, count = 2) => ({ number, notice: { at, text: 't', options: options(count) }, closed: closed === null ? null : { by: closed } });
+  const questions = [
+    question(1, '2026-10-29T05:00:00.000Z', 'answer'),
+    question(2, '2026-10-29T06:10:00.000Z', 'answer'),
+    question(3, '2026-10-29T06:10:00.000Z', 'withdrawn'),
+    question(4, '2026-10-29T06:10:00.000Z', null),
+    question(5, '2026-10-29T06:10:00.000Z', 'answer', 5),
+  ];
+  assert.deepEqual(answeredMoments(questions, Date.parse('2026-10-29T06:00:00.000Z')), [{ template: 'question', subject: '2' }]);
 });
 
 test('render refuses a question the tool cannot show, and heads a long number with #', () => {
