@@ -37,27 +37,10 @@ minutes after a land (JH 84, Decisions, unit 4), and a copy already behind canno
 - Nothing beyond the repository's rules.
 
 ## Next step
-State at the context pause (2026-10-29, JH 88). The change is a chain of three PRs (over 400 lines):
-- Slice 1, branch feat/lead-manual-steps: commit fd41d373 (S6), its gate passed. Slice 2, feat/lead-manual-steps-2:
-  183b473b, gate passed. Slice 3, feat/lead-manual-steps-3: its commit started; check `git log -1` there. In slice 3:
-  docs/FAILURES.md (commit-attribution-from-host), which is still uncommitted: commit it with slice 3.
-- Slice 2, branch feat/lead-manual-steps-2 from slice 1 (S4, S5, S7): the untracked bin/lib/merge-queue-waits.mjs and
-  its test, bin/lib/merge-queue-refresh-now.mjs, and the full versions saved in
-  C:\Users\Oficina\.claude\jobs\d075e800\tmp\full\ (bin/merge-queue.mjs, bin/merge-queue.test.mjs, bin/js-harness.mjs,
-  bin/lib/merge-queue-refresh.mjs and its test, README.md). Copy the full bin/lib/merge-queue-refresh.mjs, its test,
-  bin/merge-queue.test.mjs and bin/js-harness.mjs over; for bin/merge-queue.mjs and README.md, re-apply only the mode
-  (USAGE first line and the paragraph on --refresh-copy alone, without the backup and bin sentence slice 1 already
-  says; parseArgs; the mode branch in mergeQueueMain passing answer, versionOf, pnpmBinDir; imports of refreshNowRun
-  and pnpmBinDir) on slice 1's file.
-- Slice 3, branch feat/lead-manual-steps-3 (S8): bin/lib/manifest.mjs and its test from the saved full versions,
-  docs/ROADMAP.md from tmp\full\ROADMAP.md, docs/FAILURES.md, the summary under docs/sessions/.
-- Then for each code slice: `js-harness codex-review --base <boundary>` and `js-harness lens-review --base <boundary>
-  --lenses risk,reliability,resilience --reason "<why>"`; one independent verifier over the range (T5); `npm run
-  check`; push; one PR each, chained; `js-harness notify --to orchestrator --kind ready --pr <n>`; the summary; the
-  closed notice. No `Co-Authored-By` or session line in any commit (CLAUDE.md).
-- Evidence already taken: every new test failed on main's code (a copy of origin/main's bin/ in the job's scratch
-  folder with the branch's tests) and passes on the branch: merge-queue-waits 7/7, merge-queue-refresh 15/15,
-  refresh-copy 22/22, merge-queue-stale-bin 3/3, the merge-queue refresh tests 17/17, the manifest question test.
+Done in code (2026-10-29, JH 88). The chain: `feat/lead-manual-steps` (fd41d373, S6), `-2` (183b473b, S4 S5 S7), `-3`
+(b9fa64fd, S8 and the roadmap line), `-4` (the review fixes to 1a429763 and the summary). Each code commit has a Codex
+record and a complete Claude lens record. Left: the push, one pull request a branch based on the one before, the ready
+notice, the closed notice with the summary.
 
 ## Specs
 - S1. The brief (the lead, 2026-10-29 16:03Z): "Read what of "watch and lease, land and copy, archive, openings" is
@@ -135,9 +118,11 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   (installed anyway). Two pinning tests the verifier found missing passed at once: two creation times that disagree, a
   script of pnpm's global folder outside the package. GREEN: waits 9/9, refresh 19/19, refresh-now 2/2, stale-bin 4/4,
   refresh-copy 23/23, merge-queue 119/119, guard 43/43.
-- [ ] T6 (kind: docs) README, the roadmap line, the session summary.
-- [ ] T8 (kind: verify) follow-up of Codex's half-open finding 2 (L8), fixed in d8d4f54 (L9): Codex reads 183b473..HEAD
-  again (`codex-review --base 183b473 --again`), since a second recheck of the first review is not run. Route: inline.
+- [x] T6 (kind: docs) README, the roadmap line, the session summary
+  (docs/sessions/2026-10-29-jh-88-the-lead-s-manual-steps-as-commands.md).
+- [x] T8 (kind: verify) follow-up of Codex's half-open finding 2 (L8), fixed in d8d4f54 (L9): Codex reads 183b473..HEAD
+  again (`codex-review --base 183b473 --again`), since a second recheck of the first review is not run. Route: inline. One new P2 (L10), fixed in 1a42976 and
+  rechecked: fixed, the patch correct.
 
 ## Log
 - L1. 2026-10-29 16:03Z, the lead's brief (C:\Users\Oficina\.js-harness\background\briefs\2026-10-29T16-03-53-806Z-72c9e958.md), quoted in S1 to S3.
