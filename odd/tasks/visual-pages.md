@@ -553,6 +553,11 @@ carrying #644, landed (main 96b917a).
   (44,683), one warning not taken, the why section filled by nothing in E1, which is E2's wiring by design. gentle-ai
   not run again on E1 alone: its code is inside the approved range above. Prevention: each slice of a stack gets
   reviews whose range ends at its own tip, never one range over the stack.
+- State at ~10:50Z: #655 and #658 landed. #659 (E2) retargeted to main, ready sent. Slice E3 is d2e7a9ad on
+  `feat/visual-pages-e3` (local, unpushed, stacked on E2's eb4c2098): Codex correct (0.91, 78,007); its lens run
+  (reliability, resilience, run 5f61f391) was cut when the lead refreshed the installed copy at ~10:43Z and left no
+  record: run it once more, then gentle-ai from eb4c2098 (status gave the start; run its granted), push, PR on #659.
+  Left after E3: T7 (waits on the lead: CLAUDE.md outside the surface), T11a (README/help, outside the surface), T9.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
