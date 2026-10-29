@@ -333,8 +333,8 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
   head is not past. The first pull request of a stack, landed alone after a review over the stack, passes the queue
   and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline.
-- [ ] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
-  phase` in the slice C commit "feat(report): the phase page".
+- [x] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
+  phase` in the slice C commit "feat(report): the phase page". Landed as #651, #652 and #654.
 - [x] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
   gates of the feature's slice worktrees left out, fixed in d8e0a122; Codex reads C3 again from 95d5231e (`--again`).
   Route: inline.
@@ -348,13 +348,15 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
 - [x] T7 (kind: build) init's line. Spec 2. Route: inline. The block init writes names the page of each moment and
   its command, under `rule:reports-spanish-visual`; this repo's CLAUDE.md names the rule in its Reporting sentence,
   the one line the lead's note of 09:11Z widened the surface to.
-- [ ] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline.
-- [ ] T9 (kind: verify) the four pages from the real records, published; reviews on each slice. Route: inline.
-- [ ] T11 (kind: build) the return's why and fix, `stretch explain` and `stretch show`, then the stretch of
+- [x] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline. Landed as #655.
+- [x] T9 (kind: verify) the four pages from the real records, published; reviews on each slice. Route: inline. The
+  return of the real stretch of 2026-10-29T03:06:28.748Z took the place of the scratch-home stretch of 2026-10-28:
+  a real record exists now, so none was written by hand.
+- [x] T11 (kind: build) the return's why and fix, `stretch explain` and `stretch show`, then the stretch of
   2026-10-29T03:06:28.748Z shown again. Spec 9. Route: inline. Slice E, about 510 lines, as two stacked pull
   requests: E1 (`feat/visual-pages-e`, on #655) the pure part, the failures' fix, `problemsOf` and the page's section;
   E2 (`feat/visual-pages-e2`) `stretch explain` and `stretch show`.
-- [ ] T11a (kind: docs) the stretch entries of `README.md` and `js-harness help` (`bin/js-harness.mjs`) name only open,
+- [x] T11a (kind: docs) the stretch entries of `README.md` and `js-harness help` (`bin/js-harness.mjs`) name only open,
   bind, status and close; both lie outside this brief's surface, so `explain` and `show` are said in the command's
   own usage until a session that owns them adds a line. Route: inline. The lead's note of 11:03Z widened the surface to
   those two entries.
@@ -603,6 +605,28 @@ carrying #644, landed (main 96b917a).
   (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
 - 4ba61a5b (the text fix): Codex correct (0.96, 61,391 input tokens); the readability lens found nothing (4,271).
 - gentle-ai: a40d85e7..4ba61a5b approved (medium, lineage review-673b5907691d27bb), no findings.
+- #666 landed at 13:10Z as 27fc4f9 without 5f8768c, pushed after its ready; the queue's next run landed it again at
+  5f8768c (main d90caad, 13:19Z), so PR #667, which carried it, was closed.
+- T9, 13:25Z, with the branch's code (main d90caad; the installed copy predates T12): `stretch explain` gave the
+  03:06Z stretch's four failures their why and fix, each from a record: 04:09Z land exit 4 from the lead's notice
+  04:17:45Z (Actions run 40816256353 red on #632's sweep test; #648 landed alone, #632 at 04:33Z); 05:44Z land exit 1
+  from commit 0fbba0f0 (#649 moved main past the installed copy 5e36e82, and the land refused to run older code, as
+  its record in `lands.jsonl` says; the 05:45Z land ran); 05:45Z land exit 4 from the lead's notice 05:55:44Z (run
+  40825306670 red on three comments of #647, reworded in daa51f84, landed 06:24Z); 06:52Z Codex failed from commit
+  83d2f1b1 (JH 80 committed its state while part 1 of 4 ran; rerun 06:55Z, four parts reviewed). The item
+  `visual-b`, already explained as fixed in its text, got `--fixed`. `stretch show --html` then left "no registrado"
+  only on the item `templates`' why-not, which no record says.
+- The four pages, made by the commands from the real records and published: the stretch return
+  (https://claude.ai/artifact/2NbRkxz9tyCJy1MCdEJKsU, version 2), the phase page
+  (https://claude.ai/artifact/Rxf3wL6dsYmf6AbEe9LhZ4; no before, since no phase page was recorded), the status report
+  (https://claude.ai/artifact/BKtRtp4b3ZCX5yJUs3YsFb, no `--mark`: the cut is the lead's) and the feature close
+  (`report feature odd/tasks/visual-pages.md --branch feat/visual-pages --branch rule/visual-moments --record`,
+  https://claude.ai/artifact/7C6FKQJk2ccpH9q2ndu9po: 17 of 19 tasks, T5e and T5f the follow-ups left; 13 h real
+  against 3.5-6.5 h estimated; 41 Codex runs, 4,804,708 input tokens; the lenses 1,093,107 input tokens, US$ 3).
+- Follow-up, not done (outside the surface, `bin/lib/throughput.mjs`): a failed land's record holds its own reason
+  (`said`) and a failed Codex run its `reason`, but `landFacts` and `codexFacts` drop both, so the return shows only
+  "land exit 1" or "Codex review failed" until an explanation is written. Carrying them would explain most such
+  failures from the record alone.
 - State at ~13:00Z: #664 (T7) landed 12:27Z. T12+T11a is PR #666 (`feat/visual-pages-t12`, on main), ready sent
   12:58Z. Left: T9. Once #666 lands, record the 03:06Z stretch's four failures with the branch or installed
   `stretch explain failure:<HH:MM> --stretch 2026-10-29T03:06:28.748Z --source notice:<at>`, from these notices:
