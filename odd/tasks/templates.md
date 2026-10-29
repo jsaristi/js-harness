@@ -34,9 +34,9 @@ one.
 - In: this document; new `bin/template.mjs`, `bin/lib/template*.mjs` and their tests; `templates/` (the samples and
   their input records); one ROADMAP line; the session summary; the rule change through `js-harness rules change` on
   `rule/templates`.
-- In, once the lead extends the edit surface (Ask me before): one dispatcher line and its help line in
-  `bin/js-harness.mjs`; the gate's hook entry in `bin/lib/hook-entries.mjs` and the matcher install registers; the
-  escape entry in `docs/FAILURES.md`; `"templates": true` in this repository's `harness.json`.
+- In, by the lead's extension of 2026-10-29 (L4): one dispatcher line and its help line in `bin/js-harness.mjs`; the
+  gate's hook entry in `bin/lib/hook-entries.mjs`; one entry in `docs/FAILURES.md`; `"templates": true` in this
+  repository's `harness.json`.
 - Out: JH 79's pages and commands (`bin/lib/pages*.mjs`, `stretch`, `report`, `bin/lib/stale-board.mjs`): this
   feature lists them and gives them a gate, it does not rebuild them; `package.json` (not needed, see Design);
   credentials, `~/.claude`, `~/.codex`; the installed copy; evals.
@@ -57,8 +57,8 @@ one.
 
 ## Ask me before
 His words decide the feature (Specs 5: "hagamos una plantilla de esto"); the design passes two blind readers
-before code (`rule:double-review`). Through the lead, before T4: the edit-surface extension above, since the brief
-lists only the new files.
+before code (`rule:double-review`). The edit surface beyond the brief's new files was the lead's to extend, and it
+did (L4).
 
 ## Specs
 1. "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no quedan
@@ -155,9 +155,19 @@ passes template check": the pre-commit hook and CI run `bin/check.mjs` (`.githoo
 `.github/workflows/gate.yml:42`), whose tests sensor runs `node --test`, so `package.json` needs no change.
 
 ### The two records
-- Rendered, `<home>/.js-harness/templates/<project>/rendered.jsonl`: `{ schema: 'js-harness.rendered/v1', template,
-  sha256, at, head, path }`, appended by `recordRendered` (`bin/lib/template-record.mjs`), which a `rendered`
-  template's command calls when it writes its output.
+- Rendered, `<home>/.js-harness/templates/<slug>/rendered.jsonl`, `slug` the project's as the page record and the
+  channel name it (`D--js-harness` here): `{ schema: 'js-harness.rendered/v1', template, sha256, bytes, at, head,
+  path }`. The one gate is this feature's (the lead, 2026-10-29, L4); JH 79's page commands build against this
+  contract, one call each, in `bin/lib/template-record.mjs`:
+  - `renderedFile(home, slug)`: the path above, in the shape of `pagesFile`;
+  - `recordRendered(file, { template, path, at, head }, fileSystem = fs)`: reads the bytes of `path` as they are on
+    disk once the command has written them (so line endings and encoding are what the Artifact tool will publish),
+    appends one line with their sha256 and length, and returns it. A line left without its newline is ended first,
+    as `appendPage` does. A file it cannot read or a record it cannot write throws: the command says so and its page
+    stays unpublishable, never published unrecorded.
+  - `template` is the page template's id: `stretch-departure`, `stretch-status`, `stretch-return`, `feature-close`,
+    `phase-change`, `status-report`; `head` the default branch's commit the page read.
+  A page edited after it was rendered has another hash and is refused: the fix is to render it again.
 - Shown, `shown.jsonl` beside it: `{ schema: 'js-harness.shown/v1', at, session, tool, template | null, decision:
   admitted | refused | free | unchecked, sha256, reason }`, appended by the gate on every call it judges.
 Append only; a cut last line is ended first, as the stretch record does.
@@ -166,8 +176,11 @@ Append only; a cut last line is ended first, as the stretch record does.
 - `artifact` (`PreToolUse` on `Artifact`, action publish): a page whose sha256 is a line of the rendered record is
   admitted as its template; a page that carries `<meta name="js-harness-page" content="free: <reason>">` with a
   reason of at least 20 characters is admitted as free and recorded (research, a design, an inventory: what no
-  record holds); any other page is refused, and the reason names the commands of the registered page templates and
-  the free mark. The desktop's visual tool, where a page is shown inline, gets the same check once its tool name is
+  record holds); any other page is refused with this reason, which JH 79's tests may quote:
+  `js-harness template gate: this page came from no template command (sha256 <first 12 hex> is not in <rendered
+  file>). Make it with its command and publish that file unchanged: <one line a registered page template, its id and
+  its render command>. If no record holds what it shows, mark it free: <meta name="js-harness-page" content="free:
+  <why, 20 characters or more>">.` The desktop's visual tool, where a page is shown inline, gets the same check once its tool name is
   read from a real payload.
 - `artifact-data` (`PreToolUse` on `ArtifactData`): a write to the board's `events` collection (the url of the
   cursor `sessions live` keeps) is admitted when every row, without its `sesion` and `texto` fields (the lead's
@@ -248,3 +261,9 @@ registry, `template check` and `list`, each test first (T3); B, the gate, the re
   too; told to the lead.
 - L3. 2026-10-29, the board rows chosen as the proof (the brief's first choice): JH 79 covers the board's freshness
   (stale-board, start row, running block, last three done), not whether a row came from the record.
+- L4. 2026-10-29 ~03:25Z, the lead's message to JH 80: (1) there is one gate and JH 80 owns it; JH 79 had planned its
+  own hash gate for the moments' pages (its slice C, T10, from his line 14721) and is told not to build a second; its
+  page commands call `recordRendered`, one line each, so this design names its signature, where the record lives and
+  the refusal message (The two records, The gates). (2) The edit surface is extended for the build: one dispatcher
+  line in `bin/js-harness.mjs`, the gate entry in `bin/lib/hook-entries.mjs`, one entry in `docs/FAILURES.md`,
+  `templates: true` in `harness.json`.
