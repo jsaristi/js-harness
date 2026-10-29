@@ -452,8 +452,11 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   `control` and `rules coverage`, and 2 new cases (PR 638). The paid runs ran 2026-10-28 on his yes, the cap raised
   to $19 by his answer to question 105: the incident set no worse, `f8-s5c-a-incidents-2` 13 of 20 as S0's
   baseline; neither new case told its rule apart (both arms scored the same), so both stay owed; $16.23 recorded
-  (L13 to L16). Left: `init`'s baseline line (JH 68, L5), harder premises for the two cases and their reruns, and
-  13 to 23 more cases.
+  (L13 to L16). On 2026-10-29 (JH 82, `f8-s5c-a-cases`, his yes to question 110 and no cap after it, L17) both
+  cases got harder premises and reran, $4.87: neither tells its rule apart yet, because every rule a case ties
+  lives only in a skill, and because the five reply states `init` checks close a stretch the user is away from as a
+  question, against `away-autonomy` (L18, L21). Left: those two blockers, with the lead (L22); then the reruns and
+  13 to 23 more cases; `init`'s baseline line (L5, L20).
 
 ### S13 The rehearsal on a scratch project
 - **Changes:** nothing new; the whole path of the reverse-engineering document's 11.1 walked on a

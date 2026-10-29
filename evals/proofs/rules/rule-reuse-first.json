@@ -5,22 +5,22 @@
     "reuse-first"
   ],
   "digests": {
-    "case": "6400535a1deef87cc1a21b3c28e795b73d943dd796702a8f4417a91579cc0c37",
+    "case": "054763aa3d2a26d90bff5732d74b9be4a5d8585baa888fdf6373c376ac5c564c",
     "rules": "5a16f0945086140d3f09204e20f256aba0349ad35aaf57edef67ef6cc5969d05"
   },
-  "date": "2026-10-28",
-  "commit": "f1e0e8ea58f6d0f94424cd7e17025f9483a0711a",
+  "date": "2026-10-29",
+  "commit": "03effcad5fc7e2b66963165fe33db1ad09fb182d",
   "current": {
-    "run": "f8-s5c-a-rules-current",
+    "run": "f8-s5c-a-cases-reuse",
     "arm": "current",
     "trials": 2,
-    "score": 1
+    "score": 0.7142857142857143
   },
   "without": {
-    "run": "f8-s5c-a-rules-current",
+    "run": "f8-s5c-a-cases-reuse",
     "arm": "current-without-rule-reuse-first",
     "trials": 2,
-    "score": 1
+    "score": 0.7142857142857143
   },
-  "costUsd": 2.0753771999999997
+  "costUsd": 2.3120492
 }

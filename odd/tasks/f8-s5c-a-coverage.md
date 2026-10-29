@@ -99,8 +99,9 @@ mechanism here, before S13 rehearses it and S12 ships it.
   `task-proof` and owed in the register until its paid run; the other 13 to 23 are a later session's
 - [x] T7 (kind: docs) the paid runs as ready commands, the ROADMAP line, the ready notice — S8; inline (the ready
   notice goes with the pull request, after the reviews)
-- [ ] T8 (kind: build) harder premises for `rule-reuse-first` and `rule-away-autonomy` (L18, L19: D8, D9), proven
-  by `task-proof`, and their paid reruns P5 and P6 — S4; inline; JH 82, branch `f8-s5c-a-cases`
+- [x] T8 (kind: build) harder premises for `rule-reuse-first` and `rule-away-autonomy` (L18, L19: D8, D9), proven
+  by `task-proof`, and their paid reruns P5 and P6 — S4; inline; JH 82, branch `f8-s5c-a-cases` (`b08cf553`,
+  `03effcad`, the records' commit after them): neither tells its rule apart (L21); both stay owed
 - [ ] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
   rule apart (D10) — S4; inline
 - [ ] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline
@@ -153,8 +154,10 @@ plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
 
 | Run | Command | Trials | Estimate | Real |
 |---|---|---|---|---|
-| P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | $1.84 to $2.76 | |
-| P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | $1.84 to $2.76, more if the lead's skill makes a trial longer | |
+| P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | plan $2.08 (table $1.84 to $2.76) | $2.31 (1.11 times the plan) |
+| P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | plan $2.41 (table $1.84 to $2.76) | $2.56 (1.06 times the plan) |
+
+Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21).
 
 In all for P1 to P4, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
 record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
@@ -166,8 +169,11 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 ## Next step
 The mechanism landed with PR 638. The paid runs are done (L13 to L16, JH 78, branch `f8-s5c-a-paid`): $16.23
 recorded of the $19 cap; the incident set is no worse (13 of 20, as S0), and neither new case tells its rule
-apart, so both stay owed. Left for a later session: harder premises for `rule-reuse-first` and
-`rule-away-autonomy` and their reruns, the 13 to 23 cases T6 did not write, and `init`'s baseline line (JH 68, L5).
+apart, so both stay owed. JH 82 (L17 to L22) gave both harder premises and reran them, $4.87: neither tells its
+rule apart yet, and the replies now kept say why (L21). Next, in this order: the lead's answer on the two blockers
+of D11 (the five reply states against `away-autonomy`'s "ask nothing"; transcripts on the rule arms, to see whether
+a rule's skill is loaded); then, on that answer, the reruns and the 13 to 23 cases T6 did not write (T9); and
+`init`'s baseline line (T10, L20), in its own slice.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -367,3 +373,40 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   module for the code you move out to get under its ceiling (say why that code, in the commit), and their tests. It
   touches the installer, so it is high risk: one independent verifier after its own checks, plus Codex and the
   lenses. Separate slice/PR from the cases if that keeps each under 400 lines."
+- L21 (2026-10-29, evidence, P5 and P6 from `03effcad`, reviewed by Codex, the lenses and gentle-ai, which approved
+  `7eb2a709..03effcad` with 3 suggestions, informational): neither v2 case tells its rule apart. `rule-reuse-first`
+  scored 5 of 7 on all four trials, both arms; `rule-away-autonomy` 4 of 6 on all four. Both records are written
+  (`evals/proofs/rules/<case>.json`, `rule-proof.mjs` exit 1); both cases stay owed. This time the replies are kept
+  (`evals/runs/f8-s5c-a-cases-*/`, the `result` of each stdout log), and they say why:
+  - reuse-first: the two replies that say how (the second trial of each arm) found `src/lib/slug.mjs`, took the
+    accents off in `tags.mjs` and then called `slug`, which they say they left unchanged, the arm without the rule
+    so the sitemap's output stays the same. That is the search done and the amend not done: the import test
+    passes and the two tests of "amend that one instead of adding a second" fail, 5 of 7, the score of all four
+    trials. Which two failed on the first trials is not recorded (the grader's output is not kept), so it is
+    assumed, not checked, that they failed the same way. On the trial without the rule that says how, the search
+    was made all the same: here it is the model's habit.
+  - away-autonomy: every trial, both arms, did item 1, left the currency waiting and said so, and closed with a
+    `Question:` line asking the owner to choose. `Question` is one of the five states the reply check that `init`
+    turns on asks a reply to end in (`DEFAULT_REPLY`, `bin/lib/reply.mjs:20`; protocol 2: "a question he answers in
+    writing"), and the home's Stop hook runs that check (`js-harness reply --hook`). Nothing in the five states
+    says what a reply closes on while the user is away, so a stretch with something waiting for them is closed as
+    a question, with or without `away-autonomy`'s "ask nothing": the shipped texts contradict each other, and the
+    case shows it. The trials also replied in Spanish, the home's language setting, so the reply test's
+    `/currenc/` missed "moneda" on all four: a grader defect, though the score would not change, since the
+    question fails the no-question test on every trial.
+  - Which skill each trial loaded is not known: the `current` config keeps no transcripts (`transcriptsOf`,
+    `evals/runner.mjs`), and the stdout log holds only the final result.
+- L22 (2026-10-29, decisions, the session's own, within the brief): D11, no more paid reruns of these two cases and
+  no new case for now (D10): what blocks them is outside this brief's surface. For `away-autonomy` it is the
+  contradiction of L21, whose fix is a change of a rule or of protocol 2, his or the lead's; for any rule case, it
+  is that nobody can see whether the skill holding the rule was loaded, which a `transcripts` keeper on the
+  `current` and `current-without-rule-<id>` configs would show (`SUBAGENT_TRANSCRIPTS`, `evals/configs.mjs`). Both
+  go to the lead in a `waiting` notice. D12: the away grader reads Spanish too (`moneda`, the Spanish of waiting
+  and of choosing), fixed in its own commit after the records' commit, so the records stay those of `03effcad`.
+- L23 (2026-10-29, the lead's answer in the channel at 07:15 local to this session's `waiting` notice): "Blocker 2:
+  yes, surface widened to evals/configs.mjs (add SUBAGENT_TRANSCRIPTS to current and current-without-rule-*) and
+  evals/runner.mjs only if the keeper needs it, with their tests; reviews as usual. Blocker 1 changes his rule
+  (away-autonomy vs the reply states): recorded as his question 111, asked on his next message; until then no
+  away-autonomy rerun. Go on with T10, then L5 (init baseline line)." Evidence: the records' commit was refused by
+  its gate once, on `bin/lib/gentle-ai-absence.test.mjs`, which names every results file that holds the word
+  (a trial's `gentle-ai/state.json` path); the two new ones are named there with P1-P4's reason, `RESULT`.
