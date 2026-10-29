@@ -1451,6 +1451,16 @@ was made; the rule "never two gates" was kept by hand.
 - Control: check — bin/check.test.mjs — "two check processes that share a home run their sensors one
   after the other, and the second says whose gate it waits for" — since 2026-10-11
 
+### uninstall-took-user-entry
+A hook entry the user's host file already held, identical to one of ours, was recorded as ours by
+`install`, and `uninstall` took it out of the user's file.
+- Class: tool
+- Seen: 2026-10-29 — bin/lib/manifest.mjs:583-585 and :744 on main `4b1a7b71` — found by JH 80's
+  independent verifier on PR 653; a scratch home seeded with our own Claude and Codex entries came
+  back with `"SessionStart": []` after install, install and uninstall
+- Control: check — bin/lib/manifest.test.mjs — "an entry the Codex hooks.json already held,
+  identical to ours, keeps its place and its trust through install and uninstall" — since 2026-10-29
+
 ### upgrade-cannot-work
 `js-harness upgrade` cannot bring a copy up to date, and the hint it gives on a version mismatch
 names something that does not exist.

@@ -372,13 +372,16 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   tool or shell write to `lens-reviews` and `codex-reviews` under the git common directory.
   Provenance: a lens record is admitted only when it names a run line the command wrote first, as
   Codex's records do (`bin/lib/codex-review-runs.mjs:9-11`).
-- **Files** [i, planned]: `bin/lib/guard.mjs`, `bin/lib/lens-reviews.mjs`, `bin/lens-review.mjs`,
-  `bin/check.mjs`, their tests.
+- **Files:** `bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/lens-reviews.mjs`,
+  `bin/lib/lens-review-rows.mjs`, `bin/lens-review.mjs`, their tests.
 - **Probe and pass:** a `guard` test denies an Edit, a Write and a `>>` to either record; a
   well-shaped lens record with no run line is not counted by `check --push`.
-- **Cost:** about 100 lines and tests [i]; no eval.
+- **Cost:** 1,025 lines added (423 of code, 382 of tests, 220 of docs); no eval.
 - **Order:** after S10, which owned `bin/guard.mjs`.
-- **State:** in progress, JH 69, worktree `f8-s1-records`; its feature document is not written yet.
+- **State:** done: PR 630, merged 2026-10-28 ("fix(guard): review records only the commands write");
+  the probe passes on main (`bin/guard.test.mjs` "a Write, an Edit, a MultiEdit or a NotebookEdit of
+  a review record is denied", `bin/lib/lens-review-rows.test.mjs` "a well-shaped record that names
+  no run line lens-review wrote is refused by the push").
 
 ### S10 The port: style, skills, permissions, guard
 - **Changes:** `install` writes the `js-harness` output style (neutral Spanish with tú, G10, G10n),
@@ -399,6 +402,9 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **His decisions:** G12 (answered, question 99); applying it to his machine (question 102, "Aplicar
   ahora").
 - **State:** done (PRs 615, 617, 619, 620, 621, 623; `odd/tasks/f8-s10-port.md`).
+- **Later fix:** a hook entry the user's host file already held, identical to one of ours, is
+  recorded `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust (JH 81, found by
+  JH 80's verifier on PR 653; `docs/sessions/2026-10-29-jh-81-uninstall-keeps-a-users-hook-entry.md`).
 
 ### S11 The complements under js-harness
 - **Changes:** `stack`'s engram, engram-plugin, codegraph and context7 rows install and register
