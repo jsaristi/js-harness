@@ -16,12 +16,11 @@ function sections(text) {
   return found;
 }
 
-test('section 3 gives a gentle-ai review a base on the first-parent line, and says what a timeout leaves', () => {
+test('section 3 gives a review a base on the first-parent line, and sends a session to no gentle-ai review (F8 S11, L11)', () => {
   const text = protocolsSkillContent();
   assert.ok(text.includes('a base on the head\'s first-parent line'));
-  assert.ok(text.includes('`js-harness guard` refuses such a base'));
-  assert.ok(text.includes('When a gentle-ai command ends with `operation_timeout`, run that same command once more'));
-  assert.ok(text.includes('the words "not reviewed", and Codex reviews the range'));
+  assert.ok(text.includes('a debt that `check` lists until a review pays it'));
+  assert.doesNotMatch(text, /gentle-ai/);
 });
 
 test('the protocols skill has a one-line description a host can read, with the version', () => {
@@ -79,10 +78,10 @@ test('the protocol for changing a rule opens with the stale 73 percent, and its 
 
 // One home for every rule: the skill names a rule by its id and never restates its value, and every id it names is
 // declared, so that a rule changed by `js-harness rules change` reaches this text with nothing to carry by hand.
-test('protocol 3 sends every slice of code through Codex, whether gentle-ai reviewed it or not, as AGENTS.md says', () => {
+test('protocol 3 sends every slice of code through Codex and the Claude lenses where their switches are on', () => {
   const protocol3 = sections(TEXT)[2].lines.join('\n');
-  assert.match(protocol3, /every slice of code goes through Codex, whether gentle-ai reviewed it or not/);
-  assert.doesNotMatch(protocol3, /each approved slice/, 'Codex does not wait for gentle-ai\'s approval');
+  assert.match(protocol3, /every slice of code goes through Codex where the project's `codexReview` switch is on/);
+  assert.match(protocol3, /through the Claude lenses where its `lensReview` switch is on/);
 });
 
 test('protocol 1 pushes unasked only where the project\'s pushUnasked switch reads on, and asks before a push elsewhere', () => {

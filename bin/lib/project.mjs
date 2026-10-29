@@ -385,8 +385,8 @@ line of this file or a protocol.
 
 A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known,
 as \`js-harness-protocols\` section 6 says.
-Where the Codex review is off (\`js-harness functions\`), gentle-ai's assessment decides when a change
-is reviewed.
+Where the Codex review is off (\`js-harness functions\`), the Claude lens review stays on: the merge
+door asks for its record before a change lands.
 `;
 }
 

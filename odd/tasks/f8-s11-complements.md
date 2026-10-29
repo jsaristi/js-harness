@@ -73,7 +73,7 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   per preset — S2, S3; inline; PR 2
 - [x] T4 (kind: build) row 11: a test that nothing js-harness writes carries engram's protocol, and the
   engram-plugin row's `mismatch` with its two fixtures (L10) — S6; inline; PR 2
-- [ ] T5 (kind: build) the review sweep: the merge door's gentle-ai evidence, the pull-request body line, the
+- [x] T5 (kind: build) the review sweep: the merge door's gentle-ai evidence, the pull-request body line, the
   review-starts row and the shipped text that sends a session to gentle-ai — S5; inline; PR 3
 - [ ] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
   list — S5; inline; PR 4
@@ -95,17 +95,45 @@ Reviews:
   cell matching by case would make two rules for one file, and it fails open, never a false gap.
 - f63536e9 (R3-002's test): Codex ac28c99..f63536e passed (35,412 input tokens); lens reliability, 0 findings;
   gentle-ai on `ac28c992..f63536e9`: approved, no finding (lineage review-02e16e1f6bf65507).
+- PR 3, fc2a9a0f (the merge door asks for no gentle-ai line): Codex e0260e5..fc2a9a0, 1 part, passed (131,847
+  input tokens); lenses risk, reliability, readability over e0260e5..fc2a9a0: 0 findings (about 29,840 input
+  tokens each); gentle-ai on `e0260e51..fc2a9a0f`: approved (lineage review-62a0e5a1a2f1a26e), two advisory
+  findings. R3-001 (with both review switches off the door admits a code commit with no review) is question 104's
+  case: L11 keeps it until he answers, and the codex-off landing test changes with that answer. R3-002 (the help
+  test's `doesNotMatch` runs on a `find` that could be undefined) is left: an undefined argument throws, so the
+  test still fails, only with a type error, and a test-only commit would cost three more reviews.
+- PR 3, f718c3f6 (the review starts and their throughput row leave): Codex 6c04759..f718c3f, 2 parts, passed
+  (172,708 input tokens); lenses reliability, readability: 0 findings (about 26,230 input tokens each; a first run
+  came back incomplete, readability's answer cut mid-JSON, and the one rerun was complete); gentle-ai on
+  `6c047591..f718c3f6`: approved (lineage review-050cc676b966128a), one suggestion left: R3-001 (the no-store test
+  wraps three fs calls, not every one) is covered by the same test's output assertion, which is what a person sees.
+- PR 3, 36587437 (the lens record where the Codex review is off, L14): Codex caaccd3..3658743, 1 part, passed
+  (118,985 input tokens); lenses risk, reliability, readability over caaccd3..3658743: 0 findings (about 20,350
+  input tokens each); gentle-ai on `caaccd3f..36587437`: approved (lineage review-e13532840d6c3432), two suggestions
+  left. R3-001 (no test of a Codex switch whose `auto` resolves off): the merge-queue test of a project with no
+  harness.json is that case, since `codexReview` falls back to `auto` (`bin/lib/functions.mjs:9`), and it is now
+  refused with no lens record. R3-002 (the "2 of 2" count rests on state of earlier tests): `beforeEach` makes a new
+  repository for each test, so the two commits are its own and the one this test makes.
+- PR 3, 315a15d5 (the door on a branch that turns the Codex review off midway, gentle-ai's R3-001 on the merge
+  into f8-s11-sweep): Codex 0b53640..315a15d passed (32,403 input tokens); lens reliability, 0 findings (8,584 input
+  tokens); gentle-ai on `0b53640d..315a15d5`: approved, no finding (lineage review-3b3d8d277f78d3b0).
+- PR 3, 133e0bcc (the merge of main at 9e44cca5: the merge-queue test's imports, two structure ceilings, and the
+  coverage register's five refreshed hashes): Codex 7cf13fc..133e0bc, 21 changed lines, passed (76,598 input tokens);
+  lens reliability, 0 findings, 791,578 input tokens, against an estimate of about 20,000: `lens-review` reads the
+  whole first-parent diff, main's 139 files, where `codex-review` reads the merge's own lines, and the estimate was
+  not checked against that. gentle-ai on `7cf13fcf..133e0bcc`: not reviewed, its candidate being main's 139 files;
+  its status was read and nothing started.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
 Not run yet.
 
 ## Next step
-PR 1 is #627 and PR 2 (T3, T4) is on branch f8-s11-presets, stacked on it, every code commit reviewed by
-Codex, the lenses and gentle-ai (2026-10-28). Next, on a branch f8-s11-reviews stacked on f8-s11-presets: T5,
-the review sweep (the merge door's gentle-ai evidence, the pull-request body line, the review-starts row, the
-shipped text at bin/lib/manifest.mjs, bin/lib/protocols-skill.mjs and agentsBlock in bin/lib/project.mjs), leaving
-bin/lib/guard.mjs to JH 69.
+#627 and #628 landed (main 170e09dd). PR 3 is #629 on f8-s11-reviews (worktree D:/js-harness/.claude/worktrees/f8-s11):
+fc2a9a0f, f718c3f6 and 36587437 (his answer to question 104, L14), each reviewed by Codex, the lenses and gentle-ai
+(Reviews); T5 is done. Next: merge f8-s11-reviews into f8-s11-sweep (PR 4, #632), drop the Q104 entries of
+`bin/lib/gentle-ai-absence.test.mjs` that no longer name gentle-ai, review that, and announce both ready. Open, his:
+applying S11 to his machine, asked through the lead.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
@@ -181,3 +209,38 @@ bin/lib/guard.mjs to JH 69.
   rule. The js-harness skill's "When Engram fails" stays: it is js-harness's own backup and its restore, not
   engram's protocol or its context recovery (searched: `grep -rln "mem_save|mem_search|mem_context" bin`, only
   test files and evals fixtures).
+- L11 (2026-10-28, decision within S5, and one question that is his): the merge door and `notify --kind ready` stop
+  asking for a gentle-ai line in the pull request's body and on the feature document (`bin/lib/gentle-ai-evidence.mjs`
+  leaves); they ask for what the project's switches ask, a Codex record where `codexReview` is on and a complete lens
+  record where `lensReview` is on, as before. T5 splits: PR 3 holds that and the shipped text; the review starts the
+  pause hook keeps and their `throughput` row (`bin/lib/review-starts.mjs`, reaching `install`, `resume` and
+  `throughput`) go in a slice after it. **Open, his:** the line of `init`'s `AGENTS.md` block "Where the Codex review
+  is off (`js-harness functions`), gentle-ai's assessment decides when a change is reviewed" is his answer to
+  question 4 of odd/tasks/on-demand-functions.md (N6, 2026-10-24); with gentle-ai gone, what reviews a change in a
+  project whose Codex review is off is his to say. Asked through the lead as question 104 (2026-10-28); until he answers, that line
+  and its two tests stay, and PR 3 is not announced ready.
+- L12 (2026-10-28, decision within S5): the plan of the sweep, from a read-only map of every file of `bin/`, `evals/`
+  and `scripts/` that names gentle-ai (111 files; `grep -rliE 'gentle-ai|gentle_ai|gentleai'`, since the camelCase
+  `gentleAi` and `GENTLE_AI_TELEMETRY` escape the plain grep). The diet says gentle-ai leaves his machine only at
+  S2, after S11 and S12 (harness-diet.md:1339), so what guards his machine while it is there stays: the eval homes'
+  copy of `~/.gentle-ai/state.json` and the isolation probes' watch of `~/.gentle-ai`, the block arms and their
+  marker parser (`evals/arms.mjs:23-47`, `evals/without.mjs:182-232`), `GENTLE_AI_TELEMETRY`, and `init`'s
+  `.atl/` exclude (`bin/lib/project-exclude.mjs`) all become historical fixtures named in the list, each with S2 as
+  the step that retires it. The licence notices stay as the licences require (`bin/lib/lens-prompts.mjs` MIT,
+  `bin/lib/ported-skills.mjs` Apache-2.0) and are named. What goes: `evals/review/compare.mjs` runs
+  `codegraph init` itself instead of `gentle-ai codegraph init`; `rules-change-run`'s cost line and `summary`'s
+  placeholder stop naming gentle-ai; about 60 comments and test titles are rewritten or lose the name; six test
+  fixtures that use gentle-ai as an arbitrary id take a neutral one. The guard's refusal of a `gentle-ai review`
+  base (`bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/codex-reviews.mjs`, their tests and `js-harness.mjs`'s guard
+  help) is JH 69's surface: named in the list until the lead says otherwise, asked through it. `bin/lib/
+  gentle-ai-absence.test.mjs` holds the list and fails on a file outside it.
+- L14 (2026-10-28 22:59Z, his answer to question 104, tapped on the board, read with `js-harness sessions --quote
+  0f71b2c6-cbce-43ca-a031-276a4b2c381f 11879`): "Las lentes Claude (Recomendada)", the option that read "Donde Codex
+  está apagado, la revisión de lentes queda encendida: la línea dice eso y la puerta de merge exige su registro."
+  So `init`'s `AGENTS.md` block says "Where the Codex review is off (`js-harness functions`), the Claude lens review
+  stays on: the merge door asks for its record before a change lands", in place of his answer to question 4 of
+  odd/tasks/on-demand-functions.md, and `lensDoor` asks for a complete lens record of every code commit whose own tree
+  turns the Codex review off, even with `lensReview` off (`whereCodexOff`). The push rows do not change: his answer
+  S9 there lets a push through with the Codex review off, and the door is where the record is asked. The block's
+  bytes move, so a project whose block is unedited gets it rendered again on its next sync, which git undoes, and an
+  edited one is kept (`syncTemplateBlock`).
