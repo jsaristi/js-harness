@@ -1,6 +1,6 @@
 // The output style `install` writes for Claude Code, and the name a clone's settings select it by (F8 S10,
 // odd/tasks/f8-s10-port.md). It sets how a session talks, never what it builds: his voice decision G10 (2026-10-26,
-// "la 7 la voz hazlo en neutro") asks for neutral Spanish with tú, and nothing of gentle-ai's persona is copied.
+// "la 7 la voz hazlo en neutro") asks for neutral Spanish with tú, and nothing of another tool's persona is copied.
 // `keep-coding-instructions` keeps Claude Code's own software-engineering prompt beside it.
 
 /** The style's name: its file's name under `~/.claude/output-styles`, and the value of `outputStyle` that selects it. */

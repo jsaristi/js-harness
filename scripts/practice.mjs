@@ -27,7 +27,7 @@ import { classifyAgentFailure } from '../evals/agent-output.mjs';
 import { killByPath } from '../evals/runner.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
-// commit whose hook runs `check`, which runs the project's tests and asks gentle-ai twice. On Windows the
+// commit whose hook runs `check`, which runs the project's tests and reads its review records. On Windows the
 // timeout ends the child itself and not what the child started, so a hung grandchild may outlive the run.
 const CHILD_TIMEOUT_MS = 5 * 60 * 1000;
 const CHILD_OUTPUT_LIMIT = 16 * 1024 * 1024;

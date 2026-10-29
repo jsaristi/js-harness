@@ -3668,7 +3668,7 @@ test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md
     assert.equal(third.upToDate, true);
     assert.equal(fs.readFileSync(agents, 'utf8'), edited);
 
-    // A block sync cannot write again is a failed sync, not an up-to-date one (gentle-ai R3 and R4 on cf820d2).
+    // A block sync cannot write again is a failed sync, not an up-to-date one (review findings R3 and R4 on cf820d2).
     fs.writeFileSync(agents, block(old), 'utf8');
     const refused = (file, ...rest) => {
       if (file === agents) throw new Error('EACCES');

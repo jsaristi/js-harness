@@ -1630,14 +1630,14 @@ test('--address finds a session sessions start recorded, in its worktree\'s fold
   assert.match(unread.stderr, /background sessions .*could not be read \(EBUSY\)/);
   appendRecord(machine.userHome, { event: 'removed', at, id: 'dddddddd' });
   assert.equal((await runSessions(machine, ['--address', '70'])).code, 1);
-  // A line of the record it skipped may be the start of the holder: not known either (gentle-ai R3-002).
+  // A line of the record it skipped may be the start of the holder: not known either (review finding R3-002).
   fs.appendFileSync(recordFileOf(machine.userHome), '{ cut\n');
   const skipped = await runSessions(machine, ['--address', '70']);
   assert.deepEqual([skipped.code, skipped.stdout], [2, '']);
   assert.match(skipped.stderr, /not known whether a session carries the title of work session 70: the record of background sessions .* holds 1 line it could not read/);
 }));
 
-// gentle-ai R3-005 on JH 72's slice A: two paths of the read of recorded sessions that no test held.
+// Review finding R3-005 on JH 72's slice A: two paths of the read of recorded sessions that no test held.
 test('--address reads a recorded session with no worktree from its own folder, and one it cannot date is not known', withMachine(async (machine) => {
   writeRoster(machine);
   const plain = path.join(machine.dir, 'plain');
@@ -1746,7 +1746,7 @@ test('--next-number prints the next free work number of the code the project dec
   assert.deepEqual([none.code, none.stdout], [1, '']);
   assert.match(none.stderr, /harness\.json declares no "code"/);
   // A code that is no single word, or a harness.json that is not JSON, is exit 2: it cannot be read.
-  // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (gentle-ai, R3/R4).
+  // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (a review, R3/R4).
   for (const text of [JSON.stringify({ code: 'J H' }), JSON.stringify({ code: 'ORQ' }), JSON.stringify({ code: 'jh' }), JSON.stringify({ code: 'J-H' }), JSON.stringify({ code: 7 }), '{ not json']) {
     fs.writeFileSync(path.join(machine.root, 'harness.json'), text, 'utf8');
     const broken = await runSessions(machine, ['--next-number']);

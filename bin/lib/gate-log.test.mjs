@@ -570,7 +570,7 @@ test('gateRecord writes no gate it waited for whose folder or pid the reader wou
   assert.equal(formatGates(gatesOf(read.events)).length, 2);
 }));
 
-// Left by the review of the slice before (gentle-ai, 2026-10-11): the reader refuses a start whose load
+// Left by the review of the slice before (a review, 2026-10-11): the reader refuses a start whose load
 // holds a figure that is no finite number or a busiest name that is no text, and the writer wrote the load
 // as it was handed it. The sampler hands neither today; a start that is refused takes its gate's end with it.
 test('gateRecord writes no part of a load that the reader would refuse and keeps the rest of it, so the gate is read back with its end', withHome(async (home) => {

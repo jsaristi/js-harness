@@ -336,7 +336,7 @@ test('heldInChild runs the held part in another process, so this one goes on run
   assert.deepEqual(err, ['err line']);
 });
 
-// gentle-ai review-fb9f66ace187f6fe, R4-doctor-exit-ignored: a doctor that failed was printed and the refresh exited 0.
+// A review (fb9f66ace187f6fe), R4-doctor-exit-ignored: a doctor that failed was printed and the refresh exited 0.
 test('refreshCopy fails when js-harness doctor exits non-zero after the install', async () => {
   const m = machine({ prev: PREV });
   const spawn = (cmd, args, opts) => (cmd === process.execPath && args[1] === 'doctor' ? { status: 1, stdout: '', stderr: '' } : m.spawn(cmd, args, opts));
@@ -345,7 +345,7 @@ test('refreshCopy fails when js-harness doctor exits non-zero after the install'
   assert.match(run.err, /js-harness doctor exited 1/);
 });
 
-// gentle-ai review-fb9f66ace187f6fe, R4-prune-dangling-link-throws: a link of the store whose target was gone threw out
+// A review (fb9f66ace187f6fe), R4-prune-dangling-link-throws: a link of the store whose target was gone threw out
 // of the prune, after the copy was installed.
 test('pruneStalePnpm leaves a link whose target is gone and goes on', () => {
   const top = tempDir('js-harness-prune-link-');

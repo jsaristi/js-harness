@@ -158,7 +158,7 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
  * nothing for a review to look at, such as a change and its revert; both are listed), and the review the
  * branch ends on must owe no unrechecked correction (`correctionOwed`; a recheck that left findings open
  * passes with a warning that names them). Plain `check` never
- * runs it, because a slice under gentle-ai's review budget is committed before it is reviewed: what it
+ * runs it, because a slice under the review budget is committed before it is reviewed: what it
  * runs is `checkCodexReviewDebt`, which reads the same records and fails nothing. */
 export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
   // The switch is read at the commit pushed, before the remote is resolved: a project with the review off is

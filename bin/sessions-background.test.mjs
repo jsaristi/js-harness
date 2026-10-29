@@ -535,7 +535,7 @@ const endJob = (world, id) => {
   writeState(world, state);
 };
 
-// gentle-ai on slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
+// The review of slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
 test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
   const [first] = recordLines(world);

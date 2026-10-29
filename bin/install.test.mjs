@@ -182,7 +182,7 @@ test('installMain and uninstallMain say what they did with the permissions, and 
   }
 });
 
-// gentle-ai's lens on 8c684535..c9f3efd9: the message of a record that names another file sends the user to that file,
+// A review of 8c684535..c9f3efd9: the message of a record that names another file sends the user to that file,
 // the one the record says install wrote, not to the user settings; a file it could not read or write says so before a run again.
 test('uninstallMain sends a permissions record it cannot clear to its own file, and an unreadable one to be fixed first', async () => {
   const home = makeTmpHome();
@@ -241,7 +241,7 @@ test('installMain and uninstallMain say what they did with the Rules block, and 
     assert.equal(keptEdited.code, 0);
     assert.ok(keptEdited.outLines.includes(`kept the Rules block in ${file} (modified by you)`), keptEdited.outLines.join('\n'));
 
-    // gentle-ai on T7's slice: the two lines no test of the command said, `updated` and `kept` with its exit code.
+    // A review of T7's slice: the two lines no test of the command said, `updated` and `kept` with its exit code.
     fs.writeFileSync(file, '');
     await captureConsole(() => installMain(['--home', home]));
     fs.writeFileSync(file, renderBlock(fs.readFileSync(file, 'utf8'), '## Rules\n- An older line.\n', 'rules').text);
