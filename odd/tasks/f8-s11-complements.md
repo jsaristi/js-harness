@@ -185,11 +185,23 @@ T8, 2026-10-28, from the branch at 71e89a2b, nothing installed and nothing writt
   running copy was installed with (`resolveStackPm`, bin/lib/package-manager.mjs:117), not a change of S11.
 - `check` green at each commit (the pre-commit hook); the full tests run on GitHub at each push.
 
+Applied to his machine, 2026-10-29 00:33-00:42 local, by his answer to question 106 (L15), with the installed copy
+refreshed by the lead to main 5e36e82 (`stack.mjs`, `stack-install.mjs` and `doctor.mjs` byte-equal to main):
+- `js-harness stack`: "nothing the harness requires is missing."; `js-harness stack install`: "nothing to install.",
+  exit 0, so it installed, registered and recorded nothing. Engram 3.6.0, its plugin 0.1.19, codegraph 1.6.2 and
+  context7 (hosted) were already there.
+- `js-harness doctor --cwd D:/js-harness` before and after: exit 0 both, gentle-ai still installed. Every row reads
+  the same but `pnpm-lock`, `ok` before and `stale` after: pnpm's global bin lock folder, left at 00:30:52, the minute
+  of the lead's refresh, with nothing installed by this session; it is left to the lead. One `doctor` between them
+  read codegraph's and codex's versions as `unknown` under a machine load of 7.1 of 8 (`gate log`); `codex --version`
+  and `codegraph --version` answered at once, and the next `doctor` read them as before.
+- Gaps that stay, both before and after: context7's project cell `missing` in the main checkout (its fix, `/mcp` in a
+  Claude Code session there, is his setting), codex `outdated` at 0.164.0, the memory notes `stale`, codex's hook
+  trust `missing` (his setting), and one worktree to prune.
+
 ## Next step
-#627, #628 and #629 landed. #632 (PR 4, f8-s11-sweep, base main) holds main at 410eed7c and is announced ready.
-T1-T8 are done, T5 by his answer to question 104 (L14). By his answer to question 106 (L15), once #632 lands and
-the lead refreshes the installed copy, this session runs `doctor`, `stack install` on his real home and `doctor`
-again, and records both here. A session that lands a file naming gentle-ai after #632 is refused by
+S11 is done: #627, #628, #629 and #632 landed, T1-T8 are done, T5 by his answer to question 104 (L14), and S11 is
+applied to his machine by his answer to question 106 (L15), recorded under Probe. A session that lands a file naming gentle-ai after #632 is refused by
 `bin/lib/gentle-ai-absence.test.mjs` until it rewords it or names it with its reason.
 
 ## Log
