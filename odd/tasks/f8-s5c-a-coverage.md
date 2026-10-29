@@ -166,6 +166,11 @@ Reviews:
 - gentle-ai: approved on `b0f2ec23..7b923938` (lineage `review-1aefbe0d45f2d6d8`), two advisory findings, read and not
   taken: "the cut" is one of the five states the reply check names, and the exception keeps a phrase the rule had
   before, so `accepted` needs no new approval.
+- JH 86, `f68d869f..d1ca1b90` (T12, the one code commit `69404e56`): the reliability lens, 0 findings (9,192 input
+  tokens); Codex, "the patch is correct" (0.97, 59,595 against the plan's 59,000).
+- gentle-ai: approved on `f68d869f..d1ca1b90` (lineage `review-cd25b270739d2648`), one suggestion, read and not taken
+  now: `LEAD_CASES` is a list kept by hand; it holds one case, and the cases of the twelve orchestrator rules (D16)
+  are where deriving it from the register pays.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
