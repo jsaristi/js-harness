@@ -197,6 +197,13 @@ Reviews:
   sessions whose times overlap another session's message could replace a later message of two blocks. Fixed by the
   commit after `e1cd87dd`: blocks are gathered by message id first, and a message is as late as its latest line,
   with a test of that overlap.
+- JH 86, `e1cd87dd..4ce3b70d`: the reliability lens, 0 findings (11,402 input tokens); Codex, "the patch is correct"
+  (0.98, 31,621), its P2 fixed.
+- gentle-ai: approved on `addd0718..4ce3b70d` (lineage `review-fae163c02d672ec8`), acknowledged, four advisory findings
+  of the reliability lens, read and not taken: one message id in two session files would be joined twice, and a
+  message with no timestamp outranks a timed one after it, but a trial is one `-p` session (each of P8's four left
+  one main file) and Claude Code stamps every line; the two-session test's earlier line takes its 10:00 from the
+  helper in the same test; the real-timeout test waits 2.5 s, as the runner's other timeout test does.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
