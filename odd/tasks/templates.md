@@ -517,3 +517,8 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   started at the shown record's first line of any surface, so a project whose gate had decided pages before would
   name questions answered before the `ask` gate as escapes. Fixed in unit 5 with a test that failed first: the
   window starts at the first line of a call of the question tool.
+- Unit 5 is d3ff2bbe. Codex over e91cf39..d3ff2bb: correct, 0.95, 64,566 input tokens; lenses reliability and
+  resilience: 0. gentle-ai: approved, medium, lineage review-28522967ad0952a1, over 48ae1ca1..d3ff2bbe (e91cf39d,
+  d3ff2bbe), acknowledged; its reliability lens left 2 non-blocking suggestions, both holding, taken in unit 6 (tests
+  only): a blank decision refused, and a gate that decided only pages holds no question's moment and reads no channel
+  record (it fails on the window of unit 4, checked by putting it back).

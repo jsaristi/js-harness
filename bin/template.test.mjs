@@ -387,6 +387,17 @@ test('the questions\' escapes start at the first call of the question tool, not 
   assert.deepEqual(JSON.parse(report.out).escapes, ['the moment 2 of question was never shown']);
 });
 
+test('a gate that decided only pages holds no question\'s moment, and does not read the channel\'s record for them', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'page.html'), '<p>hecho a mano</p>');
+  hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u21', tool_input: { file_path: 'page.html' } });
+  fs.mkdirSync(recordPath(home, 'p'), { recursive: true });
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW + 60 * 60 * 1000 });
+  assert.equal(report.err, '');
+  assert.deepEqual(JSON.parse(report.out).escapes, []);
+});
+
 test('shown reports each template\'s counts and free pages, exit 0, and 3 when a call went unchecked', (t) => {
   const { root, home, hook, done } = gateScratch();
   t.after(done);

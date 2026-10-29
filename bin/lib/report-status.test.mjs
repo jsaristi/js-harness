@@ -68,4 +68,7 @@ test('the notes are read whole or refused with what is wrong', () => {
     assert.throws(() => notesOf(JSON.stringify({ proposals: [{ step: 'Tramo D', why }] })), /proposals\[0\] needs step and why/);
   }
   assert.throws(() => notesOf(JSON.stringify({ waits: [{ what: ' ', why: 'otra sesión' }] })), /waits\[0\] needs what and why/);
+  for (const decision of [{ text: '', changed: 'una revisión menos' }, { text: 'Aterrizar 644', changed: '\t' }]) {
+    assert.throws(() => notesOf(JSON.stringify({ decisions: [decision] })), /decisions\[0\] needs text and changed/);
+  }
 });
