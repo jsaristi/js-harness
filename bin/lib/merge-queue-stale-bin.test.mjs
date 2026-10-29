@@ -1,5 +1,6 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,6 +45,19 @@ test('binDiffers names a file on one side only, and a file it cannot compare, wh
   assert.deepEqual(staleBin(path.join(dir, 'merge-queue.mjs'), 'HEAD', gitOf(LISTING)), ['bin/extra.mjs']);
   assert.deepEqual(binDiffers(dir, 'HEAD', gitOf(LISTING, { 'bin/lib/a.mjs': 'changed\n' })), ['bin/extra.mjs', 'bin/lib/a.mjs']);
   assert.deepEqual(binDiffers(dir, 'HEAD', gitOf(LISTING, { 'bin/lib/a.mjs': 'changed' })), ['bin/extra.mjs']);
+});
+
+test('binDiffers lists main from the root of the checkout when git runs in one of its folders', () => {
+  const repo = copyWith({ 'bin/a.mjs': 'a', 'docs/x.md': 'x' });
+  const git = (...args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', windowsHide: true });
+  git('init', '-q');
+  git('add', '.');
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'one');
+  const inDocs = (...args) => {
+    const done = spawnSync('git', args, { cwd: path.join(repo, 'docs'), encoding: 'utf8', windowsHide: true });
+    return { ok: done.status === 0, out: done.stdout };
+  };
+  assert.deepEqual(binDiffers(path.join(repo, 'bin'), 'HEAD', inDocs), []);
 });
 
 test('binDiffers cannot tell when main cannot be listed, holds no bin/, or the copy cannot be read', () => {

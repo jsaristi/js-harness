@@ -37,27 +37,10 @@ minutes after a land (JH 84, Decisions, unit 4), and a copy already behind canno
 - Nothing beyond the repository's rules.
 
 ## Next step
-State at the context pause (2026-10-29, JH 88). The change is a chain of three PRs (over 400 lines):
-- Slice 1, branch feat/lead-manual-steps: commit fd41d373 (S6), its gate passed. Slice 2, feat/lead-manual-steps-2:
-  183b473b, gate passed. Slice 3, feat/lead-manual-steps-3: its commit started; check `git log -1` there. In slice 3:
-  docs/FAILURES.md (commit-attribution-from-host), which is still uncommitted: commit it with slice 3.
-- Slice 2, branch feat/lead-manual-steps-2 from slice 1 (S4, S5, S7): the untracked bin/lib/merge-queue-waits.mjs and
-  its test, bin/lib/merge-queue-refresh-now.mjs, and the full versions saved in
-  C:\Users\Oficina\.claude\jobs\d075e800\tmp\full\ (bin/merge-queue.mjs, bin/merge-queue.test.mjs, bin/js-harness.mjs,
-  bin/lib/merge-queue-refresh.mjs and its test, README.md). Copy the full bin/lib/merge-queue-refresh.mjs, its test,
-  bin/merge-queue.test.mjs and bin/js-harness.mjs over; for bin/merge-queue.mjs and README.md, re-apply only the mode
-  (USAGE first line and the paragraph on --refresh-copy alone, without the backup and bin sentence slice 1 already
-  says; parseArgs; the mode branch in mergeQueueMain passing answer, versionOf, pnpmBinDir; imports of refreshNowRun
-  and pnpmBinDir) on slice 1's file.
-- Slice 3, branch feat/lead-manual-steps-3 (S8): bin/lib/manifest.mjs and its test from the saved full versions,
-  docs/ROADMAP.md from tmp\full\ROADMAP.md, docs/FAILURES.md, the summary under docs/sessions/.
-- Then for each code slice: `js-harness codex-review --base <boundary>` and `js-harness lens-review --base <boundary>
-  --lenses risk,reliability,resilience --reason "<why>"`; one independent verifier over the range (T5); `npm run
-  check`; push; one PR each, chained; `js-harness notify --to orchestrator --kind ready --pr <n>`; the summary; the
-  closed notice. No `Co-Authored-By` or session line in any commit (CLAUDE.md).
-- Evidence already taken: every new test failed on main's code (a copy of origin/main's bin/ in the job's scratch
-  folder with the branch's tests) and passes on the branch: merge-queue-waits 7/7, merge-queue-refresh 15/15,
-  refresh-copy 22/22, merge-queue-stale-bin 3/3, the merge-queue refresh tests 17/17, the manifest question test.
+Done in code (2026-10-29, JH 88). The chain: `feat/lead-manual-steps` (fd41d373, S6), `-2` (183b473b, S4 S5 S7), `-3`
+(b9fa64fd, S8 and the roadmap line), `-4` (the review fixes to 1a429763 and the summary). Each code commit has a Codex
+record and a complete Claude lens record. Left: the push, one pull request a branch based on the one before, the ready
+notice, the closed notice with the summary.
 
 ## Specs
 - S1. The brief (the lead, 2026-10-29 16:03Z): "Read what of "watch and lease, land and copy, archive, openings" is
@@ -125,8 +108,21 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   the land test in merge-queue.test.mjs that pinned the old words was updated.
 - [x] T4 (kind: docs) (S8) the orchestrator skill's sentence and its test. Route: inline. RED, then GREEN; the
   sentence ends an existing line, so bin/lib/manifest.mjs stays at its 1793-line ceiling.
-- [ ] T5 (kind: verify) one independent verifier over the range (delivery and installer: high risk). Route: delegated.
-- [ ] T6 (kind: docs) README, the roadmap line, the session summary.
+- [x] T5 (kind: verify) one independent verifier over the range (delivery and installer: high risk). Route: delegated
+  (opus, read-only, over 1c6b6c2..b9fa64f): no blocker and no path that stops a process other than a wait; four
+  should-fix and a test gap (L7), fixed with the five Codex P2 (L5) in one commit after b9fa64f.
+- [x] T7 (kind: build) the review fixes (L5, L7). Route: inline. RED, each new test on the code before it: the bin/
+  listing from a subfolder (null, not []), the re-arm quoting, a single-quoted typed wait (no session), the note in
+  another project's channel, `openSessions` (no export), a pid reused between the two reads (no blocker), the sessions
+  read after the last look, the stop that fails partway (no note), the session with no title, an unreadable package.json
+  (installed anyway). Two pinning tests the verifier found missing passed at once: two creation times that disagree, a
+  script of pnpm's global folder outside the package. GREEN: waits 9/9, refresh 19/19, refresh-now 2/2, stale-bin 4/4,
+  refresh-copy 23/23, merge-queue 119/119, guard 43/43.
+- [x] T6 (kind: docs) README, the roadmap line, the session summary
+  (docs/sessions/2026-10-29-jh-88-the-lead-s-manual-steps-as-commands.md).
+- [x] T8 (kind: verify) follow-up of Codex's half-open finding 2 (L8), fixed in d8d4f54 (L9): Codex reads 183b473..HEAD
+  again (`codex-review --base 183b473 --again`), since a second recheck of the first review is not run. Route: inline. One new P2 (L10), fixed in 1a42976 and
+  rechecked: fixed, the patch correct.
 
 ## Log
 - L1. 2026-10-29 16:03Z, the lead's brief (C:\Users\Oficina\.js-harness\background\briefs\2026-10-29T16-03-53-806Z-72c9e958.md), quoted in S1 to S3.
@@ -148,3 +144,38 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   is now the one whose transcript holds the same wait still open, read by `wakePlan` (bin/lib/wake.mjs) as `wake`
   reads the waits a boot killed; with the same wait open in two sessions, none is told and the wait is printed. The
   look then named the lead's `wait --notice-to orchestrator` as JH ORQ's.
+- L5. 2026-10-29, Codex on 1c6b6c2..b9fa64f (gpt-6.1-sol, medium, 3 parts, 736,968 input tokens): five P2, the patch
+  incorrect in each part (0.97-0.98). (1) A phone's session has no title in its transcript: the channel's readings name
+  it, as `wake` passes them. (2) The copy is the machine's: another project's waits are stopped too, so its sessions
+  are read and told in its own channel. (3) A typed wait in single quotes was split by Windows rules: it is read by
+  `shellWords` (bin/lib/guard.mjs). (4) The re-arm command quoted only spaces: each word is now quoted for sh. (5) `git
+  ls-tree` from a subfolder lists nothing: `--full-tree`. All five fixed. Claude lenses on the three slices: 0
+  findings (10 lens runs).
+- L6. 2026-10-29 12:43 local, the lead (its notice, not the user's word): "yes, export shellWords from
+  bin/lib/guard.mjs, that one word only; no behavior of guard changes. guard is a security file: your independent
+  verifier's range covers that commit too."
+- L7. 2026-10-29, the independent verifier (T5) on 1c6b6c2..b9fa64f: no blocker. Fixed: (1) a stop that fails partway
+  left its waits untold: each is taken for stopped before the stop, and printed as "may have stopped"; (2) the
+  transcripts were read between the last look and the stop: now before the look; (3) a pid reused between the process
+  table and the listing could hide a blocker as the refresh's own or a wait's child: both now need the creation time
+  to agree; (4) an unreadable package.json was "none to back up": only a missing one is, any other error fails before
+  the install. Also: a session with no title is named by its id, the gate lock names this mode, and the help says to
+  run it in the background (it can wait an hour for the lock). Left by design: stopping a wait stops its git and gh
+  children; a loop that is the refresh's own ancestor is its caller, not a blocker; a wait matched to no session is
+  printed, not told; a relative or 8.3 path is not read as the copy's (none seen on this machine).
+- L8. 2026-10-29, Codex's recheck of b9fa64f..8843225 (184,244 input tokens): four of the five fixed; (2) half open: a
+  transcript of another project's worktree was told in a channel named after that worktree's folder, which no one
+  reads. Now each other transcript's channel is its main checkout's, read from the `cwd` it ran in
+  (`projectSlug(mainCheckout(cwd))`, as `notify` names it). Claude lenses on b9fa64f..8843225: 0 findings (4 lenses).
+- L9. 2026-10-29, the verifier's second pass on b9fa64f..8843225: no blocker; guard.mjs changes by the export alone
+  (43/43). Fixed: (N1) a transcript of a worktree git no longer lists was told in a channel named after its folder,
+  and printed "told": one that ran under this project's checkout is this project's, and one whose folder is gone
+  elsewhere is printed with "its project's channel is not known", not told; (N2) the note after a stop that failed
+  partway says the wait may have been stopped, to run again only if it no longer runs; (N4) the refresh's own process
+  with no creation time in the listing is pinned as its own; the no-backup line no longer says the shim names no copy.
+  Left: a wait typed inside `bash -c "..."`, or by a path the shell expands, matches no session and is printed (N3);
+  the 100 ms tolerance where both reads give the same time (N5).
+- L10. 2026-10-29, Codex on 183b473..e387c13 again (T8; 2 parts, 310,423 input tokens): the channel fix and the backup
+  correct (0.94); one new P2 (0.99): a quoted argument that begins with `<` (`--contains "<html"`) was read as an
+  input redirection, so its wait matched no session. `shellWords` tells no input redirection, so no word ends a typed
+  wait by its first character any more; a wait typed with an unquoted `<` after it is printed, not told.

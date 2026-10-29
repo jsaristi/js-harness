@@ -9,6 +9,7 @@ import path from 'node:path';
 import { CLOCK_TOLERANCE_MS, selectDescendants } from './process-tree.mjs';
 import { argumentsOf, comparable, DISPATCHER_PATTERN } from './sessions.mjs';
 import { NOTICE_TEXT_MAX } from './channel.mjs';
+import { shellWords } from './guard.mjs';
 
 /** The index of the script a command line's `args` run (the dispatcher or another `.mjs`), or -1. */
 const scriptAt = (args) => args.findIndex((arg, at) => at > 0 && (DISPATCHER_PATTERN.test(arg) || /\.mjs$/i.test(arg)));
@@ -70,11 +71,19 @@ function lineage(pid, byPid) {
  * time is not known, since it cannot be stopped safely. Both sorted by pid. */
 export function readCopy({ snapshot, processes, globalDir, self }) {
   const byPid = new Map(snapshot.map((row) => [row.pid, row]));
+  const created = new Map(snapshot.filter((row) => Number.isFinite(row.createdAt)).map((row) => [row.pid, row.createdAt]));
+  // The table and the listing are two reads, and Windows reuses pids between them: a listed process is one of the
+  // table only when its creation time agrees. The refresh's own family is matched leniently, a time not known on
+  // either side agreeing, so the refresh never blocks itself; a wait's child strictly, so no unknown passes as one.
+  const agrees = (one, lenient) => {
+    const known = created.get(one.pid);
+    if (!Number.isFinite(known) || !Number.isFinite(one.createdAt)) return lenient && byPid.has(one.pid);
+    return Math.abs(known - one.createdAt) <= CLOCK_TOLERANCE_MS;
+  };
   const own = new Set(lineage(self, byPid).map((row) => row.pid));
   const selfRow = byPid.get(self);
   if (selfRow && Number.isFinite(selfRow.createdAt)) for (const pid of selectDescendants(snapshot, { pid: self, createdAt: selfRow.createdAt })) own.add(pid);
-  const copy = processes.filter((one) => !own.has(one.pid) && fromCopy(one.commandLine, globalDir)).sort((a, b) => a.pid - b.pid);
-  const created = new Map(snapshot.filter((row) => Number.isFinite(row.createdAt)).map((row) => [row.pid, row.createdAt]));
+  const copy = processes.filter((one) => !(own.has(one.pid) && agrees(one, true)) && fromCopy(one.commandLine, globalDir)).sort((a, b) => a.pid - b.pid);
   const waits = [];
   const started = new Set();
   for (const one of copy) {
@@ -83,23 +92,35 @@ export function readCopy({ snapshot, processes, globalDir, self }) {
     for (const pid of pids) started.add(pid);
     waits.push({ pid: one.pid, createdAt: one.createdAt, commandLine: one.commandLine, targets: pids.filter((pid) => created.has(pid)).map((pid) => ({ pid, createdAt: created.get(pid) })) });
   }
-  const blockers = copy.filter((one) => !started.has(one.pid)).map(({ pid, createdAt, commandLine }) => ({ pid, createdAt, verb: verbOf(commandLine), commandLine }));
+  const blockers = copy.filter((one) => !(started.has(one.pid) && agrees(one, false))).map(({ pid, createdAt, commandLine }) => ({ pid, createdAt, verb: verbOf(commandLine), commandLine }));
   return { waits, blockers };
 }
 
-// The wait in a command a session typed: the command name or the dispatcher followed by `wait`, or `wait.mjs`, and
-// its words up to the end or the next shell operator.
-const TYPED_WAIT = /(?:^|[\s/\\"'&;|(])(?:js-harness(?:\.mjs)?["']?\s+wait|wait\.mjs["']?)(?=\s|$)(.*?)(?=\s(?:&&|\|\||[;|<>]|\d?>)|$)/s;
+/** The arguments of the wait in a command a session typed, as its shell reads them (`shellWords`): after the command
+ * name or the dispatcher followed by `wait`, or after `wait.mjs`, up to the end, the next operator or an output
+ * redirection; null when it holds no wait. `shellWords` takes the quotes off and tells no input redirection, so a word
+ * that begins with `<` is an argument (`--contains "<html"`, Codex P2 on 183b473..e387c13): a wait typed with `<` after
+ * it matches no session and is printed, not told. */
+function typedWait(typed) {
+  const words = shellWords(typed, { redirections: true });
+  const ends = (at) => words.operators.has(at) || words.redirections.has(at);
+  for (let at = 0; at < words.length; at += 1) {
+    if (ends(at)) continue;
+    const verbAt = /(^|[/\\])js-harness(\.mjs)?$/.test(words[at]) && words[at + 1] === 'wait' && !ends(at + 1) ? at + 2 : /(^|[/\\])wait\.mjs$/.test(words[at]) ? at + 1 : -1;
+    if (verbAt < 0) continue;
+    let end = verbAt;
+    while (end < words.length && !ends(end)) end += 1;
+    return words.slice(verbAt, end);
+  }
+  return null;
+}
 
 /** The words of a wait's arguments, without quotes: of a running process (`commandLine`, after its verb), or of a
  * command a session typed (`typed`); null when it holds no wait. */
 function waitWords({ commandLine, typed }) {
-  if (typed !== undefined) {
-    const found = TYPED_WAIT.exec(typed);
-    return found ? argumentsOf(found[1].trim()) : null;
-  }
-  const again = waitAgain(commandLine);
-  return again === null || !again.startsWith('js-harness wait') ? null : argumentsOf(again).slice(2);
+  if (typed !== undefined) return typedWait(typed);
+  const words = verbAndArguments(commandLine);
+  return words === null || words[0] !== 'wait' ? null : words.slice(1);
 }
 
 /** The session that runs the wait `commandLine`, from `plan` (wakePlan at this moment: each open session's `title`,
@@ -118,22 +139,35 @@ export function sessionOf({ commandLine, plan }) {
   return { session: null, why: ran.length === 0 ? 'no open session ran it' : `several sessions ran it (${ran.map((one) => one.title ?? one.id).join(', ')})` };
 }
 
-/** The wait a command line runs, to run again: `js-harness wait` (or `quiet`) and its arguments, one with a space in
- * quotes; null when it runs no wait. */
+/** `arg` as the session's shell (sh, as its Bash tool runs) reads it back unchanged: bare when it holds only characters
+ * no shell reads, else in single quotes, each quote in it closed, escaped and reopened. */
+const shellArg = (arg) => (/^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, "'\\''")}'`);
+
+/** The wait a command line runs, to run again: `js-harness wait` (or `quiet`) and its arguments, quoted for the shell
+ * the session runs it in; null when it runs no wait. */
 export function waitAgain(commandLine) {
+  const words = verbAndArguments(commandLine);
+  return words === null ? null : ['js-harness', ...words.map(shellArg)].join(' ');
+}
+
+/** The verb of the wait a command line runs and its arguments, unquoted; null when it runs no wait. */
+function verbAndArguments(commandLine) {
   const args = argumentsOf(commandLine ?? '');
   const at = scriptAt(args);
   if (at < 0 || !isWait(commandLine)) return null;
-  const rest = DISPATCHER_PATTERN.test(args[at]) ? args.slice(at + 1) : [verbOf(commandLine), ...args.slice(at + 1)];
-  return ['js-harness', ...rest.map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg))].join(' ');
+  return DISPATCHER_PATTERN.test(args[at]) ? args.slice(at + 1) : [verbOf(commandLine), ...args.slice(at + 1)];
 }
 
 /** The note a session gets for the waits `again` the refresh stopped: the sha the copy was refreshed to, whether the
- * refresh ended well (`code` 0), and the waits to run again, cut to a notice's length. */
-export function reArmNote({ sha, code, again }) {
+ * refresh ended well (`code` 0), and the waits to run again, cut to a notice's length. With `maybe`, the stop failed
+ * partway, so a wait may still run and is run again only if it does not. */
+export function reArmNote({ sha, code, again, maybe = false }) {
   const short = String(sha).slice(0, 7);
   const head = code === 0 ? `The installed copy was refreshed to ${short} by merge-queue --refresh-copy` : `The refresh of the installed copy to ${short} ended with exit ${code} (merge-queue --refresh-copy says why)`;
-  const waits = again.length === 1 ? 'the wait you ran from it was stopped for it: run it again' : `the ${again.length} waits you ran from it were stopped for it: run them again`;
+  const one = again.length === 1;
+  const waits = maybe
+    ? `${one ? 'the wait you ran from it' : `the ${again.length} waits you ran from it`} may have been stopped for it: run ${one ? 'it' : 'each'} again if it no longer runs`
+    : one ? 'the wait you ran from it was stopped for it: run it again' : `the ${again.length} waits you ran from it were stopped for it: run them again`;
   const text = `${head}, and ${waits}: ${again.join('; ')}`;
   return text.length <= NOTICE_TEXT_MAX ? text : `${text.slice(0, NOTICE_TEXT_MAX - 1)}…`;
 }

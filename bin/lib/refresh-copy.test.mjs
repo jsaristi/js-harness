@@ -154,11 +154,25 @@ test('refreshCopy backs up the pnpm global package.json its shim names before it
   assert.deepEqual(kept, ['package.json.20261002T000000Z', 'package.json.20261003T000000Z', 'package.json.20261004T000000Z', 'package.json.20261005T000000Z', 'package.json.20261018T023500Z']);
 });
 
+// The verifier's case (T5): a package.json there but unreadable is no "none to back up", and installs nothing.
+test('refreshCopy fails before it installs when the pnpm global package.json is there but cannot be read', async () => {
+  const m = machine({ prev: PREV });
+  const busy = { ...fs, readFileSync: (file, ...rest) => {
+    if (path.basename(String(file)) === 'package.json' && String(file).includes('global')) throw Object.assign(new Error('resource busy or locked'), { code: 'EBUSY' });
+    return fs.readFileSync(file, ...rest);
+  } };
+  const run = await refresh(m, { fsys: busy });
+  assert.equal(run.code, 6);
+  assert.match(run.err, /EBUSY/);
+  assert.doesNotMatch(run.out, /none to back up/);
+  assert.ok(!m.calls.some((one) => one.startsWith('pnpm add')), m.calls.join('\n'));
+});
+
 test("refreshCopy checks the verified copy's bin/ against main's, the files the package leaves out aside, and says it matches", async () => {
   const m = machine({ prev: PREV });
   const run = await refresh(m);
   assert.equal(run.code, 0, run.err);
-  assert.ok(m.calls.includes(`git ls-tree -r ${SHA} -- bin`), m.calls.join('\n'));
+  assert.ok(m.calls.includes(`git ls-tree --full-tree -r ${SHA} -- bin`), m.calls.join('\n'));
   assert.match(run.out, new RegExp(`refresh: the installed copy's bin/ is main's at ${SHA.slice(0, 7)}`));
 });
 

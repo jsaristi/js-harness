@@ -27,9 +27,10 @@ const unshipped = (repoPath) =>
 /** The git blob id of `bytes`, as `git hash-object` gives it: the sha1 of `blob <length>`, a NUL and the bytes. */
 const blobId = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 
-/** The blob id of each bin/ path of `main`, from one `git ls-tree`, or null when the listing cannot be read. */
+/** The blob id of each bin/ path of `main`, from one `git ls-tree`, or null when the listing cannot be read. The
+ * listing is of the whole tree: git reads a path relative to the folder it runs in, which may be below the root. */
 function mainBin(main, gitIn) {
-  const listed = gitIn('ls-tree', '-r', main, '--', 'bin');
+  const listed = gitIn('ls-tree', '--full-tree', '-r', main, '--', 'bin');
   if (!listed.ok) return null;
   const onMain = new Map();
   for (const line of listed.out.split('\n')) {

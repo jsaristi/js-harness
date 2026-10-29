@@ -182,12 +182,14 @@ function backupSettings({ settings, dir, stamp, fsys }) {
 
 /** Copies pnpm's global package.json `manifest` (the one the shim names, which `pnpm add -g` rewrites) to `dir` as
  * `package.json.<stamp>`, as the lead backed it up by hand, then keeps the newest `KEEP_MANIFEST_BACKUPS` of those names.
- * The copy's path, or null when there is no manifest to copy. */
+ * The copy's path, or null when there is no manifest to copy. One there that cannot be read throws, so nothing is
+ * installed without its backup. */
 function backupManifest({ manifest, dir, stamp, fsys }) {
   let text;
   try {
     text = manifest === null ? null : fsys.readFileSync(manifest);
-  } catch {
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw new Error(`could not back up pnpm's global package.json ${manifest} (${err.code ?? err.message})`);
     text = null;
   }
   if (text === null) return null;
@@ -238,6 +240,8 @@ export async function refreshCopy({
   session = null,
   // One look at the work sessions under the lock: `{ quiet }`, with `why` when not (lookOnce, merge-queue-refresh.mjs).
   stillQuiet = () => ({ quiet: true }),
+  // What the gate lock says holds it, to the sessions that wait for it.
+  command = 'merge-queue --land --refresh-copy',
   stdout = console.log,
   stderr = console.error,
 }) {
@@ -254,7 +258,7 @@ export async function refreshCopy({
 
   // The lock is taken as `js-harness gate` takes it, in its turn: the heavy part below runs under it, and a refusal or
   // a lock that cannot be taken runs nothing.
-  const turn = await takeGateTurn({ name: 'merge-queue', home, cwd, command: 'merge-queue --land --refresh-copy', wait: true, waitMinutes: WAIT_MINUTES, session }, takeGateLock);
+  const turn = await takeGateTurn({ name: 'merge-queue', home, cwd, command, wait: true, waitMinutes: WAIT_MINUTES, session }, takeGateLock);
   if (turn.refused || turn.without) {
     stderr(`refresh: the gate lock was not obtained (${turn.refused ?? turn.without}): nothing was refreshed, and the installed copy still names its previous main`);
     return GATE_NOT_RUN;
@@ -317,7 +321,12 @@ async function refreshHoldingLock({ sha, version, home, settings, cwd, env, plat
   const backupDir = path.join(home, '.js-harness', 'refresh-backups');
   const stamp = stampOf(now());
   const backup = backupSettings({ settings, dir: backupDir, stamp, fsys });
-  const manifestBackup = backupManifest({ manifest: shimManifest(binDir, fsys), dir: backupDir, stamp, fsys });
+  let manifestBackup;
+  try {
+    manifestBackup = backupManifest({ manifest: shimManifest(binDir, fsys), dir: backupDir, stamp, fsys });
+  } catch (err) {
+    return fail(`${err.message}: nothing was installed`);
+  }
   // The undo is printed whatever the end, once the settings are backed up and the previous copy is known.
   const undo = () => stdout(`undo: js-harness uninstall --global, then pnpm add -g github:jsaristi/js-harness#${previous ?? '<the previous sha, not recorded>'}, then js-harness install; the settings before are in ${backup?.file ?? 'no copy (there was no settings file)'}`);
   if (backup) {
@@ -326,7 +335,7 @@ async function refreshHoldingLock({ sha, version, home, settings, cwd, env, plat
   } else {
     stdout('settings before: no settings file to back up');
   }
-  stdout(`pnpm global package.json before: ${manifestBackup ? `copy ${manifestBackup}` : 'none to back up (the shim names no copy)'}`);
+  stdout(`pnpm global package.json before: ${manifestBackup ? `copy ${manifestBackup}` : 'none to back up (the shim names none, or it is not there)'}`);
   stdout(`refresh: installing main ${sha.slice(0, 7)} (version ${version}); the copy named ${previous ? previous.slice(0, previous.startsWith('v') ? undefined : 7) : 'no sha'} before`);
 
   // The copy is verified, and then run, by the path of the entry its shim names, never by a `js-harness` the PATH finds:

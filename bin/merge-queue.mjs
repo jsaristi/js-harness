@@ -78,8 +78,9 @@ default branch now, landing nothing; exit 0 when the copy already names it, 1 wh
 read. It reads the processes that run from the copy (Windows): a js-harness wait or quiet --wait, with what it started,
 is a wait, and anything else (a gate, a review, an eval batch) refuses it, exit 75, after three looks ten seconds apart,
 stopping nothing. Under the gate lock it looks again, stops every wait by pid and creation time (75 when one survives),
-and refreshes as above. Then each work session whose wait was stopped, the one session whose transcript holds that
-wait still open, gets a note in the channel with its wait to run again, and every other stopped wait is printed with it.
+and refreshes as above. Then each work session whose wait was stopped, the one session whose transcript (of any
+project) holds that wait still open, gets a note in its project's channel with its wait to run again, and every other
+stopped wait is printed with it. It can wait up to an hour for the gate lock: run it in the background.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
