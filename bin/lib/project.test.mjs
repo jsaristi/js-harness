@@ -28,6 +28,8 @@ import { parseRegister } from './failures.mjs';
 import { checkFailures } from '../failures.mjs';
 import { estimateTokens } from './payload.mjs';
 import { TOKEN_BUDGET } from '../check.mjs';
+import { coverageRecord } from './project-rules-read.mjs';
+import { localDay } from './flaky.mjs';
 
 // T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
 // `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
@@ -220,6 +222,31 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
       fs.realpathSync(result.manifestPath),
       fs.realpathSync(path.join(root, '.git', 'js-harness', 'manifest.json')),
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// F8 S5c-a, L5 (odd/tasks/f8-s5c-a-coverage.md): a new project's manifest dates the rules' controls from the day
+// `init` ran, in the record `coverageRecord` reads, so `rules check` there asks a control of every rule from then on.
+test('initProject records the day it ran and the release that ran it as the coverage baseline', () => {
+  const root = makeTmpRepo();
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', today: '2026-10-29' });
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.manifest.coverage, { baseline: '2026-10-29', release: '0.1.0' });
+    assert.deepEqual(coverageRecord(root), { baseline: '2026-10-29', release: '0.1.0' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject dates the coverage baseline the day it runs (`localDay`) when no day is given', () => {
+  const root = makeTmpRepo();
+  try {
+    const before = localDay();
+    const { baseline } = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).manifest.coverage;
+    assert.ok([before, localDay()].includes(baseline), `${baseline} is the day init ran`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -2964,6 +2991,9 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     ]);
     assert.deepEqual(onDisk.codegraph, { createdDir: true, status: 'ok' });
     assert.deepEqual(onDisk.dirs, []);
+    // No coverage baseline: a clone of a project older than its rules would date them all today and owe a control of
+    // each at once (F8 S5c-a, odd/tasks/f8-s5c-a-coverage.md), so only `init` dates a project.
+    assert.equal(onDisk.coverage, undefined);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
