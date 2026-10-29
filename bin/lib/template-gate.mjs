@@ -2,6 +2,7 @@
 // about to show the user, and whether a template command made it. This module holds the `page` surface (an `Artifact`
 // publish of a page, an `mcp__visualize__show_widget`); `bin/template.mjs` reads the files and the records and writes
 // the decision. Pure: it is handed the page's text, the rendered lines, the registry and the open moments.
+import path from 'node:path';
 import { normalText, sha256 } from './template.mjs';
 
 /** How old a rendered line may be and still admit its page: an old page published again as a new moment's is refused. */
@@ -23,20 +24,21 @@ export function freeReason(text) {
 const isPage = (file) => typeof file === 'string' && /\.(?:html?|md)$/i.test(file);
 
 /** What a call of `tool` with `input` shows as a page: `{ files }`, the local files an `Artifact` publish sends as
- * pages (the page itself and each `.html` or `.md` of its `files`), or `{ widget }`, a widget's code; `null` when the
- * call shows no page (a read, an open, a list, a quickstart, an asset upload, a create from a type, a data file). */
+ * pages (the page itself and each `.html` or `.md` of its `files`, a map or a list, a relative one under its `root`),
+ * or `{ widget }`, a widget's code; `null` when the call shows no page (a read, an open, a list, a quickstart, an asset
+ * upload, a create from a type, a data file). */
 export function pageTarget(tool, input) {
   if (tool === 'mcp__visualize__show_widget') return typeof input?.widget_code === 'string' ? { widget: input.widget_code } : null;
   if (tool !== 'Artifact' || input === null || typeof input !== 'object') return null;
   if ((input.action ?? 'publish') !== 'publish' || input.asset === true) return null;
   const files = [];
   if (isPage(input.file_path)) files.push(input.file_path);
-  if (input.files !== null && typeof input.files === 'object' && !Array.isArray(input.files)) {
-    for (const source of Object.values(input.files)) {
-      const file = typeof source === 'string' ? source : source?.from;
-      if (isPage(file)) files.push(file);
-    }
-  }
+  // A list publishes each `{ path }` at its own spelling; a map's value is a path or `{ from }` (an `{ artifact }` copy
+  // is another artifact's file, never a local page).
+  const sources = Array.isArray(input.files) ? input.files.map((entry) => entry?.path)
+    : input.files !== null && typeof input.files === 'object' ? Object.values(input.files).map((source) => (typeof source === 'string' ? source : source?.from)) : [];
+  const root = typeof input.root === 'string' && input.root !== '' ? input.root : null;
+  for (const file of sources.filter(isPage)) files.push(root !== null && !path.isAbsolute(file) ? path.join(root, file) : file);
   return files.length > 0 ? { files } : null;
 }
 

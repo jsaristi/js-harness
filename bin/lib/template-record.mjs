@@ -75,6 +75,8 @@ export function recordRendered(file, { template, subject, path: page, at, head }
   for (const [name, value] of Object.entries({ template, subject, path: page })) {
     if (typeof value !== 'string' || value === '') throw new Error(`recordRendered: ${name} is required`);
   }
+  // The gate admits a page by the age of its line, so a line whose time does not parse could never admit it.
+  if (typeof at !== 'string' || !Number.isFinite(Date.parse(at))) throw new Error(`recordRendered: at must be a time, not ${JSON.stringify(at)}`);
   const bytes = fileSystem.readFileSync(page);
   const line = {
     schema: RENDERED_SCHEMA, template, subject, sha256: sha256(bytes), normal: sha256(normalText(bytes.toString('utf8'))),

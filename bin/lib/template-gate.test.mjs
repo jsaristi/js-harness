@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, decidePage, freeReason, pageTarget, shownReport } from './template-gate.mjs';
 import { cutSpans } from './rules-coverage.mjs';
 import { RENDERED_SCHEMA, normalText, sha256 } from './template-record.mjs';
@@ -21,6 +22,14 @@ test('pageTarget reads an Artifact publish of a page, file by file, and a widget
   assert.deepEqual(pageTarget('Artifact', { action: 'publish', file_path: 'notes.md', url: 'u' }), { files: ['notes.md'] });
   assert.deepEqual(pageTarget('Artifact', { file_path: 'p.html', files: { 'a.html': 'src/a.html', 'b.css': 'src/b.css', 'c.html': { from: 'src/c.html' }, 'd.html': null } }), { files: ['p.html', 'src/a.html', 'src/c.html'] });
   assert.deepEqual(pageTarget('mcp__visualize__show_widget', { title: 't', widget_code: '<p>x</p>' }), { widget: '<p>x</p>' });
+});
+
+test('pageTarget reads files given as a list, and a files source under the publish\'s root', () => {
+  assert.deepEqual(pageTarget('Artifact', { files: [{ path: 'a.html' }, { path: 'b.png' }, { path: 'c.md', contentType: 'text/markdown' }] }), { files: ['a.html', 'c.md'] });
+  assert.deepEqual(pageTarget('Artifact', { file_path: 'p.html', root: 'site', files: { 'a.html': 'src/a.html', 'b.html': { from: 'b.html' } } }), { files: ['p.html', path.join('site', 'src/a.html'), path.join('site', 'b.html')] });
+  assert.deepEqual(pageTarget('Artifact', { root: 'site', files: [{ path: 'a.html' }] }), { files: [path.join('site', 'a.html')] });
+  const absolute = path.resolve('elsewhere', 'a.html');
+  assert.deepEqual(pageTarget('Artifact', { root: 'site', files: { 'a.html': absolute } }), { files: [absolute] });
 });
 
 test('an Artifact call that shows no page is not the gate\'s', () => {

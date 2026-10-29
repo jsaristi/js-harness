@@ -65,12 +65,37 @@ function faultsOfEntry(entry, readFile, hooked) {
   return faults;
 }
 
+// The characters after which a `/` starts a regular expression literal, not a division.
+const BEFORE_REGEX = '(,=:[!&|?{};+-*%<>~^';
+
+/** Where the regular expression literal opening at `start` ends (past its flags), or `start + 1` when the `/` opens
+ * none on its line. A `/` inside a class `[...]` does not close it. */
+function regexEnd(source, start) {
+  let inClass = false;
+  for (let i = start + 1; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === '\\') i += 1;
+    else if (char === '\n') break;
+    else if (inClass) inClass = char !== ']';
+    else if (char === '[') inClass = true;
+    else if (char === '/') {
+      let end = i + 1;
+      while (/[a-z]/i.test(source[end] ?? '')) end += 1;
+      return end;
+    }
+  }
+  return start + 1;
+}
+
 /** `{ code, quoted }`: `source` with each comment blanked to spaces, its newlines kept, and which of its positions lie
- * inside a quoted string or a template literal, where a `//` or `/*` is no comment and a `test(` is no call. A regular
- * expression literal is read as code, which is enough for a test file's titles. */
+ * inside a quoted string, a template literal (its `${}` holes too, however deep) or a regular expression literal,
+ * where a `//` or `/*` is no comment, a quote opens no string and a `test(` is no call. */
 function withoutComments(source) {
   let out = '';
   const quoted = new Uint8Array(source.length);
+  // The brace depth at which each open `${` hole of a template literal closes, innermost last.
+  const holes = [];
+  let depth = 0;
   let quote = null;
   for (let i = 0; i < source.length; i += 1) {
     const char = source[i];
@@ -80,14 +105,38 @@ function withoutComments(source) {
       if (char === '\\') {
         out += source[++i] ?? '';
         quoted[i] = 1;
+      } else if (quote === '`' && char === '$' && source[i + 1] === '{') {
+        out += source[++i];
+        quoted[i] = 1;
+        holes.push(depth);
+        depth += 1;
+        quote = null;
       } else if (char === quote) quote = null;
-    } else if (char === '"' || char === '\'' || char === '`') {
+      continue;
+    }
+    if (holes.length > 0) quoted[i] = 1;
+    if (char === '"' || char === '\'' || char === '`') {
       quote = char;
       out += char;
+    } else if (char === '{') {
+      depth += 1;
+      out += char;
+    } else if (char === '}') {
+      depth -= 1;
+      out += char;
+      if (holes.length > 0 && depth === holes.at(-1)) {
+        holes.pop();
+        quote = '`';
+      }
     } else if (char === '/' && (source[i + 1] === '/' || source[i + 1] === '*')) {
       const close = source[i + 1] === '/' ? source.indexOf('\n', i) : source.indexOf('*/', i + 2);
       const end = close < 0 ? source.length : source[i + 1] === '/' ? close : close + 2;
       out += source.slice(i, end).replace(/[^\n]/g, ' ');
+      i = end - 1;
+    } else if (char === '/' && BEFORE_REGEX.includes(out.trimEnd().at(-1) ?? '(')) {
+      const end = regexEnd(source, i);
+      out += source.slice(i, end);
+      quoted.fill(1, i, end);
       i = end - 1;
     } else out += char;
   }

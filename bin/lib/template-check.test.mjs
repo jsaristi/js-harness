@@ -190,6 +190,24 @@ test('a test call quoted inside a string, as a fixture, is no declaration: neith
   assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': only }))), ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"']);
 });
 
+test('a quote inside a regular expression or a nested template literal does not turn a commented test into a declared one', () => {
+  const golden = `test('template:question golden', () => {});`;
+  const refusal = `test('template:question refuses a hand-made one', () => {});`;
+  const missing = ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"'];
+  const shapes = [
+    `const quotes = /['"]/;\n// ${golden}\n${refusal}\n`,
+    `const s = /[/']/g.test(x) ? 1 : 2;\n/* ${golden} */\n${refusal}\n`,
+    `const t = \`a \${\`it's \${b}\`} c\`;\n// ${golden}\n${refusal}\n`,
+  ];
+  for (const text of shapes) assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': text }))), missing, text);
+  const declared = [
+    `const quotes = /['"]/;\n${golden}\n${refusal}\n`,
+    `const half = total / 2; const rest = 'x' / 1;\n${golden}\n${refusal}\n`,
+    `const t = \`a \${{ k: '}' }.k} c\`;\n${golden}\n${refusal}\n`,
+  ];
+  for (const text of declared) assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': text })), [], text);
+});
+
 test('an entry with no id, or an id that is not a name, is a fault and never stands for another', () => {
   const { id, ...noId } = entry();
   assert.deepEqual(faultsOf(run([noId])), ['(no id): the entry lacks id']);

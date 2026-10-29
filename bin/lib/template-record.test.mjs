@@ -47,13 +47,25 @@ test('recordRendered reads the bytes the command wrote and appends their sha256,
 test('recordRendered throws when the page cannot be read, and writes nothing', () => {
   scratch((dir) => {
     const file = renderedFile(dir, 'p');
-    assert.throws(() => recordRendered(file, { template: 't', subject: 's', path: path.join(dir, 'none.html'), at: 'x', head: 'h' }), /ENOENT/);
+    assert.throws(() => recordRendered(file, { template: 't', subject: 's', path: path.join(dir, 'none.html'), at: '2026-10-29T05:00:00.000Z', head: 'h' }), /ENOENT/);
     assert.equal(fs.existsSync(file), false);
   });
 });
 
 test('recordRendered refuses a call without its template, subject or path', () => {
   assert.throws(() => recordRendered('/x', { subject: 's', path: '/p', at: 'a', head: 'h' }), /template/);
+});
+
+test('recordRendered refuses a time that does not parse, which could never admit its page, and writes nothing', () => {
+  scratch((dir) => {
+    const file = renderedFile(dir, 'p');
+    const page = path.join(dir, 'page.html');
+    fs.writeFileSync(page, '<p>x</p>');
+    for (const at of [undefined, '', 'yesterday', 7]) {
+      assert.throws(() => recordRendered(file, { template: 't', subject: 's', path: page, at, head: 'h' }), /recordRendered: at must be a time/);
+    }
+    assert.equal(fs.existsSync(file), false);
+  });
 });
 
 test('a line left without its newline is ended before the next, and a line that does not parse is skipped', () => {
