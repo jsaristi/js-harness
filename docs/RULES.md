@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `3380229ba63c`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
+Hash `a7f087c64ca7`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 3.
 
 ## Sebastián's
 
@@ -13,9 +13,9 @@ A session says when it finished and where to return, watches its context, and a 
 - Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
 
 ### away-autonomy
-Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
+Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-29. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-29, 2026-10-29, 2026-10-29, checked by the command on 2026-10-29.
 
 ### background-task-declared
 A background task says what it is for and what ends it, and is stopped when its condition resolves: "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step."

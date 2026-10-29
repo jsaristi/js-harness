@@ -1422,7 +1422,8 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-10-29 — the lead's note to JH 89 at 16:33Z (claimed; the lead's own) — he was away about
   an hour with no stretch open; the stretch record holds none between the close at 08:11:36Z and the
   open at 16:07:51Z (`stretches.jsonl` under the throughput folder, read by JH 89)
-- Control: owed — odd/tasks/stretch-forecast.md — "T5 (kind: docs) `rule:away-autonomy`"
+- Control: protocol — bin/lib/manifest.mjs — "exits 1 when none is open) and show its departure in that reply" — since
+  2026-10-29
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
