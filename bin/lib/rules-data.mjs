@@ -39,7 +39,7 @@ export const RULES = [
   },
   {
     "id": "away-autonomy",
-    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure with its goals, and when he is back its return checked against them",
+    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
     "owner": "sebastian",
     "since": "2026-10-29",
     "path": "bin/lib/manifest.mjs",
@@ -52,7 +52,8 @@ export const RULES = [
       "When they say they are back, before anything else, close it",
       "the share of the planned that was met, the map by phase before and after, the timeline",
       "before they are due back, so the time they take is known before the return",
-      "Both are shown as a visual page in the chat, never drawn by hand"
+      "Both are shown as a visual page in the chat, never drawn by hand",
+      "a reply closes in the working state, saying what wakes you, or once in the cut that gives that block"
     ]
   },
   {
