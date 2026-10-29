@@ -59,7 +59,7 @@ on; `--address` answers "none" past record lines it skipped; `stop` says a workt
   New: `--address`'s unread line names the main folder's path for a session read from its worktree's folder.
 - [x] T5 (verify) S4: refreshAfterLand and REGEXP_EXEC, already fixed on main, checked (L3).
 - [x] T6 (verify) S5: the two readings (L4, L5).
-- [ ] T7 (verify) the verifier, Codex, the lenses and gentle-ai per slice; push, PR, `notify --kind ready`.
+- [x] T7 (verify) the verifier, Codex, the lenses and gentle-ai per slice; push, PR #642, `notify --kind ready`.
 
 ## Next step (state, ~23:40Z)
 Commits: e44519b7 (stranded entry, stop worktree), 7f068b91 (board and --address with no folder), e16b5770 (tests),
