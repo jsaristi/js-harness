@@ -136,6 +136,8 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   script of pnpm's global folder outside the package. GREEN: waits 9/9, refresh 19/19, refresh-now 2/2, stale-bin 4/4,
   refresh-copy 23/23, merge-queue 119/119, guard 43/43.
 - [ ] T6 (kind: docs) README, the roadmap line, the session summary.
+- [ ] T8 (kind: verify) follow-up of Codex's half-open finding 2 (L8), fixed in d8d4f54 (L9): Codex reads 183b473..HEAD
+  again (`codex-review --base 183b473 --again`), since a second recheck of the first review is not run. Route: inline.
 
 ## Log
 - L1. 2026-10-29 16:03Z, the lead's brief (C:\Users\Oficina\.js-harness\background\briefs\2026-10-29T16-03-53-806Z-72c9e958.md), quoted in S1 to S3.
