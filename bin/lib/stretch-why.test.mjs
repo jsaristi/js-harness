@@ -71,9 +71,9 @@ test('an item not finished says its state at its last record, and its session\'s
 
 test('an explanation names its target and source; each of its texts wins over the derived cell, the last one over earlier ones', () => {
   const explains = [
-    { event: 'explain', at: at(8.1), target: 'G2', why: 'una razón vieja', source: { kind: 'commit', ref: 'aaaaaaaaaaaa' } },
-    { event: 'explain', at: at(8.2), target: 'G2', why: 'la cola rechazó #644 sola', fix: 'aterrizó dentro de #645', open: 'la raíz es T5f, abierta', source: { kind: 'commit', ref: 'e6c8214c0000' } },
-    { event: 'explain', at: at(8.3), target: 'W2', fixed: true, fix: 'aterrizó como #647', source: { kind: 'notice', at: at(8.25), from: 'JH 70 · tablero' } },
+    { event: 'explain', at: at(8.1), kind: 'goal', target: 'G2', why: 'una razón vieja', source: { kind: 'commit', ref: 'aaaaaaaaaaaa' } },
+    { event: 'explain', at: at(8.2), kind: 'goal', target: 'G2', why: 'la cola rechazó #644 sola', fix: 'aterrizó dentro de #645', open: 'la raíz es T5f, abierta', source: { kind: 'commit', ref: 'e6c8214c0000' } },
+    { event: 'explain', at: at(8.3), kind: 'item', target: 'W2', fixed: true, fix: 'aterrizó como #647', source: { kind: 'notice', at: at(8.25), from: 'JH 70 · tablero' } },
   ];
   const rows = problemsOf(view, { notices: [], explains });
   const goal = rows.find((row) => row.target === 'G2');
@@ -85,6 +85,24 @@ test('an explanation names its target and source; each of its texts wins over th
   assert.match(item.fix[0].source, /aviso de JH 70 · tablero/);
   // An explanation of an item is not one of its failures'.
   assert.equal(rows.find((row) => row.kind === 'failure' && row.target === 'W2').fixed, false);
+});
+
+test('explanations add up: a later one that leaves a cell out keeps what an earlier one said there', () => {
+  const explains = [
+    { event: 'explain', at: at(8.1), kind: 'goal', target: 'G2', why: 'la cola la rechazó sola', open: 'espera su merge', source: { kind: 'commit', ref: 'e6c8214c0000' } },
+    { event: 'explain', at: at(9), kind: 'goal', target: 'G2', fixed: true, fix: 'aterrizó dentro de #645', source: { kind: 'notice', at: at(8.9), from: 'JH ORQ' } },
+  ];
+  const goal = problemsOf(view, { notices: [], explains }).find((row) => row.target === 'G2');
+  assert.deepEqual(cells(goal), { why: ['la cola la rechazó sola'], fix: ['aterrizó dentro de #645'], open: [], fixed: true });
+  assert.match(goal.why[0].source, /commit e6c8214c/);
+  assert.match(goal.fix[0].source, /aviso de JH ORQ/);
+});
+
+test('an explanation of a goal never reaches an item of the same id, nor the other way round', () => {
+  const shared = { ...view, goals: { ...view.goals, list: [{ id: 'X1', text: 'PR 1 en main', met: false, said: 'exit 1' }] }, items: [{ id: 'X1', title: 'trabajo X1', session: null, state: 'queued', lastAt: null, failures: [] }], failures: [] };
+  const explains = [{ event: 'explain', at: at(9), kind: 'item', target: 'X1', fixed: true, fix: 'lo tomó otra sesión', source: { kind: 'commit', ref: 'e6c8214c0000' } }];
+  const rows = problemsOf(shared, { notices: [], explains });
+  assert.deepEqual(rows.map((row) => [row.kind, row.fixed, row.fix.length]), [['goal', false, 0], ['item', true, 1]]);
 });
 
 test('the open stretch says its items are still running, not at the close', () => {

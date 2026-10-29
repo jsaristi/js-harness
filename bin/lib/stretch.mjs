@@ -291,11 +291,11 @@ export function itemMeasure(entry, trail, { openedAt, now, gates }) {
 export function stretchLost({ lands, codex, gates = [] }, { from, to, root }) {
   const project = `${folderKey(root)}/`;
   const ours = (gate) => isText(gate.cwd) && folderKey(gate.cwd).startsWith(project);
-  const landGates = gates.filter((one) => inLand(one) && ours(one) && typeof one.result === 'string');
-  const exited = lands.filter((one) => Number.isInteger(one.exit));
+  // None is fixed by a later pass: these records name no pull request or range, so the pass may be another's, and
+  // only an explanation (`stretch explain`) says one was fixed.
   return [
-    ...clippedTo(withFix(exited, (one) => one.exit !== 0, (one) => one.exit === 0, to), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`, one.fixedAt)),
-    ...clippedTo(withFix(landGates, (one) => failed(one.result), (one) => !failed(one.result), to), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`, one.fixedAt)),
-    ...clippedTo(withFix(codex, (one) => one.outcome === 'failed', (one) => one.outcome === 'reviewed', to), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed', one.fixedAt)),
+    ...clippedTo(lands.filter((one) => Number.isInteger(one.exit) && one.exit !== 0), from, to).map((one) => failure(one.startedAt, one.seconds, `land exit ${one.exit}`)),
+    ...clippedTo(gates.filter((one) => inLand(one) && ours(one) && failed(one.result)), from, to).map((one) => failure(one.startedAt, one.seconds, `land gate ${one.result}`)),
+    ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one.startedAt, one.seconds, 'Codex review failed')),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

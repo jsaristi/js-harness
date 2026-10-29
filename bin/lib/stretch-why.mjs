@@ -56,17 +56,21 @@ function failureRow(one, target, who) {
   };
 }
 
-/** `row` with the last explanation of its target applied: each text it gives replaces that cell, `fixed` marks it
- * fixed and a text of why it is not fixed marks it open. */
+/** `row` with the explanations of its target applied oldest first, so they add up: each text one gives replaces that
+ * cell and a cell it leaves out keeps what came before; `fixed` marks the row fixed, a later text of why it is not
+ * fixed marks it open again. A goal and an item may share an id, so the explanation's `kind` must be the row's too. */
 function explained(row, explains) {
-  const last = explains.filter((one) => one.target === row.target).at(-1);
-  if (!last) return row;
-  const source = sourceName(last.source);
   const next = { ...row };
-  if (last.why) next.why = [{ text: last.why, source }];
-  if (last.fix) next.fix = [{ text: last.fix, source }];
-  if (last.fixed) next.fixed = true;
-  if (last.open) next.open = [{ text: last.open, source }];
+  for (const one of explains.filter((each) => each.kind === row.kind && each.target === row.target)) {
+    const source = sourceName(one.source);
+    if (one.why) next.why = [{ text: one.why, source }];
+    if (one.fix) next.fix = [{ text: one.fix, source }];
+    if (one.fixed) next.fixed = true;
+    if (one.open) {
+      next.fixed = false;
+      next.open = [{ text: one.open, source }];
+    }
+  }
   if (next.fixed) next.open = [];
   return next;
 }
