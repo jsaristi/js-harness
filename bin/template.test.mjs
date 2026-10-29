@@ -371,6 +371,22 @@ test('shown names a question answered with no shown line of its number as an esc
   assert.deepEqual(templatesHealth(root, home, { now: GATE_NOW + 60 * 60 * 1000, slug: 'p' }).escapes, ['the moment 3 of question was never shown']);
 });
 
+test('the questions\' escapes start at the first call of the question tool, not at a page the gate decided before it', (t) => {
+  const { root, home, done } = gateScratch();
+  t.after(done);
+  const at = (minutes) => new Date(GATE_NOW + minutes * 60 * 1000).toISOString();
+  const hookAt = (minutes, payload) => call(['gate', '--hook'], { root, home, slug: 'p', now: GATE_NOW + minutes * 60 * 1000, templates: PAGE_TEMPLATES, readStdin: () => JSON.stringify({ cwd: root, session_id: 's1', ...payload }) });
+  fs.writeFileSync(path.join(root, 'page.html'), '<p>hecho a mano</p>');
+  hookAt(0, { tool_name: 'Artifact', tool_use_id: 'u20', tool_input: { file_path: 'page.html' } });
+  recordQuestion(home, '¿Antes de la puerta de preguntas?', ASK_OPTIONS, at(10));
+  closeQuestion(home, 1, 'answer', at(20));
+  hookAt(40, asking('q20', { questions: [{ question: '¿Escrita a mano?', options: ASK_OPTIONS }] }));
+  recordQuestion(home, '¿Después?', ASK_OPTIONS, at(50));
+  closeQuestion(home, 2, 'answer', at(55));
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW + 60 * 60 * 1000 });
+  assert.deepEqual(JSON.parse(report.out).escapes, ['the moment 2 of question was never shown']);
+});
+
 test('shown reports each template\'s counts and free pages, exit 0, and 3 when a call went unchecked', (t) => {
   const { root, home, hook, done } = gateScratch();
   t.after(done);

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { registryOfText, sha256, writeRegistry } from './lib/template.mjs';
+import { SURFACES, registryOfText, sha256, writeRegistry } from './lib/template.mjs';
 import { checkTemplates } from './lib/template-check.mjs';
 import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
 import { askTarget, decideAsk, decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
@@ -349,14 +349,15 @@ function shownOf(folder, days, seams) {
   return shownReport({ rendered, shown, moments: [...seams.moments, ...questionMoments(places, since, lines)] });
 }
 
-/** The moments of the `ask` surface (`answeredMoments`) since `since` or the gate's first line, whichever is later:
- * none before the gate ever ran, since no question asked then went through it. A channel record it cannot read
- * throws. */
+/** The moments of the `ask` surface (`answeredMoments`) since `since` or the first line the gate wrote for a call of
+ * the question tool, whichever is later: none before the gate decided a question, since no question asked then went
+ * through it, though it may have decided pages. A channel record it cannot read throws. */
 function questionMoments(places, since, lines) {
-  if (lines.length === 0) return [];
+  const first = lines.find((line) => SURFACES.ask.includes(line.tool));
+  if (first === undefined) return [];
   const channel = readNotices(places.home, places.slug);
   if (channel.unavailable !== undefined) throw new Error(`cannot read ${channel.path}: ${channel.unavailable}`);
-  return answeredMoments(recordedQuestions(channel), Math.max(since, Date.parse(lines[0].at)));
+  return answeredMoments(recordedQuestions(channel), Math.max(since, Date.parse(first.at)));
 }
 
 /** The templates row of `doctor` for the project at `project` under the harness home `home`: `{ days, escapes,

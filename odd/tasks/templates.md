@@ -508,3 +508,12 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   holds `hand-made-output` (controlled by the page refusal test) and `harness.json` turns templates on. Next: merge
   main (PR 653 and 654 landed) into the branch, then unit 4, `notesOf` refuses a proposal with no `why` (L8); then
   the reviews of slice C, push, PR, ready notice; slice D amends `rules-live-in-the-harness` and `status-report`.
+- Update 08:55Z: main merged in as 48ae1ca1 (no conflict, `git merge-tree`); unit 4 is e91cf39d. Codex over
+  f043f06..54ed729 (2 parts, from a detached worktree at 54ed729c so the merge's content stayed out): correct, 0.86
+  and 0.9, 0 findings, 265,106 input tokens; over 48ae1ca..e91cf39: correct, 0.98, 32,710 input tokens. Lenses over
+  f043f06..54ed729 (risk, resilience, readability, reliability) and 48ae1ca..e91cf39 (reliability, readability): 0.
+- gentle-ai: approved, medium, lineage review-39f414838ddd7dcb, over f5eb5226..54ed729c (34162fa1, e42535c9,
+  54ed729c), acknowledged. Its reliability lens left 1 non-blocking warning, holding: the questions' escape window
+  started at the shown record's first line of any surface, so a project whose gate had decided pages before would
+  name questions answered before the `ask` gate as escapes. Fixed in unit 5 with a test that failed first: the
+  window starts at the first line of a call of the question tool.
