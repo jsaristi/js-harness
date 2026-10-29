@@ -169,3 +169,22 @@ test('two entries with one id, or one signature, are a fault', () => {
   assert.deepEqual(result, ['b: its signature is also template a\'s']);
   assert.deepEqual(faultsOf(run([entry(), entry()])), ['question: the id is registered twice']);
 });
+
+test('a required test that is only in a comment is no test', () => {
+  const commented = [
+    `// test('template:question golden', () => {});\ntest('template:question refuses a hand-made one', () => {});\n`,
+    `/* test('template:question golden', () => {}); */\ntest('template:question refuses a hand-made one', () => {});\n`,
+    `/*\n * test('template:question golden', () => {});\n */\ntest('template:question refuses a hand-made one', () => {});\n`,
+  ];
+  for (const text of commented) {
+    assert.deepEqual(faultsOf(run([entry()], files({ 'bin/lib/template-question.test.mjs': text }))), ['question: bin/lib/template-question.test.mjs has no test titled "template:question golden"'], text);
+  }
+  const quoted = `const url = 'https://example.test/a'; test('template:question golden', () => {});\ntest('template:question refuses a hand-made one', () => { const glob = '/*'; });\n`;
+  assert.deepEqual(run([entry()], files({ 'bin/lib/template-question.test.mjs': quoted })), [], 'a // or /* inside a string is no comment');
+});
+
+test('an entry with no id, or an id that is not a name, is a fault and never stands for another', () => {
+  const { id, ...noId } = entry();
+  assert.deepEqual(faultsOf(run([noId])), ['(no id): the entry lacks id']);
+  assert.deepEqual(faultsOf(run([entry({ id: '' }), entry({ id: 7 })])), ['(no id): the entry lacks id', '(no id): the entry lacks id']);
+});

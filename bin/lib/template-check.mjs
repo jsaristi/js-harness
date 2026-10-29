@@ -65,15 +65,40 @@ function faultsOfEntry(entry, readFile, hooked) {
   return faults;
 }
 
+/** `source` with each comment blanked to spaces, its newlines kept: a `//` or `/*` inside a quoted string or a template
+ * literal is no comment. A regular expression literal is read as code, which is enough for a test file's titles. */
+function withoutComments(source) {
+  let out = '';
+  let quote = null;
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    if (quote !== null) {
+      out += char;
+      if (char === '\\') out += source[++i] ?? '';
+      else if (char === quote) quote = null;
+    } else if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      out += char;
+    } else if (char === '/' && (source[i + 1] === '/' || source[i + 1] === '*')) {
+      const close = source[i + 1] === '/' ? source.indexOf('\n', i) : source.indexOf('*/', i + 2);
+      const end = close < 0 ? source.length : source[i + 1] === '/' ? close : close + 2;
+      out += source.slice(i, end).replace(/[^\n]/g, ' ');
+      i = end - 1;
+    } else out += char;
+  }
+  return out;
+}
+
 /** The declarations of the tests titled `title` in `source`: each `test` or `it` call whose first argument is the
  * quoted title, from the call to its body (the first `=>` or `function` after the title), over as many lines as it
  * takes. A `test.skip(` and a `{ skip: … }` are both inside one; the title in a comment or a message is not a call. */
 function declarationsOf(source, title) {
   const quoted = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return [...source.matchAll(new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`, 'g'))].map((call) => {
+  const code = withoutComments(source);
+  return [...code.matchAll(new RegExp(`\\b(?:test|it)\\s*(?:\\.\\s*\\w+\\s*)?\\(\\s*(['"\`])${quoted}\\1`, 'g'))].map((call) => {
     const end = call.index + call[0].length;
-    const body = source.slice(end).search(/=>|\bfunction\b/);
-    return source.slice(call.index, end + (body < 0 ? 0 : body));
+    const body = code.slice(end).search(/=>|\bfunction\b/);
+    return code.slice(call.index, end + (body < 0 ? 0 : body));
   });
 }
 
@@ -88,6 +113,10 @@ export function checkTemplates(entries, { readFile, hooked }) {
     const id = typeof entry?.id === 'string' && entry.id !== '' ? entry.id : '(no id)';
     if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
       faults.push({ id, fault: 'the entry is not an object' });
+      continue;
+    }
+    if (id === '(no id)') {
+      faults.push({ id, fault: 'the entry lacks id' });
       continue;
     }
     if (ids.has(id)) {

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { templateMain, templatesHealth } from './template.mjs';
+import { registryLock, templateMain, templatesHealth } from './template.mjs';
 import { registryOfText, writeRegistry } from './lib/template.mjs';
 import { SHOWN_SCHEMA, readRecord, recordRendered, renderedFile, shownFile } from './lib/template-record.mjs';
 
@@ -138,6 +138,26 @@ test('a bad command line is a usage error: exit 2, the unknown token named', () 
     assert.equal(code, 2, JSON.stringify(argv));
     assert.match(err, said, JSON.stringify(argv));
   }
+});
+
+test('template new refuses while another holds the registry, so two at once cannot lose an entry, and frees it after', (t) => {
+  const { root, sample, done } = scratch();
+  t.after(done);
+  const lock = registryLock(root);
+  fs.writeFileSync(lock, 'held');
+  try {
+    const held = call(NEW(sample), { root });
+    assert.equal(held.code, 1);
+    assert.match(held.err, /another template new holds the registry/);
+    assert.ok(held.err.includes(lock), held.err);
+    assert.equal(fs.existsSync(path.join(root, 'bin', 'lib', 'template-question.mjs')), false, 'it wrote nothing');
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
+  assert.equal(call(NEW(sample), { root }).code, 0);
+  assert.equal(fs.existsSync(lock), false, 'the lock goes with the run');
+  assert.equal(call(NEW(sample).map((arg) => (arg === 'question' ? 'answer' : arg)), { root }).code, 0);
+  assert.deepEqual(registryOfText(fs.readFileSync(path.join(root, REGISTRY), 'utf8')).map((entry) => entry.id), ['answer', 'question']);
 });
 
 // `template gate --hook` and `--shown` (T4): the page surface through the command, with the seams a hook needs.

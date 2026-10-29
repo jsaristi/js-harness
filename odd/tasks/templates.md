@@ -419,3 +419,13 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   owed whole; the register declares its 7 spans as context (4 state a fact of the call; 3 are directives the
   `PreToolUse` hook enforces on the call itself). `rules check` passes. Slice D may tie the 3 directive spans to
   the amended rule instead.
+- Update ~06:50Z: unit 3 is 0fa67aaa and unit 4 bc3a0520 (high risk, installer: install grafts
+  `claude-template-gate-hook` under PreToolUse and `claude-template-shown-hook` under PostToolUse; a scratch home
+  seeded with the user's own entries of both events: install exit 0, ours after theirs, both recorded; uninstall
+  exit 0 and settings.json equal to the seed byte for byte). One independent verifier runs on bc3a0520. The lead
+  relayed (01:23 local, unverified, JH 79's Codex run on main's slice A code) four points; each was read in the code
+  and holds: a required test only in a comment counted; an entry with no id passed as `(no id)`; a field given over
+  several lines ended the scaffold module's `//` comment; two `template new` at once could each write the list it
+  read. Unit 5 fixes each with its test: comments are blanked (strings kept) before the titles are read; a missing
+  id is a fault; the scaffold keeps each field on one line; `template new` holds an exclusive lock in the system's
+  temporary folder while it reads and writes the registry.

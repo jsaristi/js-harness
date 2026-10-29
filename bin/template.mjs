@@ -4,9 +4,10 @@
 // `list` prints the registry. Not `contract template` or `summary template`, which print a skeleton a session fills:
 // a template here is an output the user sees, made by a command and held by a gate. Zero dependencies.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { registryOfText, writeRegistry } from './lib/template.mjs';
+import { registryOfText, sha256, writeRegistry } from './lib/template.mjs';
 import { checkTemplates } from './lib/template-check.mjs';
 import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
 import { decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
@@ -73,6 +74,28 @@ function readRegistry(root) {
   }
   const list = registryOfText(text);
   return Array.isArray(list) ? { list } : list;
+}
+
+/** The lock `template new` holds while it reads and writes the registry of the checkout at `root`, outside it in the
+ * system's temporary folder: two runs at once would each write the list it read, and one entry would be lost. */
+export const registryLock = (root) => path.join(os.tmpdir(), `js-harness-template-new-${sha256(path.resolve(root).toLowerCase()).slice(0, 12)}.lock`);
+
+/** `runNew` under the registry's lock, taken with an exclusive create and given back when it ends, whatever it ends
+ * with. A lock already there is another run's, or one a crash left: it names the file, so the user can tell which. */
+function runNewLocked(given, root, cwd, io) {
+  const lock = registryLock(root);
+  try {
+    fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    io.stderr(`template new: another template new holds the registry (${lock}); run it again once that one ends, or delete the file if none runs`);
+    return 1;
+  }
+  try {
+    return runNew(given, root, cwd, io);
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
 }
 
 function runNew(given, root, cwd, { stdout, stderr }) {
@@ -296,7 +319,7 @@ export function templateMain(argv, {
     }
     if (subcommand === 'shown') return runShown(parseShown(rest), seams, io);
     const top = root ?? topLevel(cwd);
-    if (subcommand === 'new') return runNew(parseNew(rest), top, cwd, io);
+    if (subcommand === 'new') return runNewLocked(parseNew(rest), top, cwd, io);
     if (subcommand === 'check') {
       if (rest.length > 0) throw new TemplateArgError(`unknown argument: ${rest[0]}`);
       return runCheck(top, hooked ?? installedGateTools(), io);
