@@ -529,6 +529,16 @@ it, in a change that touched nothing of the evals.
 - Control: check — evals/configs.test.mjs — "the fixture commit starts no git maintenance: nothing of
   it writes in the workspace once prepare has returned" — since 2026-10-15
 
+### failure-cause-dropped
+The facts the pages read of a stretch left out the words that say why a land or a Codex review
+failed: `landFacts` dropped a land record's `said`, and `codexFacts` a run's `reason`, so a failure
+read as an exit code or an outcome alone.
+- Class: unseen-state
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
+  "Left" — found closing visual pages; `stretch explain` was the only way to say why
+- Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
+  the reason it was logged with" — since 2026-10-29
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row

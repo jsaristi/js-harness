@@ -108,9 +108,21 @@ test('the Codex runs of a day, with their seconds and outcome', () => {
   runs[1].findings = { total: 2 };
   runs[1].part = { index: 1, of: 2 };
   assert.deepEqual(codexFacts(runs, { from, to }), [
-    { startedAt: '2026-10-16T08:00:00Z', seconds: 49, outcome: 'reviewed', findings: 2, part: true },
-    { startedAt: '2026-10-16T09:00:00Z', seconds: null, outcome: 'failed', findings: null, part: false },
+    { startedAt: '2026-10-16T08:00:00Z', seconds: 49, outcome: 'reviewed', findings: 2, part: true, reason: null },
+    { startedAt: '2026-10-16T09:00:00Z', seconds: null, outcome: 'failed', findings: null, part: false, reason: null },
   ]);
+});
+
+// docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md, "Left": the pages read
+// these facts, and a failure lost the words that say why it failed.
+test('a land keeps the last line it said, and a Codex run the reason it was logged with', () => {
+  const day = dayBounds('2026-10-29');
+  const land = (said) => ({ v: 1, startedAt: '2026-10-29T05:00:00Z', endedAt: '2026-10-29T05:05:00Z', considered: [1], landed: [], phases: [], exit: 1, ...said });
+  const lands = landFacts([land({ said: 'PR 644 was refused at push: its head is past the reviewed range' }), land({}), land({ said: 7 })], day);
+  assert.deepEqual(lands.map((one) => one.said), ['PR 644 was refused at push: its head is past the reviewed range', null, null]);
+  const run = (reason) => ({ startedAt: '2026-10-29T06:00:00Z', durationMs: 1000, outcome: 'failed', ...reason });
+  const runs = codexFacts([run({ reason: 'the session ran gpt-5.4 at low, not gpt-5.5 at high' }), run({}), run({ reason: { not: 'words' } })], day);
+  assert.deepEqual(runs.map((one) => one.reason), ['the session ran gpt-5.4 at low, not gpt-5.5 at high', null, null]);
 });
 
 // Harness review d6, 2026-10-18: open counted checkboxes alone, while closed and added count the rows of a task table
