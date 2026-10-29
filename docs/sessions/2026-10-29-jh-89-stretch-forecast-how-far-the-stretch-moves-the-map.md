@@ -55,13 +55,20 @@ They need the installed copy to hold this branch.
   tokens). Fix: commit first, then run again with nothing edited, under a declared `js-harness wait`. Its `Seen:` line
   is in `edit-during-review`.
 
+## The rule (T5), after PR 675 landed
+- `eb043c74` feat(rules), PR 676 on `rule/away-autonomy-forecast` from main `b2954f54`: `rule:away-autonomy` leads the
+  departure with the migration's share now and expected at the return, checks with `stretch status` that a stretch is
+  open before he leaves, and shows the return against the forecast; made by `rules change` (dry run first), his words
+  of lines 23408, 23526 and 23561 stored with the five of 2026-10-28. No open pull request touched
+  `bin/lib/manifest.mjs` (checked with `gh pr list` and each one's files). Codex over `b2954f5..757bf02`: correct
+  (0.93), no findings; the readability lens: 0 findings, 9,126 input tokens.
+- `757bf02` docs(failures): `stretch-not-opened` controlled by that line (`js-harness failures stretch-not-opened`).
+
 ## Open
-- T5: `rule:away-autonomy` names the migration's share on the departure and `stretch status` at his departure, on a
-  `rule/` branch from origin/main once this PR lands; it edits `bin/lib/manifest.mjs`, which JH 88 also touches, so
-  merge-tree is checked first.
 - The dispatcher's help (`bin/js-harness.mjs`) and `docs/SPEC.md` do not name the `closes` verb: outside this brief's
   surfaces; `stretch --help` does.
 - The lanes do not hold that S13 comes after S5c-a; that is `laneOut`'s.
 
 ## Spent
-Codex: 456,322 input tokens over two runs (one discarded). Claude lenses: 120,754 input tokens. No eval spend.
+Codex: 456,322 input tokens over two runs for PR 675 (one discarded), and one small run for PR 676. Claude lenses:
+120,754 and 9,126 input tokens. No eval spend.
