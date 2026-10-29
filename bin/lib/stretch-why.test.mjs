@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { problemsOf } from './stretch-why.mjs';
+import { failuresOf, problemsOf } from './stretch-why.mjs';
 
 const H = 3_600_000;
 const T0 = Date.parse('2026-10-28T12:00:00Z');
@@ -100,6 +100,14 @@ test('a failure is named by its start: its explanation reaches that failure alon
   assert.deepEqual(cells(rows[2]), { why: ['gate exit 1'], fix: [], open: ['espera la revisión del líder'], fixed: false });
   // The one fixed by a later run keeps what its records say.
   assert.deepEqual(cells(rows[0]).fix, ['una corrida posterior pasó a las 13:30Z']);
+});
+
+test('failures that start at the same instant, as two cut to the opening do, are told apart by #2, #3 after the start', () => {
+  const twins = { ...view, items: [], failures: [{ at: at(0), seconds: 60, what: 'land exit 1', fixedAt: null }, { at: at(0), seconds: 90, what: 'Codex review failed', fixedAt: null }] };
+  assert.deepEqual(failuresOf(twins).map((one) => [one.target, one.what]), [[at(0), 'land exit 1'], [`${at(0)}#2`, 'Codex review failed']]);
+  const explains = [{ event: 'explain', at: at(9), kind: 'failure', target: `${at(0)}#2`, why: 'Codex no respondió', source: { kind: 'commit', ref: 'eb4c20980000' } }];
+  const rows = problemsOf(twins, { notices: [], explains }).filter((row) => row.kind === 'failure');
+  assert.deepEqual(rows.map((row) => [row.target, row.why[0].text]), [[at(0), 'land exit 1'], [`${at(0)}#2`, 'Codex no respondió']]);
 });
 
 test('explanations add up: a later one that leaves a cell out keeps what an earlier one said there', () => {

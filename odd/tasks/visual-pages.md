@@ -577,6 +577,16 @@ carrying #644, landed (main 96b917a).
   instead. Codex 7b6d3f39..60e17fb0 correct (0.95, 64,107 input tokens); the lenses reliability and readability
   found nothing (25,843).
 - gentle-ai: 7b6d3f39..60e17fb0 approved (medium, lineage review-9affe131e336c6a8), no findings.
+- T12 is f45da73f and T11a 7e9ae874, on `feat/visual-pages-t12` stacked on T7. The lenses reliability and resilience
+  over 8b0e339f..7e9ae874 (40,441 input tokens): reliability nothing; resilience one warning, not taken: that
+  `explainTarget` matches a closed stretch's failures up to now. `measure` ends at `stretch.closedAt ?? now`
+  (`bin/stretch.mjs:262`) and the stretch `explain` names carries its `closedAt` (`:188`), so it matches to the close.
+- Codex on 8b0e339f..7e9ae874 (116,907 input tokens): incorrect (0.97), one P2: two failures cut to the same start,
+  as two that began before the opening are, share a name and neither can be explained. Taken, test-first: a second and
+  later failure that starts at the same instant is named `<start>#2`, `#3` (`failuresOf`, shared by the page and
+  `explain`), and a shared start is refused with each one's name and what it was. No record was written: this
+  document was edited while Codex read, after the rule of not doing so was already in this log. Prevention: nothing
+  is edited from a review's start to its end; the next review starts only after this commit.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.

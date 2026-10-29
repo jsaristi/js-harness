@@ -25,7 +25,7 @@ import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, sc
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { renderDeparture, renderReturn } from './lib/stretch-render.mjs';
-import { problemsOf } from './lib/stretch-why.mjs';
+import { failuresOf, problemsOf } from './lib/stretch-why.mjs';
 import { codexFacts, landFacts } from './lib/throughput.mjs';
 import { readLandRecord, readRecordLines } from './throughput.mjs';
 
@@ -68,9 +68,10 @@ export const USAGE = [
   '  explain: records why a goal, an item or a failure of the stretch went wrong, how it was or can be fixed (--fixed',
   '    when it was), or why it is not (--open), with its source: commit:<hash> git knows, or notice:<at> of the',
   '    channel. A goal and an item are named by id (goal:<id> or item:<id> when both share it), a failure by its start,',
-  '    failure:<time> in full or failure:<HH:MM> as the return shows it. The return shows it beside its row, over what',
-  '    the records say alone. It explains the open stretch, else the last closed one, or the one --stretch <id> names.',
-  '    Exit 1 for an unknown target, a minute two failures start in, or a source no record holds.',
+  '    failure:<time> in full or failure:<HH:MM> as the return shows it, and a second failure that starts at the same',
+  '    instant as failure:<time>#2. The return shows it beside its row, over what the records say alone. It explains',
+  '    the open stretch, else the last closed one, or the one --stretch <id> names. Exit 1 for an unknown target, a',
+  '    start two failures share (the message names each), or a source no record holds.',
   '  show: the return of the last closed stretch, or of --stretch <id>, measured again at its close from its records.',
   '    It runs no goal and records nothing. Exit 1 with no closed stretch, or for an open one (use status).',
   '  --json prints the view as JSON; --html <file> writes it as the HTML fragment the lead shows in the chat, and puts',
@@ -474,13 +475,13 @@ function explainTarget(ctx, stretch, target) {
   const { id: stretchId, plan } = stretch.open;
   const [, kindAsked, id] = /^(?:(goal|item|failure):)?(.+)$/.exec(target);
   if (kindAsked === 'failure') {
-    const view = measure(ctx, stretch, ctx.now());
+    const failures = failuresOf(measure(ctx, stretch, ctx.now()));
     const minute = /^(\d{2}:\d{2})Z?$/.exec(id)?.[1];
     const wanted = Date.parse(id);
-    const starts = [...view.items.flatMap((item) => item.failures), ...view.failures].map((one) => one.at)
-      .filter((at) => (minute ? at.slice(11, 16) === minute : Date.parse(at) === wanted));
-    if (starts.length === 1) return { kind: 'failure', target: starts[0] };
-    return { error: starts.length === 0 ? `the stretch ${stretchId} has no failure that starts at ${id}` : `${starts.length} failures of the stretch ${stretchId} start at ${id}: name one, ${starts.map((at) => `failure:${at}`).join(' or ')}` };
+    const exact = failures.filter((one) => one.target === id);
+    const found = exact.length > 0 ? exact : failures.filter((one) => (minute ? one.at.slice(11, 16) === minute : Date.parse(one.at) === wanted));
+    if (found.length === 1) return { kind: 'failure', target: found[0].target };
+    return { error: found.length === 0 ? `the stretch ${stretchId} has no failure that starts at ${id}` : `${found.length} failures of the stretch ${stretchId} start at ${id}: name one, ${found.map((one) => `failure:${one.target} (${one.what})`).join(' or ')}` };
   }
   const kinds = [['goal', plan.goals], ['item', plan.items]].filter(([kind, list]) => (kindAsked ?? kind) === kind && list.some((one) => one.id === id)).map(([kind]) => kind);
   if (kinds.length === 1) return { kind: kinds[0], target: id };

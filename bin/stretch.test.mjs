@@ -458,6 +458,22 @@ test('explain names a failure by its start, in full or by its minute, asks which
   assert.deepEqual([row.why[0].text, row.fix[0].text, row.fixed], ['la cola lo rechazó: sin registro de Codex', 'se cubrió con codex-review --again', true]);
 });
 
+test('explain tells apart two failures cut to the same start, the second by #2, and names each with what it was when asked which', async () => {
+  const place = scratch();
+  const land = (startedAt, exit) => ({ startedAt, endedAt: at(0.5), exit });
+  const deps = { run: explainGit(), readLands: () => [land(at(-1), 1), land(at(-0.5), 4)] };
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
+  await stretch(place, ['close'], { hours: 9, deps });
+  const explain = (target) => stretch(place, ['explain', target, '--source', 'commit:e6c8214c', '--why', 'x'], { hours: 10, deps });
+  const which = await explain('failure:12:00');
+  assert.equal(which.code, 1);
+  assert.ok(which.err.includes(`failure:${at(0)} (land exit 1)`) && which.err.includes(`failure:${at(0)}#2 (land exit 4)`), which.err);
+  assert.equal((await explain(`failure:${at(0)}#2`)).code, 0);
+  assert.equal((await explain(`failure:${at(0)}`)).code, 0, 'the full start names the first');
+  assert.equal((await explain(`failure:${at(0)}#3`)).code, 1);
+  assert.deepEqual(events(place).filter((event) => event.event === 'explain').map((one) => one.target), [`${at(0)}#2`, at(0)]);
+});
+
 test('show measures a closed stretch from the records up to its close: a session\'s later notice changes nothing', async () => {
   const place = scratch({ notices: [notice(0.5, 's69', 'JH 69 · registros', 'opened')] });
   await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
