@@ -119,6 +119,9 @@ Reviews:
   complete, 0 findings), so a skip is recorded with `--unavailable` and its reason. `check`, `doctor` and the merge
   queue list it until a lens run covers the range: the debt is open, and is the lead's to route.
 - PR 638 is open; `notify --kind ready` refuses it while the lens skip holds (L10).
+- gentle-ai: no gentle-ai review ran on `2507ab54` (`f1e0e8ea..2507ab54`), the proof records `check --push` counts as
+  code: the Stop hook offered only the whole branch, of records and documents, so only its read-only status ran.
+  Codex reviewed it ("the patch is correct", 0.99) and the reliability lens, 0 findings (L15).
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
