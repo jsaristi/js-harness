@@ -85,7 +85,7 @@ export async function refreshAfterLand({ code, log, refresh, versionOf, home, cw
     if (landed) {
       const quiet = await waitForQuiet({ list, roots, self: session, now, sleep, stdout });
       if (!quiet.quiet) {
-        stderr(`refresh: ${quiet.why}: nothing was refreshed, and the installed copy still names its previous main; the next land with --refresh-copy brings it up`);
+        stderr(`refresh: ${quiet.why}: nothing was refreshed, and the installed copy still names its previous main; a land run from that copy is refused while main's bin/ differs from it: land from a checkout at origin/main with --refresh-copy to bring it up`);
         return GATE_NOT_RUN;
       }
     }
