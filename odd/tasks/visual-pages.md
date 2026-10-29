@@ -305,15 +305,17 @@ board, the start row and the running work; C the report's pages and init's line;
 ## Next step
 State at 2026-10-29 ~01:30Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch `feat/visual-pages`):
 - Slice A committed: 35c8d1fd, 8a412b79, then the review fixes; reviewed by Codex, the lenses and gentle-ai (L5).
-- gentle-ai: c8ee437c approved (low, docs; ee595c7c before its rebase); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720);
-  54747bc6 approved (medium, lineage review-a3c20007ce0c6f70; its two warnings, the in-time caption and the git
-  failures at the opening and now untested, fixed in the commit after it). Codex rechecked 54747bc6: 4 of 4 fixed;
-  the lenses found nothing.
-- gentle-ai: 2bd3bc72 approved (medium, lineage review-9342779d8a486aab; its warning, the in-time caption over no
-  goal planned or reviewed, fixed in e05a86e2, and its suggestion, the plans when git fails now, taken there too);
-  e05a86e2 approved (medium, lineage review-1bf6dda7ac7d0c09; one suggestion, a test of goals partly reviewed with
-  none met, not taken: that case says "ninguna meta cumplida todavía", which holds). Codex on e05a86e2: correct
-  (0.96); the reliability lens found nothing.
+- The design commit, reviewed by gentle-ai (low, docs) as ee595c7c, landed on main through #643.
+- gentle-ai: 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720).
+- gentle-ai: 54747bc6 approved (medium, lineage review-a3c20007ce0c6f70); two warnings, fixed in the commit after it.
+  Its warnings: the in-time caption, and the git failures at the opening and now untested. Codex rechecked 54747bc6:
+  4 of 4 fixed; the lenses found nothing.
+- gentle-ai: 2bd3bc72 approved (medium, lineage review-9342779d8a486aab); its warning fixed in the commit after it.
+  The warning: the in-time caption claimed none met when no goal was planned or reviewed; its suggestion, the plans
+  when git fails now, was taken there too.
+- gentle-ai: e05a86e2 approved (medium, lineage review-1bf6dda7ac7d0c09); one suggestion, not taken.
+  The suggestion: a test of goals partly reviewed with none met; that case says "ninguna meta cumplida todavía",
+  which holds. Codex on e05a86e2: correct (0.96); the reliability lens found nothing.
 - 2026-10-29 ~03:30Z: this branch lands #644 with it, as the lead chose; why #644 alone was refused at push is T5f on
   `feat/visual-pages-board`.
 - Next: push, PR for slice A, notify ready; then slice B: T4 (draft in the job tmp `draft/stale-board*.mjs`; move
