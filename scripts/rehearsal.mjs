@@ -34,25 +34,28 @@ export function rehearsalLayout(root) {
 /** The login variables no scratch child inherits: a host started there finds no login but the one a step hands it. */
 const LOGINS = ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
 
-/** The environment of a command run in the scratch home: `base` without any login, with the scratch home under every
- * name Claude Code, Codex, the harness and Windows read it by. PATH is left as `base` has it; the walk hands in a
- * base whose PATH is its shims. */
+/** The environment of a command run in the scratch home: `base` without any login, any of git's own variables (one
+ * such as GIT_DIR, set in a hook, would bind a scratch git to his repository) or a CLAUDE_CONFIG_DIR (Claude then keeps
+ * `.claude.json` inside it, where stack does not read it back), with the scratch home under every name Claude Code,
+ * Codex, the harness and Windows read it by. PATH is left as `base` has it; the walk hands in a base whose PATH is
+ * its shims. */
 export function rehearsalEnv(layout, base) {
-  const env = Object.fromEntries(Object.entries(base).filter(([name]) => !LOGINS.includes(name.toUpperCase())));
+  const dropped = (name) => LOGINS.includes(name.toUpperCase()) || /^GIT_/i.test(name) || name.toUpperCase() === 'CLAUDE_CONFIG_DIR';
+  const env = Object.fromEntries(Object.entries(base).filter(([name]) => !dropped(name)));
   return {
     ...env,
     HOME: layout.home,
     USERPROFILE: layout.home,
     JS_HARNESS_HOME: layout.home,
     CODEX_HOME: path.join(layout.home, '.codex'),
-    CLAUDE_CONFIG_DIR: path.join(layout.home, '.claude'),
     APPDATA: layout.appData,
     LOCALAPPDATA: layout.localAppData,
     DO_NOT_TRACK: '1',
   };
 }
 
-/** The hash of every file under `root`, by its absolute path, following no link; `{}` for a folder that is not there. */
+/** The hash of every file under `root`, and `folder` for every folder, by its absolute path, following no link; `{}`
+ * for a folder that is not there. Folders count, since a manifest records some and one left behind must show. */
 export function snapshotTree(root) {
   const snapshot = {};
   const visit = (dir) => {
@@ -64,7 +67,10 @@ export function snapshotTree(root) {
     }
     for (const entry of entries) {
       const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) visit(file);
+      if (entry.isDirectory()) {
+        snapshot[file] = 'folder';
+        visit(file);
+      }
       else if (entry.isFile()) snapshot[file] = contentHash(fs.readFileSync(file));
     }
   };

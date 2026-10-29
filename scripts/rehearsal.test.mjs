@@ -65,22 +65,27 @@ test('in a scratch home, a planted directive without a control makes rules check
 
 test('rehearsalEnv puts the scratch home under every name a host reads it by and drops every login token', () => {
   const layout = rehearsalLayout(path.join(os.tmpdir(), 'r'));
-  const env = rehearsalEnv(layout, { PATH: '/bin', JS_HARNESS_EVAL_OAUTH_TOKEN: 't', CLAUDE_CODE_OAUTH_TOKEN: 't', ANTHROPIC_API_KEY: 'k', CODEX_HOME: '/his/.codex' });
+  const his = { PATH: '/bin', JS_HARNESS_EVAL_OAUTH_TOKEN: 't', CLAUDE_CODE_OAUTH_TOKEN: 't', ANTHROPIC_API_KEY: 'k', CODEX_HOME: '/his/.codex', CLAUDE_CONFIG_DIR: '/his/.claude', GIT_DIR: '/his/.git', GIT_WORK_TREE: '/his', GIT_INDEX_FILE: '/his/.git/index' };
+  const env = rehearsalEnv(layout, his);
   for (const name of ['HOME', 'USERPROFILE', 'JS_HARNESS_HOME']) assert.equal(env[name], layout.home);
   assert.equal(env.CODEX_HOME, path.join(layout.home, '.codex'));
-  assert.equal(env.CLAUDE_CONFIG_DIR, path.join(layout.home, '.claude'));
-  for (const name of ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']) assert.equal(env[name], undefined);
+  // Claude reads its config and .claude.json from HOME, where stack reads them back: no CLAUDE_CONFIG_DIR moves them.
+  // git binds to the scratch project by its folder, never to a repository his variables name (Codex P2 on 541464c).
+  for (const name of ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CONFIG_DIR', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) assert.equal(env[name], undefined);
   assert.equal(env.PATH, '/bin');
 });
 
-test('snapshotTree hashes every file under a folder by its absolute path, and a missing folder is empty', (t) => {
+test('snapshotTree hashes every file and marks every folder under a folder by its absolute path, and a missing folder is empty', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-snapshot-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'a', 'b'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'empty'));
   fs.writeFileSync(path.join(root, 'a', 'b', 'c.txt'), 'x');
   fs.writeFileSync(path.join(root, 'd.txt'), 'x');
   const snapshot = snapshotTree(root);
-  assert.deepEqual(Object.keys(snapshot).sort(), [path.join(root, 'a', 'b', 'c.txt'), path.join(root, 'd.txt')].sort());
+  assert.deepEqual(Object.keys(snapshot).sort(), [path.join(root, 'a'), path.join(root, 'a', 'b'), path.join(root, 'a', 'b', 'c.txt'), path.join(root, 'd.txt'), path.join(root, 'empty')].sort());
   assert.equal(snapshot[path.join(root, 'd.txt')], snapshot[path.join(root, 'a', 'b', 'c.txt')]);
+  // A recorded folder left behind is no longer invisible to restoreProblems (Codex P2 on 541464c).
+  assert.equal(snapshot[path.join(root, 'empty')], 'folder');
   assert.deepEqual(snapshotTree(path.join(root, 'none')), {});
 });
