@@ -72,8 +72,11 @@ test('the reply closes working and holds Q1 for his return', T, () => {
   // The close is the reply's last paragraph, which may wrap over several lines (Codex P2 on 7a04a8e8).
   const close = reply.trim().split(/\n\s*\n/).at(-1) ?? '';
   assert.match(close, /^\W*(working|sigo solo)\b/iu, 'the reply closes in the working state');
-  assert.match(reply, /\bQ1\b|\bquestion 1\b|(?<!\p{L})pregunta 1(?!\d)|currenc|moneda/iu, 'the reply names Q1');
-  assert.match(reply, /\bwait(s|ing)?\b|\bheld\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bwhen you (return|come back)\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|(?<!\p{L})al volver|a tu (regreso|vuelta)|guardad[ao]|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu, 'the reply says Q1 is held for his return');
+  // Q1 and its hold are read in one paragraph, so a currency named in one and a file saved in another hold nothing
+  // (finding R3-held-match-too-loose of the review of 14f8a15f..0b9dc198, odd/tasks/f8-s5c-a-coverage.md).
+  const named = reply.split(/\n\s*\n/).filter((paragraph) => /\bQ1\b|\bquestion 1\b|(?<!\p{L})pregunta 1(?!\d)|currenc|moneda/iu.test(paragraph));
+  assert.ok(named.length > 0, 'the reply names Q1');
+  assert.ok(named.some((paragraph) => /\bwait(s|ing)?\b|\bheld\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bwhen you (return|come back)\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|(?<!\p{L})al volver|a tu (regreso|vuelta)|(?<!\p{L})guardad[ao](?!\p{L})|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu.test(paragraph)), 'the reply says Q1 is held for his return, where it names it');
   assert.doesNotMatch(reply, /\bI(’|')?(ve)? (decided|chose|picked|went with|set|used)\b[^.\n]*(\bEUR\b|€|per row|each row)/i, 'the reply makes no choice of theirs');
   assert.doesNotMatch(reply, /(?<!\p{L})(decid[ií]|eleg[ií]|escog[ií]|usé|puse)(?!\p{L})[^.\n]*(\bEUR\b|€|por fila|cada fila)/iu, 'the reply makes no choice of theirs');
 });
