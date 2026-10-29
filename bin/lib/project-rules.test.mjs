@@ -72,6 +72,13 @@ test('the harness list refuses a sensor body: a rule a sensor enforces is declar
   ]);
 });
 
+test('the harness list refuses a control: a harness rule\'s control is in the coverage register', () => {
+  const rule = RULES.find((item) => item.id === 'questions-one-place');
+  assert.deepEqual(readRules(RULES.map((item) => (item === rule ? { ...rule, control: { level: 'owed', since: '2026-10-28' } } : item))), [
+    'rule "questions-one-place": a harness rule\'s control is in bin/lib/rules-coverage-data.mjs, apart from what the rule says',
+  ]);
+});
+
 test('the shipped list still reads with no fault, by the default call', () => {
   assert.deepEqual(readRules(RULES), []);
 });
@@ -109,6 +116,33 @@ test('a project whose rules all hold has no finding', () => {
   const result = checkProjectRules(input(fileOf([prose, sensed])));
   assert.deepEqual(result.findings, []);
   assert.deepEqual(result.rules.map((rule) => rule.id), ['no-direct-deploy', 'no-secrets']);
+});
+
+// ---- a project rule's control (F8 S5c-a, odd/tasks/f8-s5c-a-coverage.md, S7) ------------------------------------
+
+const CHECKED = { level: 'check', test: 'test/deploy.test.mjs', break: { path: 'scripts/deploy.mjs', find: 'pipeline()', replace: 'byHand()' } };
+const PROJECT_FILES = { 'AGENTS.md': AGENTS, 'test/deploy.test.mjs': 'test', 'scripts/deploy.mjs': 'export const go = () => pipeline();\n' };
+
+test('a project rule may name its control; with no baseline recorded the control is optional, and held to its files', () => {
+  assert.deepEqual(checkProjectRules(input(fileOf([{ ...prose, control: CHECKED }, sensed]), { files: PROJECT_FILES })).findings, []);
+  assert.deepEqual(checkProjectRules(input(fileOf([{ ...prose, control: { ...CHECKED, test: 'test/gone.test.mjs' } }]), { files: PROJECT_FILES })).findings, [
+    'rule "no-direct-deploy": the test test/gone.test.mjs is not there',
+  ]);
+  assert.deepEqual(checkProjectRules(input(fileOf([{ ...prose, control: { level: 'check', test: 'test/deploy.test.mjs' } }]), { files: PROJECT_FILES })).findings, [
+    'rule "no-direct-deploy": a check names its planted break { path, find, replace }: a proof that names only a file is refused',
+  ]);
+});
+
+test('once the project\'s baseline is recorded, every live rule names its control, and only a rule of the baseline is owed', () => {
+  const baseline = '2026-10-28';
+  const owed = { level: 'owed', since: baseline };
+  const result = checkProjectRules({ ...input(fileOf([{ ...prose, control: CHECKED }, sensed, retired]), { files: PROJECT_FILES }), baseline });
+  assert.deepEqual(result.findings, [
+    'rule "no-secrets": no control: it names a check, an eval case, a line, a protocol, a measurement or a dated owed (the project\'s baseline is 2026-10-28)',
+  ]);
+  assert.deepEqual(checkProjectRules({ ...input(fileOf([{ ...sensed, since: '2026-11-02', control: owed }]), { files: PROJECT_FILES }), baseline }).findings, [
+    'rule "no-secrets": the rule is declared on 2026-11-02, after the baseline of 2026-10-28, so it is not owed: it names its control',
+  ]);
 });
 
 test('a list that cannot be read gives its faults and no other finding', () => {

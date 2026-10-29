@@ -9,9 +9,11 @@ what an agent about to change a piece reads to find it.
 ## The problem and the bet
 
 An AI coding agent works inside a host (Claude Code, Codex) on top of a stack this harness does
-not rebuild: gentle-ai owns the workflow, task documents, test-first work and review; engram
-owns memory; codegraph owns code structure; the host's `/goal` owns the autonomy loop. Left
-there, three things go wrong. Rules live in prose the agent reads every turn and forgets, so
+not rebuild: engram owns memory; codegraph owns code structure; context7 owns library
+documentation; the host's `/goal` owns the autonomy loop. The workflow, the task documents,
+test-first work and review were gentle-ai's until F8, which replaces it: js-harness carries them
+itself, installs the three complements, and gentle-ai leaves the machine at F8's S2 (`docs/ROADMAP.md`,
+Decided, "Direction"; "After F8" below). Left there, three things go wrong. Rules live in prose the agent reads every turn and forgets, so
 the same mistake comes back. Work spreads over several sessions that cannot see each other,
 so a finished feature sits undelivered and a question reaches nobody. And whatever is written
 into a machine to make this work cannot be taken out again: the predecessor stack needed four
@@ -49,6 +51,193 @@ and provable, not that its reason is well told; that part stays with review.
 The eval tasks under `evals/tasks/` are the measure of "better": a rebuild is proved by these
 proofs and by those tasks.
 
+Two sections stand outside that shape. "The architecture", next, is the map: the pieces and how
+they connect, so a reader knows where a capability sits before reading it. "After F8", after the
+capabilities, is where each capability must end once F8 is done, and the capabilities F8 adds that
+have no code yet: a capability enters "Capabilities" only when its proof exists, since the `spec`
+row refuses a proof or a file that does not.
+
+## The architecture
+
+This is today's map, as the Today lines are: it says where each piece sits and what it talks to,
+so an agent can find its way and see what a change touches. A rebuild is held to the requirements
+of the capabilities, not to this layout ("The specification stays alive", Discarded).
+
+### The pieces
+
+```
+ the owner ── decides spend, anything irreversible, product choices; reads Spanish Artifact pages
+     │  one question at a time, through the orchestrator (`notify --kind question`)
+     ▼
+ the host: Claude Code works, Codex reviews
+     │  loads every turn: CLAUDE.md → @AGENTS.md, ~/.claude/CLAUDE.md, the output style,
+     │  skill descriptions, the MCP servers' instructions, what hooks print
+     │  runs hooks: `js-harness <command> --hook` (13 Claude entries, 5 Codex entries)
+     ├──────────────────────────────┬────────────────────────────────────┐
+     ▼                              ▼                                    ▼
+ js-harness (bin/, the package)    the stack (MCP servers, CLIs)        the owner's other tools
+  the gate and its sensors          engram: memory                       gentle-ai, Orca, herdr:
+  the two reviews                   codegraph: the code map              leave at S2
+  rules, failures, the plan         context7: library docs
+  sessions, the lead, the channel   Codex CLI: the review model
+  install, doctor, stack            Claude CLI: the lens runs, evals
+  evals (evals/, not shipped)
+     │
+     ├── writes in the project: harness.json, AGENTS.md, CLAUDE.md, docs/, .githooks or the hooks path,
+     │   and the clone's .claude/settings.local.json
+     ├── writes in the clone's git data: js-harness/manifest.json, the review records and the lands
+     └── writes in the home: ~/.js-harness (the manifest, the channel, the gate log, ...),
+         and recorded entries in ~/.claude and ~/.codex
+```
+
+- **The host** is Claude Code, in the desktop app or the CLI, where every session works; Codex reads
+  only what a review hands it (the diff, read access to the repository and `AGENTS.md`, `bin/codex-review.mjs:30`, `:222`). Antigravity is
+  later (`docs/ROADMAP.md`, Decided, "Hosts").
+- **js-harness** is a zero-dependency Node package with one dispatcher, `bin/js-harness.mjs`, whose
+  `COMMANDS` the README and this file are held to. It is installed once per machine and enabled per
+  project with `init` (`docs/ROADMAP.md`, Decided, "Two levels").
+- **The stack** is installed and reported, never rebuilt: `doctor` reads each tool's state and
+  prints its own fix, `stack install` runs an install it can undo exactly (The stack doctor, The
+  stack install).
+- **The owner** is reached only through the channel and the orchestrator: a question is a numbered
+  notice first (Questions to the owner, through one place), a report is a Spanish visual page
+  (`rule:reports-spanish-visual`).
+
+### What loads on every turn
+
+What a session pays before any work, in the order the host assembles it. The `payload` and
+`fixed load` rows of every gate measure it (The payload and the fixed load); S0 measured a
+first-turn median of 105,565 tokens over five desktop sessions (`odd/tasks/f8-s0-baseline.md`,
+`## Baseline`).
+
+| Source | Owner | Bound |
+|---|---|---|
+| The host's system prompt and tool definitions | the host | none of ours |
+| The root `CLAUDE.md`, how Claude works here, which imports `@AGENTS.md` | the repository | `rule:claude-md-budget` (3,200 estimated tokens) |
+| `AGENTS.md`, what the project is and what good work looks like; Codex reads it alone | the repository | `rule:agents-budget` (1,500) |
+| `~/.claude/CLAUDE.md`: gentle-ai's blocks and the Rules block `install` writes (G12) | gentle-ai until S2, then js-harness's block only | excluded in this repository by `.claude/settings.json` (`claudeMdExcludes`) until S2 |
+| The output style `js-harness` (neutral Spanish with tú) | js-harness (`claude-output-style`) | pinned by hash |
+| Skill descriptions: `js-harness`, the orchestrator, the protocols, the two ported skills; gentle-ai's until S2 | js-harness (`claude-skill`, ...) | one line each; bodies load on demand |
+| The auto-memory index, `memory/MEMORY.md` of the main checkout's project folder (`bin/lib/payload.mjs:266`) | the host, written by sessions | measured by `payload`; S5 holds it to 0.5k |
+| The MCP servers' instructions: engram, codegraph, context7 | each tool | reported by `payload` |
+| What hooks print at session start and each prompt | each hook's owner | the doctor's notice is a `systemMessage`, which costs no model tokens |
+
+### The hooks
+
+Every hook is an entry `install` grafts into the host's settings and records by file, pointer and
+entry, so `uninstall` removes exactly it (`bin/lib/manifest.mjs`, `entryComponents`; the commands in
+`bin/lib/hook-entries.mjs`). Each ends with `|| exit 0` where it must never block the host.
+
+| Event | Claude entry | Codex entry | Command | What it does |
+|---|---|---|---|---|
+| SessionStart | `claude-hook` | `codex-hook` | `js-harness doctor --hook` | the stack's gaps, only when they changed |
+| SessionStart | `claude-resume-hook` | `codex-resume-hook` | `js-harness resume --hook` | after a compaction, the files to resume from |
+| SessionStart | `claude-rules-start-hook` | — | `js-harness rules --hook` | the rules main has that the session's base does not, once |
+| SessionStart | `claude-fallback-hook` | `codex-fallback-hook` | `js-harness backup --session-start` | sends a session to the readable memory when Engram lost its project |
+| UserPromptSubmit | `claude-rules-turn-hook` | — | `js-harness rules --hook` | as at start, at each turn |
+| SubagentStart | `claude-rules-subagent-hook` | — | `js-harness rules --hook` | as at start, for a sub-agent |
+| PreToolUse | `claude-guard-hook` | — | `js-harness guard --hook` | refuses a tool call that breaks a held rule |
+| PermissionRequest | `claude-permit-hook` | — | `js-harness permit --hook` | relays another session's permission card to the orchestrator |
+| PostToolUse | `claude-pause-hook` | — | `js-harness resume --pause` | the context pause and the inbox |
+| PostToolUseFailure | `claude-web-failure-hook` | — | `js-harness resume --pause` | the next rung after a failed web fetch |
+| Stop | `claude-share-hook` | — | `js-harness guard --stop` | turns back a reply whose stated context share is off its transcript's |
+| Stop | `claude-reply-hook` | `codex-reply-hook` | `js-harness reply --hook` | turns back a reply that closes with no state |
+| Stop | `claude-backup-hook` | `codex-backup-hook` | `js-harness backup --hook` | starts a memory backup when one is due |
+
+On this machine on 2026-10-28, `~/.claude/settings.json` held 32 hook entries: js-harness 13,
+Orca 12, gentle-ai 5, herdr 1, codegraph 1 (read with a one-off count by owner). S2 takes it to 14,
+and S4a's row holds it there.
+
+### The life of a change
+
+1. **Plan.** Large work opens `odd/tasks/<feature>.md` with the task contract first (`js-harness
+   contract template`; The task contract); small work stays inline (`CLAUDE.md`, "How sessions
+   run").
+2. **Commit.** `.githooks/pre-commit` (or the project's hooks path, written by `init`) runs
+   `js-harness check`: the static rows first, each a second or less, then the sensors. A commit's
+   gate runs its tests on CI first, on a `gate/` branch (`.github/workflows/gate.yml`), and falls
+   back to the local gate under the machine's lock (The commit gate; A commit's gate runs its tests
+   on CI first; One gate at a time on the machine). A commit of documents alone runs only the
+   document sensors.
+3. **Review.** Each slice with code gets two reviews over its commit range: `js-harness
+   codex-review --base <boundary>` (Codex, in a lean home) and `js-harness lens-review --base
+   <boundary> --lenses <list> --reason <why>` (one to four Claude lenses, fresh and tool-less). Each
+   writes its record under the git common directory (The Codex review; The Claude lens review).
+   Until S2, gentle-ai's own review also runs where its consent envelope offers it.
+4. **Push.** `.githooks/pre-push` runs `check --push`, which refuses a code commit that a complete
+   record of each review does not cover, where the project turns that review on (`codexReview` is on
+   by default where Codex is installed, `lensReview` off until the project turns it on,
+   `bin/lib/functions.mjs:131-135`; this repository turns both on), unless a skip is recorded; a skip is a debt that `check`'s
+   `review` row and `doctor`'s `review-skips` row list.
+5. **Land.** `js-harness merge-queue` builds main plus each ready pull request, tests the candidate
+   on CI (a `queue/` branch) and on this machine, refuses a pull request whose commits hold a lens
+   skip or lack a record, and moves main by fast-forward; pre-push refuses a push of main from
+   anywhere else (The merge queue).
+6. **After.** The daily Windows suite runs the whole suite on Windows once a day; the gate log keeps
+   every gate; `throughput` reads both.
+
+### Where state lives
+
+Each fact has one home. Committed documents are canonical; engram and `MEMORY.md` mirror or point
+to them (diet section 10, "The rule pass").
+
+| Record | Where | Written by | Read by |
+|---|---|---|---|
+| The project's settings | `harness.json`: the pin, `code`, `functions`, the reply check | `init`, `functions apply`, `sync` | nearly every command |
+| The clone's Claude keys | `.claude/settings.local.json`: the style and the denies | `init`, `sync` (`bin/lib/project-apply.mjs:12`) | the host; `uninstall` by the clone's manifest |
+| The project's own rules | `docs/rules.json` | sessions | `rules`, `rules check` |
+| The plan | `docs/ROADMAP.md`; frozen origin `docs/origin.md` | sessions, by hand | `progress`, `report`, every session at start |
+| A feature | `odd/tasks/<feature>.md`, mirrored in engram (`odd/<feature>/tasks`) | the session that holds it | `contract`, `check`'s `contracts` row, `resume` |
+| Rules | `bin/lib/rules-data.mjs`, sources in `docs/rule-sources.json`, rendered to `docs/RULES.md` | `js-harness rules change` on a `rule/` branch | `ruleValue` in code, `rules check`, `rules --hook` |
+| Failures | `docs/FAILURES.md` | sessions, one `Seen:` line per sighting | `failures`, `check`'s row |
+| Flaky tests | `docs/FLAKY.md` | sessions, by hand | `check` |
+| This specification | `docs/SPEC.md` | sessions | `check`'s `spec` row |
+| Session summaries | `docs/sessions/<date>-<slug>.md` | `summary`, then the session | the lead, the 1.0.0 review |
+| The machine manifest | `~/.js-harness/manifest.json` | `install`, `stack install`, opt-ins | `uninstall`, `status`, `doctor` |
+| A clone's manifest | `js-harness/manifest.json` at `git rev-parse --git-path` (`bin/lib/project.mjs:1063`) | `init` | `uninstall` in the project, `sync` |
+| Review records | `<git common dir>/js-harness/codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl`, `lens-review-runs.jsonl`, and an incomplete lens's whole stdout in `lens-answers/`, which no check reads | `codex-review`, `lens-review` | `check --push`, the merge door, `doctor`, `throughput` |
+| Lands | `<git common dir>/js-harness/lands.jsonl` | `merge-queue --land` | `throughput` |
+| Codex review homes | `~/.js-harness/codex-review-homes` (`bin/lib/codex-review-home.mjs:65`) | `codex-review` | `codex-review` (`--keep-home`) |
+| The channel | `~/.js-harness/channel/<project>.jsonl`; the lead's relief file in `~/.js-harness/relief/` | `notify` | `wait`, `sessions`, `report`, `sessions live`, `resume` |
+| Background sessions | `~/.js-harness/background/` | `sessions start` | `sessions`, `sessions stop`, `uninstall` |
+| Loops | `~/.js-harness/loops/<project>/` | `loop` | `loop status`, the heartbeat |
+| Gates | `~/.js-harness/gate-log`; the lock under `~/.js-harness/gate`; the gate-first tickets in `gate-first` (`bin/lib/gate-first.mjs:41`); the WSL gate's state in `gate-wsl.json` (`bin/lib/gate-wsl.mjs:38`) | `gate`, `check` | `gate`, `throughput`, `quiet` |
+| Throughput snapshots | `~/.js-harness/throughput/` | `throughput snapshot`, and each tick of `loop heartbeat` for settled days without one | `throughput` |
+| The remote server | `~/.js-harness/remote/`: the supervisor record, log, lock, stop marker and task file (`bin/lib/remote.mjs:632-643`) | `remote` | `remote status`, `remote stop` |
+| Refresh backups | `~/.js-harness/refresh-backups` (`bin/lib/refresh-copy.mjs:287`) | `merge-queue --land --refresh-copy`, the settings before it brings the installed copy up to main | the undo line that refresh prints |
+| The doctor's cache and reviews | `~/.js-harness/doctor.json` | `doctor` | `doctor` and its hook |
+| Clean | `~/.js-harness/clean.json`, `clean-log.jsonl` | `clean` | `clean`, `doctor` |
+| Memory | engram's store (`~/.engram`); Claude's memory folders; the backup clones under `~/.js-harness/memory-backup/`; a memory pass's lock, snapshots and journal under `~/.js-harness/memory-hygiene/<project>` (`bin/lib/memory-hygiene.mjs:37-52`) | engram, the host, `backup run`, `memory` | sessions; `backup`, the fallback hook |
+
+### Sessions and the lead
+
+The owner runs several sessions; one is the orchestrator (the lead), found by its title, and the
+others are work sessions that each hold one feature (A role is the address, and there is one
+orchestrator). Sessions cannot see each other's screens, so everything between them goes through
+files: a notice is a line of the channel written by `notify` (The record of notices between
+sessions); a session that waits keeps `js-harness wait` running, which ends on its condition or on a
+notice to its own number (Waiting and waking); the lead reads the board, computed from transcripts,
+worktrees, gates and pull requests at each read (The board knows every session), starts background
+sessions with `sessions start` (The lead starts a session on a turn he did not type), relays
+permission cards (The permit relay), asks the owner's questions one at a time (Questions to the
+owner, through one place) and reports from `report` (The status report). Every reply closes on one
+of five states that the reply hook holds (The reply check); near the context limit a session writes
+its state and keeps working, and after a compaction it resumes from files (The context pause and
+the inbox; A compaction resumes from files). The orchestrator skill holds how the lead works; the
+protocols skill holds the eight protocols (The installed skills).
+
+### Rules, failures and coverage
+
+A rule lives where something acts on it: a check before a line in `CLAUDE.md` or `AGENTS.md`, a line
+before a protocol, never a memory note (`AGENTS.md`). Each rule is declared once with an id, owner
+and source, as a value code reads by id or as prose held by phrases (Declared rules); `rules check`
+runs as a document sensor and refuses a renamed reader, a lost phrase or a deleted rule; `rules
+--hook` tells a session at start, at each turn and in each sub-agent what main's rules say that its
+base does not. A failure is registered with its class and its control, whose state is computed
+(The failures register). A project keeps its own list in `docs/rules.json` (A project's own
+rules). What none of this proves yet is that a directive is followed: S5c ties every directive to a
+check or an eval case ("After F8", directive coverage).
+
 ## Capabilities
 
 ### The commit gate
@@ -63,11 +252,11 @@ proofs and by those tasks.
 ### The instruction budget
 
 **Problem:** No incident; the founding bet (`docs/origin.md`) and F1, which asked for `AGENTS.md` at about 1.5k tokens and a check that fails over it (`odd/tasks/f1-skeleton.md`). It landed at 691 tokens and stood at 1,478 of 1,500 on 2026-10-15 (`odd/tasks/drop-github-gate.md`).
-**Requirement:** A commit fails when the instruction file every session pays on every turn exceeds a declared token budget; the budget is a declared rule, not a literal in code.
+**Requirement:** A commit fails when an instruction file every session pays on every turn exceeds its declared token budget: `AGENTS.md`, and since F8's S3 the root `CLAUDE.md` that imports it, each with its own rule; a budget is a declared rule, not a literal in code.
 **Reason:** Every line of `AGENTS.md` is paid on every turn of every session, and a check costs no tokens and cannot be forgotten.
 **Proof:** `node --test bin/check.test.mjs`
 **Discarded:** Failing on the whole payload of the machine: no commit here can shrink a file gentle-ai manages, so the hard budget stays on what the repository owns.
-**Today:** `bin/check.mjs`, `bin/lib/rules-data.mjs`, `AGENTS.md`
+**Today:** `bin/check.mjs`, `bin/lib/claude-md-budget.mjs`, `bin/lib/rules-data.mjs`, `AGENTS.md`, `CLAUDE.md`
 
 ### The project's sensors
 
@@ -162,11 +351,11 @@ proofs and by those tasks.
 ### Install and undo exactly
 
 **Problem:** The predecessor stack needed four hand-written purge scripts to uninstall (`AGENTS.md`, `odd/tasks/install-update.md`). Sessions of two permission classes could not message each other: Claude Code delivers only within a class unless a user setting says otherwise (`odd/tasks/commands-and-doctor.md`).
-**Requirement:** Every file written outside a repository is recorded in a manifest under the home with its hash; uninstall removes exactly those and keeps, and reports, a file the user edited. An entry grafted into a JSON file the harness does not own (a hook in a host's settings) is recorded by file, pointer and entry: install adds no duplicate, uninstall removes only that entry and deletes the file only if the harness created it and it is now empty. An opt-in sets the user setting that lets sessions of other permission classes message each other, and uninstall puts back what was there. Each command acts on the project inside one and on the machine elsewhere; each kind of uninstall (project, machine, machine and memory snapshots, everything) also has a name that never acts by location, in the CLI and as an item of the TUI's Uninstall submenu, each saying what it removes and what it keeps; a status says what is pinned, installed and latest.
+**Requirement:** Every file written outside a repository is recorded in a manifest under the home with its hash; uninstall removes exactly those and keeps, and reports, a file the user edited; install and sync, likewise, leave a recorded file whose bytes are neither the recorded ones nor this version's, carry its record forward and say it was kept as the user's with how to take this version's text, while a file deleted is written again. An entry grafted into a JSON file the harness does not own (a hook in a host's settings) is recorded by file, pointer and entry: install adds no duplicate, uninstall removes only that entry and deletes the file only if the harness created it and it is now empty. An opt-in sets the user setting that lets sessions of other permission classes message each other, and uninstall puts back what was there. Each command acts on the project inside one and on the machine elsewhere; each kind of uninstall (project, machine, machine and memory snapshots, everything) also has a name that never acts by location, in the CLI and as an item of the TUI's Uninstall submenu, each saying what it removes and what it keeps; a status says what is pinned, installed and latest.
 **Reason:** Anything written outside the repository must come out exactly, or removing the harness costs a purge script.
-**Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/install-session-messages.test.mjs`, `node --test bin/uninstall-kinds.test.mjs`, `node --test bin/tui.test.mjs`
+**Proof:** `node --test bin/install.test.mjs`, `node --test bin/lib/manifest.test.mjs`, `node --test bin/lib/component-write.test.mjs`, `node --test bin/install-session-messages.test.mjs`, `node --test bin/uninstall-kinds.test.mjs`, `node --test bin/tui.test.mjs`
 **Discarded:** Assuming npm: on this machine `npm` is a pnpm shim. Owning a host's settings file whole instead of one entry.
-**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `bin/tui.mjs` (the menu and its Uninstall submenu), `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
+**Today:** `bin/install.mjs`, `bin/lib/manifest.mjs`, `bin/lib/component-write.mjs`, `bin/tui.mjs` (the menu and its Uninstall submenu), `scripts/e2e.mjs`, `js-harness install`, `js-harness sync`, `js-harness uninstall`, `js-harness status`, `~/.js-harness/manifest.json`, `~/.claude/settings.json`, `~/.codex/hooks.json` (hook entries), and the installed skills under `~/.claude/skills` and `~/.codex/skills` (`bin/lib/manifest.mjs`, claimed by id)
 
 ### Releases
 
@@ -180,11 +369,11 @@ proofs and by those tasks.
 ### Project init
 
 **Problem:** No incident; the roadmap decided two levels, installed per machine and enabled per project like `git init` (`docs/ROADMAP.md`, `odd/tasks/project-init.md`).
-**Requirement:** In a git repository, init writes a committed `harness.json` pinning the version, a base `AGENTS.md` only where none exists, an empty failures register (`docs/FAILURES.md`, declaring no class, since the classes are the project's own) only where none exists, and the pre-commit gate in the hooks path, keeping any hook already there; it prepares the code map where it is on. Every file is recorded in a per-clone project manifest so uninstall restores the repository exactly. Outside a git repository it writes nothing and exits 1.
+**Requirement:** In a git repository, init writes a committed `harness.json` pinning the version, a base `AGENTS.md` only where none exists and, where the project has neither file, a root `CLAUDE.md` that imports it and holds the half of the harness's lines Claude works from (a project with its own `CLAUDE.md` gets the whole block in `AGENTS.md`, so no line is lost), an empty failures register (`docs/FAILURES.md`, declaring no class, since the classes are the project's own) only where none exists, the pre-commit gate in the hooks path and, where the project's Codex review switch resolves on, the pre-push check, keeping any hook already there; it writes into the clone's own `.claude/settings.local.json`, never the tracked settings, the keys its switches ask for, the `js-harness` output style and the deny list among them; it prepares the code map where it is on. Every file and key is recorded in a per-clone project manifest so uninstall restores the repository exactly. Outside a git repository it writes nothing and exits 1.
 **Reason:** Every file init writes inside a project must be undone exactly, like what install writes on the machine.
-**Proof:** `node --test bin/init.test.mjs`, `node --test bin/lib/project.test.mjs`
+**Proof:** `node --test bin/init.test.mjs`, `node --test bin/lib/project.test.mjs`, `node --test bin/lib/project-apply.test.mjs`
 **Discarded:** Changing `core.hooksPath`: it silently disables `.git/hooks`. A committed manifest: it is per clone, like the hook.
-**Today:** `bin/init.mjs`, `bin/lib/project.mjs`, `js-harness init`
+**Today:** `bin/init.mjs`, `bin/lib/project.mjs`, `bin/lib/project-apply.mjs`, `js-harness init`
 
 ### The stack doctor
 
@@ -239,6 +428,15 @@ proofs and by those tasks.
 **Proof:** `node --test bin/throughput.test.mjs`, `node --test bin/lib/throughput.test.mjs`
 **Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
 **Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput` (with snapshot, status, reviewed and shipped)
+
+### The stretch
+
+**Problem:** Before an absence the lead wrote by hand what would run and for how long, and on the user's return a report by hand: nothing checked the goals, nothing measured the time against the estimate, and the next estimate learned nothing (the user's words of 2026-10-28, `odd/tasks/stretch-protocol.md`).
+**Requirement:** A stretch opens from a plan whose goals are commands and whose items are one session's work each; the departure says whether the queued work fills the hours, each estimate corrected by the last stretches; the open stretch is measured from the records (each item's span, its failed gates as lost time, what no record holds named); the close checks the goals and records estimate against real by kind, which the next opening reads. The departure and the return are rendered from the command's JSON.
+**Reason:** A goal graded by the session that ran it, or a time guessed after the fact, is a claim; read from the records it is a measure the next plan can learn from.
+**Proof:** `node --test bin/stretch.test.mjs`, `node --test bin/lib/stretch.test.mjs`, `node --test bin/lib/stretch-render.test.mjs`
+**Discarded:** One correction for every kind (the user asked by kind; every kind together is the fallback until a kind has three items); measuring tasks by the commits that close them (an item is one session's work, as a session holds one feature); running the goals on every heartbeat (a gate as a goal would take the lock the sessions need).
+**Today:** `bin/stretch.mjs`, `bin/lib/stretch.mjs`, `bin/lib/stretch-render.mjs`, `js-harness stretch` (with open, bind, status and close)
 
 ### The task contract
 
@@ -414,11 +612,11 @@ proofs and by those tasks.
 ### What a session took from gentle-ai is ours
 
 **Problem:** F8's S2 removes gentle-ai, and with it the output style that sets how a session talks, the skills that say how to cut a commit and split a large change, and, by its uninstall, the whole `permissions` object of the user's Claude settings (`docs/proposals/gentle-ai-reverse-engineering.md`, section 3; `odd/tasks/f8-s10-port.md`).
-**Requirement:** Install writes, for Claude Code, an output style named `js-harness` (neutral Spanish with tú, no voseo, no persona; Claude Code's coding instructions kept) and two skills adapted from gentle-ai under our names, `js-harness-work-units` and `js-harness-chained-prs`, each recorded and removed exactly; the package ships the notices of what it ports, the Apache License 2.0 text among them. Install also holds the `permissions` object of the user's Claude settings: it adds the allow entry and the 24 denies gentle-ai writes where they are missing, puts back a `defaultMode` it adopted once that has gone missing and never invents one, and records only what it wrote, so uninstall takes out exactly that and never an entry it found; `doctor`'s `permissions` row names each entry missing. `guard` refuses a Read, Write, Edit, MultiEdit, NotebookEdit or Grep of a place those denies name, or of Claude Code's login file, whatever the settings hold and however the path is spelled (dot segments, doubled separators, an NTFS stream, trailing dots); and every clone's `.claude/settings.local.json` holds the `js-harness` style, recorded as a switch's keys are, and the denies its deny list lacks, added after the user's own entries and recorded one by one, so uninstall takes out only those.
+**Requirement:** Install writes, for Claude Code, an output style named `js-harness` (neutral Spanish with tú, no voseo, no persona; Claude Code's coding instructions kept) and two skills adapted from gentle-ai under our names, `js-harness-work-units` and `js-harness-chained-prs`, each recorded and removed exactly; the package ships the notices of what it ports, the Apache License 2.0 text among them. Install also holds the `permissions` object of the user's Claude settings: it adds the allow entry and the 24 denies gentle-ai writes where they are missing, puts back a `defaultMode` it adopted once that has gone missing and never invents one, and records only what it wrote, so uninstall takes out exactly that and never an entry it found; `doctor`'s `permissions` row names each entry missing. `guard` refuses a Read, Write, Edit, MultiEdit, NotebookEdit or Grep of a place those denies name, or of Claude Code's login file, whatever the settings hold and however the path is spelled (dot segments, doubled separators, an NTFS stream, trailing dots); and every clone's `.claude/settings.local.json` holds the `js-harness` style, recorded as a switch's keys are, and the denies its deny list lacks, added after the user's own entries and recorded one by one, so uninstall takes out only those. Install also writes, into the user's own `~/.claude/CLAUDE.md`, a small marked block of his Rules lines as his answer D7 left them, rendered again while unedited and his once he edits it, recorded and undone by uninstall, and it touches nothing else of that file (G12, question 99). A test pins the style's and the two skills' text by hash, so a change to what is shipped changes its pin in the same commit.
 **Reason:** The owner's voice decision G10 ("la 7 la voz hazlo en neutro", 2026-10-26) and the order of F8: port first, remove last. Under gentle-ai's names install would write over gentle-ai's own files.
-**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/package.test.mjs`, `node --test bin/lib/permissions.test.mjs`, `node --test bin/lib/deny-paths.test.mjs`, `node --test bin/guard.test.mjs`
+**Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/package.test.mjs`, `node --test bin/lib/permissions.test.mjs`, `node --test bin/lib/deny-paths.test.mjs`, `node --test bin/guard.test.mjs`, `node --test bin/lib/rules-block.test.mjs`, `node --test bin/lib/output-style.test.mjs`, `node --test bin/lib/ported-skills.test.mjs`
 **Discarded:** Copying gentle-ai's persona or its 14 skills. Installing the skills for Codex, which only reviews here. Moving the first skills' text out of the engine, which would move 13 rules' phrases. Holding the denies as hook-style entries, whose engine does not remember an entry that was there before it, so uninstall would take gentle-ai's denies out of the user's settings.
-**Today:** `bin/lib/output-style.mjs`, `bin/lib/ported-skills.mjs`, `claude-output-style`, `claude-work-units-skill`, `claude-chained-prs-skill`, `THIRD_PARTY_NOTICES.md`, `bin/lib/permissions.mjs`, `bin/lib/deny-paths.mjs`
+**Today:** `bin/lib/output-style.mjs`, `bin/lib/ported-skills.mjs`, `claude-output-style`, `claude-work-units-skill`, `claude-chained-prs-skill`, `THIRD_PARTY_NOTICES.md`, `bin/lib/permissions.mjs`, `bin/lib/deny-paths.mjs`, `bin/lib/rules-block.mjs`
 
 ### The record of notices between sessions
 
@@ -669,5 +867,81 @@ proofs and by those tasks.
 **Requirement:** This file holds one entry per capability with the six fields, and a commit is refused when an entry lacks a field or a proof command, when a file its Today line names does not exist, or when a command of the dispatcher, an entry the manifest installs or a file written under the home is claimed by no entry.
 **Reason:** A document kept alive by remembering goes stale; one held by the gate cannot lose a piece silently.
 **Proof:** `node --test bin/lib/spec.test.mjs`
-**Discarded:** A description of the pieces as they stand: it reads as today's architecture, and a rebuild would copy it. Principles alone: nothing can be rebuilt from a philosophy.
+**Discarded:** A description of the pieces as they stand in place of the requirements: it reads as today's architecture, and a rebuild would copy it; the map under "The architecture" is kept apart from the entries and says it is today's. Principles alone: nothing can be rebuilt from a philosophy.
 **Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`
+
+## After F8
+
+Where the harness must stand once F8 is done (`docs/ROADMAP.md`, "F8 plan"), so a step can be
+judged against its end and a later model knows what was intended, not only what was built. A
+capability moves into its entry above when its step lands, with its proof; until then this section
+is the record of the intent. The register of the owner's decisions is the diet's section 1
+(`docs/proposals/harness-diet.md`); a decision named here as open is his until answered.
+
+### The whole, at the end of F8
+
+- **One harness.** gentle-ai, Orca and herdr are gone from the machine (S2). Nothing of them loads,
+  runs a hook or is named by `bin/` or `evals/` except the idea watch, named historical fixtures and
+  the tests that assert their absence (S11, S9). gentle-ai's repository is read for ideas, never
+  installed (`docs/ROADMAP.md`, Decided, "Direction").
+- **The complements are ours to install.** js-harness installs and registers engram and its plugin,
+  codegraph and context7 with their own commands, records each and undoes each exactly, under a
+  preset: complete, lean (no codegraph) or custom, never without context7 or the two reviews (S11,
+  G11, G14).
+- **What loads.** A session loads the root `CLAUDE.md` and `AGENTS.md` within their budgets (3,200
+  and 1,500 estimated tokens), the Rules block `install` writes into `~/.claude/CLAUDE.md` (G12),
+  our output style and our skills, and the complements' own instructions, one engram text among
+  them. The first turn is at most 80,000 tokens once S2 is measured and 75,000 after S5 and S6, a
+  failing `check` row (D4, by default), against 105,565 at S0.
+- **Hooks.** 14 entries in `~/.claude/settings.json`, js-harness 13 and codegraph 1, held by a
+  `check` row that fails above that or on a new owner (S4a); 32 today.
+- **Two reviews on every slice with code**, Codex and the Claude lenses, recorded only by the
+  commands that ran them; a skip is a debt the merge door refuses (S1, its records fix).
+- **Every directive tied to its proof.** Every source the harness ships or sends to an agent is
+  listed, every obligation in it names a control (a check with a planted break, an eval case whose
+  arm without the rule scores lower, or a dated `owed`), and `owed` is at most 10% at S8 (S5c).
+- **Every project works the same.** `init` gives a new project, and the migration gives an
+  initialized one, the same split, style, denies, complements, gates, reviews and coverage baseline,
+  each write recorded (S12, `docs/proposals/gentle-ai-reverse-engineering.md`, section 11).
+- **Proven.** The incident set at least 17 of 20, the S0 and S8 measures at their frozen lines, a
+  Claude and a Codex audit three runs each, and the failure classes' closing counts (S8).
+
+### Each capability's target
+
+Only the capabilities F8 changes; every other one stands as written above.
+
+| Capability | Step | Target after F8 |
+|---|---|---|
+| The payload and the fixed load | S2, D4 | The gentle-ai source is gone and the interim exclusion reverted; the `fixed load` row fails over 80,000, then over 75,000 after S5 and S6, instead of warning over `rule:fixed-load-budget` (100,000, `bin/lib/fixed-load.mjs:138-147`). |
+| The commit gate | S4a, S4b, S5c-a | New static rows: the hook count by event and owner (S4a); a new feature document without `## Goal` refused (S4b); directive coverage's totals as an INFO row (S5c-a). A refusal with a next step ends with the exact command, bound to the commit range it was computed for (S4b; reverse-engineering document, 13.3 row 1). |
+| Project init | S11, S4a, S5c-a, S12 | Also: context7 enabled and codegraph by preset (S11); the `commit-msg` hook that strips attribution (S4a); the coverage baseline, the coverage row and an example eval case (S5c-a); the check that the root `CLAUDE.md` imports `AGENTS.md` and nothing above turns it off (S12). The style and the denies already ship (S10). |
+| The stack doctor | S11, S12, S8 | The `gentle-ai` and `gentle-ai-sync` rows leave; context7 is required and a project with it off is flagged; a row turns red when engram's binary and plugin serve different protocol versions (S11); a row for the `CLAUDE.md` import (S12); a row for hooks cancelled or timed out in the last 20 sessions and one for a credentials file under the scratch and temp roots (diet sections 7 and 9; neither exists, `grep -i "cancel\|credential" bin/doctor.mjs`). |
+| The stack install | S11, S2 | engram, its plugin, codegraph and context7 are rows js-harness runs and undoes, chosen by preset; no tool is the person's step because gentle-ai brings it. `stack backup` takes S2's full backup and runs its restore drill (S2). |
+| Install and undo exactly | S11, S5 | `install` writes by preset and ships the trimmed skills; after S2 the only output style and skills are ours. |
+| The installed skills | S5, S7 | Each skill's description is one line with its trigger first and its body at most 3k, held by a test; the protocols skill loads in at most 3 of 10 sessions (S5). The orchestrator skill cuts the lead at a phase's close or after two compactions, routes helpers to Haiku 5.5 with `omitClaudeMd` and writers' briefs name their `S#` (S7). |
+| The Codex review | S1 records fix | A record counts only when the command wrote it, named by its run line; `guard` refuses any other write to the records. Its reason no longer reads "after gentle-ai": it is one of two reviews on every slice. |
+| The Claude lens review | S1 records fix, S5 | A lens record is admitted only when it names a run line the command wrote first; a headless lens run is shown not to fire a planted user hook (flag parity, reverse-engineering document 13.3 row 2). |
+| The guard | S1 records fix | Refuses a file tool or shell write to `codex-reviews.jsonl`, `codex-review-runs.jsonl` and `lens-reviews.jsonl` under the git common directory. |
+| Declared rules | S5, S5c | Every rule and every register control classified as a check or hook, prose that stays, or retired, counted from the register on the day (S5); every rule's obligations carry a control and `rules check` refuses a new gap (S5c). |
+| A project's own rules | S5c-a | The `Control` field, optional in `docs/rules.json` until the project's baseline is set, required by `rules check` after it. |
+| The failures register | S5, S8 | Each of the 68 tool, machine and unseen-state entries assigned by id to its class repair or named open; S8 reports each class's closing count (diet section 10, "The failures outside prose"). |
+| Evals that discriminate | S11, S5c, S8 | gentle-ai's block arms kept only as named historical fixtures (S11); each case names its rules in `task.json`, with a recorded run where its arm without them scored lower (S5c); the long-session eval (S8). |
+| Releases | S8 | Every tag runs `scripts/release-proof.mjs` on the tagged commit before it is announced, and its record names that run (reverse-engineering document, 13.3 row 13). |
+| What a session took from gentle-ai is ours | S2 | After S2, the only style, skills and permissions on the machine are these; the Rules block stays. |
+| The memory survives the machine | S11 | Engram's protocol and its context recovery come from engram alone (its MCP instructions and plugin); js-harness writes no engram text of its own. |
+| The future-model protocol | S8, G7 | Certification reruns on each new model and each Claude Code or Codex CLI update, at most once a week by G7's default (about $25 each, $70 to $80 with directive coverage [i]); a gentle-ai release reruns nothing. |
+
+### What F8 adds that has no code yet
+
+Each is designed, with its step, and enters "Capabilities" with its proof when it lands.
+
+| Capability | Step | What it must do | Its proof, planned |
+|---|---|---|---|
+| Directive coverage | S5c-a, S5c-b | `js-harness rules coverage` lists every source, every span tied to a rule or listed as context, and every obligation's control; `--strict` exits 1 on a gap the pass line forbids, `--prove` applies each planted break in a scratch copy and its test must go red; a new gap is refused by `rules check`; projects get the same, bound to the release that wrote their text (reverse-engineering document, section 14) | `rules coverage --strict` and `--prove` exit 0; `node --test evals/tasks.test.mjs` |
+| The migration of an initialized project | S12 | Builds on `sync`, which already rewires the pre-push check and writes the clone's style and denies (`bin/lib/project.mjs:1593-1639`): reads the version the project's manifest recorded, writes what later versions add and `sync` does not (the split, context7, the baseline), keeps the owner's edits (merged or left with a note, never overwritten) and records each write | a test on a copy of a project an old release initialized |
+| The full backup and restore drill | S2 | `js-harness stack backup`, run from a plain terminal with every session closed: one backup outside the repository, recorded; a drill on a scratch home that hashes it, restores it, puts back a deleted file and removes a created one, and proves engram answers an observation recorded before | the drill's own checks, which stop at the first failure |
+| The attribution hook and the hook count | S4a | A `commit-msg` hook strips attribution lines; a `check` row counts hook entries by event and owner and fails above 14 or on a new owner | a scratch commit lands without `Co-Authored-By`; one extra `Stop` entry turns the row red |
+| The rehearsal | S13 | The whole path of a project, from `install` to `uninstall machine`, walked on a scratch project, comparing only the paths the manifests recorded | every row of the reverse-engineering document's 11.1 does what it says; exact undo |
+| The idea watch | S9 | Each gentle-ai release read by area and classified adopt, adapt or ignore; nothing installs | a fixture diff with one path per area and one unmatched |
+| The long-session eval | beside, run at S8 | A scripted user drives one session of about 40 turns with five planted moments; a separate grader | at least 90% of moments, five runs per setup (`odd/tasks/f8-s0-baseline.md`, its build plan) |
+| Certification | S8 | The S0 and S8 measures, one row each with its own frozen line and no combined score; Claude and Codex audits, three runs each | the incident set at least 17 of 20; 17 measures pass, 4 deferred reported as not built |

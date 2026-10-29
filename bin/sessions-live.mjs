@@ -12,6 +12,7 @@ import { channelDir, readNotices } from './lib/channel.mjs';
 import { batchesOf, cursorAfter, cursorFrom, pendingRows, positionOf } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { boardStretch } from './stretch.mjs';
 import { WAIT_FOR_MINUTES } from './wait.mjs';
 
 export const LIVE_USAGE = [
@@ -195,7 +196,9 @@ export async function sessionsLiveMain(argv, {
   // holds, until the lead's next check.
   const checked = path.join(out, 'board-checked.json');
   const holds = (parsed.resting ? WAIT_FOR_MINUTES : CHECK_MINUTES) * 60_000;
-  const stamp = { checked: new Date(now()).toISOString(), until: new Date(now() + holds).toISOString(), resting: parsed.resting === true };
+  // The open stretch rides on the same document, `null` when none is open so the merge clears one that closed.
+  const stretch = boardStretch({ home, root, slug, now: now(), run });
+  const stamp = { checked: new Date(now()).toISOString(), until: new Date(now() + holds).toISOString(), resting: parsed.resting === true, stretch };
   fs.writeFileSync(checked, `${JSON.stringify(stamp)}\n`, 'utf8');
   stdout(`ArtifactData update: url ${url ?? '<board>'}, collection board, doc_id summary, file_path ${checked}`);
   stdout('  once every batch above was sent: the board reads it as the time you checked the record');

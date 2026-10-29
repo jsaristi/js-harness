@@ -14,14 +14,16 @@
 //     against the clock (`hourRefusal`).
 //   - `Bash`: backticks inside double quotes, which bash runs as commands (`backtickRefusal`); then a recursive `rm` or
 //     an `rmdir` of a drive's root or a folder at its top, which the host holds for the user even in bypass mode
-//     (`driveRootRemovalRefusal`; odd/tasks/held-sessions.md, T4); then a gentle-ai review
+//     (`driveRootRemovalRefusal`; odd/tasks/held-sessions.md, T4); then a write to a review's record by hand
+//     (`reviewRecordWriteRefusal`; docs/proposals/gentle-ai-reverse-engineering.md, section 13.3, row 3); then a gentle-ai review
 //     given a `--base-ref` its head does not contain (`reviewBaseRefusal`; odd/tasks/gate-wait.md, T11); then a `node --test` of
 //     several files outside a turn while another gate holds the machine's lock, refused with JH 8's warning line
 //     unchanged (bin/lib/test-run-warning.mjs; his answers of 2026-10-14, S7 and S8), and a `js-harness sessions` read of
 //     the board (`--watch` too) in the same case (docs/FAILURES.md, board-read-loads-gate).
 //   - `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, and a `Grep` of a file or of the folder that holds it: a
 //     path in a place of secrets the denies of the Claude settings keep sessions off, or Claude Code's login file
-//     (bin/lib/deny-paths.mjs, the one module this path loads; odd/tasks/f8-s10-port.md, T5). All but `Write` and
+//     (bin/lib/deny-paths.mjs, the one module this path loads; odd/tasks/f8-s10-port.md, T5). Then, but for `Read` and
+//     `Grep`, a review's record (`reviewRecordFileRefusal`, loaded only for a `.jsonl` path). All but `Write` and
 //     `Edit` stop there.
 //   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
 //     call leaves (read from disk for an Edit) and only when the call brings it
@@ -53,8 +55,9 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  the rules declare it), a start_session titled otherwise than <code> <n> · <purpose>, naming the next free\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
-  + '  does (where the rules declare terminal-note), a recursive rm or an rmdir of a folder at the top of a drive, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
+  + '  does (where the rules declare terminal-note), a recursive rm or an rmdir of a folder at the top of a drive, a shell write to a review\'s record, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
   + '  a Read, Write, Edit, MultiEdit, NotebookEdit or Grep of a place of secrets the denies of the Claude settings name, or of Claude Code\'s login file,\n'
+  + '  a Write, Edit, MultiEdit or NotebookEdit of a review\'s record (lens-reviews.jsonl and its kin in the git common dir),\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md), that leaves a feedback note\n'
   + '  of a memory folder naming no home of its rule in the repository (where the rules declare memory-feedback-home),\n'
   + '  or that puts a line in a Markdown\n'
@@ -115,6 +118,11 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const file = input[PATH_FIELDS[tool]];
     const place = tool === 'Grep' ? heldPlace(file) : deniedPlace(file);
     if (place !== null) return `js-harness guard: ${tool} of ${file} is refused: it matches ${place}, a place of secrets that sessions are kept off (the denies js-harness install holds in the Claude settings); if the work needs it, the user does that step by hand`;
+    // Only a `.jsonl` path loads the check of the review records.
+    if (tool !== 'Read' && tool !== 'Grep' && /\.jsonl\s*$/i.test(String(file ?? ''))) {
+      const record = (await import('./lib/guard.mjs')).reviewRecordFileRefusal(tool, file);
+      if (record !== null) return record;
+    }
     if (!FILE_TOOLS.has(tool)) return null;
   }
   if (FILE_TOOLS.has(tool)) {
@@ -133,7 +141,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     }
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
@@ -149,6 +157,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (backticks !== null) return backticks;
   const driveRoot = driveRootRemovalRefusal(input.command);
   if (driveRoot !== null) return driveRoot;
+  const record = reviewRecordWriteRefusal(input.command);
+  if (record !== null) return record;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
   const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
   if (base !== null) return base;

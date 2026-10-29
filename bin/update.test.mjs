@@ -642,13 +642,15 @@ test('upgrade with pnpm and --prefix installs with add -g in a home of its own a
 
 /** An upgrade with pnpm into a prefix whose bin folder holds pnpm's lock, stamped `ageMinutes` ago before the
  * run, or taken by the install itself when `ageMinutes` is null; it says whether the lock is left. */
-async function lockAfterUpgrade(ageMinutes, { processes = `${process.pid} node /x/js-harness.mjs upgrade --pm pnpm\n` } = {}) {
+async function lockAfterUpgrade(ageMinutes, { processes = `${process.pid} node /x/js-harness.mjs upgrade --pm pnpm\n`, filled = false } = {}) {
   const calls = [];
   let lock;
   const spawn = (prefix) => {
     lock = path.join(prefix, 'bin', '.pnpm-global-bin.lock');
     if (ageMinutes !== null) {
       fs.mkdirSync(lock, { recursive: true });
+      // A lock with something inside is one rmdir refuses, as Windows refuses a folder a process holds open.
+      if (filled) fs.writeFileSync(path.join(lock, 'held'), '');
       const then = new Date(Date.now() - ageMinutes * 60_000);
       fs.utimesSync(lock, then, then);
     }
@@ -713,6 +715,20 @@ test('upgrade with pnpm keeps even an old bin lock while a pnpm run by node runs
   assert.equal(quoted.left, true);
   const quotedNode = await lockAfterUpgrade(30, { processes: '89 "C:\\Program Files\\nodejs\\node.exe" "C:\\Program Files\\pnpm\\bin\\pnpm.cjs" i\n' });
   assert.equal(quotedNode.left, true);
+});
+
+// A lock six hours old stayed through a refresh with not a word, and its install waited on it and timed out
+// (2026-10-28): an old lock that stays is named, with its age and why it stays, and so is one rmdir refuses.
+test('upgrade with pnpm names an old bin lock it keeps, with its age and why, and one rmdir refuses', async () => {
+  const byNode = await lockAfterUpgrade(30, { processes: '77 /usr/bin/node /usr/lib/node_modules/pnpm/bin/pnpm.cjs install\n' });
+  assert.match(byNode.run.err, /pnpm's bin lock .*\.pnpm-global-bin\.lock is 30 minutes old \(taken at .*Z\) and stays: a pnpm runs/);
+  const unread = await lockAfterUpgrade(30, { processes: null });
+  assert.match(unread.run.err, /is 30 minutes old .* and stays: the process list could not be read/);
+  const refused = await lockAfterUpgrade(30, { filled: true });
+  assert.equal(refused.left, true);
+  assert.match(refused.run.err, /is 30 minutes old .* and stays: rmdir refused it \(ENOTEMPTY\)/);
+  // A fresh lock another install may hold is no news: nothing is said of it.
+  assert.doesNotMatch((await lockAfterUpgrade(1)).run.err, /bin lock/);
 });
 
 // install-update T8: with no --prefix the sync is run by whatever js-harness the shell finds, so that

@@ -138,6 +138,12 @@ Reviews:
 - PR 3, 315a15d5 (the door on a branch that turns the Codex review off midway, gentle-ai's R3-001 on the merge
   into f8-s11-sweep): Codex 0b53640..315a15d passed (32,403 input tokens); lens reliability, 0 findings (8,584 input
   tokens); gentle-ai on `0b53640d..315a15d5`: approved, no finding (lineage review-3b3d8d277f78d3b0).
+- PR 3, 133e0bcc (the merge of main at 9e44cca5: the merge-queue test's imports, two structure ceilings, and the
+  coverage register's five refreshed hashes): Codex 7cf13fc..133e0bc, 21 changed lines, passed (76,598 input tokens);
+  lens reliability, 0 findings, 791,578 input tokens, against an estimate of about 20,000: `lens-review` reads the
+  whole first-parent diff, main's 139 files, where `codex-review` reads the merge's own lines, and the estimate was
+  not checked against that. gentle-ai on `7cf13fcf..133e0bcc`: not reviewed, its candidate being main's 139 files;
+  its status was read and nothing started.
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe

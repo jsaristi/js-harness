@@ -41,7 +41,7 @@ lead's brief, `C:\Users\Oficina\.js-harness\background\briefs\2026-10-27T22-37-2
 ## Left
 - Cases 01 (paid eval), 02 (review consent) and 05 (reported done) still fail every trial, as in S0. They are later
   steps' work (S4b, S5).
-- Not checked: that the trial homes held his post-install files byte for byte (L26).
+- The trial homes held his post-install settings, `CLAUDE.md` and style, by the run's setup fingerprint (L26).
 
 ## Cost
 - Incident rerun: $10.61 for 20 trials, 10:17Z to 10:39Z.

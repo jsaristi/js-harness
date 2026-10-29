@@ -1,0 +1,18 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/rule-away-autonomy.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "proof": {
+    "total": 5,
+    "fixturePassed": 1
+  },
+  "rules": [
+    "away-autonomy"
+  ]
+}

@@ -14,7 +14,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { endsUnterminated } from './jsonl-tail.mjs';
-import { isSelf, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
+import { isSelf, projectSlug, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
+import { readRecord, recordFileOf } from './background.mjs';
 
 export const NOTICE_SCHEMA = 'js-harness.channel-notice/v1';
 export const OPENING_SCHEMA = 'js-harness.channel-opening/v1';
@@ -622,10 +623,15 @@ export function nextSessionNumber(home, slug, { code, readdir = (dir) => fs.read
   } catch (err) {
     if (err.code !== 'ENOENT') unavailable.push(`openings ${dir} (${err.code ?? err.message})`);
   }
+  // A session `sessions start` started holds its number before it sends a notice: its title is in that record.
+  const background = readRecord(home, { readFile });
+  if (background.unavailable) unavailable.push(`background sessions ${recordFileOf(home)} (${background.unavailable})`);
+  else if (background.skipped > 0) unavailable.push(`background sessions ${recordFileOf(home)} (${background.skipped} line${background.skipped === 1 ? '' : 's'} not readable as an entry)`);
   const titles = [
     ...record.notices.map((notice) => notice.from?.title),
     ...record.readings.map((reading) => reading.title),
     ...openings.map((opening) => opening.title),
+    ...(background.started ?? []).filter((entry) => typeof entry.root === 'string' && projectSlug(entry.root) === slug).map((entry) => entry.title),
   ].map((title) => roleOfTitle(title)).filter(Boolean);
   const numbers = [
     ...titles.filter((title) => title.code === code && title.role === 'work').map((title) => title.number),

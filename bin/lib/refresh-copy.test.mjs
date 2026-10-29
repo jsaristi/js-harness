@@ -195,6 +195,23 @@ test('refreshCopy does nothing when the gate lock is not obtained: no install, e
   assert.ok(!fs.existsSync(path.join(m.home, '.js-harness', 'refresh-backups')), 'no settings backup was written');
 });
 
+// Codex P2 on 79e3430..318f952: a session may begin a run while the gate lock is waited for, so it is looked at again
+// under the lock, once, and a session at work then refreshes nothing.
+test('refreshCopy looks once more under the gate lock and refreshes nothing, exit 75, when a session is at work then', async () => {
+  const m = machine({ prev: PREV });
+  const released = [];
+  const looks = [];
+  const takeGateLock = async () => ({ release: () => released.push(true), lost: () => false, waitedMs: 0 });
+  const run = await refresh(m, { takeGateLock, stillQuiet: () => (looks.push(released.length), { quiet: false, why: 'JH 9 (busy) began a run' }) });
+  assert.equal(run.code, 75, run.out);
+  assert.deepEqual(looks, [0], 'looked once, holding the lock');
+  assert.match(run.err, /refresh: JH 9 \(busy\) began a run while the gate lock was waited for: nothing was refreshed/);
+  assert.deepEqual(m.calls, [], 'no package manager ran');
+  assert.deepEqual(released, [true], 'the lock was released');
+  const quiet = await refresh(machine({ prev: PREV }), { stillQuiet: () => ({ quiet: true }) });
+  assert.equal(quiet.code, 0, quiet.err);
+});
+
 test('pruneStalePnpm removes unused install folders and old bin backups as prune-pnpm.sh does, keeps used and young ones, and names a shim whose target is missing', () => {
   const top = tempDir('js-harness-prune-');
   const home = path.join(top, 'pnpm');

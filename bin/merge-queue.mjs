@@ -24,7 +24,9 @@ import { defaultBranchOf } from './lib/default-branch.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
-import { REFRESH_FAILED, refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
+import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
+import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
+import { claudeRunner, listAgents } from './lib/background.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
@@ -62,7 +64,8 @@ ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or n
 verified by its --version (the version main's package.json names) and by the sha its shim names, then js-harness
 install and js-harness doctor run, and the stale pnpm state is pruned. The undo is printed. A land that moved nothing
 refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install fails (the landing
-stands), 75 when the gate lock was not obtained (nothing refreshed).
+stands), 75 when the gate lock was not obtained or a session of the project was still at work after 30 minutes
+(nothing refreshed): the refresh first waits for every session claude agents lists busy or waiting to be between runs.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
@@ -790,29 +793,14 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   }
   let exit = code;
   if (args.refreshCopy) {
-    // After the land and its removals, as the lead ran update-copy.sh after a land. Only a refresh that fails changes
-    // the exit (REFRESH_FAILED, GATE_NOT_RUN): the landing it follows already stands.
-    const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
-    const sha = landed ? log.record.candidate : null;
-    let refreshed;
-    try {
-      refreshed = await (deps.refreshCopy ?? refreshInstalledCopy)({
-        landed,
-        sha,
-        version: landed ? versionAt(sha, args.cwd, deps.run ?? spawnSync) : null,
-        home: harnessHomeOf(env),
-        cwd: args.cwd,
-        env,
-        session: env.CLAUDE_CODE_SESSION_ID || null,
-        stdout: printOut,
-        stderr: printErr,
-      });
-    } catch (err) {
-      // A refresh that threw still lets the land record below be written: main has moved whatever the refresh did.
-      printErr(`refresh failed: ${err.message}`);
-      refreshed = REFRESH_FAILED;
-    }
-    exit = refreshed === 0 ? code : refreshed;
+    // After the land and its removals, as the lead ran update-copy.sh after a land, once the project's sessions are
+    // between runs. Only a refresh that fails or waits in vain changes the exit: the landing it follows already stands.
+    const run = deps.run ?? spawnSync;
+    const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
+    exit = await refreshAfterLand({
+      code, log, refresh: deps.refreshCopy ?? refreshInstalledCopy, versionOf: (sha) => versionAt(sha, args.cwd, run), home: harnessHomeOf(env), cwd: args.cwd, env, run, list,
+      now, sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))), stdout: printOut, stderr: printErr,
+    });
   }
   if (log.file && log.record.leftOut.length > 0) {
     // After the land's own last line, and not as its `said`: telling is no part of what the land did. A notice

@@ -214,6 +214,8 @@ export async function refreshCopy({
   takeGateLock,
   runHeld = heldInChild,
   session = null,
+  // One look at the work sessions under the lock: `{ quiet }`, with `why` when not (lookOnce, merge-queue-refresh.mjs).
+  stillQuiet = () => ({ quiet: true }),
   stdout = console.log,
   stderr = console.error,
 }) {
@@ -237,6 +239,12 @@ export async function refreshCopy({
   }
   const { lock } = turn;
   try {
+    // A session may have begun a run while the lock was waited for, and a refresh under it breaks its hooks.
+    const quiet = stillQuiet();
+    if (!quiet.quiet) {
+      stderr(`refresh: ${quiet.why} while the gate lock was waited for: nothing was refreshed, and the installed copy still names its previous main`);
+      return GATE_NOT_RUN;
+    }
     return await runHeld({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr });
   } finally {
     const lost = lock.lost();

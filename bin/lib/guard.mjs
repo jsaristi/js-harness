@@ -3,6 +3,7 @@
 // an older js-harness on the path answers 2 to a command it does not know, and 2 blocks the host, so every hook
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -273,10 +274,12 @@ export function terminalNoteRefusal(command, projectData) {
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
  * as it is: a Windows path is written with them. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
- * a `$(...)` stays in its word. */
-function shellWords(command, { groups = false } = {}) {
+ * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
+ * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
+function shellWords(command, { groups = false, redirections = false } = {}) {
   const words = [];
   const operators = new Set();
+  const redirects = new Set();
   const operator = (text) => { operators.add(words.length); words.push(text); };
   let word = null;
   let quote = null;
@@ -334,12 +337,21 @@ function shellWords(command, { groups = false } = {}) {
       const pair = text[i + 1] === c && c !== ';';
       operator(pair ? c + c : c);
       if (pair) i += 1;
+    } else if (redirections && c === '>') {
+      if (word !== null && !/^\d+$/.test(word)) words.push(word);
+      word = null;
+      const pair = text[i + 1] === '>';
+      redirects.add(words.length);
+      words.push(pair ? '>>' : '>');
+      if (pair) i += 1;
+      if (text[i + 1] === '|') i += 1;
     } else {
       word = (word ?? '') + c;
     }
   }
   if (word !== null) words.push(word);
   words.operators = operators;
+  words.redirections = redirects;
   return words;
 }
 
@@ -454,6 +466,404 @@ export function driveRootRemovalRefusal(command) {
 
 // The words after which a command starts, as after an operator: a group's `{` and the bodies of if, for and while.
 const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
+
+// The records of both reviews, each in `<git common dir>/js-harness/` (./codex-reviews.mjs, ./codex-review-runs.mjs,
+// ./lens-reviews.mjs; a test holds this list to their names). Only the commands that make a review write them: a
+// line a session writes there by hand reads as a review nobody made (docs/proposals/gentle-ai-reverse-engineering.md,
+// section 13.3, row 3). This is the only thing that stops a session writing a lens record and its run line both; the
+// run line (./lens-reviews.mjs) refuses a record written with none.
+export const REVIEW_RECORD_FILES = Object.freeze(['codex-reviews.jsonl', 'codex-review-runs.jsonl', 'lens-reviews.jsonl', 'lens-review-runs.jsonl']);
+const RECORD_NAMES = REVIEW_RECORD_FILES.map((name) => name.replace(/\./g, '\\.')).join('|');
+const RECORD_PATH = new RegExp(`(?:^|/)js-harness/(${RECORD_NAMES})$`, 'i');
+// A record's name in a script's text, where its folder may be joined apart from it.
+const RECORD_IN_TEXT = new RegExp(`(?:^|[\\\\/'"\`\\s(,])(${RECORD_NAMES})(?![\\w.-])`, 'i');
+const RECORDS_FOLDER = /(?:^|\/)js-harness\/?$/i;
+// The folder itself is `js-harness` in a git dir, so a project folder named `js-harness` is not it. Each part of a path
+// may be a glob (`partMatches`). A `.git` under any prefix counts, an absolute path to this one among them, refusing
+// more being the safe side; a bare `.git` removed whole is this checkout's only from where the command runs, since
+// another project's is removed often and an absolute path to this one is not followed.
+
+/** Whether the part of a path `part`, a name or a glob, matches `name` as a shell reads it: `*`, `?` and a bracketed
+ * class (`[!…]` or `[^…]` negated), every other character as itself, and a leading dot matched only by a dot. */
+function partMatches(part, name) {
+  if (part === undefined) return false;
+  if (name.startsWith('.') && !part.startsWith('.')) return false;
+  const source = part.replace(/\[([!^]?)(\]?[^\]]*)\]|\*|\?|[.+^${}()|\\[\]]/g, (piece, negated, members) => {
+    if (piece === '*') return '.*';
+    if (piece === '?') return '.';
+    if (members === undefined) return `\\${piece}`;
+    return `[${negated === '' ? '' : '^'}${members.replace(/[\\^\]]/g, (c) => `\\${c}`)}]`;
+  });
+  try {
+    return new RegExp(`^${source}$`, 'i').test(name);
+  } catch {
+    return true;
+  }
+}
+
+/** The parts of the path `arg`, and whether a trailing slash keeps only folders. */
+function pathParts(arg) {
+  return { folderOnly: /.\/+$/.test(slashed(arg)), parts: slashed(arg).replace(/(.)\/+$/, '$1').split('/') };
+}
+
+const isGitDir = (part) => partMatches(part, '.git');
+const isRecordsFolder = (part) => partMatches(part, 'js-harness');
+const isRecord = (part) => REVIEW_RECORD_FILES.some((name) => partMatches(part, name));
+
+/** Whether removing or moving away the path `arg` takes a record: it is this checkout's git dir, the records' folder,
+ * or a record in it, which a trailing slash leaves out, every record being a file. */
+function takesRecords(arg) {
+  const { folderOnly, parts } = pathParts(arg);
+  const back = (n) => parts[parts.length - n];
+  if (parts.length === 1 && isGitDir(back(1))) return true;
+  if (isGitDir(back(2)) && isRecordsFolder(back(1))) return true;
+  return !folderOnly && isGitDir(back(3)) && isRecordsFolder(back(2)) && isRecord(back(1));
+}
+
+/** Whether a `mv`, `cp`, `install` or `ln` given `args` writes the records' folder whole: one copied into a git dir, or
+ * what a folder holds (`<folder>/.`, or a glob that can match a record) copied into the git dir or the folder. */
+function folderWrittenInto(args) {
+  const { target, sources } = moveParts(args);
+  if (target === undefined) return false;
+  const { parts } = pathParts(target);
+  const holds = (source) => /\/\.\/*$/.test(String(source).replace(/\\/g, '/'));
+  const last = (source) => pathParts(source).parts.pop();
+  if (isGitDir(parts[parts.length - 1])) return sources.some((source) => holds(source) || isRecordsFolder(last(source)));
+  if (isGitDir(parts[parts.length - 2]) && isRecordsFolder(parts[parts.length - 1])) {
+    return sources.some((source) => holds(source) || isRecord(last(source)));
+  }
+  return false;
+}
+
+/** `file` with forward slashes and its `.`, `..` and doubled slashes taken out. */
+const slashed = (file) => path.posix.normalize(String(file).trim().replace(/\\/g, '/'));
+
+/** The name of the review record the path `file` is, or null when it is none: a file of `REVIEW_RECORD_FILES` in a
+ * folder named `js-harness`, in any spelling of the path. */
+export function reviewRecordOf(file) {
+  const match = typeof file === 'string' && file.trim() !== '' ? RECORD_PATH.exec(slashed(file)) : null;
+  return match === null ? null : match[1].toLowerCase();
+}
+
+/** Whether the path `file` names a review record by its file name alone. */
+const recordNamed = (file) => REVIEW_RECORD_FILES.includes(slashed(file).split('/').pop().toLowerCase());
+
+/** The refusal of a write to a review record, after `what` says which write and which record. */
+const recordReason = (what) => `js-harness guard: ${what}, and only the command that makes the review writes one `
+  + '(js-harness lens-review, js-harness codex-review): a line written by hand reads as a review nobody made, and '
+  + 'check --push counts no lens record that names no run line of its own. Run the review instead; reading a record '
+  + 'is free, and removing one is the user\'s to do.';
+
+/** Why the file tool `tool` is refused for writing the path `file`, or null when it is no review record. */
+export function reviewRecordFileRefusal(tool, file) {
+  const name = reviewRecordOf(file);
+  return name === null ? null : recordReason(`${tool} of ${file} is refused: it is ${name}, the record of a review`);
+}
+
+// The commands that write every file they are given (`mv` moves them away, which writes them too), and those that write
+// into a target: the last path, or the folder `-t` names.
+const WRITES_EACH = new Set(['tee', 'truncate', 'rm', 'shred', 'mv']);
+const WRITES_INTO = new Set(['mv', 'cp', 'install', 'ln']);
+const IN_PLACE = new Set(['sed', 'perl']);
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
+const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby', 'deno', 'bun', 'pwsh', 'powershell']);
+const POWERSHELLS = new Set(['pwsh', 'powershell']);
+// The words before a command that leave it the command: an assignment, and a few wrappers.
+const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
+// The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
+const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
+const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
+// A write call the code names without calling it: passed on, held or destructured.
+const HELD_WRITE = /\b(?:appendFile|writeFile|createWriteStream|copyFile|appendJsonLine|rename|truncate|unlink)(?:Sync)?\b(?!\s*\()/;
+// The package's constants and functions that name a record, each with the record it names.
+export const RECORD_HANDLES = Object.freeze({
+  LENS_REVIEWS_FILE: 'lens-reviews.jsonl',
+  LENS_REVIEW_RUNS_FILE: 'lens-review-runs.jsonl',
+  codexReviewsPath: 'codex-reviews.jsonl',
+  codexReviewRunsPath: 'codex-review-runs.jsonl',
+});
+const RECORD_HANDLE = new RegExp(`\\b(${Object.keys(RECORD_HANDLES).join('|')})\\b`);
+// A function of this package that appends a record of a review and nothing else, named in a script's code: called,
+// passed on or held, it is refused; named in a string, it is text.
+const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReviewRun|appendCodexReview)\b/;
+
+/** Why the Bash command `command` is refused for writing a review record, or null (`recordWriteOf`). */
+export function reviewRecordWriteRefusal(command) {
+  const what = recordWriteOf(command);
+  return what === null ? null : recordReason(what);
+}
+
+/** What the shell command `command` writes of the review records, said as a refusal opens, or null. A record is written
+ * by a redirection to it, by a command of `WRITES_EACH` given it, by one of `WRITES_INTO` aimed at it or at the records'
+ * folder with a record's name, by `sed` or `perl` with an in-place option, by `dd of=` it, by `rm` of the records'
+ * folder, by `bash -c` (or `sh`, `zsh`, `dash`), `cmd /c` or `eval` of a script that does, and by an interpreter's command
+ * line whose write call is given it, that calls a function of this package that appends a record, or that starts a
+ * child process beside a record's name (`CHILD_STARTS`); PowerShell's command line is read as a shell's too. Reading
+ * one passes, and so does text in quotes or a heredoc's body. A script fed on standard input, a path held in a shell
+ * variable, a record's name built from parts and a `cd` into the folder are not followed. */
+function recordWriteOf(command) {
+  const words = shellWords(command, { groups: true, redirections: true });
+  const { operators, redirections } = words;
+  let start = 0;
+  for (let i = 0; i <= words.length; i += 1) {
+    if (i < words.length && !operators.has(i)) continue;
+    const redirected = new Set([...redirections].filter((at) => at >= start && at < i).map((at) => at - start));
+    const what = segmentRecordWrite(words.slice(start, i), redirected);
+    if (what !== null) return what;
+    start = i + 1;
+  }
+  return null;
+}
+
+/** What the words of one simple command write of the review records, said as the refusal opens, or null.
+ * `redirected` holds the indexes of its redirections, each followed by the file it writes. */
+function segmentRecordWrite(words, redirected) {
+  const writes = (name) => (name === null || name === undefined ? null : `this command writes ${name}, the record of a review`);
+  for (const at of redirected) {
+    const name = reviewRecordOf(words[at + 1]);
+    if (name !== null) return writes(name);
+  }
+  // What is left is the command and its arguments.
+  const segment = words.filter((_, i) => !redirected.has(i) && !redirected.has(i - 1));
+  let at = 0;
+  while (at < segment.length && (COMMAND_KEYWORDS.has(segment[at]) || WRAPPERS.has(segment[at]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at]))) at += 1;
+  const program = String(segment[at] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd)$/, '');
+  const args = segment.slice(at + 1);
+  const first = args.map(reviewRecordOf).find((name) => name !== null) ?? null;
+  if (WRITES_EACH.has(program) && first !== null) return writes(first);
+  if (program === 'rm' && args.some(takesRecords)) return 'this command removes the folder that holds every record of a review';
+  if (program === 'mv' && moveParts(args).sources.some(takesRecords)) return 'this command moves away the folder that holds every record of a review';
+  if (WRITES_INTO.has(program) && writtenInto(args) === null && folderWrittenInto(args)) return 'this command writes the folder that holds every record of a review';
+  if (WRITES_INTO.has(program)) return writes(writtenInto(args));
+  if (IN_PLACE.has(program) && args.some((arg) => /^-[A-Za-z]*i/.test(arg) || arg.startsWith('--in-place')) && first !== null) return writes(first);
+  if (program === 'dd') return writes(args.map((arg) => (arg.startsWith('of=') ? reviewRecordOf(arg.slice(3)) : null)).find((name) => name !== null));
+  if (program === 'eval') return recordWriteOf((args[0] === '--' ? args.slice(1) : args).join(' '));
+  if (SHELLS.has(program)) {
+    const flag = args.findIndex((arg) => /^-[A-Za-z]*c$/.test(arg));
+    return flag === -1 || args[flag + 1] === undefined ? null : recordWriteOf(args[flag + 1]);
+  }
+  if (program === 'cmd') return cmdRecordWrite(args);
+  if (!INTERPRETERS.has(program)) return null;
+  // The record the command line names anywhere, the script's arguments and environment among them, which a script reads
+  // as `process.argv` or `process.env` (JH 74).
+  const named = segment.map((word) => reviewRecordOf(word) ?? recordNamedIn(word)).find((name) => name !== null) ?? null;
+  for (const arg of args) {
+    const append = RECORD_APPENDS.exec(codeOf(arg));
+    if (append !== null) return `this command calls ${append[1]}, which appends the record of a review`;
+    const name = scriptRecordWrite(arg, named);
+    if (name !== null) return writes(name);
+    const child = CHILD_STARTS[LANGUAGES[program]].test(arg) ? recordNamedIn(arg) ?? named : null;
+    if (child !== null) {
+      return `this command's script starts a child process beside ${child}, the record of a review, and what a child process `
+        + 'runs is not read here (read a record with cat or a file tool, or start the child process from a command that names no record)';
+    }
+    // PowerShell runs a command line as a shell does: its redirections, and the commands it starts, cmd among them.
+    if (POWERSHELLS.has(program) && recordWriteOf(backslashesKept(arg)) !== null) return recordWriteOf(backslashesKept(arg));
+  }
+  return null;
+}
+
+// What starts a child process, or a thread that runs a string, in the language of each interpreter (JH 74; found by
+// JH 72): a script that names a record and starts one is refused whole, since what the child runs (a command line, an
+// array of words, a name chosen at run time) is not read here. Matched in the script's strings too, where Node names its
+// module. A runtime that starts processes among other things (Deno, Bun) is refused whole, since a destructured name
+// or brackets rename its call (the independent verifier on 62470339); a read through one goes through cat. Python's os
+// is refused by its process functions, or brought in under another name, so its paths still read (the same, on
+// db220fe3). A module or a function whose name the script builds from parts is not followed.
+const CHILD_STARTS = {
+  js: /\b(?:child_process|worker_threads|Deno|Bun|binding|_linkedBinding|execve|dlopen)\b|['"]bun['"]/,
+  python: new RegExp([
+    /\b(?:posix|nt|_winapi|_posixsubprocess|subprocess|pty|asyncio|multiprocessing|ctypes|importlib|__import__)\b/,
+    /\bos\s*\.\s*(?:system|popen|exec|spawn|posix_spawn|fork|startfile|__dict__)/,
+    // An import's names run to its closing parenthesis, or over a backslash's line (Codex on 1189ae0..7ea64a7).
+    /\bfrom\s+os\s+import\s*(?:\([^)]*?|(?:\\\s*\n|[^;\n(])*?)(?:\*|\b(?:system|popen|exec|spawn|posix_spawn|fork|startfile))/,
+    /\bimport\s+os\s+as\b/,
+    /\b(?:getattr|vars)\s*\(\s*os\b|\bmodules\s*\[/,
+  ].map((part) => part.source).join('|')),
+  // A pipe open's pipe sits at its mode string's edge (`"|-"`, `'-|'`, `"cmd |"`), not in a block's `|f|` or `|| die`.
+  perlRuby: /`|\bqx\b|%x[^\w\s\\]|\b(?:system|exec|spawn|fork|syscall|readpipe|Open[23]|IPC|PTY|popen\w*)\b|\bopen\b[^;]*?(?:["']\s*\||\|\s*["'])/,
+  powershell: /\b(?:Start-Process|saps|start|Invoke-Expression|iex|Invoke-Command|icm|Invoke-Item|ii|Start-Job|Start-ThreadJob|Invoke-CimMethod|Invoke-WmiMethod|scriptblock|NewScriptBlock|InvokeScript|ComObject|ShellExecute)\b|Diagnostics\.Process|Win32_Process/i,
+};
+const LANGUAGES = { node: 'js', deno: 'js', bun: 'js', python: 'python', python3: 'python', py: 'python', perl: 'perlRuby', ruby: 'perlRuby', pwsh: 'powershell', powershell: 'powershell' };
+
+// cmd's own commands that write the file they are given, as a word of the line: first, or after a space, `&`, `|`, `(`
+// or `@`, so after `if` and `for … do` too, and not inside a name such as copy.jsonl.
+const CMD_WRITES = /(?:^|[\s&|(@])(?:copy|xcopy|robocopy|move|del|erase|ren|rename|mklink|replace)(?:\.exe)?(?=[\s/]|$)/i;
+
+/** What `cmd /c` (or `/k`) given `args` writes of the review records: its command line read as a shell reads it, or one
+ * of cmd's own writing commands beside a record's name. The flag may hold the line after it (`/c"echo x"`). */
+function cmdRecordWrite(args) {
+  const flag = args.findIndex((arg) => /^\/\/?[ck]/i.test(arg));
+  if (flag === -1) return null;
+  const line = [args[flag].replace(/^\/\/?[ck]/i, ''), ...args.slice(flag + 1)].join(' ');
+  const record = recordNamedIn(line);
+  if (record !== null && CMD_WRITES.test(line)) return `this command writes ${record}, the record of a review`;
+  return recordWriteOf(backslashesKept(line));
+}
+
+/** The command line `text` of a shell that takes no backslash for an escape (cmd, PowerShell), as a POSIX shell reads
+ * the same words: each backslash doubled, so a Windows path keeps its separators. */
+const backslashesKept = (text) => text.replace(/\\/g, '\\\\');
+
+/** The target and the sources of a `mv`, `cp`, `install` or `ln` given `args`, and the folder `-t` (alone or last among
+ * short options, or `--target-directory`) names, which is then the target; else the target is the last path. */
+function moveParts(args) {
+  const flag = args.findIndex((arg) => /^-[A-Za-z]*t$/.test(arg) || arg === '--target-directory');
+  const long = args.find((arg) => arg.startsWith('--target-directory='));
+  const folder = flag !== -1 ? args[flag + 1] : long?.slice('--target-directory='.length);
+  const paths = args.filter((arg, i) => !arg.startsWith('-') && !(flag !== -1 && i === flag + 1));
+  if (folder !== undefined) return { folder, target: folder, sources: paths };
+  return { folder, target: paths.length < 2 ? undefined : paths[paths.length - 1], sources: paths.slice(0, -1) };
+}
+
+/** The record a `mv`, `cp`, `install` or `ln` given `args` writes: its target when that is a record, or a record's name
+ * among its sources when the target is the records' folder; else null (`moveParts`). */
+function writtenInto(args) {
+  const { folder, target, sources } = moveParts(args);
+  if (target === undefined) return null;
+  if (folder === undefined && reviewRecordOf(target) !== null) return reviewRecordOf(target);
+  if (!RECORDS_FOLDER.test(slashed(target ?? ''))) return null;
+  const source = sources.find(recordNamed);
+  return source === undefined ? null : slashed(source).split('/').pop().toLowerCase();
+}
+
+/** The top-level arguments of the call whose `(` ends just before `from` in `text`, as written. */
+function callArguments(text, from) {
+  const args = [];
+  let current = '';
+  let depth = 0;
+  let quote = null;
+  for (let i = from; i < text.length; i += 1) {
+    const c = text[i];
+    if (quote !== null) {
+      current += c;
+      if (c === '\\') current += text[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') quote = c;
+    else if ('([{'.includes(c)) depth += 1;
+    else if (')]}'.includes(c)) {
+      if (depth === 0) break;
+      depth -= 1;
+    } else if (c === ',' && depth === 0) {
+      args.push(current);
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  args.push(current);
+  return args;
+}
+
+// A call that runs a string as code, here or in a child process: what that string holds is code too. A timer may run
+// what it is given unless that is a function written in place.
+const RUNS_TEXT = /\b(?:eval|Function|exec\w*|spawn\w*|fork|compile|runIn\w*Context|system|popen|Popen|check_output|check_call)\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*(?![\s(]|function\b|async\b|[\w$]+\s*=>)|\b(?:subprocess|child_process)\b/;
+// The one exec that runs no string: a RegExp's, called on the RegExp it is written on (`RegExp('…').exec(t)`), whose
+// arguments hold no call (gentle-ai on PR 630). Called on a name, it may be a child process's, and stays in RUNS_TEXT;
+// so does every exec of a script that names RegExp as anything but a call, which may make it another function, or that
+// could make a RegExp's exec something else: eval named without a call, a prototype, a global or a member named in
+// brackets by a string (the independent verifier on 3982ae68). An exec named in brackets reads `.exec` with spaces
+// after it, and stays. A RegExp named as a member (`obj.RegExp`, `obj. RegExp`) or within a longer name (`$RegExp`) is
+// another function, and stays too (gentle-ai R2 on 73fc8cf7..3982ae68).
+const REGEXP_EXEC = /(?<![\w$]|\.\s*)(?:new\s+)?RegExp\s*\([^()]*\)\s*\.exec\(/g;
+const REGEXP_NOT_CALLED = /\bRegExp\b(?!\s*\()|\b(?:function|class)\s+RegExp\b/;
+const REGEXP_REDIRECTED = /\b(?:eval|Function|constructor|prototype|__proto__|\w*[Pp]rototypeOf|define\w*|Reflect|Object|globalThis|global|window|self|this|with|atob|Buffer)\b|\[\s*['"`]/;
+
+/** Whether the code `code`, its strings blanked, runs a string (`RUNS_TEXT`), a RegExp's own exec left out. */
+const runsText = (code) =>
+  RUNS_TEXT.test(REGEXP_NOT_CALLED.test(code) || REGEXP_REDIRECTED.test(code) ? code : code.replace(REGEXP_EXEC, ''));
+
+/** The script `text` with what its string literals hold blanked to spaces, so a call is looked for in its code alone and
+ * at the same indexes; a template literal's `${…}` stays code, a member named in brackets (`fs['writeFileSync']`) is
+ * read as `.writeFileSync`, and a `//` or `/* … *\/` comment opens no string. On the safe side, the script comes back
+ * whole, its bracketed members still read so, when its code holds any other `/` (a regex literal's quotes would mislead it), a quote is left open, or the script
+ * runs a string (`runsText`). */
+function codeOf(script) {
+  // Read whole on the safe side, a script keeps its bracketed members read as `.name` (`text`, at the same indexes).
+  const text = script.replace(/\[\s*(['"`])([A-Za-z_$][\w$]*)\1\s*\]/g, (whole, _, name) => `.${name}`.padEnd(whole.length));
+  let out = '';
+  const open = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    const top = open[open.length - 1];
+    const comment = top !== "'" && top !== '"' && top !== '`' && c === '/' ? { '/': '\n', '*': '*/' }[text[i + 1]] : undefined;
+    if (comment !== undefined) {
+      const end = text.indexOf(comment, i + 2);
+      const to = end === -1 ? text.length : end;
+      out += text.slice(i, to);
+      i = to - 1;
+      continue;
+    }
+    // A regex literal may hold a quote, and telling one from a division needs a parser: read the script whole.
+    if (top !== "'" && top !== '"' && top !== '`' && c === '/') return text;
+    if (top === "'" || top === '"' || top === '`') {
+      if (c === top) open.pop();
+      else if (top === '`' && c === '$' && text[i + 1] === '{') {
+        open.push('${');
+        out += '${';
+        i += 1;
+        continue;
+      } else {
+        const escaped = c === '\\' && i + 1 < text.length;
+        out += escaped ? '  ' : ' ';
+        if (escaped) i += 1;
+        continue;
+      }
+    } else if (c === "'" || c === '"' || c === '`') open.push(c);
+    else if (c === '{' && top !== undefined) open.push('{');
+    else if (c === '}' && top !== undefined) open.pop();
+    out += c;
+  }
+  return open.length > 0 || runsText(out) ? text : out;
+}
+
+/** What the call argument `arg` holds when it is one string literal and nothing else, or null. */
+function literalOf(arg) {
+  const match = /^\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*$/s.exec(arg);
+  return match === null || (match[1] === '`' && match[2].includes('${')) ? null : match[2];
+}
+
+/** The record the script `text` writes by a call given it, or null. What each call writes: `rename` both of its paths,
+ * `copyFile` and `appendJsonLine` (this package's, given a folder and a record's name) their second, `open` its first
+ * when its mode (the second argument, or `mode=`) writes, the others their first. A call is looked for in the code, not
+ * inside a string. A path written whole in one string is a record only in the records' folder (`reviewRecordOf`); one
+ * assembled from parts, a join, is taken for a record when a part names one. A path given as anything but one string,
+ * a variable or a join of one, is taken for the record the script names anywhere, when it names one: reading a record
+ * and writing to a variable is refused with it, the safe side. So is a write call the code holds without calling it
+ * (`fs.writeFileSync.call`, `const w = fs.writeFileSync`). A record is named by its file name or by the package's
+ * constant or function for it (`RECORD_HANDLES`), in the script or, as `named`, elsewhere on its command line. */
+function scriptRecordWrite(text, named = null) {
+  const anywhere = recordNamedIn(text) ?? named;
+  const code = codeOf(text);
+  if (anywhere !== null && HELD_WRITE.test(code)) return anywhere;
+  for (const match of code.matchAll(WRITE_CALL)) {
+    const call = match[1].toLowerCase();
+    const args = callArguments(text, match.index + match[0].length);
+    if (call === 'open') {
+      const mode = args.slice(1).find((arg) => /^\s*mode\s*=/.test(arg)) ?? (args[1] !== undefined && !/^\s*\w+\s*=/.test(args[1]) ? args[1] : undefined);
+      if (mode === undefined || !/['"][^'"]*[wax+][^'"]*['"]/.test(mode)) continue;
+    }
+    const written = call === 'rename' ? args : call === 'copyfile' || call === 'appendjsonline' ? args.slice(1, 2) : args.slice(0, 1);
+    const recordIn = (arg) => {
+      const literal = call === 'appendjsonline' ? null : literalOf(arg);
+      return literal !== null ? reviewRecordOf(literal) : recordNamedIn(arg);
+    };
+    const named = written.map(recordIn).find((name) => name !== null);
+    if (named !== undefined) return named;
+    if (anywhere !== null && written.some((arg) => arg.trim() !== '' && literalOf(arg) === null)) return anywhere;
+  }
+  return CMDLET_WRITE.test(text) ? anywhere : null;
+}
+
+/** The record `text` names, by its file name or by a handle of `RECORD_HANDLES`, lower-cased; or null. */
+function recordNamedIn(text) {
+  const name = RECORD_IN_TEXT.exec(text)?.[1];
+  if (name !== undefined) return name.toLowerCase();
+  const handle = RECORD_HANDLE.exec(text)?.[1];
+  return handle === undefined ? null : RECORD_HANDLES[handle];
+}
 
 /** The hooks contract's answer that refuses the call, with `reason` shown to the agent. */
 export function denial(reason) {

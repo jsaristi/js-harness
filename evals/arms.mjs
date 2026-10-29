@@ -11,6 +11,8 @@
 //
 // The components are what the current arm's home template seeds (`evals/home.mjs`, `evals/codex-home.mjs`), each
 // agent its own. `plugin-<name>` and `mcp-<name>` are families: one id per installed plugin or MCP server.
+// `rule-<id>` is one too, one id per live rule (F8 S5c-a, `odd/tasks/f8-s5c-a-coverage.md`): its arm takes that
+// rule's text out of what js-harness wrote into the home, every span tied to it, and nothing else.
 //
 // Minimal's flags (`evals/configs.mjs`) switch off the user settings, every MCP server and every skill, so most
 // components cannot be put into it without changing more than one thing: those are measured by taking them out of
@@ -27,7 +29,7 @@ const CODEX_FIXED = [
   'agents-md', 'gentle-ai-agent-routing', 'gentle-ai-codegraph-guidance', 'gentle-ai-engram-protocol', 'gentle-ai-orchestrator',
   'gentle-ai-persona', 'hooks', 'js-harness', 'project', 'skills',
 ];
-const FAMILY = /^(plugin|mcp)-[a-z0-9][a-z0-9.-]*$/;
+const FAMILY = /^(plugin|mcp|rule)-[a-z0-9][a-z0-9.-]*$/;
 /** The components of each agent: a fixed list and the two families. */
 const COMPONENTS = { claude: CLAUDE_FIXED, codex: CODEX_FIXED };
 
@@ -38,7 +40,8 @@ const MINIMAL_WITH = {
   skills: SWITCHED_OFF, 'js-harness': SWITCHED_OFF, project: SWITCHED_OFF,
   'claude-md': NOT_YET, 'claude-md-own': NOT_YET, agents: NOT_YET, 'output-style': NOT_YET, hooks: NOT_YET,
 };
-const minimalWithRefusal = (id) => (id.startsWith('mcp-') ? null : id.startsWith('plugin-') ? SWITCHED_OFF : MINIMAL_WITH[id] ?? NOT_YET);
+const NO_RULES = 'minimal holds no rule\'s text, so a rule is measured as current-without, the arm that takes it out';
+const minimalWithRefusal = (id) => (id.startsWith('mcp-') ? null : id.startsWith('plugin-') ? SWITCHED_OFF : id.startsWith('rule-') ? NO_RULES : MINIMAL_WITH[id] ?? NOT_YET);
 
 const PREFIXES = [['current-without-', 'current', 'without'], ['minimal-with-', 'minimal', 'with']];
 
@@ -60,7 +63,7 @@ export function parseArm(name, agent) {
   if (components.length === 2 && components[0] > components[1]) throw new ArmError(`${name}: the pair is named sorted, ${[...components].sort().join('_')}, so one pair has one name`);
   for (const id of components) {
     if (!COMPONENTS[agent].includes(id) && !FAMILY.test(id)) {
-      throw new ArmError(`${name}: ${id} is not a component of ${agent === 'codex' ? 'Codex' : 'Claude Code'} (${COMPONENTS[agent].join(', ')}, plugin-<name>, mcp-<name>)`);
+      throw new ArmError(`${name}: ${id} is not a component of ${agent === 'codex' ? 'Codex' : 'Claude Code'} (${COMPONENTS[agent].join(', ')}, plugin-<name>, mcp-<name>, rule-<id>)`);
     }
   }
   for (const [whole, parts] of Object.entries(PARTS[agent])) {

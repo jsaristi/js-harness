@@ -122,6 +122,15 @@ one runs.
   a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
   it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
 
+### brief-waived-review-lines
+A lead's brief for code work waived the feature document, whose gentle-ai lines the merge door asks
+for every code commit while gentle-ai reviews (until F8's S2).
+- Class: delivery
+- Seen: 2026-10-28 — odd/tasks/board-follow-ups.md, L2 — the brief for JH 72 said "no feature
+  document needed"; the merge door then refused PR 636, and JH 72 added per-slice gentle-ai reviews
+  afterwards. The prevention: a lead's brief for code work never waives the feature document's
+  gentle-ai lines before S2
+
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was
 not the real one.
@@ -416,6 +425,11 @@ not the committed range, wrote no record and had to be run again.
 - Class: delivery
 - Seen: 2026-10-27 — this entry's own commit (JH 66, lens reader) — `docs/FAILURES.md` edited during
   the Codex review of `d6867d8..484df03`; 68,470 input tokens spent on a run that recorded nothing
+- Seen: 2026-10-28 — `odd/tasks/f8-s1-reviews.md` L16 (JH 69, T7) — a tracked file edited during the
+  Codex review of `9e167848..d153e61e` (run b2dfaa03 in `codex-review-runs.jsonl`); 79,701 input tokens spent
+  on a run that recorded nothing, and the review ran again
+- Seen: 2026-10-28 — `odd/tasks/f8-s5c-a-coverage.md` L6 (JH 73) — a test file written to fix a lens finding
+  during the Codex review of `947ac91..62f4a62`; 353,663 input tokens spent on two parts of 8, nothing recorded
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 

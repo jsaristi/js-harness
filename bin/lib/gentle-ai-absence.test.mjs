@@ -23,6 +23,7 @@ const RESULT = 'a result a past run recorded, with the machine it ran on';
 const LICENCE = 'the licence of what was adapted from gentle-ai requires its notice';
 const GUARD = 'guards a machine where gentle-ai is still installed, until S2 removes it';
 const JH69 = 'the guard\'s refusal of a gentle-ai review base, which stays while gentle-ai reviews here and leaves with it at S2 (the lead, 2026-10-28)';
+const OWNED = 'a file JH 69 owns (the S1 records fix), which S11\'s brief leaves out of its edits';
 
 const NAMED = {
   'bin/lib/gentle-ai-absence.test.mjs': 'this list',
@@ -73,6 +74,10 @@ const NAMED = {
   'bin/lib/guard.test.mjs': JH69,
   'bin/lib/codex-reviews.mjs': JH69,
   'bin/js-harness.mjs': `${JH69}: the guard's help line`,
+  'bin/lib/lens-reviews.mjs': OWNED,
+  'bin/lib/lens-reviews.test.mjs': OWNED,
+  'bin/lib/rules-coverage.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
+  'bin/lib/rules-coverage.test.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
 };
 
 /** The files git tracks under the roots, as paths from the repository with forward slashes: what a commit holds, so a
