@@ -176,3 +176,15 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   run it in the background (it can wait an hour for the lock). Left by design: stopping a wait stops its git and gh
   children; a loop that is the refresh's own ancestor is its caller, not a blocker; a wait matched to no session is
   printed, not told; a relative or 8.3 path is not read as the copy's (none seen on this machine).
+- L8. 2026-10-29, Codex's recheck of b9fa64f..8843225 (184,244 input tokens): four of the five fixed; (2) half open: a
+  transcript of another project's worktree was told in a channel named after that worktree's folder, which no one
+  reads. Now each other transcript's channel is its main checkout's, read from the `cwd` it ran in
+  (`projectSlug(mainCheckout(cwd))`, as `notify` names it). Claude lenses on b9fa64f..8843225: 0 findings (4 lenses).
+- L9. 2026-10-29, the verifier's second pass on b9fa64f..8843225: no blocker; guard.mjs changes by the export alone
+  (43/43). Fixed: (N1) a transcript of a worktree git no longer lists was told in a channel named after its folder,
+  and printed "told": one that ran under this project's checkout is this project's, and one whose folder is gone
+  elsewhere is printed with "its project's channel is not known", not told; (N2) the note after a stop that failed
+  partway says the wait may have been stopped, to run again only if it no longer runs; (N4) the refresh's own process
+  with no creation time in the listing is pinned as its own; the no-backup line no longer says the shim names no copy.
+  Left: a wait typed inside `bash -c "..."`, or by a path the shell expands, matches no session and is printed (N3);
+  the 100 ms tolerance where both reads give the same time (N5).

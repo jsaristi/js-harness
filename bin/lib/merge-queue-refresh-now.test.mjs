@@ -17,7 +17,7 @@ after(() => {
 
 const NOW = Date.parse('2026-10-29T17:00:00.000Z');
 const at = (minutes) => new Date(NOW - minutes * 60_000).toISOString();
-const base = (time) => ({ timestamp: time, cwd: 'D:\\proj', gitBranch: 'main', isSidechain: false });
+const base = (time, cwd = 'D:\\proj') => ({ timestamp: time, cwd, gitBranch: 'main', isSidechain: false });
 const titled = (title) => ({ type: 'custom-title', customTitle: title, sessionId: 's' });
 const call = (id, command, time) => ({ type: 'assistant', ...base(time), message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name: 'Bash', input: { command, description: 'made up', run_in_background: true } }] } });
 const launched = (id, task, time) => ({ type: 'user', ...base(time), toolUseResult: { stdout: '', stderr: '', backgroundTaskId: task }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } });
@@ -36,15 +36,25 @@ function machine() {
   write('D--js-harness--claude-worktrees-f8', 'tree-1', waiting('js-harness wait --notice-to 85', titled('JH 85 · follow-ups')));
   write('D--js-harness', 'phone-1', waiting('js-harness wait --main-has 1c6b6c2'));
   write('D--other', 'other-1', waiting('js-harness wait --pr 12', titled('JH 3 · other work')));
+  // A worktree of another project: its channel is its main checkout's, read from the cwd its transcript ran in.
+  write('D--other--claude-worktrees-x', 'other-2', waiting('js-harness wait --pr 13', { type: 'user', ...base(at(31), 'D:\\other\\.claude\\worktrees\\x'), origin: { kind: 'human' }, message: { role: 'user', content: 'go' } }, titled('JH 4 · other tree')));
+  // A worktree of this project git no longer lists, its folder still there: this project's channel, by its cwd.
+  write('D--js-harness--claude-worktrees-gone', 'gone-1', waiting('js-harness wait --pr 14', { type: 'user', ...base(at(31), 'D:\\js-harness\\.claude\\worktrees\\gone'), origin: { kind: 'human' }, message: { role: 'user', content: 'go' } }, titled('JH 5 · landed tree')));
+  // A worktree of another project that is gone: its channel cannot be known.
+  write('D--else--claude-worktrees-y', 'else-1', waiting('js-harness wait --pr 15', { type: 'user', ...base(at(31), 'D:\\else\\.claude\\worktrees\\y'), origin: { kind: 'human' }, message: { role: 'user', content: 'go' } }, titled('JH 6 · lost tree')));
   appendReading(home, 'D--js-harness', newReading({ at: at(40), reader: { id: 'phone-1' }, title: 'JH 84 · from the phone' }));
-  return { claudeHome, home, here: { slug: 'D--js-harness', dirs: [path.join(claudeHome, 'projects', 'D--js-harness'), path.join(claudeHome, 'projects', 'D--js-harness--claude-worktrees-f8')] } };
+  return { claudeHome, home, here: { slug: 'D--js-harness', root: 'D:\\js-harness', dirs: [path.join(claudeHome, 'projects', 'D--js-harness'), path.join(claudeHome, 'projects', 'D--js-harness--claude-worktrees-f8')] } };
 }
 
-test("openSessions reads every project's open sessions, each with its channel's slug, a phone's named by its reading", () => {
-  const found = openSessions({ ...machine(), now: () => NOW });
+test("openSessions reads every project's open sessions, each with its main checkout's channel, a phone's named by its reading", () => {
+  const slugOf = (cwd) => (cwd === 'D:\\other\\.claude\\worktrees\\x' ? 'D--other' : cwd.startsWith('D:\\else') ? null : `slug of ${cwd}`);
+  const found = openSessions({ ...machine(), now: () => NOW, slugOf });
   const brief = found.map(({ title, slug, waits }) => [title, slug, waits]).sort((a, b) => a[0].localeCompare(b[0]));
   assert.deepEqual(brief, [
-    ['JH 3 · other work', 'D--other', ['js-harness wait --pr 12']],
+    ['JH 3 · other work', 'slug of D:\\proj', ['js-harness wait --pr 12']],
+    ['JH 4 · other tree', 'D--other', ['js-harness wait --pr 13']],
+    ['JH 5 · landed tree', 'D--js-harness', ['js-harness wait --pr 14']],
+    ['JH 6 · lost tree', null, ['js-harness wait --pr 15']],
     ['JH 84 · from the phone', 'D--js-harness', ['js-harness wait --main-has 1c6b6c2']],
     ['JH 85 · follow-ups', 'D--js-harness', ['js-harness wait --notice-to 85']],
     ['JH 86 · rules and evals', 'D--js-harness', ['js-harness wait --pr 674']],

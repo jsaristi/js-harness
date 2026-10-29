@@ -115,19 +115,21 @@ const blockersWhy = (blockers) => `${blockers.length === 1 ? 'a process other th
 
 /** Tells each work session whose waits `stopped` holds to run them again, by one note of `reArmNote` through `tell`, in
  * the channel of its project (`session.slug`; this one's when it names none), and prints every other stopped wait with
- * the command that runs it again. A note that cannot be written is said. */
+ * the command that runs it again, as it does one whose project's channel is not known (`slug` null). A note that cannot
+ * be written is said. */
 function tellStopped({ stopped, sha, code, tell, stdout }) {
   const bySession = new Map();
   for (const wait of stopped) {
     const role = roleOfTitle(wait.session?.title);
     const key = `${wait.session?.slug ?? ''}\0${role?.number}`;
-    if (role?.role === 'work') bySession.set(key, [...(bySession.get(key) ?? []), wait]);
+    if (role?.role === 'work' && wait.session.slug === null) stdout(`refresh: run again the wait of ${wait.whose} (its project's channel is not known): ${wait.again}`);
+    else if (role?.role === 'work') bySession.set(key, [...(bySession.get(key) ?? []), wait]);
     else stdout(`refresh: run again the wait of ${wait.whose}: ${wait.again}`);
   }
   for (const waits of bySession.values()) {
     const { number } = roleOfTitle(waits[0].session.title);
     try {
-      tell(number, reArmNote({ sha, code, again: waits.map((wait) => wait.again) }), waits[0].session.slug);
+      tell(number, reArmNote({ sha, code, again: waits.map((wait) => wait.again), maybe: waits.some((wait) => wait.maybe) }), waits[0].session.slug);
       stdout(`refresh: told ${waits[0].whose} to run its ${waits.length === 1 ? 'wait' : `${waits.length} waits`} again`);
     } catch (err) {
       stdout(`refresh: could not tell ${waits[0].whose} to run its waits again (${err.message}): ${waits.map((wait) => wait.again).join('; ')}`);
@@ -196,7 +198,10 @@ export async function refreshNow({ main, copySha, look, stop, sessions, refresh,
     try {
       outcome = stop(seen.waits.flatMap((wait) => wait.targets));
     } catch (err) {
-      for (const wait of stopped) stdout(`refresh: may have stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);
+      for (const wait of stopped) {
+        wait.maybe = true;
+        stdout(`refresh: may have stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);
+      }
       return { quiet: false, why: `the waits could not be stopped (${err.message})` };
     }
     for (const wait of stopped) stdout(`refresh: stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);

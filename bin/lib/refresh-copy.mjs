@@ -335,7 +335,7 @@ async function refreshHoldingLock({ sha, version, home, settings, cwd, env, plat
   } else {
     stdout('settings before: no settings file to back up');
   }
-  stdout(`pnpm global package.json before: ${manifestBackup ? `copy ${manifestBackup}` : 'none to back up (the shim names no copy)'}`);
+  stdout(`pnpm global package.json before: ${manifestBackup ? `copy ${manifestBackup}` : 'none to back up (the shim names none, or it is not there)'}`);
   stdout(`refresh: installing main ${sha.slice(0, 7)} (version ${version}); the copy named ${previous ? previous.slice(0, previous.startsWith('v') ? undefined : 7) : 'no sha'} before`);
 
   // The copy is verified, and then run, by the path of the entry its shim names, never by a `js-harness` the PATH finds:

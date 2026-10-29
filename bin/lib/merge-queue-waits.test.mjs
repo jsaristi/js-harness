@@ -60,6 +60,9 @@ test('readCopy takes a pid reused between the two reads for a blocker, and keeps
   // The refresh run from a loop of the copy: the loop is its ancestor, and is left out.
   const looped = [...PROCESSES.filter((one) => one.pid !== 290), line(290, T, `node "${ENTRY}" loop --heartbeat`)];
   assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: looped, globalDir: GLOBAL, self: 300 }).blockers.map((one) => one.pid), [220]);
+  // The refresh's own process with no creation time in the listing is still its own: it never blocks itself.
+  const untimed = PROCESSES.map((one) => (one.pid === 300 ? { ...one, createdAt: null } : one));
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: untimed, globalDir: GLOBAL, self: 300 }).blockers.map((one) => one.pid), [220]);
 });
 
 test('readCopy takes a wait whose two creation times disagree for a blocker, and a script of pnpm\'s global folder outside the package for none', () => {

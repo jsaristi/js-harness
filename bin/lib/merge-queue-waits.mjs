@@ -157,11 +157,15 @@ function verbAndArguments(commandLine) {
 }
 
 /** The note a session gets for the waits `again` the refresh stopped: the sha the copy was refreshed to, whether the
- * refresh ended well (`code` 0), and the waits to run again, cut to a notice's length. */
-export function reArmNote({ sha, code, again }) {
+ * refresh ended well (`code` 0), and the waits to run again, cut to a notice's length. With `maybe`, the stop failed
+ * partway, so a wait may still run and is run again only if it does not. */
+export function reArmNote({ sha, code, again, maybe = false }) {
   const short = String(sha).slice(0, 7);
   const head = code === 0 ? `The installed copy was refreshed to ${short} by merge-queue --refresh-copy` : `The refresh of the installed copy to ${short} ended with exit ${code} (merge-queue --refresh-copy says why)`;
-  const waits = again.length === 1 ? 'the wait you ran from it was stopped for it: run it again' : `the ${again.length} waits you ran from it were stopped for it: run them again`;
+  const one = again.length === 1;
+  const waits = maybe
+    ? `${one ? 'the wait you ran from it' : `the ${again.length} waits you ran from it`} may have been stopped for it: run ${one ? 'it' : 'each'} again if it no longer runs`
+    : one ? 'the wait you ran from it was stopped for it: run it again' : `the ${again.length} waits you ran from it were stopped for it: run them again`;
   const text = `${head}, and ${waits}: ${again.join('; ')}`;
   return text.length <= NOTICE_TEXT_MAX ? text : `${text.slice(0, NOTICE_TEXT_MAX - 1)}…`;
 }

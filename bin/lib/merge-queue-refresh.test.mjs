@@ -238,7 +238,13 @@ test('refreshNow tells the sessions of the waits it meant to stop when the stop 
   assert.equal(run.exit, 75);
   assert.match(run.said, /why: the waits could not be stopped \(powershell timed out\)/);
   assert.match(run.said, /may have stopped the wait 120 of JH 86 · rules and evals: js-harness wait --pr 674/);
-  assert.match(run.told[0].text, /^The refresh of the installed copy to 0123456 ended with exit 75/);
+  assert.match(run.told[0].text, /^The refresh of the installed copy to 0123456 ended with exit 75 \(merge-queue --refresh-copy says why\), and the wait you ran from it may have been stopped for it: run it again if it no longer runs: js-harness wait --pr 674$/);
+});
+
+test('refreshNow prints, and does not tell, a session whose project channel is not known', async () => {
+  const run = await refreshingNow({ sessions: [{ ...SESSIONS[0], slug: null }] });
+  assert.deepEqual(run.told, []);
+  assert.match(run.said, /run again the wait of JH 86 · rules and evals \(its project's channel is not known\): js-harness wait --pr 674/);
 });
 
 test('refreshNow names a session with no title by its id', async () => {
