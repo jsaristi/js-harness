@@ -137,7 +137,7 @@ test('a lens whose CLI printed no JSON keeps that output too; one that printed n
   assert.equal(readability.answerFile, undefined);
 });
 
-// gentle-ai R3-003: a write that fails is said and recorded, and the run keeps its record.
+// Review finding R3-003: a write that fails is said and recorded, and the run keeps its record.
 test('an output that cannot be kept is recorded as not kept, and the run still has its record', () => {
   const folder = path.join(git('rev-parse', '--absolute-git-dir'), 'js-harness', 'lens-answers');
   fs.rmSync(folder, { recursive: true, force: true });
@@ -173,7 +173,7 @@ test('a lens answer is read from structured_output when the CLI gives it, whatev
   assert.deepEqual(rec.results.map((r) => [r.lens, r.outcome, r.evidence]), [['risk', 'complete', ['risk: read a.mjs']], ['readability', 'complete', ['readability: read a.mjs']]]);
 });
 
-// gentle-ai R3-fallback-guard-untested: only an object counts as structured output; anything else leaves the text.
+// Review finding R3-fallback-guard-untested: only an object counts as structured output; anything else leaves the text.
 test('a structured_output that is no object is passed over, and the answer is read from result', () => {
   const given = { risk: null, resilience: [], readability: 'text' };
   const runLens = ({ lens, block }) => {
@@ -231,7 +231,7 @@ test('a skip is recorded with its reason and runs no lens; a range with no code 
   assert.deepEqual(records.slice(-2).map(admitted), [true, true]);
 });
 
-// Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: every record the command writes names the run
+// Row 3 of the reverse-engineering document, section 13.3: every record the command writes names the run
 // line it wrote first, before any lens ran, so a check admits it, and a line written by hand names none.
 test('each record names the run line the command wrote before any lens ran, so every outcome is admitted', () => {
   const seen = [];

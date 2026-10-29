@@ -15,8 +15,19 @@ test('the shares are tiles that say their denominator, an unknown share "sin med
   const unknown = sharesTiles({ goals: { met: { met: null, of: 2, unknown: 2 }, inTime: { met: 0, of: 0, unknown: 0 } }, work: { met: 0, of: 0, unknown: 0, others: {}, waiting: [] }, outside: { sessions: [], untitled: 0 } });
   assert.match(unknown, /sin medir[\s\S]*2 metas sin revisar/);
   assert.match(unknown, /nada que medir/);
-  assert.match(unknown, /ninguna meta cumplida todavía/, 'in time counts over the goals met: none met is not "nothing planned"');
+  assert.doesNotMatch(unknown, /ninguna meta cumplida todavía/, 'goals not reviewed are not "none met"');
+  assert.match(unknown, /a tiempo sin medir: las metas no se revisaron/);
   assert.match(unknown, /nada planeado/, 'no work planned');
+});
+
+test('the in-time tile over no goal met says why from the goals: none met, nothing planned or not reviewed', () => {
+  const empty = { work: { met: 0, of: 0, unknown: 0, others: {}, waiting: [] }, outside: { sessions: [], untitled: 0 } };
+  const inTime = { met: 0, of: 0, unknown: 0 };
+  const noneMet = sharesTiles({ ...empty, goals: { met: { met: 0, of: 3, unknown: 0 }, inTime } });
+  assert.match(noneMet, /0 de 3 metas cumplidas[\s\S]*ninguna meta cumplida todavía/);
+  const nonePlanned = sharesTiles({ ...empty, goals: { met: { met: 0, of: 0, unknown: 0 }, inTime } });
+  assert.doesNotMatch(nonePlanned, /ninguna meta cumplida todavía/);
+  assert.equal(nonePlanned.match(/nada planeado/g).length, 3, 'goals, in time and work each say nothing was planned');
 });
 
 test('the map shows each phase before and now, the ones that changed marked, and the total', () => {

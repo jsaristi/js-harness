@@ -146,7 +146,7 @@ test('undoStack keeps the record of an undo that failed, for a second run', () =
   assert.deepEqual(result.failedRecords, [PACKAGE]);
 }));
 
-// gentle-ai R1-001 (T7): a record whose `applies` was never read cannot tell the harness's install from a later one of
+// A review R1-001 (T7): a record whose `applies` was never read cannot tell the harness's install from a later one of
 // his own, so its undo is named, never run, and the record dropped.
 test('undoStack never runs the undo of a record whose applies was never read: it names it and drops the record', () => withHome((home) => {
   const { spawn, calls } = fakeSpawn((file) => (file === 'codex' ? { status: 0, stdout: '0.51.0' } : assert.fail('ran an undo')));

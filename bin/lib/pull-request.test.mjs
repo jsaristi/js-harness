@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { pullRequestProblems } from './pull-request.mjs';
 
-const pr = (over = {}) => ({ number: 7, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Checks: gentle-ai assessment passive.', ...over });
+const pr = (over = {}) => ({ number: 7, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none.', ...over });
 
-test('an open, mergeable pull request on main with a gentle-ai line has no problem of its own', () => {
+test('an open, mergeable pull request on main has no problem of its own', () => {
   assert.deepEqual(pullRequestProblems(pr(), 'main'), []);
 });
 
@@ -20,10 +20,12 @@ test('each check of the pull request itself says which, in order', () => {
     [{ mergeable: 'UNKNOWN' }, 'PR 7 is not mergeable (UNKNOWN).'],
     [{ mergeable: 'CONFLICTING' }, 'PR 7 is not mergeable (CONFLICTING).'],
     [{ baseRefName: 'dev' }, 'PR 7 targets dev, not main.'],
-    [{ body: 'No checks here.' }, 'PR 7: its body has no gentle-ai line.'],
-    [{ body: null }, 'PR 7: its body has no gentle-ai line.'],
   ]) {
     assert.deepEqual(pullRequestProblems(pr(over), 'main'), [said], JSON.stringify(over));
   }
   assert.deepEqual(pullRequestProblems(pr({ state: 'MERGED', isDraft: true, baseRefName: 'dev' }), 'main'), ['PR 7 is MERGED, not open.', 'PR 7 is a draft.', 'PR 7 targets dev, not main.']);
+});
+
+test('a body that names no review is no problem: the reviews are read from their records (F8 S11, L11)', () => {
+  for (const body of ['No checks here.', null]) assert.deepEqual(pullRequestProblems(pr({ body }), 'main'), []);
 });

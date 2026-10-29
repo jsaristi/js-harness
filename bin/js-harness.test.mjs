@@ -86,8 +86,10 @@ test('-v and version print the version alone on one line, as --version does, and
   assert.match(run(['--help']).stdout, /^js-harness --version \(or -v, or version\) /m);
 });
 
-test('the merge-queue help says each code commit needs its gentle-ai line on its branch, and the coverage is printed commit by commit (T16e, slice b)', () => {
-  assert.match(run(['--help']).stdout, /merge-queue .*Each code commit made after the cut-over is named, by its hash or a range a\.\.b that holds it, on a gentle-ai line its pull request adds to a feature document \(odd\/tasks\), and the queue prints each code commit's Codex record and that line\./);
+test('the merge-queue help says ready asks each code commit for its review records, prints the coverage commit by commit, and asks for no gentle-ai line (F8 S11, L11)', () => {
+  const help = run(['--help']).stdout;
+  assert.match(help, /merge-queue .*Ready asks each code commit for the review records its project's switches ask \(a Codex record, a complete Claude lens record\), and the queue prints each code commit's Codex record\./);
+  assert.doesNotMatch(help.split('\n').find((line) => line.startsWith('  merge-queue')), /gentle-ai/);
 });
 
 test('the merge-queue help says a landed rule/ branch confirms its proposal in the relief file, and the check help says a push reports the row rules (T16e, slice c)', () => {

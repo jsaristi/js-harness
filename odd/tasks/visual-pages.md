@@ -415,15 +415,32 @@ done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
   and gentle-ai.
 
 ## Next step
-State at 2026-10-29 ~02:55Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch
-`feat/visual-pages-board` at 71d626c5, on `feat/visual-pages-b` (9b36b5b5), on `feat/visual-pages`):
-- Slice A: #643 landed (main 837cedd); #644 on main, #645 on #644, landing in order by the queue.
-- Slice B reviews: Codex rechecks done (67e6230..1f61e01 one P2 fixed; 1f61e01..71d626c correct 0.99); lenses all 0
-  findings; gentle-ai lineage review-8ed9074b0701c90f (ca23a627..71d626c5) approved and acknowledged (L15). Slice B
-  is fully reviewed.
+JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`. Slice A: #643 landed (main 837cedd); #645,
+carrying #644, landed (main 96b917a).
+- The design commit, reviewed by gentle-ai (low, docs) as ee595c7c, landed on main through #643.
+- gentle-ai: 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720).
+- gentle-ai: 54747bc6 approved (medium, lineage review-a3c20007ce0c6f70); two warnings, fixed in the commit after it.
+  Its warnings: the in-time caption, and the git failures at the opening and now untested. Codex rechecked 54747bc6:
+  4 of 4 fixed; the lenses found nothing.
+- gentle-ai: 2bd3bc72 approved (medium, lineage review-9342779d8a486aab); its warning fixed in the commit after it.
+  The warning: the in-time caption claimed none met when no goal was planned or reviewed; its suggestion, the plans
+  when git fails now, was taken there too.
+- gentle-ai: e05a86e2 approved (medium, lineage review-1bf6dda7ac7d0c09); one suggestion, not taken.
+  The suggestion: a test of goals partly reviewed with none met; that case says "ninguna meta cumplida todavía",
+  which holds. Codex on e05a86e2: correct (0.96); the reliability lens found nothing.
 - gentle-ai: 2bd3bc72..b70ac68d approved (medium, lineage review-7c6f3a36e3078389), with 9b36b5b5 in it.
 - gentle-ai: b70ac68d..ca23a627 approved (medium, lineage review-3aafcdd1541ce20e).
 - gentle-ai: ca23a627..71d626c5 approved (medium, lineage review-8ed9074b0701c90f).
-- State at ~03:30Z: #645 (slice A, carrying #644) ready on main, head 7f09d915. Slice B: one PR (L18) on
-  `feat/visual-pages`, then notify ready once #645 lands and this branch merges main.
+- Slice B: one PR, #647 (`feat/visual-pages-board`, L18), fully reviewed (L15). State at ~04:45Z: origin/main merged
+  into it as 02e68ec3. Its reviews: Codex correct (0.99, 59,929 input tokens); the reliability lens found nothing.
+  gentle-ai did not review it: its range holds main's 53 files, each reviewed in its own pull request, and the
+  merge's own writing is the 3-line fixture Codex read. Pushed; ready sent.
+- gentle-ai: daa51f84 approved (medium, lineage review-4204ae195c698200), no findings: three test comments reworded,
+  since main's sweep refused a file naming the tool (#647's land red on Actions, run 40825306670). Codex on it alone:
+  correct (0.99). Main merged in again as 78bfe423, covered by main's own records; gentle-ai did not review it, for
+  the reason given above for 02e68ec3.
+- Seen ~06:10Z: a first merge, 279d6e74, came before daa51f84 had a Codex record, so Codex read the whole range with
+  main's code in it (4 parts, 497,298 input tokens) and left 4 findings on JH 80's template code, which pre-push
+  refused as owed. That merge was rebuilt, unpushed, as 78bfe423 after a record of daa51f84 alone. A branch commit
+  gets its record before main is merged over it.
 - Then slice C (T6, T7, T10 as L17 says), slice D (T8), T9.

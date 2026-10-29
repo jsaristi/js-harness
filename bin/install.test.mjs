@@ -182,7 +182,7 @@ test('installMain and uninstallMain say what they did with the permissions, and 
   }
 });
 
-// gentle-ai's lens on 8c684535..c9f3efd9: the message of a record that names another file sends the user to that file,
+// A review of 8c684535..c9f3efd9: the message of a record that names another file sends the user to that file,
 // the one the record says install wrote, not to the user settings; a file it could not read or write says so before a run again.
 test('uninstallMain sends a permissions record it cannot clear to its own file, and an unreadable one to be fixed first', async () => {
   const home = makeTmpHome();
@@ -241,7 +241,7 @@ test('installMain and uninstallMain say what they did with the Rules block, and 
     assert.equal(keptEdited.code, 0);
     assert.ok(keptEdited.outLines.includes(`kept the Rules block in ${file} (modified by you)`), keptEdited.outLines.join('\n'));
 
-    // gentle-ai on T7's slice: the two lines no test of the command said, `updated` and `kept` with its exit code.
+    // A review of T7's slice: the two lines no test of the command said, `updated` and `kept` with its exit code.
     fs.writeFileSync(file, '');
     await captureConsole(() => installMain(['--home', home]));
     fs.writeFileSync(file, renderBlock(fs.readFileSync(file, 'utf8'), '## Rules\n- An older line.\n', 'rules').text);
@@ -2287,7 +2287,7 @@ test('uninstallMain says a task the user edited stays recorded while the remote 
   }
 });
 
-test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai review starts beside them when there are any', async () => {
+test('uninstallMain names the throughput snapshots it keeps, and the review starts an earlier js-harness kept beside them when there are any', async () => {
   const home = makeTmpHome();
   try {
     const folder = path.join(home, '.js-harness', 'throughput');
@@ -2297,11 +2297,11 @@ test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai r
     assert.deepEqual(snapshots.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`]);
     fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
     const starts = await captureConsole(() => uninstallMain(['--global', '--home', home]));
-    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the gentle-ai review starts of 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
+    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the review starts an earlier js-harness recorded for 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
     // A folder that could not be listed is named with what it may hold.
     const listDir = (dir, ...rest) => (path.resolve(dir).startsWith(path.resolve(folder)) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readdirSync(dir, ...rest));
     const unlisted = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { listDir }));
-    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any gentle-ai review starts recorded there; remove the folder by hand to drop them`]);
+    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any review starts an earlier js-harness recorded there; remove the folder by hand to drop them`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

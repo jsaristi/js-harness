@@ -1630,6 +1630,47 @@ test('--address finds a session sessions start recorded, in its worktree\'s fold
   assert.match(unread.stderr, /background sessions .*could not be read \(EBUSY\)/);
   appendRecord(machine.userHome, { event: 'removed', at, id: 'dddddddd' });
   assert.equal((await runSessions(machine, ['--address', '70'])).code, 1);
+  // A line of the record it skipped may be the start of the holder: not known either (review finding R3-002).
+  fs.appendFileSync(recordFileOf(machine.userHome), '{ cut\n');
+  const skipped = await runSessions(machine, ['--address', '70']);
+  assert.deepEqual([skipped.code, skipped.stdout], [2, '']);
+  assert.match(skipped.stderr, /not known whether a session carries the title of work session 70: the record of background sessions .* holds 1 line it could not read/);
+}));
+
+// Review finding R3-005 on JH 72's slice A: two paths of the read of recorded sessions that no test held.
+test('--address reads a recorded session with no worktree from its own folder, and one it cannot date is not known', withMachine(async (machine) => {
+  writeRoster(machine);
+  const plain = path.join(machine.dir, 'plain');
+  writeTitled(machine, SESSION_D, 'JH 70 · plain', 120, { cwd: plain, projectDir: path.join(machine.home, 'projects', projectSlug(plain)) });
+  appendRecord(machine.userHome, { event: 'started', at: before(3600).toISOString(), id: 'dddddddd', sessionId: SESSION_D, title: 'JH 70 · plain', root: machine.root, cwd: plain, worktree: null, worktreePath: null });
+  const found = await runSessions(machine, ['--address', '70']);
+  assert.deepEqual([found.code, found.stdout], [0, 'JH 70 · plain']);
+  const stat = (file) => (file.includes(SESSION_D) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.statSync(file));
+  const unread = await runSessions(machine, ['--address', '70'], { stat });
+  assert.deepEqual([unread.code, unread.stdout], [2, '']);
+  assert.match(unread.stderr, new RegExp(`could not be read: .*${SESSION_D}\\.jsonl \\(EACCES\\)`));
+}));
+
+// Codex finding 6 on 54c7e39..e7aa7ec: with no sessions folder for the main checkout the board ended with exit 1 before
+// it read the background sessions, whose transcripts are in their worktrees' folders.
+test('with no sessions folder for the main checkout, the board and --address still read the sessions sessions start recorded', withMachine(async (machine) => {
+  fs.rmSync(machine.projectDir, { recursive: true });
+  const worktree = path.join(machine.root, '.claude', 'worktrees', 'docs');
+  writeTitled(machine, SESSION_D, 'JH 70 · docs', 120, { cwd: worktree, projectDir: path.join(machine.home, 'projects', projectSlug(worktree)) });
+  appendRecord(machine.userHome, { event: 'started', at: before(3600).toISOString(), id: 'dddddddd', sessionId: SESSION_D, title: 'JH 70 · docs', root: machine.root, cwd: machine.root, worktree: 'docs', worktreePath: worktree });
+  const listBackground = () => [{ id: 'dddddddd', sessionId: SESSION_D, kind: 'background', name: 'JH 70 · docs', status: 'busy', state: 'working', cwd: worktree, startedAt: NOW - 3600000 }];
+  const board = await runSessions(machine, ['--json'], { listBackground });
+  assert.equal(board.code, 0, board.stderr);
+  const json = JSON.parse(board.stdout);
+  assert.deepEqual(json.sessions.map((session) => session.id), [SESSION_D]);
+  assert.deepEqual(json.background.items.map((item) => [item.id, item.recorded, item.listed]), [['dddddddd', true, true]]);
+  const found = await runSessions(machine, ['--address', '70']);
+  assert.deepEqual([found.code, found.stdout], [0, 'JH 70 · docs']);
+  // With nothing recorded for the project, no folder is no session, as it was.
+  appendRecord(machine.userHome, { event: 'removed', at: before(60).toISOString(), id: 'dddddddd' });
+  const none = await runSessions(machine, [], { listBackground });
+  assert.deepEqual([none.code, none.stdout], [1, '']);
+  assert.match(none.stderr, /^js-harness sessions: no sessions folder for /);
 }));
 
 test('--address never counts the session that asks: CLAUDE_CODE_SESSION_ID, or --self', withMachine(async (machine) => {
@@ -1705,7 +1746,7 @@ test('--next-number prints the next free work number of the code the project dec
   assert.deepEqual([none.code, none.stdout], [1, '']);
   assert.match(none.stderr, /harness\.json declares no "code"/);
   // A code that is no single word, or a harness.json that is not JSON, is exit 2: it cannot be read.
-  // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (gentle-ai, R3/R4).
+  // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (a review, R3/R4).
   for (const text of [JSON.stringify({ code: 'J H' }), JSON.stringify({ code: 'ORQ' }), JSON.stringify({ code: 'jh' }), JSON.stringify({ code: 'J-H' }), JSON.stringify({ code: 7 }), '{ not json']) {
     fs.writeFileSync(path.join(machine.root, 'harness.json'), text, 'utf8');
     const broken = await runSessions(machine, ['--next-number']);

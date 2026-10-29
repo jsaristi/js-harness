@@ -70,7 +70,25 @@ test('waitForQuiet gives up after its minutes with the sessions still at work, a
   assert.deepEqual(blind, { quiet: false, why: 'claude agents could not say which sessions are at work (claude is not on PATH)' });
 });
 
-// gentle-ai on slice B of JH 72 (e30ae69d..7d8db831): the project's folders and the wait ran outside the try that keeps
+// The review of slice B of JH 72 (e30ae69d..7d8db831): no test held a worktree outside the main checkout, where a sibling
+// folder of worktrees puts it.
+test('refreshAfterLand waits for a session in a worktree outside the main checkout, which git lists', async () => {
+  const outside = roots[1];
+  const run = (command, args) => {
+    if (args[0] === 'rev-parse') return { status: 0, stdout: `${path.join(ROOT, '.git')}\n`, stderr: '' };
+    if (args[0] === 'worktree') return { status: 0, stdout: `worktree ${ROOT}\nHEAD ${'1'.repeat(40)}\nbranch refs/heads/main\n\nworktree ${outside}\nHEAD ${'2'.repeat(40)}\nbranch refs/heads/feat/board\n\n`, stderr: '' };
+    throw new Error(`unexpected ${command} ${args.join(' ')}`);
+  };
+  const listings = [[agent({ status: 'busy', cwd: outside })], [agent({ status: 'idle', cwd: outside })]];
+  const time = clock();
+  let refreshed = 0;
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const exit = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => (listings.length > 1 ? listings.shift() : listings[0]), ...time, refresh: async () => { refreshed += 1; return 0; }, stderr: () => {} });
+  assert.deepEqual([exit, refreshed], [0, 1]);
+  assert.match(time.said.join('\n'), /waiting for JH 7 · a \(busy\) to be between runs/);
+});
+
+// The review of slice B of JH 72 (e30ae69d..7d8db831): the project's folders and the wait ran outside the try that keeps
 // the land record written, so a git that threw there, or a wait that did, ended the land before its record.
 test('refreshAfterLand turns a throw while it finds the folders or waits into a failed refresh, and refreshes nothing', async () => {
   const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };

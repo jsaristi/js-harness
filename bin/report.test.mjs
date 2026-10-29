@@ -106,7 +106,7 @@ test('reading writes nothing; --mark records the report, and the next report sta
   assert.match(next.out, /^Landed on main: nothing since the cut$/m);
 }));
 
-// gentle-ai review R3-stale-origin-cut: a pull request merged before a report but fetched after it carries a merge time
+// A review finding, R3-stale-origin-cut: a pull request merged before a report but fetched after it carries a merge time
 // earlier than the report's, so a cut by time alone would never show it.
 test('after a report, what landed is what the default branch gained since the commit that report saw, whatever its time', withProject(async (project) => {
   await report(['--mark'], project);
@@ -144,7 +144,7 @@ test('a default branch with no roadmap says so, and that is no error', withProje
   assert.match(out, /^Map: no docs\/ROADMAP.md on main$/m);
 }));
 
-// gentle-ai review R3-mark-after-failed-section and R3-untested-mark-failure.
+// Review findings R3-mark-after-failed-section and R3-untested-mark-failure.
 test('a record that cannot be read is said in Sessions and Questions, exits 1, and --mark then records nothing', withProject(async (project) => {
   fs.mkdirSync(recordPath(project.home, project.slug), { recursive: true });
   const { code, out, err } = await report(['--mark'], project);
