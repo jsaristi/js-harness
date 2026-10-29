@@ -592,6 +592,11 @@ carrying #644, landed (main 96b917a).
   explanation. The lenses on fc5cb241 found nothing (26,492). Taken, test-first: a failure is named by the start its
   own record holds (`began`, which `clippedTo` keeps), never by its place, so two cut to the opening differ and a later
   one takes no name; `#n` is gone.
+- 3504d75e: Codex recheck fixed and correct (0.94, 41,570 input tokens). The lenses (32,146): three warnings, not taken.
+  Two say explanations recorded under the old names are orphaned: those names and failure explanations never reached
+  main, and the real `stretches.jsonl` holds 0 failure explanations among its 5 `explain` events (`grep -c`). The
+  third says two failures whose records start in the same millisecond share one name: the refusal lists each, and
+  one explanation then reaches both, a case no record has shown.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
