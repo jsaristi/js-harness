@@ -708,6 +708,13 @@ test('the last reply of a kept session is the last text its main thread wrote, n
   fs.writeFileSync(path.join(two, 'b-earlier.jsonl'), `${line('e1', text('the earlier session'))}\n`);
   fs.writeFileSync(path.join(two, 'a-later.jsonl'), `${JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T11:00:00.000Z', message: { id: 'l1', model: 'claude-opus-5-5', content: text('the later session') } })}\n`);
   assert.equal(lastReply(two), 'the later session');
+  // Two sessions whose times overlap: a message of two blocks, 11:00:00 and 11:00:05, ends after the other session's
+  // 11:00:02, so it is the reply, whole (Codex P2 on e1cd87dd).
+  const overlap = tmp('last-reply-overlap');
+  const at = (id, value, timestamp) => JSON.stringify({ type: 'assistant', timestamp, message: { id, model: 'claude-opus-5-5', content: text(value) } });
+  fs.writeFileSync(path.join(overlap, 'a.jsonl'), `${at('x', 'first block', '2026-10-29T11:00:00.000Z')}\n${at('x', 'second block', '2026-10-29T11:00:05.000Z')}\n`);
+  fs.writeFileSync(path.join(overlap, 'b.jsonl'), `${at('z', 'the other session', '2026-10-29T11:00:02.000Z')}\n`);
+  assert.equal(lastReply(overlap), 'first block\n\nsecond block');
 });
 
 test('the current arm and the arms without a rule read their trial\'s last reply from its kept transcripts', () => {

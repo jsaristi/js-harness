@@ -192,6 +192,11 @@ Reviews:
   timeout, now one does; `lastReply` took the last of two sessions by file name, now by the lines' timestamps), one
   not: a config that keeps no transcripts gets no fallback and nothing records it, but no such arm runs a reply case
   in this comparison, both arms of P9 keep theirs.
+- JH 86, `addd0718..e1cd87dd` (the two taken): the reliability lens, 0 findings (5,595 input tokens); Codex, "the patch
+  is incorrect" (0.92, 60,175): one finding P2, read true: a message's time was its first line's, so with two
+  sessions whose times overlap another session's message could replace a later message of two blocks. Fixed by the
+  commit after `e1cd87dd`: blocks are gathered by message id first, and a message is as late as its latest line,
+  with a test of that overlap.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the

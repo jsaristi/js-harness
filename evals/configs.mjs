@@ -359,12 +359,14 @@ const SUBAGENT_TRANSCRIPTS = {
  * (`odd/tasks/f8-s5c-a-coverage.md`, L35). Only the session files at the top of `dir` are the main thread's: a
  * subagent's sit in `<session>/subagents/` (`transcript-usage.mjs`), and a sidechain line is a subagent's too. A line
  * Claude Code made up itself (`<synthetic>`) is no reply. It writes a line per content block of a message, so the text
- * blocks of the last message that has one are joined. Last is by the lines' timestamps, so of two sessions (one
- * resumed under another name) the later one's is the reply, whatever their names; a line with none is later than
- * what came before it. A line that is not JSON is passed over. */
+ * blocks of each message are gathered first, by its id, and the last message is the one whose latest line is latest:
+ * of two sessions (one resumed under another name), the later one's is the reply whatever their names and however
+ * their times overlap. A message with no timestamp is later than those before it. A line that is not JSON is passed
+ * over. */
 export function lastReply(dir) {
   if (!fs.existsSync(dir)) return null;
-  let last = null;
+  const messages = [];
+  const byId = new Map();
   for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort()) {
     for (const text of fs.readFileSync(path.join(dir, file), 'utf8').split('\n')) {
       let line;
@@ -377,10 +379,20 @@ export function lastReply(dir) {
       if (line?.type !== 'assistant' || line.isSidechain === true || !Array.isArray(message?.content) || message.model === '<synthetic>') continue;
       const texts = message.content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text);
       if (texts.length === 0) continue;
+      let entry = typeof message.id === 'string' ? byId.get(message.id) : undefined;
+      if (entry === undefined) {
+        entry = { at: NaN, texts: [] };
+        messages.push(entry);
+        if (typeof message.id === 'string') byId.set(message.id, entry);
+      }
+      entry.texts.push(...texts);
       const at = Date.parse(line.timestamp);
-      if (last !== null && last.id !== undefined && last.id === message.id) last.texts.push(...texts);
-      else if (last === null || !Number.isFinite(at) || !Number.isFinite(last.at) || at >= last.at) last = { id: message.id, at, texts };
+      if (Number.isFinite(at) && !(at <= entry.at)) entry.at = at;
     }
+  }
+  let last = null;
+  for (const entry of messages) {
+    if (last === null || !Number.isFinite(entry.at) || !Number.isFinite(last.at) || entry.at >= last.at) last = entry;
   }
   return last === null ? null : last.texts.join('\n\n');
 }
