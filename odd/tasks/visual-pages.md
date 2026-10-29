@@ -603,6 +603,14 @@ carrying #644, landed (main 96b917a).
   (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
 - 4ba61a5b (the text fix): Codex correct (0.96, 61,391 input tokens); the readability lens found nothing (4,271).
 - gentle-ai: a40d85e7..4ba61a5b approved (medium, lineage review-673b5907691d27bb), no findings.
+- State at ~13:00Z: #664 (T7) landed 12:27Z. T12+T11a is PR #666 (`feat/visual-pages-t12`, on main), ready sent
+  12:58Z. Left: T9. Once #666 lands, record the 03:06Z stretch's four failures with the branch or installed
+  `stretch explain failure:<HH:MM> --stretch 2026-10-29T03:06:28.748Z --source notice:<at>`, from these notices:
+  the 04:09Z land, the lead's 04:17:45Z (Actions run 40816256353 red on the sweep test) and 04:22:04Z (648 landed
+  alone); the 05:44Z and 05:45Z lands, the queue's 05:42:48Z (647 CONFLICTING) and the lead's 05:55:44Z (run
+  40825306670 red, three comments of #647) and 05:56:55Z (647 to draft); the 06:52Z Codex failure, its record still to
+  find (`.git/js-harness` Codex run log). Then `stretch show --html`, publish as an Artifact, `docs/sessions/`
+  summary, ROADMAP line, `notify --kind closed --summary`.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
