@@ -1168,6 +1168,11 @@ stale pnpm state is pruned (folders no link or shim names, and old bin backups; 
 printed: the previous sha, the settings copy and `js-harness uninstall --global`. A land that moved nothing refreshes
 nothing and says so. Exit 6 when the copy is not verified or a step after the install fails, 75 when the gate lock was not
 obtained; the landing itself stands. Only pnpm installs the copy this way.
+`--refresh-copy` alone, run from a checkout, does the same refresh now to origin's main, landing nothing, for a copy left
+behind while sessions held waits on it. It refuses (75) while anything other than a `js-harness wait` or `quiet --wait`
+runs from the copy, such as a gate, a review or an eval batch, after three looks ten seconds apart. Under the gate lock it
+stops the waits by pid and creation time, refreshes, and then leaves each work session whose wait it stopped a note with
+the wait to run again; the session is the one whose transcript holds that wait still open.
 Each `--land` appends one JSON line to `lands.jsonl` under the git directory's `js-harness` folder:
 the pull requests it looked at, each one left out with its reason (`not-ready`, `review`, `door`,
 `conflict`, `merge` or `red`, with what the suite said), the start and seconds of each suite run,

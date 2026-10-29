@@ -36,6 +36,29 @@ minutes after a land (JH 84, Decisions, unit 4), and a copy already behind canno
 ## Ask me before
 - Nothing beyond the repository's rules.
 
+## Next step
+State at the context pause (2026-10-29, JH 88). The change is a chain of three PRs (over 400 lines):
+- Slice 1, branch feat/lead-manual-steps: commit fd41d373 (S6), its gate passed. Slice 2 was rebuilt on
+  feat/lead-manual-steps-2 and its commit started; check `git log -1` there. Not yet in either:
+  docs/FAILURES.md (commit-attribution-from-host), which is still uncommitted: commit it with slice 3.
+- Slice 2, branch feat/lead-manual-steps-2 from slice 1 (S4, S5, S7): the untracked bin/lib/merge-queue-waits.mjs and
+  its test, bin/lib/merge-queue-refresh-now.mjs, and the full versions saved in
+  C:\Users\Oficina\.claude\jobs\d075e800\tmp\full\ (bin/merge-queue.mjs, bin/merge-queue.test.mjs, bin/js-harness.mjs,
+  bin/lib/merge-queue-refresh.mjs and its test, README.md). Copy the full bin/lib/merge-queue-refresh.mjs, its test,
+  bin/merge-queue.test.mjs and bin/js-harness.mjs over; for bin/merge-queue.mjs and README.md, re-apply only the mode
+  (USAGE first line and the paragraph on --refresh-copy alone, without the backup and bin sentence slice 1 already
+  says; parseArgs; the mode branch in mergeQueueMain passing answer, versionOf, pnpmBinDir; imports of refreshNowRun
+  and pnpmBinDir) on slice 1's file.
+- Slice 3, branch feat/lead-manual-steps-3 (S8): bin/lib/manifest.mjs and its test from the saved full versions,
+  docs/ROADMAP.md from tmp\full\ROADMAP.md, docs/FAILURES.md, the summary under docs/sessions/.
+- Then for each code slice: `js-harness codex-review --base <boundary>` and `js-harness lens-review --base <boundary>
+  --lenses risk,reliability,resilience --reason "<why>"`; one independent verifier over the range (T5); `npm run
+  check`; push; one PR each, chained; `js-harness notify --to orchestrator --kind ready --pr <n>`; the summary; the
+  closed notice. No `Co-Authored-By` or session line in any commit (CLAUDE.md).
+- Evidence already taken: every new test failed on main's code (a copy of origin/main's bin/ in the job's scratch
+  folder with the branch's tests) and passes on the branch: merge-queue-waits 7/7, merge-queue-refresh 15/15,
+  refresh-copy 22/22, merge-queue-stale-bin 3/3, the merge-queue refresh tests 17/17, the manifest question test.
+
 ## Specs
 - S1. The brief (the lead, 2026-10-29 16:03Z): "Read what of "watch and lease, land and copy, archive, openings" is
   already a command (loop, permit, merge-queue --refresh-copy, sessions start/stop); write in the feature document what

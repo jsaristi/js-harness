@@ -26,13 +26,15 @@ import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
 import { staleBin, UNSHIPPED_GLOBS } from './lib/merge-queue-stale-bin.mjs';
+import { refreshNowRun } from './lib/merge-queue-refresh-now.mjs';
+import { pnpmBinDir } from './update.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 // Where `notify --kind ready` has read it from (bin/notify.mjs), and where the tests read the copy guard.
 export { reviewEvidence, staleBin, UNSHIPPED_GLOBS };
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --refresh-copy | --prune [--cwd <path>]
 
 Builds the candidate the default branch would be: origin's default branch (what origin's HEAD names, else what gh names)
 with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a Codex
@@ -71,6 +73,13 @@ land that moved nothing refreshes nothing and says so. Exit 6 when the copy is n
 fails (the landing stands), 75 when the gate lock was not obtained or a session of the project was still at work after
 30 minutes (nothing refreshed): the refresh first waits for every session claude agents lists busy or waiting to be
 between runs.
+--refresh-copy alone, run from a checkout (odd/tasks/lead-manual-steps.md), brings the installed copy up to origin's
+default branch now, landing nothing; exit 0 when the copy already names it, 1 when main or pnpm's bin folder cannot be
+read. It reads the processes that run from the copy (Windows): a js-harness wait or quiet --wait, with what it started,
+is a wait, and anything else (a gate, a review, an eval batch) refuses it, exit 75, after three looks ten seconds apart,
+stopping nothing. Under the gate lock it looks again, stops every wait by pid and creation time (75 when one survives),
+and refreshes as above. Then each work session whose wait was stopped, the one session whose transcript holds that
+wait still open, gets a note in the channel with its wait to run again, and every other stopped wait is printed with it.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
@@ -152,8 +161,9 @@ function parseArgs(argv) {
     else if (argv[at] === '--cwd' && at + 1 < argv.length) args.cwd = argv[(at += 1)];
     else return null;
   }
-  // One mode, named: a run that pushes main is never what a bare command does. --refresh-copy is a part of --land.
-  if (args.refreshCopy && !args.land) return null;
+  // One mode, named: a run that pushes main is never what a bare command does. --refresh-copy is a part of --land, or
+  // a mode of its own when it comes alone.
+  if (args.refreshCopy && !args.land) return args.dryRun || args.prune ? null : args;
   return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
 
@@ -747,6 +757,10 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     return 2;
   }
   if (args.prune) return pruneRun(args, { ...deps, stdout: printOut, stderr: printErr });
+  if (args.refreshCopy && !args.land) {
+    const versionOf = (sha) => versionAt(sha, args.cwd, deps.run ?? spawnSync);
+    return (deps.refreshNow ?? refreshNowRun)(args, { ...deps, env, now, stdout: printOut, stderr: printErr, answer, versionOf, pnpmBinDir });
+  }
   // Every line the run prints passes through the land's record, which keeps the last as its `said`.
   const log = landLog({ now, session: env.CLAUDE_CODE_SESSION_ID || null });
   const stdout = (line) => {
