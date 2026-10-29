@@ -471,3 +471,24 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   of them). What would let them is a choice that is not this session's: put the rules a case ties into a text that
   always loads (the home's `CLAUDE.md` or `AGENTS.md`, the harness's product), or write prompts that name the
   skill's trigger, which tests the trigger and not the rule. It goes to the lead.
+- L27 (2026-10-29, the lead's decision in the channel at 08:10 local, answering L26's note): "Decision: a trial
+  reaches a rule through prompts that fire its skill as real work would (the skill's description), never an
+  always-loaded home text: that would measure a harness we do not ship. Your finding is the result: a rule whose
+  skill never loads on its task is a coverage gap; record both cases owed with that reason, and list in the feature
+  document the rules that sit only in skills their tasks do not trigger. No paid rerun until a prompt is shown,
+  free, to load the skill." So both cases stay in the register's `cases`, owed, for this reason: `rule-reuse-first`'s
+  prompt does not load `js-harness-protocols` (P7's transcripts, L26); whether `rule-away-autonomy`'s lead prompt
+  loads `js-harness-orchestrator` is not known, since P6 kept no transcript (it ran before `45fb1751`), and its
+  rerun also waits on his question 111. The rules whose tied spans sit only in a skill, by `js-harness rules
+  coverage --json` on `dc28db03` (the `tied` spans by source; this repository's `AGENTS.md` and `CLAUDE.md` are not
+  counted, since no trial loads them), 22 of the 26 with tied spans:
+  - only in `js-harness-protocols`: `mistake-report`, `reply-five-states`, `reports-spanish-visual`, `reuse-first`
+    (case `rule-reuse-first`, which does not load it), `rules-live-in-the-harness`, `subagent-effort`,
+    `subagent-reader-model`, `subagent-writer-model`, `throughput-quiet-days`, `throughput-quiet-runs`;
+  - only in `js-harness-orchestrator`: `announce-finished`, `away-autonomy` (case `rule-away-autonomy`, loading not
+    known), `background-task-declared`, `lead-charter`, `live-board`, `question-context`, `recap-effort-line`,
+    `report-table`, `restart-announce`, `session-housekeeping`, `session-prompts`, `status-report`.
+  The other four are carried by `init`'s texts too (`context-pause`, `questions-one-place`, `double-review`,
+  `wording-is-the-need`), so a trial loads them whatever its prompt. Only the two cases above have tasks; the other
+  20 have none yet, so whether a task would load their skill is open until one is written and shown, free, to
+  load it (how to show that free is not built: a trial's transcript is the only evidence so far, and it costs).
