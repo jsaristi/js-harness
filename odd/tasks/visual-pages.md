@@ -305,7 +305,10 @@ board, the start row and the running work; C the report's pages and init's line;
 ## Next step
 State at 2026-10-29 ~01:30Z (JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`, branch `feat/visual-pages`):
 - Slice A committed: 35c8d1fd, 8a412b79, then the review fixes; reviewed by Codex, the lenses and gentle-ai (L5).
-- gentle-ai: ee595c7c approved (low, docs); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720).
+- gentle-ai: ee595c7c approved (low, docs); 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720);
+  54747bc6 approved (medium, lineage review-a3c20007ce0c6f70; its two warnings, the in-time caption and the git
+  failures at the opening and now untested, fixed in the commit after it). Codex rechecked 54747bc6: 4 of 4 fixed;
+  the lenses found nothing.
 - Next: push, PR for slice A, notify ready; then slice B: T4 (draft in the job tmp `draft/stale-board*.mjs`; move
   `CHECK_MINUTES`, the cursor schema, `liveCursorPath` and `cursorOf` into `bin/lib/live-rows.mjs`, since a lib cannot
   import a command; export `lastLineWith` from `bin/lib/stop-wake.mjs`; wire it in `bin/reply.mjs`), T5, T5b; C, D.

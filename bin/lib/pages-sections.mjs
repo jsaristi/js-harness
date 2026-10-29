@@ -10,15 +10,16 @@ const ratio = (one) => (one && one.of > 0 && one.met !== null ? one.met / one.of
 
 /** The shares of a stretch as tiles: goals met, goals met in time, work done, and the sessions outside the plan. */
 export function sharesTiles({ goals, work, outside }) {
-  const caption = (one, words, unknownWords) => {
-    if (one.of === 0) return 'nada planeado';
+  // A share over nothing: `none` says what is missing, since in time counts over the goals met, not those planned.
+  const caption = (one, words, unknownWords, none = 'nada planeado') => {
+    if (one.of === 0) return none;
     if (one.met === null) return `${one.unknown} ${unknownWords}`;
     return `${one.met} de ${one.of} ${words}${one.unknown ? `, ${one.unknown} sin medir` : ''}`;
   };
   const others = Object.entries(work.others).map(([state, ids]) => `${ids.length} ${state}`).join(', ');
   return tiles([
     { value: shareText(goals.met), share: ratio(goals.met), caption: caption(goals.met, 'metas cumplidas', 'metas sin revisar') },
-    { value: shareText(goals.inTime), share: ratio(goals.inTime), caption: caption(goals.inTime, 'cumplidas a tiempo', 'cumplidas sin revisión antes de tu vuelta') },
+    { value: shareText(goals.inTime), share: ratio(goals.inTime), caption: caption(goals.inTime, 'cumplidas a tiempo', 'cumplidas sin revisión antes de tu vuelta', 'ninguna meta cumplida todavía') },
     { value: shareText(work), share: ratio(work), caption: `${caption(work, 'trabajos terminados', 'trabajos sin medir')}${others ? ` (${others})` : ''}${work.waiting.length ? `; ${work.waiting.length} esperan por ti` : ''}` },
     { value: `+${outside.sessions.length}`, caption: `sesiones fuera del plan${outside.untitled ? `; ${outside.untitled} avisos sin título` : ''}` },
   ]);

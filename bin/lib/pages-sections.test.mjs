@@ -15,6 +15,8 @@ test('the shares are tiles that say their denominator, an unknown share "sin med
   const unknown = sharesTiles({ goals: { met: { met: null, of: 2, unknown: 2 }, inTime: { met: 0, of: 0, unknown: 0 } }, work: { met: 0, of: 0, unknown: 0, others: {}, waiting: [] }, outside: { sessions: [], untitled: 0 } });
   assert.match(unknown, /sin medir[\s\S]*2 metas sin revisar/);
   assert.match(unknown, /nada que medir/);
+  assert.match(unknown, /ninguna meta cumplida todavía/, 'in time counts over the goals met: none met is not "nothing planned"');
+  assert.match(unknown, /nada planeado/, 'no work planned');
 });
 
 test('the map shows each phase before and now, the ones that changed marked, and the total', () => {

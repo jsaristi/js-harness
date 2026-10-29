@@ -289,6 +289,25 @@ test('an opening commit git cannot read leaves the map and the steps unmeasured,
   assert.doesNotMatch(html, /pill part">nuevo/);
 });
 
+test('git failing to say the commit at the opening, or now, is said with why, never taken for no commit', async () => {
+  const place = scratch();
+  const moments = momentsGit();
+  const failing = (when) => (command, args) => {
+    const key = args.join(' ');
+    const asked = /^rev-list --first-parent -1 --before=(\S+) /.exec(key);
+    if (asked && when(Date.parse(asked[1]))) return { status: 128, stdout: '', stderr: 'fatal: rev-list timed out' };
+    return moments(command, args);
+  };
+  const opening = failing((ms) => ms <= T0 + H);
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const early = JSON.parse((await stretch(place, ['status', '--json'], { hours: 9, deps: { run: opening } })).out);
+  assert.match(early.moments.unavailable.opening, /git rev-list: fatal: rev-list timed out/);
+  assert.deepEqual(early.moments.plans[0].steps.map((step) => step.change), ['unmeasured']);
+  const now = JSON.parse((await stretch(place, ['status', '--json'], { hours: 9, deps: { run: failing((ms) => ms > T0 + H) } })).out);
+  assert.match(now.moments.unavailable.map, /git rev-list: fatal: rev-list timed out/);
+  assert.equal(now.moments.map, null);
+});
+
 test('where git cannot read the default branch, the map is unavailable with why and the shares still come', async () => {
   const place = scratch();
   await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
