@@ -565,6 +565,12 @@ carrying #644, landed (main 96b917a).
   the `--json` run checks its record message stays off stdout, and that the unrecorded case checks the page file
   exists. Both are assertions on what the code already does and its tests already reach; a new commit would cost a
   third Codex and lens round for no behavior change.
+- T7 is d0a1c365, after two refusals of the gate read before each new try: the long paragraph broke the template's
+  budget (787 of 750 estimated tokens) and `project.mjs`'s ceiling of 2034 lines; moving the block functions out
+  broke `wording-is-the-need`, whose phrases the rules check reads in `project.mjs`, so the failures template moved
+  instead. Codex 7b6d3f39..60e17fb0 correct (0.95, 64,107 input tokens); the lenses reliability and readability
+  found nothing (25,843).
+- gentle-ai: 7b6d3f39..60e17fb0 approved (medium, lineage review-9affe131e336c6a8), no findings.
 - Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
   the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
   writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
