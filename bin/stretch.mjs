@@ -252,9 +252,13 @@ const sum = (values) => round(values.reduce((total, value) => total + value, 0))
 
 /** The view of `stretch` at `now`: its items measured, what failed outside them, the goals as last checked. */
 function measure(ctx, stretch, now) {
-  const records = readRecords(ctx);
   const openedAt = Date.parse(stretch.open.at);
   const end = stretch.closedAt ?? now;
+  // Only what was recorded by the end: a closed stretch shown again reads as it closed, whatever its sessions did
+  // after. Lands and Codex runs are cut to the end by `stretchLost`.
+  const read = readRecords(ctx);
+  const byEnd = (iso) => Date.parse(iso) <= end;
+  const records = { ...read, notices: read.notices.filter((one) => byEnd(one?.at)), starts: read.starts.filter((one) => byEnd(one?.at)), gates: read.gates.filter((one) => byEnd(one.startedAt)) };
   const items = itemsOf(stretch).map((item) => {
     const trail = item.session ? sessionTrail(item.session, { notices: records.notices, starts: records.starts, root: ctx.root }) : null;
     return itemMeasure(item, trail, { openedAt, now: end, gates: records.gates });
@@ -430,9 +434,12 @@ function explainCommand(ctx, flags, [target], events) {
     ctx.err(`js-harness stretch: ${flags.stretch === undefined ? 'no stretch was opened' : `no stretch ${flags.stretch}`}`);
     return 1;
   }
+  // A goal and an item may share an id: `goal:<id>` or `item:<id>` says which, and a bare id must name only one.
   const { plan } = stretch.open;
-  if (![...plan.goals, ...plan.items].some((one) => one.id === target)) {
-    ctx.err(`js-harness stretch: the stretch ${stretch.open.id} has no goal or item ${target}`);
+  const [, kindAsked, id] = /^(?:(goal|item):)?(.+)$/.exec(target);
+  const kinds = [['goal', plan.goals], ['item', plan.items]].filter(([kind, list]) => (kindAsked ?? kind) === kind && list.some((one) => one.id === id)).map(([kind]) => kind);
+  if (kinds.length !== 1) {
+    ctx.err(`js-harness stretch: ${kinds.length === 0 ? `the stretch ${stretch.open.id} has no ${kindAsked ?? 'goal or item'} ${id}` : `the stretch ${stretch.open.id} has both a goal and an item ${id}: name goal:${id} or item:${id}`}`);
     return 1;
   }
   const source = sourceRecord(ctx, flags.source);
@@ -441,8 +448,8 @@ function explainCommand(ctx, flags, [target], events) {
     return 1;
   }
   const texts = Object.fromEntries(['why', 'fix', 'open'].filter((name) => flags[name] !== undefined).map((name) => [name, flags[name]]));
-  appendEvent(ctx.file, ctx.fileSystem, { event: 'explain', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), target, ...texts, ...(flags.fixed ? { fixed: true } : {}), source });
-  ctx.out(`${target} of the stretch ${stretch.open.id} explained, its source ${source.kind} ${source.ref ?? source.at}`);
+  appendEvent(ctx.file, ctx.fileSystem, { event: 'explain', id: stretch.open.id, at: new Date(ctx.now()).toISOString(), kind: kinds[0], target: id, ...texts, ...(flags.fixed ? { fixed: true } : {}), source });
+  ctx.out(`${kinds[0]} ${id} of the stretch ${stretch.open.id} explained, its source ${source.kind} ${source.ref ?? source.at}`);
   return 0;
 }
 

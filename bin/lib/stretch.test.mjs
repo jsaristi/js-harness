@@ -245,7 +245,7 @@ test('the stretch carries the failed lands, their failed gates and the failed Co
   assert.deepEqual(stretchLost({ lands: [{ startedAt: at(-0.25), seconds: 1800, exit: 1 }], codex: [] }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' }).map((one) => one.seconds), [900]);
 });
 
-test('a failure is fixed when a later run of its kind passed before the end: the same session\'s gate, a land, a Codex run', () => {
+test('a session\'s failed gate is fixed when a later gate of that session passed before the end; a land or a Codex run never is by the record alone', () => {
   const trail = { ids: new Set(['s1']), cwds: [], firstAt: T0, lastAt: T0 + 5 * H, closes: [], stoppedAt: null };
   const gates = [
     gate(0.5, 300, 'pass', { session: 's1' }),
@@ -261,9 +261,10 @@ test('a failure is fixed when a later run of its kind passed before the end: the
 
   const lands = [{ startedAt: at(1), seconds: 600, exit: 1 }, { startedAt: at(2), seconds: 360, exit: 0 }];
   const codex = [{ startedAt: at(3), seconds: 120, outcome: 'failed' }, { startedAt: at(3.5), seconds: 360, outcome: 'reviewed' }];
-  const landGates = [gate(4, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-1-2' }), gate(4.5, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-3-4' })];
+  const landGates = [gate(4, 300, 'fail', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-1-2' }), gate(4.5, 300, 'pass', { cwd: 'D:\\p\\.git\\js-harness\\merge-queue-3-4' })];
   const lost = stretchLost({ lands, codex, gates: landGates }, { from: T0, to: T0 + 8 * H, root: 'D:\\p' });
-  assert.deepEqual(lost.map((one) => [one.what, one.fixedAt]), [['land exit 1', at(2.1)], ['Codex review failed', at(3.6)], ['land gate fail', null], ['land gate fail', null]]);
+  // Their records name no pull request or range, so a later pass may be another's: only an explanation fixes them.
+  assert.deepEqual(lost.map((one) => [one.what, one.fixedAt]), [['land exit 1', null], ['Codex review failed', null], ['land gate fail', null]]);
 });
 
 test('a failed land gate of another project is not this stretch\'s: the gate log is the machine\'s', () => {

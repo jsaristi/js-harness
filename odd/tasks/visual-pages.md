@@ -295,18 +295,21 @@ The return gains a section, "Qué faltó, por qué y cómo se arregla", one row 
 not finished, with four cells: what, why, how it was or can be fixed, why it is not fixed. A cell says only what a
 record says, with its source beside it, else "no registrado". Two kinds of record fill them:
 - Derived, no one writes them. A failure's why is what its record names (the gate's result and failing tests, the
-  land's exit, the Codex run). It was fixed when a later run of the same kind passed: the same session's gate, a
-  later land, a later Codex run; the cell names that run's time. A goal's why is its command's exit. An item's why
+  land's exit, the Codex run). A session's failed gate was fixed when a later gate of that session passed; the cell
+  names that gate's end. A land or a Codex run is never fixed by the record alone: theirs name no pull request or
+  range, so a later pass may be another's. A goal's why is its command's exit. An item's why
   is its state with its last record's time, and its session's last `waiting` or `question` notice inside the stretch,
   quoted.
 - Explained: `js-harness stretch explain <goal or item id> --source <commit or notice> [--why <text>] [--fix <text>]
   [--fixed | --open <why not>]` appends an `explain` event to the stretch, open or the last closed one, or the one
   `--stretch <id>` names. The source is required and checked: a commit git knows in the project, or a notice of the
-  channel by its `at`. The page shows each text with its source. An explained cell wins over a derived one; the last
-  explanation of a target wins over earlier ones.
+  channel by its `at`. The page shows each text with its source. An explained cell wins over a derived one, and
+  explanations add up: a later one replaces the cells it gives and keeps the rest. A goal and an item may share an
+  id, so the event records which it names (`goal:<id>` or `item:<id>` when the bare id names both).
 
 A closed stretch is shown again by `js-harness stretch show [--stretch <id>] [--json] [--html <file>]`: the return
-measured at its close, from its own checks (no goal runs again), the map and timeline read at its close time; it
+measured at its close from the records written by then, from its own checks (no goal runs again), the map and
+timeline read at its close time; it
 records no page numbers, since the close already did. Searched first: `stretch status` and `close` act only on the
 open stretch; `notify --kind note` carries no target and lies outside the surface; nothing else names a goal's why.
 
@@ -529,6 +532,12 @@ carrying #644, landed (main 96b917a).
 - gentle-ai: 0bc60aa0..024be874 approved (medium, lineage review-2aba38fa75ad836e): one suggestion, not taken: that
   nothing in the candidate shows `stretch status --goals` exists; it does, `js-harness stretch --help` lists
   `status [--goals]`.
+- Slice E, a7b6ae42..f30d360e (E1 4b85503f, E2 f30d360e): the reliability and readability lenses found nothing
+  (46,602 input tokens). Codex: incorrect (0.92, 0.98; 407,320 input tokens, 2 parts), two P2: an explanation reached
+  a goal and an item that share an id, and `show` measured a closed stretch with records written after its close.
+  gentle-ai (medium, lineage review-7d6c066c403cf990): correction required, its critical finding the same as Codex's
+  second; two warnings, explanations that did not add up and a land or Codex run taken as fixed by any later pass.
+  All four fixed together in the commit after f30d360e, test first.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si

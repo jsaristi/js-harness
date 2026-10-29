@@ -419,6 +419,32 @@ test('show gives a closed stretch\'s return again, measured at its close, with e
   assert.equal((await stretch(place, ['show', '--stretch', at(5)], { hours: 30, deps })).code, 1);
 });
 
+test('explain records whether it names a goal or an item, and asks which when the plan gives both the same id', async () => {
+  const place = scratch();
+  const deps = { run: explainGit() };
+  const plan = { ...PLAN, goals: [...PLAN.goals, { id: 'W2', text: 'la documentación en main', command: 'goal-docs' }] };
+  await stretch(place, ['open', '--plan', planFile(place, plan)], { deps });
+  const explain = (target) => stretch(place, ['explain', target, '--source', 'commit:e6c8214c', '--why', 'x'], { hours: 1, deps });
+  const ambiguous = await explain('W2');
+  assert.equal(ambiguous.code, 1);
+  assert.match(ambiguous.err, /goal:W2.*item:W2/);
+  assert.equal((await explain('goal:W2')).code, 0);
+  assert.equal((await explain('W1')).code, 0);
+  assert.equal((await explain('goal:W1')).code, 1, 'W1 is no goal');
+  assert.deepEqual(events(place).filter((event) => event.event === 'explain').map((one) => [one.kind, one.target]), [['goal', 'W2'], ['item', 'W1']]);
+});
+
+test('show measures a closed stretch from the records up to its close: a session\'s later notice changes nothing', async () => {
+  const place = scratch({ notices: [notice(0.5, 's69', 'JH 69 · registros', 'opened')] });
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const closed = JSON.parse((await stretch(place, ['close', '--json'], { hours: 9 })).out);
+  fs.appendFileSync(path.join(place.home, '.js-harness', 'channel', `${projectSlug(place.project)}.jsonl`), `${JSON.stringify(notice(10, 's69', 'JH 69 · registros', 'note'))}\n`);
+  const shown = JSON.parse((await stretch(place, ['show', '--json'], { hours: 12 })).out);
+  const pick = (view) => view.items.map((item) => [item.id, item.state, item.realHours, item.lastAt]);
+  assert.equal(closed.items[0].state, 'silent');
+  assert.deepEqual(pick(shown), pick(closed));
+});
+
 test('show and explain with no stretch at all exit 1', async () => {
   const place = scratch();
   assert.equal((await stretch(place, ['show'])).code, 1);
