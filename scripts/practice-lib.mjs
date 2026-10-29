@@ -341,15 +341,13 @@ const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
 /** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
 const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$';
 
-/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
- * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
- * at the start of a session and the resume hook's after a compaction or a clear, for both hosts; the pause entry after a
- * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
- * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool; the guard's before a tool call and the
- * share check's at a stop, for Claude Code only; and the reply check's at a stop, for both hosts, since it reads only the
- * reply's text. The test holds
- * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
- * an install that changed. */
+/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event it hangs
+ * from, its matcher (none for the pause entry), its command and the hosts that get it: the doctor's and the resume hook's
+ * for both hosts; the pause entry after a tool call and after a failed WebFetch, the guard's, the share check's and the
+ * template gate's for Claude Code only, since what they read (a transcript, WebFetch, the tools named) is Claude Code's;
+ * the reply check's at a stop for both hosts, since it reads only the reply's text. The test holds this list to what
+ * `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against an install that
+ * changed. */
 export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|startup', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
@@ -363,6 +361,8 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'Stop', command: BACKUP_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --hook || exit 0', hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PostToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --shown || exit 0', hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume|clear|compact', command: FALLBACK_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
 ]);
 

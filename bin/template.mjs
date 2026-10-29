@@ -226,22 +226,36 @@ function parseShown(rest) {
   return options;
 }
 
+/** The escape list of the last `days` days from the records of the project at `folder` (`shownReport`); a record it
+ * cannot read throws. */
+function shownOf(folder, days, seams) {
+  const places = placesOf(folder, seams);
+  const since = seams.now - days * 24 * 3600 * 1000;
+  const recent = (line) => Date.parse(line.at) >= since;
+  const rendered = readRecord(places.rendered, RENDERED_SCHEMA).filter(recent);
+  const shown = readRecord(places.shown, SHOWN_SCHEMA).filter(recent);
+  return shownReport({ rendered, shown, moments: seams.moments });
+}
+
+/** The templates row of `doctor` for the project at `project` under the harness home `home`: `{ days, escapes,
+ * unchecked }` over the last `SHOWN_DAYS` days, or `null` where its `harness.json` does not hold `"templates": true`.
+ * A record it cannot read throws, and the row says it cannot tell. */
+export function templatesHealth(project, home, { now = Date.now(), moments = [], slug } = {}) {
+  if (harnessOfTree(project).declared?.templates !== true) return null;
+  const { escapes, unchecked } = shownOf(project, SHOWN_DAYS, { root: project, home, now, moments, slug });
+  return { days: SHOWN_DAYS, escapes, unchecked };
+}
+
 /** `template shown`: the escape list of the last `days` days. Exit 0 when it holds, 1 on an escape, 3 when it cannot
  * tell (an unchecked call, or a record it cannot read). */
 function runShown({ days, json }, seams, { stdout, stderr }) {
-  const places = placesOf(seams.cwd, seams);
-  const since = seams.now - days * 24 * 3600 * 1000;
-  const recent = (line) => Date.parse(line.at) >= since;
-  let rendered;
-  let shown;
+  let report;
   try {
-    rendered = readRecord(places.rendered, RENDERED_SCHEMA).filter(recent);
-    shown = readRecord(places.shown, SHOWN_SCHEMA).filter(recent);
+    report = shownOf(seams.cwd, days, seams);
   } catch (err) {
     stderr(`template shown: cannot read a record: ${err.message}`);
     return 3;
   }
-  const report = shownReport({ rendered, shown, moments: seams.moments });
   const code = report.escapes.length > 0 ? 1 : report.unchecked > 0 ? 3 : 0;
   if (json) return stdout(JSON.stringify({ days, ...report }, null, 2)), code;
   const calls = (n) => `${n} call${n === 1 ? '' : 's'}`;

@@ -25,7 +25,7 @@ import { writeManifestAtomic } from './atomic-write.mjs';
 export { writeManifestAtomic };
 import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
 import { chainedPrsSkillContent, workUnitsSkillContent } from './ported-skills.mjs';
-import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, webFailureHookEntry } from './hook-entries.mjs';
+import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, templateGateComponents, webFailureHookEntry } from './hook-entries.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
 import { moveTrustRecords, planTrustMoves, withConfig } from './codex-trust.mjs';
@@ -417,6 +417,7 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => backupHookEntry(),
   },
+  ...templateGateComponents(),
   {
     id: 'claude-fallback-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
@@ -439,9 +440,8 @@ export function sha256(text) {
  * must lead, along one of them, to what we wrote, and every key that ends a pointer must hold the empty array we
  * left behind after removing our entry. Any other key, even one with an empty-looking value like `{}` or `null`,
  * means this document is not ours alone to delete. Several pointers can share one file: the doctor's and the
- * resume hook's both hang from `hooks.SessionStart`, the pause hook from `hooks.PostToolUse` and the guard hook
- * from `hooks.PreToolUse`, so a file
- * js-harness created goes with the last of them. */
+ * resume hook's both hang from `hooks.SessionStart`, the pause hook and the template gate's from `hooks.PostToolUse`
+ * and the guard's and the gate's from `hooks.PreToolUse`, so a file js-harness created goes with the last of them. */
 function isOnlyOurPointerPaths(value, pointers) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.keys(value).every((key) => {

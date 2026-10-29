@@ -2409,6 +2409,36 @@ test('doctorMain lists the review skips that still owe a review, ok with none, u
   }
 });
 
+// The templates row (odd/tasks/templates.md, "Proof"): `template shown --days 7` on the machine, read only by the
+// interactive report, as the review-skips row is: ok when no escape and no unchecked call, stale with each escape, unknown
+// when a call went unchecked or the records cannot be read, n/a where the project does not turn templates on.
+test('doctorMain shows the templates row: each escape, unknown on an unchecked call, n/a where templates are off, and its hook never reads it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (templates, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, templates });
+
+    const escaped = await run(() => ({ days: 7, escapes: ['the moment s-8 of stretch-return shows no page'], unchecked: 0 }));
+    assert.match(escaped.output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(escaped.output.includes('  templates (project):\n    1 escape in 7 days: js-harness template shown names it\n    the moment s-8 of stretch-return shows no page\n'), escaped.output);
+    assert.match((await run(() => ({ days: 7, escapes: [], unchecked: 0 }))).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.match((await run(() => ({ days: 7, escapes: [], unchecked: 2 }))).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+    assert.match((await run(() => { throw new Error('no record'); })).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+    assert.match((await run(() => null)).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await run(() => { asked = true; return null; }, ['--hook']);
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook read the templates records');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The clean row (odd/tasks/clean.md, S8): the last measure of the regenerable leftovers, a gap once its total reaches
 // the threshold, named in the hook's notice; a due measure is started in the background, never run in the hook.
 test('doctorMain shows the clean row stale past the threshold, names its size in the hook, and starts a due measure', async () => {

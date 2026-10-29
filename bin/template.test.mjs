@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { templateMain } from './template.mjs';
+import { templateMain, templatesHealth } from './template.mjs';
 import { registryOfText, writeRegistry } from './lib/template.mjs';
 import { SHOWN_SCHEMA, readRecord, recordRendered, renderedFile, shownFile } from './lib/template-record.mjs';
 
@@ -233,4 +233,15 @@ test('shown reports each template\'s counts and free pages, exit 0, and 3 when a
   assert.equal(unknown.code, 3);
   assert.match(unknown.out, /1 call unchecked/);
   assert.equal(JSON.parse(report(['shown', '--json']).out).unchecked, 1);
+});
+
+test('templatesHealth gives doctor the escapes and unchecked calls of seven days, and null where templates are off', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  const health = (folder) => templatesHealth(folder, home, { now: GATE_NOW, slug: 'p' });
+  hook('--hook', { tool_name: 'Artifact', tool_use_id: 'u8', tool_input: { file_path: 'gone.html' } });
+  assert.deepEqual(health(root), { days: 7, escapes: [], unchecked: 1 });
+  const off = gateScratch({ on: false });
+  t.after(off.done);
+  assert.equal(health(off.root), null);
 });
