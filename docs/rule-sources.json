@@ -83,7 +83,7 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "si quieres metemos algo antes al protocolo donde me digas antes de irme que es todo lo que s eva a hacer cuantas horas aproximadamente se va a utilizar",
+        "quote": "Listo te voy a dejar trabajando solo y cuando vuelvas me informas de todo lo que has avanzado, si quieres metemos algo antes al protocolo donde me digas antes de irme que es todo lo que s eva a hacer cuantas horas aproximadamente se va a utilizar y me dices cuanto tiempo vas a aestar trabajando o queda de trabajo para ver si las horas que me voy van a estar todas ya en cola de trabajo",
         "date": "2026-10-28",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
         "line": 8017
@@ -95,28 +95,40 @@
         "line": 8139
       },
       {
-        "quote": "si te digo que me voy 8 horas me digas la meta que se va a tener para dentro de las 8 horas para que cuando vuelva y te diga que ya volvi y me muestres lo que hemos avanzado, me muestres un artefacto en el chat donde me checkes lo que se hizo y lo que no y miramos si se cumplieron las metas",
+        "quote": "Excelente me va a gustando este protocolo, me gustaria añadir que si te digo que me voy 8 horas me digas la meta que se va a tener para dentro de las 8 horas para que cuando vuelva y te diga que ya volvi y me muestres lo que hemos avanzado, me muestres un artefacto en el chat donde me checkes lo que se hizo y lo que no y miramos si se cumplieron las metas",
         "date": "2026-10-28",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
         "line": 8213
       },
       {
-        "quote": "muestrame asi como la visualizacion de salida el tiempo que se demoro y lo que fallo y el tiempo en barra de cuanto se gasto y fallo",
+        "quote": "y muestrame asi como la visualizacion de salida el tiempo que se demoro y lo que fallo y el tiempo en barra de cuanto se gasto y fallo asi como me mostraste la primera visualizacion e incluso en comparativa con los tiempos estimados",
         "date": "2026-10-28",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
         "line": 8264
       },
       {
-        "quote": "quiero que volvamos esto un protocolo del arnes y que nos sirva para ir miediendo en tiempo real nuestro flujo de trabajo",
+        "quote": "Excelente, quiero que volvamos esto un protocolo del arnes y que nos sirva para ir miediendo en tiempo real nuestro flujo de trabajo, que te parece? o como crees que podemos hacerlo mejor?",
         "date": "2026-10-28",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
         "line": 8296
+      },
+      {
+        "quote": "añadamos esto mas al protocolo, entre todo lo que teniamos que porcentaje se cumplio y ademas quiero que me muestres el mapa y como cronologico o de fases bien completo y detallado y me checkees lo que se avanzo",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12054
+      },
+      {
+        "quote": "si pero cada que el orquestador se pasa a otra sesion al parecer el tablero se elimina y queda desactualizado en la version vieja osea no lo vuelve a generar ni actualizar ni absolutamente nada y te apruebo las ideas que me diste para que los apliques",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12237
       }
     ],
-    "reading": "On 2026-10-28, about to leave the lead working alone, he asked to add to the protocol that before he leaves the lead tells him everything that will run, about how many hours it takes and whether the hours he is away are all queued (line 8017); that it is shown always as a visual artifact inside the chat (line 8139); that it states the goal for the hours he is away, and when he says he is back it shows in the chat what was done and what was not, checked against the goals (line 8213); with the time each took, what failed and bars of what was spent and lost, against the estimates (line 8264); and that it be a harness protocol that measures the workflow in real time (line 8296). So before he leaves the lead opens a stretch with `js-harness stretch open` and shows its departure in that reply, its goals each a command that exits 0 so no session grades itself; when he says he is back, before anything else, it closes the stretch and shows its return, the goals checked and each item's time spent and lost from the records. Both reach him as a visual page in the chat: the host's in-chat visual tool with the command's HTML whole, else an Artifact link. The departure states what will run as a fact, so it asks nothing and keeps the rest of the rule as it was; the stretch also serves any stretch the lead plans, which the live board shows as it runs.",
-    "accepted": "He asked for these additions in his own words over five messages (lines 8017 to 8296) and, in question 103 (line 8326, 'Próximo cupo'), chose to have them built as their own feature beside F8; the lead's brief for JH 71 carried his words and this reading, after the design passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request.",
+    "reading": "Earlier on 2026-10-28 he asked (lines 8017 to 8296) that before he leaves the lead shows what will run, its hours and its goals, always as a visual artifact in the chat, and that when he is back it shows what was done and what was not against the goals, with each item's time, failures and spend, as a harness protocol measured in real time. Later that day, adding to the protocol of his absence, he asked that its return say what share of everything that was planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054), and he approved the lead's ideas (line 12237), among them that the return shows the percent of the plan met, the map by phase and a timeline, made by a command from the records. So the return of a stretch shows, beside each goal and each item's time, the share of the planned that was met, the map by phase before and after, and the timeline; and the lead runs the goals with stretch status --goals before he is due back, so the time a goal takes is known before the return and does not hold it.",
+    "accepted": "He asked for the first additions over five messages (lines 8017 to 8296) and chose in question 103 to build them; He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request.",
     "checked": {
-      "date": "2026-10-28",
+      "date": "2026-10-29",
       "by": "command"
     }
   },

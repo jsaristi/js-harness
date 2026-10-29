@@ -19,8 +19,9 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "away-autonomy": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "line",
+      "path": "bin/lib/manifest.mjs",
+      "phrase": "the share of the planned that was met, the map by phase before and after, the timeline"
     },
     "background-task-declared": {
       "level": "owed",
