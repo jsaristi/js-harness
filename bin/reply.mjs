@@ -14,6 +14,8 @@
 // In the same projects it also turns back, once, a work session that ends its turn holding work the orchestrator
 // handed it with nothing in its background to wake it (bin/lib/stop-wake.mjs, A(a) of odd/tasks/wake-and-flag.md);
 // both reasons go in one block when both apply. Codex sends no background tasks, so there that check does not run.
+// And it turns back, once a pending set, the lead of a project with a live board whose rows have waited longer than
+// one check of the board holds (bin/lib/stale-board.mjs, spec 3 of odd/tasks/visual-pages.md).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,7 +26,8 @@ const USAGE = 'Usage: js-harness reply --hook\n'
   + '  reads a Stop payload on standard input; where the nearest harness.json holds a "reply" key, turns the stop back\n'
   + '  when the reply does not close with exactly one state (working, decision, question, cut, finished, in the labels\n'
   + '  the key names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
-  + '  nothing in its background to wake it; writes nothing and always exits 0\n';
+  + '  nothing in its background to wake it, and, once, when the lead of a project with a live board ends its turn\n'
+  + '  while the board\'s rows waited longer than one check; writes nothing and always exits 0\n';
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that
  * is there and cannot be read or parsed throws. */
@@ -66,6 +69,17 @@ async function wakeOf(payload, state, io, stderr) {
   }
 }
 
+/** The stale-board check's warning (bin/lib/stale-board.mjs), or `null`, read as the wake check is. */
+async function staleOf(payload, state, io, stderr) {
+  try {
+    const { staleBoardWarning } = await import('./lib/stale-board.mjs');
+    return staleBoardWarning(payload, state, io, io.now());
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the stale-board check did not run\n`);
+    return null;
+  }
+}
+
 export async function replyMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
   readFile = (file) => fs.readFileSync(file, 'utf8'),
@@ -73,6 +87,7 @@ export async function replyMain(argv, {
   run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 2000 }),
   env = process.env,
   homedir = os.homedir,
+  now = () => Date.now(),
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
 } = {}) {
@@ -101,8 +116,11 @@ export async function replyMain(argv, {
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
       else if (config !== null) {
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
-        const warning = await wakeOf(payload, closingState(message, config), { readFile, readdir, run, env, homedir }, stderr);
-        if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
+        const state = closingState(message, config);
+        const io = { readFile, readdir, run, env, homedir, now };
+        for (const warning of [await wakeOf(payload, state, io, stderr), await staleOf(payload, state, io, stderr)]) {
+          if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
+        }
       }
     } catch (err) {
       // A harness.json that is there and cannot be read lets the session stop, and says why the check did not run.

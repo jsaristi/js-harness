@@ -8,8 +8,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { channelDir, readNotices } from './lib/channel.mjs';
-import { batchesOf, cursorAfter, cursorFrom, pendingRows, positionOf } from './lib/live-rows.mjs';
+import { readNotices } from './lib/channel.mjs';
+import { batchesOf, CHECK_MINUTES, CURSOR_SCHEMA, cursorAfter, cursorFrom, cursorOf, liveCursorPath, pendingRows, positionOf } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { boardStretch } from './stretch.mjs';
@@ -31,18 +31,10 @@ export const LIVE_USAGE = [
   '         2 for a usage error.',
 ].join('\n');
 
-const CURSOR_SCHEMA = 'js-harness.live-cursor/v1';
-
-// How long a check of the record holds on the board: the lead wakes on a notice or after the heartbeat's 30 quiet
-// minutes (`loop heartbeat --quiet`), plus 15 to wake and send. A resting lead waits for a notice up to `wait-for`.
-const CHECK_MINUTES = 45;
-
 class LiveArgError extends Error {}
 
-/** The file of the live board's cursor for the project `slug` under `home`: in the channel's folder. */
-export function liveCursorPath(home, slug) {
-  return path.join(channelDir(home), 'live', `${slug}.json`);
-}
+// The cursor's file is named in bin/lib/live-rows.mjs, which the reply Stop hook reads too; kept here for the callers.
+export { liveCursorPath };
 
 const VALUED = new Map([['--hours', 'hours'], ['--out', 'out'], ['--url', 'url'], ['--sent', 'sent'], ['--cwd', 'cwd'], ['--home', 'home']]);
 
@@ -89,13 +81,6 @@ function writeCursor(file, saved) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify({ ...saved, schema: CURSOR_SCHEMA })}\n`, 'utf8');
 }
-
-/** The saved cursor: its position form, `{ upto, sent }`, or the form before it, `{ through, ids }`, which
- * `positionOf` places in the record once; `null` when there is none. */
-const cursorOf = (saved) => {
-  if (Number.isSafeInteger(saved.upto) && Array.isArray(saved.sent)) return { upto: saved.upto, sent: saved.sent };
-  return typeof saved.through === 'string' && Array.isArray(saved.ids) ? { through: saved.through, ids: saved.ids } : null;
-};
 
 /** `saved` with `cursor` in place of the cursor it held, in either form. */
 const withCursor = ({ through, ids, upto, sent, ...rest }, cursor) => ({ ...rest, ...cursor });
