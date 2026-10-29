@@ -107,7 +107,7 @@ effort.
 - [ ] T3 (kind: build) the pages: the departure leads with the migration's plan and the map, two numbers each, the status and the return with the forecast section (`bin/lib/stretch-render.mjs`). Spec 1, 2, 3. Route: inline. Commit: pending.
 - [ ] T4 (kind: verify) the open stretch's forecast rendered from the real record in a scratch home; reviews (Codex and the Claude lenses) on the slice; PR. Route: inline.
 - [ ] T5 (kind: docs) `rule:away-autonomy` names the migration's share now and at the return on the departure, through `js-harness rules change away-autonomy` on a `rule/` branch, his words quoted with their date; its own PR. Spec 3. Route: inline.
-- [ ] T6 (kind: docs) the `docs/FAILURES.md` line: 2026-10-29 he left for an hour with no stretch opened, so the return had no goals; the check is `stretch status` at his departure. Spec 3. Route: inline.
+- [x] T6 (kind: docs) the `docs/FAILURES.md` line: 2026-10-29 he left for an hour with no stretch opened, so the return had no goals; the check is `stretch status` at his departure. Spec 3. Route: inline.
 
 ## Log
 - L1. 2026-10-29, the lead's brief for JH 89: his words of line 23408 (spec 1), the departure of the stretch opened
@@ -123,3 +123,9 @@ effort.
   here: the plan sections lead the pages, the map total second; no new field, since the roadmap already names the
   migration's plan. T1 (3ddcf3f8) and T2 (f5d4d70f) already count each plan's steps, so only the pages change. The
   rule change and the FAILURES line are added as T5 and T6, after the code PR, as the lead asked.
+- L5. 2026-10-29, the slice's reviews over 1c6b6c22..5aed8af1. The Claude lenses (reliability, readability,
+  resilience; risk left out: the change adds an optional field, a verb and an event kind the record's other readers
+  do not read): complete, 0 findings, 120,754 input tokens. Codex: part 1 of 2 read 181,101 input tokens and was
+  discarded, because this session wrote the T6 entry in `docs/FAILURES.md` in the worktree while it ran
+  (`edit-during-review`, seen again; its Seen line added). Fix: the T6 commit first, then the review run again with
+  nothing edited while it runs, under a declared `js-harness wait`.
