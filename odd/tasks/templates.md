@@ -436,3 +436,13 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   and uninstall removes it (`bin/lib/manifest.mjs:584`, `:745`), told to the lead. Its minor point, two git calls
   before `harness.json` is read on every call of the tools, is unit 6: the gate reads the nearest `harness.json`
   first, with no git, and computes the project's records only where templates are on.
+- State ~07:10Z (context pause): slice B on `feat/templates-b`, worktree `D:\js-harness\.claude\worktrees\templates`,
+  base 39e69ee5, head 4c4509ca (units bbd5c73d, d57c075c, 0fa67aaa, bc3a0520, d7912f64, 4c4509ca). Running:
+  `js-harness codex-review --base 39e69ee5c44a306a7447f88906404c083ac33681` (log in the job tmp `codex-b.log`) and
+  `js-harness lens-review` with risk, resilience, readability, reliability (`lens-b.log`); gentle-ai lineage
+  review-7ce7253a9018aa39 started with consent relay, its envelope's `granted` invocation is next, then
+  lens-context, a general-purpose reader, capture-result (no `--agent`), acknowledge. Then: take the findings, add
+  a gentle-ai line here, push `feat/templates-b`, open the PR against main naming the high-risk installer change,
+  `js-harness notify --to orchestrator --kind ready --pr <n>` telling the lead the surface touched beyond the brief
+  (rules-sources, rules-coverage-data, js-harness.test, SPEC's hook table) and the verifier's pre-existing finding
+  (an identical user entry is removed by uninstall, `bin/lib/manifest.mjs:584`, `:745`). Then slice C (T5).
