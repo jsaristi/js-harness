@@ -322,7 +322,7 @@ Codex and the Claude lenses before its pull request.
 - [x] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline. PR 653.
 - [x] T5 (kind: build) the questions to him as the first template, end to end (the `ask` gate), with the escape entry. Spec 1, 4. Route: inline. PR 656.
 - [x] T6 (kind: build) the rule change on `rule/templates`. Spec 1, 5. Route: inline. PR 660; `status-report` (L8) on `rule/status-report-why`, 7d770446.
-- [ ] T7 (kind: docs) the session summary and the ROADMAP line. Route: inline.
+- [x] T7 (kind: docs) the session summary and the ROADMAP line. Route: inline. `docs/sessions/2026-10-29-jh-80-templates-everything-he-sees-made-by-a-command-and-hel.md`.
 
 ## Log
 - L1. 2026-10-29, the lead's brief for JH 80 (its five lines of his, the recipe it gave him at line 15080, the
@@ -550,3 +550,7 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   insufficient), not holding: it read the reading's "report-status refuses a proposal whose why is blank" as
   unproved, but the base holds it since PR 656 (`bin/lib/report-status.mjs:11` and its test, lines 67-68). Next:
   push, PR, ready notice; then T7.
+- Update 12:30Z: PR 662 landed (11:43Z). T7 on `docs/templates-close` from main f357174e: the session summary
+  and one ROADMAP line (Session board). Done when, checked: `js-harness template check` prints "templates: 1
+  registered, every part present", exit 0; `bin/lib/template-check.test.mjs:102-104` fails it on a planted
+  missing part; no eval spend. Next: commit, push, PR, then the closed notice naming the summary.
