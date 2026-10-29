@@ -14,12 +14,15 @@ import { fileURLToPath } from 'node:url';
 import { GATE_NOT_RUN, takeGateTurn } from './gate-turn.mjs';
 import { installCopy, pnpmBinDir, pnpmRunning } from '../update.mjs';
 import { harnessHome } from './home.mjs';
+import { binDiffers } from './merge-queue-stale-bin.mjs';
 
 /** The exit of a refresh that ran and could not verify the copy, or could not finish after it (a `js-harness install`
  * that exits non-zero, or a shim the prune finds broken). The land's own exit stands in the printed record. */
 export const REFRESH_FAILED = 6;
 /** The settings backups kept: the newest this many, the older ones removed by the run that writes a newer one. */
 const KEEP_SETTINGS_BACKUPS = 5;
+/** The pnpm global package.json backups kept, as the settings backups are. */
+const KEEP_MANIFEST_BACKUPS = 5;
 /** Tries of the install, each verified; a pause before each try after the first, as update-copy.sh waited 20 seconds. */
 const TRIES = 3;
 const TRY_PAUSE_MS = 20_000;
@@ -60,7 +63,7 @@ function copyEntry(binDir, fsys) {
 }
 
 /** The sha the copy's manifest names (`js-harness#<sha>`), or null when the shim names none. */
-function namedSha(binDir, fsys) {
+export function namedSha(binDir, fsys = fs) {
   const manifest = shimManifest(binDir, fsys);
   if (manifest === null) return null;
   let text;
@@ -177,6 +180,25 @@ function backupSettings({ settings, dir, stamp, fsys }) {
   return { file, dir, hash: hashOf(text), kept: Math.min(backups.length, KEEP_SETTINGS_BACKUPS), pruned };
 }
 
+/** Copies pnpm's global package.json `manifest` (the one the shim names, which `pnpm add -g` rewrites) to `dir` as
+ * `package.json.<stamp>`, as the lead backed it up by hand, then keeps the newest `KEEP_MANIFEST_BACKUPS` of those names.
+ * The copy's path, or null when there is no manifest to copy. */
+function backupManifest({ manifest, dir, stamp, fsys }) {
+  let text;
+  try {
+    text = manifest === null ? null : fsys.readFileSync(manifest);
+  } catch {
+    text = null;
+  }
+  if (text === null) return null;
+  fsys.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `package.json.${stamp}`);
+  fsys.writeFileSync(file, text);
+  const backups = fsys.readdirSync(dir).filter((name) => /^package\.json\.\d{8}T\d{6}Z$/.test(name)).sort().reverse();
+  for (const name of backups.slice(KEEP_MANIFEST_BACKUPS)) fsys.rmSync(path.join(dir, name), { force: true });
+  return file;
+}
+
 const hashOf = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16);
 
 /** The short hash of the Claude settings as they are now, or null when there is no settings file. */
@@ -245,7 +267,7 @@ export async function refreshCopy({
       stderr(`refresh: ${quiet.why} while the gate lock was waited for: nothing was refreshed, and the installed copy still names its previous main`);
       return GATE_NOT_RUN;
     }
-    return await runHeld({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr });
+    return await runHeld({ sha, version, home, settings, cwd, env, platform, spawn, fsys, now, sleep, stdout, stderr });
   } finally {
     const lost = lock.lost();
     lock.release();
@@ -262,9 +284,9 @@ export function heldInProcess(opts) {
  * for minutes; in this process that would stop the gate lock's beat, and a waiting gate would take the lock as a dead
  * one's (Codex P2 on 93de70b..2e6f86b). Here this process only waits, so its lock beats. The child's lines are passed
  * on as they come; its exit is the refresh's, REFRESH_FAILED when it could not run or ended by a signal. */
-export function heldInChild({ sha, version, home, settings, env, platform, stdout, stderr }, { entry = fileURLToPath(import.meta.url) } = {}) {
+export function heldInChild({ sha, version, home, settings, cwd, env, platform, stdout, stderr }, { entry = fileURLToPath(import.meta.url) } = {}) {
   return new Promise((resolve) => {
-    const child = spawnChild(process.execPath, [entry, HELD_FLAG, JSON.stringify({ sha, version, home, settings, platform })], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnChild(process.execPath, [entry, HELD_FLAG, JSON.stringify({ sha, version, home, settings, cwd, platform })], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const ended = [];
     for (const [stream, say] of [[child.stdout, stdout], [child.stderr, stderr]]) {
       const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
@@ -283,7 +305,7 @@ export function heldInChild({ sha, version, home, settings, env, platform, stdou
   });
 }
 
-async function refreshHoldingLock({ sha, version, home, settings, env, platform, spawn, fsys, now, sleep, stdout, stderr }) {
+async function refreshHoldingLock({ sha, version, home, settings, cwd, env, platform, spawn, fsys, now, sleep, stdout, stderr }) {
   const fail = (line) => {
     stderr(`refresh failed: ${line}`);
     return REFRESH_FAILED;
@@ -293,7 +315,9 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
   if (!binDir) return fail("pnpm's global bin folder is not known: `pnpm bin -g` gave none");
   const previous = namedSha(binDir, fsys);
   const backupDir = path.join(home, '.js-harness', 'refresh-backups');
-  const backup = backupSettings({ settings, dir: backupDir, stamp: stampOf(now()), fsys });
+  const stamp = stampOf(now());
+  const backup = backupSettings({ settings, dir: backupDir, stamp, fsys });
+  const manifestBackup = backupManifest({ manifest: shimManifest(binDir, fsys), dir: backupDir, stamp, fsys });
   // The undo is printed whatever the end, once the settings are backed up and the previous copy is known.
   const undo = () => stdout(`undo: js-harness uninstall --global, then pnpm add -g github:jsaristi/js-harness#${previous ?? '<the previous sha, not recorded>'}, then js-harness install; the settings before are in ${backup?.file ?? 'no copy (there was no settings file)'}`);
   if (backup) {
@@ -302,6 +326,7 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
   } else {
     stdout('settings before: no settings file to back up');
   }
+  stdout(`pnpm global package.json before: ${manifestBackup ? `copy ${manifestBackup}` : 'none to back up (the shim names no copy)'}`);
   stdout(`refresh: installing main ${sha.slice(0, 7)} (version ${version}); the copy named ${previous ? previous.slice(0, previous.startsWith('v') ? undefined : 7) : 'no sha'} before`);
 
   // The copy is verified, and then run, by the path of the entry its shim names, never by a `js-harness` the PATH finds:
@@ -327,6 +352,21 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
     return REFRESH_FAILED;
   }
   stdout(`refresh: the installed copy answers ${version} and names ${sha}`);
+  // The copy's bin/ is main's, file by file, as the lead compared `git archive` with it by hand (S6 of
+  // odd/tasks/lead-manual-steps.md); read in the checkout the refresh runs from, which holds main.
+  const gitIn = (...args) => {
+    const result = spawn('git', args, { cwd, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+    return { ok: !result.error && result.status === 0, out: String(result.stdout ?? '') };
+  };
+  const differs = binDiffers(path.dirname(entry), sha, gitIn);
+  if (differs === null || differs.length > 0) {
+    stderr(differs === null
+      ? `refresh failed: could not compare the installed copy's bin/ with main's at ${sha.slice(0, 7)} (git ls-tree in ${cwd}, or the copy's folder, could not be read)`
+      : `refresh failed: the installed copy's bin/ differs from main's at ${sha.slice(0, 7)}: ${differs.slice(0, 5).join(', ')}${differs.length > 5 ? ` and ${differs.length - 5} more` : ''}`);
+    undo();
+    return REFRESH_FAILED;
+  }
+  stdout(`refresh: the installed copy's bin/ is main's at ${sha.slice(0, 7)}`);
 
   const installed = spawn(process.execPath, [entry, 'install'], { encoding: 'utf8' });
   stdout(`js-harness install exit ${installed.status}`);
@@ -351,8 +391,8 @@ async function refreshHoldingLock({ sha, version, home, settings, env, platform,
 
 // Run as the child of `heldInChild`: the held part with the real spawn, files, clock and sleep; its exit is the refresh's.
 if (process.argv[2] === HELD_FLAG && path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
-  const { sha, version, home, settings, platform } = JSON.parse(process.argv[3]);
-  refreshHoldingLock({ sha, version, home, settings, env: process.env, platform, spawn: spawnSync, fsys: fs, now: Date.now, sleep: defaultSleep, stdout: console.log, stderr: console.error })
+  const { sha, version, home, settings, cwd, platform } = JSON.parse(process.argv[3]);
+  refreshHoldingLock({ sha, version, home, settings, cwd, env: process.env, platform, spawn: spawnSync, fsys: fs, now: Date.now, sleep: defaultSleep, stdout: console.log, stderr: console.error })
     .then((code) => {
       process.exitCode = code;
     })

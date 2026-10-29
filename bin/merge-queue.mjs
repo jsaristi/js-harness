@@ -8,7 +8,6 @@
 // builds and prints the candidate; `--land` tests it and moves the default branch to it (`landCandidate`), then
 // retargets the open pull requests stacked on a branch it landed (`retargetStacked`).
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,11 +25,12 @@ import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
+import { staleBin, UNSHIPPED_GLOBS } from './lib/merge-queue-stale-bin.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
 import { harnessHome } from './lib/home.mjs';
 
-// Where `notify --kind ready` has read it from (bin/notify.mjs).
-export { reviewEvidence };
+// Where `notify --kind ready` has read it from (bin/notify.mjs), and where the tests read the copy guard.
+export { reviewEvidence, staleBin, UNSHIPPED_GLOBS };
 
 export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
 
@@ -64,11 +64,13 @@ ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or n
 --land --refresh-copy, after a land that moved main, also brings the installed copy the hooks run up to that main
 (odd/tasks/harness-review.md, T4): under the gate lock, the Claude settings are backed up (the newest five kept under
 <home>/.js-harness/refresh-backups), main is installed with pnpm add -g by its sha in up to three tries, the copy is
-verified by its --version (the version main's package.json names) and by the sha its shim names, then js-harness
-install and js-harness doctor run, and the stale pnpm state is pruned. The undo is printed. A land that moved nothing
-refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install fails (the landing
-stands), 75 when the gate lock was not obtained or a session of the project was still at work after 30 minutes
-(nothing refreshed): the refresh first waits for every session claude agents lists busy or waiting to be between runs.
+verified by its --version (the version main's package.json names), by the sha its shim names and by its bin/, file by
+file against main's, the tests aside; pnpm's global package.json is backed up beside the settings (the newest five
+kept). Then js-harness install and js-harness doctor run, and the stale pnpm state is pruned. The undo is printed. A
+land that moved nothing refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install
+fails (the landing stands), 75 when the gate lock was not obtained or a session of the project was still at work after
+30 minutes (nothing refreshed): the refresh first waits for every session claude agents lists busy or waiting to be
+between runs.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
@@ -808,73 +810,6 @@ function versionAt(sha, cwd, run) {
   } catch {
     return null;
   }
-}
-
-/** The files under `dir`, as paths relative to it with forward slashes. */
-function copyFiles(dir, folder = '') {
-  return fs.readdirSync(path.join(dir, folder), { withFileTypes: true }).flatMap((entry) => {
-    const rel = folder ? `${folder}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) return copyFiles(dir, rel);
-    return entry.isFile() ? [rel] : [];
-  });
-}
-
-/**
- * The bin/ files package.json `files` leaves out of an installed copy: the globs of its `!bin/` negations. A path
- * main holds that such a glob matches is no stale path when the copy lacks it. The test in merge-queue.test.mjs reads
- * package.json and fails if the two disagree.
- */
-export const UNSHIPPED_GLOBS = ['*.test.mjs', '*.testkit.mjs'];
-const unshipped = (repoPath) =>
-  UNSHIPPED_GLOBS.some((glob) => new RegExp(`(^|/)${glob.replace(/\./g, '\\.').replace(/\*/g, '[^/]*')}$`).test(repoPath));
-
-/** The git blob id of `bytes`, as `git hash-object` gives it: the sha1 of `blob <length>`, a NUL and the bytes. */
-const blobId = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
-
-/**
- * The bin/ paths the running copy and `main` do not agree on (sorted). One `git ls-tree` gives the blob id of each bin/ path of
- * `main`, and a file of the copy whose id is that one is the same file, with no more git call. The bytes are hashed with line ends
- * as LF, which is how a checkout on this machine holds them, so a blob stored with CRLF misses at the first look and is judged
- * further: `git show main:<path>` with line ends aside, as before. A path on one side only is stale. The running copy's bin/ is the
- * folder of `self`. An unreadable file is not proven different, and an unreadable listing refuses nothing, as before the guard;
- * a main without bin/merge-queue.mjs holds no queue to guard, so nothing is compared.
- */
-export function staleBin(self, main, gitIn) {
-  const dir = path.dirname(self);
-  const listed = gitIn('ls-tree', '-r', main, '--', 'bin');
-  if (!listed.ok) return [];
-  const onMain = new Map();
-  for (const line of listed.out.split('\n')) {
-    const entry = /^\S+ \S+ ([0-9a-f]+)\t(.+)$/.exec(line);
-    if (entry) onMain.set(entry[2], entry[1]);
-  }
-  if (!onMain.has('bin/merge-queue.mjs')) return [];
-  let local;
-  try {
-    local = copyFiles(dir);
-  } catch {
-    return [];
-  }
-  const copied = new Set(local.map((rel) => `bin/${rel}`));
-  const stale = [];
-  for (const rel of local) {
-    const repoPath = `bin/${rel}`;
-    if (!onMain.has(repoPath)) {
-      stale.push(repoPath);
-      continue;
-    }
-    let mine = null;
-    try {
-      mine = fs.readFileSync(path.join(dir, rel)).toString('utf8').replace(/\r\n/g, '\n');
-    } catch {
-      continue;
-    }
-    if (blobId(Buffer.from(mine, 'utf8')) === onMain.get(repoPath)) continue;
-    const theirs = gitIn('show', `${main}:${repoPath}`);
-    if (theirs.ok && mine !== theirs.out.replace(/\r\n/g, '\n')) stale.push(repoPath);
-  }
-  for (const repoPath of onMain.keys()) if (!copied.has(repoPath) && !unshipped(repoPath)) stale.push(repoPath);
-  return stale.sort();
 }
 
 async function queueRun(args, { run = spawnSync, covered = null, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
