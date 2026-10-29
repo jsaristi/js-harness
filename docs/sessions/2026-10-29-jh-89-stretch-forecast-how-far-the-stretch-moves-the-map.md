@@ -50,7 +50,15 @@ closes the map row, `js-harness stretch closes lead "Review and release" "The le
 `js-harness stretch status --html <file>`. Which rows each closes is the lead's call; these are this session's reading.
 They need the installed copy to hold this branch.
 
-## Failed, and what it cost
+## Decisions
+- How an item says what it moves: an optional `closes: [{ in, step }]`, a phase's open step by the start of its text
+  or a plan step by its id, resolved at the opening; the `stretch closes` verb adds one to an open stretch.
+- The share he means is the migration's (line 23561), so the roadmap's plan section (`F8 plan`) leads the pages,
+  counted by its steps, and the map's total comes second.
+- The measure stays honest while tasks are added: its denominator is the opening's map; the named rows done and the
+  rows the map gained are shown apart (the feature document's Design).
+
+## Failures and lessons
 - The first Codex run was discarded: `docs/FAILURES.md` was edited in the worktree while it read part 1 (181,101 input
   tokens). Fix: commit first, then run again with nothing edited, under a declared `js-harness wait`. Its `Seen:` line
   is in `edit-during-review`.
@@ -64,11 +72,11 @@ They need the installed copy to hold this branch.
   (0.93), no findings; the readability lens: 0 findings, 9,126 input tokens.
 - `757bf02` docs(failures): `stretch-not-opened` controlled by that line (`js-harness failures stretch-not-opened`).
 
-## Open
+## Left
 - The dispatcher's help (`bin/js-harness.mjs`) and `docs/SPEC.md` do not name the `closes` verb: outside this brief's
   surfaces; `stretch --help` does.
 - The lanes do not hold that S13 comes after S5c-a; that is `laneOut`'s.
 
-## Spent
+## Cost
 Codex: 456,322 input tokens over two runs for PR 675 (one discarded), and one small run for PR 676. Claude lenses:
 120,754 and 9,126 input tokens. No eval spend.
