@@ -366,6 +366,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   probe, $0.051 for three lenses over a real range (`odd/tasks/f8-s1-reviews.md`, L13 and L15).
 - **His decisions:** G9 and G13 (answered and decided).
 - **State:** done: the probe 6 of 6, the incident set 13 of 20 (PRs 607, 608, 613, 614).
+- **Later fix:** the merge door reads both reviews of a pull request at its head merged onto main, the tip the
+  push of main checks, so a record whose head lies past the pull request's no longer passes the door and fails
+  the push; a refused push of main prints the hook's failing rows (JH 83, branch
+  `fix/door-reads-coverage-like-pre-push`; `docs/FAILURES.md`, `door-covers-past-tip`).
 
 ### The S1 records fix (row 3 of the reverse-engineering document's 13.3)
 - **Changes:** the review records cannot be written by the model. Prevention: `guard` refuses a file

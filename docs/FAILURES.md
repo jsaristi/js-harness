@@ -419,6 +419,25 @@ gate for a change that held no code.
 - Control: check — bin/check.test.mjs — "a merge of the trunk into a branch of documents runs no
   sensor when the merge differs from the side it merges only in documents" — since 2026-10-14
 
+### door-covers-past-tip
+The merge queue's door called a pull request's commit covered by a record whose head lies past the
+pull request's head, a cover that holds only while that head is the tip; the push of main checks the
+candidate's merge, past which nothing lies, and refused it after a whole land, whose refusal then
+printed only git's "failed to push some refs".
+- Class: tool
+- Seen: 2026-10-29 — the channel, the lead's notice at 03:01Z and JH 79's answer at 03:04Z — the land
+  of 644 and 646, green here and on GitHub Actions, refused at the push: 35c8d1fd of PR 644 lay in
+  Codex c8ee437..8a412b7 and lens 62315e6..8a412b7, whose head 8a412b7 was past PR 644's own head,
+  the first of a stack landed alone; about 25 minutes lost
+- Seen: 2026-10-29 — the lead's land log `land-658-660.log` and notice at 10:29Z — the door printed
+  "4b85503f ...: Codex a7b6ae4..f30d360 reviewed"; feat/visual-pages-e was reviewed to f30d360 and
+  its PR then ended at 4b85503f, its parent, so the push of the candidate b5236e3 refused 4b85503f
+  for both records (reproduced on the records as they stood at 10:25Z: covered at the tip 4b85503f,
+  uncovered at b5236e3)
+- Control: check — bin/merge-queue.test.mjs — "a record whose head lies past the pull request covers
+  it at its head and not merged: the door refuses it before a candidate, as the push does" — since
+  2026-10-29
+
 ### edit-during-review
 A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
 not the committed range, wrote no record and had to be run again.
