@@ -174,6 +174,23 @@ rule apart yet, and the replies now kept say why (L21). Next, in this order: the
 of D11 (the five reply states against `away-autonomy`'s "ask nothing"; transcripts on the rule arms, to see whether
 a rule's skill is loaded); then, on that answer, the reruns and the 13 to 23 cases T6 did not write (T9); and
 `init`'s baseline line (T10, L20), in its own slice.
+JH 82's state at its context pause (2026-10-29, branch `f8-s5c-a-cases`, worktree
+`D:\js-harness\.claude\worktrees\f8-s5c-a-cases`, HEAD `45ae758e`, nothing pushed, no PR yet): blocker 2 is built
+(`45fb1751`), D12 too (`45ae758e`); blocker 1 is his question 111, and no `away-autonomy` rerun runs until it is
+answered (L23). The lenses (reliability, readability) on `03effcad..45ae758e`: 0 findings each. Reviews still
+owed: Codex on that range (its first try refused an uncommitted document), then a gentle-ai line for `e2be8e8a`,
+`45fb1751` and `45ae758e`. Next, in order: (1) those reviews, their findings fixed;
+(2) P7, a diagnostic rerun of `rule-reuse-first` on both arms now that the arms keep transcripts (4 trials, about
+$2.3 by P5): read in each trial's transcripts whether `js-harness-protocols` was loaded, record it in the Log and
+the Paid runs table, `rule-proof.mjs` from the clean commit; (3) T10: move `staleManifestMessage`,
+`invalidHarnessJsonMessage`, `howToPinClause` and `cleanupClause` (`bin/lib/project.mjs:1482-1524`) into a new
+`bin/lib/project-messages.mjs` that `project.mjs` re-exports, lower its ceiling in
+`bin/conventions-structure.test.mjs`, and write `manifest.coverage = { baseline, release }` in `writeProject` only
+when not `clone` (D13: a clone of an older project would set a baseline that asks every live rule for a control at
+once), the day injected through `initProject`'s deps (`localDay`, `bin/lib/flaky.mjs`), with tests; high risk, so
+one independent verifier, then Codex and the lenses; its own PR if the branch passes 400 lines; (4) push, PR,
+`notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`. JH 82's recorded spend:
+$4.87.
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
