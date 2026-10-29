@@ -410,3 +410,10 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   away-autonomy rerun. Go on with T10, then L5 (init baseline line)." Evidence: the records' commit was refused by
   its gate once, on `bin/lib/gentle-ai-absence.test.mjs`, which names every results file that holds the word
   (a trial's `gentle-ai/state.json` path); the two new ones are named there with P1-P4's reason, `RESULT`.
+- L24 (2026-10-29, evidence): blocker 2 of L22 is built (the commit after `e2be8e8a`): `currentConfig` gives the
+  current arm and every `current-without-rule-<id>` arm the transcript keeper of the subagent configs, and every
+  other arm keeps none (`evals/configs.test.mjs`, 91 of 91). D12 is built in the commit after it: the away grader
+  reads Spanish (`moneda`; the Spanish of waiting, "hasta que tomes" among it; the Spanish of choosing, bounded by
+  letters since `\b` stops at an accented one). Checked on the four P6 replies: each now passes the "waits" test and
+  still fails the no-question test, so P6 would have scored 5 of 6 on both arms, still no difference; and on eight
+  replies written by hand, four of them Spanish (`task-proof` unchanged: 2, 6, 0 of 6).
