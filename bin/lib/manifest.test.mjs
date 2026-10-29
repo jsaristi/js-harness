@@ -1758,6 +1758,34 @@ test('a user\'s entry equal to an older form of ours stays theirs when an update
   }
 });
 
+// JH 81's verifier: an install that stops after it writes its entries and before it writes its manifest. Install records
+// them first, so the next install still knows them as its own, and uninstall takes them out.
+test('an install that stops before its manifest is written leaves its entries recorded as its own, and uninstall takes them out', () => {
+  const home = makeTmpHome();
+  const rename = fs.renameSync;
+  try {
+    const target = claudeHook.target(home);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify({ hooks: { SessionStart: [theirStart] } }, null, 2)}\n`, 'utf8');
+    const seeded = fs.readFileSync(target, 'utf8');
+    // The run's own manifest is the one write that fails, as a process stopped there would leave it.
+    fs.renameSync = (from, to) => {
+      if (path.resolve(to) === path.resolve(manifestPath(home)) && JSON.parse(fs.readFileSync(from, 'utf8')).version === '0.1.0') throw new Error('stopped');
+      return rename(from, to);
+    };
+    assert.throws(() => install(home, '0.1.0'), /stopped/);
+    fs.renameSync = rename;
+    assert.notEqual(fs.readFileSync(target, 'utf8'), seeded, 'the entries were written');
+
+    install(home, '0.1.0');
+    uninstall(home);
+    assert.equal(fs.readFileSync(target, 'utf8'), seeded);
+  } finally {
+    fs.renameSync = rename;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('sync leaves an entry recorded as the user\'s when the release no longer ships it', () => {
   const home = makeTmpHome();
   try {

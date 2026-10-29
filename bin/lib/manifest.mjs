@@ -452,11 +452,10 @@ function isOnlyOurPointerPaths(value, pointers) {
   });
 }
 
-/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a
- * rewrite matches it instead of always reformatting to 2 spaces. `null` means compact single-line
- * JSON (no newlines besides, at most, one trailing one) and must stay compact; a tab or space run
- * right after the first real newline becomes the indent unit; anything else (a multi-line document
- * with no indented line, which should not normally happen) falls back to the historical default. */
+/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a rewrite matches it instead
+ * of always reformatting to 2 spaces. `null` means compact single-line JSON (no newlines besides, at most, one trailing
+ * one) and must stay compact; a tab or space run right after the first real newline becomes the indent unit; anything
+ * else (a multi-line document with no indented line, which should not normally happen) falls back to the default. */
 export function detectIndent(raw) {
   const body = raw.replace(/\r?\n$/, '');
   if (!body.includes('\n')) return null;
@@ -523,8 +522,8 @@ function isOlderOwnEntry(item, entry) {
  * but is not an array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent: an entry
  * that is already there (by deep equality) is left alone and the file is not rewritten at all, so a repeat install/sync
  * never reformats a file that already has what it needs. It says `present` whenever the entry was there before this run,
- * also when only older forms of it were taken out, which it names (`replaced`). */
-function appendEntryToFile(target, pointer, entry, ours) {
+ * also when only older forms of it were taken out, which it names (`replaced`). With `write` false it writes nothing. */
+function appendEntryToFile(target, pointer, entry, ours, write = true) {
   let fileExisted;
   let raw;
   try {
@@ -586,8 +585,8 @@ function appendEntryToFile(target, pointer, entry, ours) {
   const replaced = [...stale].reverse().flatMap((i) => arr.splice(i, 1)).reverse();
   if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
+    if (write) fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (write) fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
@@ -607,12 +606,11 @@ const pointersIn = (records, target) => (records ?? [])
   .filter((record) => record.path === target && !ownsNoList(record))
   .map((record) => record.pointer);
 
-/** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a
- * pointer shape that does not match, or an entry that is not there (the user changed or removed
- * it) all leave the file completely untouched — reported `kept` (or nothing, for a missing file,
- * mirroring how `uninstall` already treats a missing file component). Deletes the whole file only
- * when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but empty
- * containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
+/** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a pointer shape that does
+ * not match, or an entry that is not there (the user changed or removed it) all leave the file completely untouched —
+ * reported `kept` (or nothing, for a missing file, mirroring how `uninstall` already treats a missing file component).
+ * Deletes the whole file only when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but
+ * empty containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
  * them that is empty once the entry is out goes too (`removeEmptyCreatedContainers`). `pointers` is every pointer
  * js-harness recorded in this file, which is what "ours" means for the last check (see `isOnlyOurPointerPaths`). */
 function removeEntryFromFile(target, pointer, entry, createdFile, createdContainers = 0, pointers = [pointer]) {
@@ -708,7 +706,7 @@ function isBelow(inner, outer) {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined) {
+function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined, write = true) {
   const createdByTarget = new Map();
   const foldersByTarget = new Map();
   const ours = oursContainers(previousManifest?.entries);
@@ -717,7 +715,7 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
     const pointer = component.pointer;
     const entry = component.entry();
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
-    const result = appendEntryToFile(target, pointer, entry, ours);
+    const result = appendEntryToFile(target, pointer, entry, ours, write);
     if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
     // Like `createdFile`, the folders made for the file are a fact of the file, settled by the first install that wrote
     // it, from what was missing before install wrote anything (a skill file makes `~/.claude` first). A record from before the field names none, and its folders stay, since nothing says install made them.
@@ -1108,6 +1106,8 @@ export function install(home, version, deps = {}) {
     const record = writeComponent(target, component.content(version), previous?.files?.find((f) => f.path === target), writeFile);
     if (record) files.push(record);
   }
+  // Recorded before written, by the same walk with no write: a run stopped in between leaves them ours to undo (JH 81's verifier).
+  writeManifest(home, { ...previous, version: previous?.version ?? null, files, entries: installEntries(home, previous, missingBefore, deps.codexConfig, false) });
   const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
