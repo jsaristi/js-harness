@@ -558,6 +558,11 @@ carrying #644, landed (main 96b917a).
   (reliability, resilience, run 5f61f391) was cut when the lead refreshed the installed copy at ~10:43Z and left no
   record: run it once more, then gentle-ai from eb4c2098 (status gave the start; run its granted), push, PR on #659.
   Left after E3: T7 (waits on the lead: CLAUDE.md outside the surface), T11a (README/help, outside the surface), T9.
+- E3 reviews: the lenses rerun once over eb4c2098..d2e7a9ad, reliability and resilience with nothing (25,309 tokens).
+- gentle-ai: eb4c2098..d2e7a9ad approved (medium, lineage review-bb275768fa2ff4d8): two suggestions, not taken: that
+  the `--json` run checks its record message stays off stdout, and that the unrecorded case checks the page file
+  exists. Both are assertions on what the code already does and its tests already reach; a new commit would cost a
+  third Codex and lens round for no behavior change.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
