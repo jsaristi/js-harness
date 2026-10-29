@@ -26,6 +26,9 @@ test('importsAgents reads an import line of AGENTS.md, and no mention of it in p
   assert.equal(importsAgents('@./AGENTS.md\r\n'), true);
   assert.equal(importsAgents('Read AGENTS.md first, and @AGENTS.md in a sentence.\n'), false);
   assert.equal(importsAgents('```\n@AGENTS.md\n```\n'), false);
+  // A fence closes only on its own character, at least as long (Codex P2 on 541464c).
+  assert.equal(importsAgents('````md\n```\n@AGENTS.md\n```\n````\n'), false);
+  assert.equal(importsAgents('~~~\n```\n~~~\n@AGENTS.md\n'), true);
 });
 
 test('importHealth is ok for a root CLAUDE.md that imports AGENTS.md with nothing above it', (t) => {

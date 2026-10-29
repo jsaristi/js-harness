@@ -79,7 +79,7 @@ State at the context pause (2026-10-29, branch `f8-s13-rehearsal`, worktree
 `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD `6e5cd3e8`, nothing pushed, no PR): T1, T2, T3 and T8 built
 (`ef23c03e`, `d1cea611`, `57584e5d`, `604253a6`, `2c4e534e`). Reviews: lenses on `f2110239..57584e5d` (risk,
 reliability, readability) and `57584e5d..2c4e534e` (reliability, readability, resilience), 0 findings each; Codex on
-`541464c..6e5cd3e`, four P2 to fix next, each test first: (1) `importsAgents` must match a fence's character and
+`541464c..6e5cd3e`, four P2, (3) and (4) and the CLAUDE_CONFIG_DIR change fixed in `d8fb14a5`; next, test first: (1) `importsAgents` must match a fence's character and
 length; (2) `importHealth` must treat a root CLAUDE.md that `claudeMdExcludes` drops as not loaded (reuse
 `excludingGlob`/`claudeMdSource` of `bin/lib/payload.mjs`); (3) `rehearsalEnv` must drop git's repository variables
 as `childEnv` of `scripts/practice-lib.mjs` does; (4) `snapshotTree` must record folders, so a recorded folder left

@@ -15,10 +15,12 @@ const NONE = Object.freeze({ state: 'n/a', fix: [] });
 
 /** Whether `text`, a CLAUDE.md, imports AGENTS.md: a line of its own that is the import, outside a code fence. */
 export function importsAgents(text) {
-  let fenced = false;
+  let fence = null; // the opening fence while inside one: it closes only on its own character, at least as long
   for (const line of text.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-    else if (!fenced && /^@(\.\/)?AGENTS\.md\s*$/.test(line.trim())) return true;
+    const mark = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (mark && fence === null) fence = mark;
+    else if (mark && mark[0] === fence[0] && mark.length >= fence.length && line.trim() === mark) fence = null;
+    else if (fence === null && /^@(\.\/)?AGENTS\.md\s*$/.test(line.trim())) return true;
   }
   return false;
 }
