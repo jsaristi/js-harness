@@ -190,3 +190,7 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   with no creation time in the listing is pinned as its own; the no-backup line no longer says the shim names no copy.
   Left: a wait typed inside `bash -c "..."`, or by a path the shell expands, matches no session and is printed (N3);
   the 100 ms tolerance where both reads give the same time (N5).
+- L10. 2026-10-29, Codex on 183b473..e387c13 again (T8; 2 parts, 310,423 input tokens): the channel fix and the backup
+  correct (0.94); one new P2 (0.99): a quoted argument that begins with `<` (`--contains "<html"`) was read as an
+  input redirection, so its wait matched no session. `shellWords` tells no input redirection, so no word ends a typed
+  wait by its first character any more; a wait typed with an unquoted `<` after it is printed, not told.

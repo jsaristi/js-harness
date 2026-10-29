@@ -97,11 +97,13 @@ export function readCopy({ snapshot, processes, globalDir, self }) {
 }
 
 /** The arguments of the wait in a command a session typed, as its shell reads them (`shellWords`): after the command
- * name or the dispatcher followed by `wait`, or after `wait.mjs`, up to the end, the next operator or a redirection;
- * null when it holds no wait. */
+ * name or the dispatcher followed by `wait`, or after `wait.mjs`, up to the end, the next operator or an output
+ * redirection; null when it holds no wait. `shellWords` takes the quotes off and tells no input redirection, so a word
+ * that begins with `<` is an argument (`--contains "<html"`, Codex P2 on 183b473..e387c13): a wait typed with `<` after
+ * it matches no session and is printed, not told. */
 function typedWait(typed) {
   const words = shellWords(typed, { redirections: true });
-  const ends = (at) => words.operators.has(at) || words.redirections.has(at) || words[at].startsWith('<');
+  const ends = (at) => words.operators.has(at) || words.redirections.has(at);
   for (let at = 0; at < words.length; at += 1) {
     if (ends(at)) continue;
     const verbAt = /(^|[/\\])js-harness(\.mjs)?$/.test(words[at]) && words[at + 1] === 'wait' && !ends(at + 1) ? at + 2 : /(^|[/\\])wait\.mjs$/.test(words[at]) ? at + 1 : -1;

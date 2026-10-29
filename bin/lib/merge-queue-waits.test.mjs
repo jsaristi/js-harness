@@ -102,6 +102,9 @@ test("sessionOf finds the one open session whose transcript holds the same wait,
   ];
   assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file README.md --contains "ready now"`, plan: quoted }).session.title, 'JH 82 · q');
   assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file a.md --contains "it's here"`, plan: quoted }).session.title, 'JH 81 · r');
+  // A quoted argument that begins with `<` is an argument (Codex P2 on 183b473..e387c13), not a redirection.
+  const html = [{ id: 'g', title: 'JH 80 · s', waits: ['js-harness wait --main-file index.html --contains "<html" 2>&1'] }];
+  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file index.html --contains "<html"`, plan: html }).session.title, 'JH 80 · s');
 });
 
 test('waitAgain gives the wait to run again, as js-harness and its arguments', () => {
