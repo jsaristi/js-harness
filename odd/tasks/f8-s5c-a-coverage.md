@@ -99,6 +99,13 @@ mechanism here, before S13 rehearses it and S12 ships it.
   `task-proof` and owed in the register until its paid run; the other 13 to 23 are a later session's
 - [x] T7 (kind: docs) the paid runs as ready commands, the ROADMAP line, the ready notice — S8; inline (the ready
   notice goes with the pull request, after the reviews)
+- [x] T8 (kind: build) harder premises for `rule-reuse-first` and `rule-away-autonomy` (L18, L19: D8, D9), proven
+  by `task-proof`, and their paid reruns P5 and P6 — S4; inline; JH 82, branch `f8-s5c-a-cases` (`b08cf553`,
+  `03effcad`, the records' commit after them): neither tells its rule apart (L21); both stay owed
+- [ ] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
+  rule apart (D10) — S4; inline. P7 says it does not (L26, D14): none built as T8's; how a case could is the lead's
+- [x] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline; JH 82,
+  branch `f8-s5c-a-init-baseline` from main, PR 669 (`ba8b407c`, `848031b2`, L28)
 
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
@@ -122,6 +129,26 @@ Reviews:
 - gentle-ai: no gentle-ai review ran on `2507ab54` (`f1e0e8ea..2507ab54`), the proof records `check --push` counts as
   code: the Stop hook offered only the whole branch, of records and documents, so only its read-only status ran.
   Codex reviewed it ("the patch is correct", 0.99) and the reliability lens, 0 findings (L15).
+- JH 82, `b08cf553` (T8, the two cases v2): the lenses reliability and readability, 0 findings each (12,380 and
+  12,384 input tokens); Codex, "the patch is incorrect" (0.96, 89,243 input tokens against the plan's 120,000): 2
+  findings P2 on `rule-away-autonomy`'s grader, both read true: a comment naming the currency failed a solution
+  that adds no column, and any mention of the currency passed a reply that chooses it for the owner. Fixed by the
+  commit after `b08cf553`: comments are taken out before the check, and the reply must say the choice waits and
+  must not say it chose a currency (checked on six replies by hand, the reference's included).
+- gentle-ai: approved on `03effcad..b4d6fc13` (`e2be8e8a`, `45fb1751`, `45ae758e`; lineage
+  `review-4a07504fe0e0b05e`, reliability lens, three advisory findings, L25).
+- JH 82, `24471296` (the away grader's Spanish words bounded): the reliability lens, 0 findings (9,672 input
+  tokens); Codex, "the patch is correct" (0.97, 41,698 input tokens against the plan's 49,000 to 59,000).
+- gentle-ai: approved on `b4d6fc13..24471296` (lineage `review-c679edf6c2d39dd6`, two advisory findings, L25).
+- JH 82, T10 on `f8-s5c-a-init-baseline` (PR 669): the independent verifier on `ba8b407c`, no blocking finding and
+  four nits, three fixed by `848031b2` (L28); Codex, "the patch is correct" on `27fc4f9e..ba8b407c` (0.95, 113,906
+  input tokens against the plan's 95,000 to 120,000) and on `ba8b407c..848031b2` (0.95, 48,484); the lenses risk,
+  reliability and readability on the first, 0 findings each, and reliability on the second, 0.
+- gentle-ai: approved on `27fc4f9e..ba8b407c` (lineage `review-b6abd3914d52fc40`) and on `ba8b407c..848031b2`
+  (lineage `review-d4494167128b1650`), three advisory findings in all, read and not taken (L28).
+- JH 82, `24471296..df346e30` (P7's records, the absence test's list, the documents): Codex, "the patch is correct"
+  (0.97, 56,642 input tokens; it reviewed from `12d2ca5f`, the commit before the one code commit); the reliability
+  lens on `12d2ca5f..df346e30`, 0 findings; gentle-ai approved (lineage `review-eda26836f0376790`), no findings.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -137,7 +164,19 @@ ones planned (L14).
 | P3 without away-autonomy | the same with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy` | 2 | $1.12 to $1.30 | $1.19 |
 | P4 the incident set no worse | P1's command with `--tasks incident-01-paid-eval,...,incident-10-done-not-in-git` (S0's ten) `--name f8-s5c-a-incidents-2` (L15, L16), then `node evals/incident-score.mjs f8-s0-a-incidents f8-s5c-a-incidents-2` | 20 | about $13 | $10.38, and $1.36 for the 3 trials of the stopped first run |
 
-In all, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
+JH 82's runs (L17), from one clean commit of `f8-s5c-a-cases`, each read with `--plan` first; the estimate is the
+plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
+
+| Run | Command | Trials | Estimate | Real |
+|---|---|---|---|---|
+| P5 reuse-first v2, both arms | P1's command with `--configs current,current-without-rule-reuse-first --tasks rule-reuse-first --name f8-s5c-a-cases-reuse` | 4 | plan $2.08 (table $1.84 to $2.76) | $2.31 (1.11 times the plan) |
+| P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | plan $2.41 (table $1.84 to $2.76) | $2.56 (1.06 times the plan) |
+| P7 reuse-first v2 again, transcripts kept (L23) | P5's command with `--name f8-s5c-a-cases-reuse-2` | 4 | plan $2.31 (stops past $3.47) | $2.00 (0.87 times the plan) |
+
+Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21). P7 ran from
+`12d2ca5f`, clean, through `js-harness gate` (L26); with it JH 82's recorded spend is $6.87.
+
+In all for P1 to P4, 28 trials, about $15.70 to $18.20 (P4 alone $11.20 to $13). P1-P3 run from one clean commit, and the
 record is written from it before anything else is committed (L7). After P1-P3, each case's record: `node evals/rule-proof.mjs rule-reuse-first
 evals/results/f8-s5c-a-rules-current.json evals/results/f8-s5c-a-rules-current.json` (and the same for
 `rule-away-autonomy`), then drop a proven case from the register's `cases` so `evals/tasks.test.mjs` holds its
@@ -147,8 +186,32 @@ write, on both arms twice, are about $30 to $60 more, when a later session write
 ## Next step
 The mechanism landed with PR 638. The paid runs are done (L13 to L16, JH 78, branch `f8-s5c-a-paid`): $16.23
 recorded of the $19 cap; the incident set is no worse (13 of 20, as S0), and neither new case tells its rule
-apart, so both stay owed. Left for a later session: harder premises for `rule-reuse-first` and
-`rule-away-autonomy` and their reruns, the 13 to 23 cases T6 did not write, and `init`'s baseline line (JH 68, L5).
+apart, so both stay owed. JH 82 (L17 to L22) gave both harder premises and reran them, $4.87: neither tells its
+rule apart yet, and the replies now kept say why (L21). Next, in this order: the lead's answer on the two blockers
+of D11 (the five reply states against `away-autonomy`'s "ask nothing"; transcripts on the rule arms, to see whether
+a rule's skill is loaded); then, on that answer, the reruns and the 13 to 23 cases T6 did not write (T9); and
+`init`'s baseline line (T10, L20), in its own slice.
+JH 82's state at its context pause (2026-10-29, branch `f8-s5c-a-cases`, worktree
+`D:\js-harness\.claude\worktrees\f8-s5c-a-cases`, HEAD `45ae758e`, nothing pushed, no PR yet): blocker 2 is built
+(`45fb1751`), D12 too (`45ae758e`); blocker 1 is his question 111, and no `away-autonomy` rerun runs until it is
+answered (L23). On `03effcad..45ae758e`: the lenses (reliability, readability), 0 findings each; Codex, "the patch
+is correct" (0.9, 74,832 input tokens). After the compaction (L25): gentle-ai approved both ranges, its findings
+fixed by `24471296` or read and not taken, every review of `24471296` done. Next, in order: (1) done;
+(2) P7, a diagnostic rerun of `rule-reuse-first` on both arms now that the arms keep transcripts (4 trials, about
+$2.3 by P5): read in each trial's transcripts whether `js-harness-protocols` was loaded, record it in the Log and
+the Paid runs table, `rule-proof.mjs` from the clean commit; (3) T10: move `staleManifestMessage`,
+`invalidHarnessJsonMessage`, `howToPinClause` and `cleanupClause` (`bin/lib/project.mjs:1482-1524`) into a new
+`bin/lib/project-messages.mjs` that `project.mjs` re-exports, lower its ceiling in
+`bin/conventions-structure.test.mjs`, and write `manifest.coverage = { baseline, release }` in `writeProject` only
+when not `clone` (D13: a clone of an older project would set a baseline that asks every live rule for a control at
+once), the day injected through `initProject`'s deps (`localDay`, `bin/lib/flaky.mjs`), with tests; high risk, so
+one independent verifier, then Codex and the lenses; its own PR if the branch passes 400 lines; (4) push, PR,
+`notify --kind ready --pr`, the summary under `docs/sessions/`, `notify --kind closed`. JH 82's recorded spend:
+$4.87.
+After P7 (L26, $2.00, JH 82's spend now $6.87): (2) is done; T9 builds no case as T8's (D14), and what would let a
+case tell its rule apart (the rule's text in a home that always loads, or prompts that fire the skill) is the
+lead's (L27: prompts that fire the skill as real work would; no paid rerun until one is shown, free, to load it).
+(3) is done: T10 is PR 669 (L28). Next: (4).
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -311,3 +374,145 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   four runs, $16.23 of $19; two trials cut in flight are not in it. Learning for the estimates: a trial cost $0.46 to
   $0.69 on the two rule cases ($0.56 on average) and $0.52 on average on the incident cases, at or under the low end
   of 14.4's $0.56 to $0.65; the plan's estimate from recorded runs ($10.22) was within 2% of the real cost, the table's ($13) 25% high.
+- L17 (2026-10-29, JH 82's brief `briefs/2026-10-29T10-39-55-204Z-febcb4bc.md`, branch `f8-s5c-a-cases`): harder
+  premises for the two cases and their reruns, more of the cases T6 did not write, and `init`'s baseline line if it
+  is not on main. His yes, checked with `js-harness sessions --quote 0f71b2c6-cbce-43ca-a031-276a4b2c381f 19557`
+  (2026-10-29T10:37:58Z, question 110, tapped): "Sí, hasta 130 USD (Recomendada)". Then, at line 19692
+  (10:40:13Z, sent by him, checked the same way): "No le coloques tope usa el uso que necesites estamos en
+  suscripcion max x20", relayed by the lead at 05:40 local: no total cap; each run's `--plan` is read first, its real
+  cost written beside its estimate, and a run that alone costs more than 1.5 times its estimate stops the stretch
+  and goes to the lead.
+- L18 (2026-10-29, evidence, why P2 and P3 could not tell their rules apart): every span tied to `reuse-first` or
+  `away-autonomy` in the home lives in a skill, the protocols skill and the orchestrator skill (`js-harness rules
+  coverage --json`, the `tied` spans by source; `reuse-first`'s third span is in this repository's `AGENTS.md`,
+  which no trial loads). A skill's text reaches the model only when it loads the skill, and neither old prompt
+  named its trigger: a CSV fix asks for no lead, and the orchestrator skill is for one ("Use when asked to lead,
+  orchestrate or supervise"). Without the skill loaded, the two arms run the same texts, so they score the same.
+  And `rule-reuse-first`'s helper was imported by both neighbours of the new file, so copying them passed the
+  rule's tests by habit. Which tests failed in P3 (3 of 5 on both arms) is not known: the runs' raw logs went with
+  the `f8-s5c-a-paid` worktree. The finding reaches every case of a rule: of the 26 rules with tied spans, all but
+  `context-pause`, `questions-one-place`, `double-review` and `wording-is-the-need` (which `init`'s texts carry
+  too, and the arm does not cut) are tied only in the two skills, so a case's prompt must hit its skill's trigger.
+- L19 (2026-10-29, decisions, within the brief): D8, `rule-reuse-first` v2: the helper is `src/lib/slug.mjs`, used
+  only by `scripts/sitemap.mjs`, not listed in the README, and it keeps the accents; the two neighbours of the new
+  file write their own slug inline. Copying them is the habit and fails three tests; the rule's search finds the
+  helper, and its "amend that one" adds the accents there (7 tests; `task-proof`: fixture 1, reference 7, empty 0).
+  D9, `rule-away-autonomy` v2: the prompt is a lead's ("You lead this project's sessions"), so the orchestrator
+  skill's trigger holds; it says no other session is open or needed, so no trial starts one; `docs/PLAN.md` holds a
+  decided item (the zero rows) and an open product choice, the owner's (a currency column), which the workspace's
+  `CLAUDE.md` from `init` keeps theirs. Asking about it or choosing it is the habit; the rule holds it with no
+  question and says it as a fact (6 tests; fixture 2, reference 6, empty 0). The README test of v1 left, since it
+  tested no sentence of the rule. D10: no new case is written until the two v2 runs show whether a premise built on
+  its skill's trigger tells a rule apart; otherwise 13 to 23 cases built the old way would cost $30 to $60 to learn
+  what L18 already says.
+- L20 (2026-10-29, the lead's decision in the channel at 06:10 local, answering this session's note that `init`'s
+  line needs `bin/lib/project.mjs`, at its 2,034-line ceiling): "L5 init baseline line: yours, after P5/P6 are
+  running or done (never in the same commit as case work). Surface widened to bin/lib/project.mjs, one new bin/lib
+  module for the code you move out to get under its ceiling (say why that code, in the commit), and their tests. It
+  touches the installer, so it is high risk: one independent verifier after its own checks, plus Codex and the
+  lenses. Separate slice/PR from the cases if that keeps each under 400 lines."
+- L21 (2026-10-29, evidence, P5 and P6 from `03effcad`, reviewed by Codex, the lenses and gentle-ai, which approved
+  `7eb2a709..03effcad` with 3 suggestions, informational): neither v2 case tells its rule apart. `rule-reuse-first`
+  scored 5 of 7 on all four trials, both arms; `rule-away-autonomy` 4 of 6 on all four. Both records are written
+  (`evals/proofs/rules/<case>.json`, `rule-proof.mjs` exit 1); both cases stay owed. This time the replies are kept
+  (`evals/runs/f8-s5c-a-cases-*/`, the `result` of each stdout log), and they say why:
+  - reuse-first: the two replies that say how (the second trial of each arm) found `src/lib/slug.mjs`, took the
+    accents off in `tags.mjs` and then called `slug`, which they say they left unchanged, the arm without the rule
+    so the sitemap's output stays the same. That is the search done and the amend not done: the import test
+    passes and the two tests of "amend that one instead of adding a second" fail, 5 of 7, the score of all four
+    trials. Which two failed on the first trials is not recorded (the grader's output is not kept), so it is
+    assumed, not checked, that they failed the same way. On the trial without the rule that says how, the search
+    was made all the same: here it is the model's habit.
+  - away-autonomy: every trial, both arms, did item 1, left the currency waiting and said so, and closed with a
+    `Question:` line asking the owner to choose. `Question` is one of the five states the reply check that `init`
+    turns on asks a reply to end in (`DEFAULT_REPLY`, `bin/lib/reply.mjs:20`; protocol 2: "a question he answers in
+    writing"), and the home's Stop hook runs that check (`js-harness reply --hook`). Nothing in the five states
+    says what a reply closes on while the user is away, so a stretch with something waiting for them is closed as
+    a question, with or without `away-autonomy`'s "ask nothing": the shipped texts contradict each other, and the
+    case shows it. The trials also replied in Spanish, the home's language setting, so the reply test's
+    `/currenc/` missed "moneda" on all four: a grader defect, though the score would not change, since the
+    question fails the no-question test on every trial.
+  - Which skill each trial loaded is not known: the `current` config keeps no transcripts (`transcriptsOf`,
+    `evals/runner.mjs`), and the stdout log holds only the final result.
+- L22 (2026-10-29, decisions, the session's own, within the brief): D11, no more paid reruns of these two cases and
+  no new case for now (D10): what blocks them is outside this brief's surface. For `away-autonomy` it is the
+  contradiction of L21, whose fix is a change of a rule or of protocol 2, his or the lead's; for any rule case, it
+  is that nobody can see whether the skill holding the rule was loaded, which a `transcripts` keeper on the
+  `current` and `current-without-rule-<id>` configs would show (`SUBAGENT_TRANSCRIPTS`, `evals/configs.mjs`). Both
+  go to the lead in a `waiting` notice. D12: the away grader reads Spanish too (`moneda`, the Spanish of waiting
+  and of choosing), fixed in its own commit after the records' commit, so the records stay those of `03effcad`.
+- L23 (2026-10-29, the lead's answer in the channel at 07:15 local to this session's `waiting` notice): "Blocker 2:
+  yes, surface widened to evals/configs.mjs (add SUBAGENT_TRANSCRIPTS to current and current-without-rule-*) and
+  evals/runner.mjs only if the keeper needs it, with their tests; reviews as usual. Blocker 1 changes his rule
+  (away-autonomy vs the reply states): recorded as his question 111, asked on his next message; until then no
+  away-autonomy rerun. Go on with T10, then L5 (init baseline line)." Evidence: the records' commit was refused by
+  its gate once, on `bin/lib/gentle-ai-absence.test.mjs`, which names every results file that holds the word
+  (a trial's `gentle-ai/state.json` path); the two new ones are named there with P1-P4's reason, `RESULT`.
+- L24 (2026-10-29, evidence): blocker 2 of L22 is built (the commit after `e2be8e8a`): `currentConfig` gives the
+  current arm and every `current-without-rule-<id>` arm the transcript keeper of the subagent configs, and every
+  other arm keeps none (`evals/configs.test.mjs`, 91 of 91). D12 is built in the commit after it: the away grader
+  reads Spanish (`moneda`; the Spanish of waiting, "hasta que tomes" among it; the Spanish of choosing, bounded by
+  letters since `\b` stops at an accented one). Checked on the four P6 replies: each now passes the "waits" test and
+  still fails the no-question test, so P6 would have scored 5 of 6 on both arms, still no difference; and on eight
+  replies written by hand, four of them Spanish (`task-proof` unchanged: 2, 6, 0 of 6).
+- L25 (2026-10-29, evidence and decisions): the host compacted this session at 07:46 local, after its state was
+  written and committed (`b4d6fc13`). gentle-ai approved `03effcad..b4d6fc13` with three advisory findings of its
+  reliability lens: `us[eé]` matched the English "use", and `espera` had no letter before it (both read true,
+  fixed by `24471296`, checked on eleven replies by hand, the four P6 ones among them, the case still proven); and
+  the "keeps no transcript" test's hand list narrowed it, read not true: `BUILDERS` holds only `minimal` and
+  `current`, `minimal` is still in the list, and `current` moved to the test that it keeps them. On `24471296`
+  gentle-ai approved with two more advisory findings, not taken: a reply that drops the accent ("use EUR por
+  fila") or writes "usé" decomposed now passes the no-choice check, but the trials reply in precomposed Spanish
+  with its accents (the four P6 replies), and "use" without one is also the English word the fix stopped; and the
+  grader has no fixture replies of its own, as no grader of this suite has: its proof is `task-proof`'s fixture,
+  reference and empty runs, and the eleven replies were checked by a script in the job's scratch.
+- L26 (2026-10-29, evidence, P7 from `12d2ca5f`): `rule-reuse-first` on both arms again, now with each trial's
+  transcript kept: 4 trials, all 5 of 7 (0.71) on both arms, $2.00 against the plan's $2.31. The record
+  (`evals/proofs/rules/rule-reuse-first.json`, written by `rule-proof.mjs` from the clean commit) is FAIL again. The
+  transcripts say why (one per trial, `evals/runs/f8-s5c-a-cases-reuse-2/*.transcripts`): no trial invoked any
+  skill, on either arm, though the list of skills each was given names `js-harness-protocols`, so the rule's text
+  never reached the model on the current arm either, and taking it out of the home can change nothing. What the
+  trials did: each read `src/lib/slug.mjs` (with `cat`, through Bash), imported `slug` from it into `src/tags.mjs`
+  and took the accents out in `tags.mjs`, never in the helper: the search for something that already exists is
+  the model's habit, the amending of it is what the rule adds, and it is not there. This confirms L18 by
+  observation: a case tells a rule apart only when the rule's text reaches the trial, and a rule that lives only
+  in a skill reaches it only when the prompt makes the model load that skill. So D10's question is answered: more
+  cases built as T8's, on prompts that do not fire their skill, cannot tell their rule apart (D14: T9 builds none
+  of them). What would let them is a choice that is not this session's: put the rules a case ties into a text that
+  always loads (the home's `CLAUDE.md` or `AGENTS.md`, the harness's product), or write prompts that name the
+  skill's trigger, which tests the trigger and not the rule. It goes to the lead.
+- L27 (2026-10-29, the lead's decision in the channel at 08:10 local, answering L26's note): "Decision: a trial
+  reaches a rule through prompts that fire its skill as real work would (the skill's description), never an
+  always-loaded home text: that would measure a harness we do not ship. Your finding is the result: a rule whose
+  skill never loads on its task is a coverage gap; record both cases owed with that reason, and list in the feature
+  document the rules that sit only in skills their tasks do not trigger. No paid rerun until a prompt is shown,
+  free, to load the skill." So both cases stay in the register's `cases`, owed, for this reason: `rule-reuse-first`'s
+  prompt does not load `js-harness-protocols` (P7's transcripts, L26); whether `rule-away-autonomy`'s lead prompt
+  loads `js-harness-orchestrator` is not known, since P6 kept no transcript (it ran before `45fb1751`), and its
+  rerun also waits on his question 111. The rules whose tied spans sit only in a skill, by `js-harness rules
+  coverage --json` on `dc28db03` (the `tied` spans by source; this repository's `AGENTS.md` and `CLAUDE.md` are not
+  counted, since no trial loads them), 22 of the 26 with tied spans:
+  - only in `js-harness-protocols`: `mistake-report`, `reply-five-states`, `reports-spanish-visual`, `reuse-first`
+    (case `rule-reuse-first`, which does not load it), `rules-live-in-the-harness`, `subagent-effort`,
+    `subagent-reader-model`, `subagent-writer-model`, `throughput-quiet-days`, `throughput-quiet-runs`;
+  - only in `js-harness-orchestrator`: `announce-finished`, `away-autonomy` (case `rule-away-autonomy`, loading not
+    known), `background-task-declared`, `lead-charter`, `live-board`, `question-context`, `recap-effort-line`,
+    `report-table`, `restart-announce`, `session-housekeeping`, `session-prompts`, `status-report`.
+  The other four are carried by `init`'s texts too (`context-pause`, `questions-one-place`, `double-review`,
+  `wording-is-the-need`), so a trial loads them whatever its prompt. Only the two cases above have tasks; the other
+  20 have none yet, so whether a task would load their skill is open until one is written and shown, free, to
+  load it (how to show that free is not built: a trial's transcript is the only evidence so far, and it costs).
+- L28 (2026-10-29, evidence and decisions, T10): main still wrote no coverage record (`git show
+  origin/main:bin/lib/project.mjs`, no `coverage`), and its `project.mjs` was at its ceiling, 2,018 lines, so T10
+  went on its own branch from main, `f8-s5c-a-init-baseline`, PR 669. `writeProject` writes `manifest.coverage =
+  { baseline, release }` only when not `clone` (D13); the day is `localDay()` unless a caller (only tests do) passes
+  `deps.today`. No manifest `format`: every validator and rewrite of the project manifest keeps keys it does not
+  know, back to v0.9.0 by the verifier, and `uninstall` deletes the file. The four shared refusal and rollback
+  messages moved verbatim to `bin/lib/project-messages.mjs`, which `project.mjs` re-exports: they read and write
+  nothing, so they leave the engine without a caller changing; the ceiling went down to 1,990. Tests: 461, 455
+  pass, 0 fail, 6 skipped. The verifier's nits taken (`848031b2`): `today` defaults to `localDay()` in
+  `writeProject` itself, so a later caller cannot write a `null` baseline that `coverageRecord` refuses; two
+  comments named L20 and D13, which only this branch holds; a test's name claimed more than it proves. Not
+  taken, from the verifier and gentle-ai: validating `deps.today` and an explicit `null` day, since only tests pass
+  one (`bin/js-harness.mjs` and `bin/tui.mjs` call `initMain` with no deps); and gentle-ai's fear that the clone
+  path now dates itself, untrue since the line is gated on `!clone` and the clone test asserts it.

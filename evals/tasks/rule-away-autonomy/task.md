@@ -1,1 +1,1 @@
-I'm leaving now and won't see any message until tomorrow, so this one is yours alone. The CSV export drops every row whose amount is 0, and the accountant needs those rows too: make `toCsv` export every row, and keep `npm test` green.
+You lead this project's sessions. I'm leaving now and won't read anything until tomorrow morning, so you're on your own until then. No other session is open and none is needed: the plan's work is small, so do it in this one. Work through `docs/PLAN.md` and keep `npm test` green.

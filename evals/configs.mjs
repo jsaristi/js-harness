@@ -292,9 +292,12 @@ export function minimalWithConfig({ name, seed, ...options } = {}) {
  * (async) function, fills after the shared preparation (`prepareSandbox`); without one the home is as bare
  * as the minimal arm's. The seam is separate because building the home from the real configuration is its
  * own piece of work (`home.mjs`). An arm of one component (`evals/arms.mjs`) is this config under its own
- * `name`, with a seed that takes its component out. */
+ * `name`, with a seed that takes its component out. The current arm and each arm without a rule keep their
+ * trials' transcripts (`SUBAGENT_TRANSCRIPTS`): a rule's text lives in a skill, and only the transcript shows whether
+ * a trial loaded it (`odd/tasks/f8-s5c-a-coverage.md`, L21). */
 export function currentConfig({ seed, name = 'current', ...options } = {}) {
-  return buildConfig(name, options, DESKTOP_FLAGS, seed);
+  const config = buildConfig(name, options, DESKTOP_FLAGS, seed);
+  return name === 'current' || name.startsWith('current-without-rule-') ? { ...config, transcripts: SUBAGENT_TRANSCRIPTS } : config;
 }
 
 /** The setting sources a desktop session passes (diet section 7, C3: "evals load what a desktop session loads"),

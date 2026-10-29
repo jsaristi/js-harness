@@ -9,8 +9,8 @@
   },
   "timeoutMs": 900000,
   "proof": {
-    "total": 6,
-    "fixturePassed": 2
+    "total": 7,
+    "fixturePassed": 1
   },
   "rules": [
     "reuse-first"

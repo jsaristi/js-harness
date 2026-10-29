@@ -666,7 +666,22 @@ test('a subagent trial whose agent left no transcript records an estimate from t
   assert.ok(!fs.existsSync(path.join(runsDir, 'sample__sub-opus-explore__high__1.transcripts')), 'nothing was kept, so nothing was made');
 });
 
-for (const [name, build] of BUILDERS) {
+// The current arm and each arm without a rule keep their transcripts, so a rule case's trial shows whether the skill
+// that holds its rule was loaded (odd/tasks/f8-s5c-a-coverage.md, L21 to L23).
+for (const name of ['current', 'current-without-rule-reuse-first']) {
+  test(`${name} keeps the transcripts its agent left, as a subagent config does`, async () => {
+    const build = () => currentConfig({ ...OPTIONS, name });
+    assert.ok('transcripts' in build());
+    const { records, runsDir, homes } = await runThroughFakeAgent(build, 1, { FAKE_AGENT_TRANSCRIPTS: PROBE_TRANSCRIPTS });
+    assert.deepEqual(records[0].transcripts, { files: 3, errors: [] });
+    assert.deepEqual(filesBelow(path.join(runsDir, `sample__${name}__high__1.transcripts`)), filesBelow(PROBE_TRANSCRIPTS));
+    assert.ok(!fs.existsSync(homes[0]), 'copied before the home was removed');
+  });
+}
+
+const KEEPS_NONE = [['minimal', minimalConfig], ['current-without-engram', (options) => currentConfig({ ...options, name: 'current-without-engram' })]];
+
+for (const [name, build] of KEEPS_NONE) {
   test(`${name} keeps no transcript and records no list cost, whatever its agent left: its record is what it always was`, async () => {
     assert.ok(!('transcripts' in build(OPTIONS)));
     const { records, runsDir } = await runThroughFakeAgent(() => build(OPTIONS), 1, { FAKE_AGENT_TRANSCRIPTS: PROBE_TRANSCRIPTS });

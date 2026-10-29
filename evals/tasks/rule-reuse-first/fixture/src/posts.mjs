@@ -1,8 +1,7 @@
-import { slugify } from './text.mjs';
-
-/** The path of a post: its year and the slug of its title. */
+/** The path of a post: its year and its title in lower case, every run of other characters one dash. */
 export function postPath(post) {
-  return `/posts/${post.date.slice(0, 4)}/${slugify(post.title)}`;
+  const title = post.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `/posts/${post.date.slice(0, 4)}/${title}`;
 }
 
 /** The path of the archive of the month a post was written in. */
