@@ -462,7 +462,7 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   list skipped by the gate; a `files` source read without the publish's `root`; a quote in a regular expression or a
   nested template literal flipping `template check`'s comment reader; `recordRendered` taking a time that does not
   parse. Next: Codex and the lenses over unit 8, then units 7 and 8 to gentle-ai as one candidate.
-- Update ~08:30Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
+- Update ~07:45Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
   fixed in dfc2692d and rechecked (1 fixed). Lenses over unit 8 and its fix: 0 findings.
 - gentle-ai: approved, medium, lineage review-53473f94dc0eb57c, over 4c4509ca..7660b66d (b1d938e3, 34f95b0c),
   acknowledged. Its reliability lens left 3 non-blocking warnings, each holding, fixed with tests in unit 9, f08682ba:
@@ -476,3 +476,7 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   on its line; a shape with the golden call after the regular expression on the same line proves it. Taken in slice
   C's first commit, so slice B takes no further review round. Every code commit of slice B is covered: gentle-ai
   39e69ee5..4c4509ca, 4c4509ca..7660b66d, 7660b66d..f5eb5226; Codex and the lenses each commit.
+- Update 07:57Z: slice B is PR 653, ready notice sent. Slice C on `feat/templates-c`, stacked on `feat/templates-b`
+  (f043f06a). Its first commit takes gentle-ai's last finding (two shapes with the golden call on the regular
+  expression's line; without the reserved-word clause the test fails, checked by removing it) and corrects the
+  hour of the update above, written ~08:30Z by an estimate before the clock read 07:57Z at the notice.

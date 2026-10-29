@@ -208,6 +208,9 @@ test('a quote inside a regular expression or a nested template literal does not 
     `let n = 4; n++ / 2; ${golden} /x/.test('x'); m-- / 2; ${refusal} /y/.test('y');\n`,
     `function quoted(x) { return /['"]/.test(x); }\n${golden}\n${refusal}\n`,
     `const kind = typeof /'/;\n${golden}\n${refusal}\n`,
+    // The golden call on the regular expression's own line: only the reserved-word branch keeps it out of a string.
+    `function quoted(x) { return /['"]/.test(x) && ${golden} }\n${refusal}\n`,
+    `const kind = typeof /'/ + ${golden}\n${refusal}\n`,
     `const of = 4, yield_ = 1; of / 2; ${golden} /x/.test('x');\n${refusal}\n`,
     `const odd = 1 /'/'.length;\n${golden}\n${refusal}\n`,
     `const t = \`a \${{ k: '}' }.k} c\`;\n${golden}\n${refusal}\n`,
