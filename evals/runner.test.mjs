@@ -2435,6 +2435,22 @@ test('a reply task whose agent printed no answer is graded on the last reply its
   assert.deepEqual(asked, [{ dir: path.join(runsDir, `${task.id}__fake__medium__1.transcripts`) }], 'read from the kept copy, once');
 });
 
+test('a reply task cut by its timeout is graded on the last reply of what its session left, and recorded as a timeout', async () => {
+  const stub = stubTranscripts({
+    keep: ({ home, dest }) => {
+      const [project] = fs.readdirSync(projectsOf(home));
+      fs.cpSync(path.join(projectsOf(home), project), dest, { recursive: true });
+      return { files: 3, errors: [] };
+    },
+  });
+  // What the session wrote before the timeout, read from the copy kept after it: the fake agent leaves the probe.
+  stub.transcripts.reply = ({ dir }) => (fs.existsSync(path.join(dir, 'd2ddbeb2-f715-40b3-93d0-fd9218c7f2ce.jsonl')) ? 'Working: the currency waits.' : null);
+  const task = { ...loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader('Working: the currency waits.') })), timeoutMs: 2500 };
+  const { record } = await runTrial(keepingTrial('hang', stub, { task }).options);
+  assert.equal(record.error, 'timeout');
+  assert.equal(record.score, 1, JSON.stringify(record));
+});
+
 test('the answer the agent printed is its reply, and its transcripts are not read for one', async () => {
   const stub = stubTranscripts();
   stub.transcripts.reply = () => assert.fail('an answer was printed');

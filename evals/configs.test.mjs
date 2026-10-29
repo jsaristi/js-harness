@@ -703,6 +703,11 @@ test('the last reply of a kept session is the last text its main thread wrote, n
   const none = tmp('last-reply-none');
   fs.writeFileSync(path.join(none, 'session.jsonl'), `${line('m1', [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }])}\n`);
   assert.equal(lastReply(none), null, 'a session that wrote no text has no reply');
+  // Two sessions, the later one under the name that sorts first: the reply is the later session's.
+  const two = tmp('last-reply-two');
+  fs.writeFileSync(path.join(two, 'b-earlier.jsonl'), `${line('e1', text('the earlier session'))}\n`);
+  fs.writeFileSync(path.join(two, 'a-later.jsonl'), `${JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T11:00:00.000Z', message: { id: 'l1', model: 'claude-opus-5-5', content: text('the later session') } })}\n`);
+  assert.equal(lastReply(two), 'the later session');
 });
 
 test('the current arm and the arms without a rule read their trial\'s last reply from its kept transcripts', () => {

@@ -184,6 +184,14 @@ Reviews:
 - JH 86, `1e7687b9..86a32951` (P8's result and its `gentle-ai-absence` line): the reliability lens, 0 findings; Codex,
   "the patch is correct" (0.99).
 - gentle-ai: approved on `1e7687b9..86a32951` (lineage `review-10297f26303f75b0`), no findings, acknowledged.
+- JH 86, `86a32951..5e1e4b8e` (T14): the lenses reliability and readability, 0 findings each (28,747 and 28,810 input
+  tokens). `5e1e4b8e..addd0718` (T15, a fixture under `evals/tasks`): no path a lens reads, recorded as nothing to
+  review. Codex on `86a32951..addd0718`, "the patch is correct" (0.9, 212,900 input tokens).
+- gentle-ai: approved on `86a32951..addd0718` (lineage `review-88a953011746b540`), acknowledged, three advisory
+  findings of the reliability lens: two taken by the commit after `addd0718` (no test cut a trial by its real
+  timeout, now one does; `lastReply` took the last of two sessions by file name, now by the lines' timestamps), one
+  not: a config that keeps no transcripts gets no fallback and nothing records it, but no such arm runs a reply case
+  in this comparison, both arms of P9 keep theirs.
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
