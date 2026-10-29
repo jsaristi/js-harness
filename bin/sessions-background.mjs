@@ -233,9 +233,9 @@ export function sessionsStartMain(argv, given = {}) {
     const place = placeOf(run, folder);
     const record = readNotices(home, slug);
     if (record.unavailable !== undefined) throw new Error(`${record.path} cannot be read (${record.unavailable})`);
-    // `sessions` reads a session's state in the record's order, so a row written after the session's own first
-    // notice would take its place: once the session wrote, its own rows show it. A notice the session appends
-    // between the read and the append is still behind this row (odd/tasks/visual-pages.md, T5e).
+    // `sessions` keeps a session's newest state by its time (`recordOfRows`, odd/tasks/visual-pages.md, T5e), and this
+    // row's is the launch, before any notice the session sends: one it appends between the read and the append stays
+    // ahead of this row. Once the session wrote, its own rows show it and none is written.
     if (!record.notices.some((notice) => sameSession(notice.from?.id, sender))) {
       appendNotice(home, slug, newNotice({
         at: launchedAt, from: { host: 'claude-code', id: sender, source: 'sessions start', title: parsed.title },

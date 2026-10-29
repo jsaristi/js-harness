@@ -131,8 +131,9 @@ const READ_NAMES = { git: 'git', map: 'El mapa de ahora', opening: 'El mapa de l
 
 /** The return as a page (odd/tasks/visual-pages.md), or the open stretch's once `status` measured its moments: what
  * went wrong first, the shares of the planned met, the goals and the time bars of `renderView`, the map before and
- * now, each plan step by step, the sessions outside the plan and the timeline. */
-export function renderReturn(view) {
+ * now, each plan step by step, the sessions outside the plan and the timeline; `generatedAt`, when the page is made,
+ * which a later look tells from the close it measures. */
+export function renderReturn(view, { generatedAt = null } = {}) {
   const { moments } = view;
   if (!moments) return renderView(view);
   const closed = view.state === 'closed';
@@ -156,6 +157,7 @@ export function renderReturn(view) {
     title: closed ? 'Regreso del tramo' : 'Tramo en curso',
     heading: closed ? 'Lo que pasó mientras no estabas' : `Tramo en curso: ${view.elapsedHours} de ${view.hours} h`,
     lead: `Del ${dateTimeZ(view.openedAt)} al ${dateTimeZ(view.at)}. Todo sale de los registros: el tramo, los avisos, git y la hoja de ruta.`,
+    generatedAt,
     badNews,
     sections,
   });

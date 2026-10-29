@@ -84,10 +84,35 @@ export function chain(steps) {
   return `<div class="chain">${steps.map(({ id, state, moved }) => `<span class="step ${escapeHtml(state)}${moved ? ' moved' : ''}">${escapeHtml(id)}</span>`).join('')}</div>`;
 }
 
-/** The page: `<title>`, the style, then in its wrapper the heading and its lead, the bad news first, and each section
- * `{ title, html, note? }`, `html` built from the parts above. */
-export function page({ title, heading, lead = '', badNews = [], sections = [] }) {
+/** How long before `now` the time `at` was, both in milliseconds, in the page's words; '' when either is unreadable or
+ * `at` is ahead of `now`, a clock behind the page's. The page's script carries this function's own text, so the words a
+ * look reads are the ones tested here. */
+export function agoText(at, now) {
+  const minutes = Math.floor((now - at) / 60000);
+  if (!Number.isFinite(minutes) || minutes < 0) return '';
+  if (minutes < 1) return 'hace menos de un minuto';
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 48) return `hace ${Math.floor(hours / 24)} días`;
+  return minutes % 60 === 0 ? `hace ${hours} h` : `hace ${hours} h ${minutes % 60} min`;
+}
+
+// How long ago the page was made, counted where it is shown and again each minute: a "hace" written at render time
+// would be false on a later look.
+const AGO_SCRIPT = `<script>(() => { const ago = ${agoText}; const show = () => { for (const one of document.querySelectorAll('.js-page [data-ago]')) { const text = ago(Date.parse(one.dataset.ago), Date.now()); one.textContent = text ? \` · \${text}\` : ''; } }; show(); setInterval(show, 60000); })();</script>`;
+
+/** When the page was made, `at` as the renderer wrote it, and the place `AGO_SCRIPT` fills. */
+function generated(at) {
+  const iso = new Date(at).toISOString();
+  return `<p class="note">Generada el <time datetime="${iso}">${iso.slice(0, 16).replace('T', ' ')}Z</time><span data-ago="${iso}"></span></p>`;
+}
+
+/** The page: `<title>`, the style, then in its wrapper the heading and its lead, when it was made (`generatedAt`, when
+ * given, and then the script that says how long ago), the bad news first, and each section `{ title, html, note? }`,
+ * `html` built from the parts above. */
+export function page({ title, heading, lead = '', generatedAt = null, badNews = [], sections = [] }) {
   const bad = badNews.length === 0 ? '' : `<div class="badnews"><strong>Primero lo malo.</strong> ${badNews.map(escapeHtml).join(' ')}</div>`;
   const body = sections.map((one) => `<section><h2>${escapeHtml(one.title)}</h2>${one.html}${one.note ? `<p class="note">${escapeHtml(one.note)}</p>` : ''}</section>`).join('\n');
-  return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}</header>${bad}\n${body}</div>`;
+  const made = generatedAt === null ? '' : generated(generatedAt);
+  return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}${made}</header>${bad}\n${body}</div>${made ? AGO_SCRIPT : ''}`;
 }

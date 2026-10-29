@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chain, escapeHtml, page, pill, shareText, table, tiles, timeline } from './pages.mjs';
+import vm from 'node:vm';
+import { agoText, chain, escapeHtml, page, pill, shareText, table, tiles, timeline } from './pages.mjs';
 
 test('a page is one fragment that opens with its title, its tokens scoped to its wrapper, bad news first', () => {
   const html = page({ title: 'Regreso <1>', heading: 'Lo que pasó', lead: 'De 12:11Z a 22:54Z', badNews: ['No se abrió un tramo'], sections: [{ title: 'Metas', html: '<p>x</p>', note: 'nota' }] });
@@ -56,4 +57,28 @@ test('the timeline lists each event at its UTC time with a dot of its kind, olde
 test('the chain draws each step in order by its state, and outlines the ones that moved', () => {
   const html = chain([{ id: 'S0', state: 'done' }, { id: 'S11', state: 'moving', moved: true }, { id: 'S13', state: 'todo' }]);
   assert.match(html, /step done">S0[\s\S]*step moving moved">S11[\s\S]*step todo">S13/);
+});
+
+test('a page made at a time says when, and its "hace" is counted when it is looked at, so a later look stays true', () => {
+  const at = '2026-10-29T14:00:00.000Z';
+  const html = page({ title: 't', heading: 'h', lead: 'l', generatedAt: at, sections: [] });
+  assert.match(html, /<header>.*<p class="note">Generada el <time datetime="2026-10-29T14:00:00.000Z">2026-10-29 14:00Z<\/time><span data-ago="2026-10-29T14:00:00.000Z"><\/span><\/p><\/header>/);
+  // The script runs where the page is shown: a look 2 h 15 min later reads that, whatever the clock said at render.
+  const script = /<script>([\s\S]*?)<\/script>/.exec(html)[1];
+  const shown = { dataset: { ago: at }, textContent: '' };
+  vm.runInNewContext(script, { document: { querySelectorAll: () => [shown] }, Date: { parse: Date.parse, now: () => Date.parse(at) + 135 * 60_000 }, setInterval: () => {} });
+  assert.equal(shown.textContent, ' · hace 2 h 15 min');
+  assert.doesNotMatch(page({ title: 't', heading: 'h', sections: [] }), /Generada|<script>/, 'a page given no time says none');
+});
+
+test('how long ago reads in minutes, then hours and minutes, then days; a clock behind the page says nothing', () => {
+  const at = Date.parse('2026-10-29T14:00:00Z');
+  const min = 60_000;
+  assert.equal(agoText(at, at + 20_000), 'hace menos de un minuto');
+  assert.equal(agoText(at, at + 7 * min), 'hace 7 min');
+  assert.equal(agoText(at, at + 60 * min), 'hace 1 h');
+  assert.equal(agoText(at, at + 135 * min), 'hace 2 h 15 min');
+  assert.equal(agoText(at, at + 50 * 60 * min), 'hace 2 días');
+  assert.equal(agoText(at, at - 2 * min), '');
+  assert.equal(agoText(NaN, at), '');
 });

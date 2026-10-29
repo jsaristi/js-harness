@@ -366,6 +366,27 @@ open stretch; `notify --kind note` carries no target and lies outside the surfac
   `stretch explain failure:<time>` names one by its start, in full or by the minute the return shows, among the
   failures measured to the close; a minute two start in is refused with the full time of each. A failure's row is
   named by its start, so an explanation reaches that failure alone. Route: inline, `feat/visual-pages-t12`.
+- [x] T13 (kind: build) follow-up of JH 85 (its summary's "Left"): the return's failures say why from their own records,
+  a failed land "land exit N: <said>" and a failed Codex run "Codex review failed: <reason>" (`stretchLost`,
+  `bin/lib/stretch.mjs`), the bare words when the record holds none. Spec 9. Route: inline, JH 87 on
+  `fix/pages-follow-ups`, the commit "fix(stretch): say why a land or a Codex run failed".
+- [x] T14 (kind: build) his words, 0f71b2c6 line 21871, 2026-10-29T14:00Z: "Colocame en ese regreso del tramo de hace
+  cuanto se genero". The return (and the open stretch's status page) says "Generada el <UTC time>" from the time the
+  command wrote it (`emit`, `bin/stretch.mjs`), and a script in the page (`page`'s `generatedAt`, `bin/lib/pages.mjs`)
+  counts "hace N min" where the page is shown and again each minute, so a later look stays true; with no script the
+  time alone. Route: inline, JH 87, the commit "feat(stretch): say when the return page was made".
+- [x] T15 (kind: docs) the comment beside the start row (`bin/sessions-background.mjs`) still said a notice appended
+  between the read and the append is behind that row; since T5e the board keeps the newer by time, so it is not. JH
+  85's "Left". Route: inline, JH 87, the commit "docs(sessions): say why the start row stays behind a newer notice".
+- [x] T16 (kind: build) his words, 0f71b2c6 line 21816, 2026-10-29T13:57Z: "siempre colocame las preguntas aca y cuando
+  hayan preguntas viejas que no he respondido, colocamelas en el tablero como todo o tareas para yo podertelas pedir
+  por que me queda muy dificil adivinar o estar pendiente de todas las sesiones". `sessions live --out` puts every
+  question of the record nothing closed into `board/summary.questions` (`openQuestions`, `bin/sessions-live.mjs`),
+  each with its number and the line he sends, "hazme la pregunta N"; the board lists them under "Lo que te toca"
+  (`yoursItems`, `docs/live-board.html`), so the lead writes none by hand. The line he sends is answered with
+  `js-harness template ask N`; the orchestrator's block (`bin/lib/manifest.mjs`) does not say so yet, outside this
+  brief's surface, sent to the lead. Route: inline, JH 87, the commit "feat(board): list the open questions from the
+  record".
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 79: his words of lines 12054, 12220 and 12237, the four ideas he approved
