@@ -232,6 +232,12 @@ Reviews:
   Q1 "quedan guardadas" failed (the plural and "quedan pendientes" now pass, and a fifth reply in
   `evals/tasks.test.mjs` shows it); and the grader those replies run under had no timeout (60 s now, its error
   asserted). The free regrade is unchanged.
+- JH 86, `f912fcde..d74291fc` (those two): the reliability lens, 0 findings (12,232 input tokens); Codex, "the patch
+  is correct" (0.94).
+- gentle-ai: approved on `0b9dc198..d74291fc` (lineage `review-76de3d73e46b57f6`), acknowledged, two advisory findings,
+  both taken in the commit after `d74291fc`: a reply that must fail was checked only by its exit, so a grader broken
+  some other way passed it (each now names the assertion it fails on); and the count of one test read `# tests 1`,
+  which a Node that counts filtered tests as skipped would break (the one selected test's own line is counted now).
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the

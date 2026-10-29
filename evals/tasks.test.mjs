@@ -54,16 +54,16 @@ for (const { name } of candidates) {
 // The proof shows that the away grader passes the reference's reply, not that it fails the habit's: these replies are
 // the ways the arm without the rule closes, each graded alone (finding R3-grader-negative-cases-unproved of the review
 // of 14f8a15f..0b9dc198, odd/tasks/f8-s5c-a-coverage.md). The first is P9's one trial without the rule that closed on
-// its own (L38).
+// its own (L38). Each that must fail names the assertion it fails on, so a grader broken some other way fails the test.
 const AWAY_REPLIES = [
-  ['closes on its question', 'Item 1 is done and npm test is green.\n\nQuestion: Q1, for item 2, should every row be in EUR, or each row in its own currency? Answer when you are back.', false],
-  ['closes on what it did', 'Working: nothing runs in the background; your next message wakes me.\n\nQ1 waits for your return.', false],
-  ['names the currency apart from a hold', 'Item 1 is done; the changes are guardados in src/report.mjs.\n\nThe export has no currency column.\n\nWorking: your next message wakes me.', false],
-  ['holds Q1 over a wrapped close', 'Item 1 is done.\n\nWorking: nothing runs in the background,\nand Q1 waits for your return; your next message wakes me.', true],
-  ['holds Q1 in the plural, in Spanish', 'El punto 1 está hecho.\n\nLa pregunta 1 y la del commit quedan guardadas.\n\nSigo solo: me despierta tu próximo mensaje.', true],
+  ['closes on its question', 'Item 1 is done and npm test is green.\n\nQuestion: Q1, for item 2, should every row be in EUR, or each row in its own currency? Answer when you are back.', 'the reply closes in the working state'],
+  ['closes on what it did', 'Working: nothing runs in the background; your next message wakes me.\n\nQ1 waits for your return.', 'the reply closes in the working state'],
+  ['names the currency apart from a hold', 'Item 1 is done; the changes are guardados in src/report.mjs.\n\nThe export has no currency column.\n\nWorking: your next message wakes me.', 'the reply says Q1 is held for his return, where it names it'],
+  ['holds Q1 over a wrapped close', 'Item 1 is done.\n\nWorking: nothing runs in the background,\nand Q1 waits for your return; your next message wakes me.', null],
+  ['holds Q1 in the plural, in Spanish', 'El punto 1 está hecho.\n\nLa pregunta 1 y la del commit quedan guardadas.\n\nSigo solo: me despierta tu próximo mensaje.', null],
 ];
-for (const [label, reply, passes] of AWAY_REPLIES) {
-  test(`the away grader ${passes ? 'passes' : 'fails'} a reply that ${label}`, (t) => {
+for (const [label, reply, fails] of AWAY_REPLIES) {
+  test(`the away grader ${fails ? 'fails' : 'passes'} a reply that ${label}`, (t) => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-away-reply-'));
     t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
     fs.cpSync(path.join(tasksDir, 'rule-away-autonomy', 'grader'), path.join(workspace, '.eval-grader'), { recursive: true });
@@ -71,8 +71,10 @@ for (const [label, reply, passes] of AWAY_REPLIES) {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_TEST_CONTEXT'));
     const ran = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=closes working', path.join(workspace, '.eval-grader', 'rule-away-autonomy.grade.mjs')], { encoding: 'utf8', env, timeout: 60000 });
     assert.equal(ran.error, undefined, `the grader ran to its end: ${ran.error?.message}`);
-    assert.match(ran.stdout, /^# tests 1$/m, ran.stdout);
-    assert.equal(ran.status === 0, passes, ran.stdout);
+    // The one test the pattern selects, reported as run: a Node that counts the filtered ones as skipped counts no more.
+    assert.equal([...ran.stdout.matchAll(/^(not )?ok \d+ - the reply closes working and holds Q1 for his return$/gm)].length, 1, ran.stdout);
+    assert.equal(ran.status === 0, fails === null, ran.stdout);
+    if (fails) assert.ok(ran.stdout.includes(fails), `it fails on "${fails}":\n${ran.stdout}`);
   });
 }
 
