@@ -123,6 +123,11 @@ Reviews:
   `gentleAi` or `GENTLE_AI_TELEMETRY`): the dashed name is the diet's pass line, `grep -rl gentle-ai`; the other
   spellings are old stack records a run still reads and a guard of his machine until S2 (L12). R3-002 (the test
   needs git): every test here runs in a checkout, the GitHub gate included, and the failure names git.
+- PR 4, 4abbc2ee (the merge of f8-s11-reviews, with the absence list dropping the three files his answer to
+  question 104 freed and one comment losing the name): Codex d8c9033..4abbc2e, 6 changed lines, passed (41,371 input
+  tokens); lens reliability, 0 findings (22,525 input tokens); gentle-ai on `d8c90335..4abbc2ee`: approved (lineage
+  review-ddf40c670045365e), one suggestion taken in 315a15d5 on f8-s11-reviews: R3-001 (no test of a branch that
+  mixes switch states).
 - PR 3, 36587437 (the lens record where the Codex review is off, L14): Codex caaccd3..3658743, 1 part, passed
   (118,985 input tokens); lenses risk, reliability, readability over caaccd3..3658743: 0 findings (about 20,350
   input tokens each); gentle-ai on `caaccd3f..36587437`: approved (lineage review-e13532840d6c3432), two suggestions
