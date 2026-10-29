@@ -112,8 +112,9 @@ mechanism here, before S13 rehearses it and S12 ships it.
 - [x] T12 (kind: build) the free proof that a case's prompt loads the skill holding its rule (L30, D15, D16):
   `rule-away-autonomy` opens with `LEAD_OPENING_PROMPT`, held by `evals/tasks.test.mjs`; `rule-reuse-first` is a
   coverage gap — S4; inline; JH 86, branch `f8-s5c-a-reach`
-- [ ] T13 (kind: build) the paid rerun of `rule-away-autonomy` on both arms, once a trial's home carries the
-  orchestrator skill of PR 672 (L31, D17) — S4; inline
+- [x] T13 (kind: build) the paid rerun of `rule-away-autonomy` on both arms, once a trial's home carries the
+  orchestrator skill of PR 672 (L31, D17) — S4; inline; JH 86, P8 from `a0c89d7b` (L33): the skill loads on 4 of 4,
+  the case does not tell its rule apart, and the run cost 1.57 times its plan, so the stretch stopped
 
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
@@ -195,6 +196,13 @@ plan's, the table's [i] at L16's $0.46 to $0.69 a trial:
 | P6 away-autonomy v2, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-cases-away` | 4 | plan $2.41 (table $1.84 to $2.76) | $2.56 (1.06 times the plan) |
 | P7 reuse-first v2 again, transcripts kept (L23) | P5's command with `--name f8-s5c-a-cases-reuse-2` | 4 | plan $2.31 (stops past $3.47) | $2.00 (0.87 times the plan) |
 
+JH 86's run (L33), from `a0c89d7b`, clean, through `js-harness gate`, read with `--plan` first; its real cost is the
+transcripts' list cost, since `costUsd` is missing on a trial cut by the timeout:
+
+| Run | Command | Trials | Estimate | Real |
+|---|---|---|---|---|
+| P8 away-autonomy v3, both arms | P1's command with `--configs current,current-without-rule-away-autonomy --tasks rule-away-autonomy --name f8-s5c-a-reach-away` | 4 | plan $2.56 (stops past $3.84) | $4.02 (1.57 times the plan: the stretch stopped, L33) |
+
 Both ran from `03effcad`, clean, through `js-harness gate`; JH 82's recorded spend is $4.87 (L21). P7 ran from
 `12d2ca5f`, clean, through `js-harness gate` (L26); with it JH 82's recorded spend is $6.87.
 
@@ -239,6 +247,9 @@ now opens as a real lead does, with the prompt that loaded the orchestrator skil
 `rule-reuse-first` is a coverage gap, and its paid rerun does not run (D16). The away rerun (T13) waits on the lead:
 a trial's home copies the installed skills, v0.97.0, which lack the addition (L31, D17). Next: the lead's answer,
 then T13; the protocols rules stay gaps until a real-work prompt is shown to load their skill.
+After P8 (L33, $4.02, 1.57 times its plan): the lead prompt loads the orchestrator skill on 4 of 4 trials, and the case
+still does not tell its rule apart: 3 of 4 trials ran out the 15 minutes waiting in a background `js-harness wait`, as a
+real lead does, and left no reply to grade. The stretch stopped at the 1.5 line; what follows is the lead's (D18).
 
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
@@ -579,3 +590,26 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
     is refreshed after PR 672 lands (forbidden to this session), or the current arm installs the checkout's skills
     into the trial's home (`evals/home.mjs`, outside this brief's surface, and a change of what every current-arm run
     measures). The lead's.
+- L33 (2026-10-29, evidence, P8 from `a0c89d7b`, after the lead refreshed the installed copy to main `f68d869f`;
+  checked: `grep -c "a reply closes in the working state"` on the installed orchestrator `SKILL.md` gave 1): 4 trials,
+  0.67 (4 of 6) on all four, both arms; `rule-proof.mjs` FAIL, its record written. Cost $4.02 by the transcripts'
+  list cost (0.95, 0.97 current; 0.99, 1.11 without) against the plan's $2.56: 1.57 times, past the brief's 1.5 line,
+  so no further run started and the lead is told. What the transcripts show (`evals/runs/f8-s5c-a-reach-away/`, read
+  by a script in the job's scratch):
+  - every trial, on both arms, called `Skill js-harness-orchestrator` as its first action: the lead prompt fires
+    the skill, which confirms L30 at 4 of 4 in the trial's home;
+  - three trials (both current ones, one without) ended their work, then started `js-harness wait --notice-to
+    orchestrator` or `js-harness loop run rest` in the background as the skill says a lead waits, and ran to the
+    task's 900,000 ms timeout; such a trial leaves no final reply (`.eval-reply.md` is missing, checked in the kept
+    workspace `eval-UdTVI0`), so its two reply tests fail whatever it would have said, and its four work tests
+    pass (graded again there, free);
+  - every closing text, the without arm's included, ends on a `Working:` line, with the currency left for the owner
+    and no `?`: once the skill is loaded, the reply states and the rest of the skill close the reply the way the
+    addition says, with or without `away-autonomy`'s spans. The one complete trial (without, #1) scored 4 of 6 too,
+    which two tests it failed is not known: its workspace is gone and the grader's output is not kept.
+- L34 (2026-10-29, decisions, the session's own): D18, no more runs of this case in this session: the stop line
+  holds, and as the case stands a lead's real wait turns every trial into a timeout, so another rerun would pay to
+  learn the same. What could make it measure (a premise that ends the stretch with no wait, a grader that reads the
+  last assistant text from the transcript when the trial times out, or a shorter timeout) changes the case or the
+  runner, and is the lead's to choose. `evals/results/f8-s5c-a-reach-away.json` names gentle-ai once (a trial's path),
+  so committing it needs its line in `bin/lib/gentle-ai-absence.test.mjs`, outside this brief's surface: the lead's.
