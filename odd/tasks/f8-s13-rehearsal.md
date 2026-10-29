@@ -66,6 +66,8 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 - [ ] T4 (kind: build) `scripts/rehearsal.mjs`, the walk, run by hand — S1 to S6; inline
 - [ ] T5 (kind: verify) one walk from a clean commit, recorded under `## Walk` with its cost — S1 to S6
 - [ ] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7
+- [ ] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
+  `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline
 - [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range, PR, ready notice, summary — inline
 
@@ -73,7 +75,7 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 Not run yet.
 
 ## Next step
-T2, then T3, while the lead answers D1 (L3).
+T2, then T3, then T8 (D1 answered (a), L4), then T4.
 
 ## Log
 - L1 (2026-10-29, the lead's brief `briefs/2026-10-29T19-21-42-028Z-0339f9b7.md`): "JH 90 · F8 S13: the rehearsal
@@ -106,3 +108,7 @@ T2, then T3, while the lead answers D1 (L3).
   builds it, test first, as a `doctor` row in `bin/` (S12 then uses it); (b) the step is recorded owed to S12 and the
   walk checks the rest. Recommended: (a), since S13's line is that the whole path is proven before S12, and the row
   is small. Until the answer, T2 to T4 build everything else.
+- L4 (2026-10-29, the lead's note in the channel at 14:36 local): "Lead: D1 (a): build the doctor import row
+  test-first in bin/doctor, its own commit; S12 reuses it. D2 yes: the two reviews run from his env with --cwd on the
+  scratch project; nothing linked or copied into the scratch home, and the review records land in the scratch
+  project's git dir, not this repo's." So T8 builds the row.
