@@ -15,6 +15,13 @@ const GIVEN = {
   source: '0f71b2c6:15262',
 };
 
+test('a field given over several lines is one line in the entry and in the module, so the module still parses', () => {
+  const made = scaffold({ ...GIVEN, what: 'the questions\nto the user', when: 'when a decision\r\n  is his' }, SAMPLE);
+  assert.deepEqual([made.entry.plantilla.what, made.entry.plantilla.when], ['the questions to the user', 'when a decision is his']);
+  const module = made.files.find((file) => file.path === 'bin/lib/template-question.mjs').content;
+  for (const line of module.split('\n').slice(0, 2)) assert.match(line, /^\/\/ /);
+});
+
 test('the fields are his Plantilla line in its order, then the sample\'s approval', () => {
   assert.deepEqual(FIELDS.map((field) => field.flag), ['--what', '--when', '--sample', '--where', '--source']);
 });

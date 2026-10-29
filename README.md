@@ -926,7 +926,14 @@ $ js-harness template new question --what "the questions to the user" --when "wh
 $ js-harness template check
 templates: 1 registered, every part present
 $ js-harness template list --json
+$ js-harness template shown --days 7
+templates: no escapes in 7 days
 ```
+
+`template gate --hook` and `template gate --shown` are the hooks `install` registers: before a call that
+shows the user a page, the first refuses one no template command recorded and names the command to
+run; after it, the second records what was shown. They act only where `harness.json` holds
+`"templates": true`, and a record they cannot read lets the call through as unchecked.
 
 `new` writes the sample, its records, the renderer, the golden and refusal tests and a draft entry in
 `bin/lib/template-registry.mjs`, and names only the first field missing, so the user is asked for that

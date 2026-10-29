@@ -56,6 +56,10 @@ export function registryOfText(text) {
 /** The sha256 of `bytes` (a string or a buffer), in hex. */
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+/** A page's text as a widget may carry it: CRLF read as LF, the spaces and tabs that end each line cut, and the blank
+ * lines at its end. Its hash is the `normal` one a widget is checked by (odd/tasks/templates.md, "The records"). */
+export const normalText = (text) => text.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').replace(/\n+$/, '');
+
 /** The digest a sample is pinned by: the sha256 of its bytes with each CRLF read as LF, so a checkout that turns line
  * ends to CRLF (core.autocrlf) holds the sample he approved. */
 export const sampleDigest = (bytes) => sha256(Buffer.from(Buffer.from(bytes).toString('latin1').replace(/\r\n/g, '\n'), 'latin1'));

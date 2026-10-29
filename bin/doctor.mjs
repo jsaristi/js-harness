@@ -25,6 +25,7 @@ import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } fro
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
+import { templatesHealth } from './template.mjs';
 import { permissionsHealth } from './lib/permissions.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -216,7 +217,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
   const withTrees = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
   // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
-  const withUnseen = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
+  const withSkips = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
+  // The templates' records are read by the interactive report only, as the skips are.
+  const withUnseen = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withPermissions = deps.permissions ? [...withBackup, permissionsRow(deps.permissions, home)] : withBackup;
   const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
@@ -322,8 +325,28 @@ function reviewSkipsRow(reviewSkips, project) {
   return { ...row, project: 'stale', fix: { project: [`${count}, and a pull request that holds a lens skip does not land: run the review it skipped`, ...found] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, permissions, host-update,
- * stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its callers give it. */
+/** The templates row (odd/tasks/templates.md, "Proof"): what `template shown` reports for the last days, `stale` with
+ * each escape, `unknown` while a call went unchecked or the records cannot be read, since then no escape can be ruled
+ * out, `ok` with neither, and `n/a` where the project's `harness.json` does not hold `"templates": true` (`null`). */
+function templatesRow(templates, project, home) {
+  const row = { id: 'templates', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = templates(project, home);
+  } catch {
+    return { ...row, project: 'unknown' };
+  }
+  if (found === null) return { ...row, project: 'n/a' };
+  if (found.escapes.length > 0) {
+    const count = `${found.escapes.length} escape${found.escapes.length === 1 ? '' : 's'} in ${found.days} days`;
+    return { ...row, project: 'stale', fix: { project: [`${count}: js-harness template shown names it`, ...found.escapes] } };
+  }
+  return found.unchecked > 0 ? { ...row, project: 'unknown' } : row;
+}
+
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, permissions,
+ * host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
+ * callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
     unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
@@ -331,6 +354,7 @@ export function doctorCommand(argv) {
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
     reviewSkips: (cwd) => owedSkipLines(cwd),
+    templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
     clean: { start: backgroundMeasure(process.env, argv) },
