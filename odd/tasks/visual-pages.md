@@ -490,6 +490,11 @@ carrying #644, landed (main 96b917a).
   69f6216d, push, PR against main. Then T7 (the init line can name `rule:reports-spanish-visual` only if this repo's
   CLAUDE.md names it too: template-block.test.mjs; CLAUDE.md is outside the brief's surface, so ask the lead), then
   spec 9 below as slice E, then T10's departure.
+- 0bc60aa0..024be874 (the source fix 156738e2, away-autonomy 378275d2, this state): Codex correct (0.94, 79k input
+  tokens); the reliability lens found nothing.
+- gentle-ai: 0bc60aa0..024be874 approved (medium, lineage review-2aba38fa75ad836e): one suggestion, not taken: that
+  nothing in the candidate shows `stretch status --goals` exists; it does, `js-harness stretch --help` lists
+  `status [--goals]`.
 - Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
   o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
   fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
