@@ -21,9 +21,9 @@ test('worktreesInMain bounds every git call it makes with a timeout', () => {
   for (const call of asked) assert.ok(Number.isInteger(call.timeout) && call.timeout > 0, JSON.stringify(call));
 });
 
-// The promise the README makes: a worktree whose git hangs is not counted, and the others still are (gentle-ai, R3).
+// The promise the README makes: a worktree whose git hangs is not counted, and the others still are (a review, R3).
 // And no call takes optional locks: a `git status` killed at its limit must not leave an index.lock that breaks a
-// worktree that was only slow (gentle-ai, 2026-10-17, R4); the status calls are the ones that matter.
+// worktree that was only slow (a review, 2026-10-17, R4); the status calls are the ones that matter.
 test('worktreesInMain leaves out a worktree whose git call timed out, still counts the others, and takes no optional lock', () => {
   const locks = [];
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'worktrees-'));

@@ -1,8 +1,8 @@
 // The Rules block of the user's own Claude file, `~/.claude/CLAUDE.md` (F8 S10, odd/tasks/f8-s10-port.md, T7): his
 // answer to question 99 (G12) was that `install` writes his nine Rules lines there, as his answer D7 left them, in a
 // small recorded block that `uninstall` undoes, and touches nothing else of `~/.claude`; so his other projects keep
-// them once gentle-ai's global file is gone. It is the marked block of ./project-template.mjs: rendered again while it
-// is unedited, and his once he edits it. The text around it is his or gentle-ai's and is never changed.
+// them once the global file that had them is gone. It is the marked block of ./project-template.mjs: rendered again while it
+// is unedited, and his once he edits it. The text around it is his or the global file's and is never changed.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +36,7 @@ const separatorOf = (record) => (SEPARATORS.has(record?.separator) ? record.sepa
 
 /** Writes `text` to `target` through a fresh sibling renamed over it, so a write that fails partway leaves the file as
  * it was (the verifier, L20). The sibling is created exclusively under a random name, so nothing already there is
- * written through, and the rename is tried again while Windows holds the file (gentle-ai on T7's slice); the sibling
+ * written through, and the rename is tried again while Windows holds the file; the sibling
  * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours.
  * The sibling takes the mode of the file it replaces, so a private file stays private (Codex on cca493e..b27d063). */
 function writeWhole(target, text, writeFile = fs.writeFileSync) {
@@ -162,8 +162,7 @@ export function releaseRulesBlock(record, home, { writeFile = fs.writeFileSync, 
   const rest = out.text.slice(out.at);
   const text = withoutSeparator(out.text.slice(0, out.at), rest, separatorOf(record)) + rest;
   try {
-    // A file install made goes once empty, but never a link he put there since: the file it names keeps his text
-    // (gentle-ai on cca493e0..c7fe8137).
+    // A file install made goes once empty, but never a link he put there since: the file it names keeps his text.
     if (record.createdFile === true && text === '' && place === at) removeFile(at);
     else writeWhole(place, text, writeFile);
   } catch (err) {

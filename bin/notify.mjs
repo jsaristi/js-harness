@@ -367,7 +367,7 @@ export async function notifyMain(
   }
 
   // A ready notice is held to the checks the land runs before it builds: 360, 365 and 367 were announced ready and
-  // left out of a land for want of gentle-ai evidence, a relay and some 13 minutes each (odd/tasks/ready-checks.md, S1).
+  // left out of a land for want of review evidence, a relay and some 13 minutes each (odd/tasks/ready-checks.md, S1).
   if (draft.kind === 'ready') {
     const problems = await landChecks(draft.pr, cwd, { run });
     if (problems.length) {

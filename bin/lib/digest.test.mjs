@@ -7,25 +7,25 @@ function row(overrides) {
 }
 
 test('gapList is empty for a fully healthy report', () => {
-  assert.deepEqual(gapList([row({ id: 'gentle-ai' }), row({ id: 'engram' })]), []);
+  assert.deepEqual(gapList([row({ id: 'other-tool' }), row({ id: 'engram' })]), []);
 });
 
 test('gapList collects one entry per (id, dimension) that is missing or outdated', () => {
   const rows = [
-    row({ id: 'gentle-ai', claude: 'missing' }),
+    row({ id: 'other-tool', claude: 'missing' }),
     row({ id: 'codegraph', codex: 'missing', upToDate: 'outdated' }),
   ];
   const gaps = gapList(rows);
   assert.deepEqual(gaps, [
     { id: 'codegraph', dimension: 'codex', state: 'missing' },
     { id: 'codegraph', dimension: 'upToDate', state: 'outdated' },
-    { id: 'gentle-ai', dimension: 'claude', state: 'missing' },
+    { id: 'other-tool', dimension: 'claude', state: 'missing' },
   ]);
 });
 
 test('gapList counts a stale cell as a gap, so the session hook notifies about a dead hook', () => {
-  assert.deepEqual(gapList([row({ id: 'gentle-ai', claude: 'stale' })]), [
-    { id: 'gentle-ai', dimension: 'claude', state: 'stale' },
+  assert.deepEqual(gapList([row({ id: 'other-tool', claude: 'stale' })]), [
+    { id: 'other-tool', dimension: 'claude', state: 'stale' },
   ]);
 });
 
@@ -71,12 +71,12 @@ test('gapList sorts by tool id, then by dimension, regardless of input order', (
 });
 
 test('gapDigest is the empty string for a report with no gaps', () => {
-  assert.equal(gapDigest([row({ id: 'gentle-ai' })]), '');
+  assert.equal(gapDigest([row({ id: 'other-tool' })]), '');
 });
 
 test('gapDigest is a non-empty stable string for the same gap list, regardless of row order', () => {
-  const a = [row({ id: 'gentle-ai', claude: 'missing' }), row({ id: 'engram' })];
-  const b = [row({ id: 'engram' }), row({ id: 'gentle-ai', claude: 'missing' })];
+  const a = [row({ id: 'other-tool', claude: 'missing' }), row({ id: 'engram' })];
+  const b = [row({ id: 'engram' }), row({ id: 'other-tool', claude: 'missing' })];
   const digestA = gapDigest(a);
   const digestB = gapDigest(b);
   assert.notEqual(digestA, '');
@@ -84,7 +84,7 @@ test('gapDigest is a non-empty stable string for the same gap list, regardless o
 });
 
 test('gapDigest changes when the gap list changes', () => {
-  const before = [row({ id: 'gentle-ai', claude: 'missing' })];
-  const after = [row({ id: 'gentle-ai', claude: 'missing', codex: 'missing' })];
+  const before = [row({ id: 'other-tool', claude: 'missing' })];
+  const after = [row({ id: 'other-tool', claude: 'missing', codex: 'missing' })];
   assert.notEqual(gapDigest(before), gapDigest(after));
 });

@@ -116,9 +116,9 @@ const uncoveredLines = (uncovered, base) => {
   ];
 };
 
-/** The `review` row every commit's gate shows, informing and failing nothing (odd/tasks/f8-s1-reviews.md, T5; it
- * replaced the row that asked gentle-ai whether a review was due): the code commits since the default branch that
- * no lens record covers, and the skips of both reviews that still owe one, so the debt shows before the push that
+/** The `review` row every commit's gate shows, informing and failing nothing (odd/tasks/f8-s1-reviews.md, T5): the code
+ * commits since the default branch that no lens record covers, and the skips of both reviews that still owe one, so the
+ * debt shows before the push that
  * refuses it. With the Codex review off the lenses are the one review, and its debt is still said; the push asks
  * for none (his answer S9 of odd/tasks/on-demand-functions.md, its risk tiers dropped by "revisión siempre"). */
 export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {

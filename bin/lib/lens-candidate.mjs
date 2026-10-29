@@ -3,9 +3,8 @@
 //
 // A lens runs with no tools, so it can read nothing but what it is handed: this module hands it the range
 // `<base>..<head>` as one block, the identity first (the two commits and the subject hash), then the ordered
-// manifest of the paths and each path's own patch. It replaces the binding and context gentle-ai's provider
-// built for the same prompts. The paths are those a Codex review reads (`./codex-review-scope.mjs`), so a code
-// commit is one thing to both reviews.
+// manifest of the paths and each path's own patch. The paths are those a Codex review reads
+// (`./codex-review-scope.mjs`), so a code commit is one thing to both reviews.
 //
 // The subject hash is sha256 of the block's context, the manifest and the patches in order: it changes with any
 // changed line and never with a message, so a record names its head commit and its hash, and an amend that keeps

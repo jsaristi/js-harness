@@ -1,6 +1,6 @@
-// The `permissions` object of the user's Claude settings, held by js-harness (F8 S10, odd/tasks/f8-s10-port.md, T4):
-// gentle-ai writes it today and its uninstall takes the whole object away (S2), with the denies that keep a session
-// off credentials. `install` adds what is missing, records only what it wrote, and `uninstall` takes out exactly that:
+// The `permissions` object of the user's Claude settings, held by js-harness (F8 S10, odd/tasks/f8-s10-port.md, T4),
+// with the denies that keep a session off credentials (S2). `install` adds what is missing, records only what it wrote,
+// and `uninstall` takes out exactly that:
 // an entry or a `defaultMode` it found is the user's, never removed. The hook-entry engine cannot do this, since it
 // does not remember whether an entry was there before it (L4). It and ./manifest.mjs import each other's functions
 // only, which an ES module cycle allows.

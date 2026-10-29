@@ -288,7 +288,7 @@ test('a failed command whose probe then cannot tell is not done: it stays record
   assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', null]]);
 }));
 
-// gentle-ai review-296d60b1e90da71e (R4): a timeout kills the shell, not always what it started, which may still
+// Review finding review-296d60b1e90da71e (R4): a timeout kills the shell, not always what it started, which may still
 // install; so a timeout keeps its record, and in a terminal, where the person watches, nothing is timed out.
 test('a command that timed out keeps its record, since what it started may still finish', withHome(async (home) => {
   const world = newWorld();
@@ -299,7 +299,7 @@ test('a command that timed out keeps its record, since what it started may still
   assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', null]]);
 }));
 
-// T7 (gentle-ai R1-001): a record left unread is read once the probe can, at the end of the run, so its undo applies
+// T7 (review R1-001): a record left unread is read once the probe can, at the end of the run, so its undo applies
 // to what it left and not to whatever answers later.
 test('a timed-out install the probe reads ok at the end of the run gets what its undo applies to, and the run exits 0', withHome(async (home) => {
   const world = newWorld();

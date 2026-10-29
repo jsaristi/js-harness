@@ -421,6 +421,8 @@ test('the table has no gentle-ai row, and a day kept before F8 S11 with its revi
   const rows = throughputRows([kept]);
   assert.ok(rows.length > 0);
   for (const row of rows) assert.doesNotMatch(`${row.label} ${row.value} ${row.source}`, /gentle-ai|review starts/);
+  // Its `reviews` key has no source left to name it, so no row says it was not read.
+  for (const row of rows) assert.doesNotMatch(row.value, /EACCES/, row.label);
 });
 
 test('a day\'s questions: those recorded in it, and those an answer or a withdrawal closed in it, with the answer\'s own times once B4 keeps them', () => {

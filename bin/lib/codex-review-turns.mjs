@@ -104,7 +104,7 @@ function addCounts(all, one) {
 const TURN_WORKTREE = /^review-turn-(\d+)-(\d+)$/;
 
 // How long a turn worktree may stand: a turn is one review, which no run keeps going for a day. One older is
-// removed though a process of its pid runs, since that pid was reused by another (gentle-ai R4, PR 338).
+// removed though a process of its pid runs, since that pid was reused by another (a review R4, PR 338).
 export const TURN_WORKTREE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Whether the process `pid` is running here: a signal 0 tests it and sends nothing. */

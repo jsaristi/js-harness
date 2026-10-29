@@ -18,7 +18,7 @@ const SECTIONS = [
   ['Decisions', 'each decision, whose it was (the user, the lead, this session) and where it is recorded'],
   ['Failures and lessons', 'what failed, how it was found, and what changed so it does not come back'],
   ['Left', 'what is not done, and who holds it'],
-  ['Cost', 'time (first and last notice), context share at the end, reviews run (gentle-ai, Codex) and gate runs'],
+  ['Cost', 'time (first and last notice), context share at the end, reviews run (Codex, the Claude lenses) and gate runs'],
 ];
 
 export const SUMMARY_HEADINGS = SECTIONS.map(([heading]) => heading);

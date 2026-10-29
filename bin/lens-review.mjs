@@ -22,7 +22,7 @@ import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
 import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
-// The model gentle-ai's lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
+// The model the lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
 export const LENS_MODEL = 'sonnet';
 // The most a lens is handed, in estimated tokens (four characters a token): a range past it is reviewed in smaller
 // ranges, since a lens that cannot hold the whole block can only answer incomplete.
