@@ -537,3 +537,6 @@ Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) 
   e27ed2cf carries 70cf8bee, which the land left out. Codex over 509b559..e27ed2c: correct, 0.91; lenses risk,
   readability: 0. Next: gentle-ai (status at base 509b5599 offers lineage review-407b62dd32e929c7), push, PR, ready
   notice; then `status-report` on its own rule/ branch once this lands; then T7.
+- gentle-ai: approved, lineage review-55c5cc4b6a8efd4a, over 509b5599..00ead029 (6fd99fd5, e27ed2cf, 00ead029),
+  acknowledged; its reliability lens: 0 findings. The host compacted this session at 09:52Z, after 00ead029; the
+  review's tokens and result were in the job's tmp and resumed from there.
