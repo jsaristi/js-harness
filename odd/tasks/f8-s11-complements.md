@@ -128,6 +128,12 @@ Reviews:
   tokens); lens reliability, 0 findings (22,525 input tokens); gentle-ai on `d8c90335..4abbc2ee`: approved (lineage
   review-ddf40c670045365e), one suggestion taken in 315a15d5 on f8-s11-reviews: R3-001 (no test of a branch that
   mixes switch states).
+- PR 4, 6196a6b6 (the merge of f8-s11-reviews with main at 9e44cca5: four comments that cited a gentle-ai review
+  or the reverse-engineering document's file name reworded, and four files named, JH 69's `lens-reviews` pair and
+  directive coverage's reading of gentle-ai's block markers): Codex 7093a62..6196a6b, 21 changed lines, passed (50,287
+  input tokens); lens reliability over 52c49fc..6196a6b, from PR 3's tip so it reads PR 4 alone and not main again,
+  0 findings (89,291 input tokens); gentle-ai on `7093a62d..6196a6b6`: not reviewed, its candidate holding main's 139
+  files; its status was read and nothing started.
 - PR 3, 36587437 (the lens record where the Codex review is off, L14): Codex caaccd3..3658743, 1 part, passed
   (118,985 input tokens); lenses risk, reliability, readability over caaccd3..3658743: 0 findings (about 20,350
   input tokens each); gentle-ai on `caaccd3f..36587437`: approved (lineage review-e13532840d6c3432), two suggestions
@@ -162,11 +168,11 @@ T8, 2026-10-28, from the branch at 71e89a2b, nothing installed and nothing writt
 - `check` green at each commit (the pre-commit hook); the full tests run on GitHub at each push.
 
 ## Next step
-#627 and #628 landed (main 170e09dd). Drafts: #629 (PR 3, f8-s11-reviews, base main) and #632 (PR 4,
-f8-s11-sweep, base f8-s11-reviews, which merges PR 3 in), each reviewed by Codex, the lenses and gentle-ai
-(Reviews); T1-T8 done, T5 by his answer to question 104 (L14). Next: the absence list drops the files that no
-longer name gentle-ai, then both PRs are announced ready. Open, his: whether to apply S11 to his machine (`stack
-install` on his real home), asked through the lead.
+#627 and #628 landed (main 170e09dd). #629 (PR 3, f8-s11-reviews, base main) is announced ready and holds main at
+9e44cca5; #632 (PR 4, f8-s11-sweep) is stacked on it and lands after it. T1-T8 are done, T5 by his answer to
+question 104 (L14). Open, his: whether to apply S11 to his machine (`stack install` on his real home), asked
+through the lead. A session that lands a file naming gentle-ai after #632 is refused by
+`bin/lib/gentle-ai-absence.test.mjs` until it rewords it or names it with its reason.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
