@@ -104,7 +104,8 @@ mechanism here, before S13 rehearses it and S12 ships it.
   `03effcad`, the records' commit after them): neither tells its rule apart (L21); both stay owed
 - [ ] T9 (kind: build) more cases, built on their skill's trigger as T8's, once P5 and P6 say whether that tells a
   rule apart (D10) — S4; inline. P7 says it does not (L26, D14): none built as T8's; how a case could is the lead's
-- [ ] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline
+- [x] T10 (kind: build) `init`'s baseline line, L5's ready patch, if main still lacks it — S7; inline; JH 82,
+  branch `f8-s5c-a-init-baseline` from main, PR 669 (`ba8b407c`, `848031b2`, L28)
 
 Reviews:
 - gentle-ai: no gentle-ai review ran on the code commits `9890615e..37cdab21` (all twelve, `9890615e` to `37cdab21`):
@@ -139,6 +140,12 @@ Reviews:
 - JH 82, `24471296` (the away grader's Spanish words bounded): the reliability lens, 0 findings (9,672 input
   tokens); Codex, "the patch is correct" (0.97, 41,698 input tokens against the plan's 49,000 to 59,000).
 - gentle-ai: approved on `b4d6fc13..24471296` (lineage `review-c679edf6c2d39dd6`, two advisory findings, L25).
+- JH 82, T10 on `f8-s5c-a-init-baseline` (PR 669): the independent verifier on `ba8b407c`, no blocking finding and
+  four nits, three fixed by `848031b2` (L28); Codex, "the patch is correct" on `27fc4f9e..ba8b407c` (0.95, 113,906
+  input tokens against the plan's 95,000 to 120,000) and on `ba8b407c..848031b2` (0.95, 48,484); the lenses risk,
+  reliability and readability on the first, 0 findings each, and reliability on the second, 0.
+- gentle-ai: approved on `27fc4f9e..ba8b407c` (lineage `review-b6abd3914d52fc40`) and on `ba8b407c..848031b2`
+  (lineage `review-d4494167128b1650`), three advisory findings in all, read and not taken (L28).
 
 ## Paid runs
 Run by JH 78 on his yes (L13). Estimates [i] at 14.4's $0.56 to $0.65 a trial, API equivalent on his Max plan; the
@@ -200,8 +207,8 @@ one independent verifier, then Codex and the lenses; its own PR if the branch pa
 $4.87.
 After P7 (L26, $2.00, JH 82's spend now $6.87): (2) is done; T9 builds no case as T8's (D14), and what would let a
 case tell its rule apart (the rule's text in a home that always loads, or prompts that fire the skill) is the
-lead's. Next: (3) T10, on its own branch from `origin/main` and its own PR, since main's `project.mjs` moved
-(2,018 lines, its ceiling 2,018) and still writes no coverage record; then (4).
+lead's (L27: prompts that fire the skill as real work would; no paid rerun until one is shown, free, to load it).
+(3) is done: T10 is PR 669 (L28). Next: (4).
 Known limit (L4): an edit is judged by its place, so a new sentence written over an owed one in the same place
 passes as that span edited; `--strict` holds it stale until `--refresh`, so the review reads it.
 
@@ -492,3 +499,17 @@ passes as that span edited; `--strict` holds it stale until `--refresh`, so the 
   `wording-is-the-need`), so a trial loads them whatever its prompt. Only the two cases above have tasks; the other
   20 have none yet, so whether a task would load their skill is open until one is written and shown, free, to
   load it (how to show that free is not built: a trial's transcript is the only evidence so far, and it costs).
+- L28 (2026-10-29, evidence and decisions, T10): main still wrote no coverage record (`git show
+  origin/main:bin/lib/project.mjs`, no `coverage`), and its `project.mjs` was at its ceiling, 2,018 lines, so T10
+  went on its own branch from main, `f8-s5c-a-init-baseline`, PR 669. `writeProject` writes `manifest.coverage =
+  { baseline, release }` only when not `clone` (D13); the day is `localDay()` unless a caller (only tests do) passes
+  `deps.today`. No manifest `format`: every validator and rewrite of the project manifest keeps keys it does not
+  know, back to v0.9.0 by the verifier, and `uninstall` deletes the file. The four shared refusal and rollback
+  messages moved verbatim to `bin/lib/project-messages.mjs`, which `project.mjs` re-exports: they read and write
+  nothing, so they leave the engine without a caller changing; the ceiling went down to 1,990. Tests: 461, 455
+  pass, 0 fail, 6 skipped. The verifier's nits taken (`848031b2`): `today` defaults to `localDay()` in
+  `writeProject` itself, so a later caller cannot write a `null` baseline that `coverageRecord` refuses; two
+  comments named L20 and D13, which only this branch holds; a test's name claimed more than it proves. Not
+  taken, from the verifier and gentle-ai: validating `deps.today` and an explicit `null` day, since only tests pass
+  one (`bin/js-harness.mjs` and `bin/tui.mjs` call `initMain` with no deps); and gentle-ai's fear that the clone
+  path now dates itself, untrue since the line is gated on `!clone` and the clone test asserts it.
