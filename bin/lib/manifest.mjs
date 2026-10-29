@@ -297,7 +297,7 @@ export const components = [
     target: (home) => path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'),
     content: protocolsSkillContent,
   },
-  // F8 S10 (odd/tasks/f8-s10-port.md): what a session took from gentle-ai, for Claude Code only, since Codex only
+  // F8 S10 (odd/tasks/f8-s10-port.md): the output style, for Claude Code only, since Codex only
   // reviews here (D3). A clone selects the style through its settings (bin/lib/project-apply.mjs).
   {
     id: 'claude-output-style',

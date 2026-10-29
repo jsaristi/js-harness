@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionsMain } from './sessions.mjs';
 import { sessionsStartMain } from './sessions-background.mjs';
+import { appendNotice, newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 // `js-harness sessions start` and `stop`, the board's background sessions and the machine uninstall, through the public
@@ -30,6 +31,7 @@ const lost = (id) => { out("No job matching '" + id + "'. Run 'claude agents' to
 if (argv.includes('--bg')) {
   if (state.refuseStart) { err(state.refuseStart); save(); process.exit(1); }
   if (state.agentsFailAfterStart) state.agentsFail = state.agentsFailAfterStart;
+  state.bgAt = new Date().toISOString();
   if (state.breakRecord) {
     // The record turns into a folder while claude runs: it was a file when start opened it, and no line goes in now.
     const record = path.join(process.env.JS_HARNESS_HOME, '.js-harness', 'background', 'sessions.jsonl');
@@ -170,6 +172,64 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
   const copy = fs.readFileSync(record.brief, 'utf8');
   assert.ok(copy.startsWith('# Build the thing\n\nRead odd/tasks/thing.md first.\n'), copy);
   assert.match(copy, /js-harness notify --to orchestrator/);
+}));
+
+// odd/tasks/visual-pages.md, spec 4: the board shows a session from its start, with no notice the session must send.
+const channelFile = (world) => {
+  const channel = path.join(world.home, '.js-harness', 'channel');
+  const files = fs.existsSync(channel) ? fs.readdirSync(channel).filter((name) => name.endsWith('.jsonl')) : [];
+  assert.ok(files.length <= 1, files.join(', '));
+  return files.length === 1 ? path.join(channel, files[0]) : null;
+};
+const channelNotices = (world) => {
+  const file = channelFile(world);
+  return file === null ? [] : fs.readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+};
+
+test('sessions start writes the session\'s first row to the channel record, stamped before claude ran', withWorld((world) => {
+  const before = Date.now();
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const notices = channelNotices(world);
+  assert.deepEqual(notices.map((one) => [one.kind, one.text, one.from.id, one.from.title, one.to.role]), [
+    ['opened', 'started by sessions start: Build the thing', '0db8bc5e-0000-4000-8000-000000000000', 'Build the thing', 'orchestrator'],
+  ]);
+  const { bgAt } = readState(world);
+  assert.ok(Date.parse(notices[0].at) >= before && notices[0].at <= bgAt, `${notices[0].at} is not before claude ran at ${bgAt}`);
+  // Codex, 2bd3bc7..b70ac68: readers hand a notice's worktree to git, so it is the absolute path, not the name given.
+  const [record] = recordLines(world);
+  assert.equal(notices[0].worktree, path.resolve(record.worktreePath));
+  assert.ok(path.isAbsolute(notices[0].worktree));
+}));
+
+// Review 3aafcdd1: with no --worktree the row's place is the checkout git names, with its branch.
+test('sessions start places the first row of a session with no worktree in the checkout and its branch', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  const [notice] = channelNotices(world);
+  assert.equal(fs.realpathSync(notice.worktree), fs.realpathSync(world.project));
+  assert.equal(notice.branch, 'main');
+}));
+
+// Codex, 2bd3bc7..b70ac68: `sessions` reads a session's state in the record's order, so a first row written after the
+// session's own notice would replace its newer state.
+test('sessions start writes no first row once the session wrote its own', withWorld((world) => {
+  const channel = path.join(world.home, '.js-harness', 'channel');
+  fs.mkdirSync(channel, { recursive: true });
+  const from = { host: 'claude-code', id: '0db8bc5e-0000-4000-8000-000000000000', source: 'environment', title: 'Build the thing' };
+  const file = appendNotice(world.home, projectSlug(fs.realpathSync(world.project)), newNotice({ at: new Date().toISOString(), from, to: 'orchestrator', kind: 'waiting', text: 'waits for the lead' }));
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(channelFile(world), file, 'the record the start reads is the project\'s');
+  assert.deepEqual(channelNotices(world).map((one) => one.kind), ['waiting']);
+}));
+
+test('a start whose first row cannot be written keeps the session and says so', withWorld((world) => {
+  fs.mkdirSync(path.join(world.home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(world.home, '.js-harness', 'channel'), 'a file where the folder goes');
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /^started 0db8bc5e · Build the thing$/m);
+  assert.match(result.stderr, /the board's first row of 0db8bc5e could not be written/);
+  assert.equal(recordLines(world).length, 1);
 }));
 
 test('sessions start --no-remote-control leaves Remote Control off', withWorld((world) => {
@@ -475,7 +535,7 @@ const endJob = (world, id) => {
   writeState(world, state);
 };
 
-// gentle-ai on slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
+// The review of slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
 test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
   const [first] = recordLines(world);

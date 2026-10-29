@@ -39,7 +39,7 @@ const pad = (n) => String(n).padStart(2, '0');
 
 /** The newest line of `text` that holds `needle` and whose parsed entry `accept` takes: `{ entry, start }`, `start`
  * its position in `text`, or `null`. Lines that are not JSON are passed over. */
-function lastLineWith(text, needle, accept) {
+export function lastLineWith(text, needle, accept) {
   let at = text.lastIndexOf(needle);
   while (at >= 0) {
     const start = text.lastIndexOf('\n', at) + 1;

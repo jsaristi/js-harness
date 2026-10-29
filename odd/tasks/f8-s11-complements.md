@@ -75,11 +75,11 @@ Applying S11 to his machine (through the lead, once the PRs are ready).
   engram-plugin row's `mismatch` with its two fixtures (L10) — S6; inline; PR 2
 - [x] T5 (kind: build) the review sweep: the merge door's gentle-ai evidence, the pull-request body line, the
   review-starts row and the shipped text that sends a session to gentle-ai — S5; inline; PR 3
-- [ ] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
+- [x] T6 (kind: build) the evals sweep: the block arms and the state copies as historical fixtures, named in a
   list — S5; inline; PR 4
-- [ ] T7 (kind: build) the comment sweep and `bin/lib/gentle-ai-absence.test.mjs`, the named list — S5; inline;
+- [x] T7 (kind: build) the comment sweep and `bin/lib/gentle-ai-absence.test.mjs`, the named list — S5; inline;
   PR 4
-- [ ] T8 (kind: verify) the probe in a scratch home, and `doctor` read on his machine — S7; inline
+- [x] T8 (kind: verify) the probe in a scratch home, and `doctor` read on his machine — S7; inline
 
 Reviews:
 - Codex: ac0725d..cea68ea, 6 parts, all passed (828,730 input tokens), one P2 taken: the Codex undo of engram
@@ -107,6 +107,51 @@ Reviews:
   came back incomplete, readability's answer cut mid-JSON, and the one rerun was complete); gentle-ai on
   `6c047591..f718c3f6`: approved (lineage review-050cc676b966128a), one suggestion left: R3-001 (the no-store test
   wraps three fs calls, not every one) is covered by the same test's output assertion, which is what a person sees.
+- PR 4 (#632), eef7e095 and 61829b9f (the live mentions and the sweep): Codex caaccd3..61829b9, 2 parts, passed
+  (163,588 input tokens), one P2 taken: the review cell built its index without DO_NOT_TRACK (fixed in 8d7bc9fa;
+  Codex 61829b9..8d7bc9f, confidence 0.99, says fixed); lenses reliability, readability over caaccd3..8d7bc9f: 0
+  findings (about 38,750 input tokens each); gentle-ai on `fc2a9a0f..8d7bc9fa` (the range its Stop hook offered,
+  with f718c3f6 again): approved (lineage review-c62331774b325e18), two findings taken in 71e89a2b: R3-001 (the
+  absence test walked the worktree, so an untracked file decided it; it reads `git ls-files` now, proved with an
+  untracked scratch file naming it) and R3-002 (an old day's `reviews` key is proved silent). 71e89a2b: Codex
+  8d7bc9f..71e89a2 passed (63,924 input tokens); lens reliability, 0 findings.
+- Lens reruns (2026-10-28, the lead: PR 630 makes older lens records stop counting; installed copy main 19f2d80):
+  PR 629 over e0260e5..caaccd3, risk, reliability, readability: 0 findings (about 53,190 input tokens each); PR 632
+  over caaccd3..83fcb8a, reliability, readability: 0 findings (about 39,320 input tokens each).
+- gentle-ai on `fc2a9a0f..0cca03ed` (the range its Stop hook offered, whose tree fff61c60 was once written here as a commit; new to it: 71e89a2b and the records): approved
+  (lineage review-f349eeab4a9cc763), two findings left. R3-001 (the test matches the dashed name only, not
+  `gentleAi` or `GENTLE_AI_TELEMETRY`): the dashed name is the diet's pass line, `grep -rl gentle-ai`; the other
+  spellings are old stack records a run still reads and a guard of his machine until S2 (L12). R3-002 (the test
+  needs git): every test here runs in a checkout, the GitHub gate included, and the failure names git.
+- PR 4, 4abbc2ee (the merge of f8-s11-reviews, with the absence list dropping the three files his answer to
+  question 104 freed and one comment losing the name): Codex d8c9033..4abbc2e, 6 changed lines, passed (41,371 input
+  tokens); lens reliability, 0 findings (22,525 input tokens); gentle-ai on `d8c90335..4abbc2ee`: approved (lineage
+  review-ddf40c670045365e), one suggestion taken in 315a15d5 on f8-s11-reviews: R3-001 (no test of a branch that
+  mixes switch states).
+- PR 4, 6196a6b6 (the merge of f8-s11-reviews with main at 9e44cca5: four comments that cited a gentle-ai review
+  or the reverse-engineering document's file name reworded, and four files named, JH 69's `lens-reviews` pair and
+  directive coverage's reading of gentle-ai's block markers): Codex 7093a62..6196a6b, 21 changed lines, passed (50,287
+  input tokens); lens reliability over 52c49fc..6196a6b, from PR 3's tip so it reads PR 4 alone and not main again,
+  0 findings (89,291 input tokens); gentle-ai on `7093a62d..6196a6b6`: not reviewed, its candidate holding main's 139
+  files; its status was read and nothing started.
+- PR 4, b47cd4da (the merge of main 410eed7c: the land of 632 and 648 went red on GitHub, Actions run 40816256353,
+  because main brought three S5c-a eval results naming gentle-ai, now listed as results; the run's "FAIL budget 1501"
+  is the output of check.test.mjs's over-budget test, the real row read 974). Codex d7b4960..b47cd4d: correct
+  (57,552 input tokens); lens reliability 410eed7..b47cd4d: 0 findings (44,632).
+- PR 4, bca90373..3fc6425f (the land left #632 out red twice: the gate's WSL mirror is synced without .git, so
+  the absence test's `git ls-files` failed there; gentle-ai's R3-002 on fc2a9a0f..fff61c60 had said the test needs
+  git, and was left on the belief that every test runs in a checkout). bca90373 walked the disk with no .git; Codex
+  P2: the mirror holds untracked and ignored files, so a stray file would decide it. 57cb302a skips instead with no
+  .git; gentle-ai on `0d2840ea..57cb302a`, bca90373 with it: approved (lineage review-6e29079456ffbac5), R3-001, the read at module load, and R3-002, a CI step without
+  .git passing as a skip, taken in a4b1b66c, which skips only outside CI. The reliability lens: its own test asserted
+  this checkout does not skip, false in the mirror; fixed in 3fc6425f. A no-.git copy of the tree holding a stray
+  file that names gentle-ai passes 2 and skips 1; the committed test failed in it with "not a git repository".
+  Codex bca9037..a4b1b66 passed (70,910 input tokens, after one run stopped by "model is at capacity") and
+  a4b1b66..3fc6425 passed (38,241); lens reliability 0d2840e..a4b1b66 one finding, taken, and a4b1b66..3fc6425 0
+  findings (3,874); gentle-ai on `57cb302a..3fc6425f`: approved (lineage review-2555e690150d752b), three left:
+  R3-001 (a tree with .git where git fails would now fail) does not hold, since `trackedFiles` returns null only with
+  no .git and asserts on a git that fails, as the base did; R3-002 (`CI=false` counts as CI): GitHub sets `CI=true`;
+  R3-003 (no `os` import) does not hold, `os` is imported.
 - PR 3, 36587437 (the lens record where the Codex review is off, L14): Codex caaccd3..3658743, 1 part, passed
   (118,985 input tokens); lenses risk, reliability, readability over caaccd3..3658743: 0 findings (about 20,350
   input tokens each); gentle-ai on `caaccd3f..36587437`: approved (lineage review-e13532840d6c3432), two suggestions
@@ -126,14 +171,38 @@ Reviews:
 - gentle-ai on `ac0725d2..28acfb5d`: not reviewed (its Stop hook offered only the whole branch, so its status was read and nothing started, as CLAUDE.md says); Codex and the lenses reviewed it.
 
 ## Probe
-Not run yet.
+T8, 2026-10-28, from the branch at 71e89a2b, nothing installed and nothing written to his machine:
+- `stack` on a scratch home (`mktemp -d`, outside the repo) with only a copied `node` on PATH: 6 installs and 4 own
+  steps; engram, engram-plugin, codegraph (installed, claude, codex) and context7 (claude, codex) each with its own
+  command and undo; no gentle-ai row; the home held only the `bin/` the probe made. A first run with node's own
+  folder on PATH found codegraph there (`/c/nvm4w/nodejs`), so it showed no codegraph install: the reason for the copy.
+- `grep -rl gentle-ai bin evals`: `bin/lib/gentle-ai-absence.test.mjs` runs it over the tracked files and passes;
+  every file it finds is on its named list, with why.
+- `doctor --offline` on his machine, gentle-ai 4.3.1 still installed: the branch exits 0, as the installed copy does;
+  against it, the gentle-ai and gentle-ai-sync rows are gone, context7's project cell reads `ok` (it read `n/a`),
+  and codegraph's project fix is `codegraph init --yes <root>`; its other gaps are the same in both. Codex's fix
+  says `npm i -g` from the branch and `pnpm add -g` from the installed copy: the package manager is the one the
+  running copy was installed with (`resolveStackPm`, bin/lib/package-manager.mjs:117), not a change of S11.
+- `check` green at each commit (the pre-commit hook); the full tests run on GitHub at each push.
+
+Applied to his machine, 2026-10-29 00:33-00:42 local, by his answer to question 106 (L15), with the installed copy
+refreshed by the lead to main 5e36e82 (`stack.mjs`, `stack-install.mjs` and `doctor.mjs` byte-equal to main):
+- `js-harness stack`: "nothing the harness requires is missing."; `js-harness stack install`: "nothing to install.",
+  exit 0, so it installed, registered and recorded nothing. Engram 3.6.0, its plugin 0.1.19, codegraph 1.6.2 and
+  context7 (hosted) were already there.
+- `js-harness doctor --cwd D:/js-harness` before and after: exit 0 both, gentle-ai still installed. Every row reads
+  the same but `pnpm-lock`, `ok` before and `stale` after: pnpm's global bin lock folder, left at 00:30:52, the minute
+  of the lead's refresh, with nothing installed by this session; it is left to the lead. One `doctor` between them
+  read codegraph's and codex's versions as `unknown` under a machine load of 7.1 of 8 (`gate log`); `codex --version`
+  and `codegraph --version` answered at once, and the next `doctor` read them as before.
+- Gaps that stay, both before and after: context7's project cell `missing` in the main checkout (its fix, `/mcp` in a
+  Claude Code session there, is his setting), codex `outdated` at 0.164.0, the memory notes `stale`, codex's hook
+  trust `missing` (his setting), and one worktree to prune.
 
 ## Next step
-#627 and #628 landed (main 170e09dd). PR 3 is #629 on f8-s11-reviews (worktree D:/js-harness/.claude/worktrees/f8-s11):
-fc2a9a0f, f718c3f6 and 36587437 (his answer to question 104, L14), each reviewed by Codex, the lenses and gentle-ai
-(Reviews); T5 is done. Next: merge f8-s11-reviews into f8-s11-sweep (PR 4, #632), drop the Q104 entries of
-`bin/lib/gentle-ai-absence.test.mjs` that no longer name gentle-ai, review that, and announce both ready. Open, his:
-applying S11 to his machine, asked through the lead.
+S11 is done: #627, #628, #629 and #632 landed, T1-T8 are done, T5 by his answer to question 104 (L14), and S11 is
+applied to his machine by his answer to question 106 (L15), recorded under Probe. A session that lands a file naming gentle-ai after #632 is refused by
+`bin/lib/gentle-ai-absence.test.mjs` until it rewords it or names it with its reason.
 
 ## Log
 - L1 (2026-10-28, the brief from JH ORQ, `briefs/2026-10-28T10-57-44-850Z-c751a8fa.md`): "JH 68 · F8 S11:
@@ -234,6 +303,10 @@ applying S11 to his machine, asked through the lead.
   base (`bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/codex-reviews.mjs`, their tests and `js-harness.mjs`'s guard
   help) is JH 69's surface: named in the list until the lead says otherwise, asked through it. `bin/lib/
   gentle-ai-absence.test.mjs` holds the list and fails on a file outside it.
+- L13 (2026-10-28 09:45, the lead, a notice on the channel): "the guard's gentle-ai review-base refusal stays until S2.
+  gentle-ai still reviews here until then, and the refusal is a guard (high risk), so JH 69 keeps its scope. Name those
+  files in S11's allowed list". S2 removes the refusal with gentle-ai (`bin/guard.mjs`, `bin/lib/guard.mjs`,
+  `bin/lib/codex-reviews.mjs`, their tests, and `bin/js-harness.mjs`'s guard help line).
 - L14 (2026-10-28 22:59Z, his answer to question 104, tapped on the board, read with `js-harness sessions --quote
   0f71b2c6-cbce-43ca-a031-276a4b2c381f 11879`): "Las lentes Claude (Recomendada)", the option that read "Donde Codex
   está apagado, la revisión de lentes queda encendida: la línea dice eso y la puerta de merge exige su registro."
@@ -244,3 +317,7 @@ applying S11 to his machine, asked through the lead.
   S9 there lets a push through with the Codex review off, and the door is where the record is asked. The block's
   bytes move, so a project whose block is unedited gets it rendered again on its next sync, which git undoes, and an
   edited one is kept (`syncTemplateBlock`).
+- L15 (2026-10-29 01:31Z, his answer to question 106, tapped on the board, read with `js-harness sessions --quote
+  0f71b2c6-cbce-43ca-a031-276a4b2c381f 13778`): "Aplicarlo al entrar 632 (Recomendada)". After #632 lands and the
+  lead refreshes the installed copy, this session runs `js-harness stack install` on his real home and shows `doctor`
+  before and after; the yes does not cover removing gentle-ai, credentials or evals.

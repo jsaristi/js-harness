@@ -122,7 +122,7 @@ function shownUndo(record, platform) {
  * it (`failed`). A record whose tool answers but cannot be read (`unreadable`) keeps its record untouched, and so does
  * the Codex CLI while an undo of a registration in Codex failed (`needed`), since that undo needs it. A record whose
  * command never got as far as reading back (`applies` is `null`) cannot tell what it left from a later install of his
- * own, so its undo is named, never run, and its record dropped (`unread`; T7, gentle-ai R1-001); one in Codex keeps
+ * own, so its undo is named, never run, and its record dropped (`unread`; T7, a review R1-001); one in Codex keeps
  * the Codex CLI too (`needed`), so that undo can still run. `failedRecords`
  * keeps the order they were installed in. */
 export function undoStack(records, { home, spawn = realSpawn, platform = process.platform, env = process.env, log = () => {} }) {

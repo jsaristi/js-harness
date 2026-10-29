@@ -72,6 +72,15 @@ details.orig summary{font-size:13px} details.orig p{font-size:13.5px;color:var(-
 .yours h3{color:var(--you)}
 ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15.5px}
 .empty{color:var(--muted);font-size:15px}
+.recent li{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recent .ago{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.status{display:flex;flex-direction:column;gap:8px}
+.stat{display:flex;gap:12px;align-items:flex-start;border-radius:12px;padding:12px 15px;border:1px solid var(--line);background:var(--surface);min-width:0}
+.stat svg{flex:none;width:22px;height:22px;margin-top:2px}
+.stat div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat b{font-size:16px;overflow-wrap:anywhere} .stat span{font-size:15px;overflow-wrap:anywhere}
+.stat.done{background:var(--ok-soft);border-color:var(--ok)} .stat.done svg,.stat.done b{color:var(--ok)}
+.stat.working{background:var(--wait-soft);border-color:var(--wait)} .stat.working svg,.stat.working b{color:var(--wait)}
+.stat.waiting{background:var(--run-soft);border-color:var(--run)} .stat.waiting svg,.stat.waiting b{color:var(--run)}
 details summary{cursor:pointer;color:var(--muted);font-size:15px}
 </style>
 
@@ -85,6 +94,17 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
   <p id="lead" class="small" hidden></p>
 </header>
 
+<section class="stack" id="status-box" hidden>
+  <span class="eyebrow">Cómo va</span>
+  <div class="status" id="status"></div>
+  <p class="small muted">Verde: hecho · Ámbar: en curso · Azul: esperando</p>
+</section>
+
+<section class="stack" id="recent-box">
+  <span class="eyebrow">Lo último que se hizo</span>
+  <ul class="plain recent" id="recent"><li class="empty">Nada terminado todavía en el tablero.</li></ul>
+</section>
+
 <section class="yours" id="yours" hidden>
   <span class="eyebrow">Lo que te toca</span>
   <ul class="plain" id="yours-list"></ul>
@@ -93,6 +113,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
 <section class="stack">
   <span class="eyebrow">Ahora mismo</span>
   <h2>Quién trabaja y en qué</h2>
+  <p class="small muted" id="running" hidden></p>
   <div class="who" id="who"><p class="empty">Esperando los primeros avisos…</p></div>
   <details id="done-box" hidden><summary id="done-summary"></summary><div class="who" id="done" style="margin-top:12px"></div></details>
 </section>
@@ -140,8 +161,10 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
   <div class="card">
     <h3>Las partes</h3>
     <ul class="plain">
+      <li><b>Cómo va</b>: el resumen que deja el orquestador cada vez que despierta, una tarjeta por cosa: verde lo hecho, ámbar lo que está en curso y azul lo que espera.</li>
+      <li><b>Lo último que se hizo</b>: las tres últimas cosas terminadas (una sesión que terminó o un PR listo), con hace cuánto, para ubicarte de un vistazo.</li>
       <li><b>Lo que te toca</b>: lo único que espera por ti. Si está vacío, no tienes nada pendiente.</li>
-      <li><b>Quién trabaja y en qué</b>: una tarjeta por sesión, con su último aviso. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
+      <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso, cuánto lleva en su tarea y su estimado. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
       <li><b>Línea de tiempo</b>: los últimos 40 avisos, el más nuevo primero. Sirve para ver qué pasó mientras no mirabas.</li>
       <li><b>Dónde vamos</b>: los pasos del plan y el avance del roadmap. Lo actualiza el orquestador.</li>
     </ul>
@@ -171,8 +194,9 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
     </ul>
   </div>
   <div class="card">
-    <h3>El tiempo estimado y el real <span class="tag">propuesto</span></h3>
-    <p class="small">Al empezar una tarea, la sesión anota cuánto cree que tardará. La tarjeta muestra las dos cifras, por ejemplo “estimado 40 min · lleva 55 min”. Si lo real pasa lo estimado, la tarea queda <b>atrasada</b> y la sesión debe escribir por qué en su siguiente aviso.</p>
+    <h3>El tiempo estimado y el real</h3>
+    <p class="small">Cada tarjeta dice cuánto lleva la sesión en su tarea, contado desde que empezó, y cuánto se estimó, por ejemplo “Lleva 1 h 20 min en esto · estimado 1,5–2 h”. El estimado lo anota el orquestador o sale del plan de la tanda en curso; si no hay ninguno, dice “sin estimado”, nunca una cifra inventada.</p>
+    <p class="small">Que una tarea que pasa su estimado quede <b>atrasada</b> y la sesión escriba por qué en su siguiente aviso sigue siendo una propuesta.<span class="tag">propuesto</span></p>
   </div>
   <div class="card">
     <h3>Qué hacer si ves algo atrasado o quieto</h3>
@@ -197,7 +221,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
 <script>
 // Renders the board from its db: `events` holds batch documents of rows ({ time, session, kind, text, state, pr? }),
 // written by the lead from `js-harness sessions live`; `board/summary` holds what the lead says now, what is the
-// user's, the route, the links and the lead's last check of the record (`checked`, `until`, `resting`). Everything shared is untrusted data, so it goes in through textContent only.
+// user's, the route, the links, the lead's status list (`status`) and the lead's last check of the record (`checked`,
+// `until`, `resting`, with the work then `running`). Everything shared is untrusted data, so it goes in through textContent only.
 const STATE = { working: 'trabajando', quiet: 'quieta', late: 'atrasada', waiting: 'esperando', asking: 'te pregunta', ready: 'PR listo', closed: 'terminó', relieved: 'relevada' };
 const KIND = { opened: 'empezó', note: 'avance', answer: 'tu respuesta', withdrawn: 'pregunta retirada', waiting: 'esperando', question: 'te pregunta', ready: 'PR listo', closed: 'terminó', relieved: 'relevada' };
 const ORDER = { asking: 0, late: 1, quiet: 2, waiting: 3, working: 4, ready: 5, relieved: 6, closed: 7 };
@@ -236,11 +261,47 @@ function clock(time) {
   const date = new Date(time);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
+function hhmm(time) {
+  const date = new Date(time);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+}
 // A working session that wrote nothing for 30 minutes shows as quiet; the stored state never says so.
 const stateOf = (row) => {
   const state = STATE[row.state] ? row.state : 'working';
   return state === 'working' && Date.now() - Date.parse(row.time) > QUIET_MS ? 'quiet' : state;
 };
+
+/** A length of time in Spanish: "25 min", "1 h 20 min", "3 h". */
+function span(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ''}`;
+}
+/** An estimate `[low, high]` in hours as "1,5–2 h", or `null` when it is not two numbers. */
+function hoursText(range) {
+  // Only two numbers are an estimate: `Number` would read null, '' or false as 0 and make one up.
+  const [low, high] = Array.isArray(range) && range.length === 2 && range.every((n) => typeof n === 'number') ? range : [];
+  if (!(Number.isFinite(low) && Number.isFinite(high) && low >= 0 && high >= low)) return null;
+  const one = (n) => String(n).replace('.', ',');
+  return low === high ? `${one(low)} h` : `${one(low)}–${one(high)} h`;
+}
+// His words of 2026-10-29: who works on what, and the approximate time of the task. How long the session has been on
+// it counts from its newest `opened` row (else its oldest row the board holds); the estimate is the lead's
+// (`board/summary.estimates`, `[{ session, horas: [low, high] }]`), else its stretch item's corrected hours, else none.
+function taskTimeText(rows, session, summary, now) {
+  const own = rows.filter((row) => row.session === session && Number.isFinite(Date.parse(row.time)));
+  const opened = own.filter((row) => row.kind === 'opened').sort((a, b) => Date.parse(b.time) - Date.parse(a.time))[0];
+  const first = own.sort((a, b) => Date.parse(a.time) - Date.parse(b.time))[0];
+  const start = opened ?? first;
+  if (start === undefined) return null;
+  // A session by its whole title, or by its code and number ("JH 79"): the code alone would name every session.
+  const mine = (named) => typeof named === 'string' && (session === named || (/^\S+ \d+$/.test(named) && session.startsWith(`${named} `)));
+  const lead = (Array.isArray(summary?.estimates) ? summary.estimates : []).find((one) => mine(one?.session));
+  const item = (Array.isArray(summary?.stretch?.items) ? summary.stretch.items : []).find((one) => mine(one?.session));
+  const estimate = hoursText(lead?.horas) ?? hoursText(item?.corrected);
+  return `Lleva ${span(now - Date.parse(start.time))} en esto${opened ? '' : ' (desde su primer aviso visible)'} · ${estimate ? `estimado ${estimate}` : 'sin estimado'}`;
+}
 
 function card(latest, count) {
   const state = stateOf(latest);
@@ -248,6 +309,8 @@ function card(latest, count) {
   const head = el('div', 'head');
   head.append(el('h3', '', label(latest)), el('span', `pill s-${state}`, STATE[state]));
   box.append(head, el('p', 'small', words(latest)), ...original(latest));
+  const time = ['closed', 'relieved', 'ready'].includes(state) ? null : taskTimeText(rows, latest.session, summary, Date.now());
+  if (time) box.append(el('p', 'small muted', time));
   box.append(el('p', 'foot', `${clock(latest.time)} · ${ago(latest.time)} · ${count} ${count === 1 ? 'aviso' : 'avisos'}`));
   return box;
 }
@@ -269,6 +332,74 @@ function renderSessions() {
   $('done-summary').textContent = `${rest.length} ${rest.length === 1 ? 'sesión terminada o sin avisos en 12 horas' : 'sesiones terminadas o sin avisos en 12 horas'}`;
   $('done').replaceChildren(...rest.map((one) => card(one.latest, one.count)));
   return active.filter((one) => stateOf(one.latest) === 'asking');
+}
+
+// The kinds of row that say something was done: a session's work finished, a pull request ready.
+const DONE_KINDS = new Set(['closed', 'ready']);
+/** The `count` newest rows that say something was done, newest first. */
+function lastDone(rows, count) {
+  return rows.filter((row) => DONE_KINDS.has(row.kind) && Number.isFinite(Date.parse(row.time)))
+    .sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, count);
+}
+
+// His words of 2026-10-29: the board opens with the last three things done and how long ago, as a mini context.
+function renderRecent() {
+  const done = lastDone(rows, 3);
+  $('recent').replaceChildren(...(done.length ? done.map((row) => {
+    const item = el('li');
+    item.append(el('span', 'ago', ago(row.time)), ' · ', el('b', '', label(row)), ` ${KIND[row.kind] ?? row.kind}${row.pr ? ` (PR #${row.pr})` : ''}: `, words(row));
+    item.title = words(row);
+    return item;
+  }) : [el('li', 'empty', 'Nada terminado todavía en el tablero.')]));
+}
+
+// The lead's status list (`board/summary.status`), one colored card an item: his words of 2026-10-29, the list he
+// read in the lead's reply put at the top of the board. An item the page cannot draw is left out.
+const STATUS = { done: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M9 12l2 2l4 -4', working: 'M12 3a9 9 0 1 0 9 9 M12 7v5l3 3', waiting: 'M6.5 7h11 M6.5 17h11 M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1z M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1z' };
+/** The items of `status` the page draws: a known state and a title, the sentence empty where it has none. */
+function statusItems(status) {
+  return (Array.isArray(status) ? status : [])
+    .filter((item) => Object.hasOwn(STATUS, item?.state) && typeof item.titulo === 'string' && item.titulo !== '')
+    .map((item) => ({ state: item.state, titulo: item.titulo, texto: typeof item.texto === 'string' ? item.texto : '' }));
+}
+/** An outline icon (Tabler's shapes) drawn from one path. */
+function icon(d) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [name, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(name, value);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  svg.append(path);
+  return svg;
+}
+function renderStatus(status) {
+  const items = statusItems(status);
+  $('status-box').hidden = items.length === 0;
+  $('status').replaceChildren(...items.map((item) => {
+    const box = el('div', `stat ${item.state}`);
+    const text = el('div');
+    text.append(el('b', '', item.titulo));
+    if (item.texto) text.append(el('span', '', item.texto));
+    box.append(icon(STATUS[item.state]), text);
+    return box;
+  }));
+}
+
+// The work running on the machine when the lead last checked the record (`running` from `sessions live --out`):
+// gates, reviews and eval batches, said with the time they were seen, since nothing on the board follows them after.
+const RUN_KIND = { gate: 'gate', 'codex-review': 'revisión de Codex', 'lens-review': 'revisión de lentes', evals: 'lote de evals' };
+// Past its `until` the reading is old: it says when it was seen and when each began, never a "desde hace" that grows.
+function runningText(running, now) {
+  if (typeof running?.at !== 'string') return null;
+  const at = hhmm(running.at);
+  if (typeof running.unavailable === 'string') return `No se pudo ver qué corría en la máquina a las ${at}`;
+  const old = !(now <= Date.parse(running.until));
+  const items = Array.isArray(running.items) ? running.items : [];
+  if (items.length === 0) return old ? `Nada corría en la máquina a las ${at} (lectura vieja)` : `Nada corriendo en la máquina a las ${at}`;
+  return `${old ? `Corría a las ${at} (lectura vieja, puede haber terminado)` : `En curso a las ${at}`}: ${items.map((item) => {
+    const where = typeof item?.where === 'string' ? ` en ${item.where.split(/[\\/]/).filter(Boolean).pop()}` : '';
+    const since = typeof item?.since !== 'string' ? '' : old ? ` (empezó a las ${hhmm(item.since)})` : ` (desde ${ago(item.since)})`;
+    return `${RUN_KIND[item?.kind] ?? item?.kind}${where}${since}`;
+  }).join(' · ')}`;
 }
 
 function renderTimeline() {
@@ -319,6 +450,10 @@ function renderStretch(stretch) {
 
 function renderSummary(asking) {
   renderStretch(summary?.stretch);
+  renderStatus(summary?.status);
+  const running = runningText(summary?.running, Date.now());
+  $('running').hidden = running === null;
+  $('running').textContent = running ?? '';
   const lead = $('lead');
   lead.hidden = !summary?.now;
   lead.textContent = summary?.now ?? '';
@@ -370,6 +505,7 @@ function freshness(newest, stamp, now) {
 
 function render() {
   const asking = renderSessions();
+  renderRecent();
   renderTimeline();
   renderSummary(asking);
   const newest = rows.reduce((latest, row) => (!latest || Date.parse(row.time) > Date.parse(latest) ? row.time : latest), null);

@@ -221,8 +221,8 @@ test('the debt row is one line where the review is off', async (t) => {
   });
 });
 
-// S9 named gentle-ai as the review of a project with the Codex review off; the Claude lenses took its place
-// (odd/tasks/f8-s1-reviews.md, T5), and the row says their debt there too. Its cases are in lib/lens-review-rows.test.mjs.
+// With the Codex review off, the Claude lenses are the one review (odd/tasks/f8-s1-reviews.md, T5), and the row says
+// their debt there too. Its cases are in lib/lens-review-rows.test.mjs.
 test('with the Codex review off, the review row says the lenses are the one review (S9)', async (t) => {
   const { checkReviewDebt } = await import('./check.mjs');
   const root = pushed(t);

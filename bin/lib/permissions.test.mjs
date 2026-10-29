@@ -1,5 +1,5 @@
-// T4 of odd/tasks/f8-s10-port.md: `install` holds the `permissions` object of the user's Claude settings that
-// gentle-ai's uninstall would take away (the allow entry, `defaultMode`, the 24 denies), records only what it wrote,
+// T4 of odd/tasks/f8-s10-port.md: `install` holds the `permissions` object of the user's Claude settings (the allow entry,
+// `defaultMode`, the 24 denies), records only what it wrote,
 // and `uninstall` takes out exactly that; a value found there is never removed. Every test runs in a scratch home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,10 +36,10 @@ function tree(dir) {
   return out;
 }
 
-// The object gentle-ai writes (the reverse-engineering document, section 3; his settings, L2).
-const GENTLE = { allow: [...PERMISSIONS_ALLOW], defaultMode: 'bypassPermissions', deny: [...PERMISSIONS_DENY] };
+// The object another tool writes (the reverse-engineering document, section 3; his settings, L2).
+const PRIOR ={ allow: [...PERMISSIONS_ALLOW], defaultMode: 'bypassPermissions', deny: [...PERMISSIONS_DENY] };
 
-test('the lists are the ones gentle-ai writes: one allow entry and 24 denies, each once', () => {
+test('the lists are the ones install holds: one allow entry and 24 denies, each once', () => {
   assert.deepEqual(PERMISSIONS_ALLOW, ['mcp__codegraph__*']);
   assert.equal(PERMISSIONS_DENY.length, 24);
   assert.equal(new Set(PERMISSIONS_DENY).size, 24);
@@ -64,14 +64,14 @@ test('in an empty home install writes the allow entry and the denies, never a de
   }
 });
 
-test('over the object gentle-ai wrote it writes nothing, adopts the defaultMode, and uninstall leaves the file byte for byte', () => {
+test('over the object another tool wrote it writes nothing, adopts the defaultMode, and uninstall leaves the file byte for byte', () => {
   const m = machine();
   try {
-    m.write({ outputStyle: 'Gentleman', permissions: GENTLE });
+    m.write({ outputStyle: 'Gentleman', permissions: PRIOR });
     const before = m.read();
     const manifest = install(m.home, '1.0.0');
     assert.equal(manifest.permissionsHeld.status, 'already');
-    assert.deepEqual(m.data().permissions, GENTLE);
+    assert.deepEqual(m.data().permissions, PRIOR);
     const record = readManifest(m.home).permissions;
     assert.deepEqual(record.added, { allow: [], deny: [] });
     assert.equal(record.defaultMode, 'bypassPermissions');
@@ -103,13 +103,13 @@ test('with part of the list there it adds the rest after the user\'s own, and un
   }
 });
 
-test('once gentle-ai\'s uninstall took the object away, the next install writes it back with the adopted defaultMode, and uninstall takes that out too', () => {
+test('once another tool\'s uninstall took the object away, the next install writes it back with the adopted defaultMode, and uninstall takes that out too', () => {
   const m = machine();
   try {
-    m.write({ permissions: GENTLE });
+    m.write({ permissions: PRIOR });
     install(m.home, '1.0.0');
     m.write({ theme: 'dark' });
-    const afterGentle = m.read();
+    const afterOther = m.read();
     // Putting a mode back is said, never silent: the user may have taken it out on purpose.
     assert.equal(sync(m.home, '1.0.1').permissionsHeld.restoredMode, 'bypassPermissions');
     assert.deepEqual(m.data().permissions, { allow: PERMISSIONS_ALLOW, deny: PERMISSIONS_DENY, defaultMode: 'bypassPermissions' });
@@ -118,7 +118,7 @@ test('once gentle-ai\'s uninstall took the object away, the next install writes 
     assert.equal(record.createdObject, true);
     assert.equal(permissionsHealth(m.home).state, 'ok');
     m.remove();
-    assert.equal(m.read(), afterGentle);
+    assert.equal(m.read(), afterOther);
   } finally {
     m.done();
   }
@@ -127,7 +127,7 @@ test('once gentle-ai\'s uninstall took the object away, the next install writes 
 test('a defaultMode the user changed after install wrote it is theirs, and uninstall keeps it', () => {
   const m = machine();
   try {
-    m.write({ permissions: GENTLE });
+    m.write({ permissions: PRIOR });
     install(m.home, '1.0.0');
     m.write({});
     sync(m.home, '1.0.1');
@@ -291,7 +291,7 @@ test('a write that fails on uninstall keeps the record, so a second uninstall ta
   }
 });
 
-// gentle-ai's reliability lens on PR 2: a record that names the file in another spelling was refused and dropped.
+// A review's reliability lens on PR 2: a record that names the file in another spelling was refused and dropped.
 test('on Windows a record that names the user settings in another case is that file, and uninstall takes the entries out', { skip: process.platform !== 'win32' }, () => {
   const m = machine();
   try {
@@ -308,7 +308,7 @@ test('on Windows a record that names the user settings in another case is that f
   }
 });
 
-// gentle-ai's lens on 8c684535: a record kept forever would make every later uninstall fail, and nothing the user can
+// A review's lens on 8c684535: a record kept forever would make every later uninstall fail, and nothing the user can
 // do changes the path it names. So a file that cannot be read now is a failure that stays recorded for a run again,
 // and a record that names another file is left out of the manifest, its entries said to be removed by hand.
 test('a settings file that cannot be read on uninstall is a failure that stays recorded, and a run after it is fixed takes the entries out', () => {
@@ -371,7 +371,7 @@ test('the doctor row: n/a with nothing installed, ok while every entry is there,
   const m = machine();
   try {
     assert.deepEqual(permissionsHealth(m.home), { state: 'n/a', fix: [] });
-    m.write({ permissions: GENTLE });
+    m.write({ permissions: PRIOR });
     install(m.home, '1.0.0');
     assert.deepEqual(permissionsHealth(m.home), { state: 'ok', fix: [] });
     const data = m.data();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { replyMain } from './reply.mjs';
 import { openingsDir, recordPath } from './lib/channel.mjs';
+import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 
 // `js-harness reply --hook`, the Stop hook of C1 (odd/tasks/rule-hierarchy.md, T2). The files it reads are
@@ -277,4 +278,25 @@ test('a call the host moved to the background when it outlived its timeout count
   const moved = line({ type: 'user', timestamp: '2026-10-17T01:36:00.000Z', toolUseResult: { stdout: '', backgroundTaskId: 'b7' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't9', content: 'moved to the background' }] } });
   const result = await wakeHook({ transcript: [started, titled('JH 26 · canal'), warned('2026-10-17T01:35:00.000Z'), moved] });
   assert.match(result.answer.reason, WARNING);
+});
+
+// The stale-board check (odd/tasks/visual-pages.md, spec 3, T4): the lead of a project with a live board is told once
+// that rows wait; bin/lib/stale-board.test.mjs holds its cases, this its place in the hook.
+const BOARD_CURSOR = { [liveCursorPath(HOME, SLUG)]: JSON.stringify({ schema: CURSOR_SCHEMA, url: 'https://claude.ai/artifact/board', upto: 0, sent: [] }) };
+const STALE = /rows of the channel record wait for the live board/;
+
+test('the lead ending its turn while the live board\'s rows wait is turned back with how to send them', async () => {
+  const lead = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], files: BOARD_CURSOR, transcript: [started] });
+  assert.equal(lead.answer.decision, 'block');
+  assert.match(lead.answer.reason, STALE);
+  assert.match(lead.answer.reason, /js-harness sessions live --out <dir>/);
+  assert.equal(lead.err, '');
+  const noBoard = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: [started] });
+  assert.deepEqual(noBoard.answer, {}, 'a project with no board is never told');
+});
+
+test('a work session holding handed work in a project whose board is stale gets the wake warning alone', async () => {
+  const result = await wakeHook({ files: BOARD_CURSOR });
+  assert.match(result.answer.reason, WARNING);
+  assert.doesNotMatch(result.answer.reason, STALE);
 });

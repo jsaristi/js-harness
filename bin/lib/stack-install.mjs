@@ -84,7 +84,7 @@ export const ENGRAM_UNDO = {
     'codex plugin remove engram@engram',
     'codex plugin marketplace remove engram',
     'codex mcp remove engram',
-    // engram v3.6.0 strips these, but an older engram or gentle-ai pointed them at the files below (Codex, P2).
+    // engram v3.6.0 strips these, but an older engram or another tool pointed them at the files below (Codex, P2).
     'remove model_instructions_file and experimental_compact_prompt_file from the Codex config.toml where they name those files',
     'delete engram-instructions.md and engram-compact-prompt.md beside the Codex config.toml',
   ],

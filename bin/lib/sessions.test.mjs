@@ -2798,7 +2798,7 @@ test('channelOf never takes two sends with two ids for one, whichever transcript
   assert.deepEqual(ids(whole, resumed({ ...same, id: 'm3' })), ['m1', 'm2', 'm3'], 'a third id is a third send');
 });
 
-// Codex review of 0543030, and gentle-ai's of the same change: the calls of a transcript were taken key by
+// Codex review of 0543030, and another review of the same change: the calls of a transcript were taken key by
 // key, so three sends of one reply (one moment) with the keys K, L, K came out as the first, the third,
 // the second, and the last message of the board was not the last one sent.
 test('channelOf keeps the sends of one moment in the order their transcript has them, whatever their keys and whichever transcript is read first', () => {
