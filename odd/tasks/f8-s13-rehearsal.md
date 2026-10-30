@@ -65,7 +65,7 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   `init`, the planted directive makes `rules check` exit 1 — S5, S7; inline, test first
 - [ ] T4 (kind: build) `scripts/rehearsal.mjs`, the walk, run by hand — S1 to S6; inline
 - [ ] T5 (kind: verify) one walk from a clean commit, recorded under `## Walk` with its cost — S1 to S6
-- [ ] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7
+- [x] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7; L8
 - [ ] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
   `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline
 - [ ] T9 (kind: build) `stack install` stops the whole process tree of a run that timed out, test first, its own
@@ -163,3 +163,8 @@ summary.
   goes back to the lead with this: (a) T9 is dropped, and what Codex does after `mcp add` is owed to S12 (the walk
   keeps context7 out of Codex and its browser guard); (b) T9 is built anyway, for the latent case its comment
   already names (`bin/lib/stack-run.mjs:53`). Recommended: (a), since no run is known to have timed out.
+- L8 (2026-10-30, evidence, T6): the planted break is `controlFaults` of `bin/lib/rules-coverage.mjs:193` returning
+  no fault for a rule with no control. `node --test scripts/rehearsal.test.mjs` on it: exit 1, 6 pass and 1 fail, "in
+  a scratch home, a planted directive without a control makes rules check exit 1 ...", with "rules check exited 1 but
+  does not name the missing control of no-hand-deploy". The file restored with `git checkout`, the same command:
+  exit 0, 7 pass.
