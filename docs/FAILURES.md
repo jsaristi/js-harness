@@ -1389,8 +1389,11 @@ nothing warned the lead that a report marked without notes leaves sections 3, 5 
 - Seen: 2026-10-30 — lead transcript 0f71b2c6, line 25223 — "no aparecio en el como vamos, ni el mapa
   ni los porcentajes si se cumplio la meta"; the lead sent the report without notes and without the
   stretch (brief JH 91, odd/tasks/report-stretch-share.md)
-- Control: check — bin/report.test.mjs — "the status page and the printed report carry the F8 share and
-  the last stretch's goals, from the records" — since 2026-10-30
+- Seen: 2026-10-30 — lead transcript 0f71b2c6, line 26049 — "En la pagina como vamos no me aparece lo
+  que me dices": the report page buried the numbers he asked for in section 4, below every commit of
+  8 PRs and the sessions table, where his phone never reached them (brief JH 92)
+- Control: check — bin/lib/report-status.test.mjs — "the numbers head the page before section 1: the
+  migration now and at the cut, the map, the stretch goals each sí or no" — since 2026-10-30
 
 ### stop-read-as-refusal
 The app words a turn stopped by another session as his refusal of a tool call, so the stopped

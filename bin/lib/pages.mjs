@@ -11,12 +11,14 @@ const LIGHT = '--bg:#f6f7f4;--surface:#ffffff;--fg:#1d2420;--muted:#5d6a62;--lin
 const DARK = '--bg:#141917;--surface:#1c2320;--fg:#e4ebe6;--muted:#9aa89f;--line:#2f3a35;--accent:#8fb0e6;--est:#3f5249;--ok:#62c08a;--part:#e0a94a;--todo:#6f7889;--bad:#e07a6e;--track:#262c38';
 
 const STYLE = `<style>
-.js-page{${LIGHT};background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:900px;margin:0 auto;padding:24px 16px 48px;display:grid;gap:28px}
+.js-page{${LIGHT};background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:900px;margin:0 auto;padding:24px 16px 48px;display:grid;grid-template-columns:minmax(0,1fr);gap:28px;overflow-wrap:break-word}
 @media (prefers-color-scheme:dark){.js-page{${DARK}}}
 .js-page h1{font-size:1.8rem;line-height:1.15;margin:0}.js-page h2{font-size:1.25rem;margin:0 0 10px}.js-page p{margin:0;max-width:70ch}
 .js-page .lead,.js-page .note{color:var(--muted)}.js-page .note{font-size:.9rem;margin-top:8px}
 .js-page .badnews{border-left:4px solid var(--bad);background:var(--surface);padding:12px 14px;border-radius:4px}.js-page .badnews strong{color:var(--bad)}
-.js-page .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.js-page .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.js-page .top{display:grid;gap:12px}.js-page .goals{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.js-page details summary{cursor:pointer}.js-page td ul{margin:0;padding-left:18px}.js-page .left{min-width:16em}
 .js-page .tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:6px}
 .js-page .tile .big{font-size:2rem;line-height:1;font-weight:600}.js-page .tile .cap{font-size:.88rem;color:var(--muted)}
 .js-page .meter{height:8px;background:var(--track);border-radius:4px;overflow:hidden}.js-page .meter span{display:block;height:100%;background:var(--accent)}
@@ -108,11 +110,12 @@ function generated(at) {
 }
 
 /** The page: `<title>`, the style, then in its wrapper the heading and its lead, when it was made (`generatedAt`, when
- * given, and then the script that says how long ago), the bad news first, and each section `{ title, html, note? }`,
+ * given, and then the script that says how long ago), the bad news first, the `top` numbers, and each section `{ title, html, note? }`,
  * `html` built from the parts above. */
-export function page({ title, heading, lead = '', generatedAt = null, badNews = [], sections = [] }) {
+export function page({ title, heading, lead = '', generatedAt = null, badNews = [], top = '', sections = [] }) {
   const bad = badNews.length === 0 ? '' : `<div class="badnews"><strong>Primero lo malo.</strong> ${badNews.map(escapeHtml).join(' ')}</div>`;
   const body = sections.map((one) => `<section><h2>${escapeHtml(one.title)}</h2>${one.html}${one.note ? `<p class="note">${escapeHtml(one.note)}</p>` : ''}</section>`).join('\n');
   const made = generatedAt === null ? '' : generated(generatedAt);
-  return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}${made}</header>${bad}\n${body}</div>${made ? AGO_SCRIPT : ''}`;
+  // `top`, HTML from the parts here, is the numbers a reader asks for first: after the bad news, before any section.
+  return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}${made}</header>${bad}${top ? `<div class="top">${top}</div>` : ''}\n${body}</div>${made ? AGO_SCRIPT : ''}`;
 }

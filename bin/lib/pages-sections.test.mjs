@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
+import { mapNowSection, mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
 
 test('the shares are tiles that say their denominator, an unknown share "sin medir" and the work outside the plan a count', () => {
   const html = sharesTiles({
@@ -37,6 +37,18 @@ test('the map shows each phase before and now, the ones that changed marked, and
   });
   assert.match(html, /Session board[\s\S]*13\/15[\s\S]*13\/16 · 81 %[\s\S]*cambió[\s\S]*stretch &lt;b&gt;/);
   assert.match(html, /Total[\s\S]*95\/106 · 90 %[\s\S]*95\/107 · 89 %/);
+});
+
+test('what is left in a phase shows each item\'s first sentence, cut short, the rest folded', () => {
+  const long = `Visual pages: the harness shows its moments as pages. ${'More words here and there. '.repeat(20)}`;
+  const longFirst = `${'a'.repeat(300)}. Then.`;
+  const html = mapSection({ total: { before: null, after: { done: 1, total: 3 } }, phases: [{ title: 'A', before: null, after: { done: 1, total: 3 }, open: [long, 'Short one', longFirst], change: 'same' }] });
+  assert.match(html, /<details><summary>Visual pages: the harness shows its moments as pages\.<\/summary>[\s\S]*More words here/);
+  assert.match(html, /<li>Short one<\/li>/);
+  const [, summary] = /<summary>(a+…)<\/summary>/.exec(html);
+  assert.ok(summary.length <= 160, `cut to about 160 characters: ${summary.length}`);
+  const now = mapNowSection({ done: 1, total: 2, phases: [{ title: 'A', done: 1, total: 2, open: [long] }] });
+  assert.match(now, /<details><summary>Visual pages: the harness shows its moments as pages\.<\/summary>/);
 });
 
 test('a map with no before says it has none and still shows now', () => {
