@@ -77,6 +77,9 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   of his files hashed), `install` PASS (9 files and 20 hook entries recorded, 24 denies), `stack-install` FAIL:
   "engram setup claude-code exited 1: engram: the Claude Code plugin requires jq in PATH"; the rest skipped;
   `real-home-after` PASS (19 of his files as they were). Two findings, L5.
+- Run 2 (2026-10-30 ~02:35Z, `4664012e`, host cost $0): `install` PASS; `stack-install` FAIL: "stack still lists codex",
+  its manual `codex login`, which no scratch home can do since no credential enters it; the walk now takes that step
+  as his, as it takes gh; `real-home-after` PASS (19 of 19); no process left, no browser. Walk 3 next.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree

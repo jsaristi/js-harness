@@ -329,7 +329,8 @@ export const STEPS = {
     ctx.must(ctx.exec(['engram', 'setup', 'codex']), 'engram setup codex');
     const plan = JSON.parse(ctx.harness('stack', '--json', ...at).stdout);
     const left = (plan.mandatory ?? []).map((row) => `${row.tool}.${row.dimension}`).filter((gap) => gap !== OWED_CONTEXT7);
-    const theirs = (plan.manual ?? []).map((row) => row.tool).filter((tool) => tool !== 'gh');
+    // gh is a prerequisite, and the Codex login his own step: no credential enters the scratch home.
+    const theirs = (plan.manual ?? []).filter((row) => row.tool !== 'gh' && !(row.tool === 'codex' && row.dimensions?.includes('codex'))).map((row) => row.tool);
     assertThat(left.length === 0 && theirs.length === 0, `stack still lists ${[...left, ...theirs].join(', ')}`);
     const records = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8')).stack ?? [];
     return `${records.length} runs recorded; context7 in Claude as stack plans it; engram and its plugin set up by his steps; stack lists nothing missing but ${OWED_CONTEXT7}, owed, and gh, a prerequisite`;
