@@ -290,6 +290,12 @@ session records `tools-background.txt` from its own list either way.
   whether a feature opens to show the harness's state with `sessionStatusLine` (admin rights on Windows, outside
   the per-user undo). A yes opens that feature and asks again before anything is installed as administrator; a no
   leaves it written on map row 14. T5 does not wait on it.
+- L14 (2026-10-30): T5's slice `cc07525..de970be` is reviewed. Codex over `9bc443e..de970be` correct (0.92); lenses
+  reliability and readability over `56c82c7..de970be`, 0 findings. gentle-ai: `review-e9d1955ee1cedd86` approved
+  (reliability) and acknowledged, with two advisory findings, both real and fixed next with their tests: R3-001,
+  `CODE_TAB` also took "Visual Studio Code", "Code Interpreter" and a "Claude Code" split by another space; R3-002,
+  the test pinned no negative case. A redraft of the real span is unchanged by the fix. PR 719 (draft) to main;
+  PR 718 landed (`c9d2ee80`).
 
 ## Next step
 1. Done: PR 718 (T4) open on f8-s9-probe; its ready goes when 717 lands and 718 is retargeted to main.

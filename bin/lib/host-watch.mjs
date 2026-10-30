@@ -36,9 +36,10 @@ const SURFACE_PREFIX = /^(?:\[(?:VSCode|Cloud sessions|Claude Tag|Code Review|Je
 // only when no harness area does.
 const OUTSIDE = /VS ?Code|JetBrains|Slack|Bedrock|Vertex|Foundry|gateway|macOS|\bMac\b|Linux|GNOME|\bSSH\b|Self-hosted runner|Cowork|\/claude-api|\bMDM\b|HKLM|Dvorak/i;
 const OUTSIDE_SECTIONS = ['Cowork', '3P'];
-// The Code tab named on its own ("in Cowork, Chat and Code", "Code sessions"), not Claude Code or VS Code: an entry
-// that names it is the Code tab's too, whatever outside word or section it carries (desktop 4.4212.0 #24).
-const CODE_TAB = /(?<!Claude |VS )\bCode\b(?! Review)/;
+// The Code tab named on its own ("in Cowork, Chat and Code", "Code sessions"), not Claude Code, VS Code, Visual Studio
+// Code, Code Review or Code Interpreter: an entry that names it is the Code tab's too, whatever outside word or
+// section it carries (desktop 4.4212.0 #24).
+const CODE_TAB = /(?<!Claude\s|VS\s|Visual Studio\s)\bCode\b(?!\s(?:Review|Interpreter))/;
 const WINDOWS = /Windows|PowerShell/i;
 const PHONE = /mobile|phone|\biOS\b|Android/i;
 

@@ -356,4 +356,10 @@ test('an entry that names Code is not placed outside by an outside word or its s
   assert.equal(classify(entry('Changed a setting in Claude Code managed settings, or its MDM policy.', 'General')).outside, 'MDM');
   assert.equal(classify(entry('Fixed a VS Code panel losing its place.', 'General')).outside, 'VS Code');
   assert.equal(classify(entry('Fixed a card in Cowork.', 'Cowork')).outside, 'Cowork');
+  // The reliability lens on deede289, R3-001 and R3-002: names that hold "Code" and are not the Code tab.
+  assert.equal(classify(entry('Fixed the VSCode panel losing its place.', 'General')).outside, 'VSCode');
+  assert.equal(classify(entry('Fixed a Visual Studio Code panel in Cowork.', 'Cowork')).outside, 'Cowork');
+  assert.equal(classify(entry('Fixed Code Review comments in Cowork.', 'Cowork')).outside, 'Cowork');
+  assert.equal(classify(entry('Fixed Code Interpreter files in Cowork.', 'Cowork')).outside, 'Cowork');
+  assert.equal(classify(entry('Fixed Claude Code managed settings under MDM.', 'General')).outside, 'MDM');
 });
