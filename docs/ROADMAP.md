@@ -435,6 +435,21 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **His decisions:** G14, the presets' names, by default (the lead takes the stated default).
 - **State:** done (PRs 627, 628, 629, 632, merged 2026-10-28 and 29; `odd/tasks/f8-s11-complements.md`).
 
+### The Codex daemon row (JH 103, beside S11's doctor rows)
+- **Changes:** a `codex-daemon` check row of `doctor`, read-only on the Codex home: `ok` when the
+  managed daemon's `current` resolves to a release with its executable, `missing` when it resolves
+  to none or is gone while Codex will not reinstall one (the state of 2026-10-21), `n/a` with no
+  managed daemon; its fix names the repair of `odd/tasks/codex-trust-table.md`, `## Daemon`. With
+  it, the engram plugin's ahead-of-binary fix says when the binary is engram's latest release and
+  nothing is to be done until the next one.
+- **Files:** `bin/lib/codex-daemon.mjs`, `bin/lib/stack.mjs`, `bin/doctor.mjs` and their tests.
+- **Probe and pass:** the row `ok` on this machine's layout (`doctor` run read-only) and `missing`
+  on a fixture of 2026-10-21's state; `npm run check` green.
+- **Cost:** no eval.
+- **His decisions:** the row enters the plan by his answer to question 123 (lead transcript
+  0f71b2c6, line 32757): "Sí, agrégala".
+- **State:** built on `feat/codex-daemon-row` (`odd/tasks/codex-daemon-row.md`).
+
 ### S5c-a Directive coverage, the mechanism
 - **Changes:** every source the harness ships or sends to an agent is listed by a test; each source
   is cut into spans tied to a rule, a rule's phrases or a listed context line; every obligation names

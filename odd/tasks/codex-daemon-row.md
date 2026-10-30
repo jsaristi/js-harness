@@ -54,7 +54,7 @@ told him to update the engram binary while 3.6.0 was engram's latest release, ad
 - [x] T1 (kind: build) the `codex-daemon` check row: state, fix, its place in the row lists — S1; inline, test first
 - [x] T2 (kind: build) the engram plugin's ahead fix names the case that holds, both when not known — S2; inline, test
   first
-- [ ] T3 (kind: docs) the roadmap's F8 task with question 123 — S1
+- [x] T3 (kind: docs) the roadmap's F8 task with question 123 — S1
 - [ ] T4 (kind: verify) doctor read-only here; Codex and the lenses on the code commits; `npm run check`; PR, ready
   notice, summary — S3
 
