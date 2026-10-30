@@ -429,6 +429,28 @@ $ js-harness sync
 up to date at 0.9.0
 ```
 
+### js-harness migrate
+
+Inside a project an older release initialized, brings it to what this copy's `init` writes: a pin older
+than the running version moved in place, a `CLAUDE.md` where there is none, the coverage baseline where
+it adds no finding to `rules check`, then what `sync` does. What is missing is read from the project as
+it stands, never from its version alone. It keeps the project's edits: a `CLAUDE.md` of its own is never
+written, an edited block is kept, and each is said as a note. Every write is recorded in the project
+manifest, so `uninstall project` or git undoes exactly it; it refuses while a file it may write holds a
+change git has not committed. It writes nothing outside the project: context7 where it is missing, and
+what gentle-ai left there (`.atl/`, its review store, the `odd/` documents), are only said.
+
+`--check` says what it would write and writes nothing; it exits 1 while there is something to migrate.
+`migrate list` names, read-only, the folders of Claude Code sessions of the last 30 days and the
+initialized projects among them, a linked worktree read as its main checkout.
+
+```console
+$ js-harness migrate --check
+would write: CLAUDE.md: written, importing AGENTS.md and holding the harness's lines for Claude
+would write: the coverage baseline: recorded as 2026-10-30
+gentle-ai left .atl/ (gentle-ai's skill registry): not tracked: delete the folder by hand once gentle-ai is gone
+```
+
 ### js-harness uninstall
 
 Inside a project, removes what `init` wrote; with `--global`, removes what `install` wrote.
