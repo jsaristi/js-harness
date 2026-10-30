@@ -65,7 +65,8 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   inline, test first; commit `09ae0126`
 - [x] T3 (kind: verify) `scripts/migration.test.mjs`: v0.97.0's `init` in a scratch home, a copy with his edits,
   `migrate`, `uninstall project` back to the bytes; green, then red on a planted break — S4, S5; commit `09ae0126`, L5
-- [ ] T4 (kind: verify) `migrate list` read-only on his machine, its facts to the lead — S7
+- [x] T4 (kind: verify) `migrate list` read-only on his machine, its facts to the lead — S7; sent 2026-10-30 02:16
+  local: one initialized project, `D:\plataforma-preproyecto` (L3, L10)
 - [x] T5 (kind: docs) S8: what the walk owes about context7's OAuth in Codex, recorded — S8; the migration never
   runs `codex mcp add`: context7's Codex gap is said with doctor's fix, which warns that it opens context7's sign-in
   in a browser (`context7Gaps`, its test asserts the warning), so no run of migrate can leave a login open
@@ -94,12 +95,10 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   does, `:1844`), so the two cannot be told apart, and D5's guard keeps the baseline from adding a finding.
 
 ## Next step
-State at 2026-10-30 ~07:45Z (branch `f8-s12-migration`, nothing pushed; PR 688 is the docs-only unit). The four
-code commits are in (T1-T3); both reviews of `24c47ca..09ae012` are recorded (L9, L11) and their findings fixed in
-commit D (L12), D's reviews clean and the verifier's four defects fixed in E (L13). T4's facts went to the lead
-(02:16 local). Next: Codex and the lenses over E alone, no edit in the worktree while they run; gentle-ai per code
-commit; chained PRs (doc + A; B1 + B2; C + D + E) with ready notices; the summary under docs/sessions/ and the closed
-notice.
+State at 2026-10-30 ~08:50Z (branch `f8-s12-migration`, code through H `8546b86f`, nothing pushed). Every code
+commit has Codex, the lenses and a gentle-ai line (L9-L17); the verifier ran over `24c47ca..9af1aac` (L13). Next:
+the chain of L17, pushed slice by slice (`f8-s12-migration-1` ... `-6`, then this branch), each based on main and
+landed in order, each with a ready notice; then the summary under docs/sessions/ and the closed notice.
 
 ## Log
 - L1 (2026-10-30, the lead's brief `briefs/2026-10-30T06-12-57-495Z-28130615.md`): "Then S12's building part, its
@@ -164,3 +163,40 @@ notice.
   again; with `CLAUDE.md` a link to `AGENTS.md`, the plan read no split where sync reads through the link. It also
   named a divergence, D7. Open, outside this range: through such a link, sync renders `AGENTS.md`'s half, so Claude
   loses its half of the lines (`bin/lib/project.mjs:1858-1860`); told to the lead.
+- L14 (2026-10-30): reviews of E (`9af1aac..5529661`): Codex correct (0.93, 91,401 input tokens); the lenses risk,
+  reliability and resilience, no finding (about 41,000 input tokens). gentle-ai lines:
+  - review-5a9a528091a81b7a (`5058d55e..5529661d`: `09ae0126`, `3cba3c9f`, `7af9ec25`; medium, one lens,
+    reliability): approved and acknowledged; three WARNINGs and a SUGGESTION, advisory. Fixed in commit F `c362110f`,
+    tests red first: an ignored `CLAUDE.md` of the project's stopped the migration (the check now reads only the files
+    it or sync may write); `--check` named the `.atl/` line where sync keeps the exclude file (it asks `excludeFile`);
+    an error of sync's part other than a write's did not name the migration's writes. The SUGGESTION does not apply:
+    `inspect` validates the manifest's shape before `repairLines` reads an entry.
+- L15 (2026-10-30): reviews of F (`5529661..4e99f77`): the lenses risk, reliability and resilience, no finding (about
+  37,000 input tokens); Codex (151,544 input tokens) found F's narrowing too narrow: a `CLAUDE.md` the project
+  committed and then deleted without committing was left out of the check, so the one migrate writes would cover the
+  deletion. Fixed in commit G, test red first: a `CLAUDE.md` the migration writes is always checked.
+- L16 (2026-10-30): reviews of G (`4e99f77..60fc129`): Codex correct (0.99, the finding fixed, 34,536 input tokens);
+  the lenses risk and reliability, no finding (about 9,000). gentle-ai line: review-65cbe28528eca61f
+  (`5529661..60fc129`: `c362110f`, `60fc1295`; medium, reliability): approved and acknowledged; a WARNING that does not
+  apply (sync neither recreates nor renders an `AGENTS.md` that is gone or holds no block, `bin/lib/project.mjs:1885`)
+  and a SUGGESTION kept as owed (a positive control in the exclude-file test).
+- L17 (2026-10-30): gentle-ai on the first two slices, each read at its own end (`git checkout --detach`):
+  review-bcc685773d295106 (`34ff5c7..1488343e`: `1488343e`; medium, 421 lines) and review-63eecaacf44af999
+  (`1488343e..5058d55e`: `abe05fd3`, `5058d55e`; medium, 427 lines), both approved and acknowledged. Slice 2's three
+  WARNINGs were already fixed by D and E (each undo names its own file and runs before its write,
+  `bin/lib/project-migrate.mjs:305-342`; a deleted `CLAUDE.md` the manifest records is not written again, `:128`).
+  Slice 1's first WARNING still held: `candidateProjects` guarded only the listing of `~/.claude/projects`, so a
+  session file removed mid-scan aborted the read-only scan. Fixed in commit H `8546b86f`, test red first (a link
+  whose target is gone: ENOENT on the stat, line 409); its two test WARNINGs taken in H too (the candidates keyed by
+  real path; the context7 tests with an empty environment). Its SUGGESTIONs stay owed: the tracked `.atl/` branch and
+  `cwdOf`'s failure paths untested; keying by main checkout first does not apply, since a plain checkout falls to
+  `gitTopLevel`. Reviews of H (`e46c94b..8546b86`): Codex correct (0.96, 79,151 input tokens); the lenses reliability
+  and resilience, no finding (13,285 input tokens); gentle-ai review-171eb974b2bf873c, approved and acknowledged, a
+  SUGGESTION owed (the folder-listing guard has no test: a folder that lists as one but cannot be read is not
+  plantable on Windows) and one that does not apply (`cwdOf` catches its own read).
+  The chain (`js-harness-chained-prs`), stacked on main and landed in order: 1 `24c47cad` this document (106 lines);
+  2 `1488343e` the scans (315); 3 `abe05fd3` the plan (195); 4 `5058d55e` the writes (234); 5 `09ae0126` the
+  command, its test, the v0.97.0 proof, the dispatcher, README and SPEC (404: one unit, 4 over); 6 `9af1aacb` the
+  reviews' fixes D and their record (328); 7 this branch, E through H and the records (about 380). Measured at the
+  push, 7 held 413 (370 + 43), so it is cut at E: 7 `5529661d`, the verifier's fixes and their record (109); 8 this
+  branch, F through H, the records and the summary.
