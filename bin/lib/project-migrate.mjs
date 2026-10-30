@@ -125,7 +125,10 @@ function decide(state, version, deps) {
   let claude = null;
   const agentsFile = fileOf(root, 'AGENTS.md');
   const claudeFile = fileOf(root, 'CLAUDE.md');
-  if (claudeFile.state === 'absent') {
+  const claudeRecorded = manifest.files.some((file) => file.path === 'CLAUDE.md');
+  if (claudeFile.state === 'absent' && claudeRecorded) {
+    notes.push({ path: 'CLAUDE.md', reason: 'init wrote it and the project deleted it, so it is not written again: a file the project deleted stays deleted' });
+  } else if (claudeFile.state === 'absent') {
     if (agentsFile.state === 'file') {
       const block = renderBlock(agentsFile.text, templateBlock()).state;
       claude = block === 'edited' ? { text: IMPORT_ONLY, importOnly: true } : { text: claudeTemplate(), importOnly: false };
@@ -152,7 +155,9 @@ function decide(state, version, deps) {
 /** The committed files of `COMMITTED` that git sees changed, untracked or ignored in the project at `root`: git could
  * give none of them back. */
 function uncommittedOf(root, spawn) {
-  const result = spawn('git', ['status', '--porcelain', '--ignored', '--', ...COMMITTED], { cwd: root, encoding: 'utf8' });
+  // Every untracked file whatever the clone's config says, and no refresh of the index, which a plan must not write.
+  const args = ['--no-optional-locks', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', ...COMMITTED];
+  const result = spawn('git', args, { cwd: root, encoding: 'utf8' });
   if (!result || result.error || result.status !== 0) return [...COMMITTED];
   return result.stdout.split('\n').filter(Boolean).map((line) => line.slice(3).trim()).filter((name) => COMMITTED.includes(name));
 }
@@ -169,11 +174,20 @@ function repairLines({ root, manifest }) {
   return lines;
 }
 
-/** The lines `sync` would render in the blocks once the migration's `CLAUDE.md` is there. */
+/** The lines `sync` would render in the blocks once the migration's `CLAUDE.md` is there. Whether the project has the
+ * split is read as sync reads it, through a `CLAUDE.md` that is a link (`blockFileOf`), so the plan says what it does. */
 function blockLines(root, decided) {
   const lines = [];
   const claudeFile = fileOf(root, 'CLAUDE.md');
-  const split = (decided.claude && !decided.claude.importOnly) || (claudeFile.state === 'file' && TEMPLATE_BLOCK_MARK.test(claudeFile.text));
+  let claudeText = claudeFile.text;
+  if (claudeFile.state === 'link') {
+    try {
+      claudeText = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    } catch {
+      claudeText = undefined; // A link to nothing that can be read: sync finds no block either.
+    }
+  }
+  const split = (decided.claude && !decided.claude.importOnly) || (claudeText !== undefined && TEMPLATE_BLOCK_MARK.test(claudeText));
   const agentsFile = fileOf(root, 'AGENTS.md');
   if (agentsFile.state === 'file' && renderBlock(agentsFile.text, split ? agentsBlock() : templateBlock()).state === 'rendered') {
     lines.push("AGENTS.md: its block is rendered again with this version's lines");
