@@ -3810,6 +3810,51 @@ test('syncProject reads CLAUDE.md with lstat, so a link is no split on a machine
   }
 });
 
+// One file under both names is the same loss the other way round (the independent verifier on 00afb013): rendering
+// Claude's half into it drops the reviewer's. A hard link needs no privilege, so the first test runs on every machine;
+// the second makes AGENTS.md a link to CLAUDE.md, so it skips on Windows and runs on CI's Linux.
+test('syncProject keeps the whole block in one file under both names: a hard link renders it once', () => {
+  const root = makeTmpRepo('js-harness-project-split-hard-link-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, block('## What good looks like\nAn older line of the harness.\n'), 'utf8');
+    fs.rmSync(path.join(root, 'CLAUDE.md'));
+    fs.linkSync(agents, path.join(root, 'CLAUDE.md'));
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), block(templateBlock()));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject renders the whole block in a CLAUDE.md that AGENTS.md links to', (t) => {
+  const root = makeTmpRepo('js-harness-project-split-agents-link-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const claude = path.join(root, 'CLAUDE.md');
+    fs.writeFileSync(claude, block('## What good looks like\nAn older line of the harness.\n'), 'utf8');
+    fs.rmSync(path.join(root, 'AGENTS.md'));
+    try {
+      fs.symlinkSync('CLAUDE.md', path.join(root, 'AGENTS.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'rendered', path: 'CLAUDE.md' }]);
+    assert.equal(fs.readFileSync(claude, 'utf8'), block(templateBlock()));
+    assert.ok(fs.lstatSync(path.join(root, 'AGENTS.md')).isSymbolicLink());
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // --- F8 S3: init ships the CLAUDE.md/AGENTS.md split (odd/tasks/f8-s3-split.md, S3) ---
 
 test('initProject in a project with neither file writes the split: AGENTS.md for a reviewer, CLAUDE.md importing it; uninstall removes both', () => {
@@ -3846,7 +3891,7 @@ test('initProject leaves a project with its own AGENTS.md without a CLAUDE.md: m
 });
 
 /** What init says of a CLAUDE.md of the project's that git could not give back (odd/tasks/claude-md-block.md, D2). */
-const NOT_WRITTEN = 'git could not give it back (it is untracked, ignored or holds a change not committed), so init does not write it: add the line @AGENTS.md at its top, or Claude never loads AGENTS.md';
+const NOT_WRITTEN = 'git could not give it back byte for byte (it is untracked, changed, marked to skip, or not the bytes a checkout writes), so init does not write it: add the line @AGENTS.md at its top, or Claude never loads AGENTS.md';
 
 test('initProject keeps a project\'s own CLAUDE.md and gives its new AGENTS.md the whole block, so no line is lost', () => {
   const root = makeTmpRepo('js-harness-project-split-claude-');
@@ -3904,6 +3949,76 @@ test('initProject leaves a CLAUDE.md of the project\'s with a change not committ
     assert.deepEqual(result.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The independent verifier's two findings on 00afb013 (odd/tasks/claude-md-block.md, L5): an empty `git status` is no
+// proof git gives the bytes back.
+test('initProject leaves a CLAUDE.md as it is where a checkout would write other bytes: autocrlf, or a file marked to skip', () => {
+  const crlf = makeTmpRepoWithCommit('js-harness-project-own-claude-autocrlf-');
+  const skipped = ownClaudeRepo('js-harness-project-own-claude-skip-worktree-', '# ours\n');
+  try {
+    // With autocrlf, a working copy in LF reads as clean, yet a checkout gives it back in CRLF.
+    spawnSync('git', ['config', 'core.autocrlf', 'true'], { cwd: crlf, encoding: 'utf8' });
+    fs.writeFileSync(path.join(crlf, 'CLAUDE.md'), '# ours\n');
+    spawnSync('git', ['add', 'CLAUDE.md'], { cwd: crlf, encoding: 'utf8' });
+    assert.equal(spawnSync('git', ['commit', '-q', '-m', 'ours'], { cwd: crlf, encoding: 'utf8' }).status, 0);
+    const first = initProject(crlf, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(crlf, 'CLAUDE.md'), 'utf8'), '# ours\n');
+    assert.deepEqual(first.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+    // A change git is told not to see: status is empty, and the change is not git's to give back.
+    spawnSync('git', ['update-index', '--skip-worktree', 'CLAUDE.md'], { cwd: skipped, encoding: 'utf8' });
+    fs.writeFileSync(path.join(skipped, 'CLAUDE.md'), '# ours, edited\n');
+    const second = initProject(skipped, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(skipped, 'CLAUDE.md'), 'utf8'), '# ours, edited\n');
+    assert.deepEqual(second.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+  } finally {
+    fs.rmSync(crlf, { recursive: true, force: true });
+    fs.rmSync(skipped, { recursive: true, force: true });
+  }
+});
+
+test('initProject leaves a claude.md git tracks under that name as it is, where the file system finds it as CLAUDE.md', (t) => {
+  const root = makeTmpRepoWithCommit('js-harness-project-own-claude-case-');
+  try {
+    fs.writeFileSync(path.join(root, 'claude.md'), '# ours\n');
+    if (!fs.existsSync(path.join(root, 'CLAUDE.md'))) return t.skip('this file system tells the two names apart');
+    spawnSync('git', ['add', 'claude.md'], { cwd: root, encoding: 'utf8' });
+    assert.equal(spawnSync('git', ['commit', '-q', '-m', 'ours'], { cwd: root, encoding: 'utf8' }).status, 0);
+    fs.writeFileSync(path.join(root, 'claude.md'), '# ours, edited\n');
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(root, 'claude.md'), 'utf8'), '# ours, edited\n');
+    assert.deepEqual(result.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject writes nothing through a CLAUDE.md that is a link: none to say for one to AGENTS.md, the line for any other', (t) => {
+  const root = makeTmpRepoWithCommit('js-harness-project-own-claude-link-');
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-own-claude-link-target-'));
+  try {
+    try {
+      fs.symlinkSync('AGENTS.md', path.join(root, 'CLAUDE.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    // A link to the AGENTS.md init writes: Claude loads it through the link.
+    const first = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.deepEqual(first.actions.filter((action) => action.path === 'CLAUDE.md'), [{ kind: 'kept', path: 'CLAUDE.md', reason: 'exists' }]);
+    assert.ok(fs.lstatSync(path.join(root, 'CLAUDE.md')).isSymbolicLink());
+    // A link elsewhere: its target is not the project's to write, so the line is said.
+    assert.equal(uninstallProject(root, { spawn: spawnSync }).code, 0);
+    fs.rmSync(path.join(root, 'CLAUDE.md'));
+    fs.writeFileSync(path.join(outside, 'shared.md'), '# shared\n');
+    fs.symlinkSync(path.join(outside, 'shared.md'), path.join(root, 'CLAUDE.md'), 'file');
+    const second = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(outside, 'shared.md'), 'utf8'), '# shared\n');
+    assert.deepEqual(second.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: 'it is a link, so init does not write it: add the line @AGENTS.md at its top, or Claude never loads AGENTS.md' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
   }
 });
 

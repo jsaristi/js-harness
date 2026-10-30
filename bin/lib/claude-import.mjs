@@ -39,18 +39,29 @@ export function withImport(bytes) {
   return Buffer.concat([bytes.subarray(0, bom), Buffer.from(`${IMPORT}${eol}${eol}`), bytes.subarray(bom)]);
 }
 
+/** Whether the project's CLAUDE.md and AGENTS.md at `root` are one file under two names, through a link or a hard link:
+ * that file holds the whole block of the harness's lines (odd/tasks/claude-md-block.md, D1). */
+export function oneFile(root) {
+  try {
+    const [claude, agents] = ['CLAUDE.md', 'AGENTS.md'].map((name) => fs.statSync(path.join(root, name), { bigint: true }));
+    return claude.dev === agents.dev && claude.ino === agents.ino;
+  } catch {
+    return false;
+  }
+}
+
 /** The actions of `init` adding the import to the project's own CLAUDE.md at `root`, beside the AGENTS.md it wrote, so
  * Claude loads the harness's lines (odd/tasks/claude-md-block.md, D2): none where it imports AGENTS.md already or is a
- * link to it; an `imported` one where git can give the file back exactly, a regular file it tracks with no change not
- * committed, since git is all that undoes the write; a `skip` naming the line to add anywhere else, and a `problem`
- * where the write failed. */
+ * link to it; an `imported` one where git can give the file back exactly, a regular file whose bytes are those a
+ * checkout of the index writes, since git is all that undoes the write; a `skip` naming the line to add anywhere else,
+ * and a `problem` where the write failed. */
 export function addImport(root, { spawn = spawnSync, writeFile = fs.writeFileSync } = {}) {
   const file = path.join(root, 'CLAUDE.md');
   const skip = (why) => [{ kind: 'skip', path: 'CLAUDE.md', reason: `${why}, so init does not write it: add the line ${IMPORT} at its top, or Claude never loads AGENTS.md` }];
   let bytes;
   try {
     if (fs.lstatSync(file).isSymbolicLink()) {
-      if (fs.realpathSync(file) === fs.realpathSync(path.join(root, 'AGENTS.md'))) return [];
+      if (oneFile(root)) return [];
       return importsAgents(fs.readFileSync(file, 'utf8')) ? [] : skip('it is a link');
     }
     if (!fs.lstatSync(file).isFile()) return skip('it is not a regular file');
@@ -59,10 +70,13 @@ export function addImport(root, { spawn = spawnSync, writeFile = fs.writeFileSyn
     return skip('it cannot be read');
   }
   if (importsAgents(bytes.toString('utf8'))) return [];
-  // Every untracked or ignored file whatever the clone's config says, as the migration asks (`uncommittedOf`).
-  const status = spawn('git', ['--no-optional-locks', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
-  if (!status || status.error || status.status !== 0 || status.stdout !== '') {
-    return skip('git could not give it back (it is untracked, ignored or holds a change not committed)');
+  // Git gives back the bytes a checkout of the index writes (`cat-file --filters`: its line ends and filters), under the
+  // name git tracks, with no flag that hides a change. An empty `status` proves none of it: a file whose name differs in
+  // case, autocrlf over a working copy in LF, a skip-worktree change (the independent verifier on 00afb013).
+  const listed = spawn('git', ['ls-files', '-v', '-z', '--', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
+  const checkout = spawn('git', ['cat-file', '--filters', ':CLAUDE.md'], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+  if (listed?.status !== 0 || listed.stdout !== 'H CLAUDE.md\0' || checkout?.status !== 0 || !Buffer.isBuffer(checkout.stdout) || !checkout.stdout.equals(bytes)) {
+    return skip('git could not give it back byte for byte (it is untracked, changed, marked to skip, or not the bytes a checkout writes)');
   }
   const imported = withImport(bytes);
   if (imported === null) return skip('it is in UTF-16');
@@ -115,7 +129,7 @@ export function importHealth(project, { mainCheckout, home } = {}) {
   const dropping = fs.existsSync(claude) ? excludingGlob(settings, claude) : null;
   if (!fs.existsSync(claude)) {
     fix.push('claude-import: the project has no root CLAUDE.md, so Claude may not load AGENTS.md: write one whose first line is @AGENTS.md');
-  } else if (!importsAgents(fs.readFileSync(claude, 'utf8'))) {
+  } else if (!oneFile(project) && !importsAgents(fs.readFileSync(claude, 'utf8'))) {
     fix.push('claude-import: CLAUDE.md does not import AGENTS.md, so Claude may not load it: add the line @AGENTS.md');
   } else if (dropping !== null) {
     fix.push(`claude-import: the claudeMdExcludes glob ${dropping} drops CLAUDE.md, so Claude does not load AGENTS.md: take CLAUDE.md out of it`);

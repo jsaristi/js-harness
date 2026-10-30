@@ -492,6 +492,26 @@ test('with CLAUDE.md a link to AGENTS.md, the plan says what migrate writes, and
   }
 });
 
+test('with CLAUDE.md a hard link to AGENTS.md, the plan names no missing import and writes no half into the one file', () => {
+  // One file under both names (odd/tasks/claude-md-block.md, D1); a hard link needs no privilege, so this runs here.
+  const { dir, home } = oldProject({ pin: RUNNING });
+  try {
+    const agents = path.join(dir, 'AGENTS.md');
+    const before = read(agents);
+    fs.linkSync(agents, path.join(dir, 'CLAUDE.md'));
+    commitAll(dir);
+    const plan = migrationPlan(dir, RUNNING, { home, today: TODAY });
+    assert.ok(!plan.notes.some((note) => note.path === 'CLAUDE.md'), JSON.stringify(plan.notes));
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0);
+    assert.equal(plan.pending.some((line) => /^(AGENTS|CLAUDE)\.md/.test(line)), result.committed.length > 0, plan.pending.join('\n'));
+    assert.equal(read(agents), before);
+    assert.equal(read(path.join(dir, 'CLAUDE.md')), before);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
 test('a harness.json checked out with CRLF is still the one init wrote: after the pin moves, uninstall removes it', () => {
   const { dir, manifestPath, home } = oldProject();
   try {

@@ -1,13 +1,11 @@
-// The `init` engine: writes the committed per-project files (harness.json, AGENTS.md, the
-// pre-commit gate), runs `codegraph init`, and records everything in a project manifest so T3's
-// `uninstall` can restore the repo exactly — see odd/tasks/project-init.md, "T2 design". Like
-// manifest.mjs's install/sync engine, this stays pure-ish over injectable `deps`
-// (`spawn`/`platform`/`writeFile`/`rm`/`open`/`write`/`close`) so tests never touch a real home, a
-// real `codegraph`, or this repo itself — `rm` in particular lets a test make one specific removal
-// fail (a rollback, or the best-effort `.codegraph/` cleanup) without any OS-specific trick to
-// reproduce it. `open`/`write`/`close` are the manifest's own exclusive-create write, injected
-// separately from the general `writeFile` so a test (or `writeManifestAtomic` itself) can tell the
-// exclusive create failing apart from something failing after it succeeded — see there.
+// The `init` engine: writes the committed per-project files (harness.json, AGENTS.md, the pre-commit gate), runs
+// `codegraph init`, and records everything in a project manifest so T3's `uninstall` can restore the repo exactly — see
+// odd/tasks/project-init.md, "T2 design". Like manifest.mjs's install/sync engine, this stays pure-ish over injectable
+// `deps` (`spawn`/`platform`/`writeFile`/`rm`/`open`/`write`/`close`) so tests never touch a real home, a real
+// `codegraph`, or this repo itself — `rm` in particular lets a test make one specific removal fail (a rollback, or the
+// best-effort `.codegraph/` cleanup) without any OS-specific trick to reproduce it. `open`/`write`/`close` are the
+// manifest's own exclusive-create write, injected separately from the general `writeFile` so a test (or
+// `writeManifestAtomic` itself) can tell the exclusive create failing apart from something failing after it succeeded.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -19,7 +17,7 @@ import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, pla
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 import { localDay } from './flaky.mjs';
-import { addImport } from './claude-import.mjs';
+import { addImport, oneFile } from './claude-import.mjs';
 
 export { FAILURES_TEMPLATE };
 export { staleManifestMessage, invalidHarnessJsonMessage, howToPinClause, cleanupClause } from './project-messages.mjs';
@@ -1850,14 +1848,16 @@ export function syncProject(cwd, version, deps = {}) {
 /** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` and its
  * `CLAUDE.md` rendered again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md,
  * T16f): a `rendered` action each, and no longer up to date. A project whose `CLAUDE.md` holds a block has the split
- * (odd/tasks/f8-s3-split.md, S3), and each file gets its half; any other, or a link (odd/tasks/claude-md-block.md, D1),
- * keeps the whole block in `AGENTS.md`, so no line is lost. An edited block is a `kept` action, said on every sync, and
- * writes nothing. Git undoes the write of these committed files; no manifest records it. A refusal is returned as is. */
+ * (odd/tasks/f8-s3-split.md, S3), and each file gets its half; any other, or a link, keeps the whole block in `AGENTS.md`,
+ * and one file under both names keeps it under the name that is no link (odd/tasks/claude-md-block.md, D1): no line is
+ * lost. An edited block is a `kept` action, said on every sync. Git undoes these committed files; no manifest records it. */
 function syncTemplateBlock(root, result, writeFile, lstat = fs.lstatSync) {
   if (result.code !== 0) return result;
   const claude = blockFileOf(root, 'CLAUDE.md', lstat);
+  const agents = blockFileOf(root, 'AGENTS.md', lstat);
+  if (oneFile(root)) return renderBlockIn(root, ...(agents.link ? ['CLAUDE.md', claude] : ['AGENTS.md', agents]), templateBlock(), result, writeFile);
   const split = !claude.link && claude.text !== undefined && TEMPLATE_BLOCK_MARK.test(claude.text);
-  let synced = renderBlockIn(root, 'AGENTS.md', blockFileOf(root, 'AGENTS.md', lstat), split ? agentsBlock() : templateBlock(), result, writeFile);
+  let synced = renderBlockIn(root, 'AGENTS.md', agents, split ? agentsBlock() : templateBlock(), result, writeFile);
   if (split) synced = renderBlockIn(root, 'CLAUDE.md', claude, claudeBlock(), synced, writeFile);
   return synced;
 }

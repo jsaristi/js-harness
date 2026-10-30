@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { importHealth, mainCheckoutOf, importsAgents, withImport } from './claude-import.mjs';
+import { importHealth, mainCheckoutOf, importsAgents, oneFile, withImport } from './claude-import.mjs';
 
 /** A folder `outer` holding a project `outer/work/project` with `files`, removed after the test. */
 function tree(t, files) {
@@ -73,6 +73,17 @@ test('importHealth names a project with no root CLAUDE.md, or one that does not 
     state: 'missing',
     fix: ['claude-import: CLAUDE.md does not import AGENTS.md, so Claude may not load it: add the line @AGENTS.md'],
   });
+});
+
+test('importHealth is ok for a CLAUDE.md that is AGENTS.md under a second name, which Claude loads as it is', (t) => {
+  // A hard link needs no privilege, so this runs on every machine; a link is the same file to `stat` (D1).
+  const { project } = tree(t, INITIALIZED);
+  fs.linkSync(path.join(project, 'AGENTS.md'), path.join(project, 'CLAUDE.md'));
+  assert.equal(oneFile(project), true);
+  assert.deepEqual(importHealth(project, { mainCheckout: null }), { state: 'ok', fix: [] });
+  fs.rmSync(path.join(project, 'CLAUDE.md'));
+  fs.writeFileSync(path.join(project, 'CLAUDE.md'), INITIALIZED['AGENTS.md']);
+  assert.equal(oneFile(project), false);
 });
 
 test('importHealth reads a root CLAUDE.md a claudeMdExcludes glob drops as not loaded, and leaves out a dropped file above', (t) => {
