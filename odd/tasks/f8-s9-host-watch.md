@@ -270,7 +270,7 @@ session records `tools-background.txt` from its own list either way.
   is reviewed: `34562cc4`, `56c82c71` on `f8-s9-trigger`.
 
 ## Next step
-1. Push `f8-s9-trigger`; open PR 3 (base `f8-s9-probe` while PR 717 is open, else main); `ready` notice.
+1. Done: PR 718 (T4) open on f8-s9-probe; its ready goes when 717 lands and 718 is retargeted to main.
 2. T5, the real run, on a branch `f8-s9-review` from `f8-s9-trigger`: the draft is
    `node bin/js-harness.mjs host-watch draft --desktop <desktop.md> --code <code.md> --from-desktop 4.29.0
    --to-desktop 4.4212.0 --from-code 2.1.308 --to-code 2.1.309 --sources docs/host-updates/sources` over the
