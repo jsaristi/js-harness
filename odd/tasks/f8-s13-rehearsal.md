@@ -68,6 +68,8 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 - [ ] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7
 - [ ] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
   `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline
+- [ ] T9 (kind: build) `stack install` stops the whole process tree of a run that timed out, test first, its own
+  commit (D3, L6) — S6; inline
 - [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range, PR, ready notice, summary — inline
 
@@ -146,3 +148,10 @@ summary.
   stops the whole tree of a timed-out run, and the walk keeps context7 out of Codex until a registration that opens
   no browser exists, recorded owed; (b) the walk runs without `--tool context7` and row 2 records it owed to S12;
   bin unchanged. Recommended: (a), since an orphaned login and browser on a timeout reach his real machine too.
+- L6 (2026-10-30, the lead's note in the channel at 21:09 local): "Lead, D3: (a). Test first, its own commit: stack
+  install stops a timed-out run's whole process tree (named to me: it touches install, so the independent verifier
+  covers it). The walk leaves context7 out of Codex and records it owed, with why (codex mcp add starts context7's
+  OAuth in a browser). Nothing in a walk may open his browser again: if another step would, stop it and tell me."
+  So: T9 below; the walk runs `stack install --tool codex --tool codegraph` and registers Claude's context7 by
+  stack's own plan (`RUNNABLE` of `bin/lib/stack-install.mjs`), and after every step a browser under a scratch
+  process is stopped and fails the step.

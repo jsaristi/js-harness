@@ -18,6 +18,7 @@ import { compareSnapshots, contentHash, hostCost, readHostStream, realHomeFiles,
 import { claudeJsonMcpPart, realFilesOf, registrationsLeftIn, shimContent } from './stack-scratch.mjs';
 import { SANDBOX_SWITCHES } from '../evals/configs.mjs';
 import { allocatePort, killByPort } from '../evals/ports.mjs';
+import { RUNNABLE } from '../bin/lib/stack-install.mjs';
 import {
   ALWAYS, FOREIGN_TOOLS, REHEARSAL, costProblem, directiveProblem, engramRecoveryProblem, foreignProblems, importRowState,
   plantedRuleFiles, recordedPaths, restoreProblems,
@@ -106,6 +107,38 @@ export function commandWords(words, dirs, { platform = process.platform, exists 
   return words;
 }
 
+/** The topmost process of each tree whose command line holds `root`, as `{ pid, command }`, from `processes` (each
+ * `{ pid, parent, command }`); on Windows the case is ignored. A login a scratch command started, and the browser it
+ * opened, outlived walk 1 (odd/tasks/f8-s13-rehearsal.md, L5): what is named here is stopped with its tree. */
+export function scratchProcesses(processes, root, platform = process.platform) {
+  const { holds, under } = scratchTrees(processes, root, platform);
+  return processes.filter((p) => holds.has(p.pid) && !under(p, holds)).map(({ pid, command }) => ({ pid, command }));
+}
+
+/** The programs a login opens a page in. */
+const BROWSERS = ['brave', 'chrome', 'msedge', 'firefox', 'opera', 'iexplore', 'chromium', 'safari'];
+
+/** The topmost browser process under a process whose command line holds `root`, as `{ pid, command }`: a page a
+ * scratch command opened on his screen. One he started himself hangs from no scratch process. */
+export function openedBrowsers(processes, root, platform = process.platform) {
+  const { holds, under } = scratchTrees(processes, root, platform);
+  const program = (p) => (p.name ?? String(p.command ?? '').replace(/^"([^"]*)".*$|^(\S*).*$/, '$1$2')).split(/[\\/]/).pop().replace(/\.exe$/i, '').toLowerCase();
+  const browsers = new Set(processes.filter((p) => BROWSERS.includes(program(p)) && under(p, holds)).map((p) => p.pid));
+  return processes.filter((p) => browsers.has(p.pid) && !under(p, browsers)).map(({ pid, command }) => ({ pid, command }));
+}
+
+/** The pids whose command line holds `root`, and whether a process hangs, at any depth, from one of a set of pids. */
+function scratchTrees(processes, root, platform) {
+  const fold = (text) => (platform === 'win32' ? text.toLowerCase() : text);
+  const holds = new Set(processes.filter((p) => typeof p.command === 'string' && fold(p.command).includes(fold(root))).map((p) => p.pid));
+  const byPid = new Map(processes.map((p) => [p.pid, p]));
+  const under = (p, pids) => {
+    for (let up = byPid.get(p.parent), hops = 0; up && hops < processes.length; up = byPid.get(up.parent), hops += 1) if (pids.has(up.pid)) return true;
+    return false;
+  };
+  return { holds, under };
+}
+
 // ---- the walk ---------------------------------------------------------------------------------------------------------
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -123,6 +156,9 @@ const HOST_PROMPT = 'Reply with the one word ok, then a blank line and the line 
 // The host's own switches: no updater, telemetry or claude.ai connectors (evals/configs.mjs), and none that names a
 // foreign tool, since none takes part.
 const HOST_SWITCHES = Object.fromEntries(Object.entries(SANDBOX_SWITCHES).filter(([name]) => !/^GENTLE/i.test(name)));
+// context7's registration in Claude, as stack plans it, and the one in Codex the walk leaves out (L6).
+const CONTEXT7_CLAUDE = RUNNABLE.find((row) => row.tool === 'context7' && row.dimension === 'claude');
+const OWED_CONTEXT7 = 'context7.codex';
 
 /** The first program `name` on his PATH that is an executable, or `null`. */
 function locate(name) {
@@ -172,6 +208,52 @@ function snapshotOfHim(realHome) {
     snapshot[file] = content === null ? null : contentHash(path.basename(file) === '.claude.json' ? claudeJsonMcpPart(content.toString('utf8')) : content);
   }
   return snapshot;
+}
+
+/** Every process of the machine as `{ pid, parent, name, command }`, or `null` when they cannot be listed. */
+function listProcesses() {
+  if (process.platform === 'win32') {
+    const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress';
+    const out = spawnSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true });
+    try {
+      return JSON.parse(out.stdout).map((p) => ({ pid: p.ProcessId, parent: p.ParentProcessId, name: p.Name, command: p.CommandLine }));
+    } catch {
+      return null;
+    }
+  }
+  const out = spawnSync('ps', ['-eo', 'pid=,ppid=,args='], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (out.status !== 0) return null;
+  return out.stdout.split('\n').map((line) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)).filter(Boolean).map(([, pid, parent, command]) => ({ pid: Number(pid), parent: Number(parent), command }));
+}
+
+/** Stops each tree `pick` names among the machine's processes, and says what each was. */
+function stopTrees(pick) {
+  const processes = listProcesses();
+  if (processes === null) return ['the processes could not be listed'];
+  return pick(processes.filter((p) => p.pid !== process.pid)).map(({ pid, command }) => {
+    const stopped = process.platform === 'win32'
+      ? spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', windowsHide: true }).status === 0
+      : (() => { try { process.kill(pid, 'SIGKILL'); return true; } catch { return false; } })();
+    return `${pid} ${stopped ? 'stopped' : 'not stopped'}: ${String(command).slice(0, 160)}`;
+  });
+}
+
+/** `step` with the browser guard (L6): a browser a scratch process opened during it is stopped and fails the step,
+ * whatever the step said, so the walk goes no further. */
+function guarded(step, root) {
+  return (ctx) => {
+    let detail;
+    let failure;
+    try {
+      detail = step(ctx);
+    } catch (err) {
+      failure = err;
+    }
+    const browsers = stopTrees((processes) => openedBrowsers(processes, root));
+    if (browsers.length > 0) throw new Error(`a browser opened under the walk and was stopped: ${browsers.join('; ')}`);
+    if (failure) throw failure;
+    return detail;
+  };
 }
 
 /** The packages stack installs that a prefix still holds. */
@@ -237,17 +319,20 @@ export const STEPS = {
   'stack-install': (ctx) => {
     const { home, project, prefix, bin } = ctx.layout;
     const at = [...ctx.at, '--cwd', project, '--pm', 'pnpm'];
-    ctx.must(ctx.harness('stack', 'install', ...at, '--prefix', prefix, '--yes', '--tool', 'codex', '--tool', 'codegraph', '--tool', 'context7'), 'stack install');
+    // context7 stays out of stack's run: its Codex registration starts context7's OAuth login in a browser (L5, L6).
+    ctx.must(ctx.harness('stack', 'install', ...at, '--prefix', prefix, '--yes', '--tool', 'codex', '--tool', 'codegraph'), 'stack install');
+    ctx.must(ctx.exec(CONTEXT7_CLAUDE.run), 'context7 in Claude, as stack plans it');
+    ctx.seen.owed = [`${OWED_CONTEXT7}: codex mcp add context7 starts context7's OAuth login in a browser (L5, L6)`];
     // His steps, as stack prints them: the engram binary (his own release, in place of a download), then its setups.
     linkOrCopy(locate('engram'), path.join(bin, process.platform === 'win32' ? 'engram.exe' : 'engram'));
     ctx.must(ctx.exec(['engram', 'setup', 'claude-code']), 'engram setup claude-code');
     ctx.must(ctx.exec(['engram', 'setup', 'codex']), 'engram setup codex');
     const plan = JSON.parse(ctx.harness('stack', '--json', ...at).stdout);
-    const left = (plan.mandatory ?? []).map((row) => `${row.tool}.${row.dimension}`);
+    const left = (plan.mandatory ?? []).map((row) => `${row.tool}.${row.dimension}`).filter((gap) => gap !== OWED_CONTEXT7);
     const theirs = (plan.manual ?? []).map((row) => row.tool).filter((tool) => tool !== 'gh');
     assertThat(left.length === 0 && theirs.length === 0, `stack still lists ${[...left, ...theirs].join(', ')}`);
     const records = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8')).stack ?? [];
-    return `${records.length} runs recorded; engram and its plugin set up by his steps; stack lists nothing missing but gh, a prerequisite`;
+    return `${records.length} runs recorded; context7 in Claude as stack plans it; engram and its plugin set up by his steps; stack lists nothing missing but ${OWED_CONTEXT7}, owed, and gh, a prerequisite`;
   },
   init: (ctx) => {
     const { project } = ctx.layout;
@@ -393,8 +478,10 @@ export const STEPS = {
   'uninstall-machine': (ctx) => {
     const { home, prefix } = ctx.layout;
     ctx.machineManifest = fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8');
-    // His steps' undo first, as stack printed it, while the Codex CLI it names is still installed.
+    // His steps' undo first, as stack printed it, while the Codex CLI it names is still installed, and that of the
+    // context7 registration the walk ran in stack's place.
     const undone = [
+      CONTEXT7_CLAUDE.undo,
       ['claude', 'plugin', 'uninstall', 'engram@engram'], ['claude', 'plugin', 'marketplace', 'remove', 'engram'], ['claude', 'mcp', 'remove', 'engram', '--scope', 'user'],
       ['codex', 'plugin', 'remove', 'engram@engram'], ['codex', 'plugin', 'marketplace', 'remove', 'engram'], ['codex', 'mcp', 'remove', 'engram'],
     ].map((words) => `${words.join(' ')}: ${ctx.exec(words).code}`);
@@ -459,14 +546,17 @@ async function main(argv) {
   assertThat(gitExe, 'git is not on your PATH');
   const layout = rehearsalLayout(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rehearsal-walk-')));
   for (const dir of [layout.appData, layout.localAppData, layout.prefixBin, layout.bin, layout.project, path.join(layout.home, '.claude')]) fs.mkdirSync(dir, { recursive: true });
-  // The shims: node itself, this checkout's harness under its command name, claude and pnpm. git runs from its own
-  // folder, since its launcher finds the rest of git beside it.
+  // The shims: node itself, this checkout's harness under its command name, claude, jq and pnpm. git runs from its
+  // own folder, since its launcher finds the rest of git beside it.
   linkOrCopy(process.execPath, path.join(layout.bin, path.basename(process.execPath)));
   fs.writeFileSync(path.join(layout.bin, 'js-harness'), `#!/bin/sh\nexec "${process.execPath.replace(/\\/g, '/')}" "${JS_HARNESS.replace(/\\/g, '/')}" "$@"\n`, { mode: 0o755 });
   fs.writeFileSync(path.join(layout.bin, 'js-harness.cmd'), `@"${process.execPath}" "${JS_HARNESS}" %*\r\n`);
-  const claude = locate('claude');
-  assertThat(claude, 'claude is not on your PATH');
-  linkOrCopy(claude, path.join(layout.bin, path.basename(claude)));
+  // jq, which engram's Claude Code plugin needs on the PATH to set up and in its hooks (curl is the system's own).
+  for (const name of ['claude', 'jq']) {
+    const program = locate(name);
+    assertThat(program, `${name} is not on your PATH`);
+    linkOrCopy(program, path.join(layout.bin, path.basename(program)));
+  }
   fs.writeFileSync(path.join(layout.bin, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'), shimContent(locate('pnpm'), process.platform), { mode: 0o755 });
   // His own lines in the scratch home, which install grafts onto and uninstall must give back.
   fs.writeFileSync(path.join(layout.home, '.claude', 'settings.json'), HIS_SETTINGS);
@@ -481,17 +571,21 @@ async function main(argv) {
   ctx.treeBefore = snapshotTree(layout.root);
   ctx.results = [];
   const started = Date.now();
-  const outcome = walkJourney({ journey: REHEARSAL, steps: STEPS, ctx, alwaysRun: ALWAYS, report: ({ status, id, detail, failed }) => console.log(`${status.padEnd(4)}  ${id}  ${redacted(detail ?? `after ${failed}`, token)}`) });
+  const steps = Object.fromEntries(Object.entries(STEPS).map(([id, step]) => [id, guarded(step, layout.root)]));
+  const outcome = walkJourney({ journey: REHEARSAL, steps, ctx, alwaysRun: ALWAYS, report: ({ status, id, detail, failed }) => console.log(`${status.padEnd(4)}  ${id}  ${redacted(detail ?? `after ${failed}`, token)}`) });
   try {
     killByPort(port);
   } catch (err) {
     console.log(`engram on ${port}: ${err.message}`);
   }
+  // Nothing the walk started may outlive it: one left is stopped, named, and fails the walk.
+  const left = stopTrees((processes) => scratchProcesses(processes, layout.root));
   const spent = ctx.spend.reduce((sum, cost) => sum + cost, 0);
   const record = {
     date: new Date().toISOString(),
     commit: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).stdout.trim(),
-    ok: outcome.ok,
+    ok: outcome.ok && left.length === 0,
+    leftProcesses: left,
     minutes: Math.round((Date.now() - started) / 6000) / 10,
     hostCostUsd: Math.round(spent * 10000) / 10000,
     estimateUsd: WALK_ESTIMATE_USD,
@@ -504,7 +598,7 @@ async function main(argv) {
   console.log(text);
   if (keep) fs.writeFileSync(layout.record, `${text}\n`);
   else fs.rmSync(layout.root, { recursive: true, force: true });
-  return outcome.ok ? 0 : 1;
+  return record.ok ? 0 : 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

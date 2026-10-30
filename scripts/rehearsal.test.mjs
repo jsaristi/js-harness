@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, snapshotTree, commandWords, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { rehearsalLayout, rehearsalEnv, snapshotTree, commandWords, scratchProcesses, openedBrowsers, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
 import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -84,6 +84,39 @@ test('snapshotTree hashes every file and marks every folder under a folder by it
   // A recorded folder left behind is no longer invisible to restoreProblems (Codex P2 on 541464c).
   assert.equal(snapshot[path.join(root, 'empty')], 'folder');
   assert.deepEqual(snapshotTree(path.join(root, 'none')), {});
+});
+
+test('scratchProcesses names the topmost process of each tree whose command line holds the scratch root', () => {
+  // Walk 1 left the scratch Codex CLI's login, and the browser it opened, alive after the walk ended (L5).
+  const root = 'C:\\Users\\me\\AppData\\Local\\Temp\\js-harness-rehearsal-walk-abc';
+  const processes = [
+    { pid: 1, parent: 0, command: 'explorer.exe' },
+    { pid: 10, parent: 1, command: `node ${root.toLowerCase()}\\prefix\\bin\\..\\codex.js mcp add context7` },
+    { pid: 11, parent: 10, command: `${root}\\prefix\\codex.exe mcp add context7` },
+    { pid: 12, parent: 11, command: 'brave.exe --single-argument https://clerk.context7.com/oauth/authorize' },
+    { pid: 20, parent: 1, command: 'brave.exe' },
+    { pid: 30, parent: 99, command: `engram serve --data ${root}\\home\\.engram` },
+    { pid: 40, parent: 1, command: null },
+  ];
+  assert.deepEqual(scratchProcesses(processes, root, 'win32'), [{ pid: 10, command: processes[1].command }, { pid: 30, command: processes[5].command }]);
+  assert.deepEqual(scratchProcesses(processes, root.toLowerCase(), 'linux'), [{ pid: 10, command: processes[1].command }]);
+  assert.deepEqual(scratchProcesses([], root, 'win32'), []);
+});
+
+test('openedBrowsers names a browser started under a scratch process, and none of his own', () => {
+  // Nothing in a walk may open his browser again (L6): a step that does is stopped.
+  const root = 'C:\\Temp\\js-harness-rehearsal-walk-abc';
+  const processes = [
+    { pid: 1, parent: 0, name: 'explorer.exe', command: 'explorer.exe' },
+    { pid: 10, parent: 1, name: 'node.exe', command: `node ${root}\\prefix\\codex.js mcp add context7` },
+    { pid: 11, parent: 10, name: 'codex.exe', command: 'codex.exe mcp add context7' },
+    { pid: 12, parent: 11, name: 'brave.exe', command: '"C:\\Program Files\\Brave\\brave.exe" --single-argument https://x' },
+    { pid: 13, parent: 12, name: 'brave.exe', command: 'brave.exe --type=renderer' },
+    { pid: 20, parent: 1, name: 'msedge.exe', command: 'msedge.exe' },
+    { pid: 30, parent: 10, name: 'node.exe', command: 'node child.js' },
+  ];
+  assert.deepEqual(openedBrowsers(processes, root, 'win32'), [{ pid: 12, command: processes[3].command }]);
+  assert.deepEqual(openedBrowsers(processes.filter((p) => p.pid !== 12 && p.pid !== 13), root, 'win32'), []);
 });
 
 test('the walk has one step for each id of the rehearsal, and no other', () => {
