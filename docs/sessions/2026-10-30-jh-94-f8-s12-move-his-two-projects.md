@@ -46,5 +46,5 @@ before anything else, and do the work it gives you. Its last section says how yo
 - Not this session's: L13's sync symlink defect; the owed tests of L16 and L17.
 
 ## Cost
-- Time: brief at 10:06Z, this file at about 10:30Z; context share at the end about 30%.
+- Time: brief at 10:06Z, the ready notice at 10:17:34Z; context share at the end 24% (the notice's reading).
 - No review: the branch is docs only. Gate: `npm run check` through the pre-commit hook on each commit.
