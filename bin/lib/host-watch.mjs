@@ -39,6 +39,8 @@ const OUTSIDE_SECTIONS = ['Cowork', '3P'];
 const WINDOWS = /Windows|PowerShell/i;
 const PHONE = /mobile|phone|\biOS\b|Android/i;
 
+const headingOf = (line) => (/^##\s+v?(\d+\.\d+\.\d+)\b/.exec(line) ?? /^\*\*v?(\d+\.\d+\.\d+)\*\*/.exec(line.trim()))?.[1] ?? null;
+
 /** `{ versions, entries }` of a changelog `text` from `source` (`desktop` or `code`): the versions its headings name, in
  * order, and one entry a bullet `{ id, source, version, section, text }`. The CLI's headings are `## 2.1.314`; the
  * desktop's are a bold `**v4.4212.0**` line, after which any other bold line is a section. A line indented under a
@@ -51,9 +53,9 @@ export function parseChangelog(text, source) {
   let last = null;
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trimEnd();
-    const heading = /^##\s+v?(\d+\.\d+\.\d+)\b/.exec(line) ?? /^\*\*v?(\d+\.\d+\.\d+)\*\*/.exec(line.trim());
+    const heading = headingOf(line);
     if (heading) {
-      version = heading[1];
+      version = heading;
       versions.push(version);
       section = null;
       last = null;
@@ -93,6 +95,20 @@ export function entriesBetween({ versions, entries }, { from, to }) {
   const missing = headed.filter((version) => !span.some((entry) => entry.version === version));
   if (!headed.includes(to)) missing.push(to);
   return { source, entries: span, missing };
+}
+
+
+/** The text of the versions after `from` up to `to` of a changelog `text`, each from its heading to the next one, as
+ * published: the excerpt a review commits beside its file, so `check` reads the span with no network. */
+export function cutSpan(text, { from, to }) {
+  const out = [];
+  let keep = false;
+  for (const line of String(text).split(/\r?\n/)) {
+    const version = headingOf(line);
+    if (version) keep = compareSemver(version, from) > 0 && compareSemver(version, to) <= 0;
+    if (keep) out.push(line);
+  }
+  return `${out.join('\n').trimEnd()}\n`;
 }
 
 /** `{ areas, outside }` of an entry: the ids of the harness areas its words touch, and what places it outside the Code
@@ -220,8 +236,9 @@ export function checkReview(text, spans) {
   return gaps;
 }
 
-// The host's own MCP servers: what the app or the CLI ships, not what the user or the stack configured.
-const HOST_SERVERS = /^(?:claude-in-chrome|Claude_Browser|computer-use|remote-devices|ccd)/;
+// The host's own MCP servers: what the app or the CLI ships, not what the user, an account connector or the stack
+// configured. terminal, visualize, scheduled-tasks and mcp-registry are the app's, read in the lead's list (2026-10-30).
+const HOST_SERVERS = /^(?:claude-in-chrome|Claude_Browser|computer-use|remote-devices|ccd|terminal$|visualize$|scheduled-tasks$|mcp-registry$)/;
 
 /** The tool names of a list `text`: one a line, `#` lines and blank ones left out, sorted, each once. */
 export const parseToolList = (text) => [...new Set(String(text).split(/\r?\n/).map((name) => name.trim()).filter((name) => name !== '' && !name.startsWith('#')))].sort();
@@ -245,7 +262,8 @@ export function hostTools(names) {
  * and a background list with it was not read in a `claude --bg` session. */
 export function surfaceRefusal(surface, names) {
   if (surface !== 'desktop' && surface !== 'background') return `a surface is desktop or background, not "${surface}"`;
-  const has = names.includes('start_session');
+  // The app names it as an MCP tool of its own server, mcp__ccd_session__start_session (the lead's list, 2026-10-30).
+  const has = names.some((name) => name === 'start_session' || name.endsWith('__start_session'));
   if (surface === 'desktop' && !has) return 'a desktop list holds start_session, which only a session the app started is given; this one does not: it was read in a background session, or it is incomplete';
   if (surface === 'background' && has) return 'a background list does not hold start_session, which only a session the app started is given; this one does: record it as desktop';
   return null;

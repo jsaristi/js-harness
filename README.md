@@ -114,7 +114,7 @@ that leads other sessions, and are rarely typed by hand:
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, codex-meter, lens-review, functions, remote, memory, fetch, backup, clean | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, quiet, wait |
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, codex-meter, lens-review, functions, remote, memory, fetch, backup, clean | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, quiet, wait; the host watch: host-watch |
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
 `my-project` is the project's folder. A line `…` marks output left out; output that grows with
@@ -1671,6 +1671,29 @@ needs you: nothing
 what it waits for then goes to standard error, so standard output is the JSON alone. A process is
 work by what it runs, never by an argument that only names a file: a `js-harness wait` for
 `bin/codex-review.mjs` on main is no review.
+
+### js-harness host-watch
+
+The commands of the host watch session (F8's S9, `odd/tasks/f8-s9-host-watch.md`), which reviews
+each Claude Desktop update in depth instead of checking only that nothing broke. `draft` cuts the
+update's span of both changelogs, from the reviewed record of doctor's cache to the versions doctor
+reads (or a span frozen with `--from-*` and `--to-*`), and prints the review file
+`doctor --host-reviewed` asks for: one row an entry, placed in the harness areas it touches, an
+entry outside the Code tab decided `ignore` and every other left `?`, the unplaced ones listed under
+`## To classify by hand`; `--sources` writes the span's excerpts. `check` holds a finished review
+to the span read from those excerpts: one decided row an entry, by its id. `tools` diffs the app's
+tool list, as a session transcribes it, with the one the project recorded for that surface; a
+first capture is a baseline, and only the host's own servers are kept:
+
+```console
+$ js-harness host-watch tools --surface desktop --list tools-desktop-lead.txt
+baseline: 169 host tools on the desktop surface; no list was recorded at D:\js-harness\docs\host-updates\tools-desktop.txt
+other MCP servers left out: 1a59c906-04da-521d-bda7-7f71b9f9e01c (8), codegraph (1), engram (23)
+```
+
+A desktop list must hold `start_session`, which only a session the app started is given; a
+`claude --bg` session's list is recorded as `background`. A removed name is confirmed with
+`ToolSearch` `select:<name>` before a review claims it.
 
 ### js-harness wait
 

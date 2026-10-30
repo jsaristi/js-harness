@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AREAS, checkReview, classify, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderToolList, surfaceRefusal } from './host-watch.mjs';
+import { AREAS, checkReview, classify, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderToolList, surfaceRefusal } from './host-watch.mjs';
 import { reviewFileGaps } from './host-update.mjs';
 
 // The desktop changelog as it is served in markdown (https://claude.com/docs/cowork/claude-desktop-changelog.md):
@@ -246,6 +246,8 @@ test('a desktop list without start_session is refused, a background list with it
   assert.match(surfaceRefusal('background', ['Read', 'start_session']), /start_session/);
   assert.match(surfaceRefusal('phone', ['Read']), /desktop or background/);
   assert.equal(surfaceRefusal('desktop', ['Read', 'start_session']), null);
+  assert.equal(surfaceRefusal('desktop', ['Read', 'mcp__ccd_session__start_session']), null, 'the app names it under its own server');
+  assert.match(surfaceRefusal('background', ['mcp__ccd_session__start_session']), /record it as desktop/);
   assert.equal(surfaceRefusal('background', ['Read']), null);
 });
 
@@ -261,4 +263,13 @@ test('a recorded tool list names its surface, versions, date and provenance, and
   assert.match(text, /^# recorded: 2026-10-30$/m);
   assert.match(text, /^# provenance: transcribed by the model/m);
   assert.deepEqual(parseToolList(text), ['Bash', 'Read']);
+});
+
+test('the excerpt of a span holds its versions as published, and reads back to the same entries', () => {
+  const excerpt = cutSpan(DESKTOP, { from: '4.29.0', to: '4.5000.0' });
+  assert.match(excerpt, /^\*\*v4\.5000\.0\*\* \(latest\)$/m);
+  assert.doesNotMatch(excerpt, /v4\.29\.0|Older entry|Release notes/);
+  const whole = entriesBetween(parseChangelog(DESKTOP, 'desktop'), { from: '4.29.0', to: '4.5000.0' });
+  const cut = entriesBetween(parseChangelog(excerpt, 'desktop'), { from: '4.29.0', to: '4.5000.0' });
+  assert.deepEqual(cut, whole);
 });
