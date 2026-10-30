@@ -472,6 +472,9 @@ not the committed range, wrote no record and had to be run again.
   during the Codex review of `947ac91..62f4a62`; 353,663 input tokens spent on two parts of 8, nothing recorded
 - Seen: 2026-10-29 — `odd/tasks/stretch-forecast.md` L5 (JH 89) — `docs/FAILURES.md` edited for T6 during the
   Codex review of `b60053a..5aed8af`; 181,101 input tokens spent on part 1 of 2, nothing recorded, run again
+- Seen: 2026-10-30 — `odd/tasks/f8-s13-rehearsal.md` L12 (JH 90) — `docs/ROADMAP.md` committed during the Codex
+  review of `bb6223b..1a21375`, with the lenses running beside it; 58,369 input tokens spent on part 1 of 3,
+  nothing recorded, run again
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 

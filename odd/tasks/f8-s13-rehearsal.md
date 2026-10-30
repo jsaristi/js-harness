@@ -240,3 +240,8 @@ list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.te
   keep the plan gap as a finding, owed, with your corrected cause (unmeasured CLI overhead, not the prompt). Stop
   again only on a run whose absolute cost is material." The declared `js-harness wait --notice-to 90` that was to
   wake the session on it exited 127 with only its opening line, so the answer was read 35 minutes late; the cause, by merge-queue's note at 23:34 local: it refreshed the installed copy to `6e15b06` and stopped the wait run from it.
+- L12 (2026-10-30, the slice's reviews of `bb6223b..1a21375`): the lenses reliability, resilience, risk and
+  readability complete, 0 findings (27,314, 27,306, 55,399 and 27,318 input tokens against about 14,499 planned a
+  lens). Codex's part 1 of 3 passed but was not kept: this session committed S13's roadmap line (`4381f098`) while it
+  ran, so the tree was no longer the committed range; 58,369 input tokens spent, nothing recorded
+  (`edit-during-review`, seen a fifth time). Run once more with the worktree untouched until it ends.
