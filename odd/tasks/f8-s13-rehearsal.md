@@ -138,14 +138,15 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   tokens a lens", used 3,753 input and 269 output, the gap of run 8 again, owed as a finding (L11). Host cost of the
   nine runs: $0.0907 against the one walk's $5.
 
+- Run 10 (2026-10-30 ~04:55Z, `174fb070`, 3.6 minutes, host cost $0.0184): all 21 steps PASS, `ok: true`, exit 0,
+  with the fixes of L13: `leftProcesses` and `cleanupProblems` empty, so the sweeps by creation time and engram's stop
+  held. Host cost of the ten runs: $0.1091.
 ## Next step
 State at the third context pause (2026-10-30 ~04:50Z, branch `f8-s13-rehearsal`, worktree
 `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD `cf3e6a01` or later, nothing pushed, no PR). Done: T1-T6,
 T8; T9 dropped. Run 9 passed whole (S13's pass). Reviewed and recorded: lenses and Codex on `f2110239..bb6223b9` and
 on `bb6223b..ee22f20` (L12, L13); the independent verifier over `f2110239..ee22f20`: approve with notes (L13).
-Fixes of their findings: `608a8e68`, `cf3e6a01`, NOT yet reviewed. Running: walk 10 (`node scripts/rehearsal.mjs
---keep` into the job tmp's `walk-10.log`) to prove the fixes; read it, record it under `## Walk`, remove its kept
-root. Then: `js-harness lens-review --base ee22f206 --lenses reliability,resilience,risk --reason "..."` and
+Fixes of their findings: `608a8e68`, `cf3e6a01`, NOT yet reviewed. Walk 10 passed whole with them (run 10). Then: `js-harness lens-review --base ee22f206 --lenses reliability,resilience,risk --reason "..."` and
 `js-harness codex-review --base ee22f206`, touching NOTHING in the worktree while Codex runs (L12); gentle-ai: run
 `gentle-ai review assess` per slice, `e68e232c` escalated (item 5, installer), a due candidate started with its
 granted consent; chained PRs: slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`, slice 3a `bb6223b9..d4dd7199`,
